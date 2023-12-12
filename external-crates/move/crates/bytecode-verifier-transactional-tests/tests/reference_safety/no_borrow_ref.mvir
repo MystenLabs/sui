@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: u64;
     let ref_v: &u64;
 label b0:
@@ -7,4 +9,6 @@ label b0:
     ref_v = &v;
     _ = &ref_v; // cannot borrow a reference
     return;
+}
+
 }

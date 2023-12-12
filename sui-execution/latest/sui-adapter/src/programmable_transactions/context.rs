@@ -5,7 +5,7 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-    use std::collections::{BTreeSet, HashSet};
+    use std::collections::BTreeSet;
     use std::{
         borrow::Borrow,
         collections::{BTreeMap, HashMap},
@@ -23,7 +23,6 @@ mod checked {
     };
     use move_core_types::gas_algebra::NumBytes;
     use move_core_types::resolver::ModuleResolver;
-    use move_core_types::value::MoveTypeLayout;
     use move_core_types::vm_status::StatusCode;
     use move_core_types::{
         account_address::AccountAddress,
@@ -41,13 +40,13 @@ mod checked {
     #[cfg(debug_assertions)]
     use move_vm_types::gas::GasMeter;
     use move_vm_types::loaded_data::runtime_types::Type;
-    use move_vm_types::values::{GlobalValue, Value as VMValue};
+    use move_vm_types::values::GlobalValue;
     use sui_move_natives::object_runtime::{
         self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::execution::ExecutionResults;
-    use sui_types::storage::PackageObjectArc;
+    use sui_types::storage::PackageObject;
     use sui_types::{
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
@@ -60,7 +59,7 @@ mod checked {
         },
         metrics::LimitsMetrics,
         move_package::MovePackage,
-        object::{Data, MoveObject, Object, Owner},
+        object::{Data, MoveObject, Object, ObjectInner, Owner},
         storage::BackingPackageStore,
         transaction::{Argument, CallArg, ObjectArg},
         type_resolver::TypeTagResolver,
@@ -394,17 +393,15 @@ mod checked {
                 return Err(CommandArgumentError::InvalidObjectByValue);
             }
 
-            // ensure we don't transfer shared objects to new owners
+            // Any input object taken by value must be mutable
             if matches!(
                 input_metadata_opt,
                 Some(InputObjectMetadata::InputObject {
-                    owner: Owner::Shared { .. },
+                    is_mutable_input: false,
                     ..
                 })
-            ) && matches!(command_kind, CommandKind::TransferObjects)
-                && shared_obj_deletion_enabled
-            {
-                return Err(CommandArgumentError::SharedObjectOperationNotAllowed);
+            ) {
+                return Err(CommandArgumentError::InvalidObjectByValue);
             }
 
             let val = if is_copyable {
@@ -707,7 +704,6 @@ mod checked {
             }
 
             let object_runtime: ObjectRuntime = native_extensions.remove();
-            let external_transfers = additional_writes.keys().copied().collect::<HashSet<_>>();
 
             let RuntimeResults {
                 writes,
@@ -720,18 +716,6 @@ mod checked {
                 remaining_events.is_empty(),
                 "Events should be taken after every Move call"
             );
-
-            for id in by_value_shared_objects {
-                if !writes.contains_key(&id)
-                    && !deleted_object_ids.contains_key(&id)
-                    && !external_transfers.contains(&id)
-                {
-                    return Err(ExecutionError::new(
-                        ExecutionErrorKind::SharedObjectWrapped,
-                        Some(format!("Wrapping shared object {} not allowed", id).into()),
-                    ));
-                }
-            }
 
             loaded_runtime_objects.extend(loaded_child_objects);
 
@@ -797,6 +781,42 @@ mod checked {
                 };
                 let object = Object::new_move(move_object, recipient, tx_digest);
                 written_objects.insert(id, object);
+            }
+
+            // Before finishing, ensure that any shared object taken by value by the transaction is either:
+            // 1. Mutated (and still has a shared ownership); or
+            // 2. Deleted.
+            // Otherwise, the shared object operation is not allowed and we fail the transaction.
+            for id in &by_value_shared_objects {
+                // If it's been written it must have been reshared so must still have an ownership
+                // of `Shared`.
+                if let Some(obj) = written_objects.get(id) {
+                    if !obj.is_shared() {
+                        return Err(ExecutionError::new(
+                            ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                            Some(
+                                format!(
+                                    "Shared object operation on {} not allowed: \
+                                     cannot be frozen, transferred, or wrapped",
+                                    id
+                                )
+                                .into(),
+                            ),
+                        ));
+                    }
+                } else {
+                    // If it's not in the written objects, the object must have been deleted. Otherwise
+                    // it's an error.
+                    if !deleted_object_ids.contains_key(id) {
+                        return Err(ExecutionError::new(
+                            ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                            Some(
+                                format!("Shared object operation on {} not allowed: \
+                                         shared objects used by value must be re-shared if not deleted", id).into(),
+                            ),
+                        ));
+                    }
+                }
             }
 
             let user_events = user_events
@@ -1000,7 +1020,7 @@ mod checked {
     fn package_for_linkage(
         linkage_view: &LinkageView,
         package_id: ObjectID,
-    ) -> VMResult<PackageObjectArc> {
+    ) -> VMResult<PackageObject> {
         use move_binary_format::errors::PartialVMError;
         use move_core_types::vm_status::StatusCode;
 
@@ -1154,10 +1174,10 @@ mod checked {
         new_packages: &[MovePackage],
         object: &Object,
     ) -> Result<ObjectValue, ExecutionError> {
-        let Object {
+        let ObjectInner {
             data: Data::Move(object),
             ..
-        } = object
+        } = object.as_inner()
         else {
             invariant_violation!("Expected a Move object");
         };
@@ -1485,20 +1505,6 @@ mod checked {
             _ty: &Type,
         ) -> PartialVMResult<(&mut GlobalValue, Option<Option<NumBytes>>)> {
             panic!("load_resource should never be called for LinkageView")
-        }
-
-        fn emit_event(
-            &mut self,
-            _guid: Vec<u8>,
-            _seq_num: u64,
-            _ty: Type,
-            _val: VMValue,
-        ) -> PartialVMResult<()> {
-            panic!("emit_event should never be called for LinkageView")
-        }
-
-        fn events(&self) -> &Vec<(Vec<u8>, u64, Type, MoveTypeLayout, VMValue)> {
-            panic!("events should never be called for LinkageView")
         }
 
         fn publish_module(&mut self, _module_id: &ModuleId, _blob: Vec<u8>) -> VMResult<()> {

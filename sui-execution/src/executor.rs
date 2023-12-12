@@ -15,7 +15,7 @@ use sui_types::{
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     metrics::LimitsMetrics,
-    transaction::{InputObjects, ProgrammableTransaction, TransactionKind},
+    transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
     type_resolver::LayoutResolver,
 };
 
@@ -33,7 +33,7 @@ pub trait Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         // Transaction Inputs
-        input_objects: InputObjects,
+        input_objects: CheckedInputObjects,
         // Gas related
         gas_coins: Vec<ObjectRef>,
         gas_status: SuiGasStatus,
@@ -59,7 +59,7 @@ pub trait Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         // Transaction Inputs
-        input_objects: InputObjects,
+        input_objects: CheckedInputObjects,
         // Gas related
         gas_coins: Vec<ObjectRef>,
         gas_status: SuiGasStatus,
@@ -82,7 +82,7 @@ pub trait Executor {
         // Genesis State
         tx_context: &mut TxContext,
         // Transaction
-        input_objects: InputObjects,
+        input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,
     ) -> Result<InnerTemporaryStore, ExecutionError>;
 

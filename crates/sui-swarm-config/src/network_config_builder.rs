@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::{num::NonZeroUsize, path::Path, sync::Arc};
 use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
+use sui_config::node::OverloadThresholdConfig;
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::{Committee, ProtocolVersion};
@@ -56,6 +57,8 @@ pub struct ConfigBuilder<R = OsRng> {
     additional_objects: Vec<Object>,
     jwk_fetch_interval: Option<Duration>,
     num_unpruned_validators: Option<usize>,
+    overload_threshold_config: Option<OverloadThresholdConfig>,
+    data_ingestion_dir: Option<PathBuf>,
 }
 
 impl ConfigBuilder {
@@ -70,6 +73,8 @@ impl ConfigBuilder {
             additional_objects: vec![],
             jwk_fetch_interval: None,
             num_unpruned_validators: None,
+            overload_threshold_config: None,
+            data_ingestion_dir: None,
         }
     }
 
@@ -117,6 +122,11 @@ impl<R> ConfigBuilder<R> {
 
     pub fn with_jwk_fetch_interval(mut self, i: Duration) -> Self {
         self.jwk_fetch_interval = Some(i);
+        self
+    }
+
+    pub fn with_data_ingestion_dir(mut self, path: PathBuf) -> Self {
+        self.data_ingestion_dir = Some(path);
         self
     }
 
@@ -174,6 +184,11 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_overload_threshold_config(mut self, c: OverloadThresholdConfig) -> Self {
+        self.overload_threshold_config = Some(c);
+        self
+    }
+
     pub fn rng<N: rand::RngCore + rand::CryptoRng>(self, rng: N) -> ConfigBuilder<N> {
         ConfigBuilder {
             rng: Some(rng),
@@ -185,6 +200,8 @@ impl<R> ConfigBuilder<R> {
             additional_objects: self.additional_objects,
             num_unpruned_validators: self.num_unpruned_validators,
             jwk_fetch_interval: self.jwk_fetch_interval,
+            overload_threshold_config: self.overload_threshold_config,
+            data_ingestion_dir: self.data_ingestion_dir,
         }
     }
 
@@ -320,6 +337,15 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     builder = builder.with_jwk_fetch_interval(jwk_fetch_interval);
                 }
 
+                if let Some(overload_threshold_config) = &self.overload_threshold_config {
+                    builder =
+                        builder.with_overload_threshold_config(overload_threshold_config.clone());
+                }
+
+                if let Some(path) = &self.data_ingestion_dir {
+                    builder = builder.with_data_ingestion_dir(path.clone());
+                }
+
                 if let Some(spvc) = &self.supported_protocol_versions_config {
                     let supported_versions = match spvc {
                         ProtocolVersionsConfig::Default => {
@@ -407,7 +433,7 @@ mod test {
     use sui_types::in_memory_storage::InMemoryStorage;
     use sui_types::metrics::LimitsMetrics;
     use sui_types::sui_system_state::SuiSystemStateTrait;
-    use sui_types::transaction::InputObjects;
+    use sui_types::transaction::CheckedInputObjects;
 
     #[test]
     fn roundtrip() {
@@ -435,8 +461,7 @@ mod test {
         let genesis_digest = *genesis_transaction.digest();
 
         let silent = true;
-        let paranoid_checks = false;
-        let executor = sui_execution::executor(&protocol_config, paranoid_checks, silent)
+        let executor = sui_execution::executor(&protocol_config, silent)
             .expect("Creating an executor should not fail here");
 
         // Use a throwaway metrics registry for genesis transaction execution.
@@ -447,7 +472,7 @@ mod test {
         let epoch = EpochData::new_test();
         let transaction_data = &genesis_transaction.data().intent_message().value;
         let (kind, signer, _) = transaction_data.execution_parts();
-        let input_objects = InputObjects::new(vec![], vec![]);
+        let input_objects = CheckedInputObjects::new_for_genesis(vec![]);
 
         let (_inner_temp_store, effects, _execution_error) = executor
             .execute_transaction_to_effects(

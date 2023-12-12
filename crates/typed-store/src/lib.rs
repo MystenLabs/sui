@@ -12,9 +12,9 @@ pub mod traits;
 pub use traits::Map;
 pub mod metrics;
 pub mod rocks;
-pub use rocks::TypedStoreError;
+pub use typed_store_error::TypedStoreError;
 pub mod sally;
 pub mod test_db;
 pub use metrics::DBMetrics;
 
-pub type StoreError = rocks::TypedStoreError;
+pub type StoreError = typed_store_error::TypedStoreError;

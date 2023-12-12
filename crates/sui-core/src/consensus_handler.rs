@@ -28,6 +28,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
+use sui_types::digests::ConsensusCommitDigest;
 use sui_types::executable_transaction::{
     TrustedExecutableTransaction, VerifiedExecutableTransaction,
 };
@@ -79,7 +80,6 @@ impl ConsensusHandlerInitializer {
             )),
         }
     }
-
     pub fn new_consensus_handler(
         &self,
     ) -> ConsensusHandler<Arc<AuthorityStore>, CheckpointService> {
@@ -268,7 +268,18 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
             self.epoch_store.epoch(),
         );
 
-        let prologue_transaction = self.consensus_commit_prologue_transaction(round, timestamp);
+        let prologue_transaction = match self
+            .epoch_store
+            .protocol_config()
+            .include_consensus_digest_in_prologue()
+        {
+            true => self.consensus_commit_prologue_v2_transaction(
+                round,
+                timestamp,
+                consensus_output.consensus_digest(),
+            ),
+            false => self.consensus_commit_prologue_transaction(round, timestamp),
+        };
         let empty_bytes = vec![];
         transactions.push((
             empty_bytes.as_slice(),
@@ -320,14 +331,10 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
             let span = trace_span!("process_consensus_certs");
             let _guard = span.enter();
             for (authority_index, authority_transactions) in consensus_output.transactions() {
-                let num_certs = self
-                    .last_consensus_stats
+                // TODO: consider only messages within 1~3 rounds of the leader?
+                self.last_consensus_stats
                     .stats
-                    .inc_narwhal_certificates(authority_index as usize);
-                self.metrics
-                    .consensus_committed_certificates
-                    .with_label_values(&[&authority_index.to_string()])
-                    .set(num_certs as i64);
+                    .inc_num_messages(authority_index as usize);
                 for (serialized_transaction, transaction) in authority_transactions {
                     bytes += serialized_transaction.len();
                     self.metrics
@@ -338,19 +345,54 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                         &transaction.kind,
                         ConsensusTransactionKind::UserTransaction(_)
                     ) {
-                        let num_txns = self
-                            .last_consensus_stats
+                        self.last_consensus_stats
                             .stats
-                            .inc_user_transactions(authority_index as usize);
-                        self.metrics
-                            .consensus_committed_user_transactions
-                            .with_label_values(&[&authority_index.to_string()])
-                            .set(num_txns as i64);
+                            .inc_num_user_transactions(authority_index as usize);
                     }
-                    let transaction = SequencedConsensusTransactionKind::External(transaction);
-                    transactions.push((serialized_transaction, transaction, authority_index));
+                    if let ConsensusTransactionKind::RandomnessStateUpdate(
+                        randomness_round,
+                        bytes,
+                    ) = &transaction.kind
+                    {
+                        if self.epoch_store.randomness_state_enabled() {
+                            debug!("adding RandomnessStateUpdate tx for commit round {round:?}, randomness round {randomness_round:?}");
+                            let randomness_state_update_transaction = self
+                                .randomness_state_update_transaction(
+                                    *randomness_round,
+                                    bytes.clone(),
+                                );
+
+                            transactions.push((
+                                empty_bytes.as_slice(),
+                                SequencedConsensusTransactionKind::System(
+                                    randomness_state_update_transaction,
+                                ),
+                                consensus_output.leader_author_index(),
+                            ));
+                        } else {
+                            debug!("ignoring RandomnessStateUpdate tx for commit round {round:?}, randomness round {randomness_round:?}: randomness state is not enabled on this node")
+                        }
+                    } else {
+                        let transaction = SequencedConsensusTransactionKind::External(transaction);
+                        transactions.push((serialized_transaction, transaction, authority_index));
+                    }
                 }
             }
+        }
+
+        for i in 0..self.committee.size() {
+            let hostname = self
+                .committee
+                .authority_hostname_by_index(i as u16)
+                .unwrap_or_default();
+            self.metrics
+                .consensus_committed_messages
+                .with_label_values(&[hostname])
+                .set(self.last_consensus_stats.stats.get_num_messages(i) as i64);
+            self.metrics
+                .consensus_committed_user_transactions
+                .with_label_values(&[hostname])
+                .set(self.last_consensus_stats.stats.get_num_user_transactions(i) as i64);
         }
         self.metrics
             .consensus_handler_processed_bytes
@@ -470,24 +512,30 @@ impl AsyncTransactionScheduler {
 /// During initialization, the sender is passed into Mysticeti which can send consensus output
 /// to the channel.
 pub struct MysticetiConsensusHandler {
-    _handle: tokio::task::JoinHandle<()>,
+    handle: tokio::task::JoinHandle<()>,
 }
 
 impl MysticetiConsensusHandler {
     pub fn new(
-        mut consensus_handler: ConsensusHandler<AuthorityStore, CheckpointService>,
-        mut receiver: tokio::sync::mpsc::Receiver<
+        mut consensus_handler: ConsensusHandler<Arc<AuthorityStore>, CheckpointService>,
+        mut receiver: tokio::sync::mpsc::UnboundedReceiver<
             mysticeti_core::consensus::linearizer::CommittedSubDag,
         >,
     ) -> Self {
-        let _handle = spawn_monitored_task!(async move {
+        let handle = spawn_monitored_task!(async move {
             while let Some(committed_subdag) = receiver.recv().await {
                 consensus_handler
                     .handle_consensus_output_internal(committed_subdag)
                     .await;
             }
         });
-        Self { _handle }
+        Self { handle }
+    }
+}
+
+impl Drop for MysticetiConsensusHandler {
+    fn drop(&mut self) {
+        self.handle.abort();
     }
 }
 
@@ -501,6 +549,21 @@ impl<T, C> ConsensusHandler<T, C> {
             self.epoch(),
             round,
             commit_timestamp_ms,
+        );
+        VerifiedExecutableTransaction::new_system(transaction, self.epoch())
+    }
+
+    fn consensus_commit_prologue_v2_transaction(
+        &self,
+        round: u64,
+        commit_timestamp_ms: u64,
+        consensus_digest: ConsensusCommitDigest,
+    ) -> VerifiedExecutableTransaction {
+        let transaction = VerifiedTransaction::new_consensus_commit_prologue_v2(
+            self.epoch(),
+            round,
+            commit_timestamp_ms,
+            consensus_digest,
         );
         VerifiedExecutableTransaction::new_system(transaction, self.epoch())
     }
@@ -526,6 +589,28 @@ impl<T, C> ConsensusHandler<T, C> {
         VerifiedExecutableTransaction::new_system(transaction, self.epoch())
     }
 
+    fn randomness_state_update_transaction(
+        &self,
+        randomness_round: u64,
+        random_bytes: Vec<u8>,
+    ) -> VerifiedExecutableTransaction {
+        assert!(self.epoch_store.randomness_state_enabled());
+        let transaction = VerifiedTransaction::new_randomness_state_update(
+            self.epoch(),
+            randomness_round,
+            random_bytes,
+            self.epoch_store
+                .epoch_start_config()
+                .randomness_obj_initial_shared_version()
+                .expect("randomness state obj must exist"),
+        );
+        debug!(
+            "created randomness state update transaction: {:?}",
+            transaction.digest()
+        );
+        VerifiedExecutableTransaction::new_system(transaction, self.epoch())
+    }
+
     fn epoch(&self) -> EpochId {
         self.epoch_store.epoch()
     }
@@ -544,6 +629,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
         ConsensusTransactionKind::EndOfPublish(_) => "end_of_publish",
         ConsensusTransactionKind::CapabilityNotification(_) => "capability_notification",
         ConsensusTransactionKind::NewJWKFetched(_, _, _) => "new_jwk_fetched",
+        ConsensusTransactionKind::RandomnessStateUpdate(_, _) => "randomness_state_update",
     }
 }
 
@@ -681,6 +767,13 @@ impl SequencedConsensusTransaction {
         } else {
             false
         }
+    }
+
+    pub fn is_system(&self) -> bool {
+        matches!(
+            self.transaction,
+            SequencedConsensusTransactionKind::System(_)
+        )
     }
 
     pub fn as_shared_object_txn(&self) -> Option<&SenderSignedData> {
@@ -849,11 +942,11 @@ mod tests {
         assert_eq!(last_consensus_stats_1.index.last_committed_round, 5_u64);
         assert_ne!(last_consensus_stats_1.hash, 0);
         assert_eq!(
-            last_consensus_stats_1.stats.get_narwhal_certificates(0),
+            last_consensus_stats_1.stats.get_num_messages(0),
             num_certificates as u64
         );
         assert_eq!(
-            last_consensus_stats_1.stats.get_user_transactions(0),
+            last_consensus_stats_1.stats.get_num_user_transactions(0),
             num_transactions as u64
         );
 

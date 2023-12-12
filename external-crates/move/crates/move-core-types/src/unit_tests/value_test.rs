@@ -4,10 +4,10 @@
 
 use crate::{
     account_address::AccountAddress,
-    ident_str,
+    annotated_value as A, ident_str,
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
-    value::{MoveStruct, MoveValue},
+    runtime_value as R,
 };
 use serde_json::json;
 
@@ -19,25 +19,20 @@ fn struct_deserialization() {
         module: ident_str!("MyModule").to_owned(),
         type_params: vec![],
     };
-    let values = vec![MoveValue::U64(7), MoveValue::Bool(true)];
+    let values = vec![R::MoveValue::U64(7), R::MoveValue::Bool(true)];
+    let avalues = vec![A::MoveValue::U64(7), A::MoveValue::Bool(true)];
     let fields = vec![ident_str!("f").to_owned(), ident_str!("g").to_owned()];
-    let field_values: Vec<(Identifier, MoveValue)> =
-        fields.into_iter().zip(values.clone()).collect();
+    let field_values: Vec<(Identifier, A::MoveValue)> =
+        fields.into_iter().zip(avalues.clone()).collect();
 
     // test each deserialization scheme
-    let runtime_value = MoveStruct::Runtime(values);
+    let runtime_value = R::MoveStruct(values);
     assert_eq!(
         serde_json::to_value(&runtime_value).unwrap(),
         json!([7, true])
     );
 
-    let fielded_value = MoveStruct::WithFields(field_values.clone());
-    assert_eq!(
-        serde_json::to_value(&fielded_value).unwrap(),
-        json!({ "f": 7, "g": true })
-    );
-
-    let typed_value = MoveStruct::with_types(struct_type, field_values);
+    let typed_value = A::MoveStruct::new(struct_type, field_values);
     assert_eq!(
         serde_json::to_value(&typed_value).unwrap(),
         json!({
@@ -56,24 +51,24 @@ fn struct_deserialization() {
 /// the string.
 #[test]
 fn struct_one_field_equiv_value() {
-    let val = MoveValue::Vector(vec![
-        MoveValue::U8(1),
-        MoveValue::U8(22),
-        MoveValue::U8(13),
-        MoveValue::U8(99),
+    let val = R::MoveValue::Vector(vec![
+        R::MoveValue::U8(1),
+        R::MoveValue::U8(22),
+        R::MoveValue::U8(13),
+        R::MoveValue::U8(99),
     ]);
-    let s1 = MoveValue::Struct(MoveStruct::Runtime(vec![val.clone()]))
+    let s1 = R::MoveValue::Struct(R::MoveStruct(vec![val.clone()]))
         .simple_serialize()
         .unwrap();
     let s2 = val.simple_serialize().unwrap();
     assert_eq!(s1, s2);
 
     let utf8_str = "çå∞≠¢õß∂ƒ∫";
-    let vec_u8 = MoveValue::Vector(
+    let vec_u8 = R::MoveValue::Vector(
         utf8_str
             .as_bytes()
             .iter()
-            .map(|c| MoveValue::U8(*c))
+            .map(|c| R::MoveValue::U8(*c))
             .collect(),
     );
     assert_eq!(
@@ -98,28 +93,15 @@ fn nested_typed_struct_deserialization() {
     };
 
     // test each deserialization scheme
-    let nested_runtime_struct = MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::U64(7)]));
-    let runtime_value = MoveStruct::Runtime(vec![nested_runtime_struct]);
+    let nested_runtime_struct = R::MoveValue::Struct(R::MoveStruct(vec![R::MoveValue::U64(7)]));
+    let runtime_value = R::MoveStruct(vec![nested_runtime_struct]);
     assert_eq!(serde_json::to_value(&runtime_value).unwrap(), json!([[7]]));
 
-    let nested_fielded_struct = MoveValue::Struct(MoveStruct::with_fields(vec![(
-        ident_str!("f").to_owned(),
-        MoveValue::U64(7),
-    )]));
-    let fielded_value = MoveStruct::with_fields(vec![(
-        ident_str!("inner").to_owned(),
-        nested_fielded_struct,
-    )]);
-    assert_eq!(
-        serde_json::to_value(&fielded_value).unwrap(),
-        json!({ "inner": { "f": 7 } })
-    );
-
-    let nested_typed_struct = MoveValue::Struct(MoveStruct::with_types(
+    let nested_typed_struct = A::MoveValue::Struct(A::MoveStruct::new(
         nested_struct_type,
-        vec![(ident_str!("f").to_owned(), MoveValue::U64(7))],
+        vec![(ident_str!("f").to_owned(), A::MoveValue::U64(7))],
     ));
-    let typed_value = MoveStruct::with_types(
+    let typed_value = A::MoveStruct::new(
         struct_type,
         vec![(ident_str!("inner").to_owned(), nested_typed_struct)],
     );

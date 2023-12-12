@@ -15,7 +15,7 @@ const RPC_VERSION_FULL: &str = env!("CARGO_PKG_VERSION");
 const RPC_VERSION_YEAR: &str = env!("CARGO_PKG_VERSION_MAJOR");
 const RPC_VERSION_MONTH: &str = env!("CARGO_PKG_VERSION_MINOR");
 
-static VERSION_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-version");
+pub(crate) static VERSION_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-version");
 
 pub(crate) struct SuiRpcVersion(Vec<u8>, Vec<Vec<u8>>);
 

@@ -179,7 +179,6 @@ async fn run_publish(
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -210,7 +209,6 @@ async fn run_upgrade(
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;

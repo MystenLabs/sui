@@ -19,9 +19,10 @@ module 0x1.Test {
 
 
 //# run
+module 0x42.m {
 import 0x1.Test;
 
-main() {
+entry foo() {
     let x: u64;
     let y: u64;
     let x0: u64;
@@ -36,4 +37,5 @@ label b0:
     assert(move(y) == 14, 42);
 
     return;
+}
 }

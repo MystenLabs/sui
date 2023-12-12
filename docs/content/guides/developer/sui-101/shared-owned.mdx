@@ -5,7 +5,7 @@ description: On Sui, you can use shared objects, owned objects, or both in your 
 
 Objects on Sui can be shared (accessible for reads and writes by any transaction) or owned (accessible for reads and writes by transactions signed by their owner).  Many applications can be built using a solution that either uses shared objects or only owned objects, with trade-offs for each that need to be weighed.
 
-Transactions that use only owned objects benefit from very low latency to finality, because they do not need to go through consensus.  On the other hand, the fact that only the owner of the the object can access it complicates processes that need to work with objects owned by multiple parties, and access to very hot objects needs to be coordinated off-chain.
+Transactions that use only owned objects benefit from very low latency to finality, because they do not need to go through consensus.  On the other hand, the fact that only the owner of the object can access it complicates processes that need to work with objects owned by multiple parties, and access to very hot objects needs to be coordinated off-chain.
 
 Transactions that access one or more shared objects require consensus to sequence reads and written to those objects.  This comes at a slightly higher gas cost and increases latency and transactions that access more shared objects or particularly popular objects may see increases in latency due to contention, but the expressivity of allowing multiple addresses to access the same shared object, and the simplicity of allowing the chain to coordinate access to hot objects are benefits.
 
@@ -22,7 +22,7 @@ The Escrow example demonstrates the trade-offs between shared objects and owned 
 
 Both implementations use a primitive for locking values, which offers the following interface:
 
-```rust
+```move
 module escrow::lock {
     public fun lock<T: store>(obj: T, ctx: &mut TxContext): (Locked<T>, Key);
     public fun unlock<T: store>(locked: Locked<T>, key: Key): T
@@ -41,7 +41,7 @@ The protocol for swapping via escrow implemented using owned objects starts with
 
 Assuming both parties are happy to continue, the next step requires a third party to act as custodian.  The custodian holds objects that are waiting for their counterparts to arrive and when they arrive, it matches them up to complete the swap.
 
-```rust
+```move
 public fun create<T: key + store>(
     key: Key,
     locked: Locked<T>,
@@ -68,7 +68,7 @@ The `create` function prepares the `Escrow` request and sends it to the `custodi
 Although the custodian is trusted to preserve liveness (to complete swaps if it owns both sides of a swap and to return objects if requested), all other correctness properties are maintained in Move: Even though the custodian owns both objects being swapped, the only valid action they are permitted to take is to match them up with their correct counterpart to finish the swap, or to return them:
 
 
-```rust
+```move
 public fun swap<T: key + store, U: key + store>(
     obj1: Escrow<T>,
     obj2: Escrow<U>,
@@ -117,7 +117,7 @@ The `swap` function checks that senders and recipients match and that each party
 
 The protocol in the shared object case is less symmetric, but still starts with the first party locking the object they wish to swap. The second party can then view the object that was locked, and if they decide they want to swap with it, they indicate their interest by creating a swap request:
 
-```rust
+```move
 public fun create<T: key + store>(
     escrowed: T,
     exchange_key: ID,
@@ -138,7 +138,7 @@ public fun create<T: key + store>(
 
 This time the swap request is a shared object, and accepts the object being escrowed directly (not locked).  The request remembers the address that sent it (who is allowed to reclaim the object if the swap hasn't already happened), and the intended recipient, who is then expected to continue the swap by providing the object they initially locked:
 
-```rust
+```move
 public fun swap<T: key + store, U: key + store>(
     escrow: &mut Escrow<T>,
     key: Key,

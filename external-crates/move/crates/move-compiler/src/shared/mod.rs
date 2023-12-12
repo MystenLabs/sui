@@ -9,9 +9,7 @@ use crate::{
         codes::{Category, Declarations, DiagnosticsID, Severity, UnusedItem, WarningFilter},
         Diagnostic, Diagnostics, WarningFilters,
     },
-    editions::{
-        check_feature as edition_check_feature, Edition, FeatureGate, Flavor, SyntaxEdition,
-    },
+    editions::{check_feature_or_error as edition_check_feature, Edition, FeatureGate, Flavor},
     expansion::ast as E,
     naming::ast as N,
     naming::ast::ModuleDefinition,
@@ -577,8 +575,8 @@ impl CompilationEnv {
         self.package_config(package).edition.supports(feature)
     }
 
-    pub fn syntax_edition(&self, package: Option<Symbol>) -> SyntaxEdition {
-        self.package_config(package).edition.syntax()
+    pub fn edition(&self, package: Option<Symbol>) -> Edition {
+        self.package_config(package).edition
     }
 
     pub fn package_config(&self, package: Option<Symbol>) -> &PackageConfig {
@@ -845,7 +843,6 @@ pub mod known_attributes {
     pub enum AttributePosition {
         AddressBlock,
         Module,
-        Script,
         Use,
         Friend,
         Constant,
@@ -898,7 +895,6 @@ pub mod known_attributes {
             match self {
                 Self::AddressBlock => write!(f, "address block"),
                 Self::Module => write!(f, "module"),
-                Self::Script => write!(f, "script"),
                 Self::Use => write!(f, "use"),
                 Self::Friend => write!(f, "friend"),
                 Self::Constant => write!(f, "constant"),
@@ -1062,7 +1058,6 @@ pub mod known_attributes {
             static ALLOW_WARNING_POSITIONS: Lazy<BTreeSet<AttributePosition>> = Lazy::new(|| {
                 BTreeSet::from([
                     AttributePosition::Module,
-                    AttributePosition::Script,
                     AttributePosition::Constant,
                     AttributePosition::Struct,
                     AttributePosition::Function,

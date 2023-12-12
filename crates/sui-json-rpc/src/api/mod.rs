@@ -24,10 +24,11 @@ use prometheus::{register_int_counter_with_registry, IntCounter};
 pub use read::ReadApiClient;
 pub use read::ReadApiOpenRpc;
 pub use read::ReadApiServer;
+use tap::TapFallible;
+use tracing::warn;
 pub use transaction_builder::TransactionBuilderClient;
 pub use transaction_builder::TransactionBuilderOpenRpc;
 pub use transaction_builder::TransactionBuilderServer;
-use typed_store::rocks::read_size_from_env;
 pub use write::WriteApiClient;
 pub use write::WriteApiOpenRpc;
 pub use write::WriteApiServer;
@@ -275,4 +276,17 @@ impl JsonRpcMetrics {
         let registry = prometheus::Registry::new();
         Self::new(&registry)
     }
+}
+
+pub fn read_size_from_env(var_name: &str) -> Option<usize> {
+    std::env::var(var_name)
+        .ok()?
+        .parse::<usize>()
+        .tap_err(|e| {
+            warn!(
+                "Env var {} does not contain valid usize integer: {}",
+                var_name, e
+            )
+        })
+        .ok()
 }

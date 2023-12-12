@@ -3,11 +3,13 @@ title: Sui Client CLI
 description: The Sui Client CLI provides command-level access to interact with the Sui network.
 ---
 
-The Sui Client CLI provides command-level access to interact with the Sui network. Typical uses for the Sui Client CLI include publishing Move smart contracts, getting the information of an object, executing transactions, or managing addresses.
+The Sui CLI `client` command provides command-level access to interact with the Sui network. Typical uses for `sui client` include publishing Move smart contracts, getting the information of an object, executing transactions, or managing addresses.
+
+{@include: ../../snippets/cli-check-install.mdx}
 
 ## Commands
 
-The following list itewmizes all the available subcommands for the `sui client` command.
+The following list itemizes all the available subcommands for the `sui client` command.
 
 ```
 Usage: sui client [OPTIONS] [COMMAND]
@@ -89,7 +91,7 @@ Added new Sui env [mainnet] to config.
 Use the `sui client switch` command to change the current network. This example switches the current network to `mainnet`.
 
 ```shell
-$ sui client switch --mainnet
+$ sui client switch --env mainnet
 
 Active environment switched to [mainnet]
 ```

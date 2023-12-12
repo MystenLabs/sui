@@ -31,6 +31,47 @@ use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 pub use write_store::WriteStore;
 
+/// A potential input to a transaction.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum InputKey {
+    VersionedObject {
+        id: ObjectID,
+        version: SequenceNumber,
+    },
+    Package {
+        id: ObjectID,
+    },
+}
+
+impl InputKey {
+    pub fn id(&self) -> ObjectID {
+        match self {
+            InputKey::VersionedObject { id, .. } => *id,
+            InputKey::Package { id } => *id,
+        }
+    }
+
+    pub fn version(&self) -> Option<SequenceNumber> {
+        match self {
+            InputKey::VersionedObject { version, .. } => Some(*version),
+            InputKey::Package { .. } => None,
+        }
+    }
+}
+
+impl From<&Object> for InputKey {
+    fn from(obj: &Object) -> Self {
+        if obj.is_package() {
+            InputKey::Package { id: obj.id() }
+        } else {
+            InputKey::VersionedObject {
+                id: obj.id(),
+                version: obj.version(),
+            }
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum WriteKind {
     /// The object was in storage already but has been modified
@@ -151,17 +192,15 @@ pub trait Storage {
 
 pub type PackageFetchResults<Package> = Result<Vec<Package>, Vec<ObjectID>>;
 
-#[derive(Clone)]
-pub struct PackageObjectArc {
-    package_object: Arc<Object>,
+#[derive(Clone, Debug)]
+pub struct PackageObject {
+    package_object: Object,
 }
 
-impl PackageObjectArc {
+impl PackageObject {
     pub fn new(package_object: Object) -> Self {
         assert!(package_object.is_package());
-        Self {
-            package_object: Arc::new(package_object),
-        }
+        Self { package_object }
     }
 
     pub fn object(&self) -> &Object {
@@ -173,24 +212,30 @@ impl PackageObjectArc {
     }
 }
 
+impl From<PackageObject> for Object {
+    fn from(package_object_arc: PackageObject) -> Self {
+        package_object_arc.package_object
+    }
+}
+
 pub trait BackingPackageStore {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>>;
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>>;
 }
 
 impl<S: BackingPackageStore> BackingPackageStore for Arc<S> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         BackingPackageStore::get_package_object(self.as_ref(), package_id)
     }
 }
 
 impl<S: ?Sized + BackingPackageStore> BackingPackageStore for &S {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         BackingPackageStore::get_package_object(*self, package_id)
     }
 }
 
 impl<S: ?Sized + BackingPackageStore> BackingPackageStore for &mut S {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         BackingPackageStore::get_package_object(*self, package_id)
     }
 }
@@ -198,7 +243,7 @@ impl<S: ?Sized + BackingPackageStore> BackingPackageStore for &mut S {
 pub fn load_package_object_from_object_store(
     store: &impl ObjectStore,
     package_id: &ObjectID,
-) -> SuiResult<Option<PackageObjectArc>> {
+) -> SuiResult<Option<PackageObject>> {
     let package = store.get_object(package_id)?;
     if let Some(obj) = &package {
         fp_ensure!(
@@ -208,7 +253,7 @@ pub fn load_package_object_from_object_store(
             }
         );
     }
-    Ok(package.map(PackageObjectArc::new))
+    Ok(package.map(PackageObject::new))
 }
 
 /// Returns Ok(<package object for each package id in `package_ids`>) if all package IDs in
@@ -217,7 +262,7 @@ pub fn load_package_object_from_object_store(
 pub fn get_package_objects<'a>(
     store: &impl BackingPackageStore,
     package_ids: impl IntoIterator<Item = &'a ObjectID>,
-) -> SuiResult<PackageFetchResults<PackageObjectArc>> {
+) -> SuiResult<PackageFetchResults<PackageObject>> {
     let packages: Vec<Result<_, _>> = package_ids
         .into_iter()
         .map(|id| match store.get_package_object(id) {
@@ -431,82 +476,6 @@ pub fn transaction_receiving_object_keys(tx: &SenderSignedData) -> Vec<ObjectKey
         .collect()
 }
 
-pub trait MarkerTableQuery {
-    fn have_received_object_at_version(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError>;
-
-    fn get_deleted_shared_object_previous_tx_digest(
-        &self,
-        object_id: &ObjectID,
-        version: &SequenceNumber,
-        epoch_id: EpochId,
-    ) -> Result<Option<TransactionDigest>, SuiError>;
-
-    fn is_shared_object_deleted(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError>;
-}
-
-impl<T: MarkerTableQuery> MarkerTableQuery for Arc<T> {
-    fn have_received_object_at_version(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        self.as_ref()
-            .have_received_object_at_version(object_id, version, epoch_id)
-    }
-    fn get_deleted_shared_object_previous_tx_digest(
-        &self,
-        object_id: &ObjectID,
-        version: &SequenceNumber,
-        epoch_id: EpochId,
-    ) -> Result<Option<TransactionDigest>, SuiError> {
-        self.as_ref()
-            .get_deleted_shared_object_previous_tx_digest(object_id, version, epoch_id)
-    }
-    fn is_shared_object_deleted(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        self.as_ref().is_shared_object_deleted(object_id, epoch_id)
-    }
-}
-
-impl<T: MarkerTableQuery> MarkerTableQuery for &T {
-    fn have_received_object_at_version(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        (*self).have_received_object_at_version(object_id, version, epoch_id)
-    }
-    fn get_deleted_shared_object_previous_tx_digest(
-        &self,
-        object_id: &ObjectID,
-        version: &SequenceNumber,
-        epoch_id: EpochId,
-    ) -> Result<Option<TransactionDigest>, SuiError> {
-        (*self).get_deleted_shared_object_previous_tx_digest(object_id, version, epoch_id)
-    }
-    fn is_shared_object_deleted(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        (*self).is_shared_object_deleted(object_id, epoch_id)
-    }
-}
-
 impl Display for DeleteKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -535,7 +504,7 @@ where
     }
 }
 
-pub trait GetSharedLocks {
+pub trait GetSharedLocks: Send + Sync {
     fn get_shared_locks(
         &self,
         transaction_digest: &TransactionDigest,

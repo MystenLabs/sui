@@ -1,5 +1,6 @@
 //# print-bytecode
-main() {
+module 0x1.m {
+entry foo() {
     let x: u64;
     let ref_x: &mut u64;
 label b0:
@@ -8,8 +9,9 @@ label b0:
     *move(ref_x) = 42;
     return;
 }
+}
 
-//# print-bytecode --input=module
+//# print-bytecode
 module 0x3d.Foobar {
     struct FooCoin { value: u64 }
 
@@ -22,7 +24,7 @@ module 0x3d.Foobar {
     }
 }
 
-//# print-bytecode --input=module
+//# print-bytecode
 module 0x4d.Foobar {
     struct FooCoin<T> { value: u64 }
 

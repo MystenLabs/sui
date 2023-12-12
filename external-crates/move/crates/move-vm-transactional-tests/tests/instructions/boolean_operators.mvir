@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
   assert((true && false) == false, 99);
   assert((true || false) == true, 100);
@@ -9,4 +11,6 @@ label b0:
   assert(!!false == false, 104);
 
   return;
+}
+
 }

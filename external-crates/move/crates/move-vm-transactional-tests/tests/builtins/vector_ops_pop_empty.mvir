@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x1.m {
+
+entry foo() {
     let v: vector<u64>;
 label b0:
     v = vec_pack_0<u64>();
@@ -8,8 +10,11 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x2.m {
+
+entry foo() {
     let v: vector<u64>;
 label b0:
     v = vec_pack_1<u64>(42);
@@ -17,4 +22,6 @@ label b0:
     _ = vec_pop_back<u64>(&mut v);
 
     return;
+}
+
 }

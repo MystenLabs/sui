@@ -289,7 +289,7 @@ impl SubmitToConsensus for LazyNarwhalClient {
 /// Submit Sui certificates to the consensus.
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
-    consensus_client: Box<dyn SubmitToConsensus>,
+    consensus_client: Arc<dyn SubmitToConsensus>,
     /// Authority pubkey.
     authority: AuthorityName,
     /// The limit to number of inflight transactions at this node.
@@ -303,7 +303,7 @@ pub struct ConsensusAdapter {
     /// as delay step.
     submit_delay_step_override: Option<Duration>,
     /// A structure to check the connection statuses populated by the Connection Monitor Listener
-    connection_monitor_status: Box<Arc<dyn CheckConnection>>,
+    connection_monitor_status: Arc<dyn CheckConnection>,
     /// A structure to check the reputation scores populated by Consensus
     low_scoring_authorities: ArcSwap<Arc<ArcSwap<HashMap<AuthorityName, u64>>>>,
     /// The throughput profiler to be used when making decisions to submit to consensus
@@ -337,9 +337,9 @@ pub struct ConnectionMonitorStatusForTests {}
 impl ConsensusAdapter {
     /// Make a new Consensus adapter instance.
     pub fn new(
-        consensus_client: Box<dyn SubmitToConsensus>,
+        consensus_client: Arc<dyn SubmitToConsensus>,
         authority: AuthorityName,
-        connection_monitor_status: Box<Arc<dyn CheckConnection>>,
+        connection_monitor_status: Arc<dyn CheckConnection>,
         max_pending_transactions: usize,
         max_pending_local_submissions: usize,
         max_submit_position: Option<usize>,
@@ -828,7 +828,19 @@ impl ConsensusAdapter {
             if reconfig_guard.is_reject_user_certs() {
                 let pending_count = epoch_store.pending_consensus_certificates_count();
                 debug!(epoch=?epoch_store.epoch(), ?pending_count, "Deciding whether to send EndOfPublish");
-                pending_count == 0 // send end of epoch if empty
+                // Send end of epoch if empty and all deferred tx are procesed.
+                if pending_count > 0 {
+                    false
+                } else {
+                    // Don't check deferred table until pending_count is already 0, since it may
+                    // require scanning through a bunch of deletion markers.
+                    let deferred_is_empty = epoch_store.deferred_transactions_empty();
+                    debug!(
+                        ?deferred_is_empty,
+                        "Deciding whether to block EndOfPublish on deferred tx"
+                    );
+                    deferred_is_empty
+                }
             } else {
                 false
             }
@@ -1168,11 +1180,11 @@ mod adapter_tests {
 
         // When we define max submit position and delay step
         let consensus_adapter = ConsensusAdapter::new(
-            Box::new(LazyNarwhalClient::new(
+            Arc::new(LazyNarwhalClient::new(
                 "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
             )),
             *committee.authority_by_index(0).unwrap(),
-            Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
+            Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
             100_000,
             Some(1),
@@ -1200,11 +1212,11 @@ mod adapter_tests {
 
         // Without submit position and delay step
         let consensus_adapter = ConsensusAdapter::new(
-            Box::new(LazyNarwhalClient::new(
+            Arc::new(LazyNarwhalClient::new(
                 "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
             )),
             *committee.authority_by_index(0).unwrap(),
-            Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
+            Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
             100_000,
             None,

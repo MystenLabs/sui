@@ -12,7 +12,7 @@ use crate::{
     parser::ast::{ConstantName, FunctionName, StructName, ENTRY_MODIFIER},
     shared::{ast_debug::*, unique_map::UniqueMap},
 };
-use move_core_types::value::MoveValue;
+use move_core_types::runtime_value::MoveValue;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, VecDeque};
@@ -26,23 +26,6 @@ use std::collections::{BTreeMap, VecDeque};
 #[derive(Debug, Clone)]
 pub struct Program {
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
-    pub scripts: BTreeMap<Symbol, Script>,
-}
-
-//**************************************************************************************************
-// Scripts
-//**************************************************************************************************
-
-#[derive(Debug, Clone)]
-pub struct Script {
-    pub warning_filter: WarningFilters,
-    // package name metadata from compiler arguments, not used for any language rules
-    pub package_name: Option<Symbol>,
-    pub attributes: Attributes,
-    pub loc: Loc,
-    pub constants: UniqueMap<ConstantName, Constant>,
-    pub function_name: FunctionName,
-    pub function: Function,
 }
 
 //**************************************************************************************************
@@ -176,7 +159,7 @@ fn remap_labels_block(remapping: &BTreeMap<Label, Label>, block: &mut BasicBlock
 fn remap_labels_cmd(remapping: &BTreeMap<Label, Label>, sp!(_, cmd_): &mut Command) {
     use Command_::*;
     match cmd_ {
-        Break | Continue => panic!("ICE break/continue not translated to jumps"),
+        Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
         Mutate(_, _) | Assign(_, _) | IgnoreAndPop { .. } | Abort(_) | Return { .. } => (),
         Jump { target, .. } => *target = remapping[target],
         JumpIf {
@@ -194,43 +177,13 @@ fn remap_labels_cmd(remapping: &BTreeMap<Label, Label>, sp!(_, cmd_): &mut Comma
 
 impl AstDebug for Program {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Program { modules, scripts } = self;
+        let Program { modules } = self;
 
         for (m, mdef) in modules.key_cloned_iter() {
             w.write(&format!("module {}", m));
             w.block(|w| mdef.ast_debug(w));
             w.new_line();
         }
-
-        for (n, s) in scripts {
-            w.write(&format!("script {}", n));
-            w.block(|w| s.ast_debug(w));
-            w.new_line()
-        }
-    }
-}
-
-impl AstDebug for Script {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        let Script {
-            warning_filter,
-            package_name,
-            attributes,
-            loc: _loc,
-            constants,
-            function_name,
-            function,
-        } = self;
-        warning_filter.ast_debug(w);
-        if let Some(n) = package_name {
-            w.writeln(&format!("{}", n))
-        }
-        attributes.ast_debug(w);
-        for cdef in constants.key_cloned_iter() {
-            cdef.ast_debug(w);
-            w.new_line();
-        }
-        (*function_name, function).ast_debug(w);
     }
 }
 

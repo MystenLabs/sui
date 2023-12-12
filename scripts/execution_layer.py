@@ -382,17 +382,17 @@ def cut_directories(f):
     if f == "latest":
         crates.extend(
             [
-                external / "move" / "move-bytecode-verifier",
-                external / "move" / "move-stdlib",
-                external / "move" / "vm" / "runtime",
+                external / "move" / "crates" / "move-bytecode-verifier",
+                external / "move" / "crates" / "move-stdlib",
+                external / "move" / "crates" / "move-vm-runtime",
             ]
         )
     else:
         crates.extend(
             [
-                external / "move" / "move-execution" / f / "move-bytecode-verifier",
-                external / "move" / "move-execution" / f / "move-stdlib",
-                external / "move" / "move-execution" / f / "move-vm" / "runtime",
+                external / "move" / "move-execution" / f / "crates" / "move-bytecode-verifier",
+                external / "move" / "move-execution" / f / "crates" / "move-stdlib",
+                external / "move" / "move-execution" / f / "crates" / "move-vm-runtime",
             ]
         )
 
@@ -406,8 +406,7 @@ def impl(feature):
 
 def clean_up_cut(feature):
     """Remove some special-case files/directories from a given cut"""
-    move_exec = Path() / "external-crates" / "move" / "move-execution" / feature
-    rmtree(move_exec / "move-bytecode-verifier" / "transactional-tests")
+    move_exec = Path() / "external-crates" / "move" / "move-execution" / feature / "crates"
     remove(move_exec / "move-stdlib" / "src" / "main.rs")
     rmtree(move_exec / "move-stdlib" / "tests")
 
@@ -490,7 +489,6 @@ def generate_lib(output_file: TextIO):
             executor = (
                 "{spc}{version} => Arc::new({cut}::Executor::new(\n"
                 "{spc}    protocol_config,\n"
-                "{spc}    paranoid_type_checks,\n"
                 "{spc}    silent,\n"
                 "{spc})?),\n"
             )

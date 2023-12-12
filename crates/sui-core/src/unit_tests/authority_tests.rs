@@ -31,13 +31,14 @@ use sui_json_rpc_types::{
 };
 use sui_macros::sim_test;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_types::digests::ConsensusCommitDigest;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::effects::TransactionEffects;
 use sui_types::epoch_data::EpochData;
 use sui_types::error::UserInputError;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages_consensus::ConsensusCommitPrologue;
+use sui_types::messages_consensus::{ConsensusCommitPrologue, ConsensusCommitPrologueV2};
 use sui_types::object::Data;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::SuiSystemStateWrapper;
@@ -798,68 +799,6 @@ async fn test_dev_inspect_return_values() {
 }
 
 #[tokio::test]
-async fn test_paranoid_mode_with_natives() {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas_object_id = ObjectID::random();
-    let mut expensive_safety_checks_config = ExpensiveSafetyCheckConfig::default();
-    expensive_safety_checks_config.enable_paranoid_checks();
-    let authority_state = init_state_with_ids_and_expensive_checks(
-        vec![(sender, gas_object_id)],
-        expensive_safety_checks_config,
-    )
-    .await;
-
-    let gas_object = authority_state
-        .get_object(&gas_object_id)
-        .await
-        .unwrap()
-        .unwrap();
-    let gas_object_ref = gas_object.compute_object_reference();
-
-    let mut builder = ProgrammableTransactionBuilder::new();
-    let vector = builder.programmable_move_call(
-        MOVE_STDLIB_PACKAGE_ID,
-        ident_str!("vector").to_owned(),
-        ident_str!("empty").to_owned(),
-        vec![TypeTag::U8],
-        vec![],
-    );
-    let value = builder
-        .input(CallArg::Pure(bcs::to_bytes(&(1_u8)).unwrap()))
-        .unwrap();
-    builder.programmable_move_call(
-        MOVE_STDLIB_PACKAGE_ID,
-        ident_str!("vector").to_owned(),
-        ident_str!("push_back").to_owned(),
-        vec![TypeTag::U8],
-        vec![vector, value],
-    );
-    builder.programmable_move_call(
-        MOVE_STDLIB_PACKAGE_ID,
-        ident_str!("vector").to_owned(),
-        ident_str!("pop_back").to_owned(),
-        vec![TypeTag::U8],
-        vec![vector],
-    );
-
-    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
-    let data = TransactionData::new_programmable(
-        sender,
-        vec![gas_object_ref],
-        builder.finish(),
-        rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * 10,
-        rgp,
-    );
-
-    let transaction = to_sender_signed_transaction(data, &sender_key);
-    let signed_effects = send_and_confirm_transaction(&authority_state, transaction)
-        .await
-        .unwrap()
-        .1;
-    assert_eq!(signed_effects.data().status(), &ExecutionStatus::Success);
-}
-
-#[tokio::test]
 async fn test_dev_inspect_gas_coin_argument() {
     let (validator, fullnode, _object_basics) =
         init_state_with_ids_and_object_basics_with_fullnode(vec![]).await;
@@ -1235,7 +1174,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
         authority_state.clone(),
         consensus_address,
     );
-    let metrics = server.metrics.clone();
+    let _metrics = server.metrics.clone();
 
     let server_handle = server.spawn_for_test().await.unwrap();
 
@@ -1258,7 +1197,9 @@ async fn test_handle_transfer_transaction_bad_signature() {
         .await
         .is_err());
 
-    assert_eq!(metrics.signature_errors.get(), 1);
+    // This metric does not increment because of the early check for correct sender address in
+    // verify_user_input (transaction.rs)
+    // assert_eq!(metrics.signature_errors.get(), 1);
 
     let object = authority_state
         .get_object(&object_id)
@@ -1770,7 +1711,12 @@ async fn test_publish_dependent_module_ok() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let genesis_module = match BuiltInFramework::genesis_objects().next().unwrap().data {
+    let genesis_module = match BuiltInFramework::genesis_objects()
+        .next()
+        .unwrap()
+        .into_inner()
+        .data
+    {
         Data::Package(m) => CompiledModule::deserialize_with_defaults(
             m.serialized_module_map().values().next().unwrap(),
         )
@@ -1864,7 +1810,12 @@ async fn test_publish_non_existing_dependent_module() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let genesis_module = match BuiltInFramework::genesis_objects().next().unwrap().data {
+    let genesis_module = match BuiltInFramework::genesis_objects()
+        .next()
+        .unwrap()
+        .into_inner()
+        .data
+    {
         Data::Package(m) => CompiledModule::deserialize_with_defaults(
             m.serialized_module_map().values().next().unwrap(),
         )
@@ -2075,14 +2026,14 @@ async fn test_conflicting_transactions() {
         let object_info = authority_state
             .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
                 object.id(),
-                None,
+                LayoutGenerationOption::None,
             ))
             .await
             .unwrap();
         let gas_info = authority_state
             .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
                 gas_object.id(),
-                None,
+                LayoutGenerationOption::None,
             ))
             .await
             .unwrap();
@@ -3019,6 +2970,43 @@ async fn test_refusal_to_sign_consensus_commit_prologue() {
             epoch: 0,
             round: 0,
             commit_timestamp_ms: 42,
+        }),
+        sender,
+        gas_ref,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC * rgp,
+        rgp,
+    );
+
+    // Sender is able to sign it.
+    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
+    let transaction = authority_state.verify_transaction(transaction).unwrap();
+
+    // But the authority should refuse to handle it.
+    assert!(matches!(
+        authority_state
+            .handle_transaction(&epoch_store, transaction)
+            .await,
+        Err(SuiError::InvalidSystemTransaction),
+    ));
+}
+
+#[tokio::test]
+async fn test_refusal_to_sign_consensus_commit_prologue_v2() {
+    // The system should refuse to handle sender-signed system transactions
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let authority_state = init_state_with_objects(vec![gas_object.clone()]).await;
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
+
+    let gas_ref = gas_object.compute_object_reference();
+    let tx_data = TransactionData::new(
+        TransactionKind::ConsensusCommitPrologueV2(ConsensusCommitPrologueV2 {
+            epoch: 0,
+            round: 0,
+            commit_timestamp_ms: 42,
+            consensus_commit_digest: ConsensusCommitDigest::default(),
         }),
         sender,
         gas_ref,

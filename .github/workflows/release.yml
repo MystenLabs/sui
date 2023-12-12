@@ -38,10 +38,18 @@ jobs:
     timeout-minutes: 80
     strategy:
       matrix:
-        os: [windows-ghcloud, ubuntu-ghcloud, macos-latest-xl, macos-arm64-self-hosted]
+        os: [ windows-ghcloud, ubuntu-ghcloud, macos-latest-xl, macos-arm64-self-hosted ]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Configure AWS credentials
+        if: ${{ env.TAG_NAME != 'main' }}
+        uses: aws-actions/configure-aws-credentials@67fbcbb121271f7775d2e7715933280b06314838 # pin@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
       - name: Clean up tag name ${{ env.TAG_NAME }}
         shell: bash
         run: | 
@@ -54,6 +62,7 @@ jobs:
           ref: ${{ env.sui_tag }}
 
       - name: Setup caching
+        if: ${{ env.sui_tag != 'main' }}
         uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths          
       
       - name: Install nexttest (Windows)
@@ -99,8 +108,10 @@ jobs:
           mv ./target/release/sui-faucet ./target/release/sui-faucet-${os_type}
           mv ./target/release/sui-test-validator ./target/release/sui-test-validator-${os_type}
           mv ./target/release/sui-indexer ./target/release/sui-indexer-${os_type}
+          mv ./target/release/sui-data-ingestion ./target/release/sui-data-ingestion-${os_type}
           mv ./external-crates/move/target/release/move-analyzer ./external-crates/move/target/release/move-analyzer-${os_type}
           tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}* ./external-crates/move/target/release/move-analyzer-${os_type}
+          [[ ${{ env.sui_tag }} == *"mainnet"* ]] && aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz || true
 
       - name: Rename binaries for Windows
         if: ${{ env.sui_tag != 'main' && matrix.os == 'windows-ghcloud' }}
@@ -115,8 +126,10 @@ jobs:
           mv ./target/release/sui-faucet.exe ./target/release/sui-faucet-${os_type}.exe
           mv ./target/release/sui-test-validator.exe ./target/release/sui-test-validator-${os_type}.exe
           mv ./target/release/sui-indexer.exe ./target/release/sui-indexer-${os_type}.exe
+          mv ./target/release/sui-data-ingestion.exe ./target/release/sui-data-ingestion-${os_type}.exe
           mv ./external-crates/move/target/release/move-analyzer.exe ./external-crates/move/target/release/move-analyzer-${os_type}.exe
           tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}* ./external-crates/move/target/release/move-analyzer-${os_type}.exe
+          [[ ${{ env.sui_tag }} == *"mainnet"* ]] && aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz || true
 
       - name: Upload release artifacts for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
@@ -134,6 +147,77 @@ jobs:
           tag_name: ${{ env.sui_tag }}
           files: |
             ./target/release/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
-        env:
-          # Have to use a Personal Access Token (PAT), based on https://tinyurl.com/2by2ntdr
-          GITHUB_TOKEN: ${{ secrets.GH_RELEASE_BUILDS_TOKEN }}
+
+  update-homebrew-formula:
+    needs: release-build
+    runs-on: ubuntu-latest
+    if: ${{ contains(github.ref, 'mainnet') }}
+    steps:
+      # Checkout MystenLabs/homebrew-tap
+      - name: Checkout Target Repository
+        uses: actions/checkout@v3
+        with:
+          repository: MystenLabs/homebrew-tap
+          # @john's PAT, needs to be rotated jan 5 2024
+          token: ${{ secrets.HOMEBREW_TAP_REPO_READ_WRITE }}
+          ref: main
+          fetch-depth: 0
+
+      - name: Clean up tag name ${{ env.TAG_NAME }}
+        shell: bash
+        run: | 
+          echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
+
+      # Download all artifacts from the previous job
+      - name: Download all artifacts
+        uses: actions/download-artifact@v2
+
+      - name: Fetch Ubuntu x86_64 Binary and Compute SHA256
+        shell: bash
+        run: |
+          echo "sha256_ubuntu_release=$(sha256sum sui-binaries-ubuntu-ghcloud/sui-${sui_tag}-ubuntu-x86_64.tgz | awk '{print $1}')" >> $GITHUB_ENV
+          echo "sha256_macos_x86_release=$(sha256sum sui-binaries-macos-latest-xl/sui-${sui_tag}-macos-x86_64.tgz  | awk '{print $1}')" >> $GITHUB_ENV
+          echo "sha256_macos_arm_release$(sha256sum sui-binaries-macos-arm64-self-hosted/sui-${sui_tag}-macos-arm64.tgz | awk '{print $1}' )" >> $GITHUB_ENV
+          
+    # Install Jinja2 for templating
+      - name: Install Jinja2
+        run: pip install jinja2
+
+      - name: Apply Jinja2 Template and Update Formula
+        run: |
+          python3 - <<EOF
+          import jinja2
+          import os
+
+          # Load the template
+          template_loader = jinja2.FileSystemLoader(searchpath="./template")
+          template_env = jinja2.Environment(loader=template_loader)
+          template = template_env.get_template("sui.rb.j2")
+
+          version = "${{ env.sui_tag }}".removeprefix("mainnet-v")
+
+          # Render the template with variables
+          output = template.render(
+              version=version,
+              linux_sha256="${sha256_ubuntu_release}",
+              macos_intel_sha256="${sha256_macos_x86_release}",
+              macos_arm_sha256="${sha256_macos_arm_release}"
+          )
+
+          # Write the output to the formula file
+          with open("Formula/sui.rb", "w") as file:
+            file.write(output)
+          EOF
+
+      # Commit and Push to Target Repository
+      - name: Commit and Push to Target Repository
+        uses: github-actions-x/commit@v2.9
+        with:
+          github-token: ${{ secrets.HOMEBREW_TAP_REPO_READ_WRITE }}
+          commit-message: "Update Homebrew formula for release ${{ env.sui_tag }}"
+          files: Formula/sui.rb
+          push-branch: main
+          rebase: 'true'
+          force-add: 'true'
+          name: ${{ github.triggering_actor }}
+          email: ${{ github.triggering_actor }}@users.noreply.github.com

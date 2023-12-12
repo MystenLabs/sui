@@ -3,8 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diag, diagnostics::Diagnostic, editions::SyntaxEdition, parser::syntax::make_loc,
-    shared::CompilationEnv, FileCommentMap, MatchedFileCommentMap,
+    diag,
+    diagnostics::Diagnostic,
+    editions::{create_feature_error, Edition, FeatureGate},
+    parser::syntax::make_loc,
+    shared::CompilationEnv,
+    FileCommentMap, MatchedFileCommentMap,
 };
 use move_command_line_common::{character_sets::DisplayChar, files::FileHash};
 use move_ir_types::location::Loc;
@@ -75,7 +79,6 @@ pub enum Tok {
     PipePipe,
     RBrace,
     Fun,
-    Script,
     Const,
     Friend,
     NumSign,
@@ -85,6 +88,7 @@ pub enum Tok {
     Enum,
     Type,
     Match,
+    BlockLabel,
 }
 
 impl fmt::Display for Tok {
@@ -154,7 +158,6 @@ impl fmt::Display for Tok {
             PipePipe => "||",
             RBrace => "}",
             Fun => "fun",
-            Script => "script",
             Const => "const",
             Friend => "friend",
             NumSign => "#",
@@ -164,6 +167,7 @@ impl fmt::Display for Tok {
             Enum => "enum",
             Type => "type",
             Match => "match",
+            BlockLabel => "'[Identifier]",
         };
         fmt::Display::fmt(s, formatter)
     }
@@ -172,7 +176,7 @@ impl fmt::Display for Tok {
 pub struct Lexer<'input> {
     text: &'input str,
     file_hash: FileHash,
-    syntax_edition: SyntaxEdition,
+    edition: Edition,
     doc_comments: FileCommentMap,
     matched_doc_comments: MatchedFileCommentMap,
     prev_end: usize,
@@ -182,15 +186,11 @@ pub struct Lexer<'input> {
 }
 
 impl<'input> Lexer<'input> {
-    pub fn new(
-        text: &'input str,
-        file_hash: FileHash,
-        syntax_edition: SyntaxEdition,
-    ) -> Lexer<'input> {
+    pub fn new(text: &'input str, file_hash: FileHash, edition: Edition) -> Lexer<'input> {
         Lexer {
             text,
             file_hash,
-            syntax_edition,
+            edition,
             doc_comments: FileCommentMap::new(),
             matched_doc_comments: MatchedFileCommentMap::new(),
             prev_end: 0,
@@ -340,7 +340,7 @@ impl<'input> Lexer<'input> {
     pub fn lookahead(&mut self) -> Result<Tok, Box<Diagnostic>> {
         let text = self.trim_whitespace_and_comments(self.cur_end)?;
         let next_start = self.text.len() - text.len();
-        let (tok, _) = find_token(self.file_hash, self.syntax_edition, text, next_start)?;
+        let (tok, _) = find_token(self.file_hash, self.edition, text, next_start)?;
         Ok(tok)
     }
 
@@ -349,10 +349,10 @@ impl<'input> Lexer<'input> {
     pub fn lookahead2(&mut self) -> Result<(Tok, Tok), Box<Diagnostic>> {
         let text = self.trim_whitespace_and_comments(self.cur_end)?;
         let offset = self.text.len() - text.len();
-        let (first, length) = find_token(self.file_hash, self.syntax_edition, text, offset)?;
+        let (first, length) = find_token(self.file_hash, self.edition, text, offset)?;
         let text2 = self.trim_whitespace_and_comments(offset + length)?;
         let offset2 = self.text.len() - text2.len();
-        let (second, _) = find_token(self.file_hash, self.syntax_edition, text2, offset2)?;
+        let (second, _) = find_token(self.file_hash, self.edition, text2, offset2)?;
         Ok((first, second))
     }
 
@@ -407,7 +407,7 @@ impl<'input> Lexer<'input> {
         self.prev_end = self.cur_end;
         let text = self.trim_whitespace_and_comments(self.cur_end)?;
         self.cur_start = self.text.len() - text.len();
-        let (token, len) = find_token(self.file_hash, self.syntax_edition, text, self.cur_start)?;
+        let (token, len) = find_token(self.file_hash, self.edition, text, self.cur_start)?;
         self.cur_end = self.cur_start + len;
         self.token = token;
         Ok(())
@@ -425,7 +425,7 @@ impl<'input> Lexer<'input> {
 // Find the next token and its length without changing the state of the lexer.
 fn find_token(
     file_hash: FileHash,
-    syntax_edition: SyntaxEdition,
+    edition: Edition,
     text: &str,
     start_offset: usize,
 ) -> Result<(Tok, usize), Box<Diagnostic>> {
@@ -474,6 +474,58 @@ fn find_token(
                 (Tok::RestrictedIdentifier, len)
             }
         }
+        '\'' if edition.supports(FeatureGate::BlockLabels) => {
+            let (is_valid, len) = if (text.len() > 1)
+                && matches!(text[1..].chars().next(), Some('A'..='Z' | 'a'..='z' | '_'))
+            {
+                let sub = &text[1..];
+                let len = get_name_len(sub);
+                (true, len + 1)
+            } else {
+                (false, 1)
+            };
+            if text[len..].starts_with('\'') {
+                let loc = make_loc(file_hash, start_offset, start_offset + len + 1);
+                let msg = "Single-quote (') may only prefix control flow labels";
+                let mut diag = diag!(Syntax::UnexpectedToken, (loc, msg));
+                diag.add_note("Character literals are not supported, and string literals use double-quote (\").");
+                return Err(Box::new(diag));
+            } else if !is_valid {
+                let loc = make_loc(file_hash, start_offset, start_offset + len);
+                let msg = "Invalid control flow label";
+                return Err(Box::new(diag!(Syntax::UnexpectedToken, (loc, msg))));
+            } else {
+                (Tok::BlockLabel, len)
+            }
+        }
+        '\'' => {
+            let (is_valid, len) = if (text.len() > 1)
+                && matches!(text[1..].chars().next(), Some('A'..='Z' | 'a'..='z' | '_'))
+            {
+                let sub = &text[1..];
+                let len = get_name_len(sub);
+                (true, len + 1)
+            } else {
+                (false, 1)
+            };
+            let rest_text = &text[len..];
+            if rest_text.starts_with('\'') {
+                let loc = make_loc(file_hash, start_offset, start_offset + len + 1);
+                let msg = "Charater literals are not supported";
+                let mut diag = diag!(Syntax::UnexpectedToken, (loc, msg));
+                diag.add_note("String literals use double-quote (\").");
+                return Err(Box::new(diag));
+            } else if is_valid && (rest_text.starts_with(':') || rest_text.starts_with(" {")) {
+                let loc = make_loc(file_hash, start_offset, start_offset + len);
+                let diag = create_feature_error(edition, FeatureGate::BlockLabels, loc);
+                return Err(Box::new(diag));
+            } else {
+                let loc = make_loc(file_hash, start_offset, start_offset + len);
+                let msg = "Unexpected character (')";
+                return Err(Box::new(diag!(Syntax::InvalidCharacter, (loc, msg))));
+            }
+        }
+
         'A'..='Z' | 'a'..='z' | '_' => {
             let is_hex = text.starts_with("x\"");
             if is_hex || text.starts_with("b\"") {
@@ -494,7 +546,7 @@ fn find_token(
                 }
             } else {
                 let len = get_name_len(text);
-                (get_name_token(syntax_edition, &text[..len]), len)
+                (get_name_token(edition, &text[..len]), len)
             }
         }
         '&' => {
@@ -651,7 +703,7 @@ fn get_string_len(text: &str) -> Option<usize> {
     None
 }
 
-fn get_name_token(syntax_edition: SyntaxEdition, name: &str) -> Tok {
+fn get_name_token(edition: Edition, name: &str) -> Tok {
     match name {
         "abort" => Tok::Abort,
         "acquires" => Tok::Acquires,
@@ -673,23 +725,19 @@ fn get_name_token(syntax_edition: SyntaxEdition, name: &str) -> Tok {
         "native" => Tok::Native,
         "public" => Tok::Public,
         "return" => Tok::Return,
-        "script" => Tok::Script,
         "spec" => Tok::Spec,
         "struct" => Tok::Struct,
         "true" => Tok::True,
         "use" => Tok::Use,
         "while" => Tok::While,
-        _ => match syntax_edition {
-            SyntaxEdition::Legacy => Tok::Identifier,
-            // New keywords in the 2024 edition
-            SyntaxEdition::E2024 => match name {
-                "mut" => Tok::Mut,
-                "enum" => Tok::Enum,
-                "type" => Tok::Type,
-                "match" => Tok::Match,
-                _ => Tok::Identifier,
-            },
+        _ if edition.supports(FeatureGate::Move2024Keywords) => match name {
+            "mut" => Tok::Mut,
+            "enum" => Tok::Enum,
+            "type" => Tok::Type,
+            "match" => Tok::Match,
+            _ => Tok::Identifier,
         },
+        _ => Tok::Identifier,
     }
 }
 

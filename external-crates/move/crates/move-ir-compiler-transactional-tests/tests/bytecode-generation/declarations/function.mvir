@@ -1,4 +1,4 @@
-//# print-bytecode --input=module
+//# print-bytecode
 // This module defines several public functions with complex bodies.
 // This can be thought of as a smoke test that tests many different aspects of bytecode generation.
 module 0x3d10.Example {
@@ -30,7 +30,7 @@ module 0x3d10.Example {
     }
 }
 
-//# print-bytecode --input=module
+//# print-bytecode
 // Functions may be declared with entry modifier
 module 0x4d10.M {
     public entry f() {

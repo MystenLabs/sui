@@ -3,7 +3,7 @@
 import { getKioskIdFromOwnerCap, hasDisplayData, useGetKioskContents } from '@mysten/core';
 import { type SuiObjectResponse } from '@mysten/sui.js/client';
 import { getObjectDisplay } from '@mysten/sui.js/types';
-import cl from 'classnames';
+import cl from 'clsx';
 
 import { useActiveAddress } from '../../hooks';
 import { Text } from '../../shared/text';

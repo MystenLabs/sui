@@ -1,6 +1,7 @@
 //# run
+module 0x42.m {
 // check valid breaks in control flow check
-main() {
+entry foo() {
     let v: vector<u64>;
     let vref: &mut vector<u64>;
     let r: &mut u64;
@@ -5475,4 +5476,5 @@ label code:
 label end:
     jump code;
 
+}
 }

@@ -35,7 +35,6 @@ ResolvedGraph {
                         subdir: "language/move-stdlib/nursery",
                     },
                 ),
-                version: None,
                 resolver: None,
             },
             "MoveStdlib": Package {
@@ -46,7 +45,6 @@ ResolvedGraph {
                         subdir: "language/move-stdlib",
                     },
                 ),
-                version: None,
                 resolver: None,
             },
         },
@@ -55,14 +53,13 @@ ResolvedGraph {
             "MoveStdlib",
             "NestedDeps",
         },
-        manifest_digest: "0C5D381E36019E1585333C288C833EF07C2E0AC0CD76B1326E88A6765714C247",
+        manifest_digest: "EE966AF65A364E10F79C8D04690C10863F8B1084F45A4480A1F421D4A592A659",
         deps_digest: "F8BBB0CCB2491CA29A3DF03D6F92277A4F3574266507ACD77214D37ECA3F3082",
     },
     build_options: BuildConfig {
         dev_mode: true,
         test_mode: false,
         generate_docs: false,
-        generate_abis: false,
         install_dir: Some(
             "ELIDED_FOR_TEST",
         ),
@@ -70,7 +67,6 @@ ResolvedGraph {
         lock_file: Some(
             "ELIDED_FOR_TEST",
         ),
-        additional_named_addresses: {},
         fetch_deps_only: false,
         skip_fetch_latest_git_deps: false,
         default_flavor: None,
@@ -78,22 +74,21 @@ ResolvedGraph {
         deps_as_root: false,
         silence_warnings: false,
         warnings_are_errors: false,
+        additional_named_addresses: {},
+        no_lint: false,
     },
     package_table: {
         "MoveNursery": Package {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "MoveNursery",
-                    version: (
-                        1,
-                        5,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
                     flavor: None,
-                    custom_properties: {},
+                    custom_properties: {
+                        "version": "1.5.0",
+                    },
                 },
                 addresses: None,
                 dev_address_assignments: Some(
@@ -109,7 +104,6 @@ ResolvedGraph {
                                 "..",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -128,16 +122,13 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "MoveStdlib",
-                    version: (
-                        1,
-                        5,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
                     flavor: None,
-                    custom_properties: {},
+                    custom_properties: {
+                        "version": "1.5.0",
+                    },
                 },
                 addresses: Some(
                     {
@@ -164,11 +155,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "NestedDeps",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -195,7 +181,6 @@ ResolvedGraph {
                                 },
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },

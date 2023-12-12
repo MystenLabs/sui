@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x1.m {
+
+entry foo() {
 label b0:
     assert(0u128 + 0u128 == 0u128, 1000);
     assert(0u128 + 1u128 == 1u128, 1001);
@@ -14,24 +16,33 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x2.m {
+
+entry foo() {
 label b0:
     _ = 1u128 + 340282366920938463463374607431768211455u128;
     return;
 }
 
+}
 //# run
-main() {
+module 0x3.m {
+
+entry foo() {
 label b0:
     _ = 264235234643575437864589745863652363451u128 + 98731747836156137656137643716471364731u128;
     return;
 }
 
+}
 
 
 //# run
-main() {
+module 0x4.m {
+
+entry foo() {
 label b0:
     assert(0u128 - 0u128 == 0u128, 2000);
     assert(1u128 - 0u128 == 1u128, 2001);
@@ -45,24 +56,33 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x5.m {
+
+entry foo() {
 label b0:
     _ = 0u128 - 1u128;
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 54u128 - 100u128;
     return;
 }
 
+}
 
 
 //# run
-main() {
+module 0x6.m {
+
+entry foo() {
 label b0:
     assert(0u128 * 0u128 == 0u128, 3000);
     assert(1u128 * 0u128 == 0u128, 3001);
@@ -75,24 +95,33 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x7.m {
+
+entry foo() {
 label b0:
     _ = 18446744073709551616u128 * 18446744073709551616u128;
     return;
 }
 
+}
 //# run
-main() {
+module 0x8.m {
+
+entry foo() {
 label b0:
     _ = 170141183460469231731687303715884105728u128 * 2u128;
     return;
 }
 
+}
 
 
 //# run
-main() {
+module 0x9.m {
+
+entry foo() {
 label b0:
     assert(0u128 / 1u128 == 0u128, 4000);
     assert(1u128 / 1u128 == 1u128, 4001);
@@ -106,32 +135,44 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x10.m {
+
+entry foo() {
 label b0:
     _ = 0u128 / 0u128;
     return;
 }
 
+}
 //# run
-main() {
+module 0x11.m {
+
+entry foo() {
 label b0:
     _ = 1u128 / 0u128;
     return;
 }
 
+}
 
 
 //# run
-main() {
+module 0x12.m {
+
+entry foo() {
 label b0:
     _ = 340282366920938463463374607431768211455u128 / 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x13.m {
+
+entry foo() {
 label b0:
     assert(0u128 % 1u128 == 0u128, 5000);
     assert(1u128 % 1u128 == 0u128, 5001);
@@ -145,23 +186,34 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x14.m {
+
+entry foo() {
 label b0:
     _ = 0u128 % 0u128;
     return;
 }
 
+}
 //# run
-main() {
+module 0x15.m {
+
+entry foo() {
 label b0:
     _ = 1u128 % 0u128;
     return;
 }
 
+}
 //# run
-main() {
+module 0x16.m {
+
+entry foo() {
 label b0:
     _ = 340282366920938463463374607431768211455u128 % 0u128;
     return;
+}
+
 }

@@ -9,7 +9,7 @@
           }
           digest
           sender {
-            location
+            address
           }
           expiration {
             epochId

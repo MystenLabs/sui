@@ -27,8 +27,22 @@ export type EpochInfo = {
 	referenceGasPrice: number | null;
 };
 
+export type EpochMetrics = {
+	epoch: string;
+	epochTotalTransactions: string;
+	firstCheckpointId: string;
+	epochStartTimestamp: string;
+	endOfEpochInfo: EndOfEpochInfo | null;
+};
+
 export type EpochPage = {
 	data: EpochInfo[];
+	nextCursor: string | null;
+	hasNextPage: boolean;
+};
+
+export type EpochMetricsPage = {
+	data: EpochMetrics[];
 	nextCursor: string | null;
 	hasNextPage: boolean;
 };

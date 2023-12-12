@@ -3,7 +3,7 @@
 
 import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
 import * as CollapsiblePrimitive from '@radix-ui/react-collapsible';
-import cn from 'classnames';
+import cn from 'clsx';
 import { useState, type ReactNode } from 'react';
 
 interface CollapsibleProps {

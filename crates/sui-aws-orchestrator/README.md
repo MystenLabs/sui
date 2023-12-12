@@ -4,7 +4,7 @@ The Orchestrator crate provides facilities for quickly deploying and benchmarkin
 
 This guide provides a step-by-step explanation of how to run geo-distributed benchmarks on [Amazon Web Services (AWS)](http://aws.amazon.com).
 
-## Step 1. Set up cloud provider credentials
+## Step 1. Set up credentials
 
 To enable programmatic access to your cloud provider account from your local machine, you need to set up your cloud provider credentials. These credentials authorize your machine to create, delete, and edit instances programmatically on your account.
 
@@ -21,13 +21,20 @@ aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 
 Do not specify any AWS region in that file, as the scripts need to handle multiple regions programmatically.
 
+### Setting up SSH credentials
+
+Running `ssh-keygen -t ed25519 -C "..."` would generate a new ssh key pair under the specified path,
+e.g. private key at `~/.ssh/aws` and public key at `~/.ssh/aws.pub`. If the public key is not
+at the corresponding private key path with `.pub` extension, then the public key path must be specified
+for `ssh_public_key_file` in `settings.json`.
+
 ## Step 2. Specify the testbed configuration
 
-Create a file called `settings.json` that contains all the configuration parameters for the testbed deployment. You can find an example file at `./assets/settings.json` with the following content:
+Create a file called `settings.json` that contains all the configuration parameters for the testbed deployment. You can find a template at `./assets/settings-template.json`. Example content:
 
 ```json
 {
-  "testbed_id": "alberto",
+  "testbed_id": "alberto-0",
   "cloud_provider": "aws",
   "token_file": "/Users/alberto/.aws/credentials",
   "ssh_private_key_file": "/Users/alberto/.ssh/aws",
@@ -53,7 +60,9 @@ Create a file called `settings.json` that contains all the configuration paramet
 }
 ```
 
-The documentation of the `Settings` struct in `./src/settings.rs` provides detailed information about each field and indicates which ones are optional. If you're working with a private GitHub repository, you can include a [private access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) in the repository URL. For example, if your access token is `[your_token]`, the repository URL should be formatted as follows:
+The documentation of the `Settings` struct in `./src/settings.rs` provides detailed information about each `Settings` field.
+
+If you're working with a private GitHub repository, you can include a [private access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) in the repository URL. For example, if your access token is `[your_token]`, the repository URL should be formatted as follows:
 
 ```json
 "repository": {
@@ -81,7 +90,22 @@ Instances listed with a green number are available and ready for use, while inst
 Also keep in mind that there is nothing stopping you from running the `deploy` command multiple times if you find your self
 needing more instances down the line.
 
-## Step 4. Running benchmarks
+## Step 4. Choose protocol
+
+There is support to benchmark either Sui or Narwhal only. To choose which protocol to benchmark, you can set the `Protocol` & `BenchmarkType` field [here](https://github.com/MystenLabs/sui/blob/main/crates/sui-aws-orchestrator/src/main.rs#L33-L34)
+
+```
+// Sui
+use protocol::sui::{SuiBenchmarkType, SuiProtocol};
+type Protocol = SuiProtocol;
+type BenchmarkType = SuiBenchmarkType;
+// Narwhal
+use protocol::narwhal::{NarwhalBenchmarkType, NarwhalProtocol};
+type Protocol = NarwhalProtocol;
+type BenchmarkType = NarwhalBenchmarkType;
+```
+
+## Step 5. Running benchmarks
 
 Running benchmarks involves installing the specified version of the codebase on the remote machines and running one validator and one load generator per instance. For example, the following command benchmarks a committee of 10 validators under a constant load of 200 tx/s for 3 minutes:
 
@@ -91,7 +115,7 @@ cargo run --bin sui-aws-orchestrator -- benchmark --committee 10 fixed-load --lo
 
 In a network of 10 validators, each with a corresponding load generator, each load generator submits a fixed load of 20 tx/s. Performance measurements are collected by regularly scraping the Prometheus metrics exposed by the load generators. The `sui-aws-orchestrator` binary provides additional commands to run a specific number of load generators on separate machines.
 
-## Step 5. Monitoring
+## Step 6. Monitoring
 
 The orchestrator provides facilities to monitor metrics on clients and nodes. The orchestrator deploys a [Prometheus](https://prometheus.io) instance and a [Grafana](https://grafana.com) instance on a dedicated remote machine. Grafana is then available on the address printed on stdout (e.g., `http://3.83.97.12:3000`) with the default username and password both set to `admin`. You can either create a [new dashboard](https://grafana.com/docs/grafana/latest/getting-started/build-first-dashboard/) or [import](https://grafana.com/docs/grafana/latest/dashboards/manage-dashboards/#import-a-dashboard) the example dashboards located in the `./assets` folder.
 

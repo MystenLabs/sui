@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::{
+    annotated_value::MoveStructLayout,
     ident_str,
     identifier::IdentStr,
     language_storage::{StructTag, TypeTag},
-    value::MoveStructLayout,
 };
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
@@ -115,6 +115,11 @@ mod checked {
         #[cfg(test)]
         pub fn new_for_testing(value: u64) -> Self {
             Self::new(ObjectID::random(), value)
+        }
+
+        #[cfg(test)]
+        pub fn new_for_testing_with_id(id: ObjectID, value: u64) -> Self {
+            Self::new(id, value)
         }
     }
 

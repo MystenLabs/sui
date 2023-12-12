@@ -59,7 +59,7 @@ async fn test_publishing_with_unpublished_deps() {
     };
 
     assert_eq!(package, read_ref);
-    let Data::Package(move_package) = package_obj.data else {
+    let Data::Package(move_package) = package_obj.into_inner().data else {
         panic!("Not a package")
     };
 
@@ -199,8 +199,14 @@ async fn test_generate_lock_file() {
     let mut build_config = BuildConfig::new_for_testing();
     build_config.config.lock_file = Some(lock_file_path.clone());
     build_config
-        .build(path)
+        .clone()
+        .build(path.clone())
         .expect("Move package did not build");
+    // Update the lock file with placeholder compiler version so this isn't bumped every release.
+    build_config
+        .config
+        .update_lock_file_toolchain_version(&path, "0.0.1".into())
+        .expect("Could not update lock file");
 
     let mut lock_file_contents = String::new();
     File::open(lock_file_path)
@@ -240,6 +246,11 @@ async fn test_generate_lock_file() {
         dependencies = [
           { name = "MoveStdlib" },
         ]
+
+        [move.toolchain-version]
+        compiler-version = "0.0.1"
+        edition = "legacy"
+        flavor = "sui"
     "#]];
     expected.assert_eq(lock_file_contents.as_str());
 }

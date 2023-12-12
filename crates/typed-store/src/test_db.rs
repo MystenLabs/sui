@@ -11,8 +11,8 @@ use std::{
 };
 
 use crate::{
-    rocks::{be_fix_int_ser, TypedStoreError},
-    Map,
+    rocks::{be_fix_int_ser, errors::typed_store_err_from_bcs_err},
+    Map, TypedStoreError,
 };
 use bincode::Options;
 use collectable::TryExtend;
@@ -246,7 +246,7 @@ where
 
     fn insert(&self, key: &K, value: &V) -> Result<(), Self::Error> {
         let raw_key = be_fix_int_ser(key)?;
-        let raw_value = bcs::to_bytes(value)?;
+        let raw_value = bcs::to_bytes(value).map_err(typed_store_err_from_bcs_err)?;
         let mut locked = self.rows.write().unwrap();
         locked.insert(raw_key, raw_value);
         Ok(())

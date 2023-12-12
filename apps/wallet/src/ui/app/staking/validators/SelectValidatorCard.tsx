@@ -10,7 +10,7 @@ import { ampli } from '_src/shared/analytics/ampli';
 import { calculateStakeShare, formatPercentageDisplay, useGetValidatorsApy } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { ArrowRight16 } from '@mysten/icons';
-import cl from 'classnames';
+import cl from 'clsx';
 import { useMemo, useState } from 'react';
 
 import { ValidatorListItem } from './ValidatorListItem';

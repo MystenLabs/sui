@@ -11,10 +11,11 @@ If you haven't already, you need to [install Sui](./sui-install.mdx) on your sys
 To start the local network, run the following command from your `sui` root folder.
 
 ```bash
-RUST_LOG="consensus=off" cargo run --bin sui-test-validator
+RUST_LOG="off,sui_node=info" cargo run --bin sui-test-validator
 ```
 
-The command starts the `sui-test-validator`. The `RUST_LOG`=`consensus=off` turns off consensus for the local network.
+The command starts the `sui-test-validator`. The `RUST_LOG`=`off,sui_node=info` turns off logging for all components except
+sui-node. If you want to see more detailed logs, you can remove `RUST_LOG` from the command.
 
 **Important:** Each time you start the `sui-test-validator`, the network starts as a new network with no previous data. The local network is not persistent.
 
@@ -32,7 +33,7 @@ OPTIONS:
             Port to start the Fullnode RPC server on [default: 9000]
 ```
 
-Use `sui-validator-test --help` to see these options in your console.
+Use `sui-test-validator --help` to see these options in your console.
 
 ### Access your local Full node
 
@@ -164,15 +165,16 @@ sui client gas
 
 The response resembles the following, but with different IDs:
 
-```bash
-                             Object ID                              |  Gas Value
---------------------------------------------------------------------------------
- 0x1d790713c1c3441a307782597c088f11230c47e609af2cec97f393123ea4de45 |  200000000
- 0x20c1d5ad2e8693953fca09fd2fec0fbc52a787e0a0f77725220d36a09a5b312d |  200000000
- 0x236714566110f5624516faa0da215ad29f8daa611e8b651d1e972168207567b2 |  200000000
- 0xc81f30256bb04ad84bc4a92017cffd7c1f98286e028fa504d8515ad72ddd1088 |  200000000
- 0xf61c8b21b305cc8e062b3a37de8c3a37583e17f437a449a2ab42321d019aeeb4 |  200000000
-
+```shell
+╭────────────────────────────────────────────────────────────────────┬────────────╮
+│ gasCoinId                                                          │ gasBalance │
+├────────────────────────────────────────────────────────────────────┼────────────┤
+│ 0x1d790713c1c3441a307782597c088f11230c47e609af2cec97f393123ea4de45 │ 200000000  │
+│ 0x20c1d5ad2e8693953fca09fd2fec0fbc52a787e0a0f77725220d36a09a5b312d │ 200000000  │
+│ 0x236714566110f5624516faa0da215ad29f8daa611e8b651d1e972168207567b2 │ 200000000  │
+│ 0xc81f30256bb04ad84bc4a92017cffd7c1f98286e028fa504d8515ad72ddd1088 │ 200000000  │
+│ 0xf61c8b21b305cc8e062b3a37de8c3a37583e17f437a449a2ab42321d019aeeb4 │ 200000000  │
+╰────────────────────────────────────────────────────────────────────┴────────────╯
 ```
 
 ## Install Sui Wallet and Sui Explorer locally
@@ -220,7 +222,7 @@ Before you start the Sui Wallet app, update its default environment to point to 
 Run the following command from the `sui` root folder to start Sui Wallet on your local network:
 
 ```bash
-pnpm wallet start
+pnpm wallet dev
 ```
 
 ### Add local Sui Wallet to Chrome
@@ -242,7 +244,7 @@ Use the TypeScript SDK to add example data to your network.
 Run the following command from the `sui` root folder:
 
 ```bash
-pnpm sdk test:e2e
+pnpm --filter @mysten/sui.js test:e2e
 ```
 
 For additional information about example data for testing, see [https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing](https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing).

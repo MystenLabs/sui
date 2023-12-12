@@ -3,7 +3,9 @@
 
 use crate::config::Limits;
 use crate::config::ServiceConfig;
+use crate::error::code;
 use crate::error::code::INTERNAL_SERVER_ERROR;
+use crate::error::graphql_error;
 use crate::error::graphql_error_at_pos;
 use crate::metrics::RequestMetrics;
 use async_graphql::extensions::NextParseQuery;
@@ -31,7 +33,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-static LIMITS_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-show-usage");
+pub static LIMITS_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-show-usage");
 
 /// Only display usage information if this header was in the request.
 pub(crate) struct ShowUsage;
@@ -42,6 +44,7 @@ struct ValidationRes {
     depth: u32,
     num_variables: u32,
     num_fragments: u32,
+    query_payload: u32,
 }
 
 #[derive(Debug, Default)]
@@ -103,6 +106,7 @@ impl Extension for QueryLimitsChecker {
                     "depth": validation_result.depth,
                     "variables": validation_result.num_variables,
                     "fragments": validation_result.num_fragments,
+                    "query_payload": validation_result.query_payload,
                 }),
             )
         } else {
@@ -119,36 +123,22 @@ impl Extension for QueryLimitsChecker {
         variables: &Variables,
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
-        // TODO: limit number of variables, fragments, etc
-        // TODO: limit/ban directives for now
-        // TODO: limit overall query size
-
         let cfg = ctx
             .data::<ServiceConfig>()
             .expect("No service config provided in schema data");
 
-        if variables.len() > cfg.limits.max_query_variables as usize {
-            return Err(ServerError::new(
+        if query.len() > cfg.limits.max_query_payload_size as usize {
+            return Err(graphql_error(
+                code::GRAPHQL_VALIDATION_FAILED,
                 format!(
-                    "Query has too many variables. The maximum allowed is {}",
-                    cfg.limits.max_query_variables
+                    "Query payload is too large. The maximum allowed is {} bytes",
+                    cfg.limits.max_query_payload_size
                 ),
-                None,
             ));
         }
 
         // Document layout of the query
         let doc = next.run(ctx, query, variables).await?;
-
-        if doc.fragments.len() > cfg.limits.max_query_fragments as usize {
-            return Err(ServerError::new(
-                format!(
-                    "Query has too many fragments definitions. The maximum allowed is {}",
-                    cfg.limits.max_query_fragments
-                ),
-                None,
-            ));
-        }
 
         // TODO: Limit the complexity of fragments early on
 
@@ -173,6 +163,7 @@ impl Extension for QueryLimitsChecker {
             *self.validation_result.lock().await = Some(ValidationRes {
                 num_nodes: running_costs.num_nodes,
                 depth: running_costs.depth,
+                query_payload: query.len() as u32,
                 num_variables: variables.len() as u32,
                 num_fragments: doc.fragments.len() as u32,
             });
@@ -219,6 +210,13 @@ impl QueryLimitsChecker {
 
                 match &curr_sel.node {
                     Selection::Field(f) => {
+                        if !f.node.directives.is_empty() {
+                            return Err(graphql_error_at_pos(
+                                INTERNAL_SERVER_ERROR,
+                                "Fields with directives are not supported",
+                                f.pos,
+                            ));
+                        }
                         for field_sel in f.node.selection_set.node.items.iter() {
                             que.push_back(field_sel);
                             cost.num_nodes += 1;
@@ -241,6 +239,13 @@ impl QueryLimitsChecker {
                         // TODO: this is inefficient as we might loop over same fragment multiple times
                         // Ideally web should cache the costs of fragments we've seen before
                         // Will do as enhancement
+                        if !frag_def.node.directives.is_empty() {
+                            return Err(graphql_error_at_pos(
+                                INTERNAL_SERVER_ERROR,
+                                "Fragments with directives are not supported",
+                                frag_def.pos,
+                            ));
+                        }
                         for frag_sel in frag_def.node.selection_set.node.items.iter() {
                             que.push_back(frag_sel);
                             cost.num_nodes += 1;
@@ -248,6 +253,13 @@ impl QueryLimitsChecker {
                         }
                     }
                     Selection::InlineFragment(fs) => {
+                        if !fs.node.directives.is_empty() {
+                            return Err(graphql_error_at_pos(
+                                INTERNAL_SERVER_ERROR,
+                                "Inline fragments with directives are not supported",
+                                fs.pos,
+                            ));
+                        }
                         for in_frag_sel in fs.node.selection_set.node.items.iter() {
                             que.push_back(in_frag_sel);
                             cost.num_nodes += 1;

@@ -20,19 +20,20 @@ use getrandom::getrandom;
 use module_generation::generate_module;
 use move_binary_format::{
     access::ModuleAccess,
+    errors::VMError,
     file_format::{
         AbilitySet, CompiledModule, FunctionDefinitionIndex, SignatureToken, StructHandleIndex,
     },
 };
 use move_bytecode_verifier::verify_module_unmetered;
-use move_compiler::{compiled_unit::AnnotatedCompiledUnit, Compiler};
+use move_compiler::Compiler;
 use move_core_types::{
     account_address::AccountAddress,
     effects::{ChangeSet, Op},
     language_storage::TypeTag,
     resolver::MoveResolver,
-    value::MoveValue,
-    vm_status::{StatusCode, VMStatus},
+    runtime_value::MoveValue,
+    vm_status::StatusCode,
 };
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_test_utils::{DeltaStorage, InMemoryStorage};
@@ -59,10 +60,9 @@ static STORAGE_WITH_MOVE_STDLIB: Lazy<InMemoryStorage> = Lazy::new(|| {
     )
     .build_and_report()
     .unwrap();
-    let compiled_modules = compiled_units.into_iter().map(|unit| match unit {
-        AnnotatedCompiledUnit::Module(annot_module) => annot_module.named_module.module,
-        AnnotatedCompiledUnit::Script(_) => panic!("Unexpected Script in stdlib"),
-    });
+    let compiled_modules = compiled_units
+        .into_iter()
+        .map(|annot_module| annot_module.named_module.module);
     for module in compiled_modules {
         let mut blob = vec![];
         module.serialize(&mut blob).unwrap();
@@ -72,7 +72,7 @@ static STORAGE_WITH_MOVE_STDLIB: Lazy<InMemoryStorage> = Lazy::new(|| {
 });
 
 /// This function runs a verified module in the VM runtime
-fn run_vm(module: CompiledModule) -> Result<(), VMStatus> {
+fn run_vm(module: CompiledModule) -> Result<(), VMError> {
     // By convention the 0'th index function definition is the entrypoint to the module (i.e. that
     // will contain only simply-typed arguments).
     let entry_idx = FunctionDefinitionIndex::new(0);
@@ -124,7 +124,7 @@ fn execute_function_in_module(
     ty_arg_tags: Vec<TypeTag>,
     args: Vec<Vec<u8>>,
     storage: &impl MoveResolver,
-) -> Result<(), VMStatus> {
+) -> Result<(), VMError> {
     let module_id = module.self_id();
     let entry_name = {
         let entry_func_idx = module.function_def_at(idx).function;
@@ -318,7 +318,7 @@ pub fn bytecode_generation(
                     Ok(_) => {
                         status = Status::Valid;
                     }
-                    Err(e) => match e.status_code() {
+                    Err(e) => match e.major_status() {
                         StatusCode::ARITHMETIC_ERROR | StatusCode::OUT_OF_GAS => {
                             status = Status::Valid;
                         }

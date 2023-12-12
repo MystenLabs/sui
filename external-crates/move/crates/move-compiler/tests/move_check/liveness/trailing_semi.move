@@ -1,29 +1,29 @@
-script {
+module 1::m {
     fun main() {
         return;
     }
 }
 
-script {
+module 2::m {
     fun main() {
         abort 0;
     }
 }
 
-script {
+module 3::m {
     fun main() {
         { return };
     }
 }
 
-script {
+module 4::m {
     fun main() {
         { abort 0 };
     }
 }
 
 
-script {
+module 5::m {
     fun main(cond: bool) {
         if (cond) {
             return;
@@ -33,7 +33,7 @@ script {
     }
 }
 
-script {
+module 6::m {
     fun main(cond: bool) {
         {
             if (cond) {
@@ -45,7 +45,7 @@ script {
     }
 }
 
-script {
+module 7::m {
     fun main(cond: bool) {
         {
             if (cond) {
@@ -56,3 +56,4 @@ script {
         }
     }
 }
+

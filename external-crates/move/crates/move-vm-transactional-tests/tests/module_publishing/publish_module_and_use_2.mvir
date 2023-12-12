@@ -18,9 +18,10 @@ module 0x42.M {
 }
 
 //# run
+module 0x42.m {
 import 0x42.M;
 
-main() {
+entry foo() {
     let a: u64;
     let b: u64;
     let c: u64;
@@ -33,4 +34,5 @@ label b0:
     assert(copy(c) == 10, 42);
     assert(copy(d) == 12, 42);
     return;
+}
 }

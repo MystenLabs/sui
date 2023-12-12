@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
+import type { WalletWithFeatures, WalletWithRequiredFeatures } from '@mysten/wallet-standard';
 import type { ReactNode } from 'react';
 import { useRef } from 'react';
 import type { StateStorage } from 'zustand/middleware';
@@ -50,6 +50,8 @@ const DEFAULT_REQUIRED_FEATURES: (keyof WalletWithRequiredFeatures['features'])[
 	'sui:signTransactionBlock',
 ];
 
+export type { WalletWithFeatures };
+
 export function WalletProvider({
 	preferredWallets = [SUI_WALLET_NAME],
 	requiredFeatures = DEFAULT_REQUIRED_FEATURES,
@@ -62,10 +64,10 @@ export function WalletProvider({
 }: WalletProviderProps) {
 	const storeRef = useRef(
 		createWalletStore({
+			autoConnectEnabled: autoConnect,
 			wallets: getRegisteredWallets(preferredWallets, requiredFeatures),
 			storageKey,
 			storage,
-			autoConnect,
 		}),
 	);
 
@@ -75,7 +77,6 @@ export function WalletProvider({
 				preferredWallets={preferredWallets}
 				requiredFeatures={requiredFeatures}
 				enableUnsafeBurner={enableUnsafeBurner}
-				autoConnect={autoConnect}
 			>
 				{/* TODO: We ideally don't want to inject styles if people aren't using the UI components */}
 				{theme ? <InjectedThemeStyles theme={theme} /> : null}
@@ -88,7 +89,7 @@ export function WalletProvider({
 type WalletConnectionManagerProps = Required<
 	Pick<
 		WalletProviderProps,
-		'preferredWallets' | 'requiredFeatures' | 'enableUnsafeBurner' | 'autoConnect' | 'children'
+		'preferredWallets' | 'requiredFeatures' | 'enableUnsafeBurner' | 'children'
 	>
 >;
 
@@ -96,13 +97,12 @@ function WalletConnectionManager({
 	preferredWallets,
 	requiredFeatures,
 	enableUnsafeBurner,
-	autoConnect,
 	children,
 }: WalletConnectionManagerProps) {
 	useWalletsChanged(preferredWallets, requiredFeatures);
 	useWalletPropertiesChanged();
 	useUnsafeBurnerWallet(enableUnsafeBurner);
-	useAutoConnectWallet(autoConnect);
+	useAutoConnectWallet();
 
 	return children;
 }

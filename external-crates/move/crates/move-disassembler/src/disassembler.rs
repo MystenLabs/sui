@@ -21,7 +21,7 @@ use move_bytecode_source_map::{
     mapping::SourceMapping,
     source_map::{FunctionSourceMap, SourceName},
 };
-use move_compiler::compiled_unit::{CompiledUnit, NamedCompiledModule, NamedCompiledScript};
+use move_compiler::compiled_unit::CompiledUnit;
 use move_core_types::{identifier::IdentStr, language_storage::ModuleId};
 use move_coverage::coverage_map::{ExecCoverageMap, FunctionCoverage};
 use move_ir_types::location::Loc;
@@ -113,14 +113,7 @@ impl<'a> Disassembler<'a> {
     pub fn from_unit(unit: &'a CompiledUnit) -> Self {
         let options = DisassemblerOptions::new();
         let source_map = unit.source_map().clone();
-        let index_view = match unit {
-            CompiledUnit::Module(NamedCompiledModule { module, .. }) => {
-                BinaryIndexedView::Module(module)
-            }
-            CompiledUnit::Script(NamedCompiledScript { script, .. }) => {
-                BinaryIndexedView::Script(script)
-            }
-        };
+        let index_view = BinaryIndexedView::Module(&unit.module);
 
         let source_mapping = SourceMapping::new(source_map, index_view);
         Disassembler::new(source_mapping, options)
@@ -244,18 +237,14 @@ impl<'a> Disassembler<'a> {
     //***************************************************************************
 
     fn get_function_coverage(&self, function_name: &IdentStr) -> Option<&FunctionCoverage> {
-        self.source_mapper
-            .source_map
-            .module_name_opt
-            .as_ref()
-            .and_then(|module| {
-                self.coverage_map.as_ref().and_then(|coverage_map| {
-                    coverage_map
-                        .module_maps
-                        .get(module)
-                        .and_then(|module_map| module_map.get_function_coverage(function_name))
-                })
-            })
+        let module = &self.source_mapper.source_map.module_name;
+
+        self.coverage_map.as_ref().and_then(|coverage_map| {
+            coverage_map
+                .module_maps
+                .get(module)
+                .and_then(|module_map| module_map.get_function_coverage(function_name))
+        })
     }
 
     fn is_function_called(&self, function_name: &IdentStr) -> bool {
@@ -703,7 +692,7 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::Exists(struct_idx) => {
+            Bytecode::ExistsDeprecated(struct_idx) => {
                 let (name, ty_params) = self.struct_type_info(
                     *struct_idx,
                     &Signature(vec![]),
@@ -711,7 +700,7 @@ impl<'a> Disassembler<'a> {
                 )?;
                 Ok(format!("Exists[{}]({}{})", struct_idx, name, ty_params))
             }
-            Bytecode::ExistsGeneric(struct_idx) => {
+            Bytecode::ExistsGenericDeprecated(struct_idx) => {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
@@ -730,7 +719,7 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::MutBorrowGlobal(struct_idx) => {
+            Bytecode::MutBorrowGlobalDeprecated(struct_idx) => {
                 let (name, ty_params) = self.struct_type_info(
                     *struct_idx,
                     &Signature(vec![]),
@@ -741,7 +730,7 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::MutBorrowGlobalGeneric(struct_idx) => {
+            Bytecode::MutBorrowGlobalGenericDeprecated(struct_idx) => {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
@@ -760,7 +749,7 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::ImmBorrowGlobal(struct_idx) => {
+            Bytecode::ImmBorrowGlobalDeprecated(struct_idx) => {
                 let (name, ty_params) = self.struct_type_info(
                     *struct_idx,
                     &Signature(vec![]),
@@ -771,7 +760,7 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::ImmBorrowGlobalGeneric(struct_idx) => {
+            Bytecode::ImmBorrowGlobalGenericDeprecated(struct_idx) => {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
@@ -790,7 +779,7 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::MoveFrom(struct_idx) => {
+            Bytecode::MoveFromDeprecated(struct_idx) => {
                 let (name, ty_params) = self.struct_type_info(
                     *struct_idx,
                     &Signature(vec![]),
@@ -798,7 +787,7 @@ impl<'a> Disassembler<'a> {
                 )?;
                 Ok(format!("MoveFrom[{}]({}{})", struct_idx, name, ty_params))
             }
-            Bytecode::MoveFromGeneric(struct_idx) => {
+            Bytecode::MoveFromGenericDeprecated(struct_idx) => {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
@@ -817,7 +806,7 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::MoveTo(struct_idx) => {
+            Bytecode::MoveToDeprecated(struct_idx) => {
                 let (name, ty_params) = self.struct_type_info(
                     *struct_idx,
                     &Signature(vec![]),
@@ -825,7 +814,7 @@ impl<'a> Disassembler<'a> {
                 )?;
                 Ok(format!("MoveTo[{}]({}{})", struct_idx, name, ty_params))
             }
-            Bytecode::MoveToGeneric(struct_idx) => {
+            Bytecode::MoveToGenericDeprecated(struct_idx) => {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
@@ -1277,13 +1266,10 @@ impl<'a> Disassembler<'a> {
     }
 
     pub fn disassemble(&self) -> Result<String> {
-        let name_opt = self.source_mapper.source_map.module_name_opt.as_ref();
-        let name = name_opt.map(|(addr, n)| format!("{}.{}", addr.short_str_lossless(), n));
+        let (addr, n) = &self.source_mapper.source_map.module_name;
+        let name = format!("{}.{}", addr.short_str_lossless(), n);
         let version = format!("{}", self.source_mapper.bytecode.version());
-        let header = match name {
-            Some(s) => format!("module {}", s),
-            None => "script".to_owned(),
-        };
+        let header = format!("module {name}");
 
         let imports = self
             .source_mapper

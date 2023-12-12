@@ -17,7 +17,7 @@ use std::{collections::BTreeMap, fmt::Debug};
 use strum_macros::{AsRefStr, IntoStaticStr};
 use thiserror::Error;
 use tonic::Status;
-use typed_store::rocks::TypedStoreError;
+use typed_store_error::TypedStoreError;
 
 pub const TRANSACTION_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transaction";
 pub const TRANSACTIONS_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transactions";
@@ -331,7 +331,7 @@ pub enum SuiError {
         expected: String,
         actual: Vec<String>,
     },
-    #[error("Expect {actual} signer signatures but got {expected}.")]
+    #[error("Expect {expected} signer signatures but got {actual}.")]
     SignerSignatureNumberMismatch { expected: usize, actual: usize },
     #[error("Value was not signed by the correct sender: {}", error)]
     IncorrectSigner { error: String },
@@ -541,6 +541,8 @@ pub enum SuiError {
     // Epoch related errors.
     #[error("Validator temporarily stopped processing transactions due to epoch change")]
     ValidatorHaltedAtEpochEnd,
+    #[error("Validator has stopped operations for this epoch")]
+    EpochEnded,
     #[error("Error when advancing epoch: {:?}", error)]
     AdvanceEpochError { error: String },
 

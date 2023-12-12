@@ -1,4 +1,0 @@
-script {
-public fun main() {
-}
-}

@@ -14,6 +14,7 @@ pub mod checked {
         gas_model::{gas_v2::SuiGasStatus as SuiGasStatusV2, tables::GasStatus},
         object::Object,
         sui_serde::{BigInt, Readable},
+        transaction::ObjectReadResult,
     };
     use enum_dispatch::enum_dispatch;
     use itertools::MultiUnzip;
@@ -91,7 +92,11 @@ pub mod checked {
 
         // This is the only public API on SuiGasStatus, all other gas related operations should
         // go through `GasCharger`
-        pub fn check_gas_balance(&self, gas_objs: &[&Object], gas_budget: u64) -> UserInputResult {
+        pub fn check_gas_balance(
+            &self,
+            gas_objs: &[&ObjectReadResult],
+            gas_budget: u64,
+        ) -> UserInputResult {
             match self {
                 Self::V2(status) => status.check_gas_balance(gas_objs, gas_budget),
             }

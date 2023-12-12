@@ -14,8 +14,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use move_core_types::{
     account_address::AccountAddress,
     effects::{ChangeSet, Op},
+    runtime_value::{MoveStruct, MoveValue},
     u256,
-    value::{MoveStruct, MoveValue},
 };
 use move_model::ast::{MemoryLabel, TempIndex};
 

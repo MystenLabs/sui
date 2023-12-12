@@ -1,5 +1,3 @@
-# Sui Rust SDK
-
 This crate provides the Sui Rust SDK, containing APIs to interact with the Sui network. 
 
 ## Getting started
@@ -38,7 +36,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
 The [examples](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk/examples) folder provides both basic and advanced examples.
 
-There are five files ending in `_api.rs` which provide code examples of the corresponding APIs and their methods. These showcase how to use the Sui Rust SDK, and can be run against the Sui testnet. Below are instructions on the prerequisites and how to run these examples.
+There are serveral files ending in `_api.rs` which provide code examples of the corresponding APIs and their methods. These showcase how to use the Sui Rust SDK, and can be run against the Sui testnet. Below are instructions on the prerequisites and how to run these examples.
 
 ## Prerequisites
 
@@ -54,6 +52,7 @@ In the root folder of the `sui` repository (or in the `sui-sdk` crate folder), y
 * `cargo run --example governance_api`
 * `cargo run --example read_api`
 * `cargo run --example programmable_transactions_api`
+* `cargo run --example sign_tx_guide`
 
 ## Basic Examples
 
@@ -120,7 +119,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
 ## Advanced examples
 
-See the programmable transactions [example](examples/programmable_transactions_api.rs).
+See the programmable transactions [example](https://github.com/MystenLabs/sui/blob/main/crates/sui-sdk/examples/programmable_transactions_api.rs).
 
 ## Games examples
 
@@ -152,8 +151,8 @@ See the programmable transactions [example](examples/programmable_transactions_a
       ```shell
       cargo run --example tic-tac-toe -- --game-package-id <<games package object ID>> new-game
       ```
-        This will create a game for the first two addresses in your keystore by default. If you want to specify the identity of each player, 
-use the following command and replace the variables with the actual player's addresses:
+      This will create a game for the first two addresses in your keystore by default. If you want to specify the identity of each player,
+      use the following command and replace the variables with the actual player's addresses:
       ```shell
       cargo run --example tic-tac-toe -- --game-package-id <<games package object ID>> new-game --player-x <<player X address>> --player-o <<player O address>>
       ```

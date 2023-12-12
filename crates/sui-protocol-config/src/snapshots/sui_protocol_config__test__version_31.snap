@@ -32,8 +32,6 @@ feature_flags:
   simple_conservation_checks: true
   loaded_child_object_format_type: true
   receive_objects: true
-  narwhal_header_v2: true
-  random_beacon: true
   enable_effects_v2: true
   narwhal_certificate_v2: true
   verify_legacy_zklogin_address: true
@@ -204,7 +202,7 @@ check_zklogin_id_cost_base: 200
 check_zklogin_issuer_cost_base: 200
 scoring_decision_mad_divisor: 2.3
 scoring_decision_cutoff_value: 2.5
-execution_version: 1
+execution_version: 2
 consensus_bad_nodes_stake_threshold: 20
 max_jwk_votes_per_validator_per_epoch: 240
 max_age_of_jwk_in_epochs: 1

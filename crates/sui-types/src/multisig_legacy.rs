@@ -4,7 +4,7 @@
 use crate::{
     crypto::{CompressedSignature, SignatureScheme},
     multisig::{MultiSig, MultiSigPublicKey},
-    signature::{AuthenticatorTrait, VerifyParams},
+    signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
     sui_serde::SuiBitmap,
 };
 pub use enum_dispatch::enum_dispatch;
@@ -23,7 +23,7 @@ use std::hash::{Hash, Hasher};
 
 use crate::{
     base_types::{EpochId, SuiAddress},
-    crypto::{PublicKey, Signature},
+    crypto::PublicKey,
     error::SuiError,
 };
 
@@ -166,7 +166,7 @@ pub fn bitmap_to_u16(roaring: RoaringBitmap) -> Result<u16, SuiError> {
 impl MultiSigLegacy {
     /// This combines a list of [enum Signature] `flag || signature || pk` to a MultiSig.
     pub fn combine(
-        full_sigs: Vec<Signature>,
+        full_sigs: Vec<GenericSignature>,
         multisig_pk: MultiSigPublicKeyLegacy,
     ) -> Result<Self, SuiError> {
         multisig_pk

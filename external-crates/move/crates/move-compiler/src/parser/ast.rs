@@ -79,7 +79,6 @@ pub struct PackageDefinition {
 pub enum Definition {
     Module(ModuleDefinition),
     Address(AddressDefinition),
-    Script(Script),
 }
 
 #[derive(Debug, Clone)]
@@ -88,16 +87,6 @@ pub struct AddressDefinition {
     pub loc: Loc,
     pub addr: LeadingNameAccess,
     pub modules: Vec<ModuleDefinition>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Script {
-    pub attributes: Vec<Attributes>,
-    pub loc: Loc,
-    pub uses: Vec<UseDecl>,
-    pub constants: Vec<Constant>,
-    pub function: Function,
-    pub specs: Vec<SpecBlock>,
 }
 
 #[derive(Debug, PartialEq, Clone, Eq)]
@@ -169,6 +158,7 @@ new_name!(ModuleName);
 /// - An address numerical value
 pub enum LeadingNameAccess_ {
     AnonymousAddress(NumericalAddress),
+    GlobalAddress(Name),
     Name(Name),
 }
 pub type LeadingNameAccess = Spanned<LeadingNameAccess_>;
@@ -263,7 +253,6 @@ pub struct FunctionSignature {
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Visibility {
     Public(Loc),
-    Script(Loc),
     Friend(Loc),
     Package(Loc),
     Internal,
@@ -589,6 +578,8 @@ pub enum QuantKind_ {
 }
 pub type QuantKind = Spanned<QuantKind_>;
 
+new_name!(BlockLabel);
+
 #[derive(Debug, Clone, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum Exp_ {
@@ -622,6 +613,8 @@ pub enum Exp_ {
     // loop eloop
     Loop(Box<Exp>),
 
+    // 'label: { seq }
+    NamedBlock(BlockLabel, Sequence),
     // { seq }
     Block(Sequence),
     // fun (x1, ..., xn) e
@@ -642,14 +635,14 @@ pub enum Exp_ {
     // a = e
     Assign(Box<Exp>, Box<Exp>),
 
-    // return e
-    Return(Option<Box<Exp>>),
     // abort e
     Abort(Box<Exp>),
+    // return e
+    Return(Option<BlockLabel>, Option<Box<Exp>>),
     // break
-    Break,
+    Break(Option<BlockLabel>, Option<Box<Exp>>),
     // continue
-    Continue,
+    Continue(Option<BlockLabel>),
 
     // *e
     Dereference(Box<Exp>),
@@ -766,7 +759,6 @@ impl Definition {
         match self {
             Definition::Module(m) => m.loc.file_hash(),
             Definition::Address(a) => a.loc.file_hash(),
-            Definition::Script(s) => s.loc.file_hash(),
         }
     }
 }
@@ -922,14 +914,12 @@ impl Visibility {
     pub const PACKAGE: &'static str = "public(package)";
     pub const PACKAGE_IDENT: &'static str = "package";
     pub const PUBLIC: &'static str = "public";
-    pub const SCRIPT: &'static str = "public(script)";
 
     pub fn loc(&self) -> Option<Loc> {
         match self {
-            Visibility::Friend(loc)
-            | Visibility::Package(loc)
-            | Visibility::Public(loc)
-            | Visibility::Script(loc) => Some(*loc),
+            Visibility::Friend(loc) | Visibility::Package(loc) | Visibility::Public(loc) => {
+                Some(*loc)
+            }
             Visibility::Internal => None,
         }
     }
@@ -943,6 +933,7 @@ impl fmt::Display for LeadingNameAccess_ {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::AnonymousAddress(bytes) => write!(f, "{}", bytes),
+            Self::GlobalAddress(n) => write!(f, "::{}", n),
             Self::Name(n) => write!(f, "{}", n),
         }
     }
@@ -986,7 +977,6 @@ impl fmt::Display for Visibility {
                 Visibility::Internal => Visibility::INTERNAL,
                 Visibility::Package(_) => Visibility::PACKAGE,
                 Visibility::Public(_) => Visibility::PUBLIC,
-                Visibility::Script(_) => Visibility::SCRIPT,
             }
         )
     }
@@ -1062,7 +1052,6 @@ impl AstDebug for Definition {
         match self {
             Definition::Address(a) => a.ast_debug(w),
             Definition::Module(m) => m.ast_debug(w),
-            Definition::Script(m) => m.ast_debug(w),
         }
     }
 }
@@ -1133,35 +1122,6 @@ impl AstDebug for Vec<Attributes> {
             attrs.ast_debug(w);
             true
         });
-    }
-}
-
-impl AstDebug for Script {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        let Script {
-            attributes,
-            loc: _loc,
-            uses,
-            constants,
-            function,
-            specs,
-        } = self;
-        attributes.ast_debug(w);
-        for u in uses {
-            u.ast_debug(w);
-            w.new_line();
-        }
-        w.new_line();
-        for cdef in constants {
-            cdef.ast_debug(w);
-            w.new_line();
-        }
-        w.new_line();
-        function.ast_debug(w);
-        for spec in specs {
-            spec.ast_debug(w);
-            w.new_line();
-        }
     }
 }
 
@@ -1834,6 +1794,10 @@ impl AstDebug for Exp_ {
                 w.write("loop ");
                 e.ast_debug(w);
             }
+            E::NamedBlock(name, seq) => {
+                w.write(format!("'{}: ", name));
+                w.block(|w| seq.ast_debug(w))
+            }
             E::Block(seq) => w.block(|w| seq.ast_debug(w)),
             E::Lambda(sp!(_, bs), e) => {
                 w.write("fun ");
@@ -1863,19 +1827,30 @@ impl AstDebug for Exp_ {
                 w.write(" = ");
                 rhs.ast_debug(w);
             }
-            E::Return(e) => {
+            E::Abort(e) => {
+                w.write("abort ");
+                e.ast_debug(w);
+            }
+            E::Return(name, e) => {
                 w.write("return");
+                name.map(|name| w.write(format!(" '{} ", name)));
                 if let Some(v) = e {
                     w.write(" ");
                     v.ast_debug(w);
                 }
             }
-            E::Abort(e) => {
-                w.write("abort ");
-                e.ast_debug(w);
+            E::Break(name, e) => {
+                w.write("break");
+                name.map(|name| w.write(format!(" '{} ", name)));
+                if let Some(v) = e {
+                    w.write(" ");
+                    v.ast_debug(w);
+                }
             }
-            E::Break => w.write("break"),
-            E::Continue => w.write("continue"),
+            E::Continue(name) => {
+                w.write("continue");
+                name.map(|name| w.write(format!(" '{}", name)));
+            }
             E::Dereference(e) => {
                 w.write("*");
                 e.ast_debug(w)

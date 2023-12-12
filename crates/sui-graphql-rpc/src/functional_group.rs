@@ -144,9 +144,6 @@ mod tests {
         let unimplemented = BTreeSet::from_iter([
             ("Checkpoint", "addressMetrics"),
             ("Epoch", "protocolConfig"),
-            ("Object", "dynamicField"),
-            ("Object", "dynamicFieldConnection"),
-            ("Query", "coinMetadata"),
             ("Query", "moveCallMetrics"),
             ("Query", "networkMetrics"),
             ("Subscription", "events"),

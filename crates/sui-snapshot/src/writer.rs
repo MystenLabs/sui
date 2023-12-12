@@ -450,7 +450,7 @@ impl StateSnapshotWriterV1 {
         // Delete remote epoch dir if it exists
         delete_recursively(
             &epoch_dir,
-            self.remote_object_store.clone(),
+            &self.remote_object_store,
             NonZeroUsize::new(self.concurrency).unwrap(),
         )
         .await?;
@@ -470,7 +470,7 @@ impl StateSnapshotWriterV1 {
         to: Arc<DynObjectStore>,
     ) -> Result<()> {
         debug!("Syncing snapshot file to remote: {:?}", path);
-        copy_file(path.clone(), path.clone(), from, to).await?;
+        copy_file(&path, &path, &from, &to).await?;
         fs::remove_file(path_to_filesystem(local_path, &path)?)?;
         Ok(())
     }

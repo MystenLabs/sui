@@ -24,7 +24,6 @@ pub const KEYWORDS: &[&str] = &[
     "native",
     "public",
     "return",
-    "script",
     "spec",
     "struct",
     "true",

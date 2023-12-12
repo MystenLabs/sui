@@ -228,7 +228,6 @@ fn merge_simple() {
         Dependency::Internal(InternalDependency {
             kind: DependencyKind::default(),
             subst: None,
-            version: None,
             digest: None,
             dep_override: false,
         }),
@@ -279,7 +278,6 @@ fn merge_into_root() {
         Dependency::Internal(InternalDependency {
             kind: DependencyKind::Local("A".into()),
             subst: None,
-            version: None,
             digest: None,
             dep_override: false,
         }),
@@ -421,7 +419,6 @@ fn merge_overlapping() {
             Dependency::Internal(InternalDependency {
                 kind: DependencyKind::Local("B".into()),
                 subst: None,
-                version: None,
                 digest: None,
                 dep_override: false,
             }),
@@ -431,7 +428,6 @@ fn merge_overlapping() {
             Dependency::Internal(InternalDependency {
                 kind: DependencyKind::default(),
                 subst: None,
-                version: None,
                 digest: None,
                 dep_override: false,
             }),
@@ -495,7 +491,6 @@ fn merge_overlapping_different_deps() {
             Dependency::Internal(InternalDependency {
                 kind: DependencyKind::default(),
                 subst: None,
-                version: None,
                 digest: None,
                 dep_override: false,
             }),
@@ -505,7 +500,6 @@ fn merge_overlapping_different_deps() {
             Dependency::Internal(InternalDependency {
                 kind: DependencyKind::default(),
                 subst: None,
-                version: None,
                 digest: None,
                 dep_override: false,
             }),

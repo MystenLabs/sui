@@ -6,7 +6,10 @@ use sui_json_rpc::name_service::NameServiceConfig;
 
 use super::{
     address::Address,
+    available_range::AvailableRange,
     checkpoint::{Checkpoint, CheckpointId},
+    coin::Coin,
+    coin_metadata::CoinMetadata,
     epoch::Epoch,
     event::{Event, EventFilter},
     object::{Object, ObjectFilter},
@@ -17,16 +20,13 @@ use super::{
     transaction_block::{TransactionBlock, TransactionBlockFilter},
 };
 use crate::{
-    config::ServiceConfig,
-    context_data::db_data_provider::PgManager,
-    error::{code, graphql_error, Error},
+    config::ServiceConfig, context_data::db_data_provider::PgManager, error::Error,
+    mutation::Mutation,
 };
 
 pub(crate) struct Query;
-pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
+pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, Mutation, EmptySubscription>;
 
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
 #[Object]
 impl Query {
     /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the
@@ -38,24 +38,25 @@ impl Query {
             .extend()
     }
 
+    /// Range of checkpoints that the RPC has data available for (for data
+    /// that can be tied to a particular checkpoint).
+    async fn available_range(&self) -> Result<AvailableRange> {
+        Ok(AvailableRange)
+    }
+
     /// Configuration for this RPC service
     async fn service_config(&self, ctx: &Context<'_>) -> Result<ServiceConfig> {
-        Ok(ctx
-            .data()
-            .map_err(|_| {
-                graphql_error(
-                    code::INTERNAL_SERVER_ERROR,
-                    "Unable to fetch service configuration",
-                )
-            })
-            .cloned()?)
+        ctx.data()
+            .map_err(|_| Error::Internal("Unable to fetch service configuration.".to_string()))
+            .cloned()
+            .extend()
     }
 
     // availableRange - pending impl. on IndexerV2
     // dryRunTransactionBlock
     // coinMetadata
 
-    async fn owner(&self, ctx: &Context<'_>, address: SuiAddress) -> Option<ObjectOwner> {
+    async fn owner(&self, address: SuiAddress) -> Option<ObjectOwner> {
         Some(ObjectOwner::Owner(Owner { address }))
     }
 
@@ -75,6 +76,7 @@ impl Query {
         Some(Address { address })
     }
 
+    /// Fetch epoch information by ID (defaults to the latest epoch).
     async fn epoch(&self, ctx: &Context<'_>, id: Option<u64>) -> Result<Option<Epoch>> {
         if let Some(epoch_id) = id {
             ctx.data_unchecked::<PgManager>()
@@ -82,16 +84,17 @@ impl Query {
                 .await
                 .extend()
         } else {
-            Some(
+            Ok(Some(
                 ctx.data_unchecked::<PgManager>()
                     .fetch_latest_epoch()
                     .await
-                    .extend(),
-            )
-            .transpose()
+                    .extend()?,
+            ))
         }
     }
 
+    /// Fetch checkpoint information by sequence number or digest (defaults to the latest available
+    /// checkpoint).
     async fn checkpoint(
         &self,
         ctx: &Context<'_>,
@@ -107,16 +110,16 @@ impl Query {
                     .extend(),
             }
         } else {
-            Some(
+            Ok(Some(
                 ctx.data_unchecked::<PgManager>()
                     .fetch_latest_checkpoint()
                     .await
-                    .extend(),
-            )
-            .transpose()
+                    .extend()?,
+            ))
         }
     }
 
+    /// Fetch a transaction block by its transaction digest.
     async fn transaction_block(
         &self,
         ctx: &Context<'_>,
@@ -124,6 +127,25 @@ impl Query {
     ) -> Result<Option<TransactionBlock>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_tx(&digest)
+            .await
+            .extend()
+    }
+
+    /// The coin objects that exist in the network.
+    ///
+    /// The type field is a string of the inner type of the coin by which to filter
+    /// (e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
+    async fn coin_connection(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        type_: Option<String>,
+    ) -> Result<Option<Connection<String, Coin>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_coins(None, type_, first, after, last, before)
             .await
             .extend()
     }
@@ -164,7 +186,7 @@ impl Query {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-        filter: EventFilter,
+        filter: Option<EventFilter>,
     ) -> Result<Option<Connection<String, Event>>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_events(first, after, last, before, filter)
@@ -187,6 +209,8 @@ impl Query {
             .extend()
     }
 
+    /// Fetch the protocl config by protocol version (defaults to the latest protocol
+    /// version known to the GraphQL)
     async fn protocol_config(
         &self,
         ctx: &Context<'_>,
@@ -213,6 +237,17 @@ impl Query {
     async fn latest_sui_system_state(&self, ctx: &Context<'_>) -> Result<SuiSystemStateSummary> {
         ctx.data_unchecked::<PgManager>()
             .fetch_latest_sui_system_state()
+            .await
+            .extend()
+    }
+
+    async fn coin_metadata(
+        &self,
+        ctx: &Context<'_>,
+        coin_type: String,
+    ) -> Result<Option<CoinMetadata>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_coin_metadata(coin_type)
             .await
             .extend()
     }

@@ -8,9 +8,9 @@ use move_binary_format::normalized::{
     Field as NormalizedField, Function as SuiNormalizedFunction, Module as NormalizedModule,
     Struct as NormalizedStruct, Type as NormalizedType,
 };
+use move_core_types::annotated_value::{MoveStruct, MoveValue};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
-use move_core_types::value::{MoveStruct, MoveValue};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -365,11 +365,10 @@ impl From<MoveValue> for SuiMoveValue {
             }
             MoveValue::Struct(value) => {
                 // Best effort Sui core type conversion
-                if let MoveStruct::WithTypes { type_, fields } = &value {
-                    if let Some(value) = try_convert_type(type_, fields) {
-                        return value;
-                    }
-                };
+                let MoveStruct { type_, fields } = &value;
+                if let Some(value) = try_convert_type(type_, fields) {
+                    return value;
+                }
                 SuiMoveValue::Struct(value.into())
             }
             MoveValue::Signer(value) | MoveValue::Address(value) => {
@@ -534,23 +533,13 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
 
 impl From<MoveStruct> for SuiMoveStruct {
     fn from(move_struct: MoveStruct) -> Self {
-        match move_struct {
-            MoveStruct::Runtime(value) => {
-                SuiMoveStruct::Runtime(value.into_iter().map(|value| value.into()).collect())
-            }
-            MoveStruct::WithFields(value) => SuiMoveStruct::WithFields(
-                value
-                    .into_iter()
-                    .map(|(id, value)| (id.into_string(), value.into()))
-                    .collect(),
-            ),
-            MoveStruct::WithTypes { type_, fields } => SuiMoveStruct::WithTypes {
-                type_,
-                fields: fields
-                    .into_iter()
-                    .map(|(id, value)| (id.into_string(), value.into()))
-                    .collect(),
-            },
+        SuiMoveStruct::WithTypes {
+            type_: move_struct.type_,
+            fields: move_struct
+                .fields
+                .into_iter()
+                .map(|(id, value)| (id.into_string(), value.into()))
+                .collect(),
         }
     }
 }

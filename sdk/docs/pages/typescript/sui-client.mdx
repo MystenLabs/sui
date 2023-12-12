@@ -81,6 +81,26 @@ const unsubscribe = await client.subscribeEvent({
 await unsubscribe();
 ```
 
+## Using subscriptions in Node.js
+
+If you are using `SuiClient` in an environment that does not support the `WebSocket` API, including
+Node.js, you may need to provide your own implementation of the `WebSocket` API when creating your
+SuiClient. You can either use a global polyfill for the WebSocket class, or pass a compatible
+WebSocket implementation into SuiHTTPTransport (eg, using the `ws` package)
+
+```typescript
+import { getFullnodeUrl, SuiClient, SuiHTTPTransport } from '@mysten/sui.js/client';
+import { WebSocket } from 'ws';
+
+new SuiClient({
+	transport: new SuiHTTPTransport({
+		url: getFullnodeUrl('mainnet'),
+		// The typescript definitions may not match perfectly, casting to never avoids these minor incompatibilities
+		WebSocketConstructor: WebSocket as never,
+	}),
+});
+```
+
 ## Subscribing to transactions with SuiClient
 
 Similar to subscribing to events, the `SuiClient` also supports subscribing to transactions:

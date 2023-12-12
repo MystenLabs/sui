@@ -1,0 +1,41 @@
+---
+title: Closed-Loop Token
+---
+
+import BalanceTokenCoin from '@site/static/img/balance-token-coin.png';
+
+Closed-Loop Token allows its creator to limit applications where the token is used, set up custom policies for transfers, spending and conversions. It is defined in the `sui::token` module and is a part of the Sui Framework.
+
+## Background & Use Cases
+
+The standard Coin implementation on Sui is an example of an open-loop system - Coins are free-flowing, [wrappable](/concepts/object-ownership/wrapped), [freely transferable](/concepts/dynamic-fields/transfers/custom-rules#the-store-ability-and-transfer-rules) and can be stored in any application. The best real world analogy would be "cash" - hardly regulated and can be freely used and passed.
+
+However, some applications require constraining the scope of the token to a specific purpose. For example, a token that can only be used for a specific service, or that can be used only by an authorized account, or one whose accounts can be blocked. A real-world analogy would be a "bank account" - regulated, controlled by the bank and compliant with certain rules and policies.
+
+Specific domains that can benefit from a closed-loop token include:
+
+- **Loyalty Points** - A token that can only be used for a specific service, e.g. for an airline - granted to frequent flyers and used to purchase tickets or upgrades.
+- **Regulatory-Compliant Tokens** - some jurisdictions require certain checks or restrictions on tokens. For example, a token that can only be used by a verified user, or a single operation with a token can have a limit.
+- **In-Game Currency** - similar to "gems" and "diamonds" in mobile games: a token that can only be used in a game and granted to players for their actions or purchased. Tokens of this kind are often not transferrable and minted in predefined amounts to maintain scarcity and game balance.
+
+## Difference with Coin
+
+<img className="balance-coin-token" src={BalanceTokenCoin} />
+
+Unlike Coin, which has `key + store` abilities and thus supports wrapping and public transfers, Token has only the `key` ability and cannot be wrapped, stored as a dynamic field, or freely transferred (unless there's a custom policy for that). Due to this restriction, Token **can only be owned by an account** and can't be stored in an application (however, it can be "spent" - see [Spending section](./closed-loop-token/spending.mdx) section).
+
+```move
+// defined in `sui::coin`
+struct Coin<phantom T> has key, store { id: UID, balance: Balance<T> }
+
+// defined in `sui::token`
+struct Token<phantom T> has key { id: UID, balance: Balance<T> }
+```
+
+## Compliance and Rules
+
+Closed-Loop Token allows its creator to set up any rules for transfers, spending and conversions. These rules are specified per action in the [TokenPolicy](./closed-loop-token/token-policy.mdx). [Rules](./closed-loop-token/rules.mdx) are custom programmable restrictions which can be used to implement any request authorization / validation logic.
+
+For example, a policy can set a limit on a transfer - X tokens per operation; or require a user to be verified before spending tokens; or allow spending tokens only on a specific service.
+
+Rules can be reused across different policies and applications; and can be freely combined to create complex policies.

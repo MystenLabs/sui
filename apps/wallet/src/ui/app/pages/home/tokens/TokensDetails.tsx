@@ -25,15 +25,14 @@ import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import { useFeature } from '@growthbook/growthbook-react';
-import { useAppsBackend, useFormatCoin, useResolveSuiNSName } from '@mysten/core';
+import { useAppsBackend, useCoinMetadata, useFormatCoin, useResolveSuiNSName } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Info12, Pin16, Unpin16 } from '@mysten/icons';
 import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
-import { Coin } from '@mysten/sui.js/framework';
-import { formatAddress, MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { formatAddress, parseStructTag, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
-import clsx from 'classnames';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import clsx from 'clsx';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import Interstitial, { type InterstitialConfig } from '../interstitial';
 import { useOnrampProviders } from '../onramp/useOnrampProviders';
@@ -42,7 +41,6 @@ import { PortfolioName } from './PortfolioName';
 import { TokenIconLink } from './TokenIconLink';
 import { TokenLink } from './TokenLink';
 import { TokenList } from './TokenList';
-import SvgSuiTokensStack from './TokensStackIcon';
 
 type TokenDetailsProps = {
 	coinType?: string;
@@ -69,6 +67,7 @@ function TokenRowButton({
 	coinBalance,
 	children,
 	to,
+	onClick,
 }: {
 	coinBalance: CoinBalanceType;
 	children: ReactNode;
@@ -79,6 +78,7 @@ function TokenRowButton({
 		<ButtonOrLink
 			to={to}
 			key={coinBalance.coinType}
+			onClick={onClick}
 			className="no-underline text-subtitle font-medium text-steel hover:font-semibold hover:text-hero"
 		>
 			{children}
@@ -137,14 +137,24 @@ export function TokenRow({
 								onClick={() =>
 									ampli.selectedCoin({
 										coinType: coinBalance.coinType,
-										totalBalance: Number(BigInt(coinBalance.totalBalance) / MIST_PER_SUI),
+										totalBalance: Number(formatted),
 									})
 								}
 							>
 								Send
 							</TokenRowButton>
 							{isRenderSwapButton && (
-								<TokenRowButton coinBalance={coinBalance} to={`/swap?${params.toString()}`}>
+								<TokenRowButton
+									coinBalance={coinBalance}
+									to={`/swap?${params.toString()}`}
+									onClick={() => {
+										ampli.clickedSwapCoin({
+											coinType: coinBalance.coinType,
+											totalBalance: Number(formatted),
+											sourceFlow: 'TokenRow',
+										});
+									}}
+								>
 									Swap
 								</TokenRowButton>
 							)}
@@ -256,6 +266,23 @@ export function MyTokens({
 	);
 }
 
+function getMostNestedName(parsed: ReturnType<typeof parseStructTag>) {
+	if (parsed.typeParams.length === 0) {
+		return parsed.name;
+	}
+
+	if (typeof parsed.typeParams[0] === 'string') {
+		return parsed.typeParams[0];
+	}
+
+	return getMostNestedName(parsed.typeParams[0]);
+}
+
+function getFallbackSymbol(coinType: string) {
+	const parsed = parseStructTag(coinType);
+	return getMostNestedName(parsed);
+}
+
 function TokenDetails({ coinType }: TokenDetailsProps) {
 	const isDefiWalletEnabled = useIsWalletDefiEnabled();
 	const [interstitialDismissed, setInterstitialDismissed] = useState<boolean>(false);
@@ -276,6 +303,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	);
 
 	const { apiEnv } = useAppSelector((state) => state.app);
+	const isMainnet = apiEnv === API_ENV.mainnet;
 	const { request } = useAppsBackend();
 	const { data } = useQuery({
 		queryKey: ['apps-backend', 'monitor-network'],
@@ -286,7 +314,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		// Keep cached for 2 minutes:
 		staleTime: 2 * 60 * 1000,
 		retry: false,
-		enabled: apiEnv === API_ENV.mainnet,
+		enabled: isMainnet,
 	});
 
 	const {
@@ -311,8 +339,11 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const { providers } = useOnrampProviders();
 
 	const tokenBalance = BigInt(coinBalance?.totalBalance ?? 0);
+	const [formatted] = useFormatCoin(tokenBalance, activeCoinType);
 
-	const coinSymbol = useMemo(() => Coin.getCoinSymbol(activeCoinType), [activeCoinType]);
+	const { data: coinMetadata } = useCoinMetadata(activeCoinType);
+	const coinSymbol = coinMetadata ? coinMetadata.symbol : getFallbackSymbol(activeCoinType);
+
 	// Avoid perpetual loading state when fetching and retry keeps failing add isFetched check
 	const isFirstTimeLoading = isPending && !isFetched;
 
@@ -344,7 +375,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	}
 	return (
 		<>
-			{apiEnv === API_ENV.mainnet && data?.degraded && (
+			{isMainnet && data?.degraded && (
 				<div className="rounded-2xl bg-warning-light border border-solid border-warning-dark/20 text-warning-dark flex items-center py-2 px-3 mb-4">
 					<Info12 className="shrink-0" />
 					<div className="ml-2">
@@ -377,23 +408,22 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 										isDefiWalletEnabled ? 'bg-gradients-graph-cards' : 'bg-hero/5',
 									)}
 								>
-									{accountHasSui ? (
-										<div className="flex flex-col gap-1 items-center">
-											<CoinBalance amount={tokenBalance} type={activeCoinType} />
-										</div>
-									) : (
+									<div className="flex flex-col gap-1 items-center">
+										<CoinBalance amount={tokenBalance} type={activeCoinType} />
+									</div>
+
+									{!accountHasSui ? (
 										<div className="flex flex-col gap-5">
 											<div className="flex flex-col flex-nowrap justify-center items-center text-center px-2.5">
-												<SvgSuiTokensStack className="h-14 w-14 text-steel" />
-												<div className="flex flex-col gap-2 justify-center">
-													<Text variant="pBodySmall" color="gray-80" weight="normal">
-														To send transactions on the Sui network, you need SUI in your wallet.
-													</Text>
-												</div>
+												<Text variant="pBodySmall" color="gray-80" weight="normal">
+													{isMainnet
+														? 'Buy SUI to get started'
+														: 'To send transactions on the Sui network, you need SUI in your wallet.'}
+												</Text>
 											</div>
 											<FaucetRequestButton />
 										</div>
-									)}
+									) : null}
 									{isError ? (
 										<Alert>
 											<div>
@@ -402,13 +432,22 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 										</Alert>
 									) : null}
 									<div className="grid grid-cols-3 gap-3 w-full">
-										<LargeButton
-											center
-											to="/onramp"
-											disabled={(coinType && coinType !== SUI_TYPE_ARG) || !providers?.length}
-										>
-											Buy
-										</LargeButton>
+										{isMainnet ? (
+											<LargeButton
+												spacing="sm"
+												className={
+													!accountHasSui && isMainnet
+														? 'col-span-3 !bg-sui-primaryBlue2023 !text-white'
+														: ''
+												}
+												primary={!accountHasSui}
+												center
+												to="/onramp"
+												disabled={(coinType && coinType !== SUI_TYPE_ARG) || !providers?.length}
+											>
+												Buy
+											</LargeButton>
+										) : null}
 
 										<LargeButton
 											center
@@ -435,12 +474,29 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 													  }).toString()}`
 													: ''
 											}`}
+											onClick={() => {
+												if (!coinBalance) {
+													return;
+												}
+
+												ampli.clickedSwapCoin({
+													coinType: coinBalance.coinType,
+													totalBalance: Number(formatted),
+													sourceFlow: 'LargeButton-TokenDetails',
+												});
+											}}
 										>
 											Swap
 										</LargeButton>
+										{!accountHasSui && (
+											<LargeButton disabled to="/stake" center>
+												Stake
+											</LargeButton>
+										)}
 									</div>
+
 									<div className="w-full">
-										{activeCoinType === SUI_TYPE_ARG ? (
+										{activeCoinType === SUI_TYPE_ARG && accountHasSui ? (
 											<TokenIconLink
 												disabled={!tokenBalance}
 												accountAddress={activeAccountAddress}

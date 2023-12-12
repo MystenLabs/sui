@@ -6,7 +6,7 @@ import { Text } from '_app/shared/text';
 import { Badge } from '_src/ui/app/shared/Badge';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { formatAddress } from '@mysten/sui.js/utils';
-import cl from 'classnames';
+import cl from 'clsx';
 import { useMemo } from 'react';
 
 interface ValidatorLogoProps {

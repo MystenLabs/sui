@@ -108,7 +108,7 @@ export interface AddedAccountsProperties {
 	 *
 	 * | Rule | Value |
 	 * |---|---|
-	 * | Enum Values | Ledger, Qredo, Derived, Imported |
+	 * | Enum Values | Ledger, Qredo, Derived, Imported, Zklogin |
 	 */
 	accountType: 'Ledger' | 'Qredo' | 'Derived' | 'Imported' | 'Zklogin';
 	/**
@@ -179,7 +179,7 @@ export interface ClickedSocialSignInButtonProperties {
 	 * |---|---|
 	 * | Enum Values | Microsoft, Facebook, Google, Twitch |
 	 */
-	signInProvider: 'Microsoft' | 'Facebook' | 'Google' | 'Twitch';
+	signInProvider: 'Microsoft' | 'Facebook' | 'Google' | 'Twitch' | 'Kakao';
 	/**
 	 * The flow the user came from.
 	 */
@@ -195,6 +195,25 @@ export interface ClickedStakeSuiProperties {
 	 * The flow the user came from.
 	 */
 	sourceFlow: string;
+}
+
+export interface ClickedSwapCoinProperties {
+	/**
+	 * The type of a coin.
+	 */
+	coinType: string;
+	/**
+	 * The flow the user came from.
+	 */
+	sourceFlow: string;
+	/**
+	 * The total balance in SUI of the selected coin that the user has.
+	 *
+	 * | Rule | Value |
+	 * |---|---|
+	 * | Type | number |
+	 */
+	totalBalance: number;
 }
 
 export interface ClickedUnstakeSuiProperties {
@@ -364,6 +383,25 @@ export interface StakedSuiProperties {
 	validatorAddress: string;
 }
 
+export interface SwappedCoinProperties {
+	/**
+	 * | Rule | Value |
+	 * |---|---|
+	 * | Type | number |
+	 */
+	estimatedReturnBalance: number;
+	fromCoinType: string;
+	toCoinType: string;
+	/**
+	 * The total balance in SUI of the selected coin that the user has.
+	 *
+	 * | Rule | Value |
+	 * |---|---|
+	 * | Type | number |
+	 */
+	totalBalance: number;
+}
+
 export interface SwitchedAccountProperties {
 	/**
 	 * The type of account that is being switched to.
@@ -488,6 +526,14 @@ export class ClickedStakeSui implements BaseEvent {
 	}
 }
 
+export class ClickedSwapCoin implements BaseEvent {
+	event_type = 'clicked swap coin';
+
+	constructor(public event_properties: ClickedSwapCoinProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
 export class ClickedUnstakeSui implements BaseEvent {
 	event_type = 'clicked unstake SUI';
 
@@ -604,6 +650,14 @@ export class StakedSui implements BaseEvent {
 	event_type = 'staked SUI';
 
 	constructor(public event_properties: StakedSuiProperties) {
+		this.event_properties = event_properties;
+	}
+}
+
+export class SwappedCoin implements BaseEvent {
+	event_type = 'swapped coin';
+
+	constructor(public event_properties: SwappedCoinProperties) {
 		this.event_properties = event_properties;
 	}
 }
@@ -742,6 +796,17 @@ export class Ampli {
       amplitudeIdentify,
       options,
     );
+  }
+
+ /**
+  * Flush the event.
+  */
+  flush() : PromiseResult<Result> {
+    if (!this.isInitializedAndEnabled()) {
+      return getVoidPromiseResult();
+    }
+
+    return this.amplitude!.flush();
   }
 
   /**
@@ -966,6 +1031,23 @@ export class Ampli {
     options?: EventOptions,
   ) {
     return this.track(new ClickedStakeSui(properties), options);
+  }
+
+  /**
+   * clicked swap coin
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/clicked%20swap%20coin)
+   *
+   * When users click to swap a coin in the wallet
+   *
+   * @param properties The event's properties (e.g. coinType)
+   * @param options Amplitude event options.
+   */
+  clickedSwapCoin(
+    properties: ClickedSwapCoinProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new ClickedSwapCoin(properties), options);
   }
 
   /**
@@ -1264,6 +1346,23 @@ export class Ampli {
     options?: EventOptions,
   ) {
     return this.track(new StakedSui(properties), options);
+  }
+
+  /**
+   * swapped coin
+   *
+   * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/swapped%20coin)
+   *
+   * When users complete swapping 1 coin to another
+   *
+   * @param properties The event's properties (e.g. estimatedReturnBalance)
+   * @param options Amplitude event options.
+   */
+  swappedCoin(
+    properties: SwappedCoinProperties,
+    options?: EventOptions,
+  ) {
+    return this.track(new SwappedCoin(properties), options);
   }
 
   /**

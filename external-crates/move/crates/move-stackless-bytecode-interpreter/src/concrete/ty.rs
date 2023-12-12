@@ -19,7 +19,7 @@ use std::fmt;
 use move_core_types::{
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
-    value::{MoveStructLayout, MoveTypeLayout},
+    runtime_value::{MoveStructLayout, MoveTypeLayout},
 };
 use move_model::{
     model::{GlobalEnv, ModuleId, StructId},

@@ -98,13 +98,15 @@ module 0x42.DeepCopy {
 }
 
 //# run
+module 0x42.m {
 import 0x42.DeepCopy;
 
-main() {
+entry foo() {
 label b0:
     DeepCopy.test_struct_shallow();
     DeepCopy.test_struct_deep();
     DeepCopy.test_vector();
     DeepCopy.test_vector_to_struct();
     return;
+}
 }

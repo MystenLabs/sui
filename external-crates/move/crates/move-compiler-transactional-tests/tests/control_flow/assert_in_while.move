@@ -19,7 +19,7 @@ module 0x42::Test {
 }
 
 //# run
-script {
+module 0x42::m {
 use 0x42::Test;
 fun main() {
     let x = Test::new();

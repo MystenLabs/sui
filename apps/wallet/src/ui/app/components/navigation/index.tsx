@@ -4,7 +4,7 @@
 import { useAppSelector } from '_hooks';
 import { getNavIsVisible } from '_redux/slices/app';
 import { Activity32, Apps32, Nft132, Tokens32 } from '@mysten/icons';
-import cl from 'classnames';
+import cl from 'clsx';
 import { NavLink } from 'react-router-dom';
 
 import { useActiveAccount } from '../../hooks/useActiveAccount';

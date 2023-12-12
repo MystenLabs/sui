@@ -13,7 +13,7 @@ Practically, Kiosk is a part of the Sui framework, and it is native to the syste
 
 :::info
 
-See the [Kiosk SDK documentation](https://sui-typescript-docs.vercel.app/kiosk) for examples of working with Kiosk using TypeScript.
+See the [Kiosk SDK documentation](https://sdk.mystenlabs.com/kiosk) for examples of working with Kiosk using TypeScript.
 
 :::
 
@@ -102,7 +102,7 @@ To use a Sui Kiosk, you must create one and have the `KioskOwnerCap` that matche
 
 ### Create a Kiosk using programmable transaction blocks
 
-```rust
+```javascript
 let tx = new TransactionBlock();
 tx.moveCall({
     target: '0x2::kiosk::default'
@@ -111,7 +111,7 @@ tx.moveCall({
 
 ### Create a Kiosk using the Sui CLI
 
-```rust
+```shell
 sui client call \
     --package 0x2 \
     --module kiosk \
@@ -125,7 +125,7 @@ Kiosk is designed to be shared. If you choose a different storage model, such as
 
 ### Create a Kiosk with advanced options using programmable transaction blocks
 
-```rust
+```javascript
 let tx = new TransactionBlock();
 let [kiosk, kioskOwnerCap] = tx.moveCall({
     target: '0x2::kiosk::new'
@@ -156,7 +156,7 @@ To place an item to the Kiosk, the owner needs to call the `sui::kiosk::place` f
 
 ### Place an item using programmable transaction blocks
 
-```rust
+```javascript
 let tx = new TransactionBlock();
 
 let itemArg = tx.object('<ID>');
@@ -190,7 +190,7 @@ To take an item from a kiosk you must be the kiosk owner. As the owner, call the
 
 ### Take an item from a kiosk using programmable transaction blocks
 
-```rust
+```javascript
 let tx = new TransactionBlock();
 
 let itemId = tx.pure.id('<ITEM_ID>');
@@ -222,7 +222,7 @@ When you use the lock `function`, similar to using the `place` function, you spe
 
 ### Lock an item using programmable transaction blocks
 
-```rust
+```javascript
 const tx = new TransactionBlock();
 
 let kioskArg = tx.object('<ID>');
@@ -265,7 +265,7 @@ When you list an item, Sui emits a `kiosk::ItemListed` event that  contains the 
 
 ### List an item using programmable transaction blocks
 
-```rust
+```javascript
 let tx = new TransactionBlock();
 
 let kioskArg = tx.object('<ID>');
@@ -303,7 +303,7 @@ When you delist an item, Sui emits a `kiosk::ItemDelisted` event that contains t
 
 ### Delist an item using the programmable transaction blocks
 
-```rust
+```javascript
 let tx = new TransactionBlock();
 let kioskArg = tx.object('<ID>');
 let capArg = tx.object('<ID>');
@@ -350,8 +350,8 @@ You can always borrow an asset from a kiosk immutably. You can use the  `kiosk::
 
 ### Immutably borrow an asset using Sui Move
 
-```rust
-module examples::immutable_borrow
+```move
+module examples::immutable_borrow {
     use sui::object::ID;
     use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
 
@@ -367,7 +367,7 @@ You can mutably borrow an asset from a kiosk if it is not listed. You can use th
 
 ### Mutably borrow an asset using Sui Move
 
-```rust
+```move
 module examples::mutable_borrow
     use sui::object::ID;
     use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
@@ -386,7 +386,7 @@ You can use the PTB-friendly kiosk::borrow_val function. It allows you to take a
 
 ### Mutable borrow with `borrow_val` using programmable transaction blocks
 
-```rust
+```javascript
 let tx = new TransactionBlock();
 
 let itemType = 'ITEM_TYPE';
@@ -417,7 +417,7 @@ When someone purchases an item, Sui stores the proceeds from the sale in the Kio
 
 ### Withdraw proceeds using programmable transaction blocks
 
-```rust
+```javascript
 let tx = new TransactionBlock();
 let kioskArg = tx.object('<ID>');
 let capArg = tx.object('<ID>');
@@ -446,4 +446,3 @@ let coin = tx.moveCall({
 ### Withdraw proceeds using the Sui CLI
 
 Due to the function being PTB friendly, it is not currently supported in the CLI environment.
-

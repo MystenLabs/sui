@@ -4,7 +4,7 @@
 
 use crate::file_format::{Constant, SignatureToken};
 
-use move_core_types::value::{MoveTypeLayout, MoveValue};
+use move_core_types::runtime_value::{MoveTypeLayout, MoveValue};
 
 fn sig_to_ty(sig: &SignatureToken) -> Option<MoveTypeLayout> {
     match sig {

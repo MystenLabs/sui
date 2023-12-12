@@ -36,27 +36,7 @@ pub(crate) enum FromVecError {
     WrongLength(usize),
 }
 
-#[Scalar]
-impl ScalarType for SuiAddress {
-    fn parse(value: Value) -> InputValueResult<Self> {
-        let Value::String(s) = value else {
-            return Err(InputValueError::expected_type(value));
-        };
-
-        Ok(SuiAddress::from_str(&s)?)
-    }
-
-    fn to_value(&self) -> Value {
-        Value::String(format!("0x{}", hex::encode(self.0)))
-    }
-}
-
 impl SuiAddress {
-    #[allow(dead_code)]
-    pub fn into_array(self) -> [u8; SUI_ADDRESS_LENGTH] {
-        self.0
-    }
-
     pub fn from_array(arr: [u8; SUI_ADDRESS_LENGTH]) -> Self {
         SuiAddress(arr)
     }
@@ -73,6 +53,29 @@ impl SuiAddress {
         <[u8; SUI_ADDRESS_LENGTH]>::try_from(bytes.as_ref())
             .map_err(|_| FromVecError::WrongLength(bytes.as_ref().len()))
             .map(SuiAddress)
+    }
+}
+
+#[Scalar(use_type_description = true)]
+impl ScalarType for SuiAddress {
+    fn parse(value: Value) -> InputValueResult<Self> {
+        let Value::String(s) = value else {
+            return Err(InputValueError::expected_type(value));
+        };
+
+        Ok(SuiAddress::from_str(&s)?)
+    }
+
+    fn to_value(&self) -> Value {
+        Value::String(format!("0x{}", hex::encode(self.0)))
+    }
+}
+
+impl Description for SuiAddress {
+    fn description() -> &'static str {
+        "String containing 32B hex-encoded address, with a leading \"0x\". Leading zeroes can be \
+         omitted on input but will always appear in outputs (SuiAddress in output is guaranteed \
+         to be 66 characters long)."
     }
 }
 
@@ -156,12 +159,6 @@ mod tests {
     fn test_to_value() {
         let value = ScalarType::to_value(&SUI_ADDRESS);
         assert_eq!(value, Value::String(STR_ADDRESS.to_string()));
-    }
-
-    #[test]
-    fn test_into_array() {
-        let arr = SUI_ADDRESS.into_array();
-        assert_eq!(arr, ARR_ADDRESS);
     }
 
     #[test]

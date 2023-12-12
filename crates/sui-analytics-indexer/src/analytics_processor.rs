@@ -112,6 +112,7 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
             remote_object_store,
             local_object_store.clone(),
             checkpoint_dir,
+            config.remote_store_path_prefix.clone(),
             receiver,
             kill_receiver,
             cloned_metrics,
@@ -135,8 +136,9 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
     }
 
     async fn cut(&mut self) -> anyhow::Result<()> {
-        if !self.current_checkpoint_range.is_empty() {
-            self.writer.flush(self.current_checkpoint_range.end)?;
+        if !self.current_checkpoint_range.is_empty()
+            && self.writer.flush(self.current_checkpoint_range.end)?
+        {
             let file_metadata = FileMetadata::new(
                 self.config.file_type,
                 self.config.file_format,
@@ -192,6 +194,7 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
         remote_object_store: Arc<DynObjectStore>,
         local_object_store: Arc<DynObjectStore>,
         local_staging_root_dir: PathBuf,
+        remote_store_path_prefix: Option<Path>,
         mut file_recv: mpsc::Receiver<FileMetadata>,
         mut recv: oneshot::Receiver<()>,
         metrics: AnalyticsMetrics,
@@ -207,6 +210,7 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
                         Self::sync_file_to_remote(
                                 local_staging_root_dir.clone(),
                                 file_metadata.file_path(),
+                                remote_store_path_prefix.clone(),
                                 local_object_store.clone(),
                                 remote_object_store.clone()
                             )
@@ -226,11 +230,15 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
     async fn sync_file_to_remote(
         dir: PathBuf,
         path: Path,
+        prefix: Option<Path>,
         from: Arc<DynObjectStore>,
         to: Arc<DynObjectStore>,
     ) -> Result<()> {
-        info!("Syncing file to remote: {:?}", path);
-        copy_file(path.clone(), path.clone(), from, to).await?;
+        let remote_dest = prefix
+            .map(|p| p.child(path.to_string()))
+            .unwrap_or(path.clone());
+        info!("Syncing file to remote: {:?}", &remote_dest);
+        copy_file(&path, &remote_dest, &from, &to).await?;
         fs::remove_file(path_to_filesystem(dir, &path)?)?;
         Ok(())
     }

@@ -1,5 +1,5 @@
 //# run
-script {
+module 0x42::m {
     const C: u64 = 0;
     const BYTES: vector<u8> = b"hello";
 

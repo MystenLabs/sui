@@ -7,7 +7,6 @@ use move_symbol_pool::Symbol;
 
 use crate::{
     diag,
-    diagnostics::Diagnostics,
     parser::{
         ast as P,
         filter::{filter_program, FilterContext},
@@ -54,46 +53,6 @@ impl FilterContext for Context<'_> {
         module_def.members.push(poison_function);
         Some(module_def)
     }
-
-    fn filter_map_script(
-        &mut self,
-        script_def: P::Script,
-        _is_source_def: bool,
-    ) -> Option<P::Script> {
-        // extra sanity check on scripts
-        let P::Script {
-            attributes,
-            uses,
-            constants,
-            function,
-            specs,
-            loc: _,
-        } = &script_def;
-
-        let script_attributes = attributes
-            .iter()
-            .chain(uses.iter().flat_map(|use_decl| &use_decl.attributes))
-            .chain(constants.iter().flat_map(|constant| &constant.attributes))
-            .chain(function.attributes.iter())
-            .chain(specs.iter().flat_map(|spec| &spec.value.attributes));
-
-        let diags: Diagnostics = script_attributes
-            .flat_map(|attr| {
-                test_attributes(attr).into_iter().map(|(loc, _)| {
-                    let msg = "Testing attributes are not allowed in scripts.";
-                    diag!(Attributes::InvalidTest, (loc, msg))
-                })
-            })
-            .collect();
-
-        // filter the script based on whether there are error messages
-        if diags.is_empty() {
-            Some(script_def)
-        } else {
-            self.env.add_diags(diags);
-            None
-        }
-    }
 }
 
 //***************************************************************************
@@ -128,6 +87,9 @@ fn check_has_unit_test_module(compilation_env: &mut CompilationEnv, prog: &P::Pr
                     && match &mdef.address.as_ref().unwrap().value {
                         // TODO: remove once named addresses have landed in the stdlib
                         P::LeadingNameAccess_::Name(name) => name.value == STDLIB_ADDRESS_NAME,
+                        P::LeadingNameAccess_::GlobalAddress(name) => {
+                            name.value == STDLIB_ADDRESS_NAME
+                        }
                         P::LeadingNameAccess_::AnonymousAddress(_) => false,
                     }
             }
@@ -143,8 +105,7 @@ fn check_has_unit_test_module(compilation_env: &mut CompilationEnv, prog: &P::Pr
         {
             let loc = match def {
                 P::Definition::Module(P::ModuleDefinition { name, .. }) => name.0.loc,
-                P::Definition::Address(P::AddressDefinition { loc, .. })
-                | P::Definition::Script(P::Script { loc, .. }) => *loc,
+                P::Definition::Address(P::AddressDefinition { loc, .. }) => *loc,
             };
             compilation_env.add_diag(diag!(
                 Attributes::InvalidTest,

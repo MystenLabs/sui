@@ -1,5 +1,5 @@
 <p align="center">
-<img src="https://github.com/MystenLabs/sui/blob/main/doc/static/Sui_Icon_Brand.png" alt="Logo" width="100" height="100">
+<img src="https://github.com/MystenLabs/sui/blob/main/docs/site/static/img/logo.svg" alt="Logo" width="100" height="100">
 </p>
 
 # Welcome to Sui
@@ -52,7 +52,7 @@ Sui is backed by a number of state-of-the-art [peer-reviewed works](https://gith
 
 Use the following links to learn more about Sui and the Sui ecosystem:
 
- * Learn more about working with Sui in the [Sui Documentation](doc/src/learn/index.md).
+ * Learn more about working with Sui in the [Sui Documentation](https://docs.sui.io/).
  * Join the Sui community on [Sui Discord](https://discord.gg/sui).
  * Find out more about the Sui ecosystem on the [Sui Resources](https://sui.io/resources/) page.
- * Review information about Sui governance, [decentralization](https://suifoundation.org/decentralization), and [Developer Grants Program](https://suifoundation.org/#grants) on the [Sui Foundation](https://suifoundation.org/) site.
+ * Review information about Sui governance, [decentralization](https://suifoundation.org/decentralization), and [Developer Grants Program](https://sui.io/grants-hub) on the [Sui Foundation](https://suifoundation.org/) site.

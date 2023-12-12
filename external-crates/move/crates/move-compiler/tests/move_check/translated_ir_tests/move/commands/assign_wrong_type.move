@@ -1,5 +1,5 @@
 // check: STLOC_TYPE_MISMATCH_ERROR
-script {
+module 0x42::m {
 
 fun main() {
     let x: u64;

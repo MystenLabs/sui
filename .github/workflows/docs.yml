@@ -31,15 +31,3 @@ jobs:
         uses: crate-ci/typos@v1.16.11
         with:
           files: ./docs/content
-
-  old-doc-folder-notice:
-    name: Old doc folder notice
-    needs: diff
-    if: needs.diff.outputs.isOldDoc == 'true'
-    runs-on: [ubuntu-latest]
-
-    steps:
-      - name: Output error
-        run: |
-          echo "::error::Sui documentation has moved from doc/* to docs/content/* folder. (*.md files are now *.mdx)"
-          exit 1

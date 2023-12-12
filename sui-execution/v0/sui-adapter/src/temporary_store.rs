@@ -13,7 +13,7 @@ use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults, SharedInput};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::storage::{BackingStore, DeleteKindWithOldVersion, PackageObjectArc};
+use sui_types::storage::{BackingStore, DeleteKindWithOldVersion, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
 use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
@@ -61,7 +61,7 @@ pub struct TemporaryStore<'backing> {
 
     /// Every package that was loaded from DB store during execution.
     /// These packages were not previously loaded into the temporary store.
-    runtime_packages_loaded_from_db: RwLock<BTreeMap<ObjectID, Object>>,
+    runtime_packages_loaded_from_db: RwLock<BTreeMap<ObjectID, PackageObject>>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -174,7 +174,7 @@ impl<'backing> TemporaryStore<'backing> {
         }
         for object in to_be_updated {
             // The object must be mutated as it was present in the input objects
-            self.write_object(object, WriteKind::Mutate);
+            self.write_object(object.clone(), WriteKind::Mutate);
         }
     }
 
@@ -994,17 +994,24 @@ impl<'backing> Storage for TemporaryStore<'backing> {
 }
 
 impl<'backing> BackingPackageStore for TemporaryStore<'backing> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         if let Some((obj, _)) = self.written.get(package_id) {
-            Ok(Some(PackageObjectArc::new(obj.clone())))
+            Ok(Some(PackageObject::new(obj.clone())))
         } else {
             self.store.get_package_object(package_id).map(|obj| {
                 // Track object but leave unchanged
                 if let Some(v) = &obj {
-                    // TODO: Can this lock ever block execution?
-                    self.runtime_packages_loaded_from_db
-                        .write()
-                        .insert(*package_id, v.object().clone());
+                    if !self
+                        .runtime_packages_loaded_from_db
+                        .read()
+                        .contains_key(package_id)
+                    {
+                        // TODO: Can this lock ever block execution?
+                        // TODO: Why do we need a RwLock anyway???
+                        self.runtime_packages_loaded_from_db
+                            .write()
+                            .insert(*package_id, v.clone());
+                    }
                 }
                 obj
             })

@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let x: u64;
 label b0:
     jump_if_false (true) b2;
@@ -9,4 +11,6 @@ label b2:
     // invalid copy, might not have a value
     assert(copy(x) == 42, 42);
     return;
+}
+
 }

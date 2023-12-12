@@ -1,103 +1,137 @@
 //# run
+module 0x42.m {
 
 // tests multiple type mismatches for int operations
 // !!!! generated file, do NOT edit manually !!!!
 
 // operator +
-main() {
+entry foo() {
 label b0:
     _ = 0u8 + 0u64;
     return;
 }
-
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 + 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 + 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 + 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 + 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 + 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 + true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true + 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true + true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 + 0x0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 + 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 + 0x0;
     return;
 }
 
+}
 
 //# publish
 module 0x42.M {
@@ -133,100 +167,136 @@ module 0x42.M {
 
 // operator -
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 - 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 - 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 - 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 - 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 - 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 - 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 - true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true - 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true - true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 - 0x0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 - 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 - 0x0;
     return;
 }
 
+}
 
 //# publish
 module 0x42.M {
@@ -262,100 +332,136 @@ module 0x42.M {
 
 // operator *
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 * 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 * 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 * 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 * 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 * 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 * 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 * true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true * 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true * true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 * 0x0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 * 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 * 0x0;
     return;
 }
 
+}
 
 //# publish
 module 0x42.M {
@@ -391,100 +497,136 @@ module 0x42.M {
 
 // operator /
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 / 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 / 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 / 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 / 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 / 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 / 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 / true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true / 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true / true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 / 0x0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 / 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 / 0x0;
     return;
 }
 
+}
 
 //# publish
 module 0x42.M {
@@ -520,100 +662,136 @@ module 0x42.M {
 
 // operator &
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 & 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 & 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 & 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 & 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 & 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 & 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 & true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true & 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true & true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 & 0x0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 & 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 & 0x0;
     return;
 }
 
+}
 
 //# publish
 module 0x42.M {
@@ -649,100 +827,136 @@ module 0x42.M {
 
 // operator |
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 | 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 | 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 | 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 | 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 | 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 | 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 | true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true | 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true | true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 | 0x0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 | 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 | 0x0;
     return;
 }
 
+}
 
 //# publish
 module 0x42.M {
@@ -778,100 +992,136 @@ module 0x42.M {
 
 // operator ^
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 ^ 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 ^ 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 ^ 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 ^ 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 ^ 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 ^ 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 ^ true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true ^ 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true ^ true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 ^ 0x0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 ^ 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 ^ 0x0;
     return;
 }
 
+}
 
 //# publish
 module 0x42.M {
@@ -907,84 +1157,114 @@ module 0x42.M {
 
 // operator ==
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 == 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 == 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 == 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 == 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 == 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 == 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 == true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true == 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 == 0x0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 == 0;
     return;
 }
 
+}
 
 //# publish
 module 0x42.M {
@@ -1009,84 +1289,114 @@ module 0x42.M {
 
 // operator !=
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 != 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 != 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 != 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 != 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 != 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 != 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 != true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true != 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 != 0x0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 != 0;
     return;
 }
 
+}
 
 //# publish
 module 0x42.M {
@@ -1112,392 +1422,536 @@ module 0x42.M {
 
 // operator <
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 < 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 < 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 < 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 < 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 < 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 < 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 < true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true < 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 < 0x0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 < 0;
     return;
 }
 
+}
 
 // operator >
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 > 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 > 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 > 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 > 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 > 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 > 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 > true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true > 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 > 0x0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 > 0;
     return;
 }
 
+}
 
 // operator <=
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 <= 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 <= 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 <= 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 <= 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 <= 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 <= 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 <= true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true <= 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 <= 0x0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 <= 0;
     return;
 }
 
+}
 
 // operator >=
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 >= 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u8 >= 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 >= 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u64 >= 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 >= 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0u128 >= 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 >= true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true >= 0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 >= 0x0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 >= 0;
     return;
 }
 
+}
 
 // operator <<
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 << true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 << 0x0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 << 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 << 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true << 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true << true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 << 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 << 0x0;
     return;
 }
 
+}
 
 //# publish
 module 0x42.M {
@@ -1533,68 +1987,92 @@ module 0x42.M {
 
 // operator >>
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 >> true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 >> 0x0;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 >> 0u64;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0 >> 0u128;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true >> 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = true >> true;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 >> 0u8;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 0x0 >> 0x0;
     return;
 }
 
+}
 
 //# publish
 module 0x42.M {

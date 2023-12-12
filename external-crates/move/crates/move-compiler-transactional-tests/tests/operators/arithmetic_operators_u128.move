@@ -1,5 +1,5 @@
 //# run
-script {
+module 1::m {
 fun main() {
     assert!(0u128 + 0u128 == 0u128, 1000);
     assert!(0u128 + 1u128 == 1u128, 1001);
@@ -15,7 +15,7 @@ fun main() {
 }
 
 //# run
-script {
+module 2::m {
 fun main() {
     // should fail
     1u128 + 340282366920938463463374607431768211455u128;
@@ -23,7 +23,7 @@ fun main() {
 }
 
 //# run
-script {
+module 3::m {
 fun main() {
     // should fail
     264235234643575437864589745863652363451u128 + 98731747836156137656137643716471364731u128;
@@ -33,7 +33,7 @@ fun main() {
 
 
 //# run
-script {
+module 4::m {
 fun main() {
     assert!(0u128 - 0u128 == 0u128, 2000);
     assert!(1u128 - 0u128 == 1u128, 2001);
@@ -48,7 +48,7 @@ fun main() {
 }
 
 //# run
-script {
+module 5::m {
 fun main() {
     // should fail
     0u128 - 1u128;
@@ -56,7 +56,7 @@ fun main() {
 }
 
 //# run
-script {
+module 6::m {
 fun main() {
     // should fail
     54u128 - 100u128;
@@ -64,7 +64,7 @@ fun main() {
 }
 
 //# run
-script {
+module 7::m {
 fun main() {
     assert!(0u128 * 0u128 == 0u128, 3000);
     assert!(1u128 * 0u128 == 0u128, 3001);
@@ -78,7 +78,7 @@ fun main() {
 }
 
 //# run
-script {
+module 8::m {
 fun main() {
     // should fail
     18446744073709551616u128 * 18446744073709551616u128;
@@ -86,7 +86,7 @@ fun main() {
 }
 
 //# run
-script {
+module 9::m {
 fun main() {
     // should fail
     170141183460469231731687303715884105728u128 * 2u128;
@@ -96,7 +96,7 @@ fun main() {
 
 
 //# run
-script {
+module 10::m {
 fun main() {
     assert!(0u128 / 1u128 == 0u128, 4000);
     assert!(1u128 / 1u128 == 1u128, 4001);
@@ -111,7 +111,7 @@ fun main() {
 }
 
 //# run
-script {
+module 11::m {
 fun main() {
     // should fail
     0u128 / 0u128;
@@ -119,7 +119,7 @@ fun main() {
 }
 
 //# run
-script {
+module 12::m {
 fun main() {
     // should fail
     1u128 / 0u128;
@@ -129,7 +129,7 @@ fun main() {
 
 
 //# run
-script {
+module 13::m {
 fun main() {
     // should fail
     340282366920938463463374607431768211455u128 / 0u128;
@@ -138,7 +138,7 @@ fun main() {
 
 
 //# run
-script {
+module 14::m {
 fun main() {
     assert!(0u128 % 1u128 == 0u128, 5000);
     assert!(1u128 % 1u128 == 0u128, 5001);
@@ -153,7 +153,7 @@ fun main() {
 }
 
 //# run
-script {
+module 15::m {
 fun main() {
     // should fail
     0u128 % 0u128;
@@ -161,7 +161,7 @@ fun main() {
 }
 
 //# run
-script {
+module 16::m {
 fun main() {
     // should fail
     1u128 % 0u128;
@@ -169,7 +169,7 @@ fun main() {
 }
 
 //# run
-script {
+module 17::m {
 fun main() {
     // should fail
     340282366920938463463374607431768211455u128 % 0u128;

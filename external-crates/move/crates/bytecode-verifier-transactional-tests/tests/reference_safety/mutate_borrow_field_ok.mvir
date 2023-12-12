@@ -22,9 +22,10 @@ module 0x42.Test {
 }
 
 //# run
+module 0x42.m {
 import 0x42.Test;
 
-main() {
+entry foo() {
     let x: Test.T;
     let x_ref: u64;
 label b0:
@@ -33,4 +34,5 @@ label b0:
     x_ref = Test.value(&mut x); // can read references through calls
     assert(move(x_ref) == 1000, 42);
     return;
+}
 }

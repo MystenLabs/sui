@@ -39,7 +39,7 @@ impl Handler for TransactionHandler {
                 checkpoint_summary.timestamp_ms,
                 checkpoint_transaction,
                 &checkpoint_transaction.effects,
-            );
+            )?;
         }
         Ok(())
     }
@@ -71,7 +71,7 @@ impl TransactionHandler {
         timestamp_ms: u64,
         checkpoint_transaction: &CheckpointTransaction,
         effects: &TransactionEffects,
-    ) {
+    ) -> Result<()> {
         let transaction = &checkpoint_transaction.transaction;
         let txn_data = transaction.transaction_data();
         let gas_object = effects.gas_object();
@@ -120,7 +120,8 @@ impl TransactionHandler {
                 error!("Mismatch in move calls count: commands {move_calls_count} != {move_calls} calls");
             }
         }
-
+        let transaction_json = serde_json::to_string(&transaction)?;
+        let effects_json = serde_json::to_string(&checkpoint_transaction.effects)?;
         let entry = TransactionEntry {
             transaction_digest,
             checkpoint,
@@ -166,7 +167,13 @@ impl TransactionHandler {
             gas_price: txn_data.gas_price(),
 
             raw_transaction: Base64::encode(bcs::to_bytes(&txn_data).unwrap()),
+
+            has_zklogin_sig: transaction.has_zklogin_sig(),
+            has_upgraded_multisig: transaction.has_upgraded_multisig(),
+            transaction_json: Some(transaction_json),
+            effects_json: Some(effects_json),
         };
         self.transactions.push(entry);
+        Ok(())
     }
 }

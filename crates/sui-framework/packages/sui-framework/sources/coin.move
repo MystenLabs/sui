@@ -364,33 +364,23 @@ module sui::coin {
 
     // === Get coin metadata fields for on-chain consumption ===
 
-    public fun get_decimals<T>(
-        metadata: &CoinMetadata<T>
-    ): u8 {
+    public fun get_decimals<T>(metadata: &CoinMetadata<T>): u8 {
         metadata.decimals
     }
 
-    public fun get_name<T>(
-        metadata: &CoinMetadata<T>
-    ): string::String {
+    public fun get_name<T>(metadata: &CoinMetadata<T>): string::String {
         metadata.name
     }
 
-    public fun get_symbol<T>(
-        metadata: &CoinMetadata<T>
-    ): ascii::String {
+    public fun get_symbol<T>(metadata: &CoinMetadata<T>): ascii::String {
         metadata.symbol
     }
 
-    public fun get_description<T>(
-        metadata: &CoinMetadata<T>
-    ): string::String {
+    public fun get_description<T>(metadata: &CoinMetadata<T>): string::String {
         metadata.description
     }
 
-    public fun get_icon_url<T>(
-        metadata: &CoinMetadata<T>
-    ): Option<Url> {
+    public fun get_icon_url<T>(metadata: &CoinMetadata<T>): Option<Url> {
         metadata.icon_url
     }
 
@@ -408,6 +398,17 @@ module sui::coin {
         let Coin { id, balance } = coin;
         object::delete(id);
         balance::destroy_for_testing(balance)
+    }
+
+    #[test_only]
+    /// Create a `TreasuryCap` for any `Coin` for testing purposes.
+    public fun create_treasury_cap_for_testing<T>(
+        ctx: &mut TxContext
+    ): TreasuryCap<T> {
+        TreasuryCap {
+            id: object::new(ctx),
+            total_supply: balance::create_supply_for_testing()
+        }
     }
 
     // === Deprecated code ===

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 /* eslint-disable @tanstack/query/exhaustive-deps */
 
+import { useSuiClient } from '@mysten/dapp-kit';
 import {
 	getKioskObject,
 	Kiosk,
@@ -15,7 +16,6 @@ import { useQuery } from '@tanstack/react-query';
 
 import { OwnedObjectType } from '../components/Inventory/OwnedObjects';
 import { useKioskClient } from '../context/KioskClientContext';
-import { useRpc } from '../context/RpcClientContext';
 import {
 	TANSTACK_KIOSK_DATA_KEY,
 	TANSTACK_KIOSK_KEY,
@@ -114,13 +114,13 @@ export function useKiosk(kioskId: string | undefined | null) {
  * A hook to fetch a kiosk's details.
  */
 export function useKioskDetails(kioskId: string | undefined | null) {
-	const provider = useRpc();
+	const client = useSuiClient();
 
 	return useQuery({
 		queryKey: [TANSTACK_KIOSK_DATA_KEY, kioskId],
 		queryFn: async (): Promise<Kiosk | null> => {
 			if (!kioskId) return null;
-			return await getKioskObject(provider, kioskId);
+			return await getKioskObject(client, kioskId);
 		},
 	});
 }

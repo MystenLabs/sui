@@ -1,5 +1,5 @@
 //# run
-script {
+module 0x42::m {
     const SHL0: u8 = 1 << 7;
     const SHL1: u64 = 1 << 63;
     const SHL2: u128 = 1 << 127;

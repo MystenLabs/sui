@@ -1,5 +1,5 @@
 //# run
-script {
+module 1::m {
 fun main() {
     assert!(0u8 & 0u8 == 0u8, 1000);
     assert!(0u64 & 0u64 == 0u64, 1001);
@@ -49,7 +49,7 @@ fun main() {
 
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     assert!(0u8 | 0u8 == 0u8, 2000);
     assert!(0u64 | 0u64 == 0u64, 2001);
@@ -100,7 +100,7 @@ fun main() {
 
 
 //# run
-script {
+module 2::m {
 fun main() {
     assert!(0u8 ^ 0u8 == 0u8, 3000);
     assert!(0u64 ^ 0u64 == 0u64, 3001);

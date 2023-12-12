@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let x: u64;
     let y: u64;
     let z: u64;
@@ -7,4 +9,6 @@ label b0:
     // negative stack
     x, y, z = (1, 2);
     return;
+}
+
 }

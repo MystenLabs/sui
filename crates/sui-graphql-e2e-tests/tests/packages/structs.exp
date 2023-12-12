@@ -1,0 +1,634 @@
+processed 11 tasks
+
+init:
+A: object(0,0)
+
+task 1 'run-graphql'. lines 6-50:
+Response: {
+  "data": {
+    "object": {
+      "asMovePackage": {
+        "coin": {
+          "struct": {
+            "name": "Coin",
+            "abilities": [
+              "STORE",
+              "KEY"
+            ],
+            "typeParameters": [
+              {
+                "constraints": [],
+                "isPhantom": true
+              }
+            ],
+            "fields": [
+              {
+                "name": "id",
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID",
+                  "signature": {
+                    "ref": null,
+                    "body": {
+                      "struct": {
+                        "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                        "module": "object",
+                        "type": "UID",
+                        "type_parameters": []
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "name": "balance",
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Balance<$0>",
+                  "signature": {
+                    "ref": null,
+                    "body": {
+                      "struct": {
+                        "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                        "module": "balance",
+                        "type": "Balance",
+                        "type_parameters": [
+                          {
+                            "typeParameter": 0
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "tx_context": {
+          "struct": {
+            "name": "TxContext",
+            "abilities": [
+              "DROP"
+            ],
+            "typeParameters": [],
+            "fields": [
+              {
+                "name": "sender",
+                "type": {
+                  "repr": "address",
+                  "signature": {
+                    "ref": null,
+                    "body": "address"
+                  }
+                }
+              },
+              {
+                "name": "tx_hash",
+                "type": {
+                  "repr": "vector<u8>",
+                  "signature": {
+                    "ref": null,
+                    "body": {
+                      "vector": "u8"
+                    }
+                  }
+                }
+              },
+              {
+                "name": "epoch",
+                "type": {
+                  "repr": "u64",
+                  "signature": {
+                    "ref": null,
+                    "body": "u64"
+                  }
+                }
+              },
+              {
+                "name": "epoch_timestamp_ms",
+                "type": {
+                  "repr": "u64",
+                  "signature": {
+                    "ref": null,
+                    "body": "u64"
+                  }
+                }
+              },
+              {
+                "name": "ids_created",
+                "type": {
+                  "repr": "u64",
+                  "signature": {
+                    "ref": null,
+                    "body": "u64"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
+
+task 2 'publish'. lines 52-56:
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5213600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'create-checkpoint'. lines 58-58:
+Checkpoint created: 1
+
+task 4 'run-graphql'. lines 60-100:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": [
+              {
+                "outputState": {
+                  "address": "0x00947c61559161baebff14abf3a953508186311498625e6d340ac24a82d7f36e",
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "address": "0x02150ebfe3d017c2726bd482f6d3c8a63516a398d7d98e2ee69396764e04bc76",
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "address": "0xd6cf3abc67cfdaede67b761651dfa593cf1152e63104cb3d25b96cf45b2f73ad",
+                  "asMovePackage": {
+                    "module": {
+                      "struct": {
+                        "name": "S",
+                        "abilities": [
+                          "COPY",
+                          "DROP"
+                        ],
+                        "typeParameters": [],
+                        "fields": [
+                          {
+                            "name": "x",
+                            "type": {
+                              "repr": "u64",
+                              "signature": {
+                                "ref": null,
+                                "body": "u64"
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 5 'upgrade'. lines 102-108:
+created: object(5,0)
+mutated: object(0,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 6049600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 6 'create-checkpoint'. lines 110-110:
+Checkpoint created: 2
+
+task 7 'run-graphql'. lines 112-167:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": [
+              {
+                "outputState": {
+                  "address": "0x00947c61559161baebff14abf3a953508186311498625e6d340ac24a82d7f36e",
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "address": "0x02150ebfe3d017c2726bd482f6d3c8a63516a398d7d98e2ee69396764e04bc76",
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "address": "0x210a264edd9a4f7627a8abdef3d7d158bbd9e117ef9089a73369bb528ac52e3f",
+                  "asMovePackage": {
+                    "module": {
+                      "s": {
+                        "module": {
+                          "package": {
+                            "asObject": {
+                              "address": "0xd6cf3abc67cfdaede67b761651dfa593cf1152e63104cb3d25b96cf45b2f73ad"
+                            }
+                          }
+                        },
+                        "name": "S",
+                        "abilities": [
+                          "COPY",
+                          "DROP"
+                        ],
+                        "typeParameters": [],
+                        "fields": [
+                          {
+                            "name": "x",
+                            "type": {
+                              "repr": "u64",
+                              "signature": {
+                                "ref": null,
+                                "body": "u64"
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      "t": {
+                        "module": {
+                          "package": {
+                            "asObject": {
+                              "address": "0x210a264edd9a4f7627a8abdef3d7d158bbd9e117ef9089a73369bb528ac52e3f"
+                            }
+                          }
+                        },
+                        "name": "T",
+                        "abilities": [],
+                        "typeParameters": [
+                          {
+                            "constraints": [
+                              "DROP"
+                            ],
+                            "isPhantom": false
+                          }
+                        ],
+                        "fields": [
+                          {
+                            "name": "y",
+                            "type": {
+                              "repr": "u64",
+                              "signature": {
+                                "ref": null,
+                                "body": "u64"
+                              }
+                            }
+                          },
+                          {
+                            "name": "s",
+                            "type": {
+                              "repr": "0xd6cf3abc67cfdaede67b761651dfa593cf1152e63104cb3d25b96cf45b2f73ad::m::S",
+                              "signature": {
+                                "ref": null,
+                                "body": {
+                                  "struct": {
+                                    "package": "0xd6cf3abc67cfdaede67b761651dfa593cf1152e63104cb3d25b96cf45b2f73ad",
+                                    "module": "m",
+                                    "type": "S",
+                                    "type_parameters": []
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "name": "u",
+                            "type": {
+                              "repr": "$0",
+                              "signature": {
+                                "ref": null,
+                                "body": {
+                                  "typeParameter": 0
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      "v": {
+                        "name": "V",
+                        "fields": [
+                          {
+                            "name": "t",
+                            "type": {
+                              "repr": "0xd6cf3abc67cfdaede67b761651dfa593cf1152e63104cb3d25b96cf45b2f73ad::m::T<0xd6cf3abc67cfdaede67b761651dfa593cf1152e63104cb3d25b96cf45b2f73ad::m::S>"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 8 'run-graphql'. lines 169-202:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": [
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": {
+                    "module": {
+                      "s": {
+                        "module": {
+                          "struct": null
+                        }
+                      },
+                      "t": {
+                        "module": {
+                          "struct": {
+                            "name": "T"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 9 'run-graphql'. lines 205-239:
+Response: {
+  "data": {
+    "object": {
+      "asMovePackage": {
+        "module": {
+          "all": {
+            "nodes": [
+              {
+                "name": "Coin",
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                    }
+                  },
+                  {
+                    "name": "balance",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Balance<$0>"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "CoinMetadata",
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                    }
+                  },
+                  {
+                    "name": "decimals",
+                    "type": {
+                      "repr": "u8"
+                    }
+                  },
+                  {
+                    "name": "name",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                    }
+                  },
+                  {
+                    "name": "symbol",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::ascii::String"
+                    }
+                  },
+                  {
+                    "name": "description",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                    }
+                  },
+                  {
+                    "name": "icon_url",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::option::Option<0x0000000000000000000000000000000000000000000000000000000000000002::url::Url>"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "CurrencyCreated",
+                "fields": [
+                  {
+                    "name": "decimals",
+                    "type": {
+                      "repr": "u8"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "TreasuryCap",
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                    }
+                  },
+                  {
+                    "name": "total_supply",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Supply<$0>"
+                    }
+                  }
+                ]
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": false
+            }
+          },
+          "after": {
+            "nodes": [
+              {
+                "name": "CoinMetadata"
+              },
+              {
+                "name": "CurrencyCreated"
+              },
+              {
+                "name": "TreasuryCap"
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": true
+            }
+          },
+          "before": {
+            "nodes": [
+              {
+                "name": "Coin"
+              },
+              {
+                "name": "CoinMetadata"
+              },
+              {
+                "name": "CurrencyCreated"
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": false
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 10 'run-graphql'. lines 241-285:
+Response: {
+  "data": {
+    "object": {
+      "asMovePackage": {
+        "module": {
+          "prefix": {
+            "nodes": [
+              {
+                "name": "CoinMetadata"
+              },
+              {
+                "name": "CurrencyCreated"
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": true
+            }
+          },
+          "prefixAll": {
+            "nodes": [
+              {
+                "name": "CoinMetadata"
+              },
+              {
+                "name": "CurrencyCreated"
+              },
+              {
+                "name": "TreasuryCap"
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": true
+            }
+          },
+          "prefixExcess": {
+            "nodes": [
+              {
+                "name": "CoinMetadata"
+              },
+              {
+                "name": "CurrencyCreated"
+              },
+              {
+                "name": "TreasuryCap"
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": true
+            }
+          },
+          "suffix": {
+            "nodes": [
+              {
+                "name": "CoinMetadata"
+              },
+              {
+                "name": "CurrencyCreated"
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": true
+            }
+          },
+          "suffixAll": {
+            "nodes": [
+              {
+                "name": "Coin"
+              },
+              {
+                "name": "CoinMetadata"
+              },
+              {
+                "name": "CurrencyCreated"
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": false
+            }
+          },
+          "suffixExcess": {
+            "nodes": [
+              {
+                "name": "Coin"
+              },
+              {
+                "name": "CoinMetadata"
+              },
+              {
+                "name": "CurrencyCreated"
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": false
+            }
+          }
+        }
+      }
+    }
+  }
+}

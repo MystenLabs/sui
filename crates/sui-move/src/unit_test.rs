@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::build;
 use clap::Parser;
 use move_cli::base::{
     self,
@@ -12,6 +11,7 @@ use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use sui_move_build::decorate_warnings;
 use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
@@ -43,23 +43,13 @@ impl Test {
         build_config: BuildConfig,
         unit_test_config: UnitTestingConfig,
     ) -> anyhow::Result<UnitTestResult> {
+        if !cfg!(debug_assertions) && self.test.compute_coverage {
+            return Err(anyhow::anyhow!(
+                "The --coverage flag is currently supported only in debug builds. Please build the Sui CLI from source in debug mode."
+            ));
+        }
         // find manifest file directory from a given path or (if missing) from current dir
         let rerooted_path = base::reroot_path(path)?;
-        // pre build for Sui-specific verifications
-        let with_unpublished_deps = false;
-        let dump_bytecode_as_base64 = false;
-        let generate_struct_layouts: bool = false;
-        build::Build::execute_internal(
-            rerooted_path.clone(),
-            BuildConfig {
-                test_mode: true, // make sure to verify tests
-                ..build_config.clone()
-            },
-            with_unpublished_deps,
-            dump_bytecode_as_base64,
-            generate_struct_layouts,
-            !self.no_lint,
-        )?;
         run_move_unit_tests(
             rerooted_path,
             build_config,
@@ -110,7 +100,7 @@ pub fn run_move_unit_tests(
     let config = config
         .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));
 
-    move_cli::base::test::run_move_unit_tests(
+    let result = move_cli::base::test::run_move_unit_tests(
         &path,
         build_config,
         UnitTestingConfig {
@@ -120,9 +110,16 @@ pub fn run_move_unit_tests(
         sui_move_natives::all_natives(/* silent */ false),
         Some(initial_cost_schedule_for_unit_tests()),
         compute_coverage,
-        &mut std::io::sink(),
         &mut std::io::stdout(),
-    )
+    );
+    result.map(|(test_result, warning_diags)| {
+        if test_result == UnitTestResult::Success {
+            if let Some(diags) = warning_diags {
+                decorate_warnings(diags, None);
+            }
+        }
+        test_result
+    })
 }
 
 fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions) {

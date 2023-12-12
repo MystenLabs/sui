@@ -1,23 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr;
-
+use crate::context_data::package_cache::PackageCache;
 use async_graphql::*;
-use move_core_types::{language_storage::TypeTag, value};
+use move_core_types::{annotated_value as A, language_storage::TypeTag};
 use serde::{Deserialize, Serialize};
+use sui_package_resolver::Resolver;
 
-use crate::{
-    context_data::package_cache::PackageCache,
-    error::{code, graphql_error},
-};
+use crate::error::Error;
 
-/// Represents concrete types (no type parameters, no references)
-#[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
-#[graphql(complex)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct MoveType {
-    /// Flat representation of the type signature, as a displayable string.
-    repr: String,
+    native: TypeTag,
 }
 
 scalar!(
@@ -97,64 +91,60 @@ pub(crate) struct MoveFieldLayout {
     layout: MoveTypeLayout,
 }
 
-#[ComplexObject]
+/// Represents concrete types (no type parameters, no references)
+#[Object]
 impl MoveType {
+    /// Flat representation of the type signature, as a displayable string.
+    async fn repr(&self) -> String {
+        self.native.to_canonical_string(/* with_prefix */ true)
+    }
+
     /// Structured representation of the type signature.
     async fn signature(&self) -> Result<MoveTypeSignature> {
         // Factor out into its own non-GraphQL, non-async function for better testability
-        self.signature_impl()
+        self.signature_impl().extend()
     }
 
     /// Structured representation of the "shape" of values that match this type.
     async fn layout(&self, ctx: &Context<'_>) -> Result<MoveTypeLayout> {
-        let cache = ctx.data().map_err(|_| {
-            graphql_error(
-                code::INTERNAL_SERVER_ERROR,
-                "Unable to fetch Package Cache.",
-            )
-        })?;
+        let resolver: &Resolver<PackageCache> = ctx
+            .data()
+            .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
+            .extend()?;
 
-        MoveTypeLayout::try_from(self.layout_impl(cache).await?)
+        MoveTypeLayout::try_from(self.layout_impl(resolver).await.extend()?).extend()
     }
 }
 
 impl MoveType {
-    pub(crate) fn new(repr: String) -> MoveType {
-        Self { repr }
+    pub(crate) fn new(native: TypeTag) -> MoveType {
+        Self { native }
     }
 
-    fn signature_impl(&self) -> Result<MoveTypeSignature> {
-        MoveTypeSignature::try_from(self.native_type_tag()?)
+    fn signature_impl(&self) -> Result<MoveTypeSignature, Error> {
+        MoveTypeSignature::try_from(self.native.clone())
     }
 
-    pub(crate) async fn layout_impl(&self, cache: &PackageCache) -> Result<value::MoveTypeLayout> {
-        cache
-            .type_layout(self.native_type_tag()?)
+    pub(crate) async fn layout_impl(
+        &self,
+        resolver: &Resolver<PackageCache>,
+    ) -> Result<A::MoveTypeLayout, Error> {
+        resolver
+            .type_layout(self.native.clone())
             .await
             .map_err(|e| {
-                graphql_error(
-                    code::INTERNAL_SERVER_ERROR,
-                    format!("Error calculating layout for {}: {e}", self.repr),
-                )
-                .into()
+                Error::Internal(format!(
+                    "Error calculating layout for {}: {e}",
+                    self.native.to_canonical_display(/* with_prefix */ true),
+                ))
             })
-    }
-
-    fn native_type_tag(&self) -> Result<TypeTag> {
-        TypeTag::from_str(&self.repr).map_err(|e| {
-            graphql_error(
-                code::INTERNAL_SERVER_ERROR,
-                format!("Error parsing type '{}': {e}", self.repr),
-            )
-            .into()
-        })
     }
 }
 
 impl TryFrom<TypeTag> for MoveTypeSignature {
-    type Error = async_graphql::Error;
+    type Error = Error;
 
-    fn try_from(tag: TypeTag) -> Result<Self> {
+    fn try_from(tag: TypeTag) -> Result<Self, Error> {
         use TypeTag as T;
 
         Ok(match tag {
@@ -180,18 +170,18 @@ impl TryFrom<TypeTag> for MoveTypeSignature {
                     .type_params
                     .into_iter()
                     .map(Self::try_from)
-                    .collect::<Result<Vec<_>>>()?,
+                    .collect::<Result<Vec<_>, _>>()?,
             },
         })
     }
 }
 
-impl TryFrom<value::MoveTypeLayout> for MoveTypeLayout {
-    type Error = async_graphql::Error;
+impl TryFrom<A::MoveTypeLayout> for MoveTypeLayout {
+    type Error = Error;
 
-    fn try_from(layout: value::MoveTypeLayout) -> Result<Self> {
-        use value::MoveStructLayout as SL;
-        use value::MoveTypeLayout as TL;
+    fn try_from(layout: A::MoveTypeLayout) -> Result<Self, Error> {
+        use A::MoveStructLayout as SL;
+        use A::MoveTypeLayout as TL;
 
         Ok(match layout {
             TL::Signer => return Err(unexpected_signer_error()),
@@ -208,28 +198,20 @@ impl TryFrom<value::MoveTypeLayout> for MoveTypeLayout {
 
             TL::Vector(v) => Self::Vector(Box::new(Self::try_from(*v)?)),
 
-            TL::Struct(SL::Runtime(_)) => {
-                return Err(graphql_error(
-                    code::INTERNAL_SERVER_ERROR,
-                    "Move Struct Layout without field names.",
-                )
-                .into())
-            }
-
-            TL::Struct(SL::WithFields(fields) | SL::WithTypes { fields, .. }) => Self::Struct(
+            TL::Struct(SL { fields, .. }) => Self::Struct(
                 fields
                     .into_iter()
                     .map(MoveFieldLayout::try_from)
-                    .collect::<Result<_>>()?,
+                    .collect::<Result<_, _>>()?,
             ),
         })
     }
 }
 
-impl TryFrom<value::MoveFieldLayout> for MoveFieldLayout {
-    type Error = async_graphql::Error;
+impl TryFrom<A::MoveFieldLayout> for MoveFieldLayout {
+    type Error = Error;
 
-    fn try_from(layout: value::MoveFieldLayout) -> Result<Self> {
+    fn try_from(layout: A::MoveFieldLayout) -> Result<Self, Error> {
         Ok(Self {
             name: layout.name.to_string(),
             layout: layout.layout.try_into()?,
@@ -239,21 +221,20 @@ impl TryFrom<value::MoveFieldLayout> for MoveFieldLayout {
 
 /// Error from seeing a `signer` value or type, which shouldn't be possible in Sui Move.
 pub(crate) fn unexpected_signer_error() -> Error {
-    graphql_error(
-        code::INTERNAL_SERVER_ERROR,
-        "Unexpected value of type: signer.",
-    )
-    .into()
+    Error::Internal("Unexpected value of type: signer.".to_string())
 }
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
 
     use expect_test::expect;
 
-    fn signature(repr: impl Into<String>) -> Result<MoveTypeSignature> {
-        MoveType::new(repr.into()).signature_impl()
+    fn signature(repr: impl Into<String>) -> Result<MoveTypeSignature, Error> {
+        let tag = TypeTag::from_str(repr.into().as_str()).unwrap();
+        MoveType::new(tag).signature_impl()
     }
 
     #[test]
@@ -277,29 +258,16 @@ mod tests {
     }
 
     #[test]
-    fn tag_parse_error() {
-        let err = signature("not_a_type").unwrap_err();
-        let expect = expect![[
-            r#"Error { message: "Error parsing type 'not_a_type': unexpected token Name(\"not_a_type\"), expected type tag", extensions: None }"#
-        ]];
-        expect.assert_eq(&format!("{err:?}"));
-    }
-
-    #[test]
     fn signer_type() {
         let err = signature("signer").unwrap_err();
-        let expect = expect![[
-            r#"Error { message: "Unexpected value of type: signer.", extensions: None }"#
-        ]];
+        let expect = expect![[r#"Internal("Unexpected value of type: signer.")"#]];
         expect.assert_eq(&format!("{err:?}"));
     }
 
     #[test]
     fn nested_signer_type() {
         let err = signature("0x42::baz::Qux<u32, vector<signer>>").unwrap_err();
-        let expect = expect![[
-            r#"Error { message: "Unexpected value of type: signer.", extensions: None }"#
-        ]];
+        let expect = expect![[r#"Internal("Unexpected value of type: signer.")"#]];
         expect.assert_eq(&format!("{err:?}"));
     }
 }

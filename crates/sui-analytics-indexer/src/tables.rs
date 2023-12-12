@@ -94,6 +94,10 @@ pub(crate) struct TransactionEntry {
     // We represent them in base64 encoding so they work with the csv.
     // TODO: review and possibly move back to Vec<u8>
     pub(crate) raw_transaction: String,
+    pub(crate) has_zklogin_sig: bool,
+    pub(crate) has_upgraded_multisig: bool,
+    pub(crate) transaction_json: Option<String>,
+    pub(crate) effects_json: Option<String>,
 }
 
 // Event information.
@@ -117,6 +121,7 @@ pub(crate) struct EventEntry {
     // We represent them in base64 encoding so they work with the csv.
     // TODO: review and possibly move back to Vec<u8>
     pub(crate) bcs: String,
+    pub(crate) event_json: String,
 }
 
 // Used in the transaction object table to identify the type of input object.
@@ -174,6 +179,9 @@ pub(crate) struct ObjectEntry {
 
     pub(crate) coin_type: Option<String>,
     pub(crate) coin_balance: Option<u64>,
+
+    pub(crate) struct_tag: Option<String>,
+    pub(crate) object_json: Option<String>,
 }
 
 // Objects used and manipulated in a transaction.

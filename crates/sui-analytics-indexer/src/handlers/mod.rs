@@ -3,9 +3,12 @@
 
 use std::collections::BTreeSet;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
+use move_core_types::language_storage::{StructTag, TypeTag};
 
 use sui_indexer::framework::Handler;
+use sui_package_resolver::{PackageStore, Resolver};
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
@@ -128,11 +131,9 @@ impl ObjectStatusTracker {
             .map(|(obj_ref, _)| obj_ref.0)
             .collect();
         let deleted: BTreeSet<ObjectID> = effects
-            .deleted()
-            .iter()
-            .chain(effects.unwrapped_then_deleted().iter())
-            .chain(effects.wrapped().iter())
-            .map(|obj_ref| obj_ref.0)
+            .all_tombstones()
+            .into_iter()
+            .map(|(id, _)| id)
             .collect();
         Self {
             created,
@@ -152,4 +153,21 @@ impl ObjectStatusTracker {
             None
         }
     }
+}
+
+async fn get_move_struct<T: PackageStore>(
+    struct_tag: &StructTag,
+    contents: &[u8],
+    resolver: &Resolver<T>,
+) -> Result<MoveStruct> {
+    let move_struct = match resolver
+        .type_layout(TypeTag::Struct(Box::new(struct_tag.clone())))
+        .await?
+    {
+        MoveTypeLayout::Struct(move_struct_layout) => {
+            MoveStruct::simple_deserialize(contents, &move_struct_layout)
+        }
+        _ => Err(anyhow!("Object is not a move struct")),
+    }?;
+    Ok(move_struct)
 }

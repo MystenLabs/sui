@@ -1,6 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use expect_test::expect;
 use std::{
     fs::{self, File},
     io::{self, Read, Write},
@@ -8,7 +9,10 @@ use std::{
 };
 use tempfile::TempDir;
 
+use move_compiler::editions::{Edition, Flavor};
+use move_package::lock_file::schema::ToolchainVersion;
 use move_package::lock_file::LockFile;
+use move_package::BuildConfig;
 
 #[test]
 fn commit() {
@@ -59,6 +63,40 @@ fn discard() {
     }
 
     assert!(!pkg.path().join("Move.lock").is_file());
+}
+
+#[test]
+fn update_lock_file_toolchain_version() {
+    let pkg = create_test_package().unwrap();
+    let lock_path = pkg.path().join("Move.lock");
+
+    let lock = LockFile::new(
+        pkg.path().to_path_buf(),
+        /* manifest_digest */ "42".to_string(),
+        /* deps_digest */ "7".to_string(),
+    )
+    .unwrap();
+    lock.commit(&lock_path).unwrap();
+
+    let mut build_config: BuildConfig = Default::default();
+    build_config.default_flavor = Some(Flavor::Sui);
+    build_config.default_edition = Some(Edition::E2024_ALPHA);
+    build_config.lock_file = Some(lock_path.clone());
+    let _ =
+        build_config.update_lock_file_toolchain_version(&pkg.path().to_path_buf(), "0.0.1".into());
+
+    let mut lock_file = File::open(lock_path).unwrap();
+    let toolchain_version =
+        ToolchainVersion::read(&mut lock_file).expect("Invalid toolchain version");
+    let toml =
+        toml::ser::to_string(&toolchain_version).expect("Unable to serialize toolchain version");
+
+    let expected = expect![[r#"
+        compiler-version = "0.0.1"
+        edition = "2024.alpha"
+        flavor = "sui"
+    "#]];
+    expected.assert_eq(&toml);
 }
 
 /// Create a simple Move package with no sources (just a manifest and an output directory) in a

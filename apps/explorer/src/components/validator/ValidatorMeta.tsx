@@ -5,7 +5,6 @@ import { ArrowUpRight12 } from '@mysten/icons';
 import { type SuiValidatorSummary } from '@mysten/sui.js/client';
 import { Heading, Text } from '@mysten/ui';
 
-import { StakeButton } from './StakeButton';
 import { CopyToClipboard } from '~/ui/CopyToClipboard';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { ImageIcon } from '~/ui/ImageIcon';
@@ -41,9 +40,6 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
 							<ArrowUpRight12 className="text-steel" />
 						</a>
 					)}
-					<div className="mt-3.5">
-						<StakeButton />
-					</div>
 				</div>
 			</div>
 			<div className="min-w-0 basis-full break-words md:basis-2/3">

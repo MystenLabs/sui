@@ -63,6 +63,15 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .method(
             anemo_build::manual::Method::builder()
+                .name("send_randomness_partial_signatures")
+                .route_name("SendRandomnessPartialSignatures")
+                .request_type("crate::SendRandomnessPartialSignaturesRequest")
+                .response_type("()")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
                 .name("request_vote")
                 .route_name("RequestVote")
                 .request_type("crate::RequestVoteRequest")

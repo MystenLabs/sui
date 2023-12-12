@@ -1,5 +1,5 @@
 //# run
-script {
+module 0x42::m {
     const U8: u8 = 0;
     const U16: u16 = 0;
     const U32: u32 = 0;

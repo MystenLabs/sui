@@ -34,6 +34,9 @@ pub enum Command {
         path: PathBuf,
     },
     StartServer {
+        /// The title to display at the top of the page
+        #[clap(short, long)]
+        ide_title: Option<String>,
         /// DB URL for data fetching
         #[clap(short, long)]
         db_url: Option<String>,
@@ -53,5 +56,9 @@ pub enum Command {
         /// Path to TOML file containing configuration for service.
         #[clap(short, long)]
         config: Option<PathBuf>,
+
+        /// RPC url to the Node for tx execution
+        #[clap(long)]
+        node_rpc_url: Option<String>,
     },
 }

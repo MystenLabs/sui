@@ -5,7 +5,7 @@
 use std::{collections::BTreeMap, path::Path};
 
 use crate::{
-    framework::{run_test_impl, CompiledState, MoveTestAdapter},
+    framework::{run_test_impl, CompiledState, MaybeNamedCompiledModule, MoveTestAdapter},
     tasks::{EmptyCommand, InitCommand, SyntaxChoice, TaskInput},
 };
 use anyhow::{anyhow, Result};
@@ -13,21 +13,17 @@ use async_trait::async_trait;
 use clap::Parser;
 use move_binary_format::{
     errors::{Location, VMError, VMResult},
-    file_format::CompiledScript,
     CompiledModule,
 };
 use move_command_line_common::{
     address::ParsedAddress, files::verify_and_create_named_address_mapping,
 };
-use move_compiler::{
-    compiled_unit::AnnotatedCompiledUnit, editions::Edition, shared::PackagePaths,
-    FullyCompiledProgram,
-};
+use move_compiler::{editions::Edition, shared::PackagePaths, FullyCompiledProgram};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
-    value::MoveValue,
+    runtime_value::MoveValue,
 };
 use move_stdlib::move_stdlib_named_addresses;
 use move_symbol_pool::Symbol;
@@ -48,12 +44,6 @@ struct SimpleVMTestAdapter<'a> {
 }
 
 #[derive(Debug, Parser)]
-pub struct AdapterExecuteArgs {
-    #[clap(long)]
-    pub check_runtime_types: bool,
-}
-
-#[derive(Debug, Parser)]
 pub struct AdapterInitArgs {
     #[clap(long = "edition")]
     pub edition: Option<Edition>,
@@ -64,7 +54,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
     type ExtraInitArgs = AdapterInitArgs;
     type ExtraPublishArgs = EmptyCommand;
     type ExtraValueArgs = ();
-    type ExtraRunArgs = AdapterExecuteArgs;
+    type ExtraRunArgs = EmptyCommand;
     type Subcommand = EmptyCommand;
 
     fn compiled_state(&mut self) -> &mut CompiledState<'a> {
@@ -148,20 +138,20 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
 
     async fn publish_modules(
         &mut self,
-        modules: Vec<(Option<Symbol>, CompiledModule)>,
+        modules: Vec<MaybeNamedCompiledModule>,
         gas_budget: Option<u64>,
         _extra_args: Self::ExtraPublishArgs,
-    ) -> Result<(Option<String>, Vec<(Option<Symbol>, CompiledModule)>)> {
+    ) -> Result<(Option<String>, Vec<MaybeNamedCompiledModule>)> {
         let all_bytes = modules
             .iter()
-            .map(|(_, module)| {
+            .map(|m| {
                 let mut module_bytes = vec![];
-                module.serialize(&mut module_bytes)?;
+                m.module.serialize(&mut module_bytes)?;
                 Ok(module_bytes)
             })
             .collect::<Result<_>>()?;
 
-        let id = modules.first().unwrap().1.self_id();
+        let id = modules.first().unwrap().module.self_id();
         let sender = *id.address();
         match self.perform_session_action(
             gas_budget,
@@ -177,55 +167,6 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         }
     }
 
-    async fn execute_script(
-        &mut self,
-        script: CompiledScript,
-        type_arg_tags: Vec<TypeTag>,
-        signers: Vec<ParsedAddress>,
-        txn_args: Vec<MoveValue>,
-        gas_budget: Option<u64>,
-        extra_args: Self::ExtraRunArgs,
-    ) -> Result<(Option<String>, SerializedReturnValues)> {
-        let signers: Vec<_> = signers
-            .into_iter()
-            .map(|addr| self.compiled_state().resolve_address(&addr))
-            .collect();
-
-        let mut script_bytes = vec![];
-        script.serialize(&mut script_bytes)?;
-
-        let args = txn_args
-            .iter()
-            .map(|arg| arg.simple_serialize().unwrap())
-            .collect::<Vec<_>>();
-        // TODO rethink testing signer args
-        let args = signers
-            .iter()
-            .map(|a| MoveValue::Signer(*a).simple_serialize().unwrap())
-            .chain(args)
-            .collect();
-        let serialized_return_values = self
-            .perform_session_action(
-                gas_budget,
-                |session, gas_status| {
-                    let type_args: Vec<_> = type_arg_tags
-                        .into_iter()
-                        .map(|tag| session.load_type(&tag))
-                        .collect::<VMResult<_>>()?;
-
-                    session.execute_script(script_bytes, type_args, args, gas_status)
-                },
-                VMConfig::from(extra_args),
-            )
-            .map_err(|e| {
-                anyhow!(
-                    "Script execution failed with VMError: {}",
-                    format_vm_error(&e)
-                )
-            })?;
-        Ok((None, serialized_return_values))
-    }
-
     async fn call_function(
         &mut self,
         module: &ModuleId,
@@ -234,7 +175,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         signers: Vec<ParsedAddress>,
         txn_args: Vec<MoveValue>,
         gas_budget: Option<u64>,
-        extra_args: Self::ExtraRunArgs,
+        _extra_args: Self::ExtraRunArgs,
     ) -> Result<(Option<String>, SerializedReturnValues)> {
         let signers: Vec<_> = signers
             .into_iter()
@@ -264,7 +205,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
                         module, function, type_args, args, gas_status,
                     )
                 },
-                VMConfig::from(extra_args),
+                test_vm_config(),
             )
             .map_err(|e| {
                 anyhow!(
@@ -384,27 +325,19 @@ static MOVE_STDLIB_COMPILED: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
         }
         Ok((units, _warnings)) => units
             .into_iter()
-            .filter_map(|m| match m {
-                AnnotatedCompiledUnit::Module(annot_module) => {
-                    Some(annot_module.named_module.module)
-                }
-                AnnotatedCompiledUnit::Script(_) => None,
-            })
+            .map(|annot_module| annot_module.named_module.module)
             .collect(),
     }
 });
 
+fn test_vm_config() -> VMConfig {
+    VMConfig {
+        enable_invariant_violation_check_in_swap_loc: false,
+        ..Default::default()
+    }
+}
+
 #[tokio::main]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     run_test_impl::<SimpleVMTestAdapter>(path, Some(&*PRECOMPILED_MOVE_STDLIB)).await
-}
-
-impl From<AdapterExecuteArgs> for VMConfig {
-    fn from(arg: AdapterExecuteArgs) -> VMConfig {
-        VMConfig {
-            paranoid_type_checks: arg.check_runtime_types,
-            enable_invariant_violation_check_in_swap_loc: false,
-            ..Default::default()
-        }
-    }
 }

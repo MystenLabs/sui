@@ -12,7 +12,7 @@ The following example implements basic `Lock` and `Key` mechanics on Sui where `
 
 `Key` is linked to its `Lock` using an `ID` field. This check allows off-chain discovery of the target, as well as splits the dynamic transferable capability and the 'static' contents. Another benefit of this approach is that the target asset is always discoverable, while you can wrap its `Key` into another object (such as a marketplace listing).
 
-```rust
+```move
 module examples::lock_and_key {
     use sui::object::{Self, ID, UID};
     use sui::transfer;
@@ -51,7 +51,7 @@ module examples::lock_and_key {
     /// lock into a treasure chest by locking some `Coin<SUI>` inside.
     ///
     /// Sender gets the `Key` to this `Lock`.
-    public entry fun create<T: store + key>(obj: T, ctx: &mut TxContext) {
+    public fun create<T: store + key>(obj: T, ctx: &mut TxContext) {
         let id = object::new(ctx);
         let for = object::uid_to_inner(&id);
 
@@ -68,7 +68,7 @@ module examples::lock_and_key {
 
     /// Lock something inside a shared object using a Key. Aborts if
     /// lock is not empty or if key doesn't match the lock.
-    public entry fun lock<T: store + key>(
+    public fun lock<T: store + key>(
         obj: T,
         lock: &mut Lock<T>,
         key: &Key<T>,

@@ -1,10 +1,10 @@
 processed 1 task
 
-task 0 'run'. lines 1-20:
-Error: Script execution failed with VMError: {
-    major_status: CODE_DESERIALIZATION_ERROR,
+task 0 'run'. lines 1-24:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INDEX_OUT_OF_BOUNDS,
     sub_status: None,
-    location: script,
+    location: undefined,
     indices: [],
-    offsets: [],
+    offsets: [(FunctionDefinitionIndex(0), 15)],
 }

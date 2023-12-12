@@ -1,0 +1,96 @@
+processed 20 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1 'publish'. lines 9-79:
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 9659600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 81-81:
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'view-object'. lines 83-83:
+Owner: Account Address ( A )
+Version: 2
+Contents: test::m::Parent {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+
+task 4 'view-object'. lines 85-85:
+Owner: Account Address ( fake(2,0) )
+Version: 2
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
+
+task 5 'programmable'. lines 87-89:
+mutated: object(0,0), object(2,0)
+deleted: object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 3408372, non_refundable_storage_fee: 34428
+
+task 6 'run'. lines 91-91:
+created: object(6,0), object(6,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3465600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7 'view-object'. lines 93-93:
+Owner: Account Address ( fake(6,1) )
+Version: 4
+Contents: test::m::Cup<u64> {id: sui::object::UID {id: sui::object::ID {bytes: fake(6,0)}}}
+
+task 8 'view-object'. lines 95-95:
+Owner: Account Address ( A )
+Version: 4
+Contents: test::m::Parent {id: sui::object::UID {id: sui::object::ID {bytes: fake(6,1)}}}
+
+task 9 'programmable'. lines 97-101:
+mutated: object(0,0), object(6,1)
+deleted: object(6,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 3430944, non_refundable_storage_fee: 34656
+
+task 10 'run'. lines 103-103:
+created: object(10,0), object(10,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 11 'view-object'. lines 105-105:
+Owner: Account Address ( A )
+Version: 6
+Contents: test::m::Parent {id: sui::object::UID {id: sui::object::ID {bytes: fake(10,0)}}}
+
+task 12 'view-object'. lines 107-107:
+Owner: Account Address ( fake(10,0) )
+Version: 6
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(10,1)}}}
+
+task 13 'programmable'. lines 109-111:
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [] }), command: Some(1) } }
+
+task 14 'programmable'. lines 113-119:
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::receive. Use the public variant instead, sui::transfer::public_receive"), command: Some(1) } }
+
+task 15 'run'. lines 121-121:
+created: object(15,0), object(15,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3473200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16 'view-object'. lines 123-123:
+Owner: Account Address ( A )
+Version: 9
+Contents: test::m::Parent {id: sui::object::UID {id: sui::object::ID {bytes: fake(15,0)}}}
+
+task 17 'view-object'. lines 125-125:
+Owner: Account Address ( fake(15,0) )
+Version: 9
+Contents: test::m::Store {id: sui::object::UID {id: sui::object::ID {bytes: fake(15,1)}}}
+
+task 18 'programmable'. lines 127-131:
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::receive. Use the public variant instead, sui::transfer::public_receive"), command: Some(1) } }
+
+task 19 'programmable'. lines 132-136:
+mutated: object(0,0)
+deleted: object(15,0), object(15,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 3438468, non_refundable_storage_fee: 34732

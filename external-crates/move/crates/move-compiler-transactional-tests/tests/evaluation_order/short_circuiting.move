@@ -6,7 +6,7 @@ module 0x42::X {
 }
 
 //# run
-script {
+module 0x42::m {
 use 0x42::X;
 fun main() {
     let vtrue = true;

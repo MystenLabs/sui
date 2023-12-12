@@ -9,8 +9,8 @@ Error: Function execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(2), 1)],
 }
 
-task 6 'run'. lines 48-48:
+task 6 'run'. lines 53-53:
 return values: { 42 }
 
-task 7 'run'. lines 50-50:
+task 7 'run'. lines 55-55:
 return values: 42

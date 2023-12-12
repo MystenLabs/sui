@@ -33,9 +33,10 @@ module 0x1.Test {
 }
 
 //# run
+module 0x42.m {
 import 0x1.Test;
 
-main() {
+entry foo() {
     let x: Test.X;
     let i: u64;
     let t: Test.T;
@@ -46,4 +47,5 @@ label b0:
     i, x, b = Test.destroy_t(move(t));
     Test.destroy_x(move(x));
     return;
+}
 }

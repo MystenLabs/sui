@@ -8,7 +8,7 @@ use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
     effects::TransactionEffects,
-    execution_status::ExecutionFailureStatus,
+    execution_status::{CommandArgumentError, ExecutionFailureStatus},
     object::Object,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{ProgrammableTransaction, Transaction, TEST_ONLY_GAS_UNIT_FOR_PUBLISH},
@@ -34,7 +34,7 @@ use sui_types::committee::EpochId;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::{ExecutionError, SuiError};
 use sui_types::execution_status::ExecutionFailureStatus::{
-    InputObjectDeleted, MoveAbort, SharedObjectWrapped,
+    InputObjectDeleted, SharedObjectOperationNotAllowed,
 };
 use sui_types::transaction::{ObjectArg, VerifiedCertificate};
 
@@ -172,6 +172,29 @@ impl TestRunner {
                 id: shared_obj_id,
                 initial_shared_version,
                 mutable: true,
+            })
+            .unwrap();
+        move_call! {
+            delete_object_transaction_builder,
+            (self.package.0)::o2::consume_o2(arg)
+        };
+        let delete_obj_tx = delete_object_transaction_builder.finish();
+        let gas_id = self.gas_object_ids.pop().unwrap();
+        self.create_signed_transaction_from_pt(delete_obj_tx, gas_id)
+            .await
+    }
+
+    pub async fn delete_shared_obj_tx_immut(
+        &mut self,
+        shared_obj_id: ObjectID,
+        initial_shared_version: SequenceNumber,
+    ) -> Transaction {
+        let mut delete_object_transaction_builder = ProgrammableTransactionBuilder::new();
+        let arg = delete_object_transaction_builder
+            .obj(ObjectArg::SharedObject {
+                id: shared_obj_id,
+                initial_shared_version,
+                mutable: false,
             })
             .unwrap();
         move_call! {
@@ -592,6 +615,230 @@ async fn test_delete_shared_object() {
             .unwrap(),
         *effects.transaction_digest(),
     );
+}
+
+#[tokio::test]
+async fn test_delete_shared_object_immut() {
+    let mut user1 = TestRunner::new("shared_object_deletion").await;
+    let effects = user1.create_shared_object().await;
+
+    assert_eq!(effects.created().len(), 1);
+
+    let shared_obj = effects.created()[0].0;
+    let shared_obj_id = shared_obj.0;
+    let initial_shared_version = shared_obj.1;
+    let delete_obj_tx = user1
+        .delete_shared_obj_tx_immut(shared_obj_id, initial_shared_version)
+        .await;
+
+    let cert = user1
+        .certify_shared_obj_transaction(delete_obj_tx)
+        .await
+        .unwrap();
+
+    let (effects, _) = user1
+        .execute_sequenced_certificate_to_effects(cert)
+        .await
+        .unwrap();
+
+    assert!(effects.status().is_err());
+
+    assert!(matches!(
+        effects.status().clone().unwrap_err().0,
+        ExecutionFailureStatus::CommandArgumentError {
+            arg_idx: 0,
+            kind: CommandArgumentError::InvalidObjectByValue
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_delete_shared_object_immut_mut_mut_interleave() {
+    let mut user1 = TestRunner::new("shared_object_deletion").await;
+    let effects = user1.create_shared_object().await;
+
+    assert_eq!(effects.created().len(), 1);
+
+    let shared_obj = effects.created()[0].0;
+    let shared_obj_id = shared_obj.0;
+    let initial_shared_version = shared_obj.1;
+    let delete_obj_tx_immut1 = user1
+        .delete_shared_obj_tx_immut(shared_obj_id, initial_shared_version)
+        .await;
+
+    let delete_obj_tx = user1
+        .delete_shared_obj_tx(shared_obj_id, initial_shared_version)
+        .await;
+
+    let delete_obj_tx_immut2 = user1
+        .delete_shared_obj_tx(shared_obj_id, initial_shared_version)
+        .await;
+
+    let cert_immut1 = user1
+        .certify_shared_obj_transaction(delete_obj_tx_immut1)
+        .await
+        .unwrap();
+
+    let cert = user1
+        .certify_shared_obj_transaction(delete_obj_tx)
+        .await
+        .unwrap();
+
+    let cert_immut2 = user1
+        .certify_shared_obj_transaction(delete_obj_tx_immut2)
+        .await
+        .unwrap();
+
+    // Try and delete the shared object with the object passed as non-mutable
+    let (effects, _) = user1
+        .execute_sequenced_certificate_to_effects(cert_immut1)
+        .await
+        .unwrap();
+
+    assert!(effects.status().is_err());
+
+    assert!(matches!(
+        effects.status().clone().unwrap_err().0,
+        ExecutionFailureStatus::CommandArgumentError {
+            arg_idx: 0,
+            kind: CommandArgumentError::InvalidObjectByValue
+        }
+    ));
+
+    // Now do an actual deletion
+    let (effects, error) = user1
+        .execute_sequenced_certificate_to_effects(cert)
+        .await
+        .unwrap();
+
+    assert!(error.is_none());
+    assert_eq!(effects.deleted().len(), 1);
+
+    // assert the shared object was deleted
+    let deleted_obj_id = effects.deleted()[0].0;
+    let shared_obj_id = effects.input_shared_objects()[0].id_and_version().0;
+    assert_eq!(deleted_obj_id, shared_obj_id);
+
+    // assert the version of the deleted shared object was incremented
+    let deleted_obj_ver = effects.deleted()[0].1;
+    assert_eq!(deleted_obj_ver, 4.into());
+
+    // assert the rest of the effects are as expected
+    assert!(effects.status().is_ok());
+    assert!(effects.created().is_empty());
+    assert!(effects.unwrapped_then_deleted().is_empty());
+    assert!(effects.wrapped().is_empty());
+
+    assert_eq!(
+        user1
+            .object_exists_in_marker_table(&deleted_obj_id, &deleted_obj_ver, 0)
+            .unwrap(),
+        *effects.transaction_digest(),
+    );
+
+    // Try to delete again with the object passed as mutable and make sure we get `InputObjectDeleted`.
+    let (effects, _) = user1
+        .execute_sequenced_certificate_to_effects(cert_immut2)
+        .await
+        .unwrap();
+
+    assert!(effects.status().is_err());
+    assert_eq!(
+        effects.status().clone().unwrap_err().0,
+        ExecutionFailureStatus::InputObjectDeleted
+    );
+}
+
+#[tokio::test]
+async fn test_delete_shared_object_immut_mut_immut_interleave() {
+    let mut user1 = TestRunner::new("shared_object_deletion").await;
+    let effects = user1.create_shared_object().await;
+
+    assert_eq!(effects.created().len(), 1);
+
+    let shared_obj = effects.created()[0].0;
+    let shared_obj_id = shared_obj.0;
+    let initial_shared_version = shared_obj.1;
+    let delete_obj_tx_immut1 = user1
+        .delete_shared_obj_tx_immut(shared_obj_id, initial_shared_version)
+        .await;
+    let delete_obj_tx_immut2 = user1
+        .delete_shared_obj_tx_immut(shared_obj_id, initial_shared_version)
+        .await;
+
+    let cert_immut1 = user1
+        .certify_shared_obj_transaction(delete_obj_tx_immut1)
+        .await
+        .unwrap();
+
+    let cert_immut2 = user1
+        .certify_shared_obj_transaction(delete_obj_tx_immut2)
+        .await
+        .unwrap();
+
+    let (effects, _) = user1
+        .execute_sequenced_certificate_to_effects(cert_immut1)
+        .await
+        .unwrap();
+
+    assert!(effects.status().is_err());
+
+    assert!(matches!(
+        effects.status().clone().unwrap_err().0,
+        ExecutionFailureStatus::CommandArgumentError {
+            arg_idx: 0,
+            kind: CommandArgumentError::InvalidObjectByValue
+        }
+    ));
+
+    // Now do an actual deletion
+
+    let delete_obj_tx = user1
+        .delete_shared_obj_tx(shared_obj_id, initial_shared_version)
+        .await;
+
+    let cert = user1
+        .certify_shared_obj_transaction(delete_obj_tx)
+        .await
+        .unwrap();
+
+    let (effects, error) = user1
+        .execute_sequenced_certificate_to_effects(cert)
+        .await
+        .unwrap();
+
+    assert!(error.is_none());
+
+    assert_eq!(effects.deleted().len(), 1);
+
+    // assert the shared object was deleted
+    let deleted_obj_id = effects.deleted()[0].0;
+    let shared_obj_id = effects.input_shared_objects()[0].id_and_version().0;
+    assert_eq!(deleted_obj_id, shared_obj_id);
+
+    // assert the version of the deleted shared object was incremented
+    let deleted_obj_ver = effects.deleted()[0].1;
+    assert_eq!(deleted_obj_ver, 4.into());
+
+    // assert the rest of the effects are as expected
+    assert!(effects.status().is_ok());
+    assert!(effects.created().is_empty());
+    assert!(effects.unwrapped_then_deleted().is_empty());
+    assert!(effects.wrapped().is_empty());
+
+    assert_eq!(
+        user1
+            .object_exists_in_marker_table(&deleted_obj_id, &deleted_obj_ver, 0)
+            .unwrap(),
+        *effects.transaction_digest(),
+    );
+
+    let (effects, _) = user1
+        .execute_sequenced_certificate_to_effects(cert_immut2)
+        .await
+        .unwrap();
+
+    assert!(effects.status().is_err());
 }
 
 #[tokio::test]
@@ -1269,7 +1516,10 @@ async fn test_wrap_not_allowed() {
         .await
         .unwrap();
 
-    assert!(matches!(error.unwrap().kind(), SharedObjectWrapped));
+    assert!(matches!(
+        error.unwrap().kind(),
+        SharedObjectOperationNotAllowed
+    ));
 
     let new_version = user_1.get_object_latest_version(shared_obj_id);
     assert_eq!(new_version, 4.into());
@@ -1326,7 +1576,10 @@ async fn test_convert_to_owned_not_allowed() {
         .await
         .unwrap();
 
-    assert!(matches!(error.unwrap().kind(), MoveAbort(..)));
+    assert!(matches!(
+        error.unwrap().kind(),
+        SharedObjectOperationNotAllowed
+    ));
 
     let new_version = user_1.get_object_latest_version(shared_obj_id);
     assert_eq!(new_version, 4.into());
@@ -1355,7 +1608,10 @@ async fn test_freeze_not_allowed() {
         .await
         .unwrap();
 
-    assert!(matches!(error.unwrap().kind(), MoveAbort(..)));
+    assert!(matches!(
+        error.unwrap().kind(),
+        SharedObjectOperationNotAllowed
+    ));
 
     let new_version = user_1.get_object_latest_version(shared_obj_id);
     assert_eq!(new_version, 4.into());

@@ -100,7 +100,7 @@ txb.transferObjects([coin], '0xSomeSuiAddress');
 
 When providing inputs that are not on chain objects, the values must be serialized as
 
-[BCS](https://sui-typescript-docs.vercel.app/bcs), which can be done using `txb.pure` eg,
+[BCS](https://sdk.mystenlabs.com/bcs), which can be done using `txb.pure` eg,
 `txb.pure.address(address)` or `txb.pure(bcs.vector(bcs.U8).serialize(bytes))`.
 
 `txb.pure` can be called as a function that accepts a SerializedBcs object, or as a namespace that
@@ -132,13 +132,22 @@ txb.moveCall({
 	// object IDs must be wrapped in moveCall arguments
 	arguments: [txb.object('0xSomeObject')],
 });
+
+// txb.object automaically converts the object ID to receiving transaction arguments if the moveCall expects it
+txb.moveCall({
+	target: '0xSomeAddress::example::receive_object',
+	// 0xSomeAddress::example::receive_object expects a receiving argument and has a Move definition that looks like this:
+	// public fun receive_object<T: key>(parent_object: &mut ParentObjectType, receiving_object: Receiving<ChildObjectType>) { ... }
+	arguments: [txb.object('0xParentObjectID'), txb.object('0xReceivingObjectID')],
+});
 ```
 
 When building a transaction block, Sui expects all objects to be fully resolved, including the
-object version. The SDK will automatically lookup the current version of objects for any provided
-object reference when building a transaction block. This greatly simplifies building transactions,
-but requires additional RPC calls. You can optimize this process by providing a fully resolved
-object reference instead:
+object version. The SDK automatically looks up the current version of objects for any provided
+object reference when building a transaction block. If the object reference is used as a receiving
+argument to a `moveCall`, the object reference is automatically converted to a receiving transaction
+argument. This greatly simplifies building transactions, but requires additional RPC calls. You can
+optimize this process by providing a fully resolved object reference instead:
 
 ```ts
 // for owned or immutable objects
@@ -146,6 +155,9 @@ txb.object(Inputs.ObjectRef({ digest, objectId, version }));
 
 // for shared objects
 txb.object(Inputs.SharedObjectRef({ objectId, initialSharedVersion, mutable }));
+
+// for receiving objects
+txb.object(Inputs.ReceivingRef({ digest, objectId, version }));
 ```
 
 #### Transaction results

@@ -420,7 +420,7 @@ impl SimpleFaucet {
             .keystore
             .sign_secure(&self.active_address, &tx_data, Intent::sui_transaction())
             .map_err(FaucetError::internal)?;
-        let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]);
+        let tx = Transaction::from_data(tx_data, vec![signature]);
         let tx_digest = *tx.digest();
         info!(
             ?tx_digest,

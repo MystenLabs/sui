@@ -2798,10 +2798,6 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                         return false;
                     }
                 }
-                PA::Visibility::Script(..) => {
-                    // TODO: model script visibility properly
-                    unimplemented!("Script visibility not supported yet")
-                }
                 PA::Visibility::Friend(..) => {
                     // TODO: model friend visibility properly
                     unimplemented!("Friend visibility not supported yet")

@@ -3,6 +3,7 @@
 
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
+use sui_json_rpc::coin_api::parse_to_struct_tag;
 
 use diesel::prelude::*;
 use move_bytecode_utils::module_cache::GetModule;
@@ -11,11 +12,11 @@ use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::digests::ObjectDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
 use sui_types::object::Object;
-use sui_types::object::{ObjectFormatOptions, ObjectRead};
+use sui_types::object::ObjectRead;
 
 use crate::errors::IndexerError;
-use crate::schema_v2::objects;
-use crate::types_v2::IndexedObject;
+use crate::schema_v2::{objects, objects_history};
+use crate::types_v2::{IndexedDeletedObject, IndexedObject, ObjectStatus};
 
 #[derive(Queryable)]
 pub struct DynamicFieldColumn {
@@ -60,9 +61,83 @@ pub struct StoredObject {
 }
 
 #[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
+#[diesel(table_name = objects_history, primary_key(object_id, object_version, checkpoint_sequence_number))]
+pub struct StoredHistoryObject {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub object_status: i16,
+    pub object_digest: Option<Vec<u8>>,
+    pub checkpoint_sequence_number: i64,
+    pub owner_type: Option<i16>,
+    pub owner_id: Option<Vec<u8>>,
+    pub object_type: Option<String>,
+    pub serialized_object: Option<Vec<u8>>,
+    pub coin_type: Option<String>,
+    pub coin_balance: Option<i64>,
+    pub df_kind: Option<i16>,
+    pub df_name: Option<Vec<u8>>,
+    pub df_object_type: Option<String>,
+    pub df_object_id: Option<Vec<u8>>,
+}
+
+impl From<StoredObject> for StoredHistoryObject {
+    fn from(o: StoredObject) -> Self {
+        Self {
+            object_id: o.object_id,
+            object_version: o.object_version,
+            object_status: ObjectStatus::Active as i16,
+            object_digest: Some(o.object_digest),
+            checkpoint_sequence_number: o.checkpoint_sequence_number,
+            owner_type: Some(o.owner_type),
+            owner_id: o.owner_id,
+            object_type: o.object_type,
+            serialized_object: Some(o.serialized_object),
+            coin_type: o.coin_type,
+            coin_balance: o.coin_balance,
+            df_kind: o.df_kind,
+            df_name: o.df_name,
+            df_object_type: o.df_object_type,
+            df_object_id: o.df_object_id,
+        }
+    }
+}
+
+#[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
 #[diesel(table_name = objects, primary_key(object_id))]
 pub struct StoredDeletedObject {
     pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub checkpoint_sequence_number: i64,
+}
+
+impl From<IndexedDeletedObject> for StoredDeletedObject {
+    fn from(o: IndexedDeletedObject) -> Self {
+        Self {
+            object_id: o.object_id.to_vec(),
+            object_version: o.object_version as i64,
+            checkpoint_sequence_number: o.checkpoint_sequence_number as i64,
+        }
+    }
+}
+
+#[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
+#[diesel(table_name = objects_history, primary_key(object_id, object_version, checkpoint_sequence_number))]
+pub struct StoredDeletedHistoryObject {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub object_status: i16,
+    pub checkpoint_sequence_number: i64,
+}
+
+impl From<StoredDeletedObject> for StoredDeletedHistoryObject {
+    fn from(o: StoredDeletedObject) -> Self {
+        Self {
+            object_id: o.object_id,
+            object_version: o.object_version,
+            object_status: ObjectStatus::WrappedOrDeleted as i16,
+            checkpoint_sequence_number: o.checkpoint_sequence_number,
+        }
+    }
 }
 
 impl From<IndexedObject> for StoredObject {
@@ -112,7 +187,7 @@ impl StoredObject {
     ) -> Result<ObjectRead, IndexerError> {
         let oref = self.get_object_ref()?;
         let object: sui_types::object::Object = self.try_into()?;
-        let layout = object.get_layout(ObjectFormatOptions::default(), module_cache)?;
+        let layout = object.get_layout(module_cache)?;
         Ok(ObjectRead::Exists(oref, object, layout))
     }
 
@@ -252,12 +327,20 @@ impl TryFrom<StoredObject> for SuiCoin {
     fn try_from(o: StoredObject) -> Result<Self, Self::Error> {
         let object: Object = o.clone().try_into()?;
         let (coin_object_id, version, digest) = o.get_object_ref()?;
-        let coin_type = o
-            .coin_type
-            .ok_or(IndexerError::PersistentStorageDataCorruptionError(format!(
-                "Object {} is supposed to be a coin but has an empty coin_type column",
-                coin_object_id,
-            )))?;
+        let coin_type_canonical =
+            o.coin_type
+                .ok_or(IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "Object {} is supposed to be a coin but has an empty coin_type column",
+                    coin_object_id,
+                )))?;
+        let coin_type = parse_to_struct_tag(coin_type_canonical.as_str())
+            .map_err(|_| {
+                IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "The type of object {} cannot be parsed as a struct tag",
+                    coin_object_id,
+                ))
+            })?
+            .to_string();
         let balance = o
             .coin_balance
             .ok_or(IndexerError::PersistentStorageDataCorruptionError(format!(
@@ -285,15 +368,24 @@ pub struct CoinBalance {
     pub coin_balance: i64,
 }
 
-impl From<CoinBalance> for Balance {
-    fn from(c: CoinBalance) -> Self {
-        Self {
-            coin_type: c.coin_type,
+impl TryFrom<CoinBalance> for Balance {
+    type Error = IndexerError;
+
+    fn try_from(c: CoinBalance) -> Result<Self, Self::Error> {
+        let coin_type = parse_to_struct_tag(c.coin_type.as_str())
+            .map_err(|_| {
+                IndexerError::PersistentStorageDataCorruptionError(
+                    "The type of coin balance cannot be parsed as a struct tag".to_string(),
+                )
+            })?
+            .to_string();
+        Ok(Self {
+            coin_type,
             coin_object_count: c.coin_num as usize,
             // TODO: deal with overflow
             total_balance: c.coin_balance as u128,
             locked_balance: HashMap::default(),
-        }
+        })
     }
 }
 
@@ -304,7 +396,7 @@ mod tests {
         coin::Coin,
         digests::TransactionDigest,
         gas_coin::{GasCoin, GAS},
-        object::{Data, MoveObject, Owner},
+        object::{Data, MoveObject, ObjectInner, Owner},
         Identifier, TypeTag,
     };
 
@@ -335,10 +427,22 @@ mod tests {
         let stored_obj = StoredObject::from(indexed_obj);
 
         let sui_coin = SuiCoin::try_from(stored_obj).unwrap();
-        assert_eq!(
-            sui_coin.coin_type,
-            "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-        );
+        assert_eq!(sui_coin.coin_type, "0x2::sui::SUI");
+    }
+
+    #[test]
+    fn test_output_format_coin_balance() {
+        let test_obj = Object::new_gas_for_testing();
+        let indexed_obj = IndexedObject::from_object(1, test_obj, None);
+
+        let stored_obj = StoredObject::from(indexed_obj);
+        let test_balance = CoinBalance {
+            coin_type: stored_obj.coin_type.unwrap(),
+            coin_num: 1,
+            coin_balance: 100,
+        };
+        let balance = Balance::try_from(test_balance).unwrap();
+        assert_eq!(balance.coin_type, "0x2::sui::SUI");
     }
 
     #[test]
@@ -373,12 +477,13 @@ mod tests {
 
         let owner = AccountAddress::from_hex_literal("0x1").unwrap();
 
-        let object = Object {
+        let object = ObjectInner {
             owner: Owner::AddressOwner(owner.into()),
             data,
             previous_transaction: TransactionDigest::genesis(),
             storage_rebate: 0,
-        };
+        }
+        .into();
 
         let indexed_obj = IndexedObject::from_object(1, object, None);
 

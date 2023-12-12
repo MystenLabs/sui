@@ -30,7 +30,6 @@ use tower::ServiceBuilder;
 use tracing::{debug, error, info};
 use url::Url;
 
-use move_compiler::compiled_unit::CompiledUnitEnum;
 use move_core_types::account_address::AccountAddress;
 use move_package::BuildConfig as MoveBuildConfig;
 use move_symbol_pool::Symbol;
@@ -149,15 +148,16 @@ pub async fn verify_package(
     package_path: impl AsRef<Path>,
 ) -> anyhow::Result<(Network, AddressLookup)> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-    let config = resolve_lock_file_path(
+    let mut config = resolve_lock_file_path(
         MoveBuildConfig::default(),
         Some(package_path.as_ref().to_path_buf()),
     )?;
+    config.no_lint = true;
+    config.silence_warnings = true;
     let build_config = BuildConfig {
         config,
         run_bytecode_verifier: false, /* no need to run verifier if code is on-chain */
         print_diags_to_stderr: false,
-        lint: false,
     };
     let compiled_package = build_config.build(package_path.as_ref().to_path_buf())?;
 
@@ -186,10 +186,7 @@ pub async fn verify_package(
     for v in &compiled_package.package.root_compiled_units {
         let path = v.source_path.to_path_buf();
         let source = Some(fs::read_to_string(path.as_path())?);
-        let name = match v.unit {
-            CompiledUnitEnum::Module(ref m) => m.name,
-            CompiledUnitEnum::Script(ref m) => m.name,
-        };
+        let name = v.unit.name;
         if let Some(existing) = address_map.get_mut(&address) {
             existing.insert(name, SourceInfo { path, source });
         } else {

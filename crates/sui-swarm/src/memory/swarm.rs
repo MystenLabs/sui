@@ -13,7 +13,7 @@ use std::{
     mem, ops,
     path::{Path, PathBuf},
 };
-use sui_config::node::DBCheckpointConfig;
+use sui_config::node::{DBCheckpointConfig, OverloadThresholdConfig};
 use sui_config::NodeConfig;
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
@@ -44,6 +44,8 @@ pub struct SwarmBuilder<R = OsRng> {
     db_checkpoint_config: DBCheckpointConfig,
     jwk_fetch_interval: Option<Duration>,
     num_unpruned_validators: Option<usize>,
+    overload_threshold_config: Option<OverloadThresholdConfig>,
+    data_ingestion_dir: Option<PathBuf>,
 }
 
 impl SwarmBuilder {
@@ -64,6 +66,8 @@ impl SwarmBuilder {
             db_checkpoint_config: DBCheckpointConfig::default(),
             jwk_fetch_interval: None,
             num_unpruned_validators: None,
+            overload_threshold_config: None,
+            data_ingestion_dir: None,
         }
     }
 }
@@ -86,6 +90,8 @@ impl<R> SwarmBuilder<R> {
             db_checkpoint_config: self.db_checkpoint_config,
             jwk_fetch_interval: self.jwk_fetch_interval,
             num_unpruned_validators: self.num_unpruned_validators,
+            overload_threshold_config: self.overload_threshold_config,
+            data_ingestion_dir: self.data_ingestion_dir,
         }
     }
 
@@ -207,6 +213,20 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
+    pub fn with_overload_threshold_config(
+        mut self,
+        overload_threshold_config: OverloadThresholdConfig,
+    ) -> Self {
+        assert!(self.network_config.is_none());
+        self.overload_threshold_config = Some(overload_threshold_config);
+        self
+    }
+
+    pub fn with_data_ingestion_dir(mut self, path: PathBuf) -> Self {
+        self.data_ingestion_dir = Some(path);
+        self
+    }
+
     fn get_or_init_genesis_config(&mut self) -> &mut GenesisConfig {
         if self.genesis_config.is_none() {
             assert!(self.network_config.is_none());
@@ -239,6 +259,15 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 
             if let Some(jwk_fetch_interval) = self.jwk_fetch_interval {
                 config_builder = config_builder.with_jwk_fetch_interval(jwk_fetch_interval);
+            }
+
+            if let Some(overload_threshold_config) = self.overload_threshold_config {
+                config_builder =
+                    config_builder.with_overload_threshold_config(overload_threshold_config);
+            }
+
+            if let Some(path) = self.data_ingestion_dir {
+                config_builder = config_builder.with_data_ingestion_dir(path);
             }
 
             config_builder

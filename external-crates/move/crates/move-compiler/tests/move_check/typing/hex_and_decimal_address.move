@@ -7,7 +7,7 @@ module M {
 }
 }
 
-script {
+module 0x42::m {
     fun main() {
         0x7B::M::take(0x7B::M::s());
         0x7B::M::take(123::M::s());

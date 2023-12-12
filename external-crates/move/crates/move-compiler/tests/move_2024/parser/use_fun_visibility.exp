@@ -1,7 +1,7 @@
 error[E02017]: invalid 'use fun' declaration
   ┌─ tests/move_2024/parser/use_fun_visibility.move:2:5
   │
-2 │     public(script) use fun foo as S.f;
+2 │     public(friend) use fun foo as S.g;
   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   │     │
   │     Invalid visibility for 'use fun' declaration
@@ -10,16 +10,7 @@ error[E02017]: invalid 'use fun' declaration
 error[E02017]: invalid 'use fun' declaration
   ┌─ tests/move_2024/parser/use_fun_visibility.move:3:5
   │
-3 │     public(friend) use fun foo as S.g;
-  │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  │     │
-  │     Invalid visibility for 'use fun' declaration
-  │     Module level 'use fun' declarations can be 'public' for the module's types, otherwise they must internal to declared scope.
-
-error[E02017]: invalid 'use fun' declaration
-  ┌─ tests/move_2024/parser/use_fun_visibility.move:4:5
-  │
-4 │     public(package) use fun foo as S.h;
+3 │     public(package) use fun foo as S.h;
   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   │     │
   │     Invalid visibility for 'use fun' declaration

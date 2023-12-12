@@ -21,6 +21,7 @@ use sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSummary;
 use crate::Page;
 
 pub type EpochPage = Page<EpochInfo, BigInt<u64>>;
+pub type EpochMetricsPage = Page<EpochMetrics, BigInt<u64>>;
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
@@ -56,6 +57,26 @@ impl EpochInfo {
         }
         Ok(Committee::new(self.epoch, voting_rights))
     }
+}
+
+/// a light-weight version of `EpochInfo` for faster loading
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EpochMetrics {
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub epoch: EpochId,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub epoch_total_transactions: u64,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub first_checkpoint_id: CheckpointSequenceNumber,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub epoch_start_timestamp: u64,
+    pub end_of_epoch_info: Option<EndOfEpochInfo>,
 }
 
 #[serde_as]

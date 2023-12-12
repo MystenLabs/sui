@@ -626,7 +626,6 @@ pub fn output_compiled_units(
     compiled_units: Vec<AnnotatedCompiledUnit>,
     out_dir: &str,
 ) -> anyhow::Result<()> {
-    const SCRIPT_SUB_DIR: &str = "scripts";
     const MODULE_SUB_DIR: &str = "modules";
     fn num_digits(n: usize) -> usize {
         format!("{}", n).len()
@@ -648,32 +647,19 @@ pub fn output_compiled_units(
     }
 
     let ice_errors = compiled_unit::verify_units(&compiled_units);
-    let (modules, scripts): (Vec<_>, Vec<_>) = compiled_units
-        .into_iter()
-        .partition(|u| matches!(u, AnnotatedCompiledUnit::Module(_)));
 
     // modules
-    if !modules.is_empty() {
+    if !compiled_units.is_empty() {
         std::fs::create_dir_all(dir_path!(out_dir, MODULE_SUB_DIR))?;
     }
-    let digit_width = num_digits(modules.len());
-    for (idx, unit) in modules.into_iter().enumerate() {
+    let digit_width = num_digits(compiled_units.len());
+    for (idx, unit) in compiled_units.into_iter().enumerate() {
         let unit = unit.into_compiled_unit();
         let mut path = dir_path!(
             out_dir,
             MODULE_SUB_DIR,
             format!("{}_{}", format_idx(idx, digit_width), unit.name())
         );
-        emit_unit!(path, unit);
-    }
-
-    // scripts
-    if !scripts.is_empty() {
-        std::fs::create_dir_all(dir_path!(out_dir, SCRIPT_SUB_DIR))?;
-    }
-    for unit in scripts {
-        let unit = unit.into_compiled_unit();
-        let mut path = dir_path!(out_dir, SCRIPT_SUB_DIR, unit.name().as_str());
         emit_unit!(path, unit);
     }
 
@@ -691,6 +677,8 @@ fn generate_interface_files_for_deps(
     let interface_files_paths =
         generate_interface_files(deps, interface_files_dir_opt, module_to_named_address, true)?;
     deps.extend(interface_files_paths);
+    // Remove bytecode files
+    deps.retain(|p| !p.path.as_str().ends_with(MOVE_COMPILED_EXTENSION));
     Ok(())
 }
 

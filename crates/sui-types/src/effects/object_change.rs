@@ -8,6 +8,8 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
+use super::IDOperation;
+
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct EffectsObjectChange {
     // input_state and output_state are the core fields that's required by
@@ -52,13 +54,6 @@ impl EffectsObjectChange {
             },
         }
     }
-}
-
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub enum IDOperation {
-    None,
-    Created,
-    Deleted,
 }
 
 /// If an object exists (at root-level) in the store prior to this transaction,

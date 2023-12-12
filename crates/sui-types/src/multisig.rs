@@ -3,7 +3,8 @@
 
 use crate::{
     crypto::{CompressedSignature, DefaultHash, SignatureScheme},
-    signature::{AuthenticatorTrait, VerifyParams},
+    signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
+    zk_login_authenticator::ZkLoginAuthenticator,
 };
 pub use enum_dispatch::enum_dispatch;
 use fastcrypto::{
@@ -27,7 +28,7 @@ use std::{
 
 use crate::{
     base_types::{EpochId, SuiAddress},
-    crypto::{PublicKey, Signature},
+    crypto::PublicKey,
     error::SuiError,
 };
 
@@ -75,15 +76,18 @@ impl Hash for MultiSig {
 }
 
 impl AuthenticatorTrait for MultiSig {
-    fn verify_user_authenticator_epoch(&self, _: EpochId) -> Result<(), SuiError> {
-        Ok(())
+    fn verify_user_authenticator_epoch(&self, epoch_id: EpochId) -> Result<(), SuiError> {
+        // If there is any zkLogin signatures, filter and check epoch for each.
+        self.get_zklogin_sigs()?
+            .iter()
+            .try_for_each(|s| s.verify_user_authenticator_epoch(epoch_id))
     }
 
     fn verify_uncached_checks<T>(
         &self,
         _value: &IntentMessage<T>,
         _author: SuiAddress,
-        _aux_verify_data: &VerifyParams,
+        _verify_params: &VerifyParams,
     ) -> Result<(), SuiError>
     where
         T: Serialize,
@@ -94,83 +98,100 @@ impl AuthenticatorTrait for MultiSig {
     fn verify_claims<T>(
         &self,
         value: &IntentMessage<T>,
-        author: SuiAddress,
-        _aux_verify_data: &VerifyParams,
+        multisig_address: SuiAddress,
+        verify_params: &VerifyParams,
     ) -> Result<(), SuiError>
     where
         T: Serialize,
     {
-        self.validate().map_err(|_| SuiError::InvalidSignature {
-            error: "Invalid multisig".to_string(),
-        })?;
+        self.multisig_pk
+            .validate()
+            .map_err(|_| SuiError::InvalidSignature {
+                error: "Invalid multisig".to_string(),
+            })?;
 
-        if SuiAddress::from(&self.multisig_pk) != author {
+        if SuiAddress::from(&self.multisig_pk) != multisig_address {
             return Err(SuiError::InvalidSignature {
                 error: "Invalid address".to_string(),
             });
         }
+
+        if !self.get_zklogin_sigs()?.is_empty() && !verify_params.accept_zklogin_in_multisig {
+            return Err(SuiError::InvalidSignature {
+                error: "zkLogin sig not supported inside multisig".to_string(),
+            });
+        }
+
         let mut weight_sum: u16 = 0;
         let message = bcs::to_bytes(&value).expect("Message serialization should not fail");
         let mut hasher = DefaultHash::default();
         hasher.update(message);
         let digest = hasher.finalize().digest;
-
         // Verify each signature against its corresponding signature scheme and public key.
         // TODO: further optimization can be done because multiple Ed25519 signatures can be batch verified.
         for (sig, i) in self.sigs.iter().zip(as_indices(self.bitmap)?) {
-            let (pk, weight) =
+            let (subsig_pubkey, weight) =
                 self.multisig_pk
                     .pk_map
                     .get(i as usize)
                     .ok_or(SuiError::InvalidSignature {
                         error: "Invalid public keys index".to_string(),
                     })?;
-            let res = match sig {
-                CompressedSignature::Ed25519(s) => {
-                    let pk = Ed25519PublicKey::from_bytes(pk.as_ref()).map_err(|_| {
-                        SuiError::InvalidSignature {
-                            error: "Invalid public key".to_string(),
-                        }
-                    })?;
-                    pk.verify(
-                        &digest,
-                        &s.try_into().map_err(|_| SuiError::InvalidSignature {
-                            error: "Fail to verify single sig".to_string(),
-                        })?,
-                    )
-                }
-                CompressedSignature::Secp256k1(s) => {
-                    let pk = Secp256k1PublicKey::from_bytes(pk.as_ref()).map_err(|_| {
-                        SuiError::InvalidSignature {
-                            error: "Invalid public key".to_string(),
-                        }
-                    })?;
-                    pk.verify(
-                        &digest,
-                        &s.try_into().map_err(|_| SuiError::InvalidSignature {
-                            error: "Fail to verify single sig".to_string(),
-                        })?,
-                    )
-                }
-                CompressedSignature::Secp256r1(s) => {
-                    let pk = Secp256r1PublicKey::from_bytes(pk.as_ref()).map_err(|_| {
-                        SuiError::InvalidSignature {
-                            error: "Invalid public key".to_string(),
-                        }
-                    })?;
-                    pk.verify(
-                        &digest,
-                        &s.try_into().map_err(|_| SuiError::InvalidSignature {
-                            error: "Fail to verify single sig".to_string(),
-                        })?,
-                    )
-                }
-            };
+            let res =
+                match sig {
+                    CompressedSignature::Ed25519(s) => {
+                        let pk =
+                            Ed25519PublicKey::from_bytes(subsig_pubkey.as_ref()).map_err(|_| {
+                                SuiError::InvalidSignature {
+                                    error: "Invalid public key".to_string(),
+                                }
+                            })?;
+                        pk.verify(
+                            &digest,
+                            &s.try_into().map_err(|_| SuiError::InvalidSignature {
+                                error: "Fail to verify single sig".to_string(),
+                            })?,
+                        )
+                    }
+                    CompressedSignature::Secp256k1(s) => {
+                        let pk = Secp256k1PublicKey::from_bytes(subsig_pubkey.as_ref()).map_err(
+                            |_| SuiError::InvalidSignature {
+                                error: "Invalid public key".to_string(),
+                            },
+                        )?;
+                        pk.verify(
+                            &digest,
+                            &s.try_into().map_err(|_| SuiError::InvalidSignature {
+                                error: "Fail to verify single sig".to_string(),
+                            })?,
+                        )
+                    }
+                    CompressedSignature::Secp256r1(s) => {
+                        let pk = Secp256r1PublicKey::from_bytes(subsig_pubkey.as_ref()).map_err(
+                            |_| SuiError::InvalidSignature {
+                                error: "Invalid public key".to_string(),
+                            },
+                        )?;
+                        pk.verify(
+                            &digest,
+                            &s.try_into().map_err(|_| SuiError::InvalidSignature {
+                                error: "Fail to verify single sig".to_string(),
+                            })?,
+                        )
+                    }
+                    CompressedSignature::ZkLogin(z) => {
+                        let authenticator = ZkLoginAuthenticator::from_bytes(&z.0)
+                            .map_err(|_| SuiError::InvalidAuthenticator)?;
+                        authenticator
+                            .verify_claims(value, SuiAddress::from(subsig_pubkey), verify_params)
+                            .map_err(|_| FastCryptoError::InvalidSignature)
+                    }
+                };
             if res.is_ok() {
                 weight_sum += *weight as u16;
             } else {
                 return Err(SuiError::InvalidSignature {
-                    error: format!("Invalid signature for pk={:?}", pk),
+                    error: format!("Invalid signature for pk={:?}", subsig_pubkey),
                 });
             }
         }
@@ -220,7 +241,7 @@ impl MultiSig {
     /// [enum MultiSigPublicKey]. e.g. for [pk1, pk2, pk3, pk4, pk5],
     /// [sig1, sig2, sig5] is valid, but [sig2, sig1, sig5] is invalid.
     pub fn combine(
-        full_sigs: Vec<Signature>,
+        full_sigs: Vec<GenericSignature>,
         multisig_pk: MultiSigPublicKey,
     ) -> Result<Self, SuiError> {
         multisig_pk
@@ -260,7 +281,7 @@ impl MultiSig {
         })
     }
 
-    pub fn validate(&self) -> Result<(), FastCryptoError> {
+    pub fn init_and_validate(&mut self) -> Result<Self, FastCryptoError> {
         if self.sigs.len() > self.multisig_pk.pk_map.len()
             || self.sigs.is_empty()
             || self.bitmap > MAX_BITMAP_VALUE
@@ -268,7 +289,7 @@ impl MultiSig {
             return Err(FastCryptoError::InvalidInput);
         }
         self.multisig_pk.validate()?;
-        Ok(())
+        Ok(self.to_owned())
     }
 
     pub fn get_pk(&self) -> &MultiSigPublicKey {
@@ -277,6 +298,23 @@ impl MultiSig {
 
     pub fn get_sigs(&self) -> &[CompressedSignature] {
         &self.sigs
+    }
+
+    pub fn get_zklogin_sigs(&self) -> Result<Vec<ZkLoginAuthenticator>, SuiError> {
+        let authenticator_as_bytes: Vec<_> = self
+            .sigs
+            .iter()
+            .filter_map(|s| match s {
+                CompressedSignature::ZkLogin(z) => Some(z),
+                _ => None,
+            })
+            .collect();
+        authenticator_as_bytes
+            .iter()
+            .map(|z| {
+                ZkLoginAuthenticator::from_bytes(&z.0).map_err(|_| SuiError::InvalidAuthenticator)
+            })
+            .collect()
     }
 
     pub fn get_indices(&self) -> Result<Vec<u8>, SuiError> {
@@ -291,10 +329,9 @@ impl ToFromBytes for MultiSig {
         {
             return Err(FastCryptoError::InvalidInput);
         }
-        let multisig: MultiSig =
+        let mut multisig: MultiSig =
             bcs::from_bytes(&bytes[1..]).map_err(|_| FastCryptoError::InvalidSignature)?;
-        multisig.validate()?;
-        Ok(multisig)
+        multisig.init_and_validate()
     }
 }
 

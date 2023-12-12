@@ -17,17 +17,13 @@
 		"jsx": "react-jsx",
 		"baseUrl": ".",
 		"paths": {
-			"~/*": ["./src/*"],
-			"@mysten/sui.js/transactions": ["../../sdk/typescript/src/builder/export.ts"],
-			"@mysten/sui.js/*": ["../../sdk/typescript/src/*"],
-			"@mysten/sui.js": ["../../sdk/typescript/src/"],
-			"@mysten/dapp-kit": ["../../sdk/dapp-kit/src/"]
+			"~/*": ["./src/*"]
 		}
 	},
 	"include": ["src", "tests"],
 	"references": [
 		{ "path": "../../sdk/typescript/" },
 		{ "path": "../../sdk/kiosk/" },
-		{ "path": "../../sdk/wallet-kit/react/" }
+		{ "path": "../../sdk/dapp-kit/" }
 	]
 }

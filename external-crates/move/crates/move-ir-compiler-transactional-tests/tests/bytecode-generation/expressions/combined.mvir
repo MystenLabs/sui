@@ -1,5 +1,6 @@
 //# print-bytecode
-main() {
+module 0x1.m {
+entry foo() {
     let x: u64;
     let y: u64;
     let z: u64;
@@ -8,4 +9,5 @@ label b0:
     y = 5;
     z = move(x) + copy(y) * 5 - copy(y);
     return;
+}
 }

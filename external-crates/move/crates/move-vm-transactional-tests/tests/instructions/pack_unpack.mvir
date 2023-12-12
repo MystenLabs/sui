@@ -18,12 +18,14 @@ module 0x42.Test {
 }
 
 //# run
+module 0x42.m {
 import 0x42.Test;
-main() {
+entry foo() {
     let t: Test.T;
 label b0:
     t = Test.new_t();
     Test.unpack_t(move(t));
 
     return;
+}
 }

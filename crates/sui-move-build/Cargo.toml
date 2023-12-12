@@ -1,6 +1,6 @@
 [package]
 name = "sui-move-build"
-version = "0.0.0"
+version.workspace = true
 edition = "2021"
 authors = ["Mysten Labs <eng@mystenlabs.com>"]
 description = "Logic for building Sui Move Packages"
@@ -30,7 +30,3 @@ workspace-hack.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true
-
-[[test]]
-name = "linter_tests"
-harness = false

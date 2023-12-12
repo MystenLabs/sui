@@ -14,6 +14,7 @@ use crate::context_data::db_data_provider::DbValidationError;
 pub(crate) mod code {
     pub const BAD_REQUEST: &str = "BAD_REQUEST";
     pub const BAD_USER_INPUT: &str = "BAD_USER_INPUT";
+    pub const GRAPHQL_VALIDATION_FAILED: &str = "GRAPHQL_VALIDATION_FAILED";
     pub const INTERNAL_SERVER_ERROR: &str = "INTERNAL_SERVER_ERROR";
 }
 
@@ -63,6 +64,8 @@ pub(crate) fn graphql_error_at_pos(
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("This query is unavailable through address. Please try again with the object or owner type.")]
+    DynamicFieldOnAddress,
     #[error("Unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
     ProtocolVersionUnsupported(u64, u64),
     #[error("Invalid filter option or value provided")]
@@ -73,6 +76,8 @@ pub enum Error {
     DbValidation(#[from] DbValidationError),
     #[error("Provide one of digest or sequence_number, not both")]
     InvalidCheckpointQuery,
+    #[error("Invalid coin type: {0}")]
+    InvalidCoinType(String),
     #[error("String is not valid base58: {0}")]
     InvalidBase58(String),
     #[error("Invalid digest length: expected {expected}, actual {actual}")]
@@ -89,6 +94,9 @@ pub enum Error {
     _CursorConnectionFetchFailed(String),
     #[error("Error received in multi-get query: {0}")]
     MultiGet(String),
+    #[error("{0}")]
+    // Catch-all for client-fault errors
+    Client(String),
     #[error("Internal error occurred while processing request: {0}")]
     Internal(String),
 }
@@ -96,7 +104,9 @@ pub enum Error {
 impl ErrorExtensions for Error {
     fn extend(&self) -> async_graphql::Error {
         async_graphql::Error::new(format!("{}", self)).extend_with(|_err, e| match self {
-            Error::InvalidFilter
+            Error::InvalidCoinType(_)
+            | Error::DynamicFieldOnAddress
+            | Error::InvalidFilter
             | Error::ProtocolVersionUnsupported { .. }
             | Error::DomainParse(_)
             | Error::DbValidation(_)
@@ -108,7 +118,8 @@ impl ErrorExtensions for Error {
             | Error::_CursorConnectionFetchFailed(_)
             | Error::MultiGet(_)
             | Error::InvalidBase58(_)
-            | Error::InvalidDigestLength { .. } => {
+            | Error::InvalidDigestLength { .. }
+            | Error::Client(_) => {
                 e.set("code", code::BAD_USER_INPUT);
             }
             Error::Internal(_) => {

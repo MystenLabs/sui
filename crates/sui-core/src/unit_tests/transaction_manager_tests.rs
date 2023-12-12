@@ -11,6 +11,7 @@ use sui_types::{
     crypto::deterministic_random_account_key,
     digests::TransactionEffectsDigest,
     object::Object,
+    storage::InputKey,
     transaction::{CallArg, ObjectArg},
     SUI_FRAMEWORK_PACKAGE_ID,
 };
@@ -20,9 +21,7 @@ use tokio::{
 };
 
 use crate::{
-    authority::{
-        authority_store::InputKey, authority_tests::init_state_with_objects, AuthorityState,
-    },
+    authority::{authority_tests::init_state_with_objects, AuthorityState},
     transaction_manager::TransactionManager,
 };
 
@@ -142,7 +141,7 @@ async fn transaction_manager_basics() {
 
     // Notify TM about availability of the gas object.
     transaction_manager.objects_available(
-        get_input_keys(&vec![gas_object_new]),
+        get_input_keys(&[gas_object_new]),
         &state.epoch_store_for_testing(),
     );
     // TM should output the transaction eventually.
@@ -166,8 +165,16 @@ async fn transaction_manager_basics() {
     transaction_manager.check_empty_for_testing();
 }
 
+// Tests when objects become available, correct set of transactions can be sent to execute.
+// Specifically, we have following setup,
+//         shared_object     shared_object_2
+//       /    |    \     \    /
+//    tx_0  tx_1  tx_2    tx_3
+//     r      r     w      r
+// And when shared_object is available, tx_0, tx_1, and tx_2 can be executed. And when
+// shared_object_2 becomes available, tx_3 can be executed.
 #[tokio::test(flavor = "current_thread", start_paused = true)]
-async fn transaction_manager_read_lock() {
+async fn transaction_manager_object_dependency() {
     // Initialize an authority state, with gas objects and a shared object.
     let (owner, _keypair) = deterministic_random_account_key();
     let gas_objects: Vec<Object> = (0..10)
@@ -177,9 +184,16 @@ async fn transaction_manager_read_lock() {
         })
         .collect();
     let shared_object = Object::shared_for_testing();
+    let shared_object_2 = Object::shared_for_testing();
 
-    let state =
-        init_state_with_objects([gas_objects.clone(), vec![shared_object.clone()]].concat()).await;
+    let state = init_state_with_objects(
+        [
+            gas_objects.clone(),
+            vec![shared_object.clone(), shared_object_2.clone()],
+        ]
+        .concat(),
+    )
+    .await;
 
     // Create a new transaction manager instead of reusing the authority's, to examine
     // transaction_manager output from rx_ready_certificates.
@@ -217,7 +231,7 @@ async fn transaction_manager_read_lock() {
         )
         .unwrap();
 
-    // Enqueue one transaction with default lock on the same shared object and version.
+    // Enqueue one transaction with the same shared object in mutable mode.
     let shared_object_arg_default = ObjectArg::SharedObject {
         id: shared_object.id(),
         initial_shared_version: 0.into(),
@@ -235,12 +249,38 @@ async fn transaction_manager_read_lock() {
         )
         .unwrap();
 
+    // Enqueue one transaction with two readonly shared object inputs, `shared_object` and `shared_object_2`.
+    let shared_version_2 = 2000.into();
+    let shared_object_arg_read_2 = ObjectArg::SharedObject {
+        id: shared_object_2.id(),
+        initial_shared_version: 0.into(),
+        mutable: false,
+    };
+    let transaction_read_2 = make_transaction(
+        gas_objects[3].clone(),
+        vec![
+            CallArg::Object(shared_object_arg_default),
+            CallArg::Object(shared_object_arg_read_2),
+        ],
+    );
+    state
+        .epoch_store_for_testing()
+        .set_shared_object_versions_for_testing(
+            transaction_read_2.digest(),
+            &vec![
+                (shared_object.id(), shared_version),
+                (shared_object_2.id(), shared_version_2),
+            ],
+        )
+        .unwrap();
+
     transaction_manager
         .enqueue(
             vec![
                 transaction_read_0.clone(),
                 transaction_read_1.clone(),
                 transaction_default.clone(),
+                transaction_read_2.clone(),
             ],
             &state.epoch_store_for_testing(),
         )
@@ -250,9 +290,9 @@ async fn transaction_manager_read_lock() {
     sleep(Duration::from_secs(1)).await;
     assert!(rx_ready_certificates.try_recv().is_err());
 
-    assert_eq!(transaction_manager.inflight_queue_len(), 3);
+    assert_eq!(transaction_manager.inflight_queue_len(), 4);
 
-    // Notify TM about availability of the shared object.
+    // Notify TM about availability of the first shared object.
     transaction_manager.objects_available(
         vec![InputKey::VersionedObject {
             id: shared_object.id(),
@@ -261,33 +301,55 @@ async fn transaction_manager_read_lock() {
         &state.epoch_store_for_testing(),
     );
 
-    // TM should output the 2 read-only transactions eventually.
+    // TM should output the 3 transactions that are only waiting for this object.
     let tx_0 = rx_ready_certificates.recv().await.unwrap().0;
     let tx_1 = rx_ready_certificates.recv().await.unwrap().0;
-    let mut want_digests = vec![transaction_read_0.digest(), transaction_read_1.digest()];
-    want_digests.sort();
-    let mut got_digests = vec![tx_0.digest(), tx_1.digest()];
-    got_digests.sort();
-    assert_eq!(want_digests, got_digests);
+    let tx_2 = rx_ready_certificates.recv().await.unwrap().0;
+    {
+        let mut want_digests = vec![
+            transaction_read_0.digest(),
+            transaction_read_1.digest(),
+            transaction_default.digest(),
+        ];
+        want_digests.sort();
+        let mut got_digests = vec![tx_0.digest(), tx_1.digest(), tx_2.digest()];
+        got_digests.sort();
+        assert_eq!(want_digests, got_digests);
+    }
 
-    // TM should not output default-lock transaction yet.
     sleep(Duration::from_secs(1)).await;
     assert!(rx_ready_certificates.try_recv().is_err());
 
-    assert_eq!(transaction_manager.inflight_queue_len(), 3);
+    assert_eq!(transaction_manager.inflight_queue_len(), 4);
 
     // Notify TM about read-only transaction commit
     transaction_manager.notify_commit(tx_0.digest(), vec![], &state.epoch_store_for_testing());
     transaction_manager.notify_commit(tx_1.digest(), vec![], &state.epoch_store_for_testing());
-
-    // TM should output the default-lock transaction eventually.
-    let tx_2 = rx_ready_certificates.recv().await.unwrap().0;
-    assert_eq!(tx_2.digest(), transaction_default.digest());
+    transaction_manager.notify_commit(tx_2.digest(), vec![], &state.epoch_store_for_testing());
 
     assert_eq!(transaction_manager.inflight_queue_len(), 1);
 
-    // Notify TM about default-lock transaction commit
-    transaction_manager.notify_commit(tx_2.digest(), vec![], &state.epoch_store_for_testing());
+    // Make shared_object_2 available.
+    transaction_manager.objects_available(
+        vec![InputKey::VersionedObject {
+            id: shared_object_2.id(),
+            version: shared_version_2,
+        }],
+        &state.epoch_store_for_testing(),
+    );
+
+    // Now, the transaction waiting for both shared objects can be executed.
+    let tx_3 = rx_ready_certificates.recv().await.unwrap().0;
+    assert_eq!(transaction_read_2.digest(), tx_3.digest());
+
+    sleep(Duration::from_secs(1)).await;
+    assert!(rx_ready_certificates.try_recv().is_err());
+
+    assert_eq!(transaction_manager.inflight_queue_len(), 1);
+
+    // Notify TM about tx_3.
+    transaction_manager.notify_commit(tx_3.digest(), vec![], &state.epoch_store_for_testing());
+
     transaction_manager.check_empty_for_testing();
 }
 
@@ -345,7 +407,7 @@ async fn transaction_manager_receiving_notify_commit() {
 
     // Start things off by notifying TM that the receiving object 0 is available.
     transaction_manager.objects_available(
-        get_input_keys(&vec![object_arguments[0].0.clone()]),
+        get_input_keys(&[object_arguments[0].0.clone()]),
         &state.epoch_store_for_testing(),
     );
 
@@ -457,7 +519,7 @@ async fn transaction_manager_receiving_object_ready_notifications() {
 
     // Notify TM that the receiving object 0 is available.
     transaction_manager.objects_available(
-        get_input_keys(&vec![receiving_object_new0.clone()]),
+        get_input_keys(&[receiving_object_new0.clone()]),
         &state.epoch_store_for_testing(),
     );
 
@@ -467,7 +529,7 @@ async fn transaction_manager_receiving_object_ready_notifications() {
 
     // Notify TM that the receiving object 0 is available.
     transaction_manager.objects_available(
-        get_input_keys(&vec![receiving_object_new1.clone()]),
+        get_input_keys(&[receiving_object_new1.clone()]),
         &state.epoch_store_for_testing(),
     );
 
@@ -563,7 +625,7 @@ async fn transaction_manager_receiving_object_ready_notifications_multiple_of_sa
 
     // Notify TM that the receiving object 0 is available.
     transaction_manager.objects_available(
-        get_input_keys(&vec![receiving_object_new0.clone()]),
+        get_input_keys(&[receiving_object_new0.clone()]),
         &state.epoch_store_for_testing(),
     );
 
@@ -586,7 +648,7 @@ async fn transaction_manager_receiving_object_ready_notifications_multiple_of_sa
 
     // Notify TM that the receiving object 0 is available.
     transaction_manager.objects_available(
-        get_input_keys(&vec![receiving_object_new1.clone()]),
+        get_input_keys(&[receiving_object_new1.clone()]),
         &state.epoch_store_for_testing(),
     );
 

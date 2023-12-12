@@ -8,14 +8,15 @@ import { is, mask } from 'superstruct';
 import { bcs } from '../bcs/index.js';
 import type { ProtocolConfig, SuiClient, SuiMoveNormalizedType } from '../client/index.js';
 import type { Keypair, SignatureWithBytes } from '../cryptography/index.js';
-import { SUI_TYPE_ARG } from '../framework/framework.js';
 import type { SuiObjectResponse } from '../types/index.js';
 import {
 	extractMutableReference,
+	extractReference,
 	extractStructTag,
 	getObjectReference,
 	SuiObjectRef,
 } from '../types/index.js';
+import { SUI_TYPE_ARG } from '../utils/index.js';
 import { normalizeSuiAddress, normalizeSuiObjectId } from '../utils/sui-types.js';
 import type { ObjectCallArg } from './Inputs.js';
 import {
@@ -158,6 +159,8 @@ interface SignOptions extends BuildOptions {
 export function isTransactionBlock(obj: unknown): obj is TransactionBlock {
 	return !!obj && typeof obj === 'object' && (obj as any)[TRANSACTION_BRAND] === true;
 }
+
+export type TransactionObjectInput = string | ObjectCallArg | TransactionObjectArgument;
 
 /**
  * Transaction Builder
@@ -303,7 +306,11 @@ export class TransactionBlock {
 	/**
 	 * Add a new object input to the transaction.
 	 */
-	object(value: string | ObjectCallArg) {
+	object(value: TransactionObjectInput) {
+		if (typeof value === 'object' && 'kind' in value) {
+			return value;
+		}
+
 		const id = getIdFromCallArg(value);
 		// deduplicate
 		const inserted = this.#blockData.inputs.find(
@@ -767,10 +774,15 @@ export class TransactionBlock {
 
 				if (initialSharedVersion) {
 					// There could be multiple transactions that reference the same shared object.
-					// If one of them is a mutable reference, then we should mark the input
+					// If one of them is a mutable reference or taken by value, then we should mark the input
 					// as mutable.
+					const isByValue =
+						normalizedType != null &&
+						extractMutableReference(normalizedType) == null &&
+						extractReference(normalizedType) == null;
 					const mutable =
 						isMutableSharedObjectInput(input.value) ||
+						isByValue ||
 						(normalizedType != null && extractMutableReference(normalizedType) != null);
 
 					input.value = Inputs.SharedObjectRef({

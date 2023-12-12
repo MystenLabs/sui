@@ -14,6 +14,7 @@ bcs.workspace = true
 bytes.workspace = true
 chrono.workspace = true
 dashmap.workspace = true
+diffy = { version = "0.3", default-features = false }
 either.workspace = true
 enum_dispatch.workspace = true
 eyre.workspace = true
@@ -34,6 +35,7 @@ serde.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true
 signature.workspace = true
+static_assertions.workspace = true
 tap.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
@@ -82,7 +84,7 @@ sui-storage.workspace = true
 sui-types.workspace = true
 workspace-hack.workspace = true
 zeroize.workspace = true
-mysticeti-core = { git = "https://github.com/MystenLabs/mysticeti", rev = "18b27ff27c160f7f3f9705bee1d7c501e46e6beb" }
+mysticeti-core = { git = "https://github.com/MystenLabs/mysticeti", rev = "318d61d27f47d257d99a86983d835e9e9756bc59" }
 
 [dev-dependencies]
 clap.workspace = true
@@ -94,6 +96,7 @@ pretty_assertions.workspace = true
 serde-reflection.workspace = true
 serde_yaml.workspace = true
 
+test-cluster.workspace = true
 move-symbol-pool.workspace = true
 
 sui-test-transaction-builder.workspace = true

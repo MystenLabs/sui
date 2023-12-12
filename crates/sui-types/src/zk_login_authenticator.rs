@@ -26,7 +26,7 @@ mod zk_login_authenticator_test;
 #[derive(Debug, Clone, JsonSchema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ZkLoginAuthenticator {
-    inputs: ZkLoginInputs,
+    pub inputs: ZkLoginInputs,
     max_epoch: EpochId,
     user_signature: Signature,
     #[serde(skip)]
@@ -61,6 +61,10 @@ impl ZkLoginAuthenticator {
 
     pub fn get_iss(&self) -> &str {
         self.inputs.get_iss()
+    }
+
+    pub fn user_signature_mut_for_testing(&mut self) -> &mut Signature {
+        &mut self.user_signature
     }
 }
 
@@ -132,7 +136,7 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             .is_err()
         {
             return Err(SuiError::InvalidSignature {
-                error: "Ephermal signature verify failed".to_string(),
+                error: "Ephemermal signature verify failed".to_string(),
             });
         }
         Ok(())
@@ -153,7 +157,6 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         // Use flag || pk_bytes.
         let mut extended_pk_bytes = vec![self.user_signature.scheme().flag()];
         extended_pk_bytes.extend(self.user_signature.public_key_bytes());
-
         verify_zk_login(
             &self.inputs,
             self.max_epoch,

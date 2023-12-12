@@ -135,7 +135,7 @@ module flash_lender::example {
         self.repay_amount
     }
 
-    /// Return the amount that the holder of `self` must repay
+    /// Return the id of the FlashLender object
     public fun flash_lender_id<T>(self: &Receipt<T>): ID {
         self.flash_lender_id
     }

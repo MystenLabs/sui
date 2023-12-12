@@ -26,7 +26,7 @@ use sui::{
 };
 use sui_config::{
     PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_GENESIS_FILENAME,
-    SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
+    SUI_KEYSTORE_ALIASES_FILENAME, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
@@ -82,13 +82,13 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         .flat_map(|r| r.map(|file| file.file_name().to_str().unwrap().to_owned()))
         .collect::<Vec<_>>();
 
-    assert_eq!(9, files.len());
+    assert_eq!(10, files.len());
     assert!(files.contains(&SUI_CLIENT_CONFIG.to_string()));
     assert!(files.contains(&SUI_NETWORK_CONFIG.to_string()));
     assert!(files.contains(&SUI_FULLNODE_CONFIG.to_string()));
     assert!(files.contains(&SUI_GENESIS_FILENAME.to_string()));
-
     assert!(files.contains(&SUI_KEYSTORE_FILENAME.to_string()));
+    assert!(files.contains(&SUI_KEYSTORE_ALIASES_FILENAME.to_string()));
 
     // Check network config
     let network_conf =
@@ -131,7 +131,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
         context
             .config
             .keystore
-            .add_key(SuiKeyPair::Ed25519(get_key_pair().1))?;
+            .add_key(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
     }
 
     // Print all addresses
@@ -384,7 +384,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -606,7 +605,6 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -631,6 +629,113 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     for obj_id in obj_ids {
         get_parsed_object_assert_existence(obj_id, context).await;
     }
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    // Provide path to well formed package sources
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("sod");
+    let build_config = BuildConfig::new_for_testing().config;
+    let resp = SuiClientCommands::Publish {
+        package_path,
+        build_config,
+        gas: Some(gas_obj_id),
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+    }
+    .execute(context)
+    .await?;
+
+    let owned_obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
+        let x = response.effects.unwrap();
+        x.created().to_vec()
+    } else {
+        unreachable!("Invalid response");
+    };
+
+    // Check the objects
+    for OwnedObjectRef { reference, .. } in &owned_obj_ids {
+        get_parsed_object_assert_existence(reference.object_id, context).await;
+    }
+
+    let package_id = owned_obj_ids
+        .into_iter()
+        .find(|OwnedObjectRef { owner, .. }| owner == &Owner::Immutable)
+        .expect("Must find published package ID")
+        .reference;
+
+    // Start and then receive the object
+    let start_call_result = SuiClientCommands::Call {
+        package: (*package_id.object_id).into(),
+        module: "sod".to_string(),
+        function: "start".to_string(),
+        type_args: vec![],
+        gas: None,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        args: vec![],
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+    }
+    .execute(context)
+    .await?;
+
+    let shared_id = if let SuiClientCommandResult::Call(response) = start_call_result {
+        response.effects.unwrap().created().to_vec()[0]
+            .reference
+            .object_id
+    } else {
+        unreachable!("Invalid response");
+    };
+
+    let delete_result = SuiClientCommands::Call {
+        package: (*package_id.object_id).into(),
+        module: "sod".to_string(),
+        function: "delete".to_string(),
+        type_args: vec![],
+        gas: None,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        args: vec![SuiJsonValue::from_str(&shared_id.to_string()).unwrap()],
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+    }
+    .execute(context)
+    .await?;
+
+    if let SuiClientCommandResult::Call(response) = delete_result {
+        assert!(response.effects.unwrap().into_status().is_ok());
+    } else {
+        unreachable!("Invalid response");
+    };
 
     Ok(())
 }
@@ -674,7 +779,6 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -801,7 +905,6 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -928,7 +1031,6 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -1057,7 +1159,6 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -1126,7 +1227,6 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1173,7 +1273,6 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1229,7 +1328,6 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1272,7 +1370,6 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1316,7 +1413,6 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1372,7 +1468,6 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -1445,7 +1540,6 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -1728,6 +1822,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     // Create a new address
     let os = SuiClientCommands::NewAddress {
         key_scheme: SignatureScheme::ED25519,
+        alias: None,
         derivation_path: None,
         word_length: None,
     }
@@ -1780,6 +1875,7 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
 
     SuiClientCommands::NewAddress {
         key_scheme: SignatureScheme::Secp256k1,
+        alias: None,
         derivation_path: None,
         word_length: None,
     }

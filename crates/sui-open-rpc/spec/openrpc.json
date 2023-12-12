@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.14.0"
+    "version": "1.16.0"
   },
   "methods": [
     {
@@ -1347,9 +1347,10 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "31",
+              "maxSupportedProtocolVersion": "32",
               "protocolVersion": "6",
               "featureFlags": {
+                "accept_zklogin_in_multisig": false,
                 "advance_epoch_start_time_in_safe_mode": true,
                 "advance_to_highest_supported_protocol_version": false,
                 "ban_entry_init": false,
@@ -1361,6 +1362,7 @@
                 "enable_effects_v2": false,
                 "enable_jwk_consensus_updates": false,
                 "end_of_epoch_transaction_supported": false,
+                "include_consensus_digest_in_prologue": false,
                 "loaded_child_object_format": false,
                 "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,
@@ -5502,8 +5504,23 @@
               }
             },
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "ZkLogin"
+            ],
+            "properties": {
+              "ZkLogin": {
+                "$ref": "#/components/schemas/ZkLoginAuthenticatorAsBytes"
+              }
+            },
+            "additionalProperties": false
           }
         ]
+      },
+      "ConsensusCommitDigest": {
+        "$ref": "#/components/schemas/Digest"
       },
       "Data": {
         "oneOf": [
@@ -5925,7 +5942,7 @@
             "additionalProperties": false
           },
           {
-            "description": "Return events emitted in a specified Move module.",
+            "description": "Return events emitted in a specified Move module. If the event is defined in Module A but emitted in a tx with Module B, query `MoveModule` by module B returns the event. Query `MoveEventModule` by module A returns the event too.",
             "type": "object",
             "required": [
               "MoveModule"
@@ -5956,7 +5973,7 @@
             "additionalProperties": false
           },
           {
-            "description": "Return events with the given move event struct name",
+            "description": "Return events with the given Move event struct name (struct tag). For example, if the event is defined in `0xabcd::MyModule`, and named `Foo`, then the struct tag is `0xabcd::MyModule::Foo`.",
             "type": "object",
             "required": [
               "MoveEventType"
@@ -5969,7 +5986,7 @@
             "additionalProperties": false
           },
           {
-            "description": "Return events with the given move event module name",
+            "description": "Return events with the given Move module name where the event struct is defined. If the event is defined in Module A but emitted in a tx with Module B, query `MoveEventModule` by module A returns the event. Query `MoveModule` by module B returns the event too.",
             "type": "object",
             "required": [
               "MoveEventModule"
@@ -7788,6 +7805,18 @@
               }
             },
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "ZkLogin"
+            ],
+            "properties": {
+              "ZkLogin": {
+                "$ref": "#/components/schemas/ZkLoginPublicIdentifier"
+              }
+            },
+            "additionalProperties": false
           }
         ]
       },
@@ -8327,7 +8356,8 @@
           {
             "type": "string",
             "enum": [
-              "AuthenticatorStateCreate"
+              "AuthenticatorStateCreate",
+              "RandomnessStateCreate"
             ]
           },
           {
@@ -10154,6 +10184,38 @@
             }
           },
           {
+            "description": "A transaction which updates global randomness state",
+            "type": "object",
+            "required": [
+              "epoch",
+              "kind",
+              "random_bytes",
+              "randomness_round"
+            ],
+            "properties": {
+              "epoch": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "RandomnessStateUpdate"
+                ]
+              },
+              "random_bytes": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint8",
+                  "minimum": 0.0
+                }
+              },
+              "randomness_round": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            }
+          },
+          {
             "description": "The transaction which occurs only at the end of the epoch",
             "type": "object",
             "required": [
@@ -10172,6 +10234,36 @@
                 "items": {
                   "$ref": "#/components/schemas/SuiEndOfEpochTransactionKind"
                 }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "commit_timestamp_ms",
+              "consensus_commit_digest",
+              "epoch",
+              "kind",
+              "round"
+            ],
+            "properties": {
+              "commit_timestamp_ms": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "consensus_commit_digest": {
+                "$ref": "#/components/schemas/ConsensusCommitDigest"
+              },
+              "epoch": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "ConsensusCommitPrologueV2"
+                ]
+              },
+              "round": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
               }
             }
           }
@@ -10649,6 +10741,9 @@
           }
         }
       },
+      "ZkLoginAuthenticatorAsBytes": {
+        "$ref": "#/components/schemas/Base64"
+      },
       "ZkLoginInputs": {
         "description": "All inputs required for the zk login proof verification and other public inputs.",
         "type": "object",
@@ -10704,6 +10799,14 @@
             }
           }
         }
+      },
+      "ZkLoginPublicIdentifier": {
+        "description": "A wrapper struct to retrofit in [enum PublicKey] for zkLogin. Useful to construct [struct MultiSigPublicKey].",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Base64"
+          }
+        ]
       }
     }
   }

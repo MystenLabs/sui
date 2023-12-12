@@ -16,7 +16,7 @@ import { GrowthBookProvider } from '@growthbook/growthbook-react';
 import { KioskClientProvider } from '@mysten/core/src/components/KioskClientProvider';
 import { SuiClientProvider } from '@mysten/dapp-kit';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
-import cn from 'classnames';
+import cn from 'clsx';
 import { Fragment, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';

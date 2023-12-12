@@ -1,5 +1,78 @@
 # @mysten/dapp-kit
 
+## 0.10.3
+
+### Patch Changes
+
+- 165ad6b21d: Support both `id` and `name` as unique wallet identifiers.
+- dd362ec1d6: Update docs url to sdk.mystenlabs.com
+- d55db38647: Set a high z-index for the account dropdown so that it doesn't get hidden
+- Updated dependencies [dd362ec1d6]
+- Updated dependencies [165ad6b21d]
+  - @mysten/wallet-standard@0.9.0
+  - @mysten/sui.js@0.48.1
+
+## 0.10.2
+
+### Patch Changes
+
+- 2ae1a6a108: Early return on `useAutoConnectWallet` to improve account switching performance
+- b30fecbbca: Fix missing export of useSuiClientQueries
+- Updated dependencies [cdcfa76c43]
+  - @mysten/sui.js@0.48.0
+  - @mysten/wallet-standard@0.8.11
+
+## 0.10.1
+
+### Patch Changes
+
+- 367779ea2: Improve the reliability of the `useAutoConnectWallet` hook.
+
+## 0.10.0
+
+### Minor Changes
+
+- 47b137d03: Add new useSuiClientQueries hook to support variable client queries
+
+## 0.9.1
+
+### Patch Changes
+
+- Updated dependencies [194c980cb]
+- Updated dependencies [9ac7e2f3d]
+- Updated dependencies [0259aec82]
+- Updated dependencies [64d45ba27]
+  - @mysten/sui.js@0.47.0
+  - @mysten/wallet-standard@0.8.10
+
+## 0.9.0
+
+### Minor Changes
+
+- c5d4db238: Have useSignPersonalMessage fall back to use sui:signMessage
+
+### Patch Changes
+
+- Updated dependencies [652bcdd92]
+  - @mysten/sui.js@0.46.1
+  - @mysten/wallet-standard@0.8.9
+
+## 0.8.0
+
+### Minor Changes
+
+- 103ad29c0: Fix the connect button component not opening the modal
+
+### Patch Changes
+
+- Updated dependencies [28c2c3330]
+- Updated dependencies [43444c58f]
+- Updated dependencies [8d1e74e52]
+- Updated dependencies [093554a0d]
+- Updated dependencies [3718a230b]
+  - @mysten/sui.js@0.46.0
+  - @mysten/wallet-standard@0.8.8
+
 ## 0.7.0
 
 ### Minor Changes

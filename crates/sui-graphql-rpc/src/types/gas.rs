@@ -5,14 +5,14 @@ use crate::context_data::db_data_provider::PgManager;
 use crate::types::object::Object;
 use async_graphql::connection::Connection;
 use async_graphql::*;
-use sui_json_rpc_types::{OwnedObjectRef, SuiGasData};
-use sui_sdk::types::{
+use sui_json_rpc_types::SuiGasData;
+use sui_types::{
     base_types::{ObjectID, SuiAddress as NativeSuiAddress},
+    effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
     gas::GasCostSummary as NativeGasCostSummary,
     transaction::GasData,
 };
 
-use super::digest::Digest;
 use super::object::ObjectFilter;
 use super::{address::Address, big_int::BigInt, sui_address::SuiAddress};
 
@@ -24,26 +24,19 @@ pub(crate) struct GasInput {
     pub payment_obj_ids: Vec<ObjectID>,
 }
 
-impl From<&SuiGasData> for GasInput {
-    fn from(s: &SuiGasData) -> Self {
-        Self {
-            owner: s.owner,
-            price: s.price,
-            budget: s.budget,
-            payment_obj_ids: s.payment.iter().map(|o| o.object_id).collect(),
-        }
-    }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct GasCostSummary {
+    pub computation_cost: u64,
+    pub storage_cost: u64,
+    pub storage_rebate: u64,
+    pub non_refundable_storage_fee: u64,
 }
 
-impl From<&GasData> for GasInput {
-    fn from(s: &GasData) -> Self {
-        Self {
-            owner: s.owner,
-            price: s.price,
-            budget: s.budget,
-            payment_obj_ids: s.payment.iter().map(|o| o.0).collect(),
-        }
-    }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct GasEffects {
+    pub summary: GasCostSummary,
+    pub object_id: SuiAddress,
+    pub object_version: u64,
 }
 
 #[Object]
@@ -78,7 +71,8 @@ impl GasInput {
             .extend()
     }
 
-    /// An unsigned integer specifying the number of native tokens per gas unit this transaction will pay
+    /// An unsigned integer specifying the number of native tokens per gas unit this transaction
+    /// will pay (in MIST).
     async fn gas_price(&self) -> Option<BigInt> {
         Some(BigInt::from(self.price))
     }
@@ -89,12 +83,77 @@ impl GasInput {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct GasCostSummary {
-    pub computation_cost: u64,
-    pub storage_cost: u64,
-    pub storage_rebate: u64,
-    pub non_refundable_storage_fee: u64,
+#[Object]
+impl GasCostSummary {
+    /// Gas paid for executing this transaction (in MIST).
+    async fn computation_cost(&self) -> Option<BigInt> {
+        Some(BigInt::from(self.computation_cost))
+    }
+
+    /// Gas paid for the data stored on-chain by this transaction (in MIST).
+    async fn storage_cost(&self) -> Option<BigInt> {
+        Some(BigInt::from(self.storage_cost))
+    }
+
+    /// Part of storage cost that can be reclaimed by cleaning up data created by this transaction
+    /// (when objects are deleted or an object is modified, which is treated as a deletion followed
+    /// by a creation) (in MIST).
+    async fn storage_rebate(&self) -> Option<BigInt> {
+        Some(BigInt::from(self.storage_rebate))
+    }
+
+    /// Part of storage cost that is not reclaimed when data created by this transaction is cleaned
+    /// up (in MIST).
+    async fn non_refundable_storage_fee(&self) -> Option<BigInt> {
+        Some(BigInt::from(self.non_refundable_storage_fee))
+    }
+}
+
+#[Object]
+impl GasEffects {
+    async fn gas_object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_obj(self.object_id, Some(self.object_version))
+            .await
+            .extend()
+    }
+
+    async fn gas_summary(&self) -> Option<&GasCostSummary> {
+        Some(&self.summary)
+    }
+}
+
+impl GasEffects {
+    pub(crate) fn from(effects: &NativeTransactionEffects) -> Self {
+        let ((id, version, _digest), _owner) = effects.gas_object();
+        Self {
+            summary: GasCostSummary::from(effects.gas_cost_summary()),
+            object_id: SuiAddress::from(id),
+            object_version: version.value(),
+        }
+    }
+}
+
+impl From<&SuiGasData> for GasInput {
+    fn from(s: &SuiGasData) -> Self {
+        Self {
+            owner: s.owner,
+            price: s.price,
+            budget: s.budget,
+            payment_obj_ids: s.payment.iter().map(|o| o.object_id).collect(),
+        }
+    }
+}
+
+impl From<&GasData> for GasInput {
+    fn from(s: &GasData) -> Self {
+        Self {
+            owner: s.owner,
+            price: s.price,
+            budget: s.budget,
+            payment_obj_ids: s.payment.iter().map(|o| o.0).collect(),
+        }
+    }
 }
 
 impl From<&NativeGasCostSummary> for GasCostSummary {
@@ -105,66 +164,5 @@ impl From<&NativeGasCostSummary> for GasCostSummary {
             storage_rebate: gcs.storage_rebate,
             non_refundable_storage_fee: gcs.non_refundable_storage_fee,
         }
-    }
-}
-
-#[Object]
-impl GasCostSummary {
-    async fn computation_cost(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.computation_cost))
-    }
-
-    async fn storage_cost(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.storage_cost))
-    }
-
-    async fn storage_rebate(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.storage_rebate))
-    }
-
-    async fn non_refundable_storage_fee(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.non_refundable_storage_fee))
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct GasEffects {
-    pub gcs: GasCostSummary,
-    pub object_ref: ObjectRef,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct ObjectRef {
-    pub object_id: SuiAddress,
-    pub version: u64,
-    pub digest: Digest,
-}
-
-// From trait to convert data into GasEffects
-impl From<(&NativeGasCostSummary, &OwnedObjectRef)> for GasEffects {
-    fn from((gcs, gas_obj_ref): (&NativeGasCostSummary, &OwnedObjectRef)) -> Self {
-        Self {
-            gcs: gcs.into(),
-            object_ref: ObjectRef {
-                object_id: SuiAddress::from_array(**gas_obj_ref.object_id()),
-                version: gas_obj_ref.version().value(),
-                digest: Digest::from_array(gas_obj_ref.reference.digest.into_inner()),
-            },
-        }
-    }
-}
-
-// impl #[Object] macro handles conversions and data fetches
-#[Object]
-impl GasEffects {
-    async fn gas_object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_obj(self.object_ref.object_id, Some(self.object_ref.version))
-            .await
-            .extend()
-    }
-
-    async fn gas_summary(&self) -> Option<GasCostSummary> {
-        Some(self.gcs)
     }
 }

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import clsx from 'classnames';
+import clsx from 'clsx';
 import { forwardRef, type ComponentProps, type ReactNode, type Ref } from 'react';
 import { Link, type LinkProps } from 'react-router-dom';
 

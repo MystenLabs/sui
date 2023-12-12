@@ -4,7 +4,7 @@
 import { Text } from '_app/shared/text';
 import NumberInput from '_components/number-input';
 import { cva, type VariantProps } from 'class-variance-authority';
-import clsx from 'classnames';
+import clsx from 'clsx';
 import { useField, useFormikContext } from 'formik';
 import type { ComponentProps, ReactNode } from 'react';
 import { forwardRef } from 'react';

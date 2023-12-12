@@ -7,6 +7,8 @@ use config::ReplayableNetworkConfigSet;
 use fuzz::ReplayFuzzer;
 use fuzz::ReplayFuzzerConfig;
 use fuzz_mutations::base_fuzzers;
+use sui_types::digests::get_mainnet_chain_identifier;
+use sui_types::digests::get_testnet_chain_identifier;
 use sui_types::message_envelope::Message;
 use tracing::warn;
 use transaction_provider::{FuzzStartPoint, TransactionSource};
@@ -19,6 +21,7 @@ use std::io::BufRead;
 use std::path::PathBuf;
 use std::str::FromStr;
 use sui_config::node::ExpensiveSafetyCheckConfig;
+use sui_protocol_config::Chain;
 use sui_types::digests::TransactionDigest;
 use tracing::{error, info};
 pub mod config;
@@ -530,4 +533,19 @@ pub async fn execute_replay_command(
             }
         }
     })
+}
+
+pub(crate) fn chain_from_chain_id(chain: &str) -> Chain {
+    let mainnet_chain_id = format!("{}", get_mainnet_chain_identifier());
+    // TODO: Since testnet periodically resets, we need to ensure that the chain id
+    // is updated to the latest one.
+    let testnet_chain_id = format!("{}", get_testnet_chain_identifier());
+
+    if mainnet_chain_id == chain {
+        Chain::Mainnet
+    } else if testnet_chain_id == chain {
+        Chain::Testnet
+    } else {
+        Chain::Unknown
+    }
 }

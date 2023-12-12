@@ -20,7 +20,7 @@ use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
-    value::MoveValue,
+    runtime_value::MoveValue,
 };
 use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
 use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};
@@ -401,7 +401,7 @@ fn get_relinker_tests_modules_with_deps<'s>(
     )
     .build_and_report()?;
 
-    expect_modules(units).collect()
+    Ok(expect_modules(units).collect())
 }
 
 #[test]

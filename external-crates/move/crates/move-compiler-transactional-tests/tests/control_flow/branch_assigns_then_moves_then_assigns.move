@@ -1,5 +1,5 @@
 //# run
-script {
+module 0x42::m {
 fun main() {
     let x;
     let y;

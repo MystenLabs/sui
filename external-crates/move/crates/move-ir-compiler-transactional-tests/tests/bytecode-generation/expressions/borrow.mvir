@@ -1,6 +1,7 @@
 //# print-bytecode
+module 0x1.m {
 // Borrowing a local produces a reference type.
-main() {
+entry foo() {
     let x: u64;
     let ref_x: &u64;
 label b0:
@@ -9,10 +10,12 @@ label b0:
     _ = move(ref_x);
     return;
 }
+}
 
 //# print-bytecode
+module 0x2.m {
 // Borrowing a local reference produces a reference type.
-main() {
+entry foo() {
     let x: u64;
     let ref_x: &u64;
     let ref_ref_x: &u64;
@@ -22,8 +25,9 @@ label b0:
     ref_ref_x = &ref_x;
     return;
 }
+}
 
-//# print-bytecode --input=module
+//# print-bytecode
 module 0x1d4.M {
     struct T { u: u64 }
 
@@ -58,7 +62,7 @@ module 0x1d4.M {
     }
 }
 
-//# print-bytecode --input=module
+//# print-bytecode
 module 0x2d4.M {
     struct T<U> { u: U }
 
@@ -90,7 +94,7 @@ module 0x3d4.M {
 }
 
 
-//# print-bytecode --input=module
+//# print-bytecode
 // Attempting an immutable borrow of the field of a struct type defined in a
 // separate module is invalid.
 module 0x3d4.N {
@@ -108,8 +112,9 @@ module 0x3d4.N {
 }
 
 //# print-bytecode
+module 0x1.m {
 import 0x3d4.M;
-main(account: signer) {
+entry foo(account: signer) {
     let t: M.T;
     let r: &bool;
 label b0:
@@ -117,8 +122,9 @@ label b0:
     _ = &(&mut t).T::b;
     return;
 }
+}
 
-//# print-bytecode --input=module
+//# print-bytecode
 // Attempting a mutable borrow of the field of a struct type defined in a
 // separate module is invalid.
 module 0x3d4.O {
@@ -136,11 +142,13 @@ module 0x3d4.O {
 }
 
 //# print-bytecode
-main(account: signer) {
+module 0x1.m {
+entry foo(account: signer) {
     let t: M.T;
     let r: &bool;
 label b0:
     t = M.new();
     _ = &mut (&mut t).T::b;
     return;
+}
 }

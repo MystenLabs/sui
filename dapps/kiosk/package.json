@@ -17,11 +17,11 @@
 	},
 	"dependencies": {
 		"@headlessui/react": "^1.7.15",
+		"@mysten/dapp-kit": "workspace:*",
 		"@mysten/kiosk": "workspace:*",
 		"@mysten/sui.js": "workspace:*",
-		"@mysten/wallet-kit": "workspace:*",
 		"@tanstack/react-query": "^5.0.0",
-		"classnames": "^2.3.2",
+		"clsx": "^2.0.0",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
 		"react-hot-toast": "^2.4.1",

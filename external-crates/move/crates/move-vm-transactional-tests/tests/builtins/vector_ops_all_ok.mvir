@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: vector<u64>;
     let v_imm: &vector<u64>;
     let v_mut: &mut vector<u64>;
@@ -41,4 +43,6 @@ label b0:
 
     vec_unpack_0<u64>(move(v));
     return;
+}
+
 }

@@ -17,7 +17,6 @@ use indicatif::{ProgressBar, ProgressStyle};
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
 use object_store::path::Path;
-use object_store::DynObjectStore;
 use prometheus::Registry;
 use serde::{Deserialize, Serialize};
 use std::io::{BufWriter, Cursor, Read, Seek, SeekFrom, Write};
@@ -30,7 +29,7 @@ use sui_config::genesis::Genesis;
 use sui_config::node::ArchiveReaderConfig;
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_storage::object_store::util::{get, put};
-use sui_storage::object_store::ObjectStoreConfig;
+use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreGetExt, ObjectStorePutExt};
 use sui_storage::{compute_sha3_checksum, SHA3_BYTES};
 use sui_types::base_types::ExecutionData;
 use sui_types::messages_checkpoint::{FullCheckpointContents, VerifiedCheckpointContents};
@@ -262,9 +261,9 @@ pub fn create_file_metadata(
     Ok(file_metadata)
 }
 
-pub async fn read_manifest(remote_store: Arc<DynObjectStore>) -> Result<Manifest> {
+pub async fn read_manifest<S: ObjectStoreGetExt>(remote_store: S) -> Result<Manifest> {
     let manifest_file_path = Path::from(MANIFEST_FILENAME);
-    let vec = get(&manifest_file_path, remote_store).await?.to_vec();
+    let vec = get(&remote_store, &manifest_file_path).await?.to_vec();
     let manifest_file_size = vec.len();
     let mut manifest_reader = Cursor::new(vec);
     manifest_reader.rewind()?;
@@ -293,7 +292,10 @@ pub async fn read_manifest(remote_store: Arc<DynObjectStore>) -> Result<Manifest
     Blob::read(&mut manifest_reader)?.decode()
 }
 
-pub async fn write_manifest(manifest: Manifest, remote_store: Arc<DynObjectStore>) -> Result<()> {
+pub async fn write_manifest<S: ObjectStorePutExt>(
+    manifest: Manifest,
+    remote_store: S,
+) -> Result<()> {
     let path = Path::from(MANIFEST_FILENAME);
     let mut buf = BufWriter::new(vec![]);
     buf.write_u32::<BigEndian>(MANIFEST_FILE_MAGIC)?;
@@ -305,7 +307,7 @@ pub async fn write_manifest(manifest: Manifest, remote_store: Arc<DynObjectStore
     let computed_digest = hasher.finalize().digest;
     buf.write_all(&computed_digest)?;
     let bytes = Bytes::from(buf.into_inner()?);
-    put(&path, bytes, remote_store).await?;
+    put(&remote_store, &path, bytes).await?;
     Ok(())
 }
 
@@ -465,6 +467,7 @@ where
             (latest_checkpoint + 1)..u64::MAX,
             txn_counter,
             checkpoint_counter,
+            true,
         )
         .await?;
     progress_bar.iter().for_each(|p| p.finish_and_clear());

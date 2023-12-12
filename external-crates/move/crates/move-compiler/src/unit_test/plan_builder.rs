@@ -18,8 +18,8 @@ use crate::{
     unit_test::{ExpectedFailure, ExpectedMoveError, ModuleTestPlan, TestCase},
 };
 use move_core_types::{
-    account_address::AccountAddress as MoveAddress, language_storage::ModuleId, u256::U256,
-    value::MoveValue, vm_status::StatusCode,
+    account_address::AccountAddress as MoveAddress, language_storage::ModuleId,
+    runtime_value::MoveValue, u256::U256, vm_status::StatusCode,
 };
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;

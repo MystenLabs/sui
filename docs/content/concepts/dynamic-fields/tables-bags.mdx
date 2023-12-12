@@ -1,14 +1,18 @@
 ---
-title: Tables and Bags
+title: Table and Bag
 description: Sui provides `Table` and `Bag` collections built using dynamic fields, but with additional support to count the number of entries they contain to protect against accidental deletion when non-empty.
 ---
+
+You can extend existing objects using [dynamic fields](../dynamic-fields.mdx). Note that it's possible to delete an object that still has (potentially non-drop) dynamic fields. This might not be a concern when adding a small number of statically known additional fields to an object, but is particularly undesirable for on-chain collection types that could be holding unboundedly many key-value pairs as dynamic fields.
+
+This topic describes two such collections -- Table and Bag -- built using dynamic fields, but with additional support to count the number of entries they contain, and protect against accidental deletion when non-empty.
 
 The types and function discussed in this section are built into the Sui framework in modules [`table`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/table.move) and [`bag`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/bag.move). As with dynamic fields, there is also an `object_` variant of both: `ObjectTable` in [`object_table`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object_table.move) and `ObjectBag` in [`object_bag`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object_bag.move). The relationship between `Table` and `ObjectTable`, and `Bag` and `ObjectBag` are the same as between a field and an object field: The former can hold any `store` type as a value, but objects stored as values are hidden when viewed from external storage. The latter can only store objects as values, but keeps those objects visible at their ID in external storage.
 
 
 ### Tables
 
-```rust
+```move
 module sui::table {
 
 struct Table<K: copy + drop + store, V: store> has key, store { /* ... */ }
@@ -26,7 +30,7 @@ See `sui::object_table::ObjectTable` for the object-preserving version of `Table
 
 ### Bags
 
-```rust
+```move
 module sui::bag {
 
 struct Bag has key, store { /* ... */ }
@@ -48,7 +52,7 @@ The following sections explain the collection APIs. They use `sui::table` as the
 
 All collection types come with the following functions, defined in their respective modules:
 
-```rust
+```move
 module sui::table {
 
 public fun add<K: copy + drop + store, V: store>(
@@ -89,7 +93,7 @@ The extra flexibility of `Bag`'s heterogeneity means the type system doesn't sta
 
 It is possible to query all collection types for their length and check whether they are empty using the following family of functions:
 
-```rust
+```move
 module sui::table {
 
 public fun length<K: copy + drop + store, V: store>(
@@ -109,7 +113,7 @@ public fun is_empty<K: copy + drop + store, V: store>(
 
 Tables can be queried for key containment with:
 
-```rust
+```move
 module sui::table {
 
 public fun contains<K: copy + drop + store, V: store>(
@@ -122,7 +126,7 @@ public fun contains<K: copy + drop + store, V: store>(
 
 The equivalent functions for `Bag` are:
 
-```rust
+```move
 module sui::bag {
 
 public fun contains<K: copy + drop + store>(bag: &Bag, k: K): bool;
@@ -141,7 +145,7 @@ The first function tests whether `bag` contains a key-value pair with key `k: K`
 
 Collection types protect against accidental deletion when they might not be empty. This protection comes from the fact that they do not have `drop`, so must be explicitly deleted, using this API:
 
-```rust
+```move
 module sui::table {
 
 public fun destroy_empty<K: copy + drop + store, V: store>(
@@ -153,7 +157,7 @@ public fun destroy_empty<K: copy + drop + store, V: store>(
 
 This function takes the collection by value. If it contains no entries, it is deleted, otherwise the call fails. `sui::table::Table` also has a convenience function:
 
-```rust
+```move
 module sui::table {
 
 public fun drop<K: copy + drop + store, V: drop + store>(
@@ -175,7 +179,7 @@ Note that `drop` is not called implicitly on eligible tables before they go out 
 
 Equality on collections is based on identity, for example, an instance of a collection type is only considered equal to itself and not to all collections that hold the same entries:
 
-```rust
+```move
 let t1 = sui::table::new<u64, u64>(ctx);
 let t2 = sui::table::new<u64, u64>(ctx);
 

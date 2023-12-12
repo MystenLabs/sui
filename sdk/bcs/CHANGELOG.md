@@ -1,5 +1,17 @@
 # Change Log
 
+## 0.9.1
+
+### Patch Changes
+
+- dd362ec1d6: Update docs url to sdk.mystenlabs.com
+
+## 0.9.0
+
+### Minor Changes
+
+- fce0a08d0f: Deprecate the bcs.generic helper. This helper causes typescript performance issues, and the generated generics can't be exported
+
 ## 0.8.1
 
 ### Patch Changes
@@ -10,7 +22,7 @@
 
 ### Minor Changes
 
-- 1bc430161: Add new type-safe schema builder. See https://sui-typescript-docs.vercel.app/bcs for updated documentation
+- 1bc430161: Add new type-safe schema builder. See https://sdk.mystenlabs.com/bcs for updated documentation
 - e4484852b: Add isSerializedBcs helper
 
 ## 0.7.4

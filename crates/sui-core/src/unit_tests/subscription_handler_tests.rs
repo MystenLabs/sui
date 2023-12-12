@@ -4,11 +4,10 @@
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 
-use move_core_types::value::MoveStruct;
 use move_core_types::{
+    annotated_value::{MoveFieldLayout, MoveStruct, MoveStructLayout, MoveTypeLayout},
     ident_str,
     language_storage::StructTag,
-    value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
 };
 
 use serde::Deserialize;
@@ -83,7 +82,7 @@ impl TestEvent {
     }
 
     fn layout() -> MoveStructLayout {
-        MoveStructLayout::WithTypes {
+        MoveStructLayout {
             type_: Self::type_(),
             fields: vec![
                 MoveFieldLayout::new(ident_str!("creator").to_owned(), MoveTypeLayout::Address),
@@ -129,7 +128,7 @@ impl UTF8String {
         }
     }
     fn layout() -> MoveStructLayout {
-        MoveStructLayout::WithTypes {
+        MoveStructLayout {
             type_: Self::type_(),
             fields: vec![MoveFieldLayout::new(
                 ident_str!("bytes").to_owned(),

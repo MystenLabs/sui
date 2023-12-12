@@ -6,6 +6,7 @@ use futures::join;
 use rand::distributions::Distribution;
 use std::ops::Deref;
 use std::time::{Duration, SystemTime};
+use sui_config::node::OverloadThresholdConfig;
 use sui_core::authority::EffectsNotifyRead;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
@@ -17,7 +18,7 @@ use sui_test_transaction_builder::{
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
-use sui_types::messages_grpc::ObjectInfoRequest;
+use sui_types::messages_grpc::{LayoutGenerationOption, ObjectInfoRequest};
 use sui_types::transaction::{CallArg, ObjectArg};
 use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
@@ -528,7 +529,13 @@ async fn access_clock_object_test() {
 
 #[sim_test]
 async fn shared_object_sync() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        // Set the threshold high enough so it won't be triggered.
+        .with_overload_threshold_config(OverloadThresholdConfig {
+            max_txn_age_in_queue: Duration::from_secs(60),
+        })
+        .build()
+        .await;
     let package_id = publish_basics_package(&test_cluster.wallet).await.0;
 
     // Since we use submit_transaction_to_validators in this test, which does not go through fullnode,
@@ -562,7 +569,8 @@ async fn shared_object_sync() {
             assert!(validator
                 .state()
                 .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-                    counter_id, None,
+                    counter_id,
+                    LayoutGenerationOption::None,
                 ))
                 .await
                 .is_ok());
@@ -575,7 +583,8 @@ async fn shared_object_sync() {
             assert!(validator
                 .state()
                 .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-                    counter_id, None,
+                    counter_id,
+                    LayoutGenerationOption::None,
                 ))
                 .await
                 .is_err());

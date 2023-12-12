@@ -96,6 +96,10 @@ module sui::transfer_policy {
     /// making the discoverability and tracking the supported types easier.
     struct TransferPolicyCreated<phantom T> has copy, drop { id: ID }
 
+    /// Event that is emitted when a publisher destroys a `TransferPolicyCap`.
+    /// Allows for tracking supported policies.
+    struct TransferPolicyDestroyed<phantom T> has copy, drop { id: ID }
+
     /// Key to store "Rule" configuration for a specific `TransferPolicy`.
     struct RuleKey<phantom T: drop> has copy, store, drop {}
 
@@ -166,11 +170,12 @@ module sui::transfer_policy {
     ): Coin<SUI> {
         assert!(object::id(&self) == cap.policy_id, ENotOwner);
 
-        let TransferPolicyCap { id: cap_id, policy_id: _ } = cap;
+        let TransferPolicyCap { id: cap_id, policy_id } = cap;
         let TransferPolicy { id, rules: _, balance } = self;
 
         object::delete(id);
         object::delete(cap_id);
+        event::emit(TransferPolicyDestroyed<T> { id: policy_id });
         coin::from_balance(balance, ctx)
     }
 

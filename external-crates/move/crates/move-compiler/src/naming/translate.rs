@@ -10,7 +10,7 @@ use crate::{
         ast::{self as E, AbilitySet, ModuleIdent, Visibility},
         translate::is_valid_struct_constant_or_schema_name as is_constant_name,
     },
-    naming::ast::{self as N, Neighbor_},
+    naming::ast::{self as N, BlockLabel, Neighbor_},
     parser::ast::{self as P, ConstantName, Field, FunctionName, StructName},
     shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *},
     FullyCompiledProgram,
@@ -65,17 +65,24 @@ struct ResolvedModuleFunction {
     ty_args: Option<Vec<N::Type>>,
 }
 
+#[derive(PartialEq)]
+enum NominalBlockType {
+    Loop,
+    Block,
+}
+
 struct Context<'env> {
     env: &'env mut CompilationEnv,
     current_module: Option<ModuleIdent>,
     scoped_types: BTreeMap<ModuleIdent, BTreeMap<Symbol, ModuleType>>,
     unscoped_types: BTreeMap<Symbol, ResolvedType>,
     scoped_functions: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
-    unscoped_constants: BTreeMap<Symbol, Loc>,
     scoped_constants: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
     local_scopes: Vec<BTreeMap<Symbol, u16>>,
     local_count: BTreeMap<Symbol, u16>,
     used_locals: BTreeSet<N::Var_>,
+    nominal_blocks: Vec<(Symbol, u16, NominalBlockType)>,
+    nominal_block_id: u16,
     /// Type parameters used in a function (they have to be cleared after processing each function).
     used_fun_tparams: BTreeSet<TParamID>,
     /// Indicates if the compiler is currently translating a function (set to true before starting
@@ -157,9 +164,10 @@ impl<'env> Context<'env> {
             scoped_functions,
             scoped_constants,
             unscoped_types,
-            unscoped_constants: BTreeMap::new(),
             local_scopes: vec![],
             local_count: BTreeMap::new(),
+            nominal_blocks: vec![],
+            nominal_block_id: 0,
             used_locals: BTreeSet::new(),
             used_fun_tparams: BTreeSet::new(),
             translating_fun: false,
@@ -372,25 +380,22 @@ impl<'env> Context<'env> {
     fn resolve_constant(
         &mut self,
         sp!(loc, ma_): E::ModuleAccess,
-    ) -> Option<(Option<ModuleIdent>, ConstantName)> {
+    ) -> Option<(ModuleIdent, ConstantName)> {
         use E::ModuleAccess_ as EA;
         match ma_ {
-            EA::Name(n) => match self.unscoped_constants.get(&n.value) {
-                None => {
-                    self.env.add_diag(diag!(
-                        NameResolution::UnboundUnscopedName,
-                        (loc, format!("Unbound constant '{}'", n)),
-                    ));
-                    None
-                }
-                Some(_) => Some((None, ConstantName(n))),
-            },
+            EA::Name(n) => {
+                self.env.add_diag(diag!(
+                    NameResolution::UnboundUnscopedName,
+                    (loc, format!("Unbound constant '{}'", n)),
+                ));
+                None
+            }
             EA::ModuleAccess(m, n) => match self.resolve_module_constant(loc, &m, n) {
                 None => {
                     assert!(self.env.has_errors());
                     None
                 }
-                Some(cname) => Some((Some(m), cname)),
+                Some(cname) => Some((m, cname)),
             },
         }
     }
@@ -399,20 +404,12 @@ impl<'env> Context<'env> {
         self.unscoped_types.insert(s, rt);
     }
 
-    fn bind_constant(&mut self, s: Symbol, loc: Loc) {
-        self.unscoped_constants.insert(s, loc);
+    fn save_unscoped(&self) -> BTreeMap<Symbol, ResolvedType> {
+        self.unscoped_types.clone()
     }
 
-    fn save_unscoped(&self) -> (BTreeMap<Symbol, ResolvedType>, BTreeMap<Symbol, Loc>) {
-        (self.unscoped_types.clone(), self.unscoped_constants.clone())
-    }
-
-    fn restore_unscoped(
-        &mut self,
-        (types, constants): (BTreeMap<Symbol, ResolvedType>, BTreeMap<Symbol, Loc>),
-    ) {
+    fn restore_unscoped(&mut self, types: BTreeMap<Symbol, ResolvedType>) {
         self.unscoped_types = types;
-        self.unscoped_constants = constants;
     }
 
     fn new_local_scope(&mut self) {
@@ -456,6 +453,105 @@ impl<'env> Context<'env> {
             }
         }
     }
+
+    fn enter_nominal_block(&mut self, name: Option<P::BlockLabel>, name_type: NominalBlockType) {
+        debug_assert!(
+            self.nominal_blocks.len() < 100,
+            "Nominal block list exceeded 100."
+        );
+        let sym = if let Some(name) = name {
+            name.value()
+        } else {
+            // all named blocks have names, so a non-named block must be a loop
+            N::Exp_::LOOP_NAME_SYMBOL
+        };
+        let id = self.nominal_block_id;
+        self.nominal_block_id += 1;
+        self.nominal_blocks.push((sym, id, name_type));
+    }
+
+    fn current_loop(&self, loc: Loc) -> Option<BlockLabel> {
+        self.nominal_blocks
+            .iter()
+            .rev()
+            .find(|(_, _, name_type)| *name_type == NominalBlockType::Loop)
+            .map(|(name, id, _)| {
+                BlockLabel(sp(
+                    loc,
+                    N::Var_ {
+                        name: *name,
+                        id: *id,
+                        color: 0,
+                    },
+                ))
+            })
+    }
+
+    fn resolve_nominal_label(
+        &mut self,
+        verb: &str,
+        expected_block_type: NominalBlockType,
+        label: P::BlockLabel,
+    ) -> Option<BlockLabel> {
+        let loc = label.loc();
+        let name = label.value();
+        let id_opt = self
+            .nominal_blocks
+            .iter()
+            .rev()
+            .find(|(block_name, _, _)| name == *block_name)
+            .map(|(_, id, block_type)| (id, block_type));
+        if let Some((id, block_type)) = id_opt {
+            if *block_type == expected_block_type {
+                let nvar_ = N::Var_ {
+                    name,
+                    id: *id,
+                    color: 0,
+                };
+                Some(BlockLabel(sp(loc, nvar_)))
+            } else {
+                let msg = format!(
+                    "Invalid usage of '{}' with a {} block label",
+                    verb, block_type
+                );
+                let mut diag = diag!(NameResolution::InvalidLabel, (loc, msg));
+                match expected_block_type {
+                    NominalBlockType::Loop => {
+                        diag.add_note("Loop labels may only be used with 'break' and 'continue', not 'return'");
+                    }
+                    NominalBlockType::Block => {
+                        diag.add_note("Named block labels may only be used with 'return', not 'break' or 'continue'.");
+                    }
+                }
+                self.env.add_diag(diag);
+                None
+            }
+        } else {
+            let msg = format!("Invalid {}. Unbound label '{}", verb, name);
+            self.env
+                .add_diag(diag!(NameResolution::UnboundVariable, (loc, msg)));
+            None
+        }
+    }
+
+    fn exit_nominal_block(&mut self, loc: Loc) -> BlockLabel {
+        let (name, id, _) = self.nominal_blocks.pop().unwrap();
+        let nvar_ = N::Var_ { name, id, color: 0 };
+        BlockLabel(sp(loc, nvar_))
+    }
+}
+
+impl std::fmt::Display for NominalBlockType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                NominalBlockType::Loop => "loop",
+                NominalBlockType::Block => "named",
+            }
+        )
+    }
 }
 
 //**************************************************************************************************
@@ -468,13 +564,9 @@ pub fn program(
     prog: E::Program,
 ) -> N::Program {
     let mut context = Context::new(compilation_env, pre_compiled_lib, &prog);
-    let E::Program {
-        modules: emodules,
-        scripts: escripts,
-    } = prog;
+    let E::Program { modules: emodules } = prog;
     let modules = modules(&mut context, emodules);
-    let scripts = scripts(&mut context, escripts);
-    let mut inner = N::Program_ { modules, scripts };
+    let mut inner = N::Program_ { modules };
     let mut info = NamingProgramInfo::new(pre_compiled_lib, &inner);
     super::resolve_use_funs::program(compilation_env, &mut info, &mut inner);
     N::Program { info, inner }
@@ -519,7 +611,7 @@ fn module(
     });
     let functions = efunctions.map(|name, f| {
         context.restore_unscoped(unscoped.clone());
-        function(context, &mut spec_dependencies, Some(ident), name, f)
+        function(context, &mut spec_dependencies, ident, name, f)
     });
     let constants = econstants.map(|name, c| {
         context.restore_unscoped(unscoped.clone());
@@ -539,66 +631,6 @@ fn module(
         structs,
         constants,
         functions,
-        spec_dependencies,
-    }
-}
-
-fn scripts(
-    context: &mut Context,
-    escripts: BTreeMap<Symbol, E::Script>,
-) -> BTreeMap<Symbol, N::Script> {
-    escripts
-        .into_iter()
-        .map(|(n, s)| (n, script(context, s)))
-        .collect()
-}
-
-fn script(context: &mut Context, escript: E::Script) -> N::Script {
-    let E::Script {
-        warning_filter,
-        package_name,
-        attributes,
-        loc,
-        use_funs: euse_funs,
-        constants: econstants,
-        function_name,
-        function: efunction,
-        specs,
-    } = escript;
-    context.current_package = package_name;
-    context.env.add_warning_filter_scope(warning_filter.clone());
-    let outer_unscoped = context.save_unscoped();
-    let mut spec_dependencies = BTreeSet::new();
-    spec_blocks(&mut spec_dependencies, &specs);
-    let use_funs = use_funs(context, euse_funs);
-    for (loc, s, _) in &econstants {
-        context.bind_constant(*s, loc)
-    }
-    let inner_unscoped = context.save_unscoped();
-    let constants = econstants.map(|name, c| {
-        context.restore_unscoped(inner_unscoped.clone());
-        constant(context, name, c)
-    });
-    context.restore_unscoped(inner_unscoped);
-    let function = function(
-        context,
-        &mut spec_dependencies,
-        None,
-        function_name,
-        efunction,
-    );
-    context.restore_unscoped(outer_unscoped);
-    context.env.pop_warning_filter_scope();
-    context.current_package = None;
-    N::Script {
-        warning_filter,
-        package_name,
-        attributes,
-        loc,
-        use_funs,
-        constants,
-        function_name,
-        function,
         spec_dependencies,
     }
 }
@@ -801,7 +833,7 @@ fn friend(context: &mut Context, mident: ModuleIdent, friend: E::Friend) -> Opti
 fn function(
     context: &mut Context,
     spec_dependencies: &mut BTreeSet<(ModuleIdent, Neighbor)>,
-    module_opt: Option<ModuleIdent>,
+    module: ModuleIdent,
     name: FunctionName,
     ef: E::Function,
 ) -> N::Function {
@@ -816,11 +848,12 @@ fn function(
         body,
         specs,
     } = ef;
-    assert!(context.local_scopes.is_empty());
-    assert!(context.local_count.is_empty());
-    assert!(context.used_locals.is_empty());
-    assert!(context.used_fun_tparams.is_empty());
     assert!(!context.translating_fun);
+    assert!(context.local_count.is_empty());
+    assert!(context.local_scopes.is_empty());
+    assert!(context.nominal_block_id == 0);
+    assert!(context.used_fun_tparams.is_empty());
+    assert!(context.used_locals.is_empty());
     context.env.add_warning_filter_scope(warning_filter.clone());
     spec_blocks(spec_dependencies, specs.values());
     context.local_scopes = vec![BTreeMap::new()];
@@ -850,13 +883,14 @@ fn function(
         signature,
         body,
     };
-    fake_natives::function(context.env, module_opt, name, &f);
+    fake_natives::function(context.env, module, name, &f);
     let used_locals = std::mem::take(&mut context.used_locals);
     remove_unused_bindings_function(context, &used_locals, &mut f);
-    context.local_scopes = vec![];
     context.local_count = BTreeMap::new();
-    context.used_locals = BTreeSet::new();
+    context.local_scopes = vec![];
+    context.nominal_block_id = 0;
     context.used_fun_tparams = BTreeSet::new();
+    context.used_locals = BTreeSet::new();
     context.env.pop_warning_filter_scope();
     context.translating_fun = false;
     f
@@ -980,6 +1014,7 @@ fn constant(context: &mut Context, _name: ConstantName, econstant: E::Constant) 
     context.local_scopes = vec![];
     context.local_count = BTreeMap::new();
     context.used_locals = BTreeSet::new();
+    context.nominal_block_id = 0;
     context.env.pop_warning_filter_scope();
     N::Constant {
         warning_filter,
@@ -1243,8 +1278,22 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
         EE::IfElse(eb, et, ef) => {
             NE::IfElse(exp(context, *eb), exp(context, *et), exp(context, *ef))
         }
-        EE::While(eb, el) => NE::While(exp(context, *eb), exp(context, *el)),
-        EE::Loop(el) => NE::Loop(exp(context, *el)),
+        EE::While(eb, name_opt, el) => {
+            let cond = exp(context, *eb);
+            context.enter_nominal_block(name_opt, NominalBlockType::Loop);
+            let body = exp(context, *el);
+            NE::While(cond, context.exit_nominal_block(eloc), body)
+        }
+        EE::Loop(name_opt, el) => {
+            context.enter_nominal_block(name_opt, NominalBlockType::Loop);
+            let body = exp(context, *el);
+            NE::Loop(context.exit_nominal_block(eloc), body)
+        }
+        EE::NamedBlock(name, seq) => {
+            context.enter_nominal_block(Some(name), NominalBlockType::Block);
+            let body = sequence(context, seq);
+            NE::NamedBlock(context.exit_nominal_block(eloc), body)
+        }
         EE::Block(seq) => NE::Block(sequence(context, seq)),
 
         EE::Assign(a, e) => {
@@ -1275,13 +1324,66 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
             NE::Mutate(nel, ner)
         }
 
-        EE::Return(es) => NE::Return(exp(context, *es)),
         EE::Abort(es) => NE::Abort(exp(context, *es)),
-        EE::Break => NE::Break,
-        EE::Continue => NE::Continue,
+        EE::Return(name_opt, es) => {
+            let out_rhs = exp(context, *es);
+            if let Some(block_name) = name_opt {
+                if let Some(return_name) =
+                    context.resolve_nominal_label("return", NominalBlockType::Block, block_name)
+                {
+                    NE::Give(return_name, out_rhs)
+                } else {
+                    NE::UnresolvedError
+                }
+            } else {
+                NE::Return(out_rhs)
+            }
+        }
+        EE::Break(name_opt, rhs) => {
+            let out_rhs = exp(context, *rhs);
+            if let Some(loop_name) = name_opt {
+                context
+                    .resolve_nominal_label("break", NominalBlockType::Loop, loop_name)
+                    .map(|name| NE::Give(name, out_rhs))
+                    .unwrap_or_else(|| NE::UnresolvedError)
+            } else {
+                context
+                    .current_loop(eloc)
+                    .map(|name| NE::Give(name, out_rhs))
+                    .unwrap_or_else(|| {
+                        let msg = "Invalid usage of 'break'. \
+                            'break' can only be used inside a loop body";
+                        context
+                            .env
+                            .add_diag(diag!(TypeSafety::InvalidLoopControl, (eloc, msg)));
+                        NE::UnresolvedError
+                    })
+            }
+        }
+        EE::Continue(name_opt) => {
+            if let Some(loop_name) = name_opt {
+                context
+                    .resolve_nominal_label("continue", NominalBlockType::Loop, loop_name)
+                    .map(NE::Continue)
+                    .unwrap_or_else(|| NE::UnresolvedError)
+            } else {
+                context
+                    .current_loop(eloc)
+                    .map(NE::Continue)
+                    .unwrap_or_else(|| {
+                        let msg = "Invalid usage of 'continue'. \
+                            'continue' can only be used inside a loop body";
+                        context
+                            .env
+                            .add_diag(diag!(TypeSafety::InvalidLoopControl, (eloc, msg)));
+                        NE::UnresolvedError
+                    })
+            }
+        }
 
         EE::Dereference(e) => NE::Dereference(exp(context, *e)),
         EE::UnaryExp(uop, e) => NE::UnaryExp(uop, exp(context, *e)),
+        // FIXME Handling this recursively causes stack overflows for large programs
         EE::BinopExp(e1, bop, e2) => NE::BinopExp(exp(context, *e1), bop, exp(context, *e2)),
 
         EE::Pack(tn, etys_opt, efields) => {
@@ -1860,8 +1962,7 @@ fn remove_unused_bindings_exp(
         | N::Exp_::Copy(_)
         | N::Exp_::Use(_)
         | N::Exp_::Constant(_, _)
-        | N::Exp_::Break
-        | N::Exp_::Continue
+        | N::Exp_::Continue(_)
         | N::Exp_::Unit { .. }
         | N::Exp_::Spec(_, _)
         | N::Exp_::UnresolvedError => (),
@@ -1871,17 +1972,19 @@ fn remove_unused_bindings_exp(
         | N::Exp_::UnaryExp(_, e)
         | N::Exp_::Cast(e, _)
         | N::Exp_::Assign(_, e)
-        | N::Exp_::Loop(e)
+        | N::Exp_::Loop(_, e)
+        | N::Exp_::Give(_, e)
         | N::Exp_::Annotate(e, _) => remove_unused_bindings_exp(context, used, e),
         N::Exp_::IfElse(econd, et, ef) => {
             remove_unused_bindings_exp(context, used, econd);
             remove_unused_bindings_exp(context, used, et);
             remove_unused_bindings_exp(context, used, ef);
         }
-        N::Exp_::While(econd, ebody) => {
+        N::Exp_::While(econd, _, ebody) => {
             remove_unused_bindings_exp(context, used, econd);
             remove_unused_bindings_exp(context, used, ebody)
         }
+        N::Exp_::NamedBlock(_, s) => remove_unused_bindings_seq(context, used, s),
         N::Exp_::Block(s) => remove_unused_bindings_seq(context, used, s),
         N::Exp_::FieldMutate(ed, e) => {
             remove_unused_bindings_exp_dotted(context, used, ed);
@@ -2121,14 +2224,14 @@ fn spec_exp(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, sp!(_, e_): &E::Exp) {
         E::Exp_::Value(_)
         | E::Exp_::Move(_)
         | E::Exp_::Copy(_)
-        | E::Exp_::Break
-        | E::Exp_::Continue
+        | E::Exp_::Continue(_)
         | E::Exp_::Unit { .. }
         | E::Exp_::Spec(_, _)
         | E::Exp_::UnresolvedError => (),
 
-        E::Exp_::Loop(einner)
-        | E::Exp_::Return(einner)
+        E::Exp_::Loop(_, einner)
+        | E::Exp_::Return(_, einner)
+        | E::Exp_::Break(_, einner)
         | E::Exp_::Abort(einner)
         | E::Exp_::Dereference(einner)
         | E::Exp_::UnaryExp(_, einner)
@@ -2185,10 +2288,11 @@ fn spec_exp(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, sp!(_, e_): &E::Exp) {
             spec_exp(used, etrue);
             spec_exp(used, efalse);
         }
-        E::Exp_::While(econd, ebody) => {
+        E::Exp_::While(econd, _, ebody) => {
             spec_exp(used, econd);
             spec_exp(used, ebody)
         }
+        E::Exp_::NamedBlock(_, seq) => spec_sequence(used, seq),
         E::Exp_::Block(seq) => spec_sequence(used, seq),
         E::Exp_::Lambda(lvs, ebody) => {
             spec_lvalues(used, lvs);

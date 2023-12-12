@@ -2504,7 +2504,7 @@ non-performant validators according to the input threshold.
 
 Given the current list of active validators, the total stake and total reward,
 calculate the amount of reward each validator should get, without taking into
-account the tallyig rule results.
+account the tallying rule results.
 Returns the unadjusted amounts of staking reward and storage fund reward for each validator.
 
 

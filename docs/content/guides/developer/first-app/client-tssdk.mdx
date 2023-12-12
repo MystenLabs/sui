@@ -7,17 +7,18 @@ This exercise walks you through setting up dApp Kit in a React App, allowing you
 {@include: ../../../snippets/info-pnpm-required.mdx}
 
 ```bash
-pnpm create @mysten/create-dapp --template react-client-dapp
+pnpm create @mysten/dapp --template react-client-dapp
 ```
+
 ## What is the Sui TypeScript SDK?
 
 The Sui TypeScript SDK (@mysten/sui.js) provides all the low-level functionality needed to interact with Sui ecosystem from TypeScript. You can use it in any TypeScript or JavaScript project, including web apps, Node.js apps, or mobile apps written with tools like React Native that support TypeScript.
 
-For more information on the Sui TypeScript SDK, see the [Sui TypeScript SDK documentation](https://sui-wallet-kit.vercel.app/typescript).
+For more information on the Sui TypeScript SDK, see the [Sui TypeScript SDK documentation](https://sdk.mystenlabs.com/typescript).
 
 ## What is dApp Kit?
 
-dApp Kit (@mysten/dapp-kit) is a collection of React hooks, components, and utilities that make building dApps on Sui straightforward. For more information on dApp Kit, see the [dApp Kit documentation](https://sui-wallet-kit.vercel.app/dapp-kit).
+dApp Kit (@mysten/dapp-kit) is a collection of React hooks, components, and utilities that make building dApps on Sui straightforward. For more information on dApp Kit, see the [dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit).
 
 ## Installing dependencies
 
@@ -49,11 +50,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 const queryClient = new QueryClient();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-    <React.StrictMode>
-        <QueryClientProvider client={queryClient}>
-            <App />
-        </QueryClientProvider>
-    </React.StrictMode>,
+	<React.StrictMode>
+		<QueryClientProvider client={queryClient}>
+			<App />
+		</QueryClientProvider>
+	</React.StrictMode>,
 );
 ```
 
@@ -66,18 +67,18 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const queryClient = new QueryClient();
 const networks = {
-    devnet: { url: getFullnodeUrl('devnet') },
-    mainnet: { url: getFullnodeUrl('mainnet') },
+	devnet: { url: getFullnodeUrl('devnet') },
+	mainnet: { url: getFullnodeUrl('mainnet') },
 };
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-    <React.StrictMode>
-        <QueryClientProvider client={queryClient}>
-            <SuiClientProvider networks={networks} defaultNetwork="devnet">
-                <App />
-            </SuiClientProvider>
-        </QueryClientProvider>
-    </React.StrictMode>,
+	<React.StrictMode>
+		<QueryClientProvider client={queryClient}>
+			<SuiClientProvider networks={networks} defaultNetwork="devnet">
+				<App />
+			</SuiClientProvider>
+		</QueryClientProvider>
+	</React.StrictMode>,
 );
 ```
 
@@ -92,20 +93,20 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const queryClient = new QueryClient();
 const networks = {
-    devnet: { url: getFullnodeUrl('devnet') },
-    mainnet: { url: getFullnodeUrl('mainnet') },
+	devnet: { url: getFullnodeUrl('devnet') },
+	mainnet: { url: getFullnodeUrl('mainnet') },
 };
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-    <React.StrictMode>
-        <QueryClientProvider client={queryClient}>
-            <SuiClientProvider networks={networks} defaultNetwork="devnet">
-                <WalletProvider>
-                    <App />
-                </WalletProvider>
-            </SuiClientProvider>
-        </QueryClientProvider>
-    </React.StrictMode>,
+	<React.StrictMode>
+		<QueryClientProvider client={queryClient}>
+			<SuiClientProvider networks={networks} defaultNetwork="devnet">
+				<WalletProvider>
+					<App />
+				</WalletProvider>
+			</SuiClientProvider>
+		</QueryClientProvider>
+	</React.StrictMode>,
 );
 ```
 
@@ -117,13 +118,13 @@ With all `Providers` set up, you can use dApp Kit hooks and components. To allow
 import { ConnectButton } from '@mysten/dapp-kit';
 
 function App() {
-    return (
-        <div className="App">
-            <header className="App-header">
-                <ConnectButton />
-            </header>
-        </div>
-    );
+	return (
+		<div className="App">
+			<header className="App-header">
+				<ConnectButton />
+			</header>
+		</div>
+	);
 }
 ```
 
@@ -137,25 +138,25 @@ Now that you have a way for users to connect their wallets, you can start using 
 import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
 
 function App() {
-    return (
-        <div className="App">
-            <header className="App-header">
-                <ConnectButton />
-            </header>
+	return (
+		<div className="App">
+			<header className="App-header">
+				<ConnectButton />
+			</header>
 
-            <ConnectedAccount />
-        </div>
-    );
+			<ConnectedAccount />
+		</div>
+	);
 }
 
 function ConnectedAccount() {
-    const { account } = useCurrentAccount();
+	const account = useCurrentAccount();
 
-    if (!account) {
-        return null;
-    }
+	if (!account) {
+		return null;
+	}
 
-    return <div>Connected to {account.address}</div>;
+	return <div>Connected to {account.address}</div>;
 }
 ```
 
@@ -167,44 +168,43 @@ Now that you have the account to connect to, you can query for objects the conne
 import { useCurrentAccount, useSuiClientQuery } from '@mysten/dapp-kit';
 
 function ConnectedAccount() {
-    const { account } = useCurrentAccount();
+	const account = useCurrentAccount();
 
-    if (!account) {
-        return null;
-    }
+	if (!account) {
+		return null;
+	}
 
-    return (
-        <div>
-            <div>Connected to {account.address}</div>;
-            <OwnedObjects address={account.address} />
-        </div>
-    );
+	return (
+		<div>
+			<div>Connected to {account.address}</div>;
+			<OwnedObjects address={account.address} />
+		</div>
+	);
 }
 
 function OwnedObjects({ address }: { address: string }) {
-    const { data } = useSuiClientQuery('getOwnedObjects', {
-        owner: account?.address as string,
-    });
+	const { data } = useSuiClientQuery('getOwnedObjects', {
+		owner: address,
+	});
+	if (!data) {
+		return null;
+	}
 
-    if (!data) {
-        return null;
-    }
-
-    return (
-        <ul>
-            {data.data.map((object) => (
-                <li key={object.data?.objectId}>
-                    <a href={`https://suiexplorer.com/object/${object.data?.objectId}`}>
-                        {object.data?.objectId}
-                    </a>
-                </li>
-            ))}
-        </ul>
-    );
+	return (
+		<ul>
+			{data.data.map((object) => (
+				<li key={object.data?.objectId}>
+					<a href={`https://suiexplorer.com/object/${object.data?.objectId}`}>
+						{object.data?.objectId}
+					</a>
+				</li>
+			))}
+		</ul>
+	);
 }
 ```
 
-You now have a dApp connected to wallets and can query data from RPC nodes. 
+You now have a dApp connected to wallets and can query data from RPC nodes.
 
 ## Related links
 

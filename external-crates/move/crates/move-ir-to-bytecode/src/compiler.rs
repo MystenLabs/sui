@@ -6,8 +6,8 @@ use crate::context::{CompiledDependency, Context, MaterializedPools, TABLE_MAX_S
 use anyhow::{bail, format_err, Result};
 use move_binary_format::{
     file_format::{
-        Ability, AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, CompiledScript,
-        Constant, FieldDefinition, FunctionDefinition, FunctionSignature, ModuleHandle, Signature,
+        Ability, AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, Constant,
+        FieldDefinition, FunctionDefinition, FunctionSignature, ModuleHandle, Signature,
         SignatureToken, StructDefinition, StructDefinitionIndex, StructFieldInformation,
         StructHandleIndex, StructTypeParameter, TableIndex, TypeParameterIndex, TypeSignature,
         Visibility,
@@ -15,7 +15,7 @@ use move_binary_format::{
     file_format_common::VERSION_MAX,
 };
 use move_bytecode_source_map::source_map::SourceMap;
-use move_core_types::value::{MoveTypeLayout, MoveValue};
+use move_core_types::runtime_value::{MoveTypeLayout, MoveValue};
 use move_ir_types::{
     ast::{self, Bytecode as IRBytecode, Bytecode_ as IRBytecode_, *},
     sp,
@@ -310,90 +310,6 @@ fn verify_module(module: &ModuleDefinition) -> Result<()> {
     Ok(())
 }
 
-/// Verifies that the given script is semantically valid. Invoking this prior to compiling the
-/// script to bytecode may help diagnose malformed programs.
-fn verify_script(script: &Script) -> Result<()> {
-    verify_function(&script.main)
-}
-
-/// Compile a transaction script.
-pub fn compile_script<'a>(
-    script: Script,
-    dependencies: impl IntoIterator<Item = &'a CompiledModule>,
-) -> Result<(CompiledScript, SourceMap)> {
-    verify_script(&script)?;
-
-    let mut context = Context::new(script.loc, HashMap::new(), None)?;
-    for dep in dependencies {
-        context.add_compiled_dependency(dep)?;
-    }
-
-    compile_imports(&mut context, script.imports.clone())?;
-    // Add explicit handles/dependency declarations to `dependencies`
-    compile_explicit_dependency_declarations(
-        &mut context,
-        script.imports,
-        script.explicit_dependency_declarations,
-    )?;
-
-    for ir_constant in script.constants {
-        let constant = compile_constant(&mut context, ir_constant.signature, ir_constant.value)?;
-        context.declare_constant(ir_constant.name.clone(), constant.clone())?;
-        let const_idx = context.constant_index(constant)?;
-        record_src_loc!(const_decl: context, const_idx, ir_constant.name);
-    }
-
-    let function = script.main;
-
-    let sig = function_signature(&mut context, &function.value.signature)?;
-    let parameters_sig_idx = context.signature_index(Signature(sig.parameters))?;
-
-    record_src_loc!(
-        function_decl: context,
-        function.loc,
-        0,
-        matches!(function.value.body, FunctionBody::Native)
-    );
-    record_src_loc!(
-        function_type_formals: context,
-        &function.value.signature.type_formals
-    );
-    let code = compile_function_body_impl(&mut context, function.value)?.unwrap();
-
-    let (
-        MaterializedPools {
-            module_handles,
-            struct_handles,
-            function_handles,
-            signatures,
-            identifiers,
-            address_identifiers,
-            constant_pool,
-            function_instantiations,
-            ..
-        },
-        _compiled_deps,
-        source_map,
-    ) = context.materialize_pools();
-    let script = CompiledScript {
-        version: VERSION_MAX,
-        module_handles,
-        struct_handles,
-        function_handles,
-        function_instantiations,
-        signatures,
-        identifiers,
-        address_identifiers,
-        constant_pool,
-        metadata: vec![],
-
-        type_parameters: sig.type_parameters,
-        parameters: parameters_sig_idx,
-        code,
-    };
-    Ok((script, source_map))
-}
-
 /// Compile a module.
 pub fn compile_module<'a>(
     module: ModuleDefinition,
@@ -402,7 +318,7 @@ pub fn compile_module<'a>(
     verify_module(&module)?;
 
     let current_module = module.identifier;
-    let mut context = Context::new(module.loc, HashMap::new(), Some(current_module))?;
+    let mut context = Context::new(module.loc, HashMap::new(), current_module)?;
     for dep in dependencies {
         context.add_compiled_dependency(dep)?;
     }
@@ -508,7 +424,7 @@ fn compile_explicit_dependency_declarations(
         let mut context = Context::new(
             outer_context.decl_location(),
             dependencies_acc,
-            Some(*current_module),
+            *current_module,
         )?;
         compile_imports(&mut context, imports.clone())?;
         let self_module_handle_idx = context.module_handle_index(&mname)?;

@@ -1,6 +1,6 @@
 # Docs site
 
-For more complete docs, visit the [Sui TypeScript SDK docs](https://sui-typescript-docs.vercel.app/)
+For more complete docs, visit the [Sui TypeScript SDK docs](https://sdk.mystenlabs.com/)
 
 # Sui TypeScript SDK
 
@@ -51,9 +51,7 @@ $ pnpm install
 $ pnpm sdk build
 ```
 
-> All `pnpm` commands are intended to be run in the root of the Sui repo. You can also run them
-> within the `sdk/typescript` directory, and remove change `pnpm sdk` to just `pnpm` when running
-> commands.
+> All `pnpm` commands below are intended to be run in the root of the Sui repo.
 
 ## Type Doc
 
@@ -69,16 +67,16 @@ For the latest docs for the `main` branch, run `pnpm doc` and open the
 To run unit tests
 
 ```
-pnpm sdk test:unit
+pnpm --filter @mysten/sui.js test:unit
 ```
 
 To run E2E tests against local network
 
 ```
-pnpm sdk prepare:e2e
+pnpm --filter @mysten/sui.js prepare:e2e
 
 // This will run all e2e tests
-pnpm sdk test:e2e
+pnpm --filter @mysten/sui.js test:e2e
 
 // Alternatively you can choose to run only one test file
 npx vitest txn-builder.test.ts
@@ -97,7 +95,7 @@ https://stackoverflow.com/questions/52676244/node-version-not-updating-after-nvm
 To run E2E tests against DevNet
 
 ```
-VITE_FAUCET_URL='https://faucet.devnet.sui.io:443/gas' VITE_FULLNODE_URL='https://fullnode.devnet.sui.io' pnpm sdk exec vitest e2e
+VITE_FAUCET_URL='https://faucet.devnet.sui.io:443/gas' VITE_FULLNODE_URL='https://fullnode.devnet.sui.io' pnpm --filter @mysten/sui.js exec vitest e2e
 ```
 
 ## Connecting to Sui Network

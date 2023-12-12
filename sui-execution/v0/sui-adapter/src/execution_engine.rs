@@ -29,7 +29,7 @@ mod checked {
     use sui_types::gas::SuiGasStatus;
     use sui_types::gas_coin::GAS;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
-    use sui_types::messages_consensus::ConsensusCommitPrologue;
+    use sui_types::messages_checkpoint::CheckpointTimestamp;
     use sui_types::metrics::LimitsMetrics;
     use sui_types::object::OBJECT_START_VERSION;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -38,14 +38,14 @@ mod checked {
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
-    use sui_types::transaction::InputObjects;
+    use sui_types::transaction::CheckedInputObjects;
     use sui_types::transaction::{
         Argument, CallArg, ChangeEpoch, Command, GenesisTransaction, ProgrammableTransaction,
         TransactionKind,
     };
     use sui_types::{
         base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
-        object::Object,
+        object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
         SUI_FRAMEWORK_ADDRESS,
     };
@@ -55,7 +55,7 @@ mod checked {
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
         store: &dyn BackingStore,
-        input_objects: InputObjects,
+        input_objects: CheckedInputObjects,
         gas_coins: Vec<ObjectRef>,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -73,6 +73,7 @@ mod checked {
         TransactionEffects,
         Result<Mode::ExecutionResults, ExecutionError>,
     ) {
+        let input_objects = input_objects.into_inner();
         let shared_object_refs = input_objects.filter_shared_objects();
         let mut transaction_dependencies = input_objects.transaction_dependencies();
         let mut temporary_store =
@@ -183,9 +184,10 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         move_vm: &Arc<MoveVM>,
         tx_context: &mut TxContext,
-        input_objects: InputObjects,
+        input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,
     ) -> Result<InnerTemporaryStore, ExecutionError> {
+        let input_objects = input_objects.into_inner();
         let mut temporary_store =
             TemporaryStore::new(store, input_objects, tx_context.digest(), protocol_config);
         let mut gas_charger = GasCharger::new_unmetered(tx_context.digest());
@@ -408,13 +410,13 @@ mod checked {
                 for genesis_object in objects {
                     match genesis_object {
                         sui_types::transaction::GenesisObject::RawObject { data, owner } => {
-                            let object = Object {
+                            let object = ObjectInner {
                                 data,
                                 owner,
                                 previous_transaction: tx_ctx.digest(),
                                 storage_rebate: 0,
                             };
-                            temporary_store.write_object(object, WriteKind::Create);
+                            temporary_store.write_object(object.into(), WriteKind::Create);
                         }
                     }
                 }
@@ -422,7 +424,20 @@ mod checked {
             }
             TransactionKind::ConsensusCommitPrologue(prologue) => {
                 setup_consensus_commit(
-                    prologue,
+                    prologue.commit_timestamp_ms,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )
+                .expect("ConsensusCommitPrologue cannot fail");
+                Ok(Mode::empty_results())
+            }
+            TransactionKind::ConsensusCommitPrologueV2(prologue) => {
+                setup_consensus_commit(
+                    prologue.commit_timestamp_ms,
                     temporary_store,
                     tx_ctx,
                     move_vm,
@@ -445,10 +460,13 @@ mod checked {
                 )
             }
             TransactionKind::AuthenticatorStateUpdate(_) => {
-                panic!("AuthenticatorStateUpdate should not exist in suivm");
+                panic!("AuthenticatorStateUpdate should not exist in execution layer v0");
+            }
+            TransactionKind::RandomnessStateUpdate(_) => {
+                panic!("RandomnessStateUpdate should not exist in execution layer v0");
             }
             TransactionKind::EndOfEpochTransaction(_) => {
-                panic!("EndOfEpochTransaction should not exist in suivm");
+                panic!("EndOfEpochTransaction should not exist in execution layer v0");
             }
         }
     }
@@ -719,7 +737,7 @@ mod checked {
     /// - Set the timestamp for the `Clock` shared object from the timestamp in the header from
     ///   consensus.
     fn setup_consensus_commit(
-        prologue: ConsensusCommitPrologue,
+        consensus_commit_timestamp_ms: CheckpointTimestamp,
         temporary_store: &mut TemporaryStore<'_>,
         tx_ctx: &mut TxContext,
         move_vm: &Arc<MoveVM>,
@@ -736,7 +754,7 @@ mod checked {
                 vec![],
                 vec![
                     CallArg::CLOCK_MUT,
-                    CallArg::Pure(bcs::to_bytes(&prologue.commit_timestamp_ms).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&consensus_commit_timestamp_ms).unwrap()),
                 ],
             );
             assert_invariant!(

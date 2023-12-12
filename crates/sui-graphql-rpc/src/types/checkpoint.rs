@@ -13,6 +13,7 @@ use super::{
 };
 use async_graphql::{connection::Connection, *};
 
+/// Filter either by the digest, or the sequence number, or neither, to get the latest checkpoint.
 #[derive(InputObject)]
 pub(crate) struct CheckpointId {
     pub digest: Option<String>,
@@ -26,7 +27,7 @@ pub(crate) struct Checkpoint {
     /// This hash can be used to verify checkpoint contents by checking signatures against the committee,
     /// Hashing contents to match digest, and checking that the previous checkpoint digest matches.
     pub digest: String,
-    /// This checkpoint's position in the total order of finalised checkpoints, agreed upon by consensus.
+    /// This checkpoint's position in the total order of finalized checkpoints, agreed upon by consensus.
     pub sequence_number: u64,
     /// The timestamp at which the checkpoint is agreed to have happened according to consensus.
     /// Transactions that access time in this checkpoint will observe this timestamp.

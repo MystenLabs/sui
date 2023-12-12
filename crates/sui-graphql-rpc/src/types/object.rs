@@ -2,31 +2,33 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{connection::Connection, *};
+use fastcrypto::encoding::{Base58, Encoding};
+use sui_indexer::models_v2::objects::StoredObject;
 use sui_json_rpc::name_service::NameServiceConfig;
+use sui_types::dynamic_field::DynamicFieldType;
 
 use super::big_int::BigInt;
-use super::digest::Digest;
+use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::MoveObject;
 use super::move_package::MovePackage;
 use super::{
-    balance::Balance, coin::Coin, owner::Owner, stake::Stake, sui_address::SuiAddress,
+    balance::Balance, coin::Coin, owner::Owner, stake::StakedSui, sui_address::SuiAddress,
     transaction_block::TransactionBlock,
 };
 use crate::context_data::db_data_provider::PgManager;
-use crate::error::{code, graphql_error};
+use crate::error::Error;
 use crate::types::base64::Base64;
-use sui_types::object::{Data as NativeSuiObjectData, Object as NativeSuiObject};
+use sui_types::object::{Object as NativeObject, Owner as NativeOwner};
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct Object {
     pub address: SuiAddress,
-    pub version: u64,
-    pub digest: String,
-    pub storage_rebate: Option<BigInt>,
-    pub owner: Option<SuiAddress>,
-    pub bcs: Option<Base64>,
-    pub previous_transaction: Option<Digest>,
-    pub kind: Option<ObjectKind>,
+
+    /// Representation of an Object in the Indexer's Store.
+    pub stored: Option<StoredObject>,
+
+    /// Deserialized representation of `stored_object.serialized_object`.
+    pub native: NativeObject,
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
@@ -39,12 +41,23 @@ pub(crate) enum ObjectKind {
 
 #[derive(InputObject, Default, Clone)]
 pub(crate) struct ObjectFilter {
-    pub package: Option<SuiAddress>,
-    pub module: Option<String>,
-    pub ty: Option<String>,
+    /// This field is used to specify the type of objects that should be included in the query
+    /// results.
+    ///
+    /// Objects can be filtered by their type's package, package::module, or their fully qualified
+    /// type name.
+    ///
+    /// Generic types can be queried by either the generic type name, e.g. `0x2::coin::Coin`, or by
+    /// the full type name, such as `0x2::coin::Coin<0x2::sui::SUI>`.
+    pub type_: Option<String>,
 
+    /// Filter for live objects by their current owners.
     pub owner: Option<SuiAddress>,
+
+    /// Filter for live objects by their IDs.
     pub object_ids: Option<Vec<SuiAddress>>,
+
+    /// Filter for live or potentially historical objects by their ID and version.
     pub object_keys: Option<Vec<ObjectKey>>,
 }
 
@@ -54,105 +67,96 @@ pub(crate) struct ObjectKey {
     version: u64,
 }
 
-#[allow(clippy::diverging_sub_expression)]
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
 #[Object]
 impl Object {
     async fn version(&self) -> u64 {
-        self.version
+        self.native.version().value()
     }
 
     /// 32-byte hash that identifies the object's current contents, encoded as a Base58 string.
-    async fn digest(&self) -> &str {
-        &self.digest
+    async fn digest(&self) -> String {
+        if let Some(stored) = &self.stored {
+            Base58::encode(&stored.object_digest)
+        } else {
+            self.native.digest().base58_encode()
+        }
     }
 
     /// The amount of SUI we would rebate if this object gets deleted or mutated.
-    /// This number is recalculated based on the present storage gas price.    
-    async fn storage_rebate(&self) -> Option<&BigInt> {
-        self.storage_rebate.as_ref()
+    /// This number is recalculated based on the present storage gas price.
+    async fn storage_rebate(&self) -> Option<BigInt> {
+        Some(BigInt::from(self.native.storage_rebate))
     }
 
-    /// The Base64 encoded bcs serialization of the object's content.    
-    async fn bcs(&self) -> Option<&Base64> {
-        self.bcs.as_ref()
+    /// The Base64 encoded bcs serialization of the object's content.
+    async fn bcs(&self) -> Result<Option<Base64>> {
+        if let Some(stored) = &self.stored {
+            Ok(Some(Base64::from(&stored.serialized_object)))
+        } else {
+            let bytes = bcs::to_bytes(&self.native)
+                .map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to serialize object at {}: {e}",
+                        self.address,
+                    ))
+                })
+                .extend()?;
+
+            Ok(Some(Base64::from(&bytes)))
+        }
     }
 
-    /// The transaction block that created this version of the object.    
+    /// The transaction block that created this version of the object.
     async fn previous_transaction_block(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<TransactionBlock>, crate::error::Error> {
-        match self.previous_transaction {
-            Some(digest) => {
-                ctx.data_unchecked::<PgManager>()
-                    .fetch_tx(digest.to_string().as_str())
-                    .await
-            }
-            None => Ok(None),
-        }
+    ) -> Result<Option<TransactionBlock>> {
+        let digest = self.native.previous_transaction.to_string();
+        ctx.data_unchecked::<PgManager>()
+            .fetch_tx(digest.as_str())
+            .await
+            .extend()
     }
 
     /// Objects can either be immutable, shared, owned by an address,
     /// or are child objects (part of a dynamic field)
     async fn kind(&self) -> Option<ObjectKind> {
-        self.kind
+        use NativeOwner as O;
+        use ObjectKind as K;
+        Some(match self.native.owner {
+            O::AddressOwner(_) => K::Owned,
+            O::ObjectOwner(_) => K::Child,
+            O::Shared { .. } => K::Shared,
+            O::Immutable => K::Immutable,
+        })
     }
 
-    /// The Address or Object that owns this Object.  Immutable and Shared Objects do not have owners.
+    /// The Address or Object that owns this Object.  Immutable and Shared Objects do not have
+    /// owners.
     async fn owner(&self) -> Option<Owner> {
-        self.owner.as_ref().map(|q| Owner { address: *q })
+        use NativeOwner as O;
+        let (O::AddressOwner(address) | O::ObjectOwner(address)) = self.native.owner else {
+            return None;
+        };
+
+        let address = SuiAddress::from(address);
+        Some(Owner { address })
     }
 
     /// Attempts to convert the object into a MoveObject
-    async fn as_move_object(&self) -> Result<Option<MoveObject>> {
-        let Some(bcs) = &self.bcs else {
-            return Ok(None);
-        };
-
-        let native_object: NativeSuiObject = bcs::from_bytes(&bcs.0[..]).map_err(|e| {
-            graphql_error(
-                code::INTERNAL_SERVER_ERROR,
-                format!("Failed to deserialize object at {}: {e}", self.address),
-            )
-        })?;
-
-        Ok(
-            if matches!(native_object.data, NativeSuiObjectData::Move(_)) {
-                Some(MoveObject { native_object })
-            } else {
-                None
-            },
-        )
+    async fn as_move_object(&self) -> Option<MoveObject> {
+        MoveObject::try_from(self).ok()
     }
 
     /// Attempts to convert the object into a MovePackage
-    async fn as_move_package(&self) -> Result<Option<MovePackage>> {
-        let Some(bcs) = &self.bcs else {
-            return Ok(None);
-        };
-
-        let native_object: NativeSuiObject = bcs::from_bytes(&bcs.0[..]).map_err(|_| {
-            graphql_error(
-                code::INTERNAL_SERVER_ERROR,
-                format!("Failed to deserialize object with ID: {}", self.address),
-            )
-        })?;
-
-        Ok(
-            if matches!(native_object.data, NativeSuiObjectData::Package(_)) {
-                Some(MovePackage { native_object })
-            } else {
-                None
-            },
-        )
+    async fn as_move_package(&self) -> Option<MovePackage> {
+        MovePackage::try_from(self).ok()
     }
 
     // =========== Owner interface methods =============
 
     /// The address of the object, named as such to avoid conflict with the address type.
-    pub async fn location(&self) -> SuiAddress {
+    pub async fn address(&self) -> SuiAddress {
         self.address
     }
 
@@ -199,7 +203,10 @@ impl Object {
             .extend()
     }
 
-    /// The `0x2::sui::Coin` objects owned by the given object.
+    /// The coin objects for the given address.
+    ///
+    /// The type field is a string of the inner type of the coin by which to filter
+    /// (e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
     pub async fn coin_connection(
         &self,
         ctx: &Context<'_>,
@@ -210,20 +217,20 @@ impl Object {
         type_: Option<String>,
     ) -> Result<Option<Connection<String, Coin>>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_coins(self.address, type_, first, after, last, before)
+            .fetch_coins(Some(self.address), type_, first, after, last, before)
             .await
             .extend()
     }
 
     /// The `0x3::staking_pool::StakedSui` objects owned by the given object.
-    pub async fn stake_connection(
+    pub async fn staked_sui_connection(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Result<Option<Connection<String, Stake>>> {
+    ) -> Result<Option<Connection<String, StakedSui>>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_staked_sui(self.address, first, after, last, before)
             .await
@@ -249,42 +256,87 @@ impl Object {
     // ) -> Result<Option<Connection<String, NameService>>> {
     //     unimplemented!()
     // }
+
+    /// Access a dynamic field on an object using its name.
+    /// Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+    /// using their type, and their BCS contents, Base64 encoded.
+    /// Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
+    pub async fn dynamic_field(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_dynamic_field(self.address, name, DynamicFieldType::DynamicField)
+            .await
+            .extend()
+    }
+
+    /// Access a dynamic object field on an object using its name.
+    /// Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+    /// using their type, and their BCS contents, Base64 encoded.
+    /// The value of a dynamic object field can also be accessed off-chain directly via its address (e.g. using `Query.object`).
+    /// Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
+    pub async fn dynamic_object_field(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_dynamic_field(self.address, name, DynamicFieldType::DynamicObject)
+            .await
+            .extend()
+    }
+
+    /// The dynamic fields on an object.
+    /// Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
+    pub async fn dynamic_field_connection(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Option<Connection<String, DynamicField>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_dynamic_fields(first, after, last, before, self.address)
+            .await
+            .extend()
+    }
 }
 
-impl From<&NativeSuiObject> for Object {
-    fn from(o: &NativeSuiObject) -> Self {
-        let kind = Some(match o.owner {
-            sui_types::object::Owner::AddressOwner(_) => ObjectKind::Owned,
-            sui_types::object::Owner::ObjectOwner(_) => ObjectKind::Child,
-            sui_types::object::Owner::Shared {
-                initial_shared_version: _,
-            } => ObjectKind::Shared,
-            sui_types::object::Owner::Immutable => ObjectKind::Immutable,
-        });
-
-        let owner_address = o.owner.get_owner_address().ok();
-        if matches!(kind, Some(ObjectKind::Immutable) | Some(ObjectKind::Shared))
-            && owner_address.is_some()
-        {
-            panic!("Immutable or Shared object should not have an owner_id");
-        }
-
-        let bcs = Base64::from(
-            bcs::to_bytes(o)
-                // TODO: Shouldn't panic here.
-                .expect("Failed to serialize object")
-                .to_vec(),
-        );
-
-        Self {
-            address: SuiAddress::from_array(o.id().into_bytes()),
-            version: o.version().into(),
-            digest: o.digest().base58_encode(),
-            storage_rebate: Some(BigInt::from(o.storage_rebate)),
-            owner: owner_address.map(SuiAddress::from),
-            bcs: Some(bcs),
-            previous_transaction: Some(Digest::from_array(o.previous_transaction.into_inner())),
-            kind,
+impl Object {
+    /// Construct a GraphQL object from a native object, without its stored (indexed) counterpart.
+    pub(crate) fn from_native(address: SuiAddress, native: NativeObject) -> Object {
+        Object {
+            address,
+            stored: None,
+            native,
         }
     }
+}
+
+impl TryFrom<StoredObject> for Object {
+    type Error = Error;
+
+    fn try_from(stored_object: StoredObject) -> Result<Self, Error> {
+        let address = addr(&stored_object.object_id)?;
+        let native_object = bcs::from_bytes(&stored_object.serialized_object)
+            .map_err(|_| Error::Internal(format!("Failed to deserialize object {address}")))?;
+
+        Ok(Self {
+            address,
+            stored: Some(stored_object),
+            native: native_object,
+        })
+    }
+}
+
+/// Parse a `SuiAddress` from its stored representation.  Failure is an internal error: the
+/// database should never contain a malformed address (containing the wrong number of bytes).
+fn addr(bytes: impl AsRef<[u8]>) -> Result<SuiAddress, Error> {
+    SuiAddress::from_bytes(bytes.as_ref()).map_err(|e| {
+        let bytes = bytes.as_ref().to_vec();
+        Error::Internal(format!("Error deserializing address: {bytes:?}: {e}"))
+    })
 }

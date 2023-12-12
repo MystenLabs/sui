@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 31;
+const MAX_PROTOCOL_VERSION: u64 = 32;
 
 // Record history of protocol version allocations here:
 //
@@ -90,6 +90,14 @@ const MAX_PROTOCOL_VERSION: u64 = 31;
 //             Add support for shared obj deletion and receiving objects off of other objects in devnet only.
 // Version 31: Add support for shared object deletion in devnet only.
 //             Add support for getting object ID referenced by receiving object in sui framework.
+//             Create new execution layer version, and preserve previous behavior in v1.
+//             Update semantics of `sui::transfer::receive` and add `sui::transfer::public_receive`.
+// Version 32: Add delete functions for VerifiedID and VerifiedIssuer.
+//             Add sui::token module to sui framework.
+//             Enable transfer to object in testnet.
+//             Enable Narwhal CertificateV2 on mainnet
+//             Make critbit tree and order getters public in deepbook.
+//             Enable effects v2 on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -336,6 +344,15 @@ struct FeatureFlags {
     // If true, recompute has_public_transfer from the type instead of what is stored in the object
     #[serde(skip_serializing_if = "is_false")]
     recompute_has_public_transfer_in_execution: bool,
+
+    // If true, multisig containing zkLogin sig is accepted.
+    #[serde(skip_serializing_if = "is_false")]
+    accept_zklogin_in_multisig: bool,
+
+    // If true, consensus prologue transaction also includes the consensus output digest.
+    // It can be used to detect consensus output folk.
+    #[serde(skip_serializing_if = "is_false")]
+    include_consensus_digest_in_prologue: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -347,7 +364,7 @@ fn is_empty(b: &BTreeSet<String>) -> bool {
 }
 
 /// Ordering mechanism for transactions in one Narwhal consensus output.
-#[derive(Default, Copy, Clone, Serialize, Debug)]
+#[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Debug)]
 pub enum ConsensusTransactionOrdering {
     /// No ordering. Transactions are processed in the order they appear in the consensus output.
     #[default]
@@ -1030,8 +1047,16 @@ impl ProtocolConfig {
         self.feature_flags.verify_legacy_zklogin_address
     }
 
+    pub fn accept_zklogin_in_multisig(&self) -> bool {
+        self.feature_flags.accept_zklogin_in_multisig
+    }
+
     pub fn throughput_aware_consensus_submission(&self) -> bool {
         self.feature_flags.throughput_aware_consensus_submission
+    }
+
+    pub fn include_consensus_digest_in_prologue(&self) -> bool {
+        self.feature_flags.include_consensus_digest_in_prologue
     }
 }
 
@@ -1620,11 +1645,6 @@ impl ProtocolConfig {
                     }
 
                     cfg.random_beacon_reduction_allowed_delta = Some(800);
-                    // Only enable random beacon on devnet
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.narwhal_header_v2 = true;
-                        cfg.feature_flags.random_beacon = true;
-                    }
                     // Only enable effects v2 on devnet and testnet.
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_effects_v2 = true;
@@ -1638,10 +1658,36 @@ impl ProtocolConfig {
                     cfg.feature_flags.recompute_has_public_transfer_in_execution = true;
                 }
                 31 => {
+                    cfg.execution_version = Some(2);
                     // Only enable shared object deletion on devnet
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.shared_object_deletion = true;
                     }
+                }
+                32 => {
+                    // enable zklogin in multisig in devnet and testnet
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.accept_zklogin_in_multisig = true;
+                    }
+                    // enable receiving objects in devnet and testnet
+                    if chain != Chain::Mainnet {
+                        cfg.transfer_receive_object_cost_base = Some(52);
+                        cfg.feature_flags.receive_objects = true;
+                    }
+                    // Only enable random beacon on devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.narwhal_header_v2 = true;
+                        cfg.feature_flags.random_beacon = true;
+                    }
+                    // Only enable consensus digest in consensus commit prologue in devnet.
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.feature_flags.include_consensus_digest_in_prologue = true;
+                    }
+
+                    // enable nw cert v2 on mainnet
+                    cfg.feature_flags.narwhal_certificate_v2 = true;
+
+                    cfg.feature_flags.enable_effects_v2 = true;
                 }
                 // Use this template when making changes:
                 //

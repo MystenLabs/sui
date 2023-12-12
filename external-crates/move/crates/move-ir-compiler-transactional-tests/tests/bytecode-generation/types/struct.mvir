@@ -1,4 +1,4 @@
-//# print-bytecode --input=module
+//# print-bytecode
 // Module names cannot be used as types.
 module 0x1d20.M {
     f(m: Self.M) {

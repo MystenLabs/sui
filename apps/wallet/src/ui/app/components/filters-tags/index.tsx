@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
+import cl from 'clsx';
 import { memo, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { NavLink } from 'react-router-dom';

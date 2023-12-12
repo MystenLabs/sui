@@ -97,12 +97,13 @@ impl IndexerV2 {
 
     pub async fn start_analytical_worker(
         store: PgIndexerAnalyticalStore,
+        metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
         info!(
             "Sui indexerV2 Analytical Worker (version {:?}) started...",
             env!("CARGO_PKG_VERSION")
         );
-        let mut processor_orchestrator_v2 = ProcessorOrchestratorV2::new(store);
+        let mut processor_orchestrator_v2 = ProcessorOrchestratorV2::new(store, metrics);
         processor_orchestrator_v2.run_forever().await;
         Ok(())
     }

@@ -1,5 +1,5 @@
 //# run
-script {
+module 0x42::m {
     fun main() {
         assert!(15u8 == 1_5u8, 15);
         assert!(15_u8 == 1_5u8, 15);

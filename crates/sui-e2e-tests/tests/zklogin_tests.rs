@@ -3,17 +3,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::base_types::SuiAddress;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::utils::{get_zklogin_user_address, make_zklogin_tx, sign_zklogin_tx};
+use sui_types::utils::{
+    get_legacy_zklogin_user_address, get_zklogin_user_address, make_zklogin_tx,
+    sign_zklogin_tx_with_default_proof,
+};
 use sui_types::SUI_AUTHENTICATOR_STATE_OBJECT_ID;
 use test_cluster::{TestCluster, TestClusterBuilder};
 
 use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 
-async fn do_zklogin_test(legacy: bool) -> SuiResult {
+async fn do_zklogin_test(address: SuiAddress, legacy: bool) -> SuiResult {
     let test_cluster = TestClusterBuilder::new().build().await;
-    let (_, tx, _) = make_zklogin_tx(legacy);
+    let (_, tx, _) = make_zklogin_tx(address, legacy);
 
     test_cluster
         .authority_aggregator()
@@ -36,7 +40,9 @@ async fn test_zklogin_feature_deny() {
         config
     });
 
-    let err = do_zklogin_test(false).await.unwrap_err();
+    let err = do_zklogin_test(get_zklogin_user_address(), false)
+        .await
+        .unwrap_err();
 
     assert!(matches!(err, SuiError::UnsupportedFeatureError { .. }));
 }
@@ -50,7 +56,9 @@ async fn test_zklogin_feature_legacy_address_deny() {
         config
     });
 
-    let err = do_zklogin_test(true).await.unwrap_err();
+    let err = do_zklogin_test(get_legacy_zklogin_user_address(), true)
+        .await
+        .unwrap_err();
     assert!(matches!(err, SuiError::SignerSignatureAbsent { .. }));
 }
 
@@ -61,7 +69,9 @@ async fn test_legacy_zklogin_address_accept() {
         config.set_verify_legacy_zklogin_address(true);
         config
     });
-    let err = do_zklogin_test(true).await.unwrap_err();
+    let err = do_zklogin_test(get_legacy_zklogin_user_address(), true)
+        .await
+        .unwrap_err();
 
     // it does not hit the signer absent error.
     assert!(matches!(err, SuiError::InvalidSignature { .. }));
@@ -129,7 +139,7 @@ async fn run_zklogin_end_to_end_test(mut test_cluster: TestCluster) {
         .transfer_sui(None, sender)
         .build();
 
-    let (_, signed_txn, _) = sign_zklogin_tx(txn, false);
+    let (_, signed_txn, _) = sign_zklogin_tx_with_default_proof(txn, false);
 
     context.execute_transaction_must_succeed(signed_txn).await;
 
@@ -166,7 +176,7 @@ async fn test_create_authenticator_state_object() {
     test_cluster.wait_for_protocol_version(24.into()).await;
     // wait until next epoch - authenticator state object is created at the end of the first epoch
     // in which it is supported.
-    test_cluster.wait_for_epoch(None).await;
+    test_cluster.wait_for_epoch_all_nodes(2).await; // protocol upgrade completes in epoch 1
 
     for h in &handles {
         h.with(|node| {

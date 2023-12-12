@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: vector<bool>;
 label b0:
     (1);                // 0
@@ -8,9 +10,12 @@ label b0:
     return;             // 3
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: vector<bool>;
 label b0:
     (0);                // 0
@@ -21,9 +26,12 @@ label b0:
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: vector<u8>;
 label b0:
     (1u8, false, 2u8);
@@ -31,13 +39,18 @@ label b0:
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: vector<bool>;
 label b0:
     (false, 0, 0, 0);
     v = vec_pack_3<bool>();
     _ = ();
     return;
+}
+
 }

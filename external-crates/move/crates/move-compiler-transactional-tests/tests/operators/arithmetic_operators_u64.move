@@ -1,5 +1,5 @@
 //# run
-script {
+module 1::m {
 fun main() {
     assert!(0u64 + 0u64 == 0u64, 1000);
     assert!(0u64 + 1u64 == 1u64, 1001);
@@ -15,7 +15,7 @@ fun main() {
 }
 
 //# run
-script {
+module 2::m {
 fun main() {
     // should fail
     1u64 + 18446744073709551615u64;
@@ -23,7 +23,7 @@ fun main() {
 }
 
 //# run
-script {
+module 3::m {
 fun main() {
     // should fail
     12000000000000000000u64 + 10000000000000000000u64;
@@ -33,7 +33,7 @@ fun main() {
 
 
 //# run
-script {
+module 4::m {
 fun main() {
     assert!(0u64 - 0u64 == 0u64, 2000);
     assert!(1u64 - 0u64 == 1u64, 2001);
@@ -48,7 +48,7 @@ fun main() {
 }
 
 //# run
-script {
+module 5::m {
 fun main() {
     // should fail
     0u64 - 1u64;
@@ -56,7 +56,7 @@ fun main() {
 }
 
 //# run
-script {
+module 6::m {
 fun main() {
     // should fail
     54u64 - 100u64;
@@ -65,7 +65,7 @@ fun main() {
 
 
 //# run
-script {
+module 7::m {
 fun main() {
     assert!(0u64 * 0u64 == 0u64, 3000);
     assert!(1u64 * 0u64 == 0u64, 3001);
@@ -79,7 +79,7 @@ fun main() {
 }
 
 //# run
-script {
+module 8::m {
 fun main() {
     // should fail
     4294967296u64 * 4294967296u64;
@@ -87,7 +87,7 @@ fun main() {
 }
 
 //# run
-script {
+module 9::m {
 fun main() {
     // should fail
     9223372036854775808 * 2u64;
@@ -97,7 +97,7 @@ fun main() {
 
 
 //# run
-script {
+module 10::m {
 fun main() {
     assert!(0u64 / 1u64 == 0u64, 4000);
     assert!(1u64 / 1u64 == 1u64, 4001);
@@ -112,7 +112,7 @@ fun main() {
 }
 
 //# run
-script {
+module 11::m {
 fun main() {
     // should fail
     0u64 / 0u64;
@@ -121,14 +121,14 @@ fun main() {
 // check: ARITHMETIC_ERROR
 
 //# run
-script {
+module 12::m {
 fun main() {
     1u64 / 0u64;
 }
 }
 
 //# run
-script {
+module 13::m {
 fun main() {
     // should fail
     18446744073709551615u64 / 0u64;
@@ -137,7 +137,7 @@ fun main() {
 
 
 //# run
-script {
+module 14::m {
 fun main() {
     assert!(0u64 % 1u64 == 0u64, 5000);
     assert!(1u64 % 1u64 == 0u64, 5001);
@@ -152,7 +152,7 @@ fun main() {
 }
 
 //# run
-script {
+module 15::m {
 fun main() {
     // should fail
     0u64 % 0u64;
@@ -160,7 +160,7 @@ fun main() {
 }
 
 //# run
-script {
+module 16::m {
 fun main() {
     // should fail
     1u64 % 0u64;
@@ -168,7 +168,7 @@ fun main() {
 }
 
 //# run
-script {
+module 17::m {
 fun main() {
     // should fail
     18446744073709551615u64 % 0u64;

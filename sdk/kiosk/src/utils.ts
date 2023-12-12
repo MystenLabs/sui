@@ -1,18 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SharedObjectRef } from '@mysten/sui.js/bcs';
 import {
 	PaginationArguments,
 	SuiClient,
 	SuiObjectData,
 	SuiObjectDataFilter,
 	SuiObjectDataOptions,
-	SuiObjectRef,
 	SuiObjectResponse,
 	type DynamicFieldInfo,
 } from '@mysten/sui.js/client';
-import { TransactionBlock, TransactionObjectArgument } from '@mysten/sui.js/transactions';
 import { normalizeStructTag, normalizeSuiAddress, parseStructTag } from '@mysten/sui.js/utils';
 
 import { bcs } from './bcs';
@@ -26,36 +23,6 @@ import {
 } from './types';
 
 const DEFAULT_QUERY_LIMIT = 50;
-
-/**
- * Convert any valid input into a TransactionArgument.
- *
- * @param txb The Transaction Block
- * @param arg The argument to convert.
- * @returns The converted TransactionArgument.
- */
-export function objArg(
-	txb: TransactionBlock,
-	arg: string | SharedObjectRef | SuiObjectRef | TransactionObjectArgument,
-): TransactionObjectArgument {
-	if (typeof arg === 'string') {
-		return txb.object(arg);
-	}
-
-	if ('digest' in arg && 'version' in arg && 'objectId' in arg) {
-		return txb.objectRef(arg);
-	}
-
-	if ('objectId' in arg && 'initialSharedVersion' in arg && 'mutable' in arg) {
-		return txb.sharedObjectRef(arg);
-	}
-
-	if ('kind' in arg) {
-		return arg;
-	}
-
-	throw new Error('Invalid argument type');
-}
 
 export async function getKioskObject(client: SuiClient, id: string): Promise<Kiosk> {
 	const queryRes = await client.getObject({ id, options: { showBcs: true } });

@@ -18,7 +18,7 @@ use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents};
 use sui_types::object::Object;
-use sui_types::object::ObjectFormatOptions;
+
 use tokio::sync::watch;
 
 use std::collections::hash_map::Entry;
@@ -46,7 +46,7 @@ use crate::types_v2::IndexedEpochInfo;
 use crate::types_v2::{
     IndexedCheckpoint, IndexedEvent, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
 };
-use crate::types_v2::{IndexedObject, IndexedPackage};
+use crate::types_v2::{IndexedDeletedObject, IndexedObject, IndexedPackage};
 use crate::IndexerConfig;
 
 use super::tx_processor::EpochEndIndexingObjectStore;
@@ -238,6 +238,7 @@ where
                 new_epoch: IndexedEpochInfo::from_new_system_state_summary(
                     system_state,
                     0, //first_checkpoint_id
+                    None,
                 ),
             }));
         }
@@ -286,6 +287,7 @@ where
             new_epoch: IndexedEpochInfo::from_new_system_state_summary(
                 system_state,
                 checkpoint_summary.sequence_number + 1, // first_checkpoint_id
+                Some(&event),
             ),
         }))
     }
@@ -447,7 +449,7 @@ where
                 events,
                 transaction_kind,
                 successful_tx_num: if fx.status().is_ok() {
-                    tx.kind().num_commands() as u64
+                    tx.kind().tx_count() as u64
                 } else {
                     0
                 },
@@ -521,11 +523,18 @@ where
             .iter()
             .flat_map(|tx| get_deleted_objects(&tx.effects))
             .collect::<Vec<_>>();
-
         let deleted_object_ids = deleted_objects
             .iter()
             .map(|o| (o.0, o.1))
             .collect::<HashSet<_>>();
+        let indexed_deleted_objects = deleted_objects
+            .into_iter()
+            .map(|o| IndexedDeletedObject {
+                object_id: o.0,
+                object_version: o.1.value(),
+                checkpoint_sequence_number: checkpoint_seq,
+            })
+            .collect();
 
         let (objects, intermediate_versions) = get_latest_objects(data.output_objects());
 
@@ -576,7 +585,7 @@ where
             .collect();
         TransactionObjectChangesToCommit {
             changed_objects,
-            deleted_objects,
+            deleted_objects: indexed_deleted_objects,
         }
     }
 
@@ -657,7 +666,7 @@ fn try_create_dynamic_field_info(
     }
 
     let move_struct = move_object
-        .to_move_struct_with_resolver(ObjectFormatOptions::default(), resolver)
+        .to_move_struct_with_resolver(resolver)
         .map_err(|e| {
             IndexerError::ResolveMoveStructError(format!(
                 "Failed to create dynamic field info for obj {}:{}, type: {}. Error: {e}",

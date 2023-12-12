@@ -2,6 +2,8 @@
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+echo "Running simulator tests at commit $(git rev-parse HEAD)"
+
 # Function to handle SIGINT signal (Ctrl+C)
 cleanup() {
     echo "Cleaning up child processes..."

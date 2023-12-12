@@ -4,7 +4,6 @@
 import { type TransactionBlock } from '@mysten/sui.js/transactions';
 
 import { type ObjectArgument } from '../../types';
-import { objArg } from '../../utils';
 
 export function attachKioskLockRuleTx(
 	tx: TransactionBlock,
@@ -16,7 +15,7 @@ export function attachKioskLockRuleTx(
 	tx.moveCall({
 		target: `${packageId}::kiosk_lock_rule::add`,
 		typeArguments: [type],
-		arguments: [objArg(tx, policy), objArg(tx, policyCap)],
+		arguments: [tx.object(policy), tx.object(policyCap)],
 	});
 }
 
@@ -36,8 +35,8 @@ export function attachRoyaltyRuleTx(
 		target: `${packageId}::royalty_rule::add`,
 		typeArguments: [type],
 		arguments: [
-			objArg(tx, policy),
-			objArg(tx, policyCap),
+			tx.object(policy),
+			tx.object(policyCap),
 			tx.pure.u16(Number(percentageBps)),
 			tx.pure.u64(minAmount),
 		],
@@ -54,7 +53,7 @@ export function attachPersonalKioskRuleTx(
 	tx.moveCall({
 		target: `${packageId}::personal_kiosk_rule::add`,
 		typeArguments: [type],
-		arguments: [objArg(tx, policy), objArg(tx, policyCap)],
+		arguments: [tx.object(policy), tx.object(policyCap)],
 	});
 }
 
@@ -69,6 +68,6 @@ export function attachFloorPriceRuleTx(
 	tx.moveCall({
 		target: `${packageId}::floor_price_rule::add`,
 		typeArguments: [type],
-		arguments: [objArg(tx, policy), objArg(tx, policyCap), tx.pure.u64(minPrice)],
+		arguments: [tx.object(policy), tx.object(policyCap), tx.pure.u64(minPrice)],
 	});
 }

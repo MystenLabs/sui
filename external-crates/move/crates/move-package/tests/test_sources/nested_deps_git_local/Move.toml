@@ -1,6 +1,5 @@
 [package]
 name = "NestedDeps"
-version = "0.0.0"
 
 [dependencies]
 MoveNursery = { git = "https://github.com/move-language/move", rev = "781c844", subdir = "language/move-stdlib/nursery" }

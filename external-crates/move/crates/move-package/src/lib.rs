@@ -12,6 +12,7 @@ pub mod source_package;
 
 use anyhow::Result;
 use clap::*;
+use lock_file::LockFile;
 use move_compiler::{
     editions::{Edition, Flavor},
     Flags,
@@ -23,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use source_package::{layout::SourcePackageLayout, parsed_manifest::DependencyKind};
 use std::{
     collections::BTreeMap,
-    io::Write,
+    io::{Seek, SeekFrom, Write},
     path::{Path, PathBuf},
 };
 
@@ -31,11 +32,12 @@ use crate::{
     compilation::{
         build_plan::BuildPlan, compiled_package::CompiledPackage, model_builder::ModelBuilder,
     },
+    lock_file::schema::update_compiler_toolchain,
     package_lock::PackageLock,
 };
 
 #[derive(Debug, Parser, Clone, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Default)]
-#[clap(author, version, about)]
+#[clap(about)]
 pub struct BuildConfig {
     /// Compile in 'dev' mode. The 'dev-addresses' and 'dev-dependencies' fields will be used if
     /// this flag is set. This flag is useful for development of packages that expose named
@@ -52,10 +54,6 @@ pub struct BuildConfig {
     #[clap(name = "generate-docs", long = "doc", global = true)]
     pub generate_docs: bool,
 
-    /// Generate ABIs for packages
-    #[clap(name = "generate-abis", long = "abi", global = true)]
-    pub generate_abis: bool,
-
     /// Installation directory for compiled artifacts. Defaults to current directory.
     #[clap(long = "install-dir", global = true)]
     pub install_dir: Option<PathBuf>,
@@ -67,10 +65,6 @@ pub struct BuildConfig {
     /// Optional location to save the lock file to, if package resolution succeeds.
     #[clap(skip)]
     pub lock_file: Option<PathBuf>,
-
-    /// Additional named address mapping. Useful for tools in rust
-    #[clap(skip)]
-    pub additional_named_addresses: BTreeMap<String, AccountAddress>,
 
     /// Only fetch dependency repos to MOVE_HOME
     #[clap(long = "fetch-deps-only", global = true)]
@@ -100,6 +94,14 @@ pub struct BuildConfig {
     /// If set, warnings become errors
     #[clap(long = move_compiler::command_line::WARNINGS_ARE_ERRORS, global = true)]
     pub warnings_are_errors: bool,
+
+    /// Additional named address mapping. Useful for tools in rust
+    #[clap(skip)]
+    pub additional_named_addresses: BTreeMap<String, AccountAddress>,
+
+    /// If `true`, disable linters
+    #[clap(long, global = true)]
+    pub no_lint: bool,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
@@ -174,6 +176,7 @@ impl BuildConfig {
         let lock_string = std::fs::read_to_string(path.join(SourcePackageLayout::Lock.path())).ok();
         let _mutx = PackageLock::lock(); // held until function returns
 
+        let install_dir_set = self.install_dir.is_some();
         let install_dir = self.install_dir.as_ref().unwrap_or(&path).to_owned();
 
         let mut dep_graph_builder = DependencyGraphBuilder::new(
@@ -188,7 +191,9 @@ impl BuildConfig {
             lock_string,
         )?;
 
-        if modified {
+        if modified || install_dir_set {
+            // (1) Write the Move.lock file if the existing one is `modified`, or
+            // (2) `install_dir` is set explicitly, which may be a different directory, and where a Move.lock does not exist yet.
             let lock = dependency_graph.write_to_lock(install_dir)?;
             if let Some(lock_path) = &self.lock_file {
                 lock.commit(lock_path)?;
@@ -218,5 +223,27 @@ impl BuildConfig {
         flags
             .set_warnings_are_errors(self.warnings_are_errors)
             .set_silence_warnings(self.silence_warnings)
+    }
+
+    pub fn update_lock_file_toolchain_version(
+        &self,
+        path: &PathBuf,
+        compiler_version: String,
+    ) -> Result<()> {
+        let Some(lock_file) = self.lock_file.as_ref() else {
+            return Ok(());
+        };
+        let install_dir = self.install_dir.as_ref().unwrap_or(path).to_owned();
+        let mut lock = LockFile::from(install_dir, lock_file)?;
+        lock.seek(SeekFrom::Start(0))?;
+        update_compiler_toolchain(
+            &mut lock,
+            compiler_version,
+            self.default_edition.unwrap_or_default(),
+            self.default_flavor.unwrap_or_default(),
+        )?;
+        let _mutx = PackageLock::lock();
+        lock.commit(lock_file)?;
+        Ok(())
     }
 }

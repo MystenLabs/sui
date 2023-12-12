@@ -5,7 +5,7 @@ import { ampli } from '_src/shared/analytics/ampli';
 import { Collapsible } from '_src/ui/app/shared/collapse';
 import { Filter16, Plus12 } from '@mysten/icons';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
-import cn from 'classnames';
+import cn from 'clsx';
 import { useMemo, useState } from 'react';
 
 import { getAccountBackgroundByType } from '../../helpers/accounts';

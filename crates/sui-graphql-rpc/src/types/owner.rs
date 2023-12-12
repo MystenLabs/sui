@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::address::Address;
-use super::stake::Stake;
+use super::dynamic_field::DynamicField;
+use super::dynamic_field::DynamicFieldName;
+use super::stake::StakedSui;
 use crate::context_data::db_data_provider::PgManager;
 use crate::types::balance::*;
 use crate::types::coin::*;
@@ -12,10 +14,11 @@ use crate::types::sui_address::SuiAddress;
 use async_graphql::connection::Connection;
 use async_graphql::*;
 use sui_json_rpc::name_service::NameServiceConfig;
+use sui_types::dynamic_field::DynamicFieldType;
 
 #[derive(Interface)]
 #[graphql(
-    field(name = "location", ty = "SuiAddress"),
+    field(name = "address", ty = "SuiAddress"),
     field(
         name = "object_connection",
         ty = "Option<Connection<String, Object>>",
@@ -48,8 +51,8 @@ use sui_json_rpc::name_service::NameServiceConfig;
         arg(name = "type", ty = "Option<String>")
     ),
     field(
-        name = "stake_connection",
-        ty = "Option<Connection<String, Stake>>",
+        name = "staked_sui_connection",
+        ty = "Option<Connection<String, StakedSui>>",
         arg(name = "first", ty = "Option<u64>"),
         arg(name = "after", ty = "Option<String>"),
         arg(name = "last", ty = "Option<u64>"),
@@ -65,32 +68,47 @@ use sui_json_rpc::name_service::NameServiceConfig;
     //     arg(name = "last", ty = "Option<u64>"),
     //     arg(name = "before", ty = "Option<String>")
     // )
+    field(
+        name = "dynamic_field",
+        ty = "Option<DynamicField>",
+        arg(name = "name", ty = "DynamicFieldName")
+    ),
+    field(
+        name = "dynamic_object_field",
+        ty = "Option<DynamicField>",
+        arg(name = "name", ty = "DynamicFieldName")
+    ),
+    field(
+        name = "dynamic_field_connection",
+        ty = "Option<Connection<String, DynamicField>>",
+        arg(name = "first", ty = "Option<u64>"),
+        arg(name = "after", ty = "Option<String>"),
+        arg(name = "last", ty = "Option<u64>"),
+        arg(name = "before", ty = "Option<String>"),
+    )
 )]
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) enum ObjectOwner {
     Address(Address),
     Owner(Owner),
     Object(Object),
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct Owner {
     pub address: SuiAddress,
 }
 
-#[allow(clippy::diverging_sub_expression)]
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
 #[Object]
 impl Owner {
-    async fn as_address(&self, ctx: &Context<'_>) -> Option<Address> {
+    async fn as_address(&self) -> Option<Address> {
         // For now only addresses can be owners
         Some(Address {
             address: self.address,
         })
     }
 
-    async fn as_object(&self, ctx: &Context<'_>) -> Option<Object> {
+    async fn as_object(&self) -> Option<Object> {
         // TODO: extend when send to object imnplementation is done
         // For now only addresses can be owners
         None
@@ -98,7 +116,7 @@ impl Owner {
 
     // =========== Owner interface methods =============
 
-    pub async fn location(&self, ctx: &Context<'_>) -> SuiAddress {
+    pub async fn address(&self) -> SuiAddress {
         self.address
     }
 
@@ -142,6 +160,10 @@ impl Owner {
             .extend()
     }
 
+    /// The coin objects for the given address or object.
+    ///
+    /// The type field is a string of the inner type of the coin by which to filter
+    /// (e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
     pub async fn coin_connection(
         &self,
         ctx: &Context<'_>,
@@ -152,20 +174,20 @@ impl Owner {
         type_: Option<String>,
     ) -> Result<Option<Connection<String, Coin>>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_coins(self.address, type_, first, after, last, before)
+            .fetch_coins(Some(self.address), type_, first, after, last, before)
             .await
             .extend()
     }
 
-    /// The stake objects for the given address
-    pub async fn stake_connection(
+    /// The `0x3::staking_pool::StakedSui` objects owned by the given object.
+    pub async fn staked_sui_connection(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Result<Option<Connection<String, Stake>>> {
+    ) -> Result<Option<Connection<String, StakedSui>>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_staked_sui(self.address, first, after, last, before)
             .await
@@ -190,4 +212,51 @@ impl Owner {
     // ) -> Result<Option<Connection<String, NameService>>> {
     //     unimplemented!()
     // }
+
+    /// Access a dynamic field on an object using its name.
+    /// Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+    /// using their type, and their BCS contents, Base64 encoded.
+    /// This field exists as a convenience when accessing a dynamic field on a wrapped object.
+    pub async fn dynamic_field(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_dynamic_field(self.address, name, DynamicFieldType::DynamicField)
+            .await
+            .extend()
+    }
+
+    /// Access a dynamic object field on an object using its name.
+    /// Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+    /// using their type, and their BCS contents, Base64 encoded.
+    /// The value of a dynamic object field can also be accessed off-chain directly via its address (e.g. using `Query.object`).
+    /// This field exists as a convenience when accessing a dynamic field on a wrapped object.
+    pub async fn dynamic_object_field(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_dynamic_field(self.address, name, DynamicFieldType::DynamicObject)
+            .await
+            .extend()
+    }
+
+    /// The dynamic fields on an object.
+    /// This field exists as a convenience when accessing a dynamic field on a wrapped object.
+    pub async fn dynamic_field_connection(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Option<Connection<String, DynamicField>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_dynamic_fields(first, after, last, before, self.address)
+            .await
+            .extend()
+    }
 }

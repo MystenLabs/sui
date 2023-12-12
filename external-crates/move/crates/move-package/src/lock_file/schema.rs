@@ -5,12 +5,17 @@
 //! [move] table).  This module does not support serialization because of limitations in the `toml`
 //! crate related to serializing types as inline tables.
 
-use std::io::{Read, Write};
+use std::io::{Read, Seek, Write};
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 use toml::value::Value;
+use toml_edit::{Item::Value as EItem, Value as EValue};
+
+use move_compiler::editions::{Edition, Flavor};
+
+use super::LockFile;
 
 /// Lock file version written by this version of the compiler.  Backwards compatibility is
 /// guaranteed (the compiler can read lock files with older versions), forward compatibility is not
@@ -61,6 +66,16 @@ pub struct Dependency {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct ToolchainVersion {
+    /// The Move compiler version used to compile this package.
+    #[serde(rename = "compiler-version")]
+    pub compiler_version: String,
+    /// The Move compiler configuration used to compile this package.
+    pub edition: Edition,
+    pub flavor: Flavor,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Header {
     pub version: u64,
     /// A hash of the manifest file content this lock file was generated from computed using SHA-256
@@ -92,6 +107,28 @@ impl Packages {
             toml::de::from_str::<Schema<Packages>>(&contents).context("Deserializing packages")?;
 
         Ok((packages, read_header(&contents)?))
+    }
+}
+
+impl ToolchainVersion {
+    /// Read toolchain version info from the lock file. Returns successfully with None if
+    /// parsing the lock file succeeds but an entry for `[toolchain-version]` does not exist.
+    pub fn read(lock: &mut impl Read) -> Result<Option<ToolchainVersion>> {
+        let contents = {
+            let mut buf = String::new();
+            lock.read_to_string(&mut buf).context("Reading lock file")?;
+            buf
+        };
+
+        #[derive(Deserialize)]
+        struct TV {
+            #[serde(rename = "toolchain-version")]
+            toolchain_version: Option<ToolchainVersion>,
+        }
+        let Schema { move_: value } = toml::de::from_str::<Schema<TV>>(&contents)
+            .context("Deserializing toolchain version")?;
+
+        Ok(value.toolchain_version)
     }
 }
 
@@ -135,4 +172,55 @@ pub(crate) fn write_prologue(
     write!(file, "{}", prologue)?;
 
     Ok(())
+}
+
+pub fn update_compiler_toolchain(
+    file: &mut LockFile,
+    compiler_version: String,
+    edition: Edition,
+    flavor: Flavor,
+) -> Result<()> {
+    let mut toml_string = String::new();
+    file.read_to_string(&mut toml_string)?;
+    let mut toml = toml_string.parse::<toml_edit::Document>()?;
+    let move_table = toml["move"].as_table_mut().ok_or(std::fmt::Error)?;
+    let toolchain_version = toml::Value::try_from(ToolchainVersion {
+        compiler_version,
+        edition,
+        flavor,
+    })?;
+    move_table["toolchain-version"] = to_toml_edit_value(&toolchain_version);
+    file.set_len(0)?;
+    file.rewind()?;
+    write!(file, "{}", toml)?;
+    file.flush()?;
+    Ok(())
+}
+
+fn to_toml_edit_value(value: &toml::Value) -> toml_edit::Item {
+    match value {
+        Value::String(v) => EItem(EValue::from(v.clone())),
+        Value::Integer(v) => EItem(EValue::from(*v)),
+        Value::Float(v) => EItem(EValue::from(*v)),
+        Value::Boolean(v) => EItem(EValue::from(*v)),
+        Value::Datetime(v) => EItem(EValue::from(v.to_string())),
+        Value::Array(arr) => {
+            let mut toml_edit_arr = toml_edit::Array::new();
+            for x in arr {
+                let item = to_toml_edit_value(x);
+                match item {
+                    EItem(i) => toml_edit_arr.push(i),
+                    _ => panic!("cant"),
+                }
+            }
+            EItem(EValue::from(toml_edit_arr))
+        }
+        Value::Table(table) => {
+            let mut toml_edit_table = toml_edit::Table::new();
+            for (k, v) in table {
+                toml_edit_table[k] = to_toml_edit_value(v);
+            }
+            toml_edit::Item::Table(toml_edit_table)
+        }
+    }
 }

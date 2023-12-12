@@ -22,7 +22,7 @@ use move_bytecode_utils::module_cache::GetModule;
 use sui_json_rpc_types::{SuiObjectData, SuiObjectRef, SuiRawData};
 use sui_types::digests::TransactionDigest;
 use sui_types::move_package::MovePackage;
-use sui_types::object::{Data, MoveObject, ObjectFormatOptions, ObjectRead, Owner};
+use sui_types::object::{Data, MoveObject, ObjectRead, Owner};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress},
     storage::WriteKind,
@@ -240,7 +240,7 @@ impl Object {
             _ => {
                 let oref = self.get_object_ref()?;
                 let object: sui_types::object::Object = self.try_into()?;
-                let layout = object.get_layout(ObjectFormatOptions::default(), module_cache)?;
+                let layout = object.get_layout(module_cache)?;
                 ObjectRead::Exists(oref, object, layout)
             }
         })
@@ -303,12 +303,13 @@ impl TryFrom<Object> for sui_types::object::Object {
                     BTreeMap::new(),
                 )
                 .unwrap();
-                sui_types::object::Object {
+                sui_types::object::ObjectInner {
                     data: Data::Package(package),
                     owner,
                     previous_transaction,
                     storage_rebate: o.storage_rebate as u64,
                 }
+                .into()
             }
             // Reconstructing MoveObject form database table, move VM safety concern is irrelevant here.
             ObjectType::Struct(object_type) => unsafe {
@@ -328,12 +329,13 @@ impl TryFrom<Object> for sui_types::object::Object {
                 )
                 .unwrap();
 
-                sui_types::object::Object {
+                sui_types::object::ObjectInner {
                     data: Data::Move(object),
                     owner,
                     previous_transaction,
                     storage_rebate: o.storage_rebate as u64,
                 }
+                .into()
             },
         })
     }

@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// A basic game that depends on randomness from drand (chained mode).
+/// A basic game that depends on randomness from drand.
 ///
-/// The main chain of drand creates random 32 bytes every 30 seconds. This randomness is verifiable in the sense
+/// The quicknet chain chain of drand creates random 32 bytes every 3 seconds. This randomness is verifiable in the sense
 /// that anyone can check if a given 32 bytes bytes are indeed the i-th output of drand. For more details see
 /// https://drand.love/
 ///
@@ -17,17 +17,17 @@
 /// - The game is defined for a specific drand round N in the future, for example, the round that is expected in
 ///   5 mins from now.
 ///   The current round for the main chain can be retrieved (off-chain) using
-///   `curl https://drand.cloudflare.com/8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce/public/latest',
+///   `curl https://drand.cloudflare.com/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/public/latest',
 ///   or using the following python script:
 ///      import time
-///      genesis = 1595431050
-///      curr_round = (time.time() - genesis) // 30 + 1
-///   The round in 5 mins from now will be curr_round + 5*2.
+///      genesis = 1692803367
+///      curr_round = (time.time() - genesis) // 3 + 1
+///   The round in 5 mins from now will be curr_round + 5*20.
 ///   (genesis is the epoch of the first round as returned from
-///   curl https://drand.cloudflare.com/8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce/info.)
+///   curl https://drand.cloudflare.com/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/info.)
 /// - Anyone can *close* the game to new participants by providing drand's randomness of round N-2 (i.e., 1 minute before
 ///   round N). The randomness of round X can be retrieved using
-///  `curl https://drand.cloudflare.com/8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce/public/X'.
+///  `curl https://drand.cloudflare.com/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/public/X'.
 /// - Users can join the game as long as it is not closed and receive a *ticket*.
 /// - Anyone can *complete* the game by proving drand's randomness of round N, which is used to declare the winner.
 /// - The owner of the winning "ticket" can request a "winner ticket" and finish the game.
@@ -96,16 +96,16 @@ module games::drand_based_lottery {
     }
 
     /// Anyone can close the game by providing the randomness of round-2.
-    public entry fun close(game: &mut Game, drand_sig: vector<u8>, drand_prev_sig: vector<u8>) {
+    public entry fun close(game: &mut Game, drand_sig: vector<u8>) {
         assert!(game.status == IN_PROGRESS, EGameNotInProgress);
-        verify_drand_signature(drand_sig, drand_prev_sig, closing_round(game.round));
+        verify_drand_signature(drand_sig, closing_round(game.round));
         game.status = CLOSED;
     }
 
     /// Anyone can complete the game by providing the randomness of round.
-    public entry fun complete(game: &mut Game, drand_sig: vector<u8>, drand_prev_sig: vector<u8>) {
+    public entry fun complete(game: &mut Game, drand_sig: vector<u8>) {
         assert!(game.status != COMPLETED, EGameAlreadyCompleted);
-        verify_drand_signature(drand_sig, drand_prev_sig, game.round);
+        verify_drand_signature(drand_sig, game.round);
         game.status = COMPLETED;
         // The randomness is derived from drand_sig by passing it through sha2_256 to make it uniform.
         let digest = derive_randomness(drand_sig);

@@ -11,7 +11,7 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::checkpoints::CheckpointServiceNotify;
 use crate::transaction_manager::TransactionManager;
 use async_trait::async_trait;
-use mysticeti_core::block_validator::BlockValidator;
+use mysticeti_core::block_validator::BlockVerifier;
 use mysticeti_core::types::StatementBlock;
 use narwhal_types::{validate_batch_version, BatchAPI};
 use narwhal_worker::TransactionValidator;
@@ -71,7 +71,8 @@ impl SuiTxValidator {
                 }
                 ConsensusTransactionKind::EndOfPublish(_)
                 | ConsensusTransactionKind::CapabilityNotification(_)
-                | ConsensusTransactionKind::NewJWKFetched(_, _, _) => {}
+                | ConsensusTransactionKind::NewJWKFetched(_, _, _)
+                | ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {}
             }
         }
 
@@ -146,7 +147,7 @@ impl TransactionValidator for SuiTxValidator {
 }
 
 #[async_trait]
-impl BlockValidator for SuiTxValidator {
+impl BlockVerifier for SuiTxValidator {
     type Error = eyre::Report;
 
     async fn verify(&self, b: &StatementBlock) -> Result<(), Self::Error> {

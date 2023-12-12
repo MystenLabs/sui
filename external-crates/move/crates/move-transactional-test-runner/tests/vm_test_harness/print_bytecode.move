@@ -1,13 +1,13 @@
-//# print-bytecode
-main<T, U>() {
+//# print-bytecode --syntax=mvir
+module 0x42.M {
+entry foo<T, U>() {
 label b0:
     return;
 }
+}
 
-//# print-bytecode --input=module
-module 0x42.M {
-    f<X, Y>() {
-    label b0:
-        return;
-    }
+//# print-bytecode
+module 0x42::M {
+entry fun foo<X, Y>() {
+}
 }

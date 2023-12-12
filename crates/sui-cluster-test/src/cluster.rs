@@ -7,7 +7,9 @@ use std::net::SocketAddr;
 use std::path::Path;
 use sui_config::Config;
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG};
-use sui_indexer::test_utils::start_test_indexer;
+use sui_graphql_rpc::config::ConnectionConfig;
+use sui_graphql_rpc::test_infra::cluster::start_graphql_server;
+use sui_indexer::test_utils::{start_test_indexer, start_test_indexer_v2};
 use sui_indexer::IndexerConfig;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
@@ -218,22 +220,58 @@ impl Cluster for LocalNewCluster {
         // This cluster has fullnode handle, safe to unwrap
         let fullnode_url = test_cluster.fullnode_handle.rpc_url.clone();
 
-        let migrated_methods = if options.use_indexer_experimental_methods {
-            IndexerConfig::all_implemented_methods()
-        } else {
-            vec![]
-        };
-        if options.pg_address.is_some() && indexer_address.is_some() {
-            let config = IndexerConfig {
-                db_url: Some(options.pg_address.clone().unwrap()),
-                rpc_client_url: fullnode_url.clone(),
-                rpc_server_url: indexer_address.as_ref().unwrap().ip().to_string(),
-                rpc_server_port: indexer_address.as_ref().unwrap().port(),
-                migrated_methods,
-                reset_db: true,
-                ..Default::default()
-            };
-            start_test_indexer(config).await.unwrap();
+        if let (Some(pg_address), Some(indexer_address)) =
+            (options.pg_address.clone(), indexer_address)
+        {
+            if options.use_indexer_v2 {
+                // Start in writer mode
+                start_test_indexer_v2(
+                    Some(pg_address.clone()),
+                    fullnode_url.clone(),
+                    None,
+                    options.use_indexer_experimental_methods,
+                )
+                .await;
+
+                // Start in reader mode
+                start_test_indexer_v2(
+                    Some(pg_address),
+                    fullnode_url.clone(),
+                    Some(indexer_address.to_string()),
+                    options.use_indexer_experimental_methods,
+                )
+                .await;
+            } else {
+                let migrated_methods = if options.use_indexer_experimental_methods {
+                    IndexerConfig::all_implemented_methods()
+                } else {
+                    vec![]
+                };
+                let config = IndexerConfig {
+                    db_url: Some(pg_address),
+                    rpc_client_url: fullnode_url.clone(),
+                    rpc_server_url: indexer_address.ip().to_string(),
+                    rpc_server_port: indexer_address.port(),
+                    migrated_methods,
+                    reset_db: true,
+                    ..Default::default()
+                };
+                start_test_indexer(config).await?;
+            }
+        }
+
+        if let Some(graphql_address) = &options.graphql_address {
+            let graphql_address = graphql_address.parse::<SocketAddr>()?;
+            let graphql_connection_config = ConnectionConfig::new(
+                Some(graphql_address.port()),
+                Some(graphql_address.ip().to_string()),
+                options.pg_address.clone(),
+                None,
+                None,
+                None,
+            );
+
+            start_graphql_server(graphql_connection_config.clone()).await;
         }
 
         // Let nodes connect to one another
@@ -317,7 +355,9 @@ pub async fn new_wallet_context_from_cluster(
     let keystore_path = config_dir.join(SUI_KEYSTORE_FILENAME);
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let address: SuiAddress = key_pair.public().into();
-    keystore.add_key(SuiKeyPair::Ed25519(key_pair)).unwrap();
+    keystore
+        .add_key(None, SuiKeyPair::Ed25519(key_pair))
+        .unwrap();
     SuiClientConfig {
         keystore,
         envs: vec![SuiEnv {

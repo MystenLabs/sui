@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { AccountItemApproveConnection } from '_components/accounts/AccountItemApproveConnection';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
 import { useState } from 'react';
 
 import { Button } from '../../shared/ButtonUI';
-import { AccountMultiSelectItem } from './AccountMultiSelectItem';
 
 type AccountMultiSelectProps = {
 	accounts: SerializedUIAccount[];
@@ -27,17 +27,15 @@ export function AccountMultiSelect({
 			className="flex flex-col gap-3"
 		>
 			{accounts.map((account) => (
-				<AccountMultiSelectItem
-					key={account.id}
-					account={account}
-					state={
-						account.isLocked
-							? 'disabled'
-							: selectedAccountIDs.includes(account.id)
-							? 'selected'
-							: undefined
-					}
-				/>
+				<ToggleGroup.Item key={account.id} asChild value={account.id}>
+					<div>
+						<AccountItemApproveConnection
+							disabled={account.isLocked}
+							account={account}
+							selected={selectedAccountIDs.includes(account.id)}
+						/>
+					</div>
+				</ToggleGroup.Item>
 			))}
 		</ToggleGroup.Root>
 	);

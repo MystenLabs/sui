@@ -6,7 +6,7 @@ import { isQredoAccountSerializedUI } from '_src/background/accounts/QredoAccoun
 import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
 import { useUnlockedGuard } from '_src/ui/app/hooks/useUnlockedGuard';
 import PageTitle from '_src/ui/app/shared/PageTitle';
-import cl from 'classnames';
+import cl from 'clsx';
 import { Navigate, useParams } from 'react-router-dom';
 
 import { CompletedTransactions } from './CompletedTransactions';

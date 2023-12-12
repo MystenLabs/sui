@@ -219,8 +219,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
         | E::Move { .. }
         | E::Copy { .. }
         | E::BorrowLocal(_, _)
-        | E::Break
-        | E::Continue
+        | E::Continue(_)
         | E::Spec(_, _)
         | E::UnresolvedError => (),
 
@@ -234,11 +233,12 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, et);
             exp(context, ef);
         }
-        E::While(eb, eloop) => {
+        E::While(eb, _, eloop) => {
             exp(context, eb);
             exp(context, eloop);
         }
         E::Loop { body: eloop, .. } => exp(context, eloop),
+        E::NamedBlock(_, seq) => sequence(context, seq),
         E::Block(seq) => sequence(context, seq),
         E::Assign(_, _, er) => exp(context, er),
 
@@ -246,6 +246,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
         | E::Vector(_, _, _, er)
         | E::Return(er)
         | E::Abort(er)
+        | E::Give(_, er)
         | E::Dereference(er)
         | E::UnaryExp(_, er)
         | E::Borrow(_, er, _)

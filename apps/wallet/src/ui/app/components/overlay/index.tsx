@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { X32 } from '@mysten/icons';
-import cl from 'classnames';
+import cl from 'clsx';
 import { useCallback } from 'react';
 import type { ReactNode } from 'react';
 

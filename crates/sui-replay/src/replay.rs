@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::chain_from_chain_id;
 use crate::{
     config::ReplayableNetworkConfigSet,
     data_fetcher::{
@@ -18,6 +19,7 @@ use move_core_types::{
 };
 use prometheus::Registry;
 use serde::{Deserialize, Serialize};
+use shared_crypto::intent::Intent;
 use similar::{ChangeTag, TextDiff};
 use std::{
     collections::{BTreeMap, HashSet},
@@ -41,7 +43,6 @@ use sui_framework::BuiltInFramework;
 use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::storage::{get_module, PackageObjectArc};
 use sui_types::{
     authenticator_state::get_authenticator_state_obj_initial_shared_version,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
@@ -57,11 +58,15 @@ use sui_types::{
     storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemState,
     transaction::{
-        CertifiedTransaction, InputObjectKind, InputObjects, SenderSignedData, Transaction,
-        TransactionData, TransactionDataAPI, TransactionKind, VerifiedCertificate,
-        VerifiedTransaction,
+        CertifiedTransaction, CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult,
+        ObjectReadResultKind, SenderSignedData, Transaction, TransactionData, TransactionDataAPI,
+        TransactionKind, VerifiedCertificate, VerifiedTransaction,
     },
     DEEPBOOK_PACKAGE_ID,
+};
+use sui_types::{
+    randomness_state::get_randomness_state_obj_initial_shared_version,
+    storage::{get_module, PackageObject},
 };
 use tracing::{error, info, warn};
 
@@ -718,7 +723,7 @@ impl LocalExec {
 
         // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
         let protocol_config =
-            &ProtocolConfig::get_for_version(tx_info.protocol_version, Chain::Unknown);
+            &ProtocolConfig::get_for_version(tx_info.protocol_version, tx_info.chain);
 
         let metrics = self.metrics.clone();
 
@@ -746,7 +751,7 @@ impl LocalExec {
                 &certificate_deny_set,
                 &tx_info.executed_epoch,
                 epoch_start_timestamp,
-                input_objects,
+                CheckedInputObjects::new_for_replay(input_objects),
                 tx_info.gas.clone(),
                 gas_status,
                 override_transaction_kind.unwrap_or(tx_info.kind.clone()),
@@ -819,17 +824,19 @@ impl LocalExec {
         let epoch_start_timestamp = pre_run_sandbox.transaction_info.epoch_start_timestamp;
         let protocol_config = ProtocolConfig::get_for_version(
             pre_run_sandbox.transaction_info.protocol_version,
-            Chain::Unknown,
+            pre_run_sandbox.transaction_info.chain,
         );
         let required_objects = pre_run_sandbox.required_objects.clone();
         let shared_object_refs = pre_run_sandbox.transaction_info.shared_object_refs.clone();
 
-        let transaction_intent = pre_run_sandbox
-            .transaction_info
-            .sender_signed_data
-            .intent_message()
-            .intent
-            .clone();
+        assert_eq!(
+            pre_run_sandbox
+                .transaction_info
+                .sender_signed_data
+                .intent_message()
+                .intent,
+            Intent::sui_transaction()
+        );
         let transaction_signatures = pre_run_sandbox
             .transaction_info
             .sender_signed_data
@@ -855,11 +862,8 @@ impl LocalExec {
         )
         .await;
 
-        let sender_signed_tx = Transaction::from_generic_sig_data(
-            transaction_data,
-            transaction_intent,
-            transaction_signatures,
-        );
+        let sender_signed_tx =
+            Transaction::from_generic_sig_data(transaction_data, transaction_signatures);
         let sender_signed_tx = VerifiedTransaction::new_unchecked(
             VerifiedTransaction::new_unchecked(sender_signed_tx).into(),
         );
@@ -1308,19 +1312,17 @@ impl LocalExec {
     pub async fn get_protocol_config(
         &self,
         epoch_id: EpochId,
+        chain: Chain,
     ) -> Result<ProtocolConfig, ReplayEngineError> {
         match self.protocol_version_override {
             Some(x) if x < 0 => Ok(ProtocolConfig::get_for_max_version_UNSAFE()),
-            Some(v) => Ok(ProtocolConfig::get_for_version(
-                (v as u64).into(),
-                Chain::Unknown,
-            )),
+            Some(v) => Ok(ProtocolConfig::get_for_version((v as u64).into(), chain)),
             None => self
                 .protocol_version_epoch_table
                 .iter()
                 .rev()
                 .find(|(_, rg)| epoch_id >= rg.epoch_start)
-                .map(|(p, _rg)| Ok(ProtocolConfig::get_for_version((*p).into(), Chain::Unknown)))
+                .map(|(p, _rg)| Ok(ProtocolConfig::get_for_version((*p).into(), chain)))
                 .unwrap_or_else(|| {
                     Err(ReplayEngineError::ProtocolVersionNotFound { epoch: epoch_id })
                 }),
@@ -1441,6 +1443,7 @@ impl LocalExec {
             .collect();
 
         let epoch_id = effects.executed_epoch;
+        let chain = chain_from_chain_id(self.fetcher.get_chain_id().await?.as_str());
 
         // Extract the epoch start timestamp
         let (epoch_start_timestamp, reference_gas_price) =
@@ -1460,11 +1463,12 @@ impl LocalExec {
             effects: SuiTransactionBlockEffects::V1(effects),
             // Find the protocol version for this epoch
             // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
-            protocol_version: self.get_protocol_config(epoch_id).await?.version,
+            protocol_version: self.get_protocol_config(epoch_id, chain).await?.version,
             tx_digest: *tx_digest,
             epoch_start_timestamp,
             sender_signed_data: orig_tx.clone(),
             reference_gas_price,
+            chain,
         })
     }
 
@@ -1515,10 +1519,10 @@ impl LocalExec {
 
         let epoch_id = dp.node_state_dump.executed_epoch;
 
-        let protocol_config = ProtocolConfig::get_for_version(
-            dp.node_state_dump.protocol_version.into(),
-            Chain::Unknown,
-        );
+        let chain = chain_from_chain_id(self.fetcher.get_chain_id().await?.as_str());
+
+        let protocol_config =
+            ProtocolConfig::get_for_version(dp.node_state_dump.protocol_version.into(), chain);
         // Extract the epoch start timestamp
         let (epoch_start_timestamp, reference_gas_price) =
             self.get_epoch_start_timestamp_and_rgp(epoch_id).await?;
@@ -1540,6 +1544,7 @@ impl LocalExec {
             epoch_start_timestamp,
             sender_signed_data: orig_tx.clone(),
             reference_gas_price,
+            chain,
         })
     }
 
@@ -1553,15 +1558,14 @@ impl LocalExec {
         let mut imm_owned_inputs = vec![];
         let mut shared_inputs = vec![];
         let mut deleted_shared_info_map = BTreeMap::new();
-        let mut deleted_objects_mutability = BTreeMap::new();
 
         // for deleted shared objects, we need to look at the transaction dependencies to find the
         // correct transaction dependency for a deleted shared object.
         if !deleted_shared_objects.is_empty() {
             for tx_digest in tx_info.dependencies.iter() {
                 let tx_info = self.resolve_tx_components(tx_digest).await?;
-                for (obj_id, _, _) in tx_info.shared_object_refs.iter() {
-                    deleted_shared_info_map.insert(*obj_id, tx_info.tx_digest);
+                for (obj_id, version, _) in tx_info.shared_object_refs.iter() {
+                    deleted_shared_info_map.insert(*obj_id, (tx_info.tx_digest, *version));
                 }
             }
         }
@@ -1594,10 +1598,7 @@ impl LocalExec {
                         })
                     }
                 }
-                InputObjectKind::SharedMoveObject { id, mutable, .. } => {
-                    deleted_objects_mutability.insert(*id, *mutable);
-                    Ok(())
-                }
+                _ => Ok(()),
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -1622,7 +1623,7 @@ impl LocalExec {
             .flat_map(|kind| match kind {
                 InputObjectKind::MovePackage(i) => {
                     // Okay to unwrap since we downloaded it
-                    Some((
+                    Some(ObjectReadResult::new(
                         *kind,
                         self.storage
                             .package_cache
@@ -1635,10 +1636,11 @@ impl LocalExec {
                                     .expect("Object download failed")
                                     .expect("Object not found on chain"),
                             )
-                            .clone(),
+                            .clone()
+                            .into(),
                     ))
                 }
-                InputObjectKind::ImmOrOwnedMoveObject(o_ref) => Some((
+                InputObjectKind::ImmOrOwnedMoveObject(o_ref) => Some(ObjectReadResult::new(
                     *kind,
                     self.storage
                         .object_version_cache
@@ -1646,38 +1648,34 @@ impl LocalExec {
                         .expect("Cannot lock")
                         .get(&(o_ref.0, o_ref.1))
                         .unwrap()
-                        .clone(),
+                        .clone()
+                        .into(),
                 )),
-                InputObjectKind::SharedMoveObject {
-                    id,
-                    initial_shared_version: _,
-                    mutable: _,
-                } if !deleted_shared_info_map.contains_key(id) => {
+                InputObjectKind::SharedMoveObject { id, .. }
+                    if !deleted_shared_info_map.contains_key(id) =>
+                {
                     // we already downloaded
-                    Some((
+                    Some(ObjectReadResult::new(
                         *kind,
-                        self.storage.live_objects_store.get(id).unwrap().clone(),
+                        self.storage
+                            .live_objects_store
+                            .get(id)
+                            .unwrap()
+                            .clone()
+                            .into(),
                     ))
                 }
-                InputObjectKind::SharedMoveObject { .. } => None,
+                InputObjectKind::SharedMoveObject { id, .. } => {
+                    let (digest, version) = deleted_shared_info_map.get(id).unwrap();
+                    Some(ObjectReadResult::new(
+                        *kind,
+                        ObjectReadResultKind::DeletedSharedObject(*version, *digest),
+                    ))
+                }
             })
             .collect();
 
-        // Use the transaction dependency info that we computed above for the deleted shared
-        // objects to populated the deleted shared objects list for transaction inputs.
-        let mut deleted_objects = vec![];
-        for (obj_id, seqno, _) in deleted_shared_objects.iter() {
-            if let Some(tx_digest) = deleted_shared_info_map.get(obj_id) {
-                let object_mut = deleted_objects_mutability
-                    .get(obj_id)
-                    .expect("Deleted shared object must have a mutability entry");
-                deleted_objects.push((*obj_id, *seqno, *object_mut, *tx_digest));
-            } else {
-                panic!("Was unable to find the transaction dependency for the deleted shared object {}", obj_id);
-            }
-        }
-
-        Ok(InputObjects::new(resolved_input_objs, deleted_objects))
+        Ok(InputObjects::new(resolved_input_objs))
     }
 
     /// Given the OnChainTransactionInfo, download and store the input objects, and other info necessary
@@ -1727,7 +1725,7 @@ impl LocalExec {
 impl BackingPackageStore for LocalExec {
     /// In this case we might need to download a dependency package which was not present in the
     /// modified at versions list because packages are immutable
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         fn inner(self_: &LocalExec, package_id: &ObjectID) -> SuiResult<Option<Object>> {
             // If package not present fetch it from the network
             self_
@@ -1743,7 +1741,7 @@ impl BackingPackageStore for LocalExec {
                 package_id: *package_id,
                 result: res.clone(),
             });
-        res.map(|o| o.map(PackageObjectArc::new))
+        res.map(|o| o.map(PackageObject::new))
     }
 }
 
@@ -2038,7 +2036,7 @@ impl GetModule for LocalExec {
 pub fn get_executor(
     executor_version_override: Option<i64>,
     protocol_config: &ProtocolConfig,
-    expensive_safety_check_config: ExpensiveSafetyCheckConfig,
+    _expensive_safety_check_config: ExpensiveSafetyCheckConfig,
 ) -> Arc<dyn Executor + Send + Sync> {
     let protocol_config = executor_version_override
         .map(|q| {
@@ -2055,12 +2053,8 @@ pub fn get_executor(
         .unwrap_or(protocol_config.clone());
 
     let silent = true;
-    sui_execution::executor(
-        &protocol_config,
-        expensive_safety_check_config.enable_move_vm_paranoid_checks(),
-        silent,
-    )
-    .expect("Creating an executor should not fail here")
+    sui_execution::executor(&protocol_config, silent)
+        .expect("Creating an executor should not fail here")
 }
 
 async fn prep_network(
@@ -2125,6 +2119,8 @@ async fn create_epoch_store(
         sys_state,
         CheckpointDigest::random(),
         get_authenticator_state_obj_initial_shared_version(&authority_state.database)
+            .expect("read cannot fail"),
+        get_randomness_state_obj_initial_shared_version(&authority_state.database)
             .expect("read cannot fail"),
     );
 

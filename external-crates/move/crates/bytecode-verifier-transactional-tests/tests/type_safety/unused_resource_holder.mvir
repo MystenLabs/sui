@@ -16,10 +16,11 @@ module 0x42.A {
 }
 
 //# run
+module 0x42.m {
 
 import 0x42.A;
 
-main() {
+entry foo() {
     let zero_resource: A.Coin;
     let s: A.T;
 label b0:
@@ -28,4 +29,5 @@ label b0:
     s = A.new(move(zero_resource));
 
     return;
+}
 }

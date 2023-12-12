@@ -16,7 +16,7 @@ use move_binary_format::{
         FieldHandleIndex, FieldInstantiationIndex, FunctionDefinition, FunctionDefinitionIndex,
         FunctionHandleIndex, FunctionInstantiationIndex, Signature, SignatureIndex, SignatureToken,
         StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation, TableIndex,
-        TypeParameterIndex, Visibility,
+        TypeParameterIndex,
     },
     IndexKind,
 };
@@ -26,7 +26,8 @@ use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
     metadata::Metadata,
-    value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
+    runtime_value as R,
+    annotated_value as A,
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
@@ -1108,14 +1109,6 @@ impl Loader {
 
         fail::fail_point!("verifier-failpoint-2", |_| { Ok(module.clone()) });
 
-        if self.vm_config.paranoid_type_checks && &module.self_id() != runtime_id {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Module self id mismatch with storage".to_string())
-                    .finish(Location::Module(runtime_id.clone())),
-            );
-        }
-
         // bytecode verifier checks that can be performed with the module itself
         move_bytecode_verifier::verify_module_with_config_unmetered(
             &self.vm_config.verifier,
@@ -1552,90 +1545,6 @@ impl<'a> Resolver<'a> {
         ))
     }
 
-    pub(crate) fn get_field_type(&self, idx: FieldHandleIndex) -> PartialVMResult<Type> {
-        let handle = match &self.binary {
-            BinaryType::Module { loaded, .. } => &loaded.field_handles[idx.0 as usize],
-            BinaryType::Script(_) => unreachable!("Scripts cannot have type instructions"),
-        };
-        Ok(self
-            .loader
-            .get_struct_type(handle.owner)
-            .ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Struct Definition not resolved".to_string())
-            })?
-            .fields[handle.offset]
-            .clone())
-    }
-
-    pub(crate) fn instantiate_generic_field(
-        &self,
-        idx: FieldInstantiationIndex,
-        ty_args: &[Type],
-    ) -> PartialVMResult<Type> {
-        let field_instantiation = match &self.binary {
-            BinaryType::Module { loaded, .. } => &loaded.field_instantiations[idx.0 as usize],
-            BinaryType::Script(_) => unreachable!("Scripts cannot have type instructions"),
-        };
-        let struct_type = self
-            .loader
-            .get_struct_type(field_instantiation.owner)
-            .ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Struct Definition not resolved".to_string())
-            })?;
-
-        let instantiation_types = field_instantiation
-            .instantiation
-            .iter()
-            .map(|inst_ty| inst_ty.subst(ty_args))
-            .collect::<PartialVMResult<Vec<_>>>()?;
-        struct_type.fields[field_instantiation.offset].subst(&instantiation_types)
-    }
-
-    pub(crate) fn get_struct_fields(
-        &self,
-        idx: StructDefinitionIndex,
-    ) -> PartialVMResult<Arc<StructType>> {
-        let idx = match &self.binary {
-            BinaryType::Module { loaded, .. } => loaded.struct_at(idx),
-            BinaryType::Script(_) => unreachable!("Scripts cannot have type instructions"),
-        };
-        self.loader.get_struct_type(idx).ok_or_else(|| {
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message("Struct Definition not resolved".to_string())
-        })
-    }
-
-    pub(crate) fn instantiate_generic_struct_fields(
-        &self,
-        idx: StructDefInstantiationIndex,
-        ty_args: &[Type],
-    ) -> PartialVMResult<Vec<Type>> {
-        let struct_inst = match &self.binary {
-            BinaryType::Module { loaded, .. } => loaded.struct_instantiation_at(idx.0),
-            BinaryType::Script(_) => unreachable!("Scripts cannot have type instructions"),
-        };
-        let struct_type = self
-            .loader
-            .get_struct_type(struct_inst.def)
-            .ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Struct Definition not resolved".to_string())
-            })?;
-
-        let instantiation_types = struct_inst
-            .instantiation
-            .iter()
-            .map(|inst_ty| inst_ty.subst(ty_args))
-            .collect::<PartialVMResult<Vec<_>>>()?;
-        struct_type
-            .fields
-            .iter()
-            .map(|ty| ty.subst(&instantiation_types))
-            .collect::<PartialVMResult<Vec<_>>>()
-    }
-
     fn single_type_at(&self, idx: SignatureIndex) -> &Type {
         match &self.binary {
             BinaryType::Module { loaded, .. } => loaded.single_type_at(idx),
@@ -1692,41 +1601,14 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    pub(crate) fn field_handle_to_struct(&self, idx: FieldHandleIndex) -> Type {
-        match &self.binary {
-            BinaryType::Module { loaded, .. } => {
-                Type::Struct(loaded.field_handles[idx.0 as usize].owner)
-            }
-            BinaryType::Script(_) => unreachable!("Scripts cannot have field instructions"),
-        }
-    }
-
-    pub(crate) fn field_instantiation_to_struct(
-        &self,
-        idx: FieldInstantiationIndex,
-        args: &[Type],
-    ) -> PartialVMResult<Type> {
-        match &self.binary {
-            BinaryType::Module { loaded, .. } => Ok(Type::StructInstantiation(
-                loaded.field_instantiations[idx.0 as usize].owner,
-                loaded.field_instantiations[idx.0 as usize]
-                    .instantiation
-                    .iter()
-                    .map(|ty| ty.subst(args))
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            )),
-            BinaryType::Script(_) => unreachable!("Scripts cannot have field instructions"),
-        }
-    }
-
-    pub(crate) fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<MoveTypeLayout> {
+    pub(crate) fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<R::MoveTypeLayout> {
         self.loader.type_to_type_layout(ty)
     }
 
     pub(crate) fn type_to_fully_annotated_layout(
         &self,
         ty: &Type,
-    ) -> PartialVMResult<MoveTypeLayout> {
+    ) -> PartialVMResult<A::MoveTypeLayout> {
         self.loader.type_to_fully_annotated_layout(ty)
     }
 
@@ -1931,7 +1813,6 @@ impl LoadedModule {
             field_instantiations.push(FieldInstantiation {
                 offset,
                 owner,
-                instantiation,
             });
         }
 
@@ -2119,7 +2000,6 @@ impl LoadedScript {
             type_parameters,
             native,
             def_is_native,
-            def_is_friend_or_private: false,
             scope,
             name,
             return_types: return_tys.clone(),
@@ -2215,7 +2095,6 @@ pub(crate) struct Function {
     type_parameters: Vec<AbilitySet>,
     native: Option<NativeFunction>,
     def_is_native: bool,
-    def_is_friend_or_private: bool,
     scope: Scope,
     name: Identifier,
     return_types: Vec<Type>,
@@ -2233,10 +2112,6 @@ impl Function {
         let handle = module.function_handle_at(def.function);
         let name = module.identifier_at(handle.name).to_owned();
         let module_id = module.self_id();
-        let def_is_friend_or_private = match def.visibility {
-            Visibility::Friend | Visibility::Private => true,
-            Visibility::Public => false,
-        };
         let (native, def_is_native) = if def.is_native() {
             (
                 natives.resolve(
@@ -2278,7 +2153,6 @@ impl Function {
             type_parameters,
             native,
             def_is_native,
-            def_is_friend_or_private,
             scope,
             name,
             local_types: vec![],
@@ -2372,10 +2246,6 @@ impl Function {
         self.def_is_native
     }
 
-    pub(crate) fn is_friend_or_private(&self) -> bool {
-        self.def_is_friend_or_private
-    }
-
     pub(crate) fn get_native(&self) -> PartialVMResult<&UnboxedNativeFunction> {
         if cfg!(feature = "lazy_natives") {
             // If lazy_natives is configured, this is a MISSING_DEPENDENCY error, as we skip
@@ -2442,7 +2312,6 @@ struct FieldInstantiation {
     // `ModuelCache::structs` global table index. It is the generic type.
     #[allow(unused)]
     owner: CachedStructIndex,
-    instantiation: Vec<Type>,
 }
 
 //
@@ -2452,8 +2321,8 @@ struct FieldInstantiation {
 struct StructInfo {
     runtime_struct_tag: Option<StructTag>,
     defining_struct_tag: Option<StructTag>,
-    struct_layout: Option<MoveStructLayout>,
-    annotated_struct_layout: Option<MoveStructLayout>,
+    struct_layout: Option<R::MoveStructLayout>,
+    annotated_struct_layout: Option<A::MoveStructLayout>,
     node_count: Option<u64>,
     annotated_node_count: Option<u64>,
 }
@@ -2630,7 +2499,7 @@ impl Loader {
         ty_args: &[Type],
         count: &mut u64,
         depth: u64,
-    ) -> PartialVMResult<MoveStructLayout> {
+    ) -> PartialVMResult<R::MoveStructLayout> {
         if let Some(struct_map) = self.type_cache.read().structs.get(&gidx) {
             if let Some(struct_info) = struct_map.get(ty_args) {
                 if let Some(node_count) = &struct_info.node_count {
@@ -2655,7 +2524,7 @@ impl Loader {
             .collect::<PartialVMResult<Vec<_>>>()?;
         let field_node_count = *count - count_before;
 
-        let struct_layout = MoveStructLayout::new(field_layouts);
+        let struct_layout = R::MoveStructLayout::new(field_layouts);
 
         let mut cache = self.type_cache.write();
         let info = cache
@@ -2675,7 +2544,7 @@ impl Loader {
         ty: &Type,
         count: &mut u64,
         depth: u64,
-    ) -> PartialVMResult<MoveTypeLayout> {
+    ) -> PartialVMResult<R::MoveTypeLayout> {
         if *count > MAX_TYPE_TO_LAYOUT_NODES {
             return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
         }
@@ -2684,24 +2553,24 @@ impl Loader {
         }
         *count += 1;
         Ok(match ty {
-            Type::Bool => MoveTypeLayout::Bool,
-            Type::U8 => MoveTypeLayout::U8,
-            Type::U16 => MoveTypeLayout::U16,
-            Type::U32 => MoveTypeLayout::U32,
-            Type::U64 => MoveTypeLayout::U64,
-            Type::U128 => MoveTypeLayout::U128,
-            Type::U256 => MoveTypeLayout::U256,
-            Type::Address => MoveTypeLayout::Address,
-            Type::Signer => MoveTypeLayout::Signer,
-            Type::Vector(ty) => MoveTypeLayout::Vector(Box::new(self.type_to_type_layout_impl(
+            Type::Bool => R::MoveTypeLayout::Bool,
+            Type::U8 => R::MoveTypeLayout::U8,
+            Type::U16 => R::MoveTypeLayout::U16,
+            Type::U32 => R::MoveTypeLayout::U32,
+            Type::U64 => R::MoveTypeLayout::U64,
+            Type::U128 => R::MoveTypeLayout::U128,
+            Type::U256 => R::MoveTypeLayout::U256,
+            Type::Address => R::MoveTypeLayout::Address,
+            Type::Signer => R::MoveTypeLayout::Signer,
+            Type::Vector(ty) => R::MoveTypeLayout::Vector(Box::new(self.type_to_type_layout_impl(
                 ty,
                 count,
                 depth + 1,
             )?)),
             Type::Struct(gidx) => {
-                MoveTypeLayout::Struct(self.struct_gidx_to_type_layout(*gidx, &[], count, depth)?)
+                R::MoveTypeLayout::Struct(self.struct_gidx_to_type_layout(*gidx, &[], count, depth)?)
             }
-            Type::StructInstantiation(gidx, ty_args) => MoveTypeLayout::Struct(
+            Type::StructInstantiation(gidx, ty_args) => R::MoveTypeLayout::Struct(
                 self.struct_gidx_to_type_layout(*gidx, ty_args, count, depth)?,
             ),
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
@@ -2719,7 +2588,7 @@ impl Loader {
         ty_args: &[Type],
         count: &mut u64,
         depth: u64,
-    ) -> PartialVMResult<MoveStructLayout> {
+    ) -> PartialVMResult<A::MoveStructLayout> {
         if let Some(struct_map) = self.type_cache.read().structs.get(&gidx) {
             if let Some(struct_info) = struct_map.get(ty_args) {
                 if let Some(annotated_node_count) = &struct_info.annotated_node_count {
@@ -2749,10 +2618,10 @@ impl Loader {
             .map(|(n, ty)| {
                 let ty = self.subst(ty, ty_args)?;
                 let l = self.type_to_fully_annotated_layout_impl(&ty, count, depth + 1)?;
-                Ok(MoveFieldLayout::new(n.clone(), l))
+                Ok(A::MoveFieldLayout::new(n.clone(), l))
             })
             .collect::<PartialVMResult<Vec<_>>>()?;
-        let struct_layout = MoveStructLayout::with_types(struct_tag, field_layouts);
+        let struct_layout = A::MoveStructLayout::new(struct_tag, field_layouts);
         let field_node_count = *count - count_before;
 
         let mut cache = self.type_cache.write();
@@ -2773,7 +2642,7 @@ impl Loader {
         ty: &Type,
         count: &mut u64,
         depth: u64,
-    ) -> PartialVMResult<MoveTypeLayout> {
+    ) -> PartialVMResult<A::MoveTypeLayout> {
         if *count > MAX_TYPE_TO_LAYOUT_NODES {
             return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
         }
@@ -2782,22 +2651,22 @@ impl Loader {
         }
         *count += 1;
         Ok(match ty {
-            Type::Bool => MoveTypeLayout::Bool,
-            Type::U8 => MoveTypeLayout::U8,
-            Type::U16 => MoveTypeLayout::U16,
-            Type::U32 => MoveTypeLayout::U32,
-            Type::U64 => MoveTypeLayout::U64,
-            Type::U128 => MoveTypeLayout::U128,
-            Type::U256 => MoveTypeLayout::U256,
-            Type::Address => MoveTypeLayout::Address,
-            Type::Signer => MoveTypeLayout::Signer,
-            Type::Vector(ty) => MoveTypeLayout::Vector(Box::new(
+            Type::Bool => A::MoveTypeLayout::Bool,
+            Type::U8 => A::MoveTypeLayout::U8,
+            Type::U16 => A::MoveTypeLayout::U16,
+            Type::U32 => A::MoveTypeLayout::U32,
+            Type::U64 => A::MoveTypeLayout::U64,
+            Type::U128 => A::MoveTypeLayout::U128,
+            Type::U256 => A::MoveTypeLayout::U256,
+            Type::Address => A::MoveTypeLayout::Address,
+            Type::Signer => A::MoveTypeLayout::Signer,
+            Type::Vector(ty) => A::MoveTypeLayout::Vector(Box::new(
                 self.type_to_fully_annotated_layout_impl(ty, count, depth + 1)?,
             )),
-            Type::Struct(gidx) => MoveTypeLayout::Struct(
+            Type::Struct(gidx) => A::MoveTypeLayout::Struct(
                 self.struct_gidx_to_fully_annotated_layout(*gidx, &[], count, depth)?,
             ),
-            Type::StructInstantiation(gidx, ty_args) => MoveTypeLayout::Struct(
+            Type::StructInstantiation(gidx, ty_args) => A::MoveTypeLayout::Struct(
                 self.struct_gidx_to_fully_annotated_layout(*gidx, ty_args, count, depth)?,
             ),
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
@@ -2817,7 +2686,7 @@ impl Loader {
         self.type_to_type_tag_impl(ty, StructTagType::Runtime)
     }
 
-    pub(crate) fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<MoveTypeLayout> {
+    pub(crate) fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<R::MoveTypeLayout> {
         let mut count = 0;
         self.type_to_type_layout_impl(ty, &mut count, 1)
     }
@@ -2825,7 +2694,7 @@ impl Loader {
     pub(crate) fn type_to_fully_annotated_layout(
         &self,
         ty: &Type,
-    ) -> PartialVMResult<MoveTypeLayout> {
+    ) -> PartialVMResult<A::MoveTypeLayout> {
         let mut count = 0;
         self.type_to_fully_annotated_layout_impl(ty, &mut count, 1)
     }
@@ -2837,7 +2706,7 @@ impl Loader {
         &self,
         type_tag: &TypeTag,
         move_storage: &impl DataStore,
-    ) -> VMResult<MoveTypeLayout> {
+    ) -> VMResult<R::MoveTypeLayout> {
         let ty = self.load_type(type_tag, move_storage)?;
         self.type_to_type_layout(&ty)
             .map_err(|e| e.finish(Location::Undefined))
@@ -2847,7 +2716,7 @@ impl Loader {
         &self,
         type_tag: &TypeTag,
         move_storage: &impl DataStore,
-    ) -> VMResult<MoveTypeLayout> {
+    ) -> VMResult<A::MoveTypeLayout> {
         let ty = self.load_type(type_tag, move_storage)?;
         self.type_to_fully_annotated_layout(&ty)
             .map_err(|e| e.finish(Location::Undefined))

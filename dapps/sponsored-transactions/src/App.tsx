@@ -1,12 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+	ConnectButton,
+	useCurrentAccount,
+	useSignTransactionBlock,
+	useSuiClient,
+} from '@mysten/dapp-kit';
 import { SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { ConnectButton, useWalletKit } from '@mysten/wallet-kit';
 import { ComponentProps, ReactNode, useMemo, useState } from 'react';
 
-import { provider } from './utils/rpc';
 import { sponsorTransaction } from './utils/sponsorTransaction';
 
 const Button = (props: ComponentProps<'button'>) => (
@@ -35,7 +39,9 @@ const CodePanel = ({
 );
 
 export function App() {
-	const { currentAccount, signTransactionBlock } = useWalletKit();
+	const client = useSuiClient();
+	const currentAccount = useCurrentAccount();
+	const { mutateAsync: signTransactionBlock } = useSignTransactionBlock();
 	const [loading, setLoading] = useState(false);
 	const [sponsoredTx, setSponsoredTx] = useState<Awaited<
 		ReturnType<typeof sponsorTransaction>
@@ -72,7 +78,7 @@ export function App() {
 								setLoading(true);
 								try {
 									const bytes = await tx!.build({
-										provider,
+										client,
 										onlyTransactionKind: true,
 									});
 									const sponsoredBytes = await sponsorTransaction(currentAccount!.address, bytes);
@@ -118,7 +124,7 @@ export function App() {
 							onClick={async () => {
 								setLoading(true);
 								try {
-									const executed = await provider.executeTransactionBlock({
+									const executed = await client.executeTransactionBlock({
 										transactionBlock: signedTx!.transactionBlockBytes,
 										signature: [signedTx!.signature, sponsoredTx!.signature],
 										options: {

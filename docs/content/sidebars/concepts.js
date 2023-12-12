@@ -113,32 +113,7 @@ const concepts = [
 					id: 'concepts/transactions',
 				},
 				items: [
-					{
-						type: 'category',
-						label: 'Programmable Transaction Blocks',
-						link: {
-							type: 'doc',
-							id: 'concepts/transactions/prog-txn-blocks',
-						},
-						items: [
-							'concepts/transactions/input-types',
-							'concepts/transactions/result-and-nested',
-							{
-								type: 'category',
-								label: 'Transaction Types',
-								link: {
-									type: 'doc',
-									id: 'concepts/transactions/transaction-types',
-								},
-								items: [
-									'concepts/transactions/transaction-types/move-call',
-									'concepts/transactions/transaction-types/transfer-object',
-									'concepts/transactions/transaction-types/split-coin',
-									'concepts/transactions/transaction-types/merge-coin',
-								],
-							},
-						],
-					},
+					'concepts/transactions/prog-txn-blocks',
 					'concepts/transactions/sponsored-transactions',
 					'concepts/transactions/gas-smashing',
 				],
@@ -168,7 +143,15 @@ const concepts = [
 					'concepts/cryptography/transaction-auth/intent-signing',
 				],
 			},
-			'concepts/cryptography/zklogin',
+			{
+				type: 'category',
+				label: 'zkLogin',
+				link: {
+					type: 'doc',
+					id: 'concepts/cryptography/zklogin',
+				},
+				items: ['concepts/cryptography/zklogin/zklogin-example'],
+			},
 			{
 				type: 'category',
 				label: 'System',
@@ -193,22 +176,13 @@ const concepts = [
 		},
 		items: [
 			'concepts/sui-architecture/high-level',
-			{
-				type: 'category',
-				label: 'Lifetime of a Transaction',
-				link: {
-					type: 'doc',
-					id: 'concepts/transactions/transaction-lifecycle',
-				},
-				items: ['concepts/transactions/transaction-things'],
-			},
-			'concepts/sui-architecture/certification-overview',
+			'concepts/transactions/transaction-lifecycle',
 			'concepts/sui-architecture/consensus',
-			'concepts/sui-architecture/confirmation',
 			'concepts/sui-architecture/indexer-functions',
 			'concepts/sui-architecture/epochs',
 			'concepts/sui-architecture/protocol-upgrades',
 			'concepts/sui-architecture/data-management-things',
+			'concepts/sui-architecture/staking-rewards',
 		],
 	},
 	{

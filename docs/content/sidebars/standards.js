@@ -21,10 +21,22 @@ const standards = [
 		],
 	},
 	'standards/display',
+	'standards/wallet-standard',
 	{
-		type: 'link',
-		label: 'Wallet Kit',
-		href: 'https://sui-typescript-docs.vercel.app/wallet-kit',
+		type: 'category',
+		label: 'Closed Loop Token',
+		link: {
+			type: 'doc',
+			id: 'standards/closed-loop-token',
+		},
+		items: [
+			'standards/closed-loop-token/overview',
+			'standards/closed-loop-token/action-request',
+			'standards/closed-loop-token/token-policy',
+			'standards/closed-loop-token/spending',
+			'standards/closed-loop-token/rules',
+			'standards/closed-loop-token/coin-token-comparison',
+		],
 	},
 ];
 module.exports = standards;

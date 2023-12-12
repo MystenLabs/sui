@@ -417,9 +417,17 @@ impl CommittedSubDagShell {
 /// Shutdown token dropped when a task is properly shut down.
 pub type ShutdownToken = mpsc::Sender<()>;
 
-// Digest of ConsususOutput and CommittedSubDag
-#[derive(Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+// Digest of ConsususOutput and CommittedSubDag.
+// In non-byzantine environment, ConsensusOutputDigest of each consensus output in different
+// validator must be the same.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ConsensusOutputDigest([u8; crypto::DIGEST_LENGTH]);
+
+impl ConsensusOutputDigest {
+    pub const fn into_inner(self) -> [u8; crypto::DIGEST_LENGTH] {
+        self.0
+    }
+}
 
 impl AsRef<[u8]> for ConsensusOutputDigest {
     fn as_ref(&self) -> &[u8] {

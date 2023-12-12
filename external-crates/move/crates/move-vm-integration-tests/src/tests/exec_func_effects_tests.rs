@@ -11,8 +11,8 @@ use move_core_types::{
     effects::{ChangeSet, Event},
     identifier::Identifier,
     language_storage::ModuleId,
+    runtime_value::{serialize_values, MoveValue},
     u256::U256,
-    value::{serialize_values, MoveValue},
     vm_status::StatusCode,
 };
 use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};

@@ -55,15 +55,15 @@ const references = [
 			{
 				type: 'link',
 				label: 'Sui TypeScript SDK Site',
-				href: 'https://sui-typescript-docs.vercel.app/typescript',
+				href: 'https://sdk.mystenlabs.com/typescript',
 			},
-			'references/sdk/rust-sdk',
+			'references/rust-sdk',
 		],
 	},
 	{
 		type: 'link',
 		label: 'dApp Kit Site',
-		href: 'https://sui-typescript-docs.vercel.app/dapp-kit',
+		href: 'https://sdk.mystenlabs.com/dapp-kit',
 	},
 	{
 		type: 'category',
@@ -82,6 +82,8 @@ const references = [
 			},
 		],
 	},
+	'references/research-papers',
+	'references/sui-glossary',
 	{
 		type: 'category',
 		label: 'Contribute',

@@ -11,7 +11,7 @@ use async_graphql::{
 };
 use std::{fmt::Write, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 use uuid::Uuid;
 
 // TODO: mode in-depth logging to debug
@@ -153,10 +153,18 @@ impl Extension for LoggerExtension {
                 }
             }
         } else if self.config.log_response {
-            info!(
-                target: "async-graphql",
-                "[Response] {}: {}", self.session_id().await, resp.data
-            );
+            match operation_name {
+                Some("IntrospectionQuery") => {
+                    debug!(
+                        target: "async-graphql",
+                        "[Schema] {}: {}", self.session_id().await, resp.data
+                    );
+                }
+                _ => info!(
+                    target: "async-graphql",
+                    "[Response] {}: {}", self.session_id().await, resp.data
+                ),
+            }
         }
         resp
     }

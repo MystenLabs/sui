@@ -30,6 +30,7 @@ import type {
 	DryRunTransactionBlockResponse,
 	DynamicFieldPage,
 	EpochInfo,
+	EpochMetricsPage,
 	EpochPage,
 	ExecuteTransactionBlockParams,
 	GetAllBalancesParams,
@@ -438,7 +439,7 @@ export class SuiClient {
 		if (transactionBlock instanceof Uint8Array) {
 			transactionBytes = transactionBlock;
 		} else {
-			transactionBlock.setSenderIfNotSet(await signer.getPublicKey().toSuiAddress());
+			transactionBlock.setSenderIfNotSet(signer.toSuiAddress());
 			transactionBytes = await transactionBlock.build({ client: this });
 		}
 
@@ -579,7 +580,7 @@ export class SuiClient {
 
 		return await this.transport.request({
 			method: 'sui_devInspectTransactionBlock',
-			params: [input.sender, devInspectTxBytes, input.gasPrice, input.epoch],
+			params: [input.sender, devInspectTxBytes, input.gasPrice?.toString(), input.epoch],
 		});
 	}
 
@@ -668,6 +669,15 @@ export class SuiClient {
 
 	async getAddressMetrics(): Promise<AddressMetrics> {
 		return await this.transport.request({ method: 'suix_getLatestAddressMetrics', params: [] });
+	}
+
+	async getEpochMetrics(
+		input?: { descendingOrder?: boolean } & PaginationArguments<EpochMetricsPage['nextCursor']>,
+	): Promise<EpochMetricsPage> {
+		return await this.transport.request({
+			method: 'suix_getEpochMetrics',
+			params: [input?.cursor, input?.limit, input?.descendingOrder],
+		});
 	}
 
 	async getAllEpochAddressMetrics(input?: {
