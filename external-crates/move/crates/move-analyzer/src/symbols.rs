@@ -421,6 +421,7 @@ fn addr_to_ide_string(addr: &Address) -> String {
         Address::NamedUnassigned(name) => format!("{}", name),
     }
 }
+
 fn type_list_to_ide_string(types: &[Type]) -> String {
     types
         .iter()
