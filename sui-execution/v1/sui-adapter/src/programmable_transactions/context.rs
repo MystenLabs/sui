@@ -44,7 +44,7 @@ mod checked {
         self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
     };
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::execution::ExecutionResults;
+    use sui_types::execution::{ExecutionResults, MoveUsage};
     use sui_types::storage::PackageObject;
     use sui_types::{
         balance::Balance,
@@ -518,7 +518,11 @@ mod checked {
             Ok(())
         }
 
-        pub fn mark_used_with_move(&mut self, arg: Argument) -> Result<(), ExecutionError> {
+        pub fn mark_used_with_move(
+            &mut self,
+            arg: Argument,
+            usage: MoveUsage,
+        ) -> Result<(), ExecutionError> {
             let Ok((_input_metadata_opt, val_opt)) = self.borrow_mut_impl(arg, None) else {
                 invariant_violation!("Previously used argument now out of bounds")
             };
@@ -528,7 +532,7 @@ mod checked {
                     Value::Object(ObjectValue { used_with_move, .. })
                     | Value::Raw(RawValueType::Loaded { used_with_move, .. }, _)
                     | Value::Receiving(_, _, _, used_with_move) => {
-                        *used_with_move = true;
+                        *used_with_move = usage;
                     }
                 }
             }
@@ -900,6 +904,13 @@ mod checked {
             };
             if let Some(usage) = update_last_usage {
                 result_value.last_usage_kind = Some(usage);
+                if result_value
+                    .value
+                    .as_ref()
+                    .is_some_and(|v| v.move_usage() == MoveUsage::EntryInput)
+                {
+                    self.had_unique_inputs_private_entry = false;
+                }
             }
             Ok((metadata, &mut result_value.value))
         }
@@ -944,7 +955,7 @@ mod checked {
             type_: MoveObjectType,
             has_public_transfer: bool,
             used_in_non_entry_move_call: bool,
-            used_with_move: bool,
+            used_with_move: MoveUsage,
             contents: &[u8],
         ) -> Result<ObjectValue, ExecutionError> {
             make_object_value(
@@ -1107,7 +1118,7 @@ mod checked {
         type_: MoveObjectType,
         has_public_transfer: bool,
         used_in_non_entry_move_call: bool,
-        used_with_move: bool,
+        used_with_move: MoveUsage,
         contents: &[u8],
     ) -> Result<ObjectValue, ExecutionError> {
         let contents = if type_.is_coin() {
@@ -1156,7 +1167,7 @@ mod checked {
         };
 
         let used_in_non_entry_move_call = false;
-        let used_with_move = false;
+        let used_with_move = MoveUsage::None;
         make_object_value(
             protocol_config,
             vm,

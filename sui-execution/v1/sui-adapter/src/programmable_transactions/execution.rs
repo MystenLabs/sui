@@ -3,7 +3,6 @@
 
 pub use checked::*;
 
-// #[sui_macros::with_checked_arithmetic]
 mod checked {
     use crate::gas_charger::GasCharger;
     use move_binary_format::{
@@ -32,7 +31,6 @@ mod checked {
     };
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::storage::{get_package_objects, PackageObject};
     use sui_types::{
         base_types::{
             MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
@@ -52,6 +50,10 @@ mod checked {
         transaction::{Argument, Command, ProgrammableMoveCall, ProgrammableTransaction},
         transfer::RESOLVED_RECEIVING_STRUCT,
         SUI_FRAMEWORK_ADDRESS,
+    };
+    use sui_types::{
+        execution::MoveUsage,
+        storage::{get_package_objects, PackageObject},
     };
     use sui_types::{
         execution_mode::ExecutionMode,
@@ -173,7 +175,7 @@ mod checked {
                         ty,
                         abilities,
                         used_in_non_entry_move_call: false,
-                        used_with_move: false,
+                        used_with_move: MoveUsage::None,
                     },
                     bytes,
                 )]
@@ -187,7 +189,7 @@ mod checked {
                         let elem_ty = context
                             .load_type(&tag)
                             .map_err(|e| context.convert_vm_error(e))?;
-                        (false, false, elem_ty)
+                        (false, MoveUsage::None, elem_ty)
                     }
                     // If no tag specified, it _must_ be an object
                     None => {
@@ -208,7 +210,7 @@ mod checked {
                     check_param_type::<Mode>(context, idx, &value, &elem_ty)?;
                     used_in_non_entry_move_call =
                         used_in_non_entry_move_call || value.was_used_in_non_entry_move_call();
-                    used_with_move = used_with_move || value.was_used_with_move();
+                    used_with_move = used_with_move.join(value.move_usage());
                     value.write_bcs_bytes(&mut res);
                 }
                 let ty = Type::Vector(Box::new(elem_ty));
@@ -413,12 +415,11 @@ mod checked {
         let saved_linkage = context.linkage_view.steal_linkage();
         // write back mutable inputs. We also update if they were used in non entry Move calls
         // though we do not care for immutable usages of objects or other values
-        let used_in_non_entry_move_call = kind == FunctionKind::NonEntry;
         let res = write_back_results::<Mode>(
             context,
             argument_updates,
             &arguments,
-            used_in_non_entry_move_call,
+            kind,
             mutable_reference_outputs
                 .into_iter()
                 .map(|(i, bytes, _layout)| (i, bytes)),
@@ -435,12 +436,22 @@ mod checked {
         context: &mut ExecutionContext<'_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
         arguments: &[Argument],
-        non_entry_move_call: bool,
+        kind: FunctionKind,
         mut_ref_values: impl IntoIterator<Item = (u8, Vec<u8>)>,
         mut_ref_kinds: impl IntoIterator<Item = (u8, ValueKind)>,
         return_values: impl IntoIterator<Item = Vec<u8>>,
         return_value_kinds: impl IntoIterator<Item = ValueKind>,
     ) -> Result<Vec<Value>, ExecutionError> {
+        let non_entry_move_call = kind == FunctionKind::NonEntry;
+        let move_arg_usage = match kind {
+            FunctionKind::PrivateEntry => MoveUsage::EntryInput,
+            FunctionKind::PublicEntry | FunctionKind::NonEntry | FunctionKind::Init => {
+                MoveUsage::None
+            }
+        };
+        for arg in arguments {
+            context.mark_used_with_move(*arg, move_arg_usage)?;
+        }
         for ((i, bytes), (j, kind)) in mut_ref_values.into_iter().zip(mut_ref_kinds) {
             assert_invariant!(i == j, "lost mutable input");
             let arg_idx = i as usize;
@@ -449,12 +460,9 @@ mod checked {
                 kind,
                 bytes,
                 non_entry_move_call,
-                /* used_with_move */ true,
+                /* used_with_move */ move_arg_usage,
             )?;
             context.restore_arg::<Mode>(argument_updates, arguments[arg_idx], value)?;
-        }
-        for arg in arguments {
-            context.mark_used_with_move(*arg)?;
         }
 
         return_values
@@ -463,8 +471,11 @@ mod checked {
             .map(|(bytes, kind)| {
                 // only non entry functions have return values
                 make_value(
-                    context, kind, bytes, /* used_in_non_entry_move_call */ true,
-                    /* used_with_move */ true,
+                    context,
+                    kind,
+                    bytes,
+                    /* used_in_non_entry_move_call */ true,
+                    /* used_with_move */ MoveUsage::Other,
                 )
             })
             .collect()
@@ -475,7 +486,7 @@ mod checked {
         value_info: ValueKind,
         bytes: Vec<u8>,
         used_in_non_entry_move_call: bool,
-        used_with_move: bool,
+        used_with_move: MoveUsage,
     ) -> Result<Value, ExecutionError> {
         Ok(match value_info {
             ValueKind::Object {
@@ -560,7 +571,7 @@ mod checked {
                 UpgradeCap::type_().into(),
                 /* has_public_transfer */ true,
                 /* used_in_non_entry_move_call */ false,
-                /* used_with_move */ true,
+                MoveUsage::Other,
                 &bcs::to_bytes(cap).unwrap(),
             )?)]
         };
@@ -662,13 +673,13 @@ mod checked {
         )?;
 
         context.write_package(package);
-        context.mark_used_with_move(upgrade_ticket_arg)?;
+        context.mark_used_with_move(upgrade_ticket_arg, MoveUsage::Other)?;
         Ok(vec![Value::Raw(
             RawValueType::Loaded {
                 ty: upgrade_receipt_type,
                 abilities: AbilitySet::EMPTY,
                 used_in_non_entry_move_call: false,
-                used_with_move: true,
+                used_with_move: MoveUsage::Other,
             },
             bcs::to_bytes(&UpgradeReceipt::new(upgrade_ticket, storage_id)).unwrap(),
         )])
@@ -1305,8 +1316,10 @@ mod checked {
                     idx,
                 ));
             }
-            if matches!(function_kind, FunctionKind::PrivateEntry) && value.was_used_with_move() {
-                context.had_unique_inputs_private_entry = false
+            if matches!(function_kind, FunctionKind::PrivateEntry)
+                && !matches!(value.move_usage(), MoveUsage::None)
+            {
+                context.had_unique_inputs_private_entry = false;
             }
             check_param_type::<Mode>(context, idx, &value, non_ref_param_ty)?;
             let bytes = {
