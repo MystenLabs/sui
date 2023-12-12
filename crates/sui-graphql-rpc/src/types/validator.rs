@@ -16,7 +16,7 @@ pub(crate) struct Validator {
     pub validator_summary: NativeSuiValidatorSummary,
     pub at_risk: Option<u64>,
     pub report_records: Option<Vec<Address>>,
-    pub apy: Option<f64>,
+    // pub apy: Option<f64>,
 }
 
 #[Object]
@@ -202,8 +202,11 @@ impl Validator {
     }
 
     /// The apy of this validator.
-    async fn apy(&self) -> Option<f64> {
-        self.apy
+    async fn apy(&self, ctx: &Context<'_>) -> Result<Option<f64>, Error> {
+        Ok(ctx
+            .data_unchecked::<PgManager>()
+            .fetch_validator_apys(&self.validator_summary.sui_address, None)
+            .await?)
     }
 }
 

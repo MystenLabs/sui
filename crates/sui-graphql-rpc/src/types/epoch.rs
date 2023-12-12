@@ -33,19 +33,14 @@ impl Epoch {
     }
 
     /// Validator related properties, including the active validators
-    async fn validator_set(&self, ctx: &Context<'_>) -> Result<Option<ValidatorSet>> {
+    async fn validator_set(&self) -> Result<Option<ValidatorSet>> {
         let system_state: NativeSuiSystemStateSummary = bcs::from_bytes(&self.stored.system_state)
             .map_err(|e| {
                 Error::Internal(format!(
                     "Can't convert system_state into SystemState. Error: {e}",
                 ))
             })?;
-        let validator_apys = ctx
-            .data_unchecked::<PgManager>()
-            .fetch_validator_apys()
-            .await?;
-        let active_validators =
-            convert_to_validators(system_state.active_validators, validator_apys, None);
+        let active_validators = convert_to_validators(system_state.active_validators, None);
         let validator_set = ValidatorSet {
             total_stake: Some(BigInt::from(self.stored.total_stake)),
             active_validators: Some(active_validators),

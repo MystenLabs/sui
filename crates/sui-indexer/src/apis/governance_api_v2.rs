@@ -32,7 +32,27 @@ impl GovernanceReadApiV2 {
         Self { inner }
     }
 
-    pub async fn get_validators_apy(&self) -> Result<ValidatorApys, IndexerError> {
+    pub async fn get_validator_apy(
+        &self,
+        address: &SuiAddress,
+        epoch: Option<&u64>,
+    ) -> Result<Option<f64>, IndexerError> {
+        let apys = validators_apys_map(self.get_validators_apy().await?);
+        let epoch = match epoch {
+            Some(e) => *e,
+            None => {
+                let system_state_summary: SuiSystemStateSummary =
+                    self.get_latest_sui_system_state().await?;
+                let epoch = system_state_summary.epoch;
+                epoch
+            }
+        };
+
+        let apy = &apys.get(&epoch).map(|a| a.get(address)).flatten();
+        Ok(apy.copied())
+    }
+
+    async fn get_validators_apy(&self) -> Result<ValidatorApys, IndexerError> {
         let system_state_summary: SuiSystemStateSummary =
             self.get_latest_sui_system_state().await?;
         let epoch = system_state_summary.epoch;
@@ -274,6 +294,19 @@ async fn exchange_rates(
         });
     }
     Ok(exchange_rates)
+}
+
+/// Cache a map representing the validators' APYs for this epoch
+#[cached(
+    type = "SizedCache<EpochId, BTreeMap<EpochId, BTreeMap<SuiAddress, f64>>>",
+    create = "{ SizedCache::with_size(1) }",
+    convert = " {apys.epoch} "
+)]
+fn validators_apys_map(apys: ValidatorApys) -> BTreeMap<EpochId, BTreeMap<SuiAddress, f64>> {
+    let map = BTreeMap::from_iter(apys.apys.iter().map(|x| (x.address, x.apy)));
+    let mut output: BTreeMap<EpochId, BTreeMap<SuiAddress, f64>> = BTreeMap::new();
+    output.insert(apys.epoch, map);
+    output
 }
 
 #[async_trait]
