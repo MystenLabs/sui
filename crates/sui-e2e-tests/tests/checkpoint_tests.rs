@@ -60,15 +60,7 @@ async fn checkpoint_split_brain_test() {
     // because in some cases the simnode ID's assigned are not sequential.
     let fail_node_list: Arc<Mutex<Vec<u64>>> = Default::default();
     let fail_list_clone = fail_node_list.clone();
-    register_fail_point_if("cp_execution_nondeterminism", move || {
-        let mut fail_list = fail_list_clone.lock().unwrap();
-        if fail_list.len() < 2 {
-            fail_list.push(sui_simulator::current_simnode_id().0);
-            true
-        } else {
-            fail_list.contains(&sui_simulator::current_simnode_id().0)
-        }
-    });
+    register_fail_point_if("cp_execution_nondeterminism", || true);
 
     let test_cluster = TestClusterBuilder::new()
         .with_num_validators(4)
@@ -76,7 +68,11 @@ async fn checkpoint_split_brain_test() {
         .await;
 
     let tx = make_transfer_sui_transaction(&test_cluster.wallet, None, None).await;
-    test_cluster.execute_transaction(tx).await;
+    test_cluster
+        .wallet
+        .execute_transaction_may_fail(tx)
+        .await
+        .ok();
 
     // provide enough time for validators to detect split brain
     tokio::time::sleep(Duration::from_secs(5)).await;

@@ -452,7 +452,6 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
             }
         }
 
-        fail_point_if!("cp_execution_nondeterminism", || { all_transactions.pop() });
 
         let transactions_to_schedule = self
             .epoch_store

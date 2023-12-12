@@ -69,7 +69,7 @@ use sui_json_rpc_types::{
     SuiObjectDataFilter, SuiTransactionBlockData, SuiTransactionBlockEffects,
     SuiTransactionBlockEvents, TransactionFilter,
 };
-use sui_macros::{fail_point, fail_point_async};
+use sui_macros::{fail_point, fail_point_async, fail_point_if};
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::indexes::{CoinInfo, ObjectIndexChanges};
 use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
@@ -1364,7 +1364,7 @@ impl AuthorityState {
         let protocol_config = epoch_store.protocol_config();
         let transaction_data = &certificate.data().intent_message().value;
         let (kind, signer, gas) = transaction_data.execution_parts();
-        let (inner_temp_store, effects, execution_error_opt) =
+        let (inner_temp_store, mut effects, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
                 &self.database,
                 protocol_config,
@@ -1386,6 +1386,31 @@ impl AuthorityState {
                 signer,
                 tx_digest,
             );
+
+        fail_point_if!("cp_execution_nondeterminism", || {
+            use std::cell::RefCell;
+            thread_local! {
+                static FAIL_STATE: RefCell<(u64, HashSet<AuthorityName>)> = RefCell::new((0, HashSet::new()));
+            }
+            if !certificate.data().intent_message().value.is_system_tx() {
+                let committee = epoch_store.committee();
+                let cur_stake = (**committee).weight(&self.name);
+                if cur_stake > 0 {
+                    FAIL_STATE.with_borrow_mut(|fail_state| {
+                        //let (&mut failing_stake, &mut failing_validators) = fail_state;
+                        if fail_state.0 < committee.validity_threshold() {
+                            fail_state.0 += cur_stake;
+                            fail_state.1.insert(self.name);
+                        }
+
+                        if fail_state.1.contains(&self.name) {
+                            info!("cp_exec failing tx");
+                            effects.gas_cost_summary_mut_for_testing().computation_cost += 1;
+                        }
+                    });
+                }
+            }
+        });
 
         Ok((inner_temp_store, effects, execution_error_opt.err()))
     }
