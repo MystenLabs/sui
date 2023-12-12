@@ -1,5 +1,17 @@
 # @mysten/create-dapp
 
+## 0.1.8
+
+### Patch Changes
+
+- f8d44c25cc: Fix handling of paths on windows
+- dd362ec1d6: Update docs url to sdk.mystenlabs.com
+- Updated dependencies [165ad6b21d]
+- Updated dependencies [dd362ec1d6]
+- Updated dependencies [d55db38647]
+  - @mysten/dapp-kit@0.10.3
+  - @mysten/sui.js@0.48.1
+
 ## 0.1.7
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @mysten/sui.js
 
+## 0.48.1
+
+### Patch Changes
+
+- dd362ec1d6: Update docs url to sdk.mystenlabs.com
+- Updated dependencies [dd362ec1d6]
+  - @mysten/bcs@0.9.1
+
 ## 0.48.0
 
 ### Minor Changes
