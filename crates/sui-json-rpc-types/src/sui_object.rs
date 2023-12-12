@@ -910,14 +910,6 @@ impl SuiParsedMoveObject {
             SuiParsedData::Package(_) => Err(anyhow::anyhow!("Object is not a Move object")),
         }
     }
-
-    pub fn read_dynamic_field_value(&self, field_name: &str) -> Option<SuiMoveValue> {
-        match &self.fields {
-            SuiMoveStruct::WithFields(fields) => fields.get(field_name).cloned(),
-            SuiMoveStruct::WithTypes { fields, .. } => fields.get(field_name).cloned(),
-            _ => None,
-        }
-    }
 }
 
 pub fn type_and_fields_from_move_struct(

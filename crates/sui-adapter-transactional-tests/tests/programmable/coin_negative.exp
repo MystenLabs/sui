@@ -6,7 +6,7 @@ A: object(0,0)
 task 1 'publish'. lines 8-23:
 created: object(1,0), object(1,1), object(1,2)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 10617200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 10624800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'programmable'. lines 25-27:
 created: object(2,0)
@@ -19,4 +19,4 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 4 'programmable'. lines 32-33:
 Error: Transaction Effects Status: Insufficient coin balance for operation.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientCoinBalance, source: Some("balance: 299989985010392 required: 18446744073709551615"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientCoinBalance, source: Some("balance: 299989985002792 required: 18446744073709551615"), command: Some(0) } }

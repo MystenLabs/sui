@@ -19,8 +19,8 @@ use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
     file_format::{
-        Ability, AbilitySet, Bytecode, CompiledModule, FunctionDefinition, FunctionHandle,
-        SignatureToken, StructDefinition, StructHandle,
+        Ability, AbilitySet, Bytecode, CompiledModule, DatatypeHandle, FunctionDefinition,
+        FunctionHandle, SignatureToken, StructDefinition,
     },
 };
 use move_core_types::{ident_str, language_storage::ModuleId};
@@ -56,7 +56,7 @@ pub fn verify_module(
     let mut one_time_witness_candidate = None;
     // find structs that can potentially represent a one-time witness type
     for def in struct_defs {
-        let struct_handle = module.struct_handle_at(def.struct_handle);
+        let struct_handle = module.datatype_handle_at(def.struct_handle);
         let struct_name = view.identifier_at(struct_handle.name).as_str();
         if mod_name.to_ascii_uppercase() == struct_name {
             // one-time witness candidate's type name must be the same as capitalized module name
@@ -112,7 +112,7 @@ pub fn verify_module(
 fn verify_one_time_witness(
     module: &CompiledModule,
     candidate_name: &str,
-    candidate_handle: &StructHandle,
+    candidate_handle: &DatatypeHandle,
 ) -> Result<(), String> {
     // must have only one ability: drop
     let drop_set = AbilitySet::EMPTY | Ability::Drop;
@@ -140,7 +140,7 @@ fn verify_init_one_time_witness(
     module: &CompiledModule,
     fn_handle: &FunctionHandle,
     candidate_name: &str,
-    candidate_handle: &StructHandle,
+    candidate_handle: &DatatypeHandle,
 ) -> Result<(), String> {
     let view = &BinaryIndexedView::Module(module);
     let fn_sig = view.signature_at(fn_handle.parameters);
@@ -163,9 +163,9 @@ fn verify_init_one_time_witness(
 fn is_one_time_witness(
     view: &BinaryIndexedView,
     tok: &SignatureToken,
-    candidate_handle: &StructHandle,
+    candidate_handle: &DatatypeHandle,
 ) -> bool {
-    matches!(tok, SignatureToken::Struct(idx) if view.struct_handle_at(*idx) == candidate_handle)
+    matches!(tok, SignatureToken::Datatype(idx) if view.datatype_handle_at(*idx) == candidate_handle)
 }
 
 /// Checks if this module's `init` function has a single parameter of TxContext type only

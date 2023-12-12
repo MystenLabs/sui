@@ -3,7 +3,7 @@ processed 5 tasks
 task 1 'publish'. lines 8-29:
 created: object(1,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5396000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5411200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'run'. lines 31-31:
 created: object(2,0)

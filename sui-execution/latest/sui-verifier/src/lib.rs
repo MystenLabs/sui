@@ -72,7 +72,7 @@ pub fn default_verifier_config(
         max_dependency_depth: Some(protocol_config.max_dependency_depth() as usize),
         max_fields_in_struct: Some(protocol_config.max_fields_in_struct() as usize),
         max_function_definitions: Some(protocol_config.max_function_definitions() as usize),
-        max_struct_definitions: Some(protocol_config.max_struct_definitions() as usize),
+        max_data_definitions: Some(protocol_config.max_struct_definitions() as usize),
         max_constant_vector_len: Some(protocol_config.max_move_vector_len()),
         max_back_edges_per_function,
         max_back_edges_per_module,
@@ -83,5 +83,6 @@ pub fn default_verifier_config(
         allow_receiving_object_id: protocol_config.allow_receiving_object_id(),
         reject_mutable_random_on_entry_functions: protocol_config
             .reject_mutable_random_on_entry_functions(),
+        max_variants_in_enum: protocol_config.max_move_enum_variants_as_option(),
     }
 }

@@ -6,7 +6,7 @@ A: object(0,0)
 task 1 'publish'. lines 6-58:
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 11308800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 11400000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'upgrade'. lines 59-112:
 Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
@@ -19,7 +19,7 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 4 'upgrade'. lines 167-219:
 created: object(4,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 11308800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 11400000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 5 'upgrade'. lines 220-274:
 Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
@@ -28,14 +28,14 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 6 'upgrade'. lines 275-329:
 created: object(6,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 12084000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 12182800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 7 'upgrade'. lines 330-384:
 created: object(7,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 12084000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 12182800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 8 'upgrade'. lines 385-437:
 created: object(8,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 12084000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 12182800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220

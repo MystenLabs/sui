@@ -6,7 +6,7 @@ A: object(0,0)
 task 1 'publish'. lines 8-24:
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 6414400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 6482800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'programmable'. lines 26-28:
 Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.

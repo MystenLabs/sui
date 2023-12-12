@@ -2,6 +2,7 @@
 name = "D"
 version = "0.0.1"
 published-at = "0xd0"
+edition = "2024.alpha"
 
 [dependencies]
 Sui = { local = "../sui" }

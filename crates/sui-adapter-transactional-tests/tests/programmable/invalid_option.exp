@@ -6,7 +6,7 @@ A: object(0,0)
 task 1 'publish'. lines 8-17:
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 4423200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 4430800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'programmable'. lines 19-20:
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type

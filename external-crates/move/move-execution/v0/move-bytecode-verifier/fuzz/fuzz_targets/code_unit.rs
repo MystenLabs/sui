@@ -7,7 +7,7 @@ use move_binary_format::file_format::{
     FunctionHandle, FunctionHandleIndex, IdentifierIndex, ModuleHandleIndex, Signature,
     SignatureIndex,
     SignatureToken::{Address, Bool, U128, U64},
-    StructDefinition, StructFieldInformation, StructHandle, StructHandleIndex, TypeSignature,
+    StructDefinition, StructFieldInformation, DatatypeHandle, DatatypeHandleIndex, TypeSignature,
     Visibility,
 };
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
@@ -19,7 +19,7 @@ fuzz_target!(|code_unit: CodeUnit| {
     let mut module = empty_module();
     module.version = 5;
 
-    module.struct_handles.push(StructHandle {
+    module.datatype_handles.push(DatatypeHandle {
         module: ModuleHandleIndex(0),
         name: IdentifierIndex(1),
         abilities: AbilitySet::ALL,
@@ -63,7 +63,7 @@ fuzz_target!(|code_unit: CodeUnit| {
     });
 
     module.struct_defs.push(StructDefinition {
-        struct_handle: StructHandleIndex(0),
+        struct_handle: DatatypeHandleIndex(0),
         field_information: StructFieldInformation::Declared(vec![FieldDefinition {
             name: IdentifierIndex::new(3),
             signature: TypeSignature(Address),

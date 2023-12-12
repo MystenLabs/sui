@@ -537,14 +537,26 @@ impl fmt::Display for MoveStructLayout {
 
 impl fmt::Display for MoveEnumLayout {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Type: {}", self.type_)?;
-        for ((variant_name, variant_tag), variant) in self.variants.iter() {
-            write!(f, "VariantName: {} (tag: {}), ", variant_name, variant_tag)?;
-            for layout in variant {
-                write!(f, "{:?}, ", layout)?;
-            }
+        use DebugAsDisplay as DD;
+        write!(f, "enum {} ", self.type_)?;
+        let mut vmap = f.debug_set();
+        for ((variant_name, _), fields) in self.variants.iter() {
+            vmap.entry(&DD(&MoveVariantDisplay(variant_name.as_str(), fields)));
         }
-        Ok(())
+        vmap.finish()
+    }
+}
+
+struct MoveVariantDisplay<'a>(&'a str, &'a [MoveFieldLayout]);
+
+impl<'a> fmt::Display for MoveVariantDisplay<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+        use DebugAsDisplay as DD;
+        let mut map = f.debug_struct(self.0);
+        for field in self.1 {
+            map.field(field.name.as_str(), &DD(&field.layout));
+        }
+        map.finish()
     }
 }
 

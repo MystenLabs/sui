@@ -64,7 +64,7 @@ impl Receiving {
         use SignatureToken as S;
         match s {
             S::MutableReference(inner) | S::Reference(inner) => Self::is_receiving(view, inner),
-            S::StructInstantiation(idx, type_args) => {
+            S::DatatypeInstantiation(idx, type_args) => {
                 let struct_tag = resolve_struct(view, *idx);
                 struct_tag == RESOLVED_RECEIVING_STRUCT && type_args.len() == 1
             }
