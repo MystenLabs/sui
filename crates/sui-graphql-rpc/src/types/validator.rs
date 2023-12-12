@@ -4,6 +4,7 @@
 use crate::context_data::db_data_provider::PgManager;
 
 use super::big_int::BigInt;
+use super::float::Float;
 use super::move_object::MoveObject;
 use super::sui_address::SuiAddress;
 use super::validator_credentials::ValidatorCredentials;
@@ -201,11 +202,12 @@ impl Validator {
     }
 
     /// The apy of this validator.
-    async fn apy(&self, ctx: &Context<'_>) -> Result<Option<f64>, Error> {
-        Ok(ctx
+    async fn apy(&self, ctx: &Context<'_>) -> Result<Option<Float>, Error> {
+        let apy = ctx
             .data_unchecked::<PgManager>()
             .fetch_validator_apys(&self.validator_summary.sui_address, None)
-            .await?)
+            .await?;
+        Ok(apy.map(|a| Float(a)))
     }
 }
 

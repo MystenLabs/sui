@@ -45,9 +45,7 @@ Response: {
       "validatorSet": {
         "activeValidators": [
           {
-            "apy": {
-              "$serde_json::private::Number": "2.6827535082318832e-8"
-            }
+            "apy": "0.000000026827535082318832"
           }
         ]
       }
