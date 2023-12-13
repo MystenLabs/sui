@@ -103,6 +103,7 @@ async fn commit_checkpoints<S>(
     let mut tx_indices_batch = vec![];
     let mut display_updates_batch = BTreeMap::new();
     let mut object_changes_batch = vec![];
+    let mut object_history_changes_batch = vec![];
     let mut packages_batch = vec![];
 
     for indexed_checkpoint in indexed_checkpoint_batch {
@@ -113,6 +114,7 @@ async fn commit_checkpoints<S>(
             tx_indices,
             display_updates,
             object_changes,
+            object_history_changes,
             packages,
             epoch: _,
         } = indexed_checkpoint;
@@ -122,6 +124,7 @@ async fn commit_checkpoints<S>(
         tx_indices_batch.push(tx_indices);
         display_updates_batch.extend(display_updates.into_iter());
         object_changes_batch.push(object_changes);
+        object_history_changes_batch.push(object_history_changes);
         packages_batch.push(packages);
     }
 
@@ -145,7 +148,8 @@ async fn commit_checkpoints<S>(
             state.persist_displays(display_updates_batch),
             state.persist_packages(packages_batch),
             state.persist_objects(object_changes_batch.clone()),
-            state.persist_object_history(object_changes_batch),
+            state.persist_object_history(object_history_changes_batch.clone()),
+            state.persist_object_snapshot(),
         ];
         if let Some(epoch_data) = epoch.clone() {
             persist_tasks.push(state.persist_epoch(epoch_data));
@@ -163,18 +167,6 @@ async fn commit_checkpoints<S>(
             .expect("Persisting data into DB should not fail.");
     }
 
-    state
-        .persist_checkpoints(checkpoint_batch)
-        .await
-        .tap_err(|e| {
-            error!(
-                "Failed to persist checkpoint data with error: {}",
-                e.to_string()
-            );
-        })
-        .expect("Persisting data into DB should not fail.");
-    let elapsed = guard.stop_and_record();
-
     // handle partitioning on epoch boundary
     if let Some(epoch_data) = epoch {
         state
@@ -186,6 +178,18 @@ async fn commit_checkpoints<S>(
             .expect("Advancing epochs in DB should not fail.");
         metrics.total_epoch_committed.inc();
     }
+
+    state
+        .persist_checkpoints(checkpoint_batch)
+        .await
+        .tap_err(|e| {
+            error!(
+                "Failed to persist checkpoint data with error: {}",
+                e.to_string()
+            );
+        })
+        .expect("Persisting data into DB should not fail.");
+    let elapsed = guard.stop_and_record();
 
     commit_notifier
         .send(Some(last_checkpoint_seq))
