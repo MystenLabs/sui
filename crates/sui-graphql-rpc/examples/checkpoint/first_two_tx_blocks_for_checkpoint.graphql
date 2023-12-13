@@ -8,6 +8,9 @@
             __typename
           }
           digest
+          sender {
+            location
+          }
           expiration {
             epochId
           }
