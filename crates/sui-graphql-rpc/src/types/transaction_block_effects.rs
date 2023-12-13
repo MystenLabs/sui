@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{context_data::db_data_provider::PgManager, error::Error};
 use async_graphql::*;
+use either::Either;
 use sui_indexer::models_v2::transactions::StoredTransaction;
 use sui_types::{
     effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
     execution_status::ExecutionStatus as NativeExecutionStatus,
+    transaction::TransactionData as NativeTransactionData,
 };
-
-use crate::{context_data::db_data_provider::PgManager, error::Error};
 
 use super::{
     balance_change::BalanceChange, base64::Base64, checkpoint::Checkpoint, date_time::DateTime,
@@ -18,9 +19,9 @@ use super::{
 
 #[derive(Clone)]
 pub(crate) struct TransactionBlockEffects {
-    /// Representation of transaction effects in the Indexer's Store.  The indexer stores the
-    /// transaction data and its effects together, in one table.
-    pub stored: Option<StoredTransaction>,
+    /// Representation of transaction effects in the Indexer's Store or
+    /// the native representation of transaction effects.
+    pub tx_data: Either<StoredTransaction, NativeTransactionData>,
 
     /// Deserialized representation of `stored.raw_effects`.
     pub native: NativeTransactionEffects,
@@ -35,21 +36,12 @@ pub enum ExecutionStatus {
 #[Object]
 impl TransactionBlockEffects {
     /// The transaction that ran to produce these effects.
-    async fn transaction_block(&self, ctx: &Context<'_>) -> Result<TransactionBlock> {
-        if let Some(stored_tx) = &self.stored {
-            Ok(TransactionBlock::try_from(stored_tx.clone()).extend()?)
-        } else {
-            let digest = self.native.transaction_digest().to_string();
-            ctx.data_unchecked::<PgManager>()
-                .fetch_tx(&digest)
-                .await
-                .transpose()
-                .ok_or(Error::Internal(format!(
-                    "Unable to fetch known transaction with digest {}",
-                    digest
-                )))?
-                .extend()
-        }
+    async fn transaction_block(&self) -> Result<Option<TransactionBlock>> {
+        self.tx_data
+            .as_ref()
+            .left()
+            .map(|stored_tx| TransactionBlock::try_from(stored_tx.clone()).extend())
+            .transpose()
     }
 
     /// Whether the transaction executed successfully or not.
@@ -123,23 +115,21 @@ impl TransactionBlockEffects {
     /// The effect this transaction had on the balances (sum of coin values per coin type) of
     /// addresses and objects.
     async fn balance_changes(&self) -> Result<Option<Vec<BalanceChange>>> {
-        if let Some(stored_tx) = &self.stored {
-            let mut changes = Vec::with_capacity(stored_tx.balance_changes.len());
-            for change in stored_tx.balance_changes.iter().flatten() {
-                changes.push(BalanceChange::read(change).extend()?);
-            }
+        let Some(stored_tx) = self.tx_data.as_ref().left() else {
+            return Ok(None);
+        };
 
-            Ok(Some(changes))
-        } else {
-            Ok(None)
+        let mut changes = Vec::with_capacity(stored_tx.balance_changes.len());
+        for change in stored_tx.balance_changes.iter().flatten() {
+            changes.push(BalanceChange::read(change).extend()?);
         }
+
+        Ok(Some(changes))
     }
 
     /// Timestamp corresponding to the checkpoint this transaction was finalized in.
     async fn timestamp(&self) -> Option<DateTime> {
-        self.stored
-            .as_ref()
-            .and_then(|stored| DateTime::from_ms(stored.timestamp_ms))
+        DateTime::from_ms(self.tx_data.as_ref().left()?.timestamp_ms)
     }
 
     /// The epoch this transaction was finalized in.
@@ -154,24 +144,29 @@ impl TransactionBlockEffects {
 
     /// The checkpoint this transaction was finalized in.
     async fn checkpoint(&self, ctx: &Context<'_>) -> Result<Option<Checkpoint>> {
-        if let Some(stored_tx) = &self.stored {
-            Ok(ctx
-                .data_unchecked::<PgManager>()
-                .fetch_checkpoint(None, Some(stored_tx.checkpoint_sequence_number as u64))
-                .await
-                .extend()?)
-        } else {
-            Ok(None)
-        }
+        let Some(stored_tx) = self.tx_data.as_ref().left() else {
+            return Ok(None);
+        };
+        Ok(ctx
+            .data_unchecked::<PgManager>()
+            .fetch_checkpoint(None, Some(stored_tx.checkpoint_sequence_number as u64))
+            .await
+            .extend()?)
     }
 
     // TODO: event_connection: EventConnection
 
     /// Base64 encoded bcs serialization of the on-chain transaction effects.
-    async fn bcs(&self) -> Result<Option<Base64>, Error> {
-        let bytes = bcs::to_bytes(&self.native)
-            .map_err(|e| Error::Internal(format!("Error serializiing transaction effects: {e}")))?;
-        Ok(Some(Base64::from(&bytes)))
+    async fn bcs(&self) -> Result<Base64> {
+        let bytes = if let Some(stored) = self.tx_data.as_ref().left() {
+            stored.raw_effects.clone()
+        } else {
+            bcs::to_bytes(&self.native)
+                .map_err(|e| Error::Internal(format!("Error serializing transaction effects: {e}")))
+                .extend()?
+        };
+
+        Ok(Base64::from(bytes))
     }
 }
 
@@ -184,7 +179,7 @@ impl TryFrom<StoredTransaction> for TransactionBlockEffects {
         })?;
 
         Ok(TransactionBlockEffects {
-            stored: Some(stored),
+            tx_data: Either::Left(stored),
             native,
         })
     }
