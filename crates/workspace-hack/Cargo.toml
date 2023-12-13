@@ -66,7 +66,7 @@ ascii_utils = { version = "0.9", default-features = false }
 asn1-rs = { version = "0.5", features = ["datetime"] }
 assert_cmd = { version = "2", default-features = false }
 async-compression = { version = "0.3", features = ["brotli", "gzip", "tokio", "zlib"] }
-async-graphql = { version = "6", features = ["dataloader"] }
+async-graphql = { version = "6", features = ["apollo_tracing", "dataloader", "opentelemetry", "tracing"] }
 async-graphql-axum = { version = "6", default-features = false }
 async-graphql-parser = { version = "6", default-features = false }
 async-graphql-value = { version = "6", default-features = false }
@@ -530,12 +530,15 @@ once_cell = { version = "1" }
 oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
 open-fastrlp = { version = "0.1", default-features = false, features = ["derive", "ethereum-types", "std"] }
-opentelemetry = { version = "0.20", features = ["metrics", "rt-tokio"] }
+opentelemetry-56bd22fc3884b12 = { package = "opentelemetry", version = "0.20", features = ["metrics", "rt-tokio"] }
+opentelemetry-cdcf2f9584511fe6 = { package = "opentelemetry", version = "0.19", default-features = false, features = ["trace"] }
 opentelemetry-otlp = { version = "0.13" }
 opentelemetry-proto = { version = "0.3", features = ["gen-tonic", "traces"] }
 opentelemetry-semantic-conventions = { version = "0.12", default-features = false }
-opentelemetry_api = { version = "0.20", features = ["logs", "metrics"] }
-opentelemetry_sdk = { version = "0.20", features = ["logs", "metrics", "rt-tokio"] }
+opentelemetry_api-56bd22fc3884b12 = { package = "opentelemetry_api", version = "0.20", features = ["logs", "metrics"] }
+opentelemetry_api-cdcf2f9584511fe6 = { package = "opentelemetry_api", version = "0.19" }
+opentelemetry_sdk-56bd22fc3884b12 = { package = "opentelemetry_sdk", version = "0.20", features = ["logs", "metrics", "rt-tokio"] }
+opentelemetry_sdk-cdcf2f9584511fe6 = { package = "opentelemetry_sdk", version = "0.19" }
 option-ext = { version = "0.2", default-features = false }
 ordered-float-7b89eefb6aaa9bf3 = { package = "ordered-float", version = "3" }
 ordered-float-f595c2ba2a3f28df = { package = "ordered-float", version = "2" }
@@ -772,7 +775,7 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-appender = { version = "0.2", default-features = false }
 tracing-core = { version = "0.1" }
 tracing-error = { version = "0.2" }
-tracing-futures = { version = "0.2" }
+tracing-futures = { version = "0.2", features = ["futures-03"] }
 tracing-log = { version = "0.1", default-features = false, features = ["log-tracer", "std"] }
 tracing-opentelemetry = { version = "0.21" }
 tracing-serde = { version = "0.1", default-features = false }
@@ -897,7 +900,7 @@ asn1-rs-derive = { version = "0.4", default-features = false }
 asn1-rs-impl = { version = "0.1", default-features = false }
 assert_cmd = { version = "2", default-features = false }
 async-compression = { version = "0.3", features = ["brotli", "gzip", "tokio", "zlib"] }
-async-graphql = { version = "6", features = ["dataloader"] }
+async-graphql = { version = "6", features = ["apollo_tracing", "dataloader", "opentelemetry", "tracing"] }
 async-graphql-axum = { version = "6", default-features = false }
 async-graphql-derive = { version = "6", default-features = false }
 async-graphql-parser = { version = "6", default-features = false }
@@ -1422,12 +1425,15 @@ oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
 open-fastrlp = { version = "0.1", default-features = false, features = ["derive", "ethereum-types", "std"] }
 open-fastrlp-derive = { version = "0.1", default-features = false }
-opentelemetry = { version = "0.20", features = ["metrics", "rt-tokio"] }
+opentelemetry-56bd22fc3884b12 = { package = "opentelemetry", version = "0.20", features = ["metrics", "rt-tokio"] }
+opentelemetry-cdcf2f9584511fe6 = { package = "opentelemetry", version = "0.19", default-features = false, features = ["trace"] }
 opentelemetry-otlp = { version = "0.13" }
 opentelemetry-proto = { version = "0.3", features = ["gen-tonic", "traces"] }
 opentelemetry-semantic-conventions = { version = "0.12", default-features = false }
-opentelemetry_api = { version = "0.20", features = ["logs", "metrics"] }
-opentelemetry_sdk = { version = "0.20", features = ["logs", "metrics", "rt-tokio"] }
+opentelemetry_api-56bd22fc3884b12 = { package = "opentelemetry_api", version = "0.20", features = ["logs", "metrics"] }
+opentelemetry_api-cdcf2f9584511fe6 = { package = "opentelemetry_api", version = "0.19" }
+opentelemetry_sdk-56bd22fc3884b12 = { package = "opentelemetry_sdk", version = "0.20", features = ["logs", "metrics", "rt-tokio"] }
+opentelemetry_sdk-cdcf2f9584511fe6 = { package = "opentelemetry_sdk", version = "0.19" }
 option-ext = { version = "0.2", default-features = false }
 ordered-float-7b89eefb6aaa9bf3 = { package = "ordered-float", version = "3" }
 ordered-float-f595c2ba2a3f28df = { package = "ordered-float", version = "2" }
@@ -1722,7 +1728,7 @@ tracing-appender = { version = "0.2", default-features = false }
 tracing-attributes = { version = "0.1", default-features = false }
 tracing-core = { version = "0.1" }
 tracing-error = { version = "0.2" }
-tracing-futures = { version = "0.2" }
+tracing-futures = { version = "0.2", features = ["futures-03"] }
 tracing-log = { version = "0.1", default-features = false, features = ["log-tracer", "std"] }
 tracing-opentelemetry = { version = "0.21" }
 tracing-serde = { version = "0.1", default-features = false }
