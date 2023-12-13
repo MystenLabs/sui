@@ -1582,13 +1582,22 @@ scalar OpenMoveTypeSignature
 A Move object, either immutable, or owned mutable.
 """
 type OwnedOrImmutable {
+	"""
+	ID of the object being read.
+	"""
 	address: SuiAddress!
+	"""
+	Version of the object being read.
+	"""
 	version: Int!
 	"""
 	32-byte hash that identifies the object's contents at this version, encoded as a Base58
 	string.
 	"""
 	digest: String!
+	"""
+	The object at this version.  May not be available due to pruning.
+	"""
 	object: Object
 }
 
@@ -1869,9 +1878,22 @@ type RandomnessStateUpdateTransaction {
 A Move object that can be received in this transaction.
 """
 type Receiving {
+	"""
+	ID of the object being read.
+	"""
 	address: SuiAddress!
+	"""
+	Version of the object being read.
+	"""
 	version: Int!
+	"""
+	32-byte hash that identifies the object's contents at this version, encoded as a Base58
+	string.
+	"""
 	digest: String!
+	"""
+	The object at this version.  May not be available due to pruning.
+	"""
 	object: Object
 }
 
@@ -1957,9 +1979,56 @@ type SharedInput {
 	initialSharedVersion: Int!
 	"""
 	Controls whether the transaction block can reference the shared object as a mutable
-	reference or by value.
+	reference or by value. This has implications for scheduling: Transactions that just read
+	shared objects at a certain version (mutable = false) can be executed concurrently, while
+	transactions that write shared objects (mutable = true) must be executed serially with
+	respect to each other.
 	"""
 	mutable: Boolean!
+}
+
+"""
+The transaction accepted a shared object as input, but it was deleted before the transaction
+executed.
+"""
+type SharedObjectDelete {
+	"""
+	ID of the shared object.
+	"""
+	address: SuiAddress!
+	"""
+	The version of the shared object that was assigned to this transaction during by consensus,
+	during sequencing.
+	"""
+	version: Int!
+	"""
+	Whether this transaction intended to use this shared object mutably or not. See
+	`SharedInput.mutable` for further details.
+	"""
+	mutable: Boolean!
+}
+
+"""
+The transaction accepted a shared object as input, but only to read it.
+"""
+type SharedObjectRead {
+	"""
+	ID of the object being read.
+	"""
+	address: SuiAddress!
+	"""
+	Version of the object being read.
+	"""
+	version: Int!
+	"""
+	32-byte hash that identifies the object's contents at this version, encoded as a Base58
+	string.
+	"""
+	digest: String!
+	"""
+	The object at this version.  May not be available due to pruning.
+	"""
+	object: Object
 }
 
 """
@@ -2309,6 +2378,10 @@ type TransactionBlockEffects {
 	"""
 	gasEffects: GasEffects
 	"""
+	Shared objects that are referenced by but not changed by this transaction.
+	"""
+	unchangedSharedObjects: [UnchangedSharedObject!]
+	"""
 	The effect this transaction had on objects on-chain.
 	"""
 	objectChanges: [ObjectChange!]
@@ -2422,6 +2495,14 @@ type TypeOrigin {
 	"""
 	definingId: SuiAddress!
 }
+
+"""
+Details pertaining to shared objects that are referenced by but not changed by a transaction.
+This information is considered part of the effects, because although the transaction specifies
+the shared object as input, consensus must schedule it and pick the version that is actually
+used.
+"""
+union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete
 
 """
 Upgrades a Move Package.
