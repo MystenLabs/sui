@@ -11376,6 +11376,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shared-crypto",
+ "sui-config",
  "sui-json-rpc-types",
  "sui-sdk",
  "sui-types",
