@@ -303,9 +303,9 @@ async fn do_transaction_test_impl(
 
         let ct = CertifiedTransaction::new_from_data_and_sig(plain_tx.into_data(), cert_sig);
 
-        assert!(client.handle_certificate(ct.clone()).await.is_err());
+        assert!(client.handle_certificate_v2(ct.clone()).await.is_err());
         epoch_store.clear_signature_cache();
-        assert!(client.handle_certificate(ct.clone()).await.is_err());
+        assert!(client.handle_certificate_v2(ct.clone()).await.is_err());
     }
 }
 
