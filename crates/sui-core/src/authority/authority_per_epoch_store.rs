@@ -1938,9 +1938,7 @@ impl AuthorityPerEpochStore {
             .get(&FINAL_EPOCH_CHECKPOINT_INDEX)?)
     }
 
-    pub fn get_reconfig_state_read_lock_guard(
-        &self,
-    ) -> parking_lot::RwLockReadGuard<ReconfigState> {
+    pub fn get_reconfig_state_read_lock_guard(&self) -> RwLockReadGuard<ReconfigState> {
         self.reconfig_state_mem.read()
     }
 
@@ -2334,7 +2332,7 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult<(
         Vec<VerifiedExecutableTransaction>,
         Vec<SequencedConsensusTransactionKey>, // keys to notify as complete
-        Option<(parking_lot::RwLockWriteGuard<ReconfigState>, u64)>,
+        Option<(RwLockWriteGuard<ReconfigState>, u64)>,
     )> {
         let mut verified_certificates = Vec::with_capacity(transactions.len());
         let mut notifications = Vec::with_capacity(transactions.len());
@@ -2427,7 +2425,7 @@ impl AuthorityPerEpochStore {
         transactions: &[VerifiedSequencedConsensusTransaction],
     ) -> SuiResult<
         Option<(
-            parking_lot::RwLockWriteGuard<ReconfigState>,
+            RwLockWriteGuard<ReconfigState>,
             u64, /* final checkpoint round */
         )>,
     > {
@@ -2458,6 +2456,7 @@ impl AuthorityPerEpochStore {
                     self.end_of_publish.try_lock()
                         .expect("No contention on Authority::end_of_publish as it is only accessed from consensus handler")
                         .insert_generic(*authority, ()).is_quorum_reached()
+                    // end_of_publish lock is released here.
                 } else {
                     // If we past the stage where we are accepting consensus certificates we also don't record end of publish messages
                     debug!("Ignoring end of publish message from validator {:?} as we already collected enough end of publish messages", authority.concise());
@@ -2481,7 +2480,7 @@ impl AuthorityPerEpochStore {
                             &consensus_index.last_committed_round,
                         )],
                     )?;
-                    // Holding this lock until end of this function where we write batch to DB
+                    // Holding this lock until end of process_consensus_transactions_and_commit_boundary() where we write batch to DB
                     ret = Some((lock, consensus_index.last_committed_round));
                 };
                 // Important: we actually rely here on fact that ConsensusHandler panics if it's
