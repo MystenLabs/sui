@@ -142,7 +142,7 @@ module Test::M2 {
   }
 }
 
-//# run-graphql --variables A --interpolations Test
+//# run-graphql --variables A
 {
   eventConnection(
     filter: {sender: $A, eventType: "@{Test}::M1"}
@@ -163,7 +163,7 @@ module Test::M2 {
   }
 }
 
-//# run-graphql --variables A --interpolations Test
+//# run-graphql --variables A
 {
   eventConnection(
     filter: {sender: $A, eventType: "@{Test}::M1::EventA"}
@@ -184,7 +184,7 @@ module Test::M2 {
   }
 }
 
-//# run-graphql --variables A --interpolations Test
+//# run-graphql --variables A
 {
   eventConnection(
     filter: {sender: $A, eventType: "@{Test}::M1::EventB"}
@@ -205,7 +205,7 @@ module Test::M2 {
   }
 }
 
-//# run-graphql --variables A --interpolations Test
+//# run-graphql --variables A
 {
   eventConnection(
     filter: {sender: $A, eventType: "@{Test}::M1::EventB<"}

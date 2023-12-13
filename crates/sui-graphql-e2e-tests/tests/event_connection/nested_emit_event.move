@@ -82,7 +82,7 @@ module Test::M3 {
   }
 }
 
-//# run-graphql --variables A --interpolations Test
+//# run-graphql --variables A
 {
   eventConnection(
     filter: {sender: $A, emittingModule: "@{Test}::M1"}
@@ -103,7 +103,7 @@ module Test::M3 {
   }
 }
 
-//# run-graphql --variables A --interpolations Test
+//# run-graphql --variables A
 {
   eventConnection(
     filter: {sender: $A, emittingModule: "@{Test}::M2"}
@@ -124,7 +124,7 @@ module Test::M3 {
   }
 }
 
-//# run-graphql --variables A --interpolations Test
+//# run-graphql --variables A
 {
   eventConnection(
     filter: {sender: $A, emittingModule: "@{Test}::M3"}
