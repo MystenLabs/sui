@@ -624,6 +624,16 @@
 >          edges {
 >            cursor
 >            node {
+>              sender {
+>                location
+>              }
+>              effects {
+>                gasEffects {
+>                  gasObject {
+>                    location
+>                  }
+>                }
+>              }
 >              gasInput {
 >                gasPrice
 >                gasBudget
@@ -650,6 +660,16 @@
 >      edges {
 >        cursor
 >        node {
+>          sender {
+>            location
+>          }
+>          effects {
+>            gasEffects {
+>              gasObject {
+>                location
+>              }
+>            }
+>          }
 >          digest
 >          gasInput {
 >            gasPrice
@@ -676,6 +696,16 @@
 >      edges {
 >        cursor
 >        node {
+>          sender {
+>            location
+>          }
+>          effects {
+>            gasEffects {
+>              gasObject {
+>                location
+>              }
+>            }
+>          }
 >          gasInput {
 >            gasPrice
 >            gasBudget
