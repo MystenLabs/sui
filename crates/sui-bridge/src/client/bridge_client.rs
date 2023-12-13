@@ -3,34 +3,42 @@
 
 //! `BridgeClient` talks to BridgeNode.
 
+use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::crypto::{verify_signed_bridge_action, BridgeAuthorityPublicKeyBytes};
 use crate::error::{BridgeError, BridgeResult};
 use crate::server::APPLICATION_JSON;
 use crate::types::{BridgeAction, BridgeCommittee, VerifiedSignedBridgeAction};
+use url::Url;
 
+// Note: `base_url` is `Option<Url>` because `quorum_map_then_reduce_with_timeout_and_prefs`
+// uses `[]` to get Client based on key. Therefore even when the URL is invalid we need to
+// create a Client instance.
+// TODO: In the future we can consider change `quorum_map_then_reduce_with_timeout_and_prefs`
+// and its callsites to use `get` instead of `[]`.
 #[derive(Clone, Debug)]
 pub struct BridgeClient {
     inner: reqwest::Client,
     authority: BridgeAuthorityPublicKeyBytes,
     committee: Arc<BridgeCommittee>,
-    base_url: String,
+    base_url: Option<Url>,
 }
 
 impl BridgeClient {
-    pub fn new<S: Into<String>>(
-        base_url: S,
-        authority: BridgeAuthorityPublicKeyBytes,
+    pub fn new(
+        authority_name: BridgeAuthorityPublicKeyBytes,
         committee: Arc<BridgeCommittee>,
     ) -> BridgeResult<Self> {
-        if !committee.is_active_member(&authority) {
-            return Err(BridgeError::InvalidBridgeAuthority(authority));
+        if !committee.is_active_member(&authority_name) {
+            return Err(BridgeError::InvalidBridgeAuthority(authority_name));
         }
+        // Unwrap safe: we passed the `is_active_member` check above
+        let member = committee.member(&authority_name).unwrap();
         Ok(Self {
             inner: reqwest::Client::new(),
-            authority,
-            base_url: base_url.into(),
+            authority: authority_name.clone(),
+            base_url: Url::from_str(&member.base_url).ok(),
             committee,
         })
     }
@@ -54,7 +62,11 @@ impl BridgeClient {
 
     // Returns Ok(true) if the server is up and running
     pub async fn ping(&self) -> BridgeResult<bool> {
-        let url = format!("{}/", self.base_url);
+        if self.base_url.is_none() {
+            return Err(BridgeError::InvalidAuthorityUrl(self.authority.clone()));
+        }
+        // Unwrap safe: checked `self.base_url.is_none()` above
+        let url = self.base_url.clone().unwrap();
         Ok(self
             .inner
             .get(url)
@@ -69,8 +81,15 @@ impl BridgeClient {
         &self,
         action: BridgeAction,
     ) -> BridgeResult<VerifiedSignedBridgeAction> {
-        let url = format!("{}/{}", self.base_url, Self::bridge_action_to_path(&action));
-
+        if self.base_url.is_none() {
+            return Err(BridgeError::InvalidAuthorityUrl(self.authority.clone()));
+        }
+        // Unwrap safe: checked `self.base_url.is_none()` above
+        let url = self
+            .base_url
+            .clone()
+            .unwrap()
+            .join(&Self::bridge_action_to_path(&action))?;
         let resp = self
             .inner
             .get(url)
@@ -95,49 +114,79 @@ impl BridgeClient {
 
 #[cfg(test)]
 mod tests {
-    use std::net::SocketAddr;
-
     use crate::{
         crypto::BridgeAuthoritySignInfo,
-        server::mock_handler::{run_mock_server, BridgeRequestMockHandler},
+        server::mock_handler::BridgeRequestMockHandler,
         test_utils::{get_test_authority_and_key, get_test_sui_to_eth_bridge_action},
         types::SignedBridgeAction,
     };
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
-    use std::net::IpAddr;
-    use std::net::Ipv4Addr;
-    use sui_config::local_ip_utils;
+
+    use crate::test_utils::run_mock_bridge_server;
     use sui_types::{crypto::get_key_pair, digests::TransactionDigest};
 
     use super::*;
 
-    #[test]
-    fn test_bridge_client() {
+    #[tokio::test]
+    async fn test_bridge_client() {
         telemetry_subscribers::init_for_testing();
 
-        let (authority, pubkey, _) = get_test_authority_and_key(10000, 12345);
+        let (mut authority, pubkey, _) = get_test_authority_and_key(10000, 12345);
+
         let pubkey_bytes = BridgeAuthorityPublicKeyBytes::from(&pubkey);
         let committee = Arc::new(BridgeCommittee::new(vec![authority.clone()]).unwrap());
+        let action = get_test_sui_to_eth_bridge_action(TransactionDigest::random(), 1, 1, 100);
 
         // Ok
-        let _ = BridgeClient::new(
-            format!("http://127.0.0.1:{}", 12345),
-            pubkey_bytes,
-            committee.clone(),
-        )
-        .unwrap();
+        let client = BridgeClient::new(pubkey_bytes.clone(), committee).unwrap();
+        assert!(client.base_url.is_some());
+
+        // Ok
+        authority.base_url = "https://foo.suibridge.io".to_string();
+        let committee = Arc::new(BridgeCommittee::new(vec![authority.clone()]).unwrap());
+        let client = BridgeClient::new(pubkey_bytes.clone(), committee.clone()).unwrap();
+        assert!(client.base_url.is_some());
 
         // Err, not in committee
         let (_, kp2): (_, fastcrypto::secp256k1::Secp256k1KeyPair) = get_key_pair();
         let pubkey2_bytes = BridgeAuthorityPublicKeyBytes::from(kp2.public());
-        let err = BridgeClient::new(
-            format!("http://127.0.0.1:{}", 12345),
-            pubkey2_bytes,
-            committee.clone(),
-        )
-        .unwrap_err();
+        let err = BridgeClient::new(pubkey2_bytes, committee.clone()).unwrap_err();
         assert!(matches!(err, BridgeError::InvalidBridgeAuthority(_)));
+
+        // invalid base url
+        authority.base_url = "127.0.0.1:12345".to_string(); // <-- bad, missing http://
+        let committee = Arc::new(BridgeCommittee::new(vec![authority.clone()]).unwrap());
+        let client = BridgeClient::new(pubkey_bytes.clone(), committee.clone()).unwrap();
+        assert!(client.base_url.is_none());
+        assert!(matches!(
+            client.ping().await.unwrap_err(),
+            BridgeError::InvalidAuthorityUrl(_)
+        ));
+        assert!(matches!(
+            client
+                .request_sign_bridge_action(action.clone())
+                .await
+                .unwrap_err(),
+            BridgeError::InvalidAuthorityUrl(_)
+        ));
+
+        // invalid base url
+        authority.base_url = "http://127.256.0.1:12345".to_string(); // <-- bad, invalid ipv4 address
+        let committee = Arc::new(BridgeCommittee::new(vec![authority.clone()]).unwrap());
+        let client = BridgeClient::new(pubkey_bytes, committee.clone()).unwrap();
+        assert!(client.base_url.is_none());
+        assert!(matches!(
+            client.ping().await.unwrap_err(),
+            BridgeError::InvalidAuthorityUrl(_)
+        ));
+        assert!(matches!(
+            client
+                .request_sign_bridge_action(action.clone())
+                .await
+                .unwrap_err(),
+            BridgeError::InvalidAuthorityUrl(_)
+        ));
     }
 
     #[tokio::test]
@@ -148,25 +197,18 @@ mod tests {
 
         let mock_handler = BridgeRequestMockHandler::new();
 
-        let localhost = local_ip_utils::localhost_for_testing();
-        let port = local_ip_utils::get_available_port(&localhost);
         // start server
-        let _server_handle = run_mock_server(
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port),
-            mock_handler.clone(),
-        );
+        let (_handles, ports) = run_mock_bridge_server(vec![mock_handler.clone()]);
+
+        let port = ports[0];
 
         let (authority, _pubkey, secret) = get_test_authority_and_key(5000, port);
         let (authority2, _pubkey2, secret2) = get_test_authority_and_key(5000, port - 1);
 
         let committee = BridgeCommittee::new(vec![authority.clone(), authority2.clone()]).unwrap();
 
-        let mut client = BridgeClient::new(
-            format!("http://127.0.0.1:{}", port),
-            authority.pubkey_bytes(),
-            Arc::new(committee.clone()),
-        )
-        .unwrap();
+        let mut client =
+            BridgeClient::new(authority.pubkey_bytes(), Arc::new(committee.clone())).unwrap();
 
         let tx_digest = TransactionDigest::random();
         let event_idx = 4;
@@ -220,7 +262,6 @@ mod tests {
             .request_sign_bridge_action(action.clone())
             .await
             .unwrap_err();
-        println!("err: {:?}", err);
         assert!(
             matches!(err, BridgeError::InvalidBridgeAuthority(pk) if pk == authority_blocklisted.pubkey_bytes()),
         );

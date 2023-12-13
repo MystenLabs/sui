@@ -15,6 +15,10 @@ pub enum BridgeError {
     NoBridgeEventsInTx,
     // Internal Bridge error
     InternalError(String),
+    // Authority signature duplication
+    AuthoritySignatureDuplication(String),
+    // Too many errors when aggregating authority signatures
+    AuthoritySignatureAggregationTooManyError(String),
     // Transient Ethereum provider error
     TransientProviderError(String),
     // Invalid BridgeCommittee
@@ -23,6 +27,8 @@ pub enum BridgeError {
     InvalidBridgeAuthoritySignature((BridgeAuthorityPublicKeyBytes, String)),
     // Entity is not in the Bridge committee or is blocklisted
     InvalidBridgeAuthority(BridgeAuthorityPublicKeyBytes),
+    // Authority's base_url is invalid
+    InvalidAuthorityUrl(BridgeAuthorityPublicKeyBytes),
     // Message is signed by mismatched authority
     MismatchedAuthoritySigner,
     // Signature is over a mismatched action

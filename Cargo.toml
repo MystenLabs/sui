@@ -91,6 +91,7 @@ members = [
     "crates/sui-benchmark",
     "crates/sui-bridge",
     "crates/sui-cluster-test",
+    "crates/sui-common",
     "crates/sui-config",
     "crates/sui-core",
     "crates/sui-cost",
@@ -564,6 +565,7 @@ sui-archival = { path = "crates/sui-archival" }
 sui-authority-aggregation= { path = "crates/sui-authority-aggregation" }
 sui-benchmark = { path = "crates/sui-benchmark" }
 sui-cluster-test = { path = "crates/sui-cluster-test" }
+sui-common = { path = "crates/sui-common" }
 sui-config = { path = "crates/sui-config" }
 sui-core = { path = "crates/sui-core" }
 sui-cost = { path = "crates/sui-cost" }
