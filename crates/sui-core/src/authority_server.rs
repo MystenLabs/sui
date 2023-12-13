@@ -548,21 +548,17 @@ impl Validator for ValidatorService {
         request.get_ref().verify_user_input()?;
         let validator_service = self.clone();
 
-        // Spawns a task which handles the certificate. The task will unconditionally continue
-        // processing in the event that the client connection is dropped.
-        spawn_monitored_task!(async move {
-            let span = error_span!("handle_certificate", tx_digest = ?request.get_ref().digest());
-            Self::handle_certificate(validator_service, request, true)
-                .instrument(span)
-                .await
-        })
-        .await
-        .unwrap()
-        .map(|v| {
-            tonic::Response::new(
-                v.expect("handle_certificate should not return none with wait_for_effects=true"),
-            )
-        })
+        let span = error_span!("handle_certificate", tx_digest = ?request.get_ref().digest());
+        Self::handle_certificate(validator_service, request, true)
+            .instrument(span)
+            .await
+            .map(|v| {
+                tonic::Response::new(
+                    v.expect(
+                        "handle_certificate should not return none with wait_for_effects=true",
+                    ),
+                )
+            })
     }
 
     async fn handle_certificate(
