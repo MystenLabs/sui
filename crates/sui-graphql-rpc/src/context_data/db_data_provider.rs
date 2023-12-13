@@ -59,6 +59,7 @@ use sui_json_rpc::{
 };
 use sui_json_rpc_types::{ProtocolConfigResponse, Stake as RpcStakedSui};
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_types::base_types::ConciseableName;
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SuiAddress as NativeSuiAddress},
     coin::{CoinMetadata as NativeCoinMetadata, TreasuryCap},
@@ -1521,7 +1522,7 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
                     committees
                         .iter()
                         .map(|c| CommitteeMember {
-                            authority_name: Some(c.0.into_concise().to_string()),
+                            authority_name: Some(c.0.concise_owned().to_string()),
                             stake_unit: Some(c.1),
                         })
                         .collect::<Vec<_>>(),

@@ -141,6 +141,9 @@ use crate::subscription_handler::SubscriptionHandler;
 use crate::transaction_input_loader::TransactionInputLoader;
 use crate::transaction_manager::TransactionManager;
 
+#[cfg(msim)]
+use sui_types::committee::CommitteeTrait;
+
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
 pub mod authority_tests;
