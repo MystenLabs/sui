@@ -84,6 +84,11 @@ mod checked {
         Result<Mode::ExecutionResults, ExecutionError>,
     ) {
         let input_objects = input_objects.into_inner();
+        let mutable_inputs = if enable_expensive_checks {
+            input_objects.mutable_inputs().keys().copied().collect()
+        } else {
+            HashSet::new()
+        };
         let shared_object_refs = input_objects.filter_shared_objects();
         let receiving_objects = transaction_kind.receiving_objects();
         let mut transaction_dependencies = input_objects.transaction_dependencies();
@@ -183,7 +188,12 @@ mod checked {
 
         if enable_expensive_checks && !Mode::allow_arbitrary_function_calls() {
             temporary_store
-                .check_ownership_invariants(&transaction_signer, &mut gas_charger, is_epoch_change)
+                .check_ownership_invariants(
+                    &transaction_signer,
+                    &mut gas_charger,
+                    &mutable_inputs,
+                    is_epoch_change,
+                )
                 .unwrap()
         } // else, in dev inspect mode and anything goes--don't check
 
