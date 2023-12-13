@@ -45,7 +45,10 @@ struct SharedInput {
     /// The version that this this object was shared at.
     initial_shared_version: u64,
     /// Controls whether the transaction block can reference the shared object as a mutable
-    /// reference or by value.
+    /// reference or by value. This has implications for scheduling: Transactions that just read
+    /// shared objects at a certain version (mutable = false) can be executed concurrently, while
+    /// transactions that write shared objects (mutable = true) must be executed serially with
+    /// respect to each other.
     mutable: bool,
 }
 

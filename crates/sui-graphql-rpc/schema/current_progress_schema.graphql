@@ -1970,7 +1970,10 @@ type SharedInput {
 	initialSharedVersion: Int!
 	"""
 	Controls whether the transaction block can reference the shared object as a mutable
-	reference or by value.
+	reference or by value. This has implications for scheduling: Transactions that just read
+	shared objects at a certain version (mutable = false) can be executed concurrently, while
+	transactions that write shared objects (mutable = true) must be executed serially with
+	respect to each other.
 	"""
 	mutable: Boolean!
 }
@@ -1981,7 +1984,7 @@ executed.
 """
 type SharedObjectDelete {
 	"""
-	Address of the shared object.
+	ID of the shared object.
 	"""
 	address: SuiAddress!
 	"""
@@ -1990,7 +1993,8 @@ type SharedObjectDelete {
 	"""
 	version: Int!
 	"""
-	Whether this transaction intended to use this shared object mutably or not.
+	Whether this transaction intended to use this shared object mutably or not. See
+	`SharedInput.mutable` for further details.
 	"""
 	mutable: Boolean!
 }
@@ -2365,7 +2369,7 @@ type TransactionBlockEffects {
 	"""
 	gasEffects: GasEffects
 	"""
-	Shared objects that are referenced by but not modified by this transaction.
+	Shared objects that are referenced by but not changed by this transaction.
 	"""
 	unchangedSharedObjects: [UnchangedSharedObject!]
 	"""

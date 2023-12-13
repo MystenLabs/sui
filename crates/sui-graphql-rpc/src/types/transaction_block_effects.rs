@@ -94,7 +94,7 @@ impl TransactionBlockEffects {
         Some(GasEffects::from(&self.native))
     }
 
-    /// Shared objects that are referenced by but not modified by this transaction.
+    /// Shared objects that are referenced by but not changed by this transaction.
     async fn unchanged_shared_objects(&self) -> Option<Vec<UnchangedSharedObject>> {
         Some(
             self.native

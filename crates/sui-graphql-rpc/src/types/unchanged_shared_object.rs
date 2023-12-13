@@ -27,14 +27,15 @@ pub(crate) struct SharedObjectRead {
 /// executed.
 #[derive(SimpleObject)]
 pub(crate) struct SharedObjectDelete {
-    /// Address of the shared object.
+    /// ID of the shared object.
     address: SuiAddress,
 
     /// The version of the shared object that was assigned to this transaction during by consensus,
     /// during sequencing.
     version: u64,
 
-    /// Whether this transaction intended to use this shared object mutably or not.
+    /// Whether this transaction intended to use this shared object mutably or not. See
+    /// `SharedInput.mutable` for further details.
     mutable: bool,
 }
 
