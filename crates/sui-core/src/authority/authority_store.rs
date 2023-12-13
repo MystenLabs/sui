@@ -842,7 +842,7 @@ impl AuthorityStore {
     /// TODO: delete this method entirely (still used by authority_tests.rs)
     pub(crate) fn insert_genesis_object(&self, object: Object) -> SuiResult {
         // We only side load objects with a genesis parent transaction.
-        debug_assert!(object.previous_transaction == TransactionDigest::genesis());
+        debug_assert!(object.previous_transaction == TransactionDigest::genesis_marker());
         let object_ref = object.compute_object_reference();
         self.insert_object_direct(object_ref, &object)
     }

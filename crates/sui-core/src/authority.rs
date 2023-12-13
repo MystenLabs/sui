@@ -1453,7 +1453,7 @@ impl AuthorityState {
             let gas_object = Object::new_move(
                 MoveObject::new_gas_coin(OBJECT_START_VERSION, gas_object_id, max_coin_value),
                 Owner::AddressOwner(sender),
-                TransactionDigest::genesis(),
+                TransactionDigest::genesis_marker(),
             );
             let gas_object_ref = gas_object.compute_object_reference();
             gas_object_refs = vec![gas_object_ref];
@@ -1607,7 +1607,7 @@ impl AuthorityState {
         let gas_object = Object::new_move(
             MoveObject::new_gas_coin(SequenceNumber::new(), gas_object_id, max_tx_gas * 2),
             Owner::AddressOwner(sender),
-            TransactionDigest::genesis(),
+            TransactionDigest::genesis_marker(),
         );
 
         let input_object_kinds = transaction_kind.input_objects()?;
@@ -3860,7 +3860,7 @@ impl AuthorityState {
                 }
 
                 Some(cur_object) => cur_object.previous_transaction,
-                None => TransactionDigest::genesis(),
+                None => TransactionDigest::genesis_marker(),
             };
 
             #[cfg(msim)]
