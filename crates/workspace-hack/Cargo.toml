@@ -506,6 +506,7 @@ nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da
 nibble_vec = { version = "0.1", default-features = false }
 no-std-compat = { version = "0.4", default-features = false, features = ["alloc", "std"] }
 nom = { version = "7" }
+nonempty = { version = "0.9", default-features = false }
 nonzero_ext = { version = "0.3" }
 normalize-line-endings = { version = "0.3", default-features = false }
 notify = { version = "6" }
@@ -1391,6 +1392,7 @@ nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da
 nibble_vec = { version = "0.1", default-features = false }
 no-std-compat = { version = "0.4", default-features = false, features = ["alloc", "std"] }
 nom = { version = "7" }
+nonempty = { version = "0.9", default-features = false }
 nonzero_ext = { version = "0.3" }
 normalize-line-endings = { version = "0.3", default-features = false }
 notify = { version = "6" }
