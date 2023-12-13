@@ -10,8 +10,11 @@ edition = "2021"
 ethers = "2.0"
 tokio = { workspace = true, features = ["full"] }
 sui-types.workspace = true
+sui-common.workspace = true
 arc-swap.workspace = true
 move-core-types.workspace = true
+url.workspace = true
+futures.workspace = true
 once_cell.workspace = true
 telemetry-subscribers.workspace = true
 prometheus.workspace = true
@@ -34,6 +37,7 @@ anyhow.workspace = true
 reqwest.workspace = true
 fastcrypto.workspace = true
 tap.workspace = true
+rand.workspace = true
 workspace-hack.workspace = true
 shared-crypto.workspace = true
 
