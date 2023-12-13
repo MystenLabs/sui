@@ -3,7 +3,7 @@
 
 use super::{
     db_backend::{BalanceQuery, Explain, Explained, GenericQueryBuilder},
-    db_data_provider::DbValidationError,
+    db_data_provider::{DbValidationError, TypeFilterError},
 };
 use crate::{
     context_data::db_data_provider::PgManager,
@@ -294,11 +294,12 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         }
 
         if let Some(object_type) = filter.type_ {
+            let format = "package[::module[::type[<type_params>]]]";
             let parts: Vec<_> = object_type.splitn(3, "::").collect();
 
             if parts.iter().any(|&part| part.is_empty()) {
                 return Err(DbValidationError::InvalidType(
-                    "Empty strings are not allowed".to_string(),
+                    TypeFilterError::MissingComponents(object_type, format).to_string(),
                 ))?;
             }
 
@@ -340,9 +341,10 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
                     );
                 }
             } else {
-                return Err(Error::Internal(
-                    "Invalid type. Type must have 3 or less parts".to_string(),
-                ));
+                return Err(DbValidationError::InvalidType(
+                    TypeFilterError::TooManyComponents(object_type, 3, format).to_string(),
+                )
+                .into());
             }
         }
 
@@ -458,11 +460,12 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
 
         // Filters on the package and/ or module that emitted some event
         if let Some(pm) = filter.emitting_module {
+            let format = "package[::module]";
             let parts: Vec<_> = pm.splitn(2, "::").collect();
 
             if parts.iter().any(|&part| part.is_empty()) {
                 return Err(DbValidationError::InvalidType(
-                    "Empty strings are not allowed".to_string(),
+                    TypeFilterError::MissingComponents(pm, format).to_string(),
                 ))?;
             }
 
@@ -478,9 +481,10 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
                     query = query.filter(events::dsl::module.eq(parts[1].to_string()));
                 }
                 _ => {
-                    return Err(Error::Internal(
-                        "Invalid type. Type must have 2 or less parts".to_string(),
-                    ));
+                    return Err(DbValidationError::InvalidType(
+                        TypeFilterError::TooManyComponents(pm, 2, format).to_string(),
+                    )
+                    .into());
                 }
             }
         }
@@ -491,7 +495,11 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
 
             if parts.iter().any(|&part| part.is_empty()) {
                 return Err(DbValidationError::InvalidType(
-                    "Empty strings are not allowed".to_string(),
+                    TypeFilterError::MissingComponents(
+                        event_type,
+                        "package[::module[::type[<type_params>]]]",
+                    )
+                    .to_string(),
                 ))?;
             }
 
@@ -527,9 +535,15 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
                     }
                 }
                 _ => {
-                    return Err(Error::Internal(
-                        "Invalid type. Type must have 3 or less parts".to_string(),
-                    ));
+                    return Err(DbValidationError::InvalidType(
+                        TypeFilterError::TooManyComponents(
+                            event_type,
+                            3,
+                            "package[::module[::type[<type_params>]]]",
+                        )
+                        .to_string(),
+                    )
+                    .into());
                 }
             }
         }
