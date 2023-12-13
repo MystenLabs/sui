@@ -21,7 +21,7 @@ module test::fake {
 
 //# create-checkpoint
 
-//# run-graphql --interpolations test
+//# run-graphql
 {
   coinMetadata(coinType: "@{test}::fake::FAKE") {
     decimals
@@ -43,7 +43,7 @@ module test::fake {
 
 //# create-checkpoint
 
-//# run-graphql --interpolations test
+//# run-graphql
 {
   coinMetadata(coinType: "@{test}::fake::FAKE") {
     decimals

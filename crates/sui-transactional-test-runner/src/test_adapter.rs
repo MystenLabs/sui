@@ -501,7 +501,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 show_headers,
                 show_service_version,
                 variables,
-                interpolations,
             }) => {
                 let file = data.ok_or_else(|| anyhow::anyhow!("Missing GraphQL query"))?;
                 let contents = std::fs::read_to_string(file.path())?;
@@ -511,7 +510,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(30))
                     .await;
 
-                let interpolated = self.interpolate_query(&contents, &interpolations)?;
+                let interpolated = self.interpolate_query(&contents)?;
 
                 let used_variables = self.resolve_graphql_variables(&variables)?;
                 let resp = cluster
@@ -1078,23 +1077,32 @@ impl<'a> SuiTestAdapter<'a> {
         }
         variables
     }
-    fn interpolate_query(
-        &self,
-        contents: &str,
-        interpolations: &[String],
-    ) -> anyhow::Result<String> {
+
+    fn interpolate_query(&self, contents: &str) -> anyhow::Result<String> {
         let variables = self.named_variables();
         let mut interpolated_query = contents.to_string();
 
-        for var_name in interpolations {
-            let value = variables.get(var_name).ok_or_else(|| {
-                anyhow!(
+        let re = regex::Regex::new(r"@\{([^\}]+)\}").unwrap();
+
+        let mut unique_vars = std::collections::HashSet::new();
+
+        // Collect unique variables
+        for cap in re.captures_iter(contents) {
+            if let Some(var_name) = cap.get(1) {
+                unique_vars.insert(var_name.as_str());
+            }
+        }
+
+        for var_name in unique_vars {
+            let Some(value) = variables.get(var_name) else {
+                return Err(anyhow!(
                     "Unknown variable: {}\nAllowed variable mappings are {:#?}",
                     var_name,
                     variables
-                )
-            })?;
-            let pattern = format!("@{{{var_name}}}");
+                ));
+            };
+
+            let pattern = format!("@{{{}}}", var_name);
             interpolated_query = interpolated_query.replace(&pattern, value);
         }
 
