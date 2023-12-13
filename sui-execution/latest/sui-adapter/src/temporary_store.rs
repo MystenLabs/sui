@@ -48,7 +48,7 @@ pub struct TemporaryStore<'backing> {
     execution_results: ExecutionResultsV2,
     /// Objects that were loaded during execution (dynamic fields + received objects).
     loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
-    protocol_config: ProtocolConfig,
+    protocol_config: &'backing ProtocolConfig,
 
     /// Every package that was loaded from DB store during execution.
     /// These packages were not previously loaded into the temporary store.
@@ -67,7 +67,7 @@ impl<'backing> TemporaryStore<'backing> {
         input_objects: InputObjects,
         receiving_objects: Vec<ObjectRef>,
         tx_digest: TransactionDigest,
-        protocol_config: &ProtocolConfig,
+        protocol_config: &'backing ProtocolConfig,
     ) -> Self {
         let mutable_input_refs = input_objects.mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
@@ -79,7 +79,7 @@ impl<'backing> TemporaryStore<'backing> {
             lamport_timestamp,
             mutable_input_refs,
             execution_results: ExecutionResultsV2::default(),
-            protocol_config: protocol_config.clone(),
+            protocol_config,
             loaded_runtime_objects: BTreeMap::new(),
             runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
             receiving_objects,
