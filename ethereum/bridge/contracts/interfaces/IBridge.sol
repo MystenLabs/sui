@@ -1,25 +1,54 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-import './IMessageType.sol';
-import './IChainID.sol';
-import './ITokenID.sol';
+import './IEnums.sol';
 
-interface IBridge is IMessageType, IChainID, ITokenID {
+interface IBridge is IEnums {
 	// STRUCTS
 
-	struct Erc20Transfer {
-		bytes32 dataDigest;
-		uint256 amount;
-		address from;
-		address to;
+	// struct Erc20Transfer {
+	// 	bytes32 dataDigest;
+	// 	uint256 amount;
+	// 	address from;
+	// 	address to;
+	// }
+
+	struct TokenBridgingMessage {
+		MessageType messageType;
+		uint8 messageVersion;
+		uint64 nonce;
+		ChainID sourceChain;
+		uint8 sourceChainTxIdLength;
+		bytes sourceChainTxId;
+		uint8 sourceChainEventIndex;
+		uint8 senderAddressLength;
+		bytes senderAddress;
+		ChainID targetChain;
+		uint8 targetChainLength;
+		address targetAddress;
+		TokenID tokenType;
+		uint64 amount;
+	}
+
+	struct CommitteeBlocklistMessage {
+		MessageType messageType;
+		uint8 messageVersion;
+		uint64 nonce;
+		BlockListType blocklistType;
+	}
+
+	struct EmergencyOpMessage {
+		MessageType messageType;
+		uint8 messageVersion;
+		uint64 nonce;
+		EmergencyOpType opType;
 	}
 
 	// Define a struct for BridgeMessage
 	struct BridgeMessage {
 		MessageType messageType;
 		uint8 messageVersion;
-		uint64 seqNum;
+		uint64 sequenceNumber;
 		ChainID sourceChain;
 		bytes payload;
 	}
@@ -52,9 +81,10 @@ interface IBridge is IMessageType, IChainID, ITokenID {
 		uint64 amount;
 	}
 
-	// Define a struct for EmergencyOpPayload
-	struct EmergencyOpPayload {
-		bool opType;
+	// Struct to store the transfer history of an address
+	struct TransferHistory {
+		uint256 transferTime; // The timestamp of the transfer
+		uint256 amount; // The amount of tokens transferred
 	}
 
 	// EVENTS
@@ -91,7 +121,7 @@ interface IBridge is IMessageType, IChainID, ITokenID {
 	event BridgeEvent(BridgeMessage message, bytes message_bytes);
 
 	// FUNCTIONS
-
+	/**
 	function setPendingMessage(BridgeMessageKey memory key, BridgeMessage memory value) external;
 
 	function getPendingMessage(BridgeMessageKey memory key) external returns (BridgeMessage memory);
@@ -108,6 +138,8 @@ interface IBridge is IMessageType, IChainID, ITokenID {
 	) external view returns (ApprovedBridgeMessage memory);
 
 	function removeApprovedMessage(BridgeMessageKey memory key) external;
+
+	*/
 
 	/**
 	// function _parseTransferCommon(bytes memory encoded) external pure returns (Transfer memory transfer);
