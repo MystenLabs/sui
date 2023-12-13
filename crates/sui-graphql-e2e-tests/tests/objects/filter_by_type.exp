@@ -423,7 +423,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Invalid type provided as filter: Empty strings are not allowed",
+      "message": "Invalid type provided as filter: Invalid format in '::::' - if '::' is present, there must be a non-empty string on both sides. Expected format like 'package[::module[::type[<type_params>]]]'",
       "locations": [
         {
           "line": 3,

@@ -723,7 +723,7 @@
 
 ><pre>{
 >  eventConnection(
->    filter: {eventPackage: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13", eventModule: "Market", eventType: "ChangePriceEvent<0x2::sui::SUI>"}
+>    filter: {eventType: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13::Market::ChangePriceEvent<0x2::sui::SUI>"}
 >  ) {
 >    nodes {
 >      sendingModule {
@@ -754,7 +754,7 @@
 >  eventConnection(
 >    first: 1
 >    after: "85173:0"
->    filter: {emittingPackage: "0x3", emittingModule: "sui_system", eventPackage: "0x3", eventModule: "validator", eventType: "StakingRequestEvent"}
+>    filter: {emittingModule: "0x3::sui_system", eventType: "0x3::validator::StakingRequestEvent"}
 >  ) {
 >    pageInfo {
 >      hasNextPage

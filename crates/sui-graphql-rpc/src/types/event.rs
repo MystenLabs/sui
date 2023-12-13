@@ -25,16 +25,21 @@ pub(crate) struct EventFilter {
     // Enhancement (post-MVP)
     // after_checkpoint
     // before_checkpoint
-    /// Events emitted by a particular package. An event is emitted by a particular package if some
-    /// function in the package is called by a PTB and emits an event.
-    pub emitting_package: Option<SuiAddress>,
-    /// Events emitted by a particular Move module. An event is emitted by a particular module if
-    /// some function in the module is called by a PTB and emits an event. Requires
-    /// `emitting_package` to be set.
+    /// Events emitted by a particular module. An event is emitted by a
+    /// particular module if some function in the module is called by a
+    /// PTB and emits an event.
+    ///
+    /// Modules can be filtered by their package, or package::module.
     pub emitting_module: Option<String>,
 
-    pub event_package: Option<SuiAddress>,
-    pub event_module: Option<String>,
+    /// This field is used to specify the type of event emitted.
+    ///
+    /// Events can be filtered by their type's package, package::module,
+    /// or their fully qualified type name.
+    ///
+    /// Generic types can be queried by either the generic type name, e.g.
+    /// `0x2::coin::Coin`, or by the full type name, such as
+    /// `0x2::coin::Coin<0x2::sui::SUI>`.
     pub event_type: Option<String>,
     // Enhancement (post-MVP)
     // pub start_time

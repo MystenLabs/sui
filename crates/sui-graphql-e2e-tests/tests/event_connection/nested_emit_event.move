@@ -64,7 +64,7 @@ module Test::M3 {
 //# run-graphql --variables A Test
 {
   eventConnection(
-    filter: {sender: $A, emittingPackage: $Test}
+    filter: {sender: $A, emittingModule: $Test}
   ) {
     nodes {
       sendingModule {
@@ -82,10 +82,10 @@ module Test::M3 {
   }
 }
 
-//# run-graphql --variables A Test
+//# run-graphql --variables A
 {
   eventConnection(
-    filter: {sender: $A, emittingPackage: $Test, emittingModule: "M1"}
+    filter: {sender: $A, emittingModule: "@{Test}::M1"}
   ) {
     nodes {
       sendingModule {
@@ -103,10 +103,10 @@ module Test::M3 {
   }
 }
 
-//# run-graphql --variables A Test
+//# run-graphql --variables A
 {
   eventConnection(
-    filter: {sender: $A, emittingPackage: $Test, emittingModule: "M2"}
+    filter: {sender: $A, emittingModule: "@{Test}::M2"}
   ) {
     nodes {
       sendingModule {
@@ -124,10 +124,10 @@ module Test::M3 {
   }
 }
 
-//# run-graphql --variables A Test
+//# run-graphql --variables A
 {
   eventConnection(
-    filter: {sender: $A, emittingPackage: $Test, emittingModule: "M3"}
+    filter: {sender: $A, emittingModule: "@{Test}::M3"}
   ) {
     nodes {
       sendingModule {

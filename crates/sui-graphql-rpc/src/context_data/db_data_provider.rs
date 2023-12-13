@@ -110,6 +110,15 @@ pub enum DbValidationError {
     #[error("Invalid type provided as filter: {0}")]
     InvalidType(String),
 }
+
+#[derive(thiserror::Error, Debug)]
+pub enum TypeFilterError {
+    #[error("Invalid format in '{0}' - if '::' is present, there must be a non-empty string on both sides. Expected format like '{1}'")]
+    MissingComponents(String, &'static str),
+    #[error("Invalid format in '{0}' - value must have {1} or fewer components. Expected format like '{2}'")]
+    TooManyComponents(String, u64, &'static str),
+}
+
 pub(crate) struct PgManager {
     pub inner: IndexerReader,
     pub limits: Limits,
