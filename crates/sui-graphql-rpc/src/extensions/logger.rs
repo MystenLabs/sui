@@ -91,8 +91,6 @@ impl Extension for LoggerExtension {
             .iter()
             .filter(|(_, operation)| operation.node.ty == OperationType::Query)
             .any(|(_, operation)| operation.node.selection_set.node.items.iter().any(|selection| matches!(&selection.node, Selection::Field(field) if field.node.name.node == "__schema")));
-
-        let is_schema = false;
         if !is_schema && self.config.log_request_query {
             info!(
                 target: "async-graphql",
