@@ -8,12 +8,13 @@ use crate::authority_client::{
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
 use fastcrypto::traits::ToFromBytes;
-use futures::Future;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use mysten_metrics::histogram::Histogram;
 use mysten_metrics::{monitored_future, spawn_monitored_task, GaugeGuard};
 use mysten_network::config::Config;
 use std::convert::AsRef;
+use sui_authority_aggregation::ReduceOutput;
+use sui_authority_aggregation::{quorum_map_then_reduce_with_timeout, AsyncResult};
 use sui_config::genesis::Genesis;
 use sui_network::{
     default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
@@ -43,7 +44,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::string::ToString;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_types::committee::{CommitteeWithNetworkMetadata, StakeUnit};
+use sui_types::committee::{CommitteeTrait, CommitteeWithNetworkMetadata, StakeUnit};
 use sui_types::effects::{
     CertifiedTransactionEffects, SignedTransactionEffects, TransactionEffects, TransactionEvents,
     VerifiedCertifiedTransactionEffects,
@@ -63,8 +64,6 @@ pub const DEFAULT_RETRIES: usize = 4;
 #[cfg(test)]
 #[path = "unit_tests/authority_aggregator_tests.rs"]
 pub mod authority_aggregator_tests;
-
-pub type AsyncResult<'a, T, E> = BoxFuture<'a, Result<T, E>>;
 
 #[derive(Clone)]
 pub struct TimeoutConfig {
@@ -272,7 +271,7 @@ pub fn group_errors(errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>) -> G
         entry.1.extend(
             names
                 .into_iter()
-                .map(|n| n.into_concise())
+                .map(|n| n.concise_owned())
                 .collect::<Vec<_>>(),
         );
     }
@@ -675,157 +674,10 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
     }
 }
 
-pub enum ReduceOutput<R, S> {
-    Continue(S),
-    ContinueWithTimeout(S, Duration),
-    Failed(S),
-    Success(R),
-}
-
 impl<A> AuthorityAggregator<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    /// This function takes an initial state, than executes an asynchronous function (FMap) for each
-    /// authority, and folds the results as they become available into the state using an async function (FReduce).
-    ///
-    /// FMap can do io, and returns a result V. An error there may not be fatal, and could be consumed by the
-    /// MReduce function to overall recover from it. This is necessary to ensure byzantine authorities cannot
-    /// interrupt the logic of this function.
-    ///
-    /// FReduce returns a result to a ReduceOutput. If the result is Err the function
-    /// shortcuts and the Err is returned. An Ok ReduceOutput result can be used to shortcut and return
-    /// the resulting state (ReduceOutput::End), continue the folding as new states arrive (ReduceOutput::Continue),
-    /// or continue with a timeout maximum waiting time (ReduceOutput::ContinueWithTimeout).
-    ///
-    /// This function provides a flexible way to communicate with a quorum of authorities, processing and
-    /// processing their results into a safe overall result, and also safely allowing operations to continue
-    /// past the quorum to ensure all authorities are up to date (up to a timeout).
-    pub(crate) async fn quorum_map_then_reduce_with_timeout<
-        'a,
-        S: 'a,
-        V: 'a,
-        R: 'a,
-        FMap,
-        FReduce,
-    >(
-        committee: Arc<Committee>,
-        authority_clients: Arc<BTreeMap<AuthorityName, Arc<SafeClient<A>>>>,
-        // The initial state that will be used to fold in values from authorities.
-        initial_state: S,
-        // The async function used to apply to each authority. It takes an authority name,
-        // and authority client parameter and returns a Result<V>.
-        map_each_authority: FMap,
-        // The async function that takes an accumulated state, and a new result for V from an
-        // authority and returns a result to a ReduceOutput state.
-        reduce_result: FReduce,
-        // The initial timeout applied to all
-        initial_timeout: Duration,
-    ) -> Result<
-        (
-            R,
-            FuturesUnordered<impl Future<Output = (AuthorityName, Result<V, SuiError>)> + 'a>,
-        ),
-        S,
-    >
-    where
-        FMap:
-            FnOnce(AuthorityName, Arc<SafeClient<A>>) -> AsyncResult<'a, V, SuiError> + Clone + 'a,
-        FReduce: Fn(
-                S,
-                AuthorityName,
-                StakeUnit,
-                Result<V, SuiError>,
-            ) -> BoxFuture<'a, ReduceOutput<R, S>>
-            + 'a,
-    {
-        AuthorityAggregator::quorum_map_then_reduce_with_timeout_and_prefs(
-            committee,
-            authority_clients,
-            None,
-            initial_state,
-            map_each_authority,
-            reduce_result,
-            initial_timeout,
-        )
-        .await
-    }
-
-    pub(crate) async fn quorum_map_then_reduce_with_timeout_and_prefs<'a, S, V, R, FMap, FReduce>(
-        committee: Arc<Committee>,
-        authority_clients: Arc<BTreeMap<AuthorityName, Arc<SafeClient<A>>>>,
-        authority_preferences: Option<&BTreeSet<AuthorityName>>,
-        initial_state: S,
-        map_each_authority: FMap,
-        reduce_result: FReduce,
-        initial_timeout: Duration,
-    ) -> Result<
-        (
-            R,
-            FuturesUnordered<impl Future<Output = (AuthorityName, Result<V, SuiError>)>>,
-        ),
-        S,
-    >
-    where
-        FMap: FnOnce(AuthorityName, Arc<SafeClient<A>>) -> AsyncResult<'a, V, SuiError> + Clone,
-        FReduce: Fn(
-            S,
-            AuthorityName,
-            StakeUnit,
-            Result<V, SuiError>,
-        ) -> BoxFuture<'a, ReduceOutput<R, S>>,
-    {
-        let authorities_shuffled = committee.shuffle_by_stake(authority_preferences, None);
-
-        // First, execute in parallel for each authority FMap.
-        let mut responses: futures::stream::FuturesUnordered<_> = authorities_shuffled
-            .into_iter()
-            .map(|name| {
-                let client = authority_clients[&name].clone();
-                let execute = map_each_authority.clone();
-                monitored_future!(async move {
-                    (
-                        name,
-                        execute(name, client)
-                            .instrument(tracing::trace_span!("quorum_map_auth", authority =? name.concise()))
-                            .await,
-                    )
-                })
-            })
-            .collect();
-
-        let mut current_timeout = initial_timeout;
-        let mut accumulated_state = initial_state;
-        // Then, as results become available fold them into the state using FReduce.
-        while let Ok(Some((authority_name, result))) =
-            timeout(current_timeout, responses.next()).await
-        {
-            let authority_weight = committee.weight(&authority_name);
-            accumulated_state =
-                match reduce_result(accumulated_state, authority_name, authority_weight, result)
-                    .await
-                {
-                    // In the first two cases we are told to continue the iteration.
-                    ReduceOutput::Continue(state) => state,
-                    ReduceOutput::ContinueWithTimeout(state, duration) => {
-                        // Adjust the waiting timeout.
-                        current_timeout = duration;
-                        state
-                    }
-                    ReduceOutput::Failed(state) => {
-                        return Err(state);
-                    }
-                    ReduceOutput::Success(result) => {
-                        // The reducer tells us that we have the result needed. Just return it.
-                        return Ok((result, responses));
-                    }
-                }
-        }
-        // If we have exhausted all authorities and still have not returned a result, return
-        // error with the accumulated state.
-        Err(accumulated_state)
-    }
-
     // Repeatedly calls the provided closure on a randomly selected validator until it succeeds.
     // Once all validators have been attempted, starts over at the beginning. Intended for cases
     // that must eventually succeed as long as the network is up (or comes back up) eventually.
@@ -1028,7 +880,7 @@ where
             total_weight: StakeUnit,
         }
         let initial_state = State::default();
-        let result = AuthorityAggregator::quorum_map_then_reduce_with_timeout(
+        let result = quorum_map_then_reduce_with_timeout(
                 self.committee.clone(),
                 self.authority_clients.clone(),
                 initial_state,
@@ -1087,7 +939,7 @@ where
             total_weight: StakeUnit,
         }
         let initial_state = State::default();
-        let result = AuthorityAggregator::quorum_map_then_reduce_with_timeout(
+        let result = quorum_map_then_reduce_with_timeout(
             self.committee.clone(),
             self.authority_clients.clone(),
             initial_state,
@@ -1170,7 +1022,7 @@ where
         let validity_threshold = committee.validity_threshold();
         let quorum_threshold = committee.quorum_threshold();
         let validator_display_names = self.validator_display_names.clone();
-        let result = AuthorityAggregator::quorum_map_then_reduce_with_timeout(
+        let result = quorum_map_then_reduce_with_timeout(
                 committee.clone(),
                 self.authority_clients.clone(),
                 state,
@@ -1594,7 +1446,7 @@ where
         let metrics = self.metrics.clone();
         let metrics_clone = metrics.clone();
         let validator_display_names = self.validator_display_names.clone();
-        let (result, mut remaining_tasks) = AuthorityAggregator::quorum_map_then_reduce_with_timeout(
+        let (result, mut remaining_tasks) = quorum_map_then_reduce_with_timeout(
             committee.clone(),
             authority_clients.clone(),
             state,

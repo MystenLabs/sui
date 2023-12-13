@@ -67,6 +67,7 @@ mod sim_only_tests {
     use sui_macros::*;
     use sui_move_build::{BuildConfig, CompiledPackage};
     use sui_protocol_config::SupportedProtocolVersions;
+    use sui_types::base_types::ConciseableName;
     use sui_types::base_types::{ObjectID, ObjectRef};
     use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
     use sui_types::id::ID;

@@ -30,6 +30,8 @@ use sui_json_rpc_types::{
 };
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_types::base_types::ConciseableName;
+use sui_types::committee::CommitteeTrait;
 use sui_types::effects::{CertifiedTransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
