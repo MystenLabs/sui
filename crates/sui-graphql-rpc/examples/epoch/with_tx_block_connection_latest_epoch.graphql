@@ -10,16 +10,6 @@
       edges {
         cursor
         node {
-          sender {
-            address
-          }
-          effects {
-            gasEffects {
-              gasObject {
-                address
-              }
-            }
-          }
           gasInput {
             gasPrice
             gasBudget
