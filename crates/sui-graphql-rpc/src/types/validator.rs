@@ -203,11 +203,11 @@ impl Validator {
 
     /// The apy of this validator.
     async fn apy(&self, ctx: &Context<'_>) -> Result<Option<Float>, Error> {
-        let apy = ctx
+        Ok(ctx
             .data_unchecked::<PgManager>()
             .fetch_validator_apys(&self.validator_summary.sui_address, None)
-            .await?;
-        Ok(apy.map(|a| Float(a)))
+            .await?
+            .map(Float))
     }
 }
 
