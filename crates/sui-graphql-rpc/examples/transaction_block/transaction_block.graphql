@@ -2,15 +2,15 @@
 {
   transactionBlock(digest: "HvTjk3ELg8gRofmB1GgrpLHBFeA53QKmUKGEuhuypezg") {
     sender {
-      address
+      location
     }
     gasInput {
       gasSponsor {
-        address
+        location
       }
       gasPayment {
         nodes {
-          address
+          location
         }
       }
       gasPrice
@@ -19,7 +19,9 @@
     kind {
       __typename
     }
-    signatures
+    signatures{
+      base64Sig
+    }
     digest
     expiration {
       epochId
