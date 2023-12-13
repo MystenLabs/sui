@@ -487,28 +487,18 @@ impl StateRead for AuthorityState {
         &self,
         digests: &[TransactionDigest],
     ) -> StateReadResult<Vec<Option<(EpochId, CheckpointSequenceNumber)>>> {
-        let epoch_store = self.load_epoch_store_one_call_per_task();
-        let epoch = epoch_store.epoch();
-        assert!(epoch_store.per_epoch_finalized_txns_enabled());
-        Ok(epoch_store
-            .multi_get_transaction_checkpoint(digests)
-            .map(|seqs| {
-                seqs.into_iter()
-                    .map(|e| e.map(|seq| (epoch, seq)))
-                    .collect()
-            })?)
+        Ok(self
+            .database
+            .deprecated_multi_get_transaction_checkpoint(digests)?)
     }
 
     fn deprecated_get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
     ) -> StateReadResult<Option<(EpochId, CheckpointSequenceNumber)>> {
-        let epoch_store = self.load_epoch_store_one_call_per_task();
-        let epoch = epoch_store.epoch();
-        assert!(epoch_store.per_epoch_finalized_txns_enabled());
-        Ok(epoch_store
-            .get_transaction_checkpoint(digest)
-            .map(|r| r.map(|seq| (epoch, seq)))?)
+        Ok(self
+            .database
+            .deprecated_get_transaction_checkpoint(digest)?)
     }
 
     fn multi_get_checkpoint_by_sequence_number(
