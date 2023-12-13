@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 use sui_swarm_config::genesis_config::AccountConfig;
+use sui_types::base_types::ConciseableName;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};

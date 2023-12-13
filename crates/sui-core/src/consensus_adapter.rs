@@ -34,7 +34,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 use sui_types::base_types::TransactionDigest;
-use sui_types::committee::Committee;
+use sui_types::committee::{Committee, CommitteeTrait};
 use sui_types::error::{SuiError, SuiResult};
 
 use tap::prelude::*;
