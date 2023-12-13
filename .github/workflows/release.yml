@@ -41,6 +41,8 @@ jobs:
         os: [ windows-ghcloud, ubuntu-ghcloud, macos-latest-xl, macos-arm64-self-hosted ]
       fail-fast: false
     runs-on: ${{ matrix.os }}
+    outputs:
+      sui_tag: ${{ steps.tag.outputs.sui_tag }}
     steps:
       - name: Configure AWS credentials
         if: ${{ env.TAG_NAME != 'main' }}
@@ -51,9 +53,11 @@ jobs:
           aws-region: us-west-2
 
       - name: Clean up tag name ${{ env.TAG_NAME }}
+        id: tag
         shell: bash
         run: | 
           echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
+          echo "sui_tag=${{ env.sui_tag }}" >> "$GITHUB_OUTPUT"
 
       - name: Checking out ${{ env.sui_tag }}
         if: ${{ env.sui_tag != 'main' }}
@@ -108,6 +112,7 @@ jobs:
           mv ./target/release/sui-faucet ./target/release/sui-faucet-${os_type}
           mv ./target/release/sui-test-validator ./target/release/sui-test-validator-${os_type}
           mv ./target/release/sui-indexer ./target/release/sui-indexer-${os_type}
+          # mv ./target/release/sui-data-ingestion ./target/release/sui-data-ingestion-${os_type}
           mv ./external-crates/move/target/release/move-analyzer ./external-crates/move/target/release/move-analyzer-${os_type}
           tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}* ./external-crates/move/target/release/move-analyzer-${os_type}
           [[ ${{ env.sui_tag }} == *"mainnet"* ]] && aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz || true
@@ -125,6 +130,7 @@ jobs:
           mv ./target/release/sui-faucet.exe ./target/release/sui-faucet-${os_type}.exe
           mv ./target/release/sui-test-validator.exe ./target/release/sui-test-validator-${os_type}.exe
           mv ./target/release/sui-indexer.exe ./target/release/sui-indexer-${os_type}.exe
+          # mv ./target/release/sui-data-ingestion.exe ./target/release/sui-data-ingestion-${os_type}.exe
           mv ./external-crates/move/target/release/move-analyzer.exe ./external-crates/move/target/release/move-analyzer-${os_type}.exe
           tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}* ./external-crates/move/target/release/move-analyzer-${os_type}.exe
           [[ ${{ env.sui_tag }} == *"mainnet"* ]] && aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz || true
@@ -149,7 +155,7 @@ jobs:
   update-homebrew-formula:
     needs: release-build
     runs-on: ubuntu-latest
-    if: ${{ contains(github.ref, 'mainnet') }}
+    if: ${{ contains(needs.release-build.outputs.sui_tag, 'mainnet') }}
     steps:
       # Checkout MystenLabs/homebrew-tap
       - name: Checkout Target Repository
@@ -161,11 +167,6 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Clean up tag name ${{ env.TAG_NAME }}
-        shell: bash
-        run: | 
-          echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
-
       # Download all artifacts from the previous job
       - name: Download all artifacts
         uses: actions/download-artifact@v2
@@ -173,11 +174,11 @@ jobs:
       - name: Fetch Ubuntu x86_64 Binary and Compute SHA256
         shell: bash
         run: |
-          echo "sha256_ubuntu_release=$(sha256sum sui-binaries-ubuntu-ghcloud/sui-${sui_tag}-ubuntu-x86_64.tgz | awk '{print $1}')" >> $GITHUB_ENV
-          echo "sha256_macos_x86_release=$(sha256sum sui-binaries-macos-latest-xl/sui-${sui_tag}-macos-x86_64.tgz  | awk '{print $1}')" >> $GITHUB_ENV
-          echo "sha256_macos_arm_release$(sha256sum sui-binaries-macos-arm64-self-hosted/sui-${sui_tag}-macos-arm64.tgz | awk '{print $1}' )" >> $GITHUB_ENV
+          echo "sha256_ubuntu_release=$(sha256sum sui-binaries-ubuntu-ghcloud/sui-${{ needs.release-build.outputs.sui_tag }}-ubuntu-x86_64.tgz | awk '{print $1}')" >> $GITHUB_ENV
+          echo "sha256_macos_x86_release=$(sha256sum sui-binaries-macos-latest-xl/sui-${{ needs.release-build.outputs.sui_tag }}-macos-x86_64.tgz  | awk '{print $1}')" >> $GITHUB_ENV
+          echo "sha256_macos_arm_release$(sha256sum sui-binaries-macos-arm64-self-hosted/sui-${{ needs.release-build.outputs.sui_tag }}-macos-arm64.tgz | awk '{print $1}' )" >> $GITHUB_ENV
           
-    # Install Jinja2 for templating
+      # Install Jinja2 for templating
       - name: Install Jinja2
         run: pip install jinja2
 
@@ -192,7 +193,7 @@ jobs:
           template_env = jinja2.Environment(loader=template_loader)
           template = template_env.get_template("sui.rb.j2")
 
-          version = "${{ env.sui_tag }}".removeprefix("mainnet-v")
+          version = "${{ needs.release-build.outputs.sui_tag }}".removeprefix("mainnet-v")
 
           # Render the template with variables
           output = template.render(
@@ -212,7 +213,7 @@ jobs:
         uses: github-actions-x/commit@v2.9
         with:
           github-token: ${{ secrets.HOMEBREW_TAP_REPO_READ_WRITE }}
-          commit-message: "Update Homebrew formula for release ${{ env.sui_tag }}"
+          commit-message: "Update Homebrew formula for release ${{ needs.release-build.outputs.sui_tag }}"
           files: Formula/sui.rb
           push-branch: main
           rebase: 'true'
