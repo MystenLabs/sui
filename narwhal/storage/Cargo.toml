@@ -10,6 +10,7 @@ publish = false
 [dependencies]
 tempfile.workspace = true
 fastcrypto.workspace = true
+fastcrypto-tbls.workspace = true
 mysten-common.workspace = true
 futures.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros"] }
