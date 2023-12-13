@@ -6,13 +6,14 @@ module scratch_off::test_game {
     
     use scratch_off::game::{Self, ConvenienceStore, ENoTicketsLeft, StoreCap, Ticket, player_metadata,
      tickets_left, leaderboard, prize_pool_balance, leaderboard_players, get_target_player_metadata,
-     tickets_claimed, amount_won, tickets_issued};
+     tickets_claimed, amount_won, tickets_issued, GiftBox, unwrap_giftbox, prove_evaluated};
 
     #[test_only] use sui::test_scenario::{Self, Scenario};
     #[test_only] use sui::coin::{mint_for_testing};
     use sui::test_scenario as ts;
-    use sui::sui::SUI;
     use std::vector;
+    use sui::sui::SUI;
+    use sui::transfer;
 
     const ALICE_ADDRESS: address = @0xAAAA;
     const BOB_ADDRESS: address = @0xBBBB;
@@ -32,7 +33,7 @@ module scratch_off::test_game {
         {
             let coin = mint_for_testing<SUI>(coin_amount, ts::ctx(scenario));
 
-            game::open_store<SUI>(
+            let cap = game::open_store(
                 coin,
                 number_of_prizes,
                 value_of_prizes,
@@ -40,6 +41,8 @@ module scratch_off::test_game {
                 max_leaderboard_size,
                 ts::ctx(scenario)
             );
+
+            transfer::public_transfer(cap, OWNER_ADDRESS);
         }
     }
 
@@ -101,7 +104,7 @@ module scratch_off::test_game {
         ts::next_tx(&mut test, OWNER_ADDRESS);
         {
             // Send a batch 3 tickets to alice
-            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+            let store: ConvenienceStore = ts::take_shared(&test);
             let store_cap: StoreCap = ts::take_from_sender(&test);
             game::send_ticket(&store_cap, ALICE_ADDRESS, &mut store, 4, ts::ctx(&mut test));
             ts::return_to_sender(&test, store_cap);
@@ -127,7 +130,7 @@ module scratch_off::test_game {
         ts::next_tx(&mut test, OWNER_ADDRESS);
         {
             // Send a batch 3 tickets to alice
-            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+            let store: ConvenienceStore = ts::take_shared(&test);
             let store_cap: StoreCap = ts::take_from_sender(&test);
             game::send_ticket(&store_cap, ALICE_ADDRESS, &mut store, 3, ts::ctx(&mut test));
             ts::return_to_sender(&test, store_cap);
@@ -135,13 +138,16 @@ module scratch_off::test_game {
         };
         ts::next_tx(&mut test, ALICE_ADDRESS);
         {
-            let ticket: Ticket = ts::take_from_sender(&test);
-            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+
+            let giftbox: GiftBox = ts::take_from_sender(&test);
+            let (ticket, promise) = unwrap_giftbox(giftbox);
+            let store: ConvenienceStore = ts::take_shared(&test);
 
             assert!(prize_pool_balance(&store) == 3, 0);
 
-            let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
-            game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
+            let id = game::evaluate_ticket(ticket, &mut store, ts::ctx(&mut test));
+            prove_evaluated(&store, promise);
+            game::finish_evaluation_for_testing(id, b"test", &mut store, ts::ctx(&mut test));
             assert!(tickets_left(&store) == 0, 0);
             assert!(prize_pool_balance(&store) == 0, 0);
             ts::return_shared(store);
@@ -166,7 +172,7 @@ module scratch_off::test_game {
         ts::next_tx(&mut test, OWNER_ADDRESS);
         {
             // Send 1 ticket to alice and 1 ticket to bob
-            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+            let store: ConvenienceStore = ts::take_shared(&test);
             let store_cap: StoreCap = ts::take_from_sender(&test);
             game::send_ticket(&store_cap, ALICE_ADDRESS, &mut store, 1, ts::ctx(&mut test));
             game::send_ticket(&store_cap, BOB_ADDRESS, &mut store, 1, ts::ctx(&mut test));
@@ -179,22 +185,27 @@ module scratch_off::test_game {
         };
         ts::next_tx(&mut test, ALICE_ADDRESS);
         {
-            let ticket: Ticket = ts::take_from_sender(&test);
-            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
-            let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
-            game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
-            let leaderboard = leaderboard<SUI>(&store);
+            let giftbox: GiftBox = ts::take_from_sender(&test);
+            let (ticket, promise) = unwrap_giftbox(giftbox);
+            let store: ConvenienceStore = ts::take_shared(&test);
+            let id = game::evaluate_ticket(ticket, &mut store, ts::ctx(&mut test));
+            prove_evaluated(&store, promise);
+            game::finish_evaluation_for_testing(id, b"test", &mut store, ts::ctx(&mut test));
+            let leaderboard = leaderboard(&store);
             let players_list = leaderboard_players(leaderboard);
             assert!(vector::length(&players_list) == 1, 0);
             ts::return_shared(store);
         };
         ts::next_tx(&mut test, BOB_ADDRESS);
         {
-            let ticket: Ticket = ts::take_from_sender(&test);
-            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
-            let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
-            game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
-            let leaderboard = leaderboard<SUI>(&store);
+            let giftbox: GiftBox = ts::take_from_sender(&test);
+            let (ticket, promise) = unwrap_giftbox(giftbox);
+
+            let store: ConvenienceStore = ts::take_shared(&test);
+            let id = game::evaluate_ticket(ticket, &mut store, ts::ctx(&mut test));
+            prove_evaluated(&store, promise);
+            game::finish_evaluation_for_testing(id, b"test", &mut store, ts::ctx(&mut test));
+            let leaderboard = leaderboard(&store);
             let players_list = leaderboard_players(leaderboard);
             assert!(vector::length(&players_list) == 1, 0);
             // This is because owner should not change as bob would be the second person to climb to the leaderboard
@@ -203,17 +214,20 @@ module scratch_off::test_game {
         };
         ts::next_tx(&mut test, BOB_ADDRESS);
         {
-            let ticket_2: Ticket = ts::take_from_sender(&test);
-            let ticket_3: Ticket = ts::take_from_sender(&test);
+            let giftbox_2: GiftBox = ts::take_from_sender(&test);
+            let giftbox_3: GiftBox = ts::take_from_sender(&test);
+            let (ticket_2, promise_2) = unwrap_giftbox(giftbox_2);
+            let (ticket_3, promise_3) = unwrap_giftbox(giftbox_3);
+            let store: ConvenienceStore = ts::take_shared(&test);
+            let id = game::evaluate_ticket(ticket_2, &mut store, ts::ctx(&mut test));
+            let id_2 = game::evaluate_ticket(ticket_3, &mut store, ts::ctx(&mut test));
+            prove_evaluated(&store, promise_2);
+            prove_evaluated(&store, promise_3);
 
-            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
-            let id = game::evaluate_ticket<SUI>(ticket_2, &mut store, ts::ctx(&mut test));
-            let id_2 = game::evaluate_ticket<SUI>(ticket_3, &mut store, ts::ctx(&mut test));
+            game::finish_evaluation_for_testing(id, b"test", &mut store, ts::ctx(&mut test));
+            game::finish_evaluation_for_testing(id_2, b"test", &mut store, ts::ctx(&mut test));
 
-            game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
-            game::finish_evaluation_for_testing<SUI>(id_2, b"test", &mut store, ts::ctx(&mut test));
-
-            let leaderboard = leaderboard<SUI>(&store);
+            let leaderboard = leaderboard(&store);
             let players_list = leaderboard_players(leaderboard);
             assert!(vector::length(&players_list) == 1, 0);
             // This is because owner should not change
@@ -250,7 +264,7 @@ module scratch_off::test_game {
         ts::next_tx(&mut test, OWNER_ADDRESS);
         {
             // Send 1 ticket to alice and 1 ticket to bob
-            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+            let store: ConvenienceStore = ts::take_shared(&test);
             let store_cap: StoreCap = ts::take_from_sender(&test);
             game::send_ticket(&store_cap, ALICE_ADDRESS, &mut store, 1, ts::ctx(&mut test));
             game::send_ticket(&store_cap, BOB_ADDRESS, &mut store, 1, ts::ctx(&mut test));
@@ -260,22 +274,26 @@ module scratch_off::test_game {
         };
         ts::next_tx(&mut test, ALICE_ADDRESS);
         {
-            let ticket: Ticket = ts::take_from_sender(&test);
-            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
-            let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
-            game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
-            let leaderboard = leaderboard<SUI>(&store);
+            let giftbox: GiftBox = ts::take_from_sender(&test);
+            let (ticket, promise) = unwrap_giftbox(giftbox);
+            let store: ConvenienceStore = ts::take_shared(&test);
+            let id = game::evaluate_ticket(ticket, &mut store, ts::ctx(&mut test));
+            prove_evaluated(&store, promise);
+            game::finish_evaluation_for_testing(id, b"test", &mut store, ts::ctx(&mut test));
+            let leaderboard = leaderboard(&store);
             let players_list = leaderboard_players(leaderboard);
             assert!(vector::length(&players_list) == 1, 0);
             ts::return_shared(store);
         };
         ts::next_tx(&mut test, BOB_ADDRESS);
         {
-            let ticket: Ticket = ts::take_from_sender(&test);
-            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
-            let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
-            game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
-            let leaderboard = leaderboard<SUI>(&store);
+            let giftbox: GiftBox = ts::take_from_sender(&test);
+            let (ticket, promise) = unwrap_giftbox(giftbox);
+            let store: ConvenienceStore = ts::take_shared(&test);
+            let id = game::evaluate_ticket(ticket, &mut store, ts::ctx(&mut test));
+            prove_evaluated(&store, promise);
+            game::finish_evaluation_for_testing(id, b"test", &mut store, ts::ctx(&mut test));
+            let leaderboard = leaderboard(&store);
             let players_list = leaderboard_players(leaderboard);
             assert!(vector::length(&players_list) == 1, 0);
             // This is because owner should not change as bob would be the second person to climb to the leaderboard
@@ -284,11 +302,13 @@ module scratch_off::test_game {
         };
         ts::next_tx(&mut test, BOB_ADDRESS);
         {
-            let ticket: Ticket = ts::take_from_sender(&test);
-            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
-            let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
-            game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
-            let leaderboard = leaderboard<SUI>(&store);
+            let giftbox: GiftBox = ts::take_from_sender(&test);
+            let (ticket, promise) = unwrap_giftbox(giftbox);
+            let store: ConvenienceStore = ts::take_shared(&test);
+            let id = game::evaluate_ticket(ticket, &mut store, ts::ctx(&mut test));
+            prove_evaluated(&store, promise);
+            game::finish_evaluation_for_testing(id, b"test", &mut store, ts::ctx(&mut test));
+            let leaderboard = leaderboard(&store);
             let players_list = leaderboard_players(leaderboard);
             assert!(vector::length(&players_list) == 1, 0);
             // This is because owner should not change
@@ -315,7 +335,7 @@ module scratch_off::test_game {
         ts::next_tx(&mut test, OWNER_ADDRESS);
         {
             // Send 3 tickets to alice
-            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+            let store: ConvenienceStore = ts::take_shared(&test);
             let store_cap: StoreCap = ts::take_from_sender(&test);
             game::send_ticket(&store_cap, ALICE_ADDRESS, &mut store, 1, ts::ctx(&mut test));
             game::send_ticket(&store_cap, ALICE_ADDRESS, &mut store, 1, ts::ctx(&mut test));
@@ -326,7 +346,7 @@ module scratch_off::test_game {
         ts::next_tx(&mut test, OWNER_ADDRESS);
         {
             // Try to send one more ticket and fail
-            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+            let store: ConvenienceStore = ts::take_shared(&test);
             let store_cap: StoreCap = ts::take_from_sender(&test);
             game::send_ticket(&store_cap, ALICE_ADDRESS, &mut store, 1, ts::ctx(&mut test));
             ts::return_to_sender(&test, store_cap);
@@ -352,7 +372,7 @@ module scratch_off::test_game {
         ts::next_tx(&mut test, OWNER_ADDRESS);
         {
             // Send 1 tickets to alice
-            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+            let store: ConvenienceStore = ts::take_shared(&test);
             let store_cap: StoreCap = ts::take_from_sender(&test);
             game::send_ticket(&store_cap, ALICE_ADDRESS, &mut store, 1, ts::ctx(&mut test));
             ts::return_to_sender(&test, store_cap);
@@ -360,13 +380,13 @@ module scratch_off::test_game {
         };
         ts::next_tx(&mut test, ALICE_ADDRESS);
         {
-            let ticket: Ticket = ts::take_from_sender(&test);
-            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
-
+            let store: ConvenienceStore = ts::take_shared(&test);
             assert!(prize_pool_balance(&store) == 3, 0);
-
-            let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
-            game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
+            let giftbox: GiftBox = ts::take_from_sender(&test);
+            let (ticket, promise) = unwrap_giftbox(giftbox);
+            let id = game::evaluate_ticket(ticket, &mut store, ts::ctx(&mut test));
+            prove_evaluated(&store, promise);
+            game::finish_evaluation_for_testing(id, b"test", &mut store, ts::ctx(&mut test));
             assert!(tickets_left(&store) == 2, 0);
             assert!(prize_pool_balance(&store) == 2, 0);
             ts::return_shared(store);
@@ -392,7 +412,7 @@ module scratch_off::test_game {
         ts::next_tx(&mut test, OWNER_ADDRESS);
         {
             // Send 1 tickets to alice
-            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+            let store: ConvenienceStore = ts::take_shared(&test);
             let store_cap: StoreCap = ts::take_from_sender(&test);
             game::send_ticket(&store_cap, ALICE_ADDRESS, &mut store, 1, ts::ctx(&mut test));
             ts::return_to_sender(&test, store_cap);
@@ -400,13 +420,14 @@ module scratch_off::test_game {
         };
         ts::next_tx(&mut test, ALICE_ADDRESS);
         {
-            let ticket: Ticket = ts::take_from_sender(&test);
-            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
-
+            let giftbox: GiftBox = ts::take_from_sender(&test);
+            let (ticket, promise) = unwrap_giftbox(giftbox);
+            let store: ConvenienceStore = ts::take_shared(&test);
             assert!(prize_pool_balance(&store) == 5500, 0);
 
-            let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
-            game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
+            let id = game::evaluate_ticket(ticket, &mut store, ts::ctx(&mut test));
+            prove_evaluated(&store, promise);
+            game::finish_evaluation_for_testing(id, b"test", &mut store, ts::ctx(&mut test));
             assert!(tickets_left(&store) == 1759, 0);
 
             assert!(prize_pool_balance(&store) == 5499, 0);

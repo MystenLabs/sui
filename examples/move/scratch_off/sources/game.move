@@ -22,6 +22,7 @@ module scratch_off::game {
     use sui::table::{Self, Table};
     use sui::package;
     use sui::kiosk::{Self, Kiosk};
+    use sui::sui::SUI;
 
     // --------------- Constants ---------------
     const EInvalidInputs: u64 = 0;
@@ -34,12 +35,12 @@ module scratch_off::game {
     const ETicketNotEvaluated: u64 = 6;
 
     // --------------- Events ---------------
-    struct NewDrawing<phantom T> has copy, drop {
+    struct NewDrawing has copy, drop {
         ticket_id: ID,
         player: address,
     }
 
-    struct DrawingResult<phantom T> has copy, drop {
+    struct DrawingResult has copy, drop {
         ticket_id: ID,
         player: address,
         amount_won: u64,
@@ -108,11 +109,11 @@ module scratch_off::game {
         }
     }
 
-    struct ConvenienceStore<phantom Asset> has key {
+    struct ConvenienceStore has key {
         id: UID,
         creator: address,
         /// Total prize pool available.
-        prize_pool: Balance<Asset>,
+        prize_pool: Balance<SUI>,
         /// The vector of tickets and their corresponding prize winnings in the pool
         /// of winning tickets. (tickets left, prize awarded)
         winning_tickets: vector<PrizeStruct>,
@@ -130,11 +131,11 @@ module scratch_off::game {
     }     
 
     /// Emergency fund withdrawal function
-    public fun withdraw_funds<Asset>(
+    public fun withdraw_funds(
         store_cap: &StoreCap,
-        store: &mut ConvenienceStore<Asset>,
+        store: &mut ConvenienceStore,
         ctx: &mut TxContext
-    ): Coin<Asset> {
+    ): Coin<SUI> {
         assert!(object::id(store) == store_cap.store_id, ENotAuthorizedEmployee);
         let value = balance::value(&store.prize_pool);
         coin::take(&mut store.prize_pool, value, ctx)
@@ -159,8 +160,8 @@ module scratch_off::game {
     /// We allow the user of the store.
     /// We purposely design the convenience store to be an owned object so that we
     /// don't need to make this in a shared format.
-    public fun open_store<Asset>(
-        coin: Coin<Asset>, 
+    public fun open_store(
+        coin: Coin<SUI>, 
         number_of_prizes: vector<u64>,
         value_of_prizes: vector<u64>,
         public_key: vector<u8>,
@@ -173,7 +174,7 @@ module scratch_off::game {
 
         let winning_tickets = vector<PrizeStruct>[];
         let idx = 0;
-        let prize_pool = balance::zero<Asset>();
+        let prize_pool = balance::zero<SUI>();
         let winning_ticket_count = 0;
         let required_funds = 0;
 
@@ -198,8 +199,10 @@ module scratch_off::game {
         assert!(coin::value(&coin) == required_funds, ENotExactAmount);
         balance::join(&mut prize_pool, coin::into_balance(coin));
 
-        let new_store = ConvenienceStore<Asset> {
-            id: object::new(ctx),
+        let store_uid = object::new(ctx);
+        let store_id = object::uid_to_inner(&store_uid);
+        let new_store = ConvenienceStore {
+            id: store_uid,
             creator: tx_context::sender(ctx),
             prize_pool,
             winning_tickets, 
@@ -220,15 +223,15 @@ module scratch_off::game {
         
         StoreCap {
             id: object::new(ctx),
-            store_id: object::id(&new_store)
+            store_id
         }
     }
 
     /// Initializes a ticket and sends it to someone.
-    public fun send_ticket<Asset>(
+    public fun send_ticket(
         store_cap: &StoreCap,
         player: address,
-        store: &mut ConvenienceStore<Asset>,
+        store: &mut ConvenienceStore,
         drawing_count: u64,
         ctx: &mut TxContext
     ) {
@@ -253,7 +256,7 @@ module scratch_off::game {
         let GiftBox { id, ticket } = gift_box;
 
         let ticket_id = object::id(&ticket);
-
+        object::delete(id);
         (ticket, UseOrLockPromise {
             ticket_id
         })
@@ -269,17 +272,20 @@ module scratch_off::game {
     }
     
     // Time to prove we've locked it or used it.
-    public fun prove_evaluated<Asset>(store: &ConvenienceStore<Asset>, promise: UseOrLockPromise){
+    public fun prove_evaluated(
+        store: &ConvenienceStore, 
+        promise: UseOrLockPromise
+    ) {
         let UseOrLockPromise { ticket_id } = promise;
-        assert!(ticket_exists<Asset>(store, ticket_id), ETicketNotEvaluated);
+        assert!(ticket_exists(store, ticket_id), ETicketNotEvaluated);
     }
 
     /// Calls evaluate ticket by adding it as a dynamic field to the store
     /// We actually have a choice here to make users send tickets to our address and write
     /// the backend to listen to those, or we can list these objects as a dof in the shared_object
-    public fun evaluate_ticket<Asset>(
+    public fun evaluate_ticket(
         ticket: Ticket,
-        store: &mut ConvenienceStore<Asset>,
+        store: &mut ConvenienceStore,
         ctx: &mut TxContext
     ): ID {
         assert!(store.tickets_issued <= store.original_ticket_count, ENoTicketsLeft);
@@ -291,7 +297,7 @@ module scratch_off::game {
         // go to the player who sent this ticket
         ticket.player = tx_context::sender(ctx);
         dof::add(&mut store.id, ticket_id, ticket);
-        event::emit(NewDrawing<Asset> { 
+        event::emit(NewDrawing { 
             ticket_id,
             player: tx_context::sender(ctx),
         });
@@ -302,14 +308,14 @@ module scratch_off::game {
     /// This function is called by the convenience store owner
     /// and we grab a prize from the store based on the number that was sent.
     /// We also need to update the prize odds in this function and decrease prizes by 1
-    public fun finish_evaluation<Asset>(
+    public fun finish_evaluation(
         ticket_id: ID,
         bls_sig: vector<u8>,
-        store: &mut ConvenienceStore<Asset>,
+        store: &mut ConvenienceStore,
         ctx: &mut TxContext
     ) {
         // get the game obj
-        if (!ticket_exists<Asset>(store, ticket_id)) return;
+        if (!ticket_exists(store, ticket_id)) return;
         let Ticket {
             id,
             convenience_store_id: _,
@@ -334,7 +340,7 @@ module scratch_off::game {
         let reward_balance = 0;
         while (ticket_index < drawing_count) {
             // Randomly pick a ticket from the prizes
-            let target_index = math::get_random_u64_in_range(&random_32b, tickets_left<Asset>(store));
+            let target_index = math::get_random_u64_in_range(&random_32b, tickets_left(store));
             // Rehash so next number is different
             random_32b = blake2b256(&random_32b);
             let current_index = 0;
@@ -442,7 +448,7 @@ module scratch_off::game {
             };
         };
 
-        event::emit(DrawingResult<Asset> { 
+        event::emit(DrawingResult { 
             ticket_id,
             player: tx_context::sender(ctx),
             amount_won: reward_balance,
@@ -453,11 +459,11 @@ module scratch_off::game {
 
     /// === Getters === 
     /// 
-    public fun total_players<Asset>(store: &ConvenienceStore<Asset>): u64 {
+    public fun total_players(store: &ConvenienceStore): u64 {
         table::length(&store.player_metadata)
     }
 
-    public fun leaderboard<Asset>(store: &ConvenienceStore<Asset>): &LeaderBoard {
+    public fun leaderboard(store: &ConvenienceStore): &LeaderBoard {
        &store.leaderboard 
     }
 
@@ -465,7 +471,7 @@ module scratch_off::game {
         leaderboard.leaderboard_players
     }
 
-    public fun winning_tickets<Asset>(store: &ConvenienceStore<Asset>): &vector<PrizeStruct> {
+    public fun winning_tickets(store: &ConvenienceStore): &vector<PrizeStruct> {
         &store.winning_tickets
     }
 
@@ -473,7 +479,7 @@ module scratch_off::game {
         table::contains(player_metadata, target_address)
     }
 
-    public fun player_metadata<Asset>(store: &ConvenienceStore<Asset>): &Table<address, Metadata> {
+    public fun player_metadata(store: &ConvenienceStore): &Table<address, Metadata> {
         &store.player_metadata
     }
 
@@ -485,42 +491,42 @@ module scratch_off::game {
         table::borrow_mut(player_metadata, target_address)
     }
 
-    public fun original_ticket_count<Asset>(store: &ConvenienceStore<Asset>): u64 {
+    public fun original_ticket_count(store: &ConvenienceStore): u64 {
         store.original_ticket_count
     }
 
-    public fun tickets_left<Asset>(store: &ConvenienceStore<Asset>): u64 {
+    public fun tickets_left(store: &ConvenienceStore): u64 {
         store.original_ticket_count - store.tickets_evaluated
     }
 
-    public fun tickets_issued<Asset>(store: &ConvenienceStore<Asset>): u64 {
+    public fun tickets_issued(store: &ConvenienceStore): u64 {
         store.tickets_issued
     }
 
-    public fun prize_pool_balance<Asset>(store: &ConvenienceStore<Asset>): u64 {
+    public fun prize_pool_balance(store: &ConvenienceStore): u64 {
         balance::value(&store.prize_pool)
     }
 
     // --------------- House Accessors ---------------
 
-    public fun public_key<Asset>(store: &ConvenienceStore<Asset>): vector<u8> {
+    public fun public_key(store: &ConvenienceStore): vector<u8> {
         store.public_key
     }
 
-    public fun ticket_exists<Asset>(store: &ConvenienceStore<Asset>, ticket_id: ID): bool {
+    public fun ticket_exists(store: &ConvenienceStore, ticket_id: ID): bool {
         dof::exists_with_type<ID, Ticket>(&store.id, ticket_id)
     }
 
     // Tests
     #[test_only]
-    public fun finish_evaluation_for_testing<Asset>(
+    public fun finish_evaluation_for_testing(
         ticket_id: ID,
         bls_sig: vector<u8>,
-        store: &mut ConvenienceStore<Asset>,
+        store: &mut ConvenienceStore,
         ctx: &mut TxContext
     ) {
         // get the game obj
-        if (!ticket_exists<Asset>(store, ticket_id)) return;
+        if (!ticket_exists(store, ticket_id)) return;
         let Ticket {
             id,
             convenience_store_id: _,
@@ -545,7 +551,7 @@ module scratch_off::game {
         let reward_balance = 0;
         while (ticket_index < drawing_count) {
             // Randomly pick a ticket from the prizes
-            let target_index = math::get_random_u64_in_range(&random_32b, tickets_left<Asset>(store));
+            let target_index = math::get_random_u64_in_range(&random_32b, tickets_left(store));
             // Rehash so next number is different
             random_32b = blake2b256(&random_32b);
             let current_index = 0;
@@ -653,7 +659,7 @@ module scratch_off::game {
             };
         };
 
-        event::emit(DrawingResult<Asset> { 
+        event::emit(DrawingResult { 
             ticket_id,
             player: tx_context::sender(ctx),
             amount_won: reward_balance,
