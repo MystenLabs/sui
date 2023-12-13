@@ -364,7 +364,6 @@ mod checked {
     fn check_objects(transaction: &TransactionData, objects: &InputObjects) -> UserInputResult<()> {
         // We require that mutable objects cannot show up more than once.
         let mut used_objects: HashSet<SuiAddress> = HashSet::new();
-        let mut deleted_shared_objects = Vec::new();
         for object in objects.iter() {
             if object.is_mutable() {
                 fp_ensure!(
@@ -407,14 +406,7 @@ mod checked {
                     )?;
                 }
                 // We skip checking a deleted shared object because it no longer exists
-                ObjectReadResultKind::DeletedSharedObject(seq, digest) => {
-                    deleted_shared_objects.push((
-                        input_object_kind.object_id(),
-                        *seq,
-                        input_object_kind.is_mutable(),
-                        *digest,
-                    ));
-                }
+                ObjectReadResultKind::DeletedSharedObject(_, _) => (),
             }
         }
 
