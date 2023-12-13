@@ -14,9 +14,8 @@ use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
 use sui_types::error::SuiResult;
 use sui_types::messages_grpc::{
-    HandleCertificateResponse, HandleCertificateResponseV2, HandleTransactionResponse,
-    ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest,
-    TransactionInfoResponse,
+    HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
+    SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
@@ -72,15 +71,6 @@ impl AuthorityAPI for LocalAuthorityClient {
             });
         }
         result
-    }
-
-    async fn handle_certificate(
-        &self,
-        certificate: CertifiedTransaction,
-    ) -> Result<HandleCertificateResponse, SuiError> {
-        self.handle_certificate_v2(certificate)
-            .await
-            .map(|r| r.into())
     }
 
     async fn handle_certificate_v2(
@@ -243,14 +233,6 @@ impl AuthorityAPI for MockAuthorityApi {
     }
 
     /// Execute a certificate.
-    async fn handle_certificate(
-        &self,
-        _certificate: CertifiedTransaction,
-    ) -> Result<HandleCertificateResponse, SuiError> {
-        unimplemented!()
-    }
-
-    /// Execute a certificate.
     async fn handle_certificate_v2(
         &self,
         _certificate: CertifiedTransaction,
@@ -327,13 +309,6 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
             tokio::time::sleep(duration).await;
         }
         self.tx_info_resp_to_return.clone()
-    }
-
-    async fn handle_certificate(
-        &self,
-        _certificate: CertifiedTransaction,
-    ) -> Result<HandleCertificateResponse, SuiError> {
-        unimplemented!()
     }
 
     async fn handle_certificate_v2(

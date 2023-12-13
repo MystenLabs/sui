@@ -18,9 +18,8 @@ use sui_network::{
 use sui_types::effects::TransactionEvents;
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::messages_grpc::{
-    HandleCertificateResponse, HandleCertificateResponseV2, HandleTransactionResponse,
-    ObjectInfoRequest, ObjectInfoResponse, SubmitCertificateResponse, SystemStateRequest,
-    TransactionInfoRequest, TransactionInfoResponse,
+    HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
+    SubmitCertificateResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
@@ -534,11 +533,7 @@ impl Validator for ValidatorService {
         })
         .await
         .unwrap()
-        .map(|executed| {
-            tonic::Response::new(SubmitCertificateResponse {
-                executed: executed.map(|e| e.into()),
-            })
-        })
+        .map(|executed| tonic::Response::new(SubmitCertificateResponse { executed }))
     }
 
     async fn handle_certificate_v2(
@@ -559,16 +554,6 @@ impl Validator for ValidatorService {
                     ),
                 )
             })
-    }
-
-    async fn handle_certificate(
-        &self,
-        request: tonic::Request<CertifiedTransaction>,
-    ) -> Result<tonic::Response<HandleCertificateResponse>, tonic::Status> {
-        request.get_ref().verify_user_input()?;
-        self.handle_certificate_v2(request)
-            .await
-            .map(|v| tonic::Response::new(v.into_inner().into()))
     }
 
     async fn object_info(
