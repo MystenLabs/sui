@@ -612,10 +612,11 @@ where
             })
             .collect();
 
+        let (latest_objects, _) = get_latest_objects(data.output_objects());
         let history_object_map = data
             .output_objects()
             .into_iter()
-            .map(|o| (o.id(), o.clone()))
+            .map(|o| ((o.id(), o.version()), o.clone()))
             .collect::<HashMap<_, _>>();
 
         let changed_objects: Vec<IndexedObject> = data
@@ -630,22 +631,23 @@ where
                 fx.all_changed_objects()
                     .into_iter()
                     .map(|(oref, _owner, _kind)| {
-                        let history_object = history_object_map.get(&(oref.0)).unwrap_or_else(|| {
+                        let history_object = history_object_map.get(&(oref.0, oref.1)).unwrap_or_else(|| {
                             panic!(
-                                "object {:?} not found in CheckpointData (tx_digest: {})",
+                                "object {:?} version {:?} not found in CheckpointData (tx_digest: {})",
                                 oref.0,
+                                oref.1,
                                 tx.digest()
                             )
                         });
-                        assert_eq!(oref.1, history_object.version());
+                        assert_eq!(oref.2, history_object.digest());
                         let df_info =
-                            try_create_dynamic_field_info(history_object, &history_object_map, module_resolver)
+                            try_create_dynamic_field_info(history_object, &latest_objects, module_resolver)
                                 .unwrap_or_else(|e| {
                                     panic!(
-                                "failed to create dynamic field info for history obj: {:?}:{:?}. Err: {e}",
-                                history_object.id(),
-                                history_object.version()
-                            )
+                                        "failed to create dynamic field info for history obj: {:?}:{:?}. Err: {e}",
+                                        history_object.id(),
+                                        history_object.version()
+                                    )
                                 });
 
                         IndexedObject::from_object(checkpoint_seq, history_object.clone(), df_info)

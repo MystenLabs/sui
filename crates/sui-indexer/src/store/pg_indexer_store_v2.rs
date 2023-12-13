@@ -73,10 +73,12 @@ const PG_COMMIT_PARALLEL_CHUNK_SIZE_PER_DB_TX: usize = 500;
 // The amount of rows to update in one DB transcation, for objects particularly
 // Having this number too high may cause many db deadlocks because of
 // optimistic locking.
-const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE_PER_DB_TX: usize = 100;
+const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE_PER_DB_TX: usize = 500;
 const OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG: usize = 900;
 const OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG: usize = 300;
 
+// with rn = 1, we only select the latest version of each object,
+// so that we don't have to update the same object multiple times.
 const UPDATE_OBJECTS_SNAPSHOT_QUERY: &str = r"
 INSERT INTO objects_snapshot (object_id, object_version, object_status, object_digest, checkpoint_sequence_number, owner_type, owner_id, object_type, serialized_object, coin_type, coin_balance, df_kind, df_name, df_object_type, df_object_id)
 SELECT object_id, object_version, object_status, object_digest, checkpoint_sequence_number, owner_type, owner_id, object_type, serialized_object, coin_type, coin_balance, df_kind, df_name, df_object_type, df_object_id
