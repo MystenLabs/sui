@@ -46,7 +46,7 @@ jobs:
       - name: Clean up and validate tag name ${{ env.TAG_NAME }}
         shell: bash
         run: |
-          export sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)"
+          export sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)
           [[ "${sui_tag}" == "main" ]] && echo "tag cannot be equals to 'main'" && exit 1
           echo "sui_tag=${sui_tag}" >> $GITHUB_ENV
 
