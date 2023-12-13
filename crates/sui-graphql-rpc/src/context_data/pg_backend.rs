@@ -3,7 +3,7 @@
 
 use super::{
     db_backend::{BalanceQuery, Explain, Explained, GenericQueryBuilder},
-    db_data_provider::DbValidationError,
+    db_data_provider::{DbValidationError, TypeFilterError},
 };
 use crate::{
     context_data::db_data_provider::PgManager,
@@ -294,11 +294,12 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         }
 
         if let Some(object_type) = filter.type_ {
+            let format = "package[::module[::type[<type_params>]]]";
             let parts: Vec<_> = object_type.splitn(3, "::").collect();
 
             if parts.iter().any(|&part| part.is_empty()) {
                 return Err(DbValidationError::InvalidType(
-                    "Empty strings are not allowed".to_string(),
+                    TypeFilterError::MissingComponents(object_type, format).to_string(),
                 ))?;
             }
 
@@ -340,9 +341,10 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
                     );
                 }
             } else {
-                return Err(Error::Internal(
-                    "Invalid type. Type must have 3 or less parts".to_string(),
-                ));
+                return Err(DbValidationError::InvalidType(
+                    TypeFilterError::TooManyComponents(object_type, 3, format).to_string(),
+                )
+                .into());
             }
         }
 
@@ -457,19 +459,60 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         }
 
         // Filters on the package and/ or module that emitted some event
-        if let Some(p) = filter.emitting_package {
-            query = query.filter(events::dsl::package.eq(p.into_vec()));
+        if let Some(pm) = filter.emitting_module {
+            let format = "package[::module]";
+            let parts: Vec<_> = pm.splitn(2, "::").collect();
 
-            if let Some(m) = filter.emitting_module {
-                query = query.filter(events::dsl::module.eq(m));
+            if parts.iter().any(|&part| part.is_empty()) {
+                return Err(DbValidationError::InvalidType(
+                    TypeFilterError::MissingComponents(pm, format).to_string(),
+                ))?;
+            }
+
+            let p = SuiAddress::from_str(parts[0])
+                .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+
+            match parts.len() {
+                1 => {
+                    query = query.filter(events::dsl::package.eq(p.into_vec()));
+                }
+                2 => {
+                    query = query.filter(events::dsl::package.eq(p.into_vec()));
+                    query = query.filter(events::dsl::module.eq(parts[1].to_string()));
+                }
+                _ => {
+                    return Err(DbValidationError::InvalidType(
+                        TypeFilterError::TooManyComponents(pm, 2, format).to_string(),
+                    )
+                    .into());
+                }
             }
         }
 
         // Filters on the event type
-        if let Some(p) = filter.event_package {
-            if let Some(m) = filter.event_module {
-                if let Some(t) = filter.event_type {
-                    let event_type = format!("{}::{}::{}", p, m, t);
+        if let Some(event_type) = filter.event_type {
+            let parts: Vec<_> = event_type.splitn(3, "::").collect();
+
+            if parts.iter().any(|&part| part.is_empty()) {
+                return Err(DbValidationError::InvalidType(
+                    TypeFilterError::MissingComponents(
+                        event_type,
+                        "package[::module[::type[<type_params>]]]",
+                    )
+                    .to_string(),
+                ))?;
+            }
+
+            let p = SuiAddress::from_str(parts[0])
+                .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+
+            match parts.len() {
+                1 => query = query.filter(events::dsl::event_type.like(format!("{}::%", p))),
+                2 => {
+                    query = query
+                        .filter(events::dsl::event_type.like(format!("{}::{}::%", p, parts[1])))
+                }
+                3 => {
                     let validated_type = parse_sui_struct_tag(&event_type)
                         .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
 
@@ -491,9 +534,18 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
                         );
                     }
                 }
-                query = query.filter(events::dsl::event_type.like(format!("{}::{}::%", p, m)));
+                _ => {
+                    return Err(DbValidationError::InvalidType(
+                        TypeFilterError::TooManyComponents(
+                            event_type,
+                            3,
+                            "package[::module[::type[<type_params>]]]",
+                        )
+                        .to_string(),
+                    )
+                    .into());
+                }
             }
-            query = query.filter(events::dsl::event_type.like(format!("{}::%", p)));
         }
 
         Ok(query)
