@@ -3,19 +3,13 @@
     filter: {eventPackage: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13", eventModule: "Market", eventType: "ChangePriceEvent<0x2::sui::SUI>"}
   ) {
     nodes {
-      sendingModule {
+      sendingModuleId {
         name
         package {
           asObject {
             digest
           }
         }
-      }
-      type {
-        repr
-      }
-      senders {
-        address
       }
       timestamp
       json
