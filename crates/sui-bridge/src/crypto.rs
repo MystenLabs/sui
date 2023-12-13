@@ -5,19 +5,68 @@ use crate::{
     error::{BridgeError, BridgeResult},
     types::{BridgeAction, BridgeCommittee, SignedBridgeAction, VerifiedSignedBridgeAction},
 };
-use fastcrypto::secp256k1::{
-    Secp256k1KeyPair, Secp256k1PublicKey, Secp256k1PublicKeyAsBytes, Secp256k1Signature,
+use fastcrypto::{
+    encoding::{Encoding, Hex},
+    secp256k1::{
+        Secp256k1KeyPair, Secp256k1PublicKey, Secp256k1PublicKeyAsBytes, Secp256k1Signature,
+    },
 };
 use fastcrypto::{hash::Keccak256, traits::KeyPair};
 use serde::{Deserialize, Serialize};
-use std::{pin::Pin, sync::Arc};
-use sui_types::{crypto::Signer, message_envelope::VerifiedEnvelope};
+use std::fmt::Debug;
+use std::{
+    fmt::{Display, Formatter},
+    pin::Pin,
+    sync::Arc,
+};
+use sui_types::{base_types::ConciseableName, crypto::Signer, message_envelope::VerifiedEnvelope};
 use tap::TapFallible;
-
 pub type BridgeAuthorityKeyPair = Secp256k1KeyPair;
 pub type BridgeAuthorityPublicKey = Secp256k1PublicKey;
-pub type BridgeAuthorityPublicKeyBytes = Secp256k1PublicKeyAsBytes;
 pub type BridgeAuthoritySignature = Secp256k1Signature;
+
+#[derive(Ord, PartialOrd, PartialEq, Eq, Clone, Debug, Hash)]
+pub struct BridgeAuthorityPublicKeyBytes(Secp256k1PublicKeyAsBytes);
+
+impl From<&BridgeAuthorityPublicKey> for BridgeAuthorityPublicKeyBytes {
+    fn from(pk: &BridgeAuthorityPublicKey) -> Self {
+        Self(Secp256k1PublicKeyAsBytes::from(pk))
+    }
+}
+
+pub struct ConciseBridgeAuthorityPublicKeyBytesRef<'a>(&'a BridgeAuthorityPublicKeyBytes);
+
+impl Debug for ConciseBridgeAuthorityPublicKeyBytesRef<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        let s = Hex::encode(self.0 .0 .0.get(0..4).ok_or(std::fmt::Error)?);
+        write!(f, "k#{}..", s)
+    }
+}
+
+impl Display for ConciseBridgeAuthorityPublicKeyBytesRef<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        Debug::fmt(self, f)
+    }
+}
+
+impl AsRef<[u8]> for BridgeAuthorityPublicKeyBytes {
+    fn as_ref(&self) -> &[u8] {
+        self.0 .0.as_ref()
+    }
+}
+
+impl<'a> ConciseableName<'a> for BridgeAuthorityPublicKeyBytes {
+    type ConciseTypeRef = ConciseBridgeAuthorityPublicKeyBytesRef<'a>;
+    type ConciseType = String;
+
+    fn concise(&'a self) -> ConciseBridgeAuthorityPublicKeyBytesRef<'a> {
+        ConciseBridgeAuthorityPublicKeyBytesRef(self)
+    }
+
+    fn concise_owned(&self) -> String {
+        format!("{:?}", ConciseBridgeAuthorityPublicKeyBytesRef(self))
+    }
+}
 
 /// See `StableSyncAuthoritySigner`
 pub type StableSyncBridgeAuthoritySigner =

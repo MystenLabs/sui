@@ -11379,15 +11379,18 @@ dependencies = [
  "ethers",
  "eyre",
  "fastcrypto",
+ "futures",
  "move-core-types",
  "mysten-metrics",
  "once_cell",
  "prometheus",
+ "rand 0.8.5",
  "reqwest",
  "rocksdb",
  "serde",
  "serde_json",
  "shared-crypto",
+ "sui-common",
  "sui-config",
  "sui-json-rpc-types",
  "sui-sdk",
@@ -11400,6 +11403,7 @@ dependencies = [
  "tracing",
  "typed-store",
  "typed-store-derive",
+ "url",
  "workspace-hack",
 ]
 
@@ -11440,6 +11444,18 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid 1.2.2",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-common"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "mysten-metrics",
+ "sui-types",
+ "tokio",
+ "tracing",
  "workspace-hack",
 ]
 

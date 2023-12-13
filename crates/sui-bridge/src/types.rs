@@ -7,16 +7,18 @@ use crate::crypto::{BridgeAuthorityPublicKey, BridgeAuthoritySignInfo, BridgeAut
 use crate::error::{BridgeError, BridgeResult};
 use crate::events::EmittedSuiToEthTokenBridgeV1;
 use ethers::types::Address as EthAddress;
+pub use ethers::types::H256 as EthTransactionHash;
+use rand::seq::SliceRandom;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
+use sui_types::committee::CommitteeTrait;
+use sui_types::committee::StakeUnit;
 use sui_types::digests::{Digest, TransactionDigest};
 use sui_types::error::SuiResult;
 use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
-use sui_types::multiaddr::Multiaddr;
 use sui_types::{base_types::SUI_ADDRESS_LENGTH, committee::EpochId};
-
-pub use ethers::types::H256 as EthTransactionHash;
 
 pub const BRIDGE_AUTHORITY_TOTAL_VOTING_POWER: u64 = 10000;
 
@@ -24,7 +26,7 @@ pub const BRIDGE_AUTHORITY_TOTAL_VOTING_POWER: u64 = 10000;
 pub struct BridgeAuthority {
     pub pubkey: BridgeAuthorityPublicKey,
     pub voting_power: u64,
-    pub bridge_network_address: Multiaddr,
+    pub base_url: String,
     pub is_blocklisted: bool,
 }
 
@@ -38,12 +40,14 @@ impl BridgeAuthority {
 #[derive(Debug, Clone)]
 pub struct BridgeCommittee {
     members: BTreeMap<BridgeAuthorityPublicKeyBytes, BridgeAuthority>,
+    total_blocklisted_stake: StakeUnit,
 }
 
 impl BridgeCommittee {
     pub fn new(members: Vec<BridgeAuthority>) -> BridgeResult<Self> {
         let mut members_map = BTreeMap::new();
         let mut total_stake = 0;
+        let mut total_blocklisted_stake = 0;
         for member in members {
             let public_key = BridgeAuthorityPublicKeyBytes::from(&member.pubkey);
             if members_map.contains_key(&public_key) {
@@ -53,6 +57,9 @@ impl BridgeCommittee {
             }
             // TODO: should we disallow identical network addresses?
             total_stake += member.voting_power;
+            if member.is_blocklisted {
+                total_blocklisted_stake += member.voting_power;
+            }
             members_map.insert(public_key, member);
         }
         if total_stake != BRIDGE_AUTHORITY_TOTAL_VOTING_POWER {
@@ -62,6 +69,7 @@ impl BridgeCommittee {
         }
         Ok(Self {
             members: members_map,
+            total_blocklisted_stake,
         })
     }
 
@@ -71,6 +79,63 @@ impl BridgeCommittee {
 
     pub fn members(&self) -> &BTreeMap<BridgeAuthorityPublicKeyBytes, BridgeAuthority> {
         &self.members
+    }
+
+    pub fn member(&self, member: &BridgeAuthorityPublicKeyBytes) -> Option<&BridgeAuthority> {
+        self.members.get(member)
+    }
+
+    pub fn total_blocklisted_stake(&self) -> StakeUnit {
+        self.total_blocklisted_stake
+    }
+}
+
+impl CommitteeTrait<BridgeAuthorityPublicKeyBytes> for BridgeCommittee {
+    // Note:
+    // 1. preference is not supported today.
+    // 2. blocklisted members are always excluded.
+    fn shuffle_by_stake_with_rng(
+        &self,
+        // preference is not supported today
+        _preferences: Option<&BTreeSet<BridgeAuthorityPublicKeyBytes>>,
+        // only attempt from these authorities.
+        restrict_to: Option<&BTreeSet<BridgeAuthorityPublicKeyBytes>>,
+        rng: &mut impl Rng,
+    ) -> Vec<BridgeAuthorityPublicKeyBytes> {
+        let candidates = self
+            .members
+            .iter()
+            .filter_map(|(name, a)| {
+                // Remove blocklisted members
+                if a.is_blocklisted {
+                    return None;
+                }
+                // exclude non-allowlisted members
+                if let Some(restrict_to) = restrict_to {
+                    match restrict_to.contains(name) {
+                        true => Some((name.clone(), a.voting_power)),
+                        false => None,
+                    }
+                } else {
+                    Some((name.clone(), a.voting_power))
+                }
+            })
+            .collect::<Vec<_>>();
+
+        candidates
+            .choose_multiple_weighted(rng, candidates.len(), |(_, weight)| *weight as f64)
+            // Unwrap safe: it panics when the third parameter is larger than the size of the slice
+            .unwrap()
+            .map(|(name, _)| name)
+            .cloned()
+            .collect()
+    }
+
+    fn weight(&self, author: &BridgeAuthorityPublicKeyBytes) -> StakeUnit {
+        self.members
+            .get(author)
+            .map(|a| a.voting_power)
+            .unwrap_or(0)
     }
 }
 
@@ -191,12 +256,16 @@ impl BridgeAction {
     }
 }
 
+#[derive(Debug)]
 pub struct BridgeCommitteeValiditySignInfo {
-    pub signatures: HashMap<BridgeAuthorityPublicKey, BridgeAuthoritySignature>,
+    pub signatures: BTreeMap<BridgeAuthorityPublicKeyBytes, BridgeAuthoritySignature>,
 }
 
 pub type SignedBridgeAction = Envelope<BridgeAction, BridgeAuthoritySignInfo>;
 pub type VerifiedSignedBridgeAction = VerifiedEnvelope<BridgeAction, BridgeAuthoritySignInfo>;
+pub type CertifiedBridgeAction = Envelope<BridgeAction, BridgeCommitteeValiditySignInfo>;
+pub type VerifiedCertifiedBridgeAction =
+    VerifiedEnvelope<BridgeAction, BridgeCommitteeValiditySignInfo>;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct BridgeEventDigest(Digest);
@@ -229,7 +298,9 @@ impl Message for BridgeAction {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::TokenId;
+    use std::collections::HashSet;
+
+    use crate::{test_utils::get_test_authority_and_key, types::TokenId};
     use ethers::types::Address as EthAddress;
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
@@ -322,19 +393,7 @@ mod tests {
 
     #[test]
     fn test_bridge_committee_construction() -> anyhow::Result<()> {
-        telemetry_subscribers::init_for_testing();
-        let registry = Registry::new();
-        mysten_metrics::init_metrics(&registry);
-
-        let (_, kp): (_, fastcrypto::secp256k1::Secp256k1KeyPair) = get_key_pair();
-        let pubkey = kp.public().clone();
-        let mut authority = BridgeAuthority {
-            pubkey: pubkey.clone(),
-            voting_power: 10000,
-            bridge_network_address: Multiaddr::try_from("/ip4/127.0.0.1/tcp/9999/http".to_string())
-                .unwrap(),
-            is_blocklisted: false,
-        };
+        let (mut authority, _, _) = get_test_authority_and_key(10000, 9999);
         // This is ok
         let _ = BridgeCommittee::new(vec![authority.clone()]).unwrap();
 
@@ -357,6 +416,82 @@ mod tests {
         // This is not ok - duplicate pub key
         authority_2.pubkey = authority.pubkey.clone();
         let _ = BridgeCommittee::new(vec![authority.clone(), authority.clone()]).unwrap_err();
+        Ok(())
+    }
+
+    #[test]
+    fn test_bridge_committee_total_blocklisted_stake() -> anyhow::Result<()> {
+        let (mut authority1, _, _) = get_test_authority_and_key(10000, 9999);
+        assert_eq!(
+            BridgeCommittee::new(vec![authority1.clone()])
+                .unwrap()
+                .total_blocklisted_stake(),
+            0
+        );
+        authority1.voting_power = 6000;
+
+        let (mut authority2, _, _) = get_test_authority_and_key(4000, 9999);
+        authority2.is_blocklisted = true;
+        assert_eq!(
+            BridgeCommittee::new(vec![authority1.clone(), authority2.clone()])
+                .unwrap()
+                .total_blocklisted_stake(),
+            4000
+        );
+
+        authority1.voting_power = 7000;
+        authority2.voting_power = 2000;
+        let (mut authority3, _, _) = get_test_authority_and_key(1000, 9999);
+        authority3.is_blocklisted = true;
+        assert_eq!(
+            BridgeCommittee::new(vec![authority1, authority2, authority3])
+                .unwrap()
+                .total_blocklisted_stake(),
+            3000
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_bridge_committee_filter_blocklisted_authorities() -> anyhow::Result<()> {
+        // Note: today BridgeCommitte does not shuffle authorities
+        let (authority1, _, _) = get_test_authority_and_key(5000, 9999);
+        let (mut authority2, _, _) = get_test_authority_and_key(3000, 9999);
+        authority2.is_blocklisted = true;
+        let (authority3, _, _) = get_test_authority_and_key(2000, 9999);
+        let committee = BridgeCommittee::new(vec![
+            authority1.clone(),
+            authority2.clone(),
+            authority3.clone(),
+        ])
+        .unwrap();
+
+        // exclude authority2
+        let result = committee
+            .shuffle_by_stake(None, None)
+            .into_iter()
+            .collect::<HashSet<_>>();
+        assert_eq!(
+            HashSet::from_iter(vec![authority1.pubkey_bytes(), authority3.pubkey_bytes()]),
+            result
+        );
+
+        // exclude authority2 and authority3
+        let result = committee
+            .shuffle_by_stake(
+                None,
+                Some(
+                    &[authority1.pubkey_bytes(), authority2.pubkey_bytes()]
+                        .iter()
+                        .cloned()
+                        .collect(),
+                ),
+            )
+            .into_iter()
+            .collect::<HashSet<_>>();
+        assert_eq!(HashSet::from_iter(vec![authority1.pubkey_bytes()]), result);
+
         Ok(())
     }
 }
