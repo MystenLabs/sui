@@ -1,0 +1,98 @@
+processed 7 tasks
+
+task 1 'publish'. lines 6-26:
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6862800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'programmable'. lines 28-29:
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'programmable'. lines 31-32:
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
+
+task 4 'programmable'. lines 34-36:
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
+
+task 5 'create-checkpoint'. lines 38-38:
+Checkpoint created: 1
+
+task 6 'run-graphql'. lines 40-85:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "kind": {
+            "__typename": "ProgrammableTransactionBlock",
+            "transactionConnection": {
+              "nodes": [
+                {
+                  "package": "0xaa0ec73c991d30198ad269cbf039f97c6eca0a5c2b487e2eddbd6eee83827680",
+                  "module": "m",
+                  "functionName": "get"
+                },
+                {
+                  "package": "0xaa0ec73c991d30198ad269cbf039f97c6eca0a5c2b487e2eddbd6eee83827680",
+                  "module": "m",
+                  "functionName": "inc"
+                }
+              ]
+            }
+          },
+          "effects": {
+            "status": "SUCCESS",
+            "unchangedSharedObjects": []
+          }
+        },
+        {
+          "kind": {
+            "__typename": "ProgrammableTransactionBlock",
+            "transactionConnection": {
+              "nodes": [
+                {
+                  "package": "0xaa0ec73c991d30198ad269cbf039f97c6eca0a5c2b487e2eddbd6eee83827680",
+                  "module": "m",
+                  "functionName": "inc"
+                }
+              ]
+            }
+          },
+          "effects": {
+            "status": "SUCCESS",
+            "unchangedSharedObjects": []
+          }
+        },
+        {
+          "kind": {
+            "__typename": "ProgrammableTransactionBlock",
+            "transactionConnection": {
+              "nodes": [
+                {
+                  "package": "0xaa0ec73c991d30198ad269cbf039f97c6eca0a5c2b487e2eddbd6eee83827680",
+                  "module": "m",
+                  "functionName": "get"
+                }
+              ]
+            }
+          },
+          "effects": {
+            "status": "SUCCESS",
+            "unchangedSharedObjects": [
+              {
+                "__typename": "SharedObjectRead",
+                "address": "0x65175dc36ece58b445c9249f3b31c96ba938595de57b569258a6b85ea75b924e",
+                "version": 2,
+                "digest": "3sgiNkfVKVFzc4jcFeWikx6iBkdKi7ykqLqNtLPtMZcX",
+                "object": null
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
