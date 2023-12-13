@@ -2320,12 +2320,13 @@ impl Transaction {
         data: TransactionData,
         signers: Vec<&dyn Signer<Signature>>,
     ) -> Self {
-        // TODO: Avoid clone of data. This can be done by adjusting the API around tx construction.
-        let intent_msg = IntentMessage::new(Intent::sui_transaction(), data.clone());
-        let mut signatures = Vec::with_capacity(signers.len());
-        for signer in signers {
-            signatures.push(Signature::new_secure(&intent_msg, signer));
-        }
+        let signatures = {
+            let intent_msg = IntentMessage::new(Intent::sui_transaction(), &data);
+            signers
+                .into_iter()
+                .map(|s| Signature::new_secure(&intent_msg, s))
+                .collect()
+        };
         Self::from_data(data, signatures)
     }
 
