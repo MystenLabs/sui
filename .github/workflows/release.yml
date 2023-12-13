@@ -89,7 +89,7 @@ jobs:
         if: ${{ env.s3_archive_exist != '' }}
         shell: bash
         run: |
-          mkdir ./target/release
+          mkdir -p ./target/release
           aws s3 cp s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz
 
       - name: Setup caching
