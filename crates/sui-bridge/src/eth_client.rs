@@ -78,6 +78,7 @@ where
         Ok(number.as_u64())
     }
 
+    // TODO: this needs some pagination if the range is too big
     pub async fn get_events_in_range(
         &self,
         address: ethers::types::Address,

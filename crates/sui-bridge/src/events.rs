@@ -10,7 +10,9 @@ use std::str::FromStr;
 
 use crate::error::BridgeError;
 use crate::error::BridgeResult;
+use crate::types::BridgeAction;
 use crate::types::BridgeChainId;
+use crate::types::SuiToEthBridgeAction;
 use crate::types::TokenId;
 use ethers::types::Address as EthAddress;
 use move_core_types::language_storage::StructTag;
@@ -18,6 +20,7 @@ use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use sui_json_rpc_types::SuiEvent;
 use sui_types::base_types::SuiAddress;
+use sui_types::digests::TransactionDigest;
 
 // TODO: Placeholder, this will need to match the actual event types defined in Move
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -71,4 +74,22 @@ macro_rules! declare_events {
             }
         }
     };
+}
+
+impl SuiBridgeEvent {
+    pub fn try_into_bridge_action(
+        self,
+        sui_tx_digest: TransactionDigest,
+        sui_tx_event_index: u16,
+    ) -> Option<BridgeAction> {
+        match self {
+            SuiBridgeEvent::SuiToEthTokenBridgeV1(event) => {
+                Some(BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
+                    sui_tx_digest,
+                    sui_tx_event_index,
+                    sui_bridge_event: event.clone(),
+                }))
+            }
+        }
+    }
 }

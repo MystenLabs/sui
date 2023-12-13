@@ -17,6 +17,7 @@ use tokio::task::JoinHandle;
 use tokio::time::{self, Duration};
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tokio_retry::Retry;
+use tracing::error;
 
 const ETH_EVENTS_CHANNEL_SIZE: usize = 1000;
 const FINALIZED_BLOCK_QUERY_INTERVAL: Duration = Duration::from_secs(2);
@@ -45,7 +46,10 @@ where
         self,
     ) -> BridgeResult<(
         Vec<JoinHandle<()>>,
-        mysten_metrics::metered_channel::Receiver<Vec<ethers::types::Log>>,
+        mysten_metrics::metered_channel::Receiver<(
+            ethers::types::Address,
+            Vec<ethers::types::Log>,
+        )>,
         watch::Receiver<u64>,
     )> {
         let (eth_evnets_tx, eth_events_rx) = mysten_metrics::metered_channel::channel(
@@ -90,12 +94,13 @@ where
         interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
-            // TODO reconsider panic, should we just log an error and continue the loop?
-            let new_value = retry_with_max_delay!(
+            let Ok(new_value) = retry_with_max_delay!(
                 eth_client.get_last_finalized_block_id(),
                 Duration::from_secs(600)
-            )
-            .expect("Failed to get last finalzied block from eth client after retry");
+            ) else {
+                error!("Failed to get last finalized block from eth client after retry");
+                continue;
+            };
             tracing::debug!("Last finalized block: {}", new_value);
 
             // TODO add a metrics for the last finalized block
@@ -114,7 +119,10 @@ where
         contract_address: ethers::types::Address,
         mut start_block: u64,
         mut last_finalized_block_receiver: watch::Receiver<u64>,
-        events_sender: mysten_metrics::metered_channel::Sender<Vec<ethers::types::Log>>,
+        events_sender: mysten_metrics::metered_channel::Sender<(
+            ethers::types::Address,
+            Vec<ethers::types::Log>,
+        )>,
         eth_client: Arc<EthClient<P>>,
     ) {
         tracing::info!(contract_address=?contract_address, "Starting eth events listening task from block {start_block}");
@@ -133,16 +141,21 @@ where
                 );
                 continue;
             }
-            // TODO reconsider panic, should we just log an error and continue the loop?
-            let events = retry_with_max_delay!(
+            let Ok(events) = retry_with_max_delay!(
                 eth_client.get_events_in_range(contract_address, start_block, new_finalized_block),
                 Duration::from_secs(600)
-            )
-            .expect("Failed to get events from eth client after retry");
+            ) else {
+                error!("Failed to get events from eth client after retry");
+                continue;
+            };
             let len = events.len();
+            // TODO: convert Log to a custom Log struct that contains block number, tx hash and log index in tx.
             if !events.is_empty() {
+                // Note: it's extremely critical to make sure the Logs we send via this channel
+                // are complete per block height. Namely, we should never send a partial list
+                // of events for a block. Otherwise, we may end up missing events.
                 events_sender
-                    .send(events)
+                    .send((contract_address, events))
                     .await
                     .expect("All Eth event channel receivers are closed");
                 tracing::info!(?contract_address, "Observed {len} new Eth events",);
@@ -192,7 +205,9 @@ mod tests {
         // The latest finalized block stays at 777, event listener should not query again.
         finalized_block_rx.changed().await.unwrap();
         assert_eq!(*finalized_block_rx.borrow(), 777);
-        assert_eq!(logs_rx.recv().await.unwrap(), vec![log.clone()]);
+        let (contract_address, received_logs) = logs_rx.recv().await.unwrap();
+        assert_eq!(contract_address, Address::zero());
+        assert_eq!(received_logs, vec![log.clone()]);
         assert_eq!(logs_rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
         mock_get_logs(&mock_provider, Address::zero(), 778, 888, vec![log.clone()]);
@@ -200,7 +215,9 @@ mod tests {
         mock_last_finalized_block(&mock_provider, 888);
         finalized_block_rx.changed().await.unwrap();
         assert_eq!(*finalized_block_rx.borrow(), 888);
-        assert_eq!(logs_rx.recv().await.unwrap(), vec![log]);
+        let (contract_address, received_logs) = logs_rx.recv().await.unwrap();
+        assert_eq!(contract_address, Address::zero());
+        assert_eq!(received_logs, vec![log]);
         assert_eq!(logs_rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
         Ok(())
@@ -254,7 +271,7 @@ mod tests {
         // The latest finalized block stays at 198.
         finalized_block_rx.changed().await.unwrap();
         assert_eq!(*finalized_block_rx.borrow(), 198);
-        assert_eq!(logs_rx.recv().await.unwrap(), vec![log1.clone()]);
+        assert_eq!(logs_rx.recv().await.unwrap().1, vec![log1.clone()]);
         // log2 should not be received as another_address's start block is 200.
         assert_eq!(logs_rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
@@ -287,10 +304,10 @@ mod tests {
         finalized_block_rx.changed().await.unwrap();
         assert_eq!(*finalized_block_rx.borrow(), 400);
         let mut logs_set = HashSet::new();
-        logs_rx.recv().await.unwrap().into_iter().for_each(|log| {
+        logs_rx.recv().await.unwrap().1.into_iter().for_each(|log| {
             logs_set.insert(format!("{:?}", log));
         });
-        logs_rx.recv().await.unwrap().into_iter().for_each(|log| {
+        logs_rx.recv().await.unwrap().1.into_iter().for_each(|log| {
             logs_set.insert(format!("{:?}", log));
         });
         assert_eq!(

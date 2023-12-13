@@ -10,6 +10,7 @@ pub mod eth_syncer;
 pub mod events;
 pub mod orchestrator;
 pub mod server;
+pub mod storage;
 pub mod sui_client;
 pub mod sui_syncer;
 pub mod types;
