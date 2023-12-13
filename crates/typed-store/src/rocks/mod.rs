@@ -20,6 +20,7 @@ use crate::{
 use bincode::Options;
 use collectable::TryExtend;
 use itertools::Itertools;
+use prometheus::{Histogram, HistogramTimer};
 use rocksdb::{
     checkpoint::Checkpoint, BlockBasedOptions, BottommostLevelCompaction, Cache, CompactOptions,
     DBPinnableSlice, LiveFile, OptimisticTransactionDB, SnapshotWithThreadMode,
@@ -1143,6 +1144,44 @@ impl<K, V> DBMap<K, V> {
             value_hist,
         })
     }
+
+    // Creates metrics and context for tracking an iterator usage and performance.
+    fn create_iter_context(
+        &self,
+    ) -> (
+        Option<HistogramTimer>,
+        Option<Histogram>,
+        Option<Histogram>,
+        Option<RocksDBPerfContext>,
+    ) {
+        let timer = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_iter_latency_seconds
+            .with_label_values(&[&self.cf])
+            .start_timer();
+        let bytes_scanned = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_iter_bytes
+            .with_label_values(&[&self.cf]);
+        let keys_scanned = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_iter_keys
+            .with_label_values(&[&self.cf]);
+        let perf_ctx = if self.iter_sample_interval.sample() {
+            Some(RocksDBPerfContext)
+        } else {
+            None
+        };
+        (
+            Some(timer),
+            Some(bytes_scanned),
+            Some(keys_scanned),
+            perf_ctx,
+        )
+    }
 }
 
 /// Provides a mutable struct to form a collection of database write operations, and execute them.
@@ -1840,73 +1879,17 @@ where
     /// Returns an unbounded iterator visiting each key-value pair in the map.
     /// This is potentially unsafe as it can perform a full table scan
     fn unbounded_iter(&'a self) -> Self::Iterator {
-        let _timer = self
-            .db_metrics
-            .op_metrics
-            .rocksdb_iter_latency_seconds
-            .with_label_values(&[&self.cf])
-            .start_timer();
-        let bytes_scanned = self
-            .db_metrics
-            .op_metrics
-            .rocksdb_iter_bytes
-            .with_label_values(&[&self.cf]);
-        let keys_scanned = self
-            .db_metrics
-            .op_metrics
-            .rocksdb_iter_keys
-            .with_label_values(&[&self.cf]);
-        let _perf_ctx = if self.iter_sample_interval.sample() {
-            Some(RocksDBPerfContext)
-        } else {
-            None
-        };
         let db_iter = self
             .rocksdb
             .raw_iterator_cf(&self.cf(), self.opts.readopts());
+        let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
         Iter::new(
             self.cf.clone(),
             db_iter,
-            Some(_timer),
+            _timer,
             _perf_ctx,
-            Some(bytes_scanned),
-            Some(keys_scanned),
-            Some(self.db_metrics.clone()),
-        )
-    }
-
-    fn safe_iter(&'a self) -> Self::SafeIterator {
-        let _timer = self
-            .db_metrics
-            .op_metrics
-            .rocksdb_iter_latency_seconds
-            .with_label_values(&[&self.cf])
-            .start_timer();
-        let _perf_ctx = if self.iter_sample_interval.sample() {
-            Some(RocksDBPerfContext)
-        } else {
-            None
-        };
-        let bytes_scanned = self
-            .db_metrics
-            .op_metrics
-            .rocksdb_iter_bytes
-            .with_label_values(&[&self.cf]);
-        let keys_scanned = self
-            .db_metrics
-            .op_metrics
-            .rocksdb_iter_keys
-            .with_label_values(&[&self.cf]);
-        let db_iter = self
-            .rocksdb
-            .raw_iterator_cf(&self.cf(), self.opts.readopts());
-        SafeIter::new(
-            self.cf.clone(),
-            db_iter,
-            Some(_timer),
-            _perf_ctx,
-            Some(bytes_scanned),
-            Some(keys_scanned),
+            bytes_scanned,
+            keys_scanned,
             Some(self.db_metrics.clone()),
         )
     }
@@ -1919,27 +1902,6 @@ where
         lower_bound: Option<K>,
         upper_bound: Option<K>,
     ) -> Self::Iterator {
-        let _timer = self
-            .db_metrics
-            .op_metrics
-            .rocksdb_iter_latency_seconds
-            .with_label_values(&[&self.cf])
-            .start_timer();
-        let bytes_scanned = self
-            .db_metrics
-            .op_metrics
-            .rocksdb_iter_bytes
-            .with_label_values(&[&self.cf]);
-        let keys_scanned = self
-            .db_metrics
-            .op_metrics
-            .rocksdb_iter_keys
-            .with_label_values(&[&self.cf]);
-        let _perf_ctx = if self.iter_sample_interval.sample() {
-            Some(RocksDBPerfContext)
-        } else {
-            None
-        };
         let mut readopts = self.opts.readopts();
         if let Some(lower_bound) = lower_bound {
             let key_buf = be_fix_int_ser(&lower_bound).unwrap();
@@ -1950,13 +1912,14 @@ where
             readopts.set_iterate_upper_bound(key_buf);
         }
         let db_iter = self.rocksdb.raw_iterator_cf(&self.cf(), readopts);
+        let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
         Iter::new(
             self.cf.clone(),
             db_iter,
-            Some(_timer),
+            _timer,
             _perf_ctx,
-            Some(bytes_scanned),
-            Some(keys_scanned),
+            bytes_scanned,
+            keys_scanned,
             Some(self.db_metrics.clone()),
         )
     }
@@ -1964,28 +1927,6 @@ where
     /// Similar to `iter_with_bounds` but allows specifying inclusivity/exclusivity of ranges explicitly.
     /// TODO: find better name
     fn range_iter(&'a self, range: impl RangeBounds<K>) -> Self::Iterator {
-        // TODO: Change the metrics?
-        let _timer = self
-            .db_metrics
-            .op_metrics
-            .rocksdb_iter_latency_seconds
-            .with_label_values(&[&self.cf])
-            .start_timer();
-        let bytes_scanned = self
-            .db_metrics
-            .op_metrics
-            .rocksdb_iter_bytes
-            .with_label_values(&[&self.cf]);
-        let keys_scanned = self
-            .db_metrics
-            .op_metrics
-            .rocksdb_iter_keys
-            .with_label_values(&[&self.cf]);
-        let _perf_ctx = if self.iter_sample_interval.sample() {
-            Some(RocksDBPerfContext)
-        } else {
-            None
-        };
         let mut readopts = self.opts.readopts();
 
         let lower_bound = range.start_bound();
@@ -2029,13 +1970,30 @@ where
         };
 
         let db_iter = self.rocksdb.raw_iterator_cf(&self.cf(), readopts);
+        let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
         Iter::new(
             self.cf.clone(),
             db_iter,
-            Some(_timer),
+            _timer,
             _perf_ctx,
-            Some(bytes_scanned),
-            Some(keys_scanned),
+            bytes_scanned,
+            keys_scanned,
+            Some(self.db_metrics.clone()),
+        )
+    }
+
+    fn safe_iter(&'a self) -> Self::SafeIterator {
+        let db_iter = self
+            .rocksdb
+            .raw_iterator_cf(&self.cf(), self.opts.readopts());
+        let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
+        SafeIter::new(
+            self.cf.clone(),
+            db_iter,
+            _timer,
+            _perf_ctx,
+            bytes_scanned,
+            keys_scanned,
             Some(self.db_metrics.clone()),
         )
     }
