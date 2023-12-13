@@ -18,8 +18,8 @@ use crate::{
     server::version::{check_version_middleware, set_version_middleware},
     types::query::{Query, SuiGraphQLSchema},
 };
+use async_graphql::extensions::ApolloTracing;
 use async_graphql::extensions::Tracing;
-use async_graphql::extensions::{ApolloTracing, OpenTelemetry};
 use async_graphql::EmptySubscription;
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
