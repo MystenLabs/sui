@@ -4674,7 +4674,7 @@ async fn test_consensus_message_processed() {
             authority1.try_execute_for_test(&certificate).await.unwrap();
 
         // now, on authority2, we send 0 or 1 consensus messages, then we either sequence and execute via
-        // effects or via handle_certificate, then send 0 or 1 consensus messages.
+        // effects or via handle_certificate_v2, then send 0 or 1 consensus messages.
         let send_first = rng.gen_bool(0.5);
         if send_first {
             send_consensus(&authority2, &certificate).await;

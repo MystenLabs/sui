@@ -73,7 +73,7 @@ pub mod system_state_observer;
 pub mod util;
 pub mod workloads;
 use futures::FutureExt;
-use sui_types::messages_grpc::{HandleCertificateResponse, TransactionStatus};
+use sui_types::messages_grpc::{HandleCertificateResponseV2, TransactionStatus};
 use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResponse};
 
 #[derive(Debug)]
@@ -519,7 +519,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             let name = *name;
             futures.push(async move {
                 client
-                    .handle_certificate(certificate)
+                    .handle_certificate_v2(certificate)
                     .map(move |r| (r, name))
                     .await
             });
@@ -534,9 +534,10 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             auth_agg.metrics.inflight_certificate_requests.dec();
             match response {
                 // If all goes well, the validators reply with signed effects.
-                Ok(HandleCertificateResponse {
+                Ok(HandleCertificateResponseV2 {
                     signed_effects,
                     events,
+                    fastpath_input_objects: _, // unused field
                 }) => {
                     let author = signed_effects.auth_sig().authority;
                     transaction_effects = Some(signed_effects.data().clone());

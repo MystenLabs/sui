@@ -206,7 +206,7 @@ where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
     authority
-        .handle_certificate(cert.clone())
+        .handle_certificate_v2(cert.clone())
         .await
         .unwrap()
         .signed_effects
@@ -217,7 +217,7 @@ pub async fn do_cert_configurable<A>(authority: &A, cert: &CertifiedTransaction)
 where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
-    let result = authority.handle_certificate(cert.clone()).await;
+    let result = authority.handle_certificate_v2(cert.clone()).await;
     if result.is_err() {
         println!("Error in do cert {:?}", result.err());
     }

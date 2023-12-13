@@ -18,9 +18,8 @@ use sui_network::{
 use sui_types::effects::TransactionEvents;
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::messages_grpc::{
-    HandleCertificateResponse, HandleCertificateResponseV2, HandleTransactionResponse,
-    ObjectInfoRequest, ObjectInfoResponse, SubmitCertificateResponse, SystemStateRequest,
-    TransactionInfoRequest, TransactionInfoResponse,
+    HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
+    SubmitCertificateResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
@@ -563,16 +562,6 @@ impl Validator for ValidatorService {
                 v.expect("handle_certificate should not return none with wait_for_effects=true"),
             )
         })
-    }
-
-    async fn handle_certificate(
-        &self,
-        request: tonic::Request<CertifiedTransaction>,
-    ) -> Result<tonic::Response<HandleCertificateResponse>, tonic::Status> {
-        request.get_ref().verify_user_input()?;
-        self.handle_certificate_v2(request)
-            .await
-            .map(|v| tonic::Response::new(v.into_inner().into()))
     }
 
     async fn object_info(

@@ -157,21 +157,6 @@ pub struct TransactionInfoResponse {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct HandleCertificateResponse {
-    pub signed_effects: SignedTransactionEffects,
-    pub events: TransactionEvents,
-}
-
-impl From<HandleCertificateResponseV2> for HandleCertificateResponse {
-    fn from(v2: HandleCertificateResponseV2) -> Self {
-        Self {
-            signed_effects: v2.signed_effects,
-            events: v2.events,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HandleCertificateResponseV2 {
     pub signed_effects: SignedTransactionEffects,
     pub events: TransactionEvents,
@@ -185,7 +170,7 @@ pub struct HandleCertificateResponseV2 {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SubmitCertificateResponse {
     /// If transaction is already executed, return same result as handle_certificate
-    pub executed: Option<HandleCertificateResponse>,
+    pub executed: Option<HandleCertificateResponseV2>,
 }
 
 #[derive(Clone, Debug)]
