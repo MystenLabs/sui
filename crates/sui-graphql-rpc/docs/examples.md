@@ -127,6 +127,9 @@
 >  address(address: "0x2") {
 >    transactionBlockConnection(relation: SENT, filter: { package: "0x2" }) {
 >      nodes {
+>        sender {
+>          location
+>        }
 >        gasInput {
 >          gasPrice
 >          gasBudget
@@ -250,6 +253,9 @@
 >          kind {
 >            __typename
 >          }
+>          sender {
+>            location
+>          }
 >          digest
 >          expiration {
 >            epochId
@@ -329,6 +335,9 @@
 >      edges {
 >        node {
 >          digest
+>          sender {
+>            location
+>          }
 >          expiration {
 >            epochId
 >          }
@@ -352,6 +361,9 @@
 >      edges {
 >        node {
 >          digest
+>          sender {
+>            location
+>          }
 >          expiration {
 >            epochId
 >          }
@@ -379,6 +391,9 @@
 >      edges {
 >        node {
 >          digest
+>          sender {
+>            location
+>          }
 >          expiration {
 >            epochId
 >          }
