@@ -379,6 +379,20 @@ impl ValidatorService {
 
         let epoch_store = state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
+
+        // Validate if cert can be executed
+        // Fullnode does not serve handle_certificate call.
+        fp_ensure!(
+            !state.is_fullnode(&epoch_store),
+            SuiError::FullNodeCantHandleCertificate.into()
+        );
+
+        // CRITICAL! Validators should never sign an external system transaction.
+        fp_ensure!(
+            !certificate.is_system_tx(),
+            SuiError::InvalidSystemTransaction.into()
+        );
+
         certificate.verify_user_input()?;
 
         let shared_object_tx = certificate.contains_shared_object();
@@ -413,19 +427,7 @@ impl ValidatorService {
             }));
         }
 
-        // 2) Validate if cert can be executed, and verify the cert.
-        // Fullnode does not serve handle_certificate call.
-        fp_ensure!(
-            !state.is_fullnode(&epoch_store),
-            SuiError::FullNodeCantHandleCertificate.into()
-        );
-
-        // CRITICAL! Validators should never sign an external system transaction.
-        fp_ensure!(
-            !certificate.is_system_tx(),
-            SuiError::InvalidSystemTransaction.into()
-        );
-
+        // 2) Verify the cert.
         // Check system overload
         let overload_check_res =
             state.check_system_overload(&consensus_adapter, certificate.data());
