@@ -39,7 +39,7 @@ jobs:
     timeout-minutes: 80
     strategy:
       matrix:
-        os: [ ubuntu-ghcloud ]
+        os: [ windows-ghcloud, ubuntu-ghcloud, macos-latest-xl, macos-arm64-self-hosted ]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
@@ -103,14 +103,13 @@ jobs:
           export system_os=$(echo ${{ matrix.os }} | cut -d- -f1)
           export os_type="${system_os}-${arch}"
           echo "os_type=${system_os}-${arch}" >> $GITHUB_ENV
-          mv ./target/release/sui ./target/release/sui-${os_type}
-          mv ./target/release/sui-node ./target/release/sui-node-${os_type}
-          mv ./target/release/sui-tool ./target/release/sui-tool-${os_type}
-          mv ./target/release/sui-faucet ./target/release/sui-faucet-${os_type}
-          mv ./target/release/sui-test-validator ./target/release/sui-test-validator-${os_type}
-          mv ./target/release/sui-indexer ./target/release/sui-indexer-${os_type}
-          # mv ./target/release/sui-data-ingestion ./target/release/sui-data-ingestion-${os_type}
-          mv ./external-crates/move/target/release/move-analyzer ./external-crates/move/target/release/move-analyzer-${os_type}
+          [ -f ./target/release/sui ] && mv ./target/release/sui ./target/release/sui-${os_type}
+          [ -f ./target/release/sui-node ] && mv ./target/release/sui-node ./target/release/sui-node-${os_type}
+          [ -f ./target/release/sui-tool ] && mv ./target/release/sui-tool ./target/release/sui-tool-${os_type}
+          [ -f ./target/release/sui-faucet ] && mv ./target/release/sui-faucet ./target/release/sui-faucet-${os_type}
+          [ -f ./target/release/sui-test-validator ] && mv ./target/release/sui-test-validator ./target/release/sui-test-validator-${os_type}
+          [ -f ./target/release/sui-data-ingestion ] && mv ./target/release/sui-data-ingestion ./target/release/sui-data-ingestion-${os_type}
+          [ -f ./external-crates/move/target/release/move-analyzer ] && mv ./external-crates/move/target/release/move-analyzer ./external-crates/move/target/release/move-analyzer-${os_type}
           tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}* ./external-crates/move/target/release/move-analyzer-${os_type}
           [[ ${{ env.sui_tag }} == *"mainnet"* ]] && aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz || true
 
@@ -121,14 +120,14 @@ jobs:
           export arch=$(uname -m)
           export os_type="windows-${arch}"
           echo "os_type=${os_type}" >> $GITHUB_ENV
-          mv ./target/release/sui.exe ./target/release/sui-${os_type}.exe
-          mv ./target/release/sui-node.exe ./target/release/sui-node-${os_type}.exe
-          mv ./target/release/sui-tool.exe ./target/release/sui-tool-${os_type}.exe
-          mv ./target/release/sui-faucet.exe ./target/release/sui-faucet-${os_type}.exe
-          mv ./target/release/sui-test-validator.exe ./target/release/sui-test-validator-${os_type}.exe
-          mv ./target/release/sui-indexer.exe ./target/release/sui-indexer-${os_type}.exe
-          # mv ./target/release/sui-data-ingestion.exe ./target/release/sui-data-ingestion-${os_type}.exe
-          mv ./external-crates/move/target/release/move-analyzer.exe ./external-crates/move/target/release/move-analyzer-${os_type}.exe
+          [ -f ./target/release/sui.exe ] && mv ./target/release/sui.exe ./target/release/sui-${os_type}.exe
+          [ -f ./target/release/sui-node.exe ] && mv ./target/release/sui-node.exe ./target/release/sui-node-${os_type}.exe
+          [ -f ./target/release/sui-tool.exe ] && mv ./target/release/sui-tool.exe ./target/release/sui-tool-${os_type}.exe
+          [ -f ./target/release/sui-faucet.exe ] && mv ./target/release/sui-faucet.exe ./target/release/sui-faucet-${os_type}.exe
+          [ -f ./target/release/sui-test-validator.exe ] && mv ./target/release/sui-test-validator.exe ./target/release/sui-test-validator-${os_type}.exe
+          [ -f ./target/release/sui-indexer.exe ] && mv ./target/release/sui-indexer.exe ./target/release/sui-indexer-${os_type}.exe
+          [ -f ./target/release/sui-data-ingestion.exe ] &&  mv ./target/release/sui-data-ingestion.exe ./target/release/sui-data-ingestion-${os_type}.exe
+          [ -f ./external-crates/move/target/release/move-analyzer.exe ] &&  ./external-crates/move/target/release/move-analyzer.exe ./external-crates/move/target/release/move-analyzer-${os_type}.exe
           tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}* ./external-crates/move/target/release/move-analyzer-${os_type}.exe
           [[ ${{ env.sui_tag }} == *"mainnet"* ]] && aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz || true
 
