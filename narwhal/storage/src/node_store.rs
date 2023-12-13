@@ -3,12 +3,15 @@
 
 use crate::payload_store::PayloadStore;
 use crate::proposer_store::ProposerKey;
+use crate::randomness_store::{EncG, PkG, RandomnessStore, SingletonKey};
 use crate::vote_digest_store::VoteDigestStore;
 use crate::{
     CertificateStore, CertificateStoreCache, CertificateStoreCacheMetrics, ConsensusStore,
     ProposerStore,
 };
 use config::{AuthorityIdentifier, WorkerId};
+use fastcrypto_tbls::dkg;
+use fastcrypto_tbls::nodes::PartyId;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
@@ -17,7 +20,7 @@ use store::reopen;
 use store::rocks::{default_db_options, open_cf_opts, DBMap, MetricConf, ReadWriteOptions};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell, ConsensusCommit,
-    Header, Round, SequenceNumber, VoteInfo,
+    Header, RandomnessRound, Round, SequenceNumber, VoteInfo,
 };
 
 // A type alias marking the "payload" tokens sent by workers to their primary as batch acknowledgements
@@ -32,6 +35,7 @@ pub struct NodeStorage {
     pub payload_store: PayloadStore,
     pub batch_store: DBMap<BatchDigest, Batch>,
     pub consensus_store: Arc<ConsensusStore>,
+    pub randomness_store: RandomnessStore,
 }
 
 impl NodeStorage {
@@ -46,6 +50,11 @@ impl NodeStorage {
     pub(crate) const LAST_COMMITTED_CF: &'static str = "last_committed";
     pub(crate) const SUB_DAG_INDEX_CF: &'static str = "sub_dag";
     pub(crate) const COMMITTED_SUB_DAG_INDEX_CF: &'static str = "committed_sub_dag";
+    pub(crate) const PROCESSED_MESSAGES_CF: &'static str = "processed_messages";
+    pub(crate) const USED_MESSAGES_CF: &'static str = "used_messages";
+    pub(crate) const CONFIRMATIONS_CF: &'static str = "confirmations";
+    pub(crate) const DKG_OUTPUT_CF: &'static str = "dkg_output";
+    pub(crate) const RANDOMNESS_ROUND_CF: &'static str = "randomness_round";
 
     // 100 nodes * 60 rounds (assuming 1 round/sec this will hold data for about the last 1 minute
     // which should be more than enough for advancing the protocol and also help other nodes)
@@ -83,7 +92,12 @@ impl NodeStorage {
             ),
             (Self::LAST_COMMITTED_CF, cf_options.clone()),
             (Self::SUB_DAG_INDEX_CF, cf_options.clone()),
-            (Self::COMMITTED_SUB_DAG_INDEX_CF, cf_options),
+            (Self::COMMITTED_SUB_DAG_INDEX_CF, cf_options.clone()),
+            (Self::PROCESSED_MESSAGES_CF, cf_options.clone()),
+            (Self::USED_MESSAGES_CF, cf_options.clone()),
+            (Self::CONFIRMATIONS_CF, cf_options.clone()),
+            (Self::DKG_OUTPUT_CF, cf_options.clone()),
+            (Self::RANDOMNESS_ROUND_CF, cf_options),
         ];
         let rocksdb = open_cf_opts(
             store_path,
@@ -106,6 +120,11 @@ impl NodeStorage {
             // This can be removed when DBMap supports removing tables.
             _sub_dag_index_map,
             committed_sub_dag_map,
+            processed_messages_map,
+            used_messages_map,
+            confirmations_map,
+            dkg_output_map,
+            randomness_round_map,
         ) = reopen!(&rocksdb,
             Self::LAST_PROPOSED_CF;<ProposerKey, Header>,
             Self::VOTES_CF;<AuthorityIdentifier, VoteInfo>,
@@ -116,7 +135,12 @@ impl NodeStorage {
             Self::BATCHES_CF;<BatchDigest, Batch>,
             Self::LAST_COMMITTED_CF;<AuthorityIdentifier, Round>,
             Self::SUB_DAG_INDEX_CF;<SequenceNumber, CommittedSubDagShell>,
-            Self::COMMITTED_SUB_DAG_INDEX_CF;<SequenceNumber, ConsensusCommit>
+            Self::COMMITTED_SUB_DAG_INDEX_CF;<SequenceNumber, ConsensusCommit>,
+            Self::PROCESSED_MESSAGES_CF;<PartyId, dkg::ProcessedMessage<PkG, EncG>>,
+            Self::USED_MESSAGES_CF;<SingletonKey, dkg::UsedProcessedMessages<PkG, EncG>>,
+            Self::CONFIRMATIONS_CF;<PartyId, dkg::Confirmation<EncG>>,
+            Self::DKG_OUTPUT_CF;<SingletonKey, dkg::Output<PkG, EncG>>,
+            Self::RANDOMNESS_ROUND_CF;<SingletonKey, RandomnessRound>
         );
 
         let proposer_store = ProposerStore::new(last_proposed_map);
@@ -138,6 +162,13 @@ impl NodeStorage {
             last_committed_map,
             committed_sub_dag_map,
         ));
+        let randomness_store = RandomnessStore::new(
+            processed_messages_map,
+            used_messages_map,
+            confirmations_map,
+            dkg_output_map,
+            randomness_round_map,
+        );
 
         Self {
             proposer_store,
@@ -146,6 +177,7 @@ impl NodeStorage {
             payload_store,
             batch_store,
             consensus_store,
+            randomness_store,
         }
     }
 }
