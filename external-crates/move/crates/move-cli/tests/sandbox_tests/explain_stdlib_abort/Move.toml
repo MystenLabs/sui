@@ -1,6 +1,5 @@
 [package]
 name = "explain_stdlib_abort"
-version = "0.0.0"
 
 [addresses]
 std = "0x1"

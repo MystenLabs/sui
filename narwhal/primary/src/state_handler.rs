@@ -408,16 +408,6 @@ impl RandomnessState {
                 return;
             }
         }
-        // TODO: Refactor to save compute by optimistically aggregating first, and only verifying
-        // each batch if aggregated signature fails verification.
-        if let Err(e) = ThresholdBls12381MinSig::partial_verify_batch(
-            &dkg_output.vss_pk,
-            &round.signature_message(),
-            sigs.as_slice(),
-            &mut rand::thread_rng(),
-        ) {
-            debug!("random beacon: ignoring partial signatures from authority {authority_id} for round {round} with verification error: {e:?}");
-        }
         if self
             .partial_sigs
             .insert((round, authority_id), sigs)
@@ -426,8 +416,8 @@ impl RandomnessState {
             debug!("random beacon: replacing existing partial signatures from authority {authority_id} for round {round}");
         }
 
-        // If we have enough partial signatures, aggregate them and send to consensus.
-        let sig = match ThresholdBls12381MinSig::aggregate(
+        // If we have enough partial signatures, aggregate them.
+        let mut sig = match ThresholdBls12381MinSig::aggregate(
             self.party.t(),
             // TODO: ThresholdBls12381MinSig::aggregate immediately just makes an iterator of the
             // given slice. Can we change its interface to accept an iterator directly, to avoid
@@ -447,6 +437,58 @@ impl RandomnessState {
                 return;
             }
         };
+
+        // Try to verify the aggregated signature all at once. (Should work in the happy path.)
+        if ThresholdBls12381MinSig::verify(dkg_output.vss_pk.c0(), &round.signature_message(), &sig)
+            .is_err()
+        {
+            // If verifiation fails, some of the inputs must be invalid. We have to go through
+            // one-by-one to find which.
+            // TODO: add test for individual sig verification.
+            self.partial_sigs.retain(|&(r, authority_id), partial_sigs| {
+                if ThresholdBls12381MinSig::partial_verify_batch(
+                    &dkg_output.vss_pk,
+                    &r.signature_message(),
+                     partial_sigs.as_slice(),
+                    &mut rand::thread_rng(),
+                )
+                .is_err()
+                {
+                    warn!("Received invalid partial signatures from possibly-Byzantine authority {authority_id}");
+                    return false
+                }
+                true
+            });
+            sig = match ThresholdBls12381MinSig::aggregate(
+                self.party.t(),
+                // TODO: ThresholdBls12381MinSig::aggregate immediately just makes an iterator of the
+                // given slice. Can we change its interface to accept an iterator directly, to avoid
+                // all the extra copying?
+                &self
+                    .partial_sigs
+                    .iter()
+                    .filter(|&((round, _), _)| *round == self.randomness_round)
+                    .flat_map(|(_, sigs)| sigs)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            ) {
+                Ok(sig) => sig,
+                Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => return, // wait for more input
+                Err(e) => {
+                    error!("Error while aggregating randomness partial signatures: {e:?}");
+                    return;
+                }
+            };
+            if let Err(e) = ThresholdBls12381MinSig::verify(
+                dkg_output.vss_pk.c0(),
+                &round.signature_message(),
+                &sig,
+            ) {
+                error!("Error while verifying randomness partial signatures after removing invalid partials: {e:?}");
+                return;
+            }
+        }
+
         let _ = self
             .tx_system_messages
             .send(SystemMessage::RandomnessSignature(

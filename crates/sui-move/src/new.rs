@@ -20,13 +20,8 @@ pub struct New {
 impl New {
     pub fn execute(self, path: Option<PathBuf>) -> anyhow::Result<()> {
         let name = &self.new.name.to_lowercase();
-        self.new.execute(
-            path,
-            "0.0.1",
-            [(SUI_PKG_NAME, SUI_PKG_PATH)],
-            [(name, "0x0")],
-            "",
-        )?;
+        self.new
+            .execute(path, [(SUI_PKG_NAME, SUI_PKG_PATH)], [(name, "0x0")], "")?;
         Ok(())
     }
 }

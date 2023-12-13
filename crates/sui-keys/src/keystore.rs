@@ -82,18 +82,7 @@ pub trait AccountKeystore: Send + Sync {
             bail!("The provided alias {old_alias} does not exist");
         }
         let new_alias_name = match new_alias {
-            Some(x) => {
-                let re = Regex::new(r"^[A-Za-z][A-Za-z0-9-_]*$").map_err(|_| {
-                    anyhow!("Cannot build the regex needed to validate the alias naming")
-                })?;
-
-                let name = x.trim();
-                ensure!(
-                        re.is_match(name),
-                        "Invalid alias. A valid alias must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_)."
-                    );
-                name.to_string()
-            }
+            Some(x) => validate_alias(x)?,
             None => random_name(
                 &self
                     .alias_names()
@@ -269,7 +258,7 @@ impl AccountKeystore for FileBasedKeystore {
             Some(a) if self.alias_exists(&a) => {
                 bail!("Alias {a} already exists. Please choose another alias.")
             }
-            Some(a) => Ok(a),
+            Some(a) => validate_alias(&a),
             None => Ok(random_name(
                 &self
                     .alias_names()
@@ -538,7 +527,7 @@ impl AccountKeystore for InMemKeystore {
             Some(a) if self.alias_exists(&a) => {
                 bail!("Alias {a} already exists. Please choose another alias.")
             }
-            Some(a) => Ok(a),
+            Some(a) => validate_alias(&a),
             None => Ok(random_name(
                 &self
                     .alias_names()
@@ -589,4 +578,15 @@ impl InMemKeystore {
 
         Self { aliases, keys }
     }
+}
+
+fn validate_alias(alias: &str) -> Result<String, anyhow::Error> {
+    let re = Regex::new(r"^[A-Za-z][A-Za-z0-9-_]*$")
+        .map_err(|_| anyhow!("Cannot build the regex needed to validate the alias naming"))?;
+    let alias = alias.trim();
+    ensure!(
+        re.is_match(alias),
+        "Invalid alias. A valid alias must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_)."
+    );
+    Ok(alias.to_string())
 }

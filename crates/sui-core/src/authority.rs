@@ -69,7 +69,7 @@ use sui_json_rpc_types::{
     SuiObjectDataFilter, SuiTransactionBlockData, SuiTransactionBlockEffects,
     SuiTransactionBlockEvents, TransactionFilter,
 };
-use sui_macros::{fail_point, fail_point_async};
+use sui_macros::{fail_point, fail_point_async, fail_point_if};
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::indexes::{CoinInfo, ObjectIndexChanges};
 use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
@@ -95,10 +95,10 @@ use sui_types::inner_temporary_store::{
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointCommitment, CheckpointContents, CheckpointContentsDigest,
-    CheckpointDigest, CheckpointSequenceNumber, CheckpointSummary, CheckpointTimestamp,
-    VerifiedCheckpoint,
+    CheckpointDigest, CheckpointRequest, CheckpointRequestV2, CheckpointResponse,
+    CheckpointResponseV2, CheckpointSequenceNumber, CheckpointSummary, CheckpointSummaryResponse,
+    CheckpointTimestamp, VerifiedCheckpoint,
 };
-use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::messages_consensus::AuthorityCapabilities;
 use sui_types::messages_grpc::{
     HandleTransactionResponse, LayoutGenerationOption, ObjectInfoRequest, ObjectInfoRequestKind,
@@ -1364,7 +1364,9 @@ impl AuthorityState {
         let protocol_config = epoch_store.protocol_config();
         let transaction_data = &certificate.data().intent_message().value;
         let (kind, signer, gas) = transaction_data.execution_parts();
-        let (inner_temp_store, effects, execution_error_opt) =
+
+        #[allow(unused_mut)]
+        let (inner_temp_store, mut effects, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
                 &self.database,
                 protocol_config,
@@ -1386,6 +1388,11 @@ impl AuthorityState {
                 signer,
                 tx_digest,
             );
+
+        fail_point_if!("cp_execution_nondeterminism", || {
+            #[cfg(msim)]
+            self.create_fail_state(certificate, epoch_store, &mut effects);
+        });
 
         Ok((inner_temp_store, effects, execution_error_opt.err()))
     }
@@ -1726,6 +1733,37 @@ impl AuthorityState {
                 loaded_child_objects,
             )
             .await
+    }
+
+    #[cfg(msim)]
+    fn create_fail_state(
+        &self,
+        certificate: &VerifiedExecutableTransaction,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        effects: &mut TransactionEffects,
+    ) {
+        use std::cell::RefCell;
+        thread_local! {
+            static FAIL_STATE: RefCell<(u64, HashSet<AuthorityName>)> = RefCell::new((0, HashSet::new()));
+        }
+        if !certificate.data().intent_message().value.is_system_tx() {
+            let committee = epoch_store.committee();
+            let cur_stake = (**committee).weight(&self.name);
+            if cur_stake > 0 {
+                FAIL_STATE.with_borrow_mut(|fail_state| {
+                    //let (&mut failing_stake, &mut failing_validators) = fail_state;
+                    if fail_state.0 < committee.validity_threshold() {
+                        fail_state.0 += cur_stake;
+                        fail_state.1.insert(self.name);
+                    }
+
+                    if fail_state.1.contains(&self.name) {
+                        info!("cp_exec failing tx");
+                        effects.gas_cost_summary_mut_for_testing().computation_cost += 1;
+                    }
+                });
+            }
+        }
     }
 
     fn process_object_index(
@@ -2093,6 +2131,41 @@ impl AuthorityState {
             None => None,
         };
         Ok(CheckpointResponse {
+            checkpoint: summary,
+            contents,
+        })
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub fn handle_checkpoint_request_v2(
+        &self,
+        request: &CheckpointRequestV2,
+    ) -> SuiResult<CheckpointResponseV2> {
+        let summary = if request.certified {
+            let summary = match request.sequence_number {
+                Some(seq) => self
+                    .checkpoint_store
+                    .get_checkpoint_by_sequence_number(seq)?,
+                None => self.checkpoint_store.get_latest_certified_checkpoint(),
+            }
+            .map(|v| v.into_inner());
+            summary.map(CheckpointSummaryResponse::Certified)
+        } else {
+            let summary = match request.sequence_number {
+                Some(seq) => self.checkpoint_store.get_locally_computed_checkpoint(seq)?,
+                None => self
+                    .checkpoint_store
+                    .get_latest_locally_computed_checkpoint(),
+            };
+            summary.map(CheckpointSummaryResponse::Pending)
+        };
+        let contents = match &summary {
+            Some(s) => self
+                .checkpoint_store
+                .get_checkpoint_contents(&s.content_digest())?,
+            None => None,
+        };
+        Ok(CheckpointResponseV2 {
             checkpoint: summary,
             contents,
         })

@@ -10,7 +10,7 @@ use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::sync::oneshot;
 use tokio::sync::{broadcast, mpsc};
-use tracing::info;
+use tracing::{debug, info};
 
 pub struct WorkerPool<W: Worker> {
     pub task_name: String,
@@ -33,8 +33,8 @@ impl<W: Worker + 'static> WorkerPool<W> {
         executor_progress_sender: mpsc::Sender<(String, CheckpointSequenceNumber)>,
     ) {
         info!(
-            "Starting indexing pipeline {} with concurrency {}",
-            self.task_name, self.concurrency
+            "Starting indexing pipeline {} with concurrency {}. Current watermark is {}.",
+            self.task_name, self.concurrency, current_checkpoint_number
         );
         let mut updates: HashSet<u64> = HashSet::new();
 
@@ -85,12 +85,14 @@ impl<W: Worker + 'static> WorkerPool<W> {
                                 continue;
                             }
                             let worker_id = (sequence_number % self.concurrency as u64) as usize;
+                            debug!("received checkpoint for processing {} for workflow {}", sequence_number, self.task_name);
                             workers[worker_id].0.send(checkpoint).await.expect("failed to dispatch a task");
                         }
                         Err(_) => break,
                     }
                 }
                 Some(status_update) = progress_receiver.recv() => {
+                    debug!("finished checkpoint processing {} for workflow {}", status_update, self.task_name);
                     updates.insert(status_update);
                     if status_update == current_checkpoint_number {
                         while updates.remove(&current_checkpoint_number) {

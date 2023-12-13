@@ -92,6 +92,10 @@ fn create_alias_if_not_exists_test() {
     // test expected result
     let create_alias_result = keystore.create_alias(Some("test".to_string()));
     assert_eq!("test".to_string(), create_alias_result.unwrap());
+    assert!(keystore.create_alias(Some("_test".to_string())).is_err());
+    assert!(keystore.create_alias(Some("-A".to_string())).is_err());
+    assert!(keystore.create_alias(Some("1A".to_string())).is_err());
+    assert!(keystore.create_alias(Some("&&AA".to_string())).is_err());
 }
 
 #[test]
