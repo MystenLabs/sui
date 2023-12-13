@@ -225,3 +225,45 @@ module Test::M2 {
     }
   }
 }
+
+//# run-graphql --variables A
+{
+  eventConnection(
+    filter: {sender: $A, eventType: "::M1"}
+  ) {
+    nodes {
+      sendingModule {
+        name
+      }
+      type {
+        repr
+      }
+      senders {
+        address
+      }
+      json
+      bcs
+    }
+  }
+}
+
+//# run-graphql --variables A
+{
+  eventConnection(
+    filter: {sender: $A, eventType: "@{Test}::"}
+  ) {
+    nodes {
+      sendingModule {
+        name
+      }
+      type {
+        repr
+      }
+      senders {
+        address
+      }
+      json
+      bcs
+    }
+  }
+}

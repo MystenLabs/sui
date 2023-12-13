@@ -1,4 +1,4 @@
-processed 15 tasks
+processed 17 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -301,6 +301,50 @@ Response: {
   "errors": [
     {
       "message": "Invalid type provided as filter: Invalid struct type: 0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M1::EventB<. Got error: unexpected end of tokens",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "eventConnection"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 15 'run-graphql'. lines 229-248:
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Invalid type provided as filter: Invalid format in '::M1' - if '::' is present, there must be a non-empty string on both sides. Expected format like 'package[::module[::type[<type_params>]]]'",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "eventConnection"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 16 'run-graphql'. lines 250-269:
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Invalid type provided as filter: Invalid format in '0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::' - if '::' is present, there must be a non-empty string on both sides. Expected format like 'package[::module[::type[<type_params>]]]'",
       "locations": [
         {
           "line": 2,
