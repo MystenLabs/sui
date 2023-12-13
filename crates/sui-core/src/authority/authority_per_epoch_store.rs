@@ -2387,6 +2387,7 @@ impl AuthorityPerEpochStore {
             }
         }
 
+        let commit_has_deferred_txns = !deferred_txns.is_empty();
         for (key, txns) in deferred_txns.into_iter() {
             self.defer_transactions(batch, key, txns)?;
         }
@@ -2397,7 +2398,8 @@ impl AuthorityPerEpochStore {
         )?;
 
         let lock = self.process_end_of_publish_transactions(batch, end_of_publish_transactions)?;
-        let (lock, final_round) = self.process_end_of_all_transactions(batch, lock)?;
+        let (lock, final_round) =
+            self.process_end_of_all_transactions(batch, lock, commit_has_deferred_txns)?;
 
         Ok((verified_certificates, notifications, lock, final_round))
     }
@@ -2470,6 +2472,7 @@ impl AuthorityPerEpochStore {
         &'a self,
         write_batch: &mut DBBatch,
         lock: Option<parking_lot::RwLockWriteGuard<'a, ReconfigState>>,
+        commit_has_deferred_txns: bool,
     ) -> SuiResult<(
         Option<parking_lot::RwLockWriteGuard<'a, ReconfigState>>,
         bool,
@@ -2484,7 +2487,7 @@ impl AuthorityPerEpochStore {
                 .is_reject_all_certs()
         };
 
-        if !is_reject_all_certs || !self.deferred_transactions_empty() {
+        if !is_reject_all_certs || !self.deferred_transactions_empty() || commit_has_deferred_txns {
             // Don't end epoch until all deferred transactions are processed.
             return Ok((lock, false));
         }
