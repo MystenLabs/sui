@@ -147,11 +147,10 @@ impl TransactionBlockEffects {
         let Some(stored_tx) = self.tx_data.as_ref().left() else {
             return Ok(None);
         };
-        Ok(ctx
-            .data_unchecked::<PgManager>()
+        ctx.data_unchecked::<PgManager>()
             .fetch_checkpoint(None, Some(stored_tx.checkpoint_sequence_number as u64))
             .await
-            .extend()?)
+            .extend()
     }
 
     // TODO: event_connection: EventConnection
