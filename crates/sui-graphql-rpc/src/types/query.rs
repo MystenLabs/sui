@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
 use async_graphql::{connection::Connection, *};
 use sui_json_rpc::name_service::NameServiceConfig;
+use sui_types::TypeTag;
 
 use super::{
     address::Address,
@@ -12,6 +15,7 @@ use super::{
     coin_metadata::CoinMetadata,
     epoch::Epoch,
     event::{Event, EventFilter},
+    move_type::MoveType,
     object::{Object, ObjectFilter},
     owner::{ObjectOwner, Owner},
     protocol_config::ProtocolConfigs,
@@ -74,6 +78,16 @@ impl Query {
 
     async fn address(&self, address: SuiAddress) -> Option<Address> {
         Some(Address { address })
+    }
+
+    /// Fetch a structured representation of a concrete type, including its layout information.
+    /// Fails if the type is malformed.
+    async fn type_(&self, type_: String) -> Result<MoveType> {
+        Ok(MoveType::new(
+            TypeTag::from_str(&type_)
+                .map_err(|e| Error::Client(format!("Bad type: {e}")))
+                .extend()?,
+        ))
     }
 
     /// Fetch epoch information by ID (defaults to the latest epoch).

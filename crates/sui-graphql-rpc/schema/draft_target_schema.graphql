@@ -59,6 +59,7 @@ type Query {
   owner(address: SuiAddress!): Owner
   object(address: SuiAddress!, version: Int): Object
   address(address: SuiAddress!): Address
+  type(type: String!): MoveType!
 
   # Fetch epoch information by ID (defaults to the latest epoch).
   epoch(id: Int): Epoch
