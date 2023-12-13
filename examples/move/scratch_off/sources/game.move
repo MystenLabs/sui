@@ -84,6 +84,16 @@ module scratch_off::game {
         store_id: ID
     }
 
+    public fun mint_child_store_cap(
+        store_cap: &StoreCap,
+        ctx: &mut TxContext
+    ): StoreCap {
+        StoreCap {
+            id: object::new(ctx),
+            store_id: store_cap.store_id
+        }
+    }
+
     struct ConvenienceStore<phantom Asset> has key {
         id: UID,
         creator: address,
@@ -183,7 +193,7 @@ module scratch_off::game {
         public_key: vector<u8>,
         max_players_in_leaderboard: u64,
         ctx: &mut TxContext
-    ) {
+    ): StoreCap {
         let number_of_prizes_len = vector::length(&number_of_prizes);
         let value_of_prizes_len = vector::length(&value_of_prizes);
         assert!(number_of_prizes_len == value_of_prizes_len, EInvalidInputs);
@@ -233,12 +243,12 @@ module scratch_off::game {
             public_key,
         };
 
-        transfer::public_transfer(StoreCap {
+        transfer::share_object(new_store);
+        
+        StoreCap {
             id: object::new(ctx),
             store_id: object::id(&new_store)
-        }, tx_context::sender(ctx));
-
-        transfer::share_object(new_store);
+        }
     }
 
     /// Initializes a ticket and sends it to someone.
