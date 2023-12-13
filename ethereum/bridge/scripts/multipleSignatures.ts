@@ -1,10 +1,8 @@
 import { ethers } from 'ethers'
 ;(async () => {
     try {
-        const privateKey =
-            '0x3f614a2b69459e93371336703571a74af91cab7ba05fd56a66b55eb1ba24ce55'
-        let wallet = new ethers.Wallet(privateKey)
-
+        for (let i = 0; i < 20; i++) {
+        let wallet = ethers.Wallet.createRandom();
 
         const messageType = 2
         const messageVersion = 1
@@ -25,6 +23,7 @@ import { ethers } from 'ethers'
         console.log(
             `signature:"${signature}"\nsigner:${await wallet.getAddress()}`,
         )
+    }
     } catch (e: any) {
         console.log(e.message)
     }

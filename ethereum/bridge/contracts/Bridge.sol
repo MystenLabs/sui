@@ -45,9 +45,8 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 	// A mapping from address to validator
 	mapping(address => Member) public committee;
 
-	mapping(MessageType => uint64) sequenceNumbers;
+	mapping(MessageType => uint64) public sequenceNumbers;
 	uint8[] private messageTypesInSequenceNumbersMapping;
-	uint64 public lastEmergencyOpSeqNum;
 
 	// Mapping to store the transfer history
 	mapping(uint256 => uint256[]) public transferHistory;
@@ -121,7 +120,6 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		running = true;
 		version = 1;
 		messageVersion = 1;
-		lastEmergencyOpSeqNum = 0;
 	}
 
 	function executeDeposit(bytes memory data) public {
@@ -204,7 +202,7 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		);
 		(, uint256 totalStake) = verifySignatures(bridgeMessage, signatures);
 		require(totalStake >= 5100, 'Not enough signatures to approve the emergency operation');
-		pauseBridge();
+		resumeBridge();
 	}
 
 	function verifySignatures(
