@@ -3,15 +3,18 @@
 
 use async_graphql::{connection::Connection, *};
 use fastcrypto::encoding::{Base58, Encoding};
-use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
+use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::StructTag;
 use sui_indexer::models_v2::objects::StoredObject;
 use sui_json_rpc::name_service::NameServiceConfig;
+use sui_json_rpc_types::SuiMoveValue;
 use sui_package_resolver::Resolver;
+use sui_types::collection_types::VecMap;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::TypeTag;
 
 use super::big_int::BigInt;
+use super::display::DisplayEntry;
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::MoveObject;
 use super::move_package::MovePackage;
@@ -95,7 +98,7 @@ impl Object {
         Some(BigInt::from(self.native.storage_rebate))
     }
 
-    async fn display(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+    async fn display(&self, ctx: &Context<'_>) -> Result<Option<Vec<DisplayEntry>>> {
         let resolver: &Resolver<PackageCache> = ctx
             .data()
             .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
@@ -111,15 +114,24 @@ impl Object {
             .await
             .extend()?;
 
-        // get_display_object_by_type
         let stored_display = ctx
             .data_unchecked::<PgManager>()
             .fetch_display_object_by_type(&struct_tag)
             .await
             .extend()?;
-        // get_rendered_fields
 
-        Ok(None)
+        let Some(stored_display) = stored_display else {
+            return Ok(None);
+        };
+
+        let event = stored_display
+            .to_display_update_event()
+            .map_err(|e| Error::Internal(e.to_string()))
+            .extend()?;
+
+        Ok(Some(
+            get_rendered_fields(event.fields, &move_struct).extend()?,
+        ))
     }
 
     /// The Base64 encoded bcs serialization of the object's content.
@@ -403,4 +415,113 @@ pub(crate) async fn deserialize_move_struct(
     })?;
 
     Ok((struct_tag, move_struct))
+}
+
+pub(crate) fn get_rendered_fields(
+    fields: VecMap<String, String>,
+    move_struct: &MoveStruct,
+) -> Result<Vec<DisplayEntry>, Error> {
+    let mut rendered_fields = Vec::<DisplayEntry>::new();
+
+    for entry in fields.contents.iter() {
+        let rendered_value = parse_template(&entry.value, move_struct)?;
+        rendered_fields.push(DisplayEntry {
+            key: entry.key.clone(),
+            value: rendered_value,
+        });
+    }
+
+    Ok(rendered_fields)
+}
+
+// handles the PART = '{' CHAIN '}'
+fn parse_template(template: &str, move_struct: &MoveStruct) -> Result<String, Error> {
+    let mut output = template.to_string();
+    let mut var_name = String::new();
+    let mut in_braces = false;
+    let mut escaped = false;
+
+    for ch in template.chars() {
+        match ch {
+            '\\' => {
+                escaped = true;
+                continue;
+            }
+            '{' if !escaped => {
+                in_braces = true;
+                var_name.clear();
+            }
+            '}' if !escaped => {
+                in_braces = false;
+                let value = get_value_from_move_struct(move_struct, &var_name)?;
+                output = output.replace(&format!("{{{}}}", var_name), &value.to_string());
+            }
+            _ if !escaped => {
+                if in_braces {
+                    var_name.push(ch);
+                }
+            }
+            _ => {}
+        }
+        escaped = false;
+    }
+
+    Ok(output.replace('\\', ""))
+}
+
+pub fn get_value_from_move_struct(
+    move_struct: &MoveStruct,
+    var_name: &str,
+) -> Result<String, Error> {
+    // Supports CHAIN . IDENT today
+    let parts: Vec<&str> = var_name.split('.').collect();
+    if parts.is_empty() {
+        // todo: custom error
+        Err(Error::Internal(
+            "Display template value cannot be empty".to_string(),
+        ))?;
+    }
+    // todo: new limit on config
+    if parts.len() > 10 {
+        Err(Error::Internal(format!(
+            "Display template value nested depth cannot exist {}",
+            10
+        )))?;
+    }
+
+    // update this as we iterate through the parts
+    let start_value = &MoveValue::Struct(move_struct.clone());
+
+    let result = parts
+        .iter()
+        .try_fold(start_value, |current_value, part| match current_value {
+            MoveValue::Struct(s) => s
+                .fields
+                .iter()
+                .find_map(|(id, value)| {
+                    if id.to_string() == *part {
+                        Some(value)
+                    } else {
+                        None
+                    }
+                })
+                .ok_or_else(|| Error::Internal(format!("Field '{}' not found", part))),
+            _ => Err(Error::Internal("Unexpected MoveValue".to_string())),
+        })?;
+
+    // TODO: implement Display for MoveData and use that instead
+    let sui_move_value: SuiMoveValue = result.clone().into();
+
+    match sui_move_value {
+        SuiMoveValue::Option(move_option) => match move_option.as_ref() {
+            Some(move_value) => Ok(move_value.to_string()),
+            None => Ok("".to_string()),
+        },
+        SuiMoveValue::Vector(_) => Err(Error::Internal(format!(
+            "Vector is not supported as a Display value {}",
+            var_name
+        )))?,
+
+        _ => Ok(sui_move_value.to_string()),
+    }
 }
