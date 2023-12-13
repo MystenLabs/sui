@@ -8,9 +8,6 @@ query transaction_block_with_relation_filter {
   address(address: "0x2") {
     transactionBlockConnection(relation: SENT, filter: { package: "0x2" }) {
       nodes {
-        sender {
-          address
-        }
         gasInput {
           gasPrice
           gasBudget
