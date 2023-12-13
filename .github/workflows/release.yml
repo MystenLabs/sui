@@ -35,7 +35,7 @@ env:
 
 jobs:
   release-build:
-    name: Build Release Binaries
+    name: Build & Publish Binaries
     timeout-minutes: 80
     strategy:
       matrix:
@@ -56,29 +56,59 @@ jobs:
         run: | 
           echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
 
+      - name: Set os/arch variables (Windows)
+        if: ${{ env.sui_tag != 'main' && matrix.os == 'windows-ghcloud' }}
+        shell: bash
+        run: |
+          export arch=$(uname -m)
+          export os_type="windows-${arch}"
+          echo "os_type=${os_type}" >> $GITHUB_ENV
+
+      - name: Set os/arch variables
+        if: ${{ env.sui_tag != 'main' && matrix.os != 'windows-ghcloud' }}
+        shell: bash
+        run: |
+          export arch=$(uname -m)
+          export system_os=$(echo ${{ matrix.os }} | cut -d- -f1)
+          export os_type="${system_os}-${arch}"
+          echo "os_type=${system_os}-${arch}" >> $GITHUB_ENV     
+        
       - name: Checking out ${{ env.sui_tag }}
         if: ${{ env.sui_tag != 'main' }}
         uses: actions/checkout@v3
         with:
           ref: ${{ env.sui_tag }}
 
+      - name: Check if archives of binaries have already been built
+        continue-on-error: true
+        shell: bash
+        run: |
+          echo "s3_archive_exist=$(curl -Is https://sui-releases.s3.us-east-1.amazonaws.com/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz | head -n 1 | grep '200 OK')" >> $GITHUB_ENV
+
+      - name: Download archive
+        if: ${{ env.s3_file_exist != '' }}
+        shell: bash
+        run: |
+          mkdir ./target/release
+          aws s3 cp s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz
+
       - name: Setup caching
-        if: ${{ env.sui_tag != 'main' }}
+        if: ${{ env.sui_tag != 'main' && env.s3_file_exist == '' }}
         uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths          
       
       - name: Install nexttest (Windows)
-        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
+        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main' && env.s3_file_exist == '' }}
         uses: taiki-e/install-action@nextest
 
       - name: Setup protoc (Windows)
-        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
+        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main' && env.s3_file_exist == '' }}
         uses: arduino/setup-protoc@v1
         # this avoids rate-limiting
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install postgres (Windows)
-        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
+        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main' && env.s3_file_exist == '' }}
         shell: bash
         run: |
           choco install postgresql12 --force --params '/Password:root'
@@ -89,20 +119,16 @@ jobs:
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV          
 
       - name: cargo build (release) for ${{ matrix.os }} platform
-        if: ${{ env.sui_tag != 'main' }}
+        if: ${{ env.sui_tag != 'main' && env.s3_file_exist == '' }}
         shell: bash
         run: |
           [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release
           cd external-crates/move && cargo build -p move-analyzer --release
 
       - name: Rename binaries for ${{ matrix.os }}
-        if: ${{ env.sui_tag != 'main' && matrix.os != 'windows-ghcloud' }}
+        if: ${{ env.sui_tag != 'main' && matrix.os != 'windows-ghcloud' && env.s3_file_exist == '' }}
         shell: bash
         run: |
-          export arch=$(uname -m)
-          export system_os=$(echo ${{ matrix.os }} | cut -d- -f1)
-          export os_type="${system_os}-${arch}"
-          echo "os_type=${system_os}-${arch}" >> $GITHUB_ENV
           [ -f ./target/release/sui ] && mv ./target/release/sui ./target/release/sui-${os_type}
           [ -f ./target/release/sui-node ] && mv ./target/release/sui-node ./target/release/sui-node-${os_type}
           [ -f ./target/release/sui-tool ] && mv ./target/release/sui-tool ./target/release/sui-tool-${os_type}
@@ -114,12 +140,9 @@ jobs:
           [[ ${{ env.sui_tag }} == *"mainnet"* ]] && aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz || true
 
       - name: Rename binaries for Windows
-        if: ${{ env.sui_tag != 'main' && matrix.os == 'windows-ghcloud' }}
+        if: ${{ env.sui_tag != 'main' && matrix.os == 'windows-ghcloud' && env.s3_file_exist == '' }}
         shell: bash
         run: |
-          export arch=$(uname -m)
-          export os_type="windows-${arch}"
-          echo "os_type=${os_type}" >> $GITHUB_ENV
           [ -f ./target/release/sui.exe ] && mv ./target/release/sui.exe ./target/release/sui-${os_type}.exe
           [ -f ./target/release/sui-node.exe ] && mv ./target/release/sui-node.exe ./target/release/sui-node-${os_type}.exe
           [ -f ./target/release/sui-tool.exe ] && mv ./target/release/sui-tool.exe ./target/release/sui-tool-${os_type}.exe
@@ -149,7 +172,7 @@ jobs:
             ./target/release/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
 
   update-homebrew-formula:
-    name: Push binaries to homebrew store
+    name: Push binaries to homebrew
     needs: release-build
     runs-on: ubuntu-latest
     if: ${{ contains( inputs.sui_tag, 'mainnet') || contains( github.ref, 'mainnet') }}
