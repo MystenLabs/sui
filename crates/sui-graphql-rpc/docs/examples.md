@@ -1231,7 +1231,7 @@
 >        status
 >        principal
 >        estimatedReward
->        activeEpoch {
+>        activatedEpoch {
 >          epochId
 >          referenceGasPrice
 >          validatorSet {
@@ -1243,7 +1243,7 @@
 >            totalStake
 >          }
 >        }
->        requestEpoch {
+>        requestedEpoch {
 >          epochId
 >        }
 >      }

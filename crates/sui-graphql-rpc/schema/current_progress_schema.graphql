@@ -2021,11 +2021,11 @@ type StakedSui {
 	"""
 	The epoch at which this stake became active
 	"""
-	activeEpoch: Epoch
+	activatedEpoch: Epoch
 	"""
 	The epoch at which this object was requested to join a stake pool
 	"""
-	requestEpoch: Epoch
+	requestedEpoch: Epoch
 	"""
 	The SUI that was initially staked.
 	"""

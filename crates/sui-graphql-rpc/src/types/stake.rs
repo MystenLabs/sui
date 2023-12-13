@@ -46,7 +46,7 @@ impl StakedSui {
     }
 
     /// The epoch at which this stake became active
-    async fn active_epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>, Error> {
+    async fn activated_epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>, Error> {
         Ok(Some(
             ctx.data_unchecked::<PgManager>()
                 .fetch_epoch_strict(self.native.activation_epoch())
@@ -55,7 +55,7 @@ impl StakedSui {
     }
 
     /// The epoch at which this object was requested to join a stake pool
-    async fn request_epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>, Error> {
+    async fn requested_epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>, Error> {
         Ok(Some(
             ctx.data_unchecked::<PgManager>()
                 .fetch_epoch_strict(self.native.request_epoch())
