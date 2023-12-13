@@ -1042,7 +1042,7 @@ impl<'a> SuiTestAdapter<'a> {
                 res.push(var.clone());
             } else {
                 return Err(anyhow!(
-                    "Unknown variable: {}\nAllowed variable mappings are are {:#?}",
+                    "Unknown variable: {}\nAllowed variable mappings are {:#?}",
                     decl,
                     variables
                 ));
@@ -1089,7 +1089,7 @@ impl<'a> SuiTestAdapter<'a> {
         for var_name in interpolations {
             let value = variables.get(var_name).ok_or_else(|| {
                 anyhow!(
-                    "Unknown variable: {}\nAllowed variable mappings are are {:#?}",
+                    "Unknown variable: {}\nAllowed variable mappings are {:#?}",
                     var_name,
                     variables
                 )
