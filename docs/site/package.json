@@ -33,6 +33,7 @@
     "axios": "^1.6.0",
     "clsx": "^2.0.0",
     "docusaurus-plugin-includes": "^1.1.4",
+    "dotenv": "^16.3.1",
     "firebase": "^10.4.0",
     "hast-util-is-element": "^1.1.0",
     "lodash": "^4.17.21",
