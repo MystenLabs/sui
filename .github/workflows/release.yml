@@ -46,7 +46,7 @@ jobs:
       - name: Clean up and validate tag name ${{ env.TAG_NAME }}
         shell: bash
         run: | 
-          [[ ${{ env.TAG_NAME }} == "main" ]] && echo "tag cannot be equals to 'main'" && exit 1
+          [[ "${{ env.TAG_NAME }}" == "main" ]] && echo "tag cannot be equals to 'main'" && exit 1
           echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
 
       - name: Configure AWS credentials
