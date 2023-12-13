@@ -119,7 +119,7 @@ jobs:
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
           
       - name: Install aws for ${{ matrix.os }}
-        if: ${{ matrix.os == 'macos-latest-xl' && env.sui_tag != 'main' && env.s3_archive_exist == '' }}
+        if: ${{ matrix.os == 'macos-arm64-self-hosted' && env.sui_tag != 'main' && env.s3_archive_exist == '' }}
         uses: chrislennon/action-aws-cli@v1.1
 
       - name: cargo build (release) for ${{ matrix.os }} platform
