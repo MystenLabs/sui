@@ -4,7 +4,7 @@ import { loadFixture } from '@nomicfoundation/hardhat-toolbox/network-helpers'
 import { HardhatEthersSigner } from '@nomicfoundation/hardhat-ethers/signers'
 // import { Bridge } from "../typechain-types/contracts/Bridge";
 import { Bridge, Bridge__factory } from '../typechain-types'
-import { Signer } from 'ethers'
+import { Signer, parseEther } from 'ethers'
 
 // Define the contract name and the interface
 const CONTRACT_NAME = 'Bridge'
@@ -418,5 +418,69 @@ describe(CONTRACT_NAME, () => {
         expect(
             await contract.sequenceNumbers(bridgeMessage.messageType),
         ).to.equal(1)
+    })
+
+    it('should emit a BridgeEvent with the correct values', async () => {
+        await loadFixture(beforeEach)
+
+        // Create a mock bridge message
+        const bridgeMessage = {
+            messageType: MessageType.EMERGENCY_OP, // 2
+            messageVersion: 1,
+            sequenceNumber: 0,
+            sourceChain: ChainID.SUI_MAINNET, // 0
+            payload: '0x00',
+        }
+
+        // Define the committee members array
+        let committeeMembers: { account: string; stake: number }[] = []
+        let signatures: string[] = []
+
+        for (let i = 0; i < 10; i++) {
+            let wallet = ethers.Wallet.createRandom()
+            committeeMembers.push({
+                account: await wallet.getAddress(),
+                stake: 1000,
+            })
+
+            const messageHash = ethers.solidityPackedKeccak256(
+                ['uint8', 'uint8', 'uint64', 'uint8', 'bytes'],
+                [
+                    bridgeMessage.messageType,
+                    bridgeMessage.messageVersion,
+                    bridgeMessage.sequenceNumber,
+                    bridgeMessage.sourceChain,
+                    bridgeMessage.payload,
+                ],
+            )
+            const messageHashBinary = ethers.getBytes(messageHash)
+            const signature = await wallet.signMessage(messageHashBinary)
+            signatures.push(signature)
+        }
+
+        // Call the initialize function using the first account
+        await contract.initialize(committeeMembers)
+
+        // Check the state variables after initialization
+        expect(await contract.validatorsCount()).to.equal(
+            committeeMembers.length,
+        )
+        expect(await contract.running()).to.be.true
+        expect(await contract.version()).to.equal(1)
+        expect(await contract.messageVersion()).to.equal(1)
+
+        // Check the committee mapping for each member
+        for (const member of committeeMembers) {
+            const committeeMember = await contract.committee(member.account)
+            expect(committeeMember.account).to.equal(member.account)
+            expect(committeeMember.stake).to.equal(member.stake)
+        }
+
+        const [msgSender] = await ethers.getSigners()
+        await contract.createBridgeTx(await msgSender.getAddress(), {
+            value: parseEther('1.0'),
+        })
+
+        expect(await contract.getBalance()).to.equal(parseEther('1.0'))
     })
 })

@@ -48,6 +48,9 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 	mapping(MessageType => uint64) public sequenceNumbers;
 	uint8[] private messageTypesInSequenceNumbersMapping;
 
+	// Array to store the frozen signers
+	address[] private bridgeFrozenSigners;
+
 	// Mapping to store the transfer history
 	mapping(uint256 => uint256[]) public transferHistory;
 
@@ -187,6 +190,7 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		(address[] memory seen, ) = verifySignatures(bridgeMessage, signatures);
 		require(seen.length >= 2, 'Not enough signatures to approve the emergency operation');
 		pauseBridge();
+		bridgeFrozenSigners = seen;
 	}
 
 	function unfreezeBridge(
@@ -203,6 +207,7 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		(, uint256 totalStake) = verifySignatures(bridgeMessage, signatures);
 		require(totalStake >= 5100, 'Not enough signatures to approve the emergency operation');
 		resumeBridge();
+		bridgeFrozenSigners = new address[](0);
 	}
 
 	function verifySignatures(
@@ -373,5 +378,11 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		messageTypesInSequenceNumbersMapping.push(uint8(msgType));
 		// Return 0
 		return 0;
+	}
+
+	event BridgeEvent(address from, address to, uint256 amount);
+
+	function createBridgeTx(address to) public payable {
+		emit BridgeEvent(msg.sender, to, msg.value);
 	}
 }
