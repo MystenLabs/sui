@@ -47,7 +47,7 @@ jobs:
         shell: bash
         run: | 
           echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
-          [[ ${{ env.sui_tag }} == "main" ]] && echo "tag cannot be equals to 'main'" && exit 1
+          [[ ${sui_tag} == "main" ]] && echo "tag cannot be equals to 'main'" && exit 1
 
       - name: Configure AWS credentials
         if: ${{ env.TAG_NAME != 'main' }}
