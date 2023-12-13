@@ -10,16 +10,6 @@
         cursor
         node {
           digest
-          sender {
-            address
-          }
-          effects {
-            gasEffects {
-              gasObject {
-                address
-              }
-            }
-          }
           gasInput {
             gasPrice
             gasBudget
