@@ -1102,16 +1102,17 @@ impl TransactionKind {
     }
 
     pub fn is_system_tx(&self) -> bool {
-        matches!(
-            self,
+        // Keep this as an exhaustive match so that we can't forget to update it.
+        match self {
             TransactionKind::ChangeEpoch(_)
-                | TransactionKind::Genesis(_)
-                | TransactionKind::ConsensusCommitPrologue(_)
-                | TransactionKind::ConsensusCommitPrologueV2(_)
-                | TransactionKind::AuthenticatorStateUpdate(_)
-                | TransactionKind::RandomnessStateUpdate(_)
-                | TransactionKind::EndOfEpochTransaction(_)
-        )
+            | TransactionKind::Genesis(_)
+            | TransactionKind::ConsensusCommitPrologue(_)
+            | TransactionKind::ConsensusCommitPrologueV2(_)
+            | TransactionKind::AuthenticatorStateUpdate(_)
+            | TransactionKind::RandomnessStateUpdate(_)
+            | TransactionKind::EndOfEpochTransaction(_) => true,
+            TransactionKind::ProgrammableTransaction(_) => false,
+        }
     }
 
     pub fn is_end_of_epoch_tx(&self) -> bool {
