@@ -30,3 +30,21 @@ impl Description for Float {
         "String representation of an arbitrary width, double precision number"
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn to_value() {
+        assert_eq!(
+            async_graphql::ScalarType::to_value(&Float(1.23f64)).to_string(),
+            "\"1.23\"".to_string()
+        );
+
+        let Value::String(s) = async_graphql::ScalarType::to_value(&Float(0.2451234f64)) else {
+            panic!("Invalid float number");
+        };
+        assert_eq!("0.2451234", s);
+    }
+}
