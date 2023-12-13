@@ -8,14 +8,8 @@ query byTxSender {
       endCursor
     }
     nodes {
-      sendingModule {
+      sendingModuleId {
         name
-      }
-      type {
-        repr
-      }
-      senders {
-        address
       }
       timestamp
       json
