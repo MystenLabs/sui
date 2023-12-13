@@ -33,6 +33,8 @@ pub enum BridgeError {
     MismatchedAuthoritySigner,
     // Signature is over a mismatched action
     MismatchedAction,
+    // Storage Error
+    StorageError(String),
     // Rest API Error
     RestAPIError(String),
     // Uncategorized error

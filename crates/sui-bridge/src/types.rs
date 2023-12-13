@@ -8,6 +8,7 @@ use crate::error::{BridgeError, BridgeResult};
 use crate::events::EmittedSuiToEthTokenBridgeV1;
 use ethers::types::Address as EthAddress;
 pub use ethers::types::H256 as EthTransactionHash;
+use fastcrypto::hash::{HashFunction, Keccak256};
 use rand::seq::SliceRandom;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -253,6 +254,22 @@ impl BridgeAction {
             }
         }
         bytes
+    }
+
+    // Digest of BridgeAction (with Keccak256 hasher)
+    pub fn digest(&self) -> BridgeActionDigest {
+        let mut hasher = Keccak256::default();
+        hasher.update(&self.to_bytes());
+        BridgeActionDigest::new(hasher.finalize().into())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct BridgeActionDigest(Digest);
+
+impl BridgeActionDigest {
+    pub const fn new(digest: [u8; 32]) -> Self {
+        Self(Digest::new(digest))
     }
 }
 
