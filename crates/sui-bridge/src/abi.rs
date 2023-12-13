@@ -8,6 +8,8 @@ use ethers::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::types::{BridgeAction, EthToSuiBridgeAction};
+
 // TODO: write a macro to handle variants
 
 // TODO: Dummy placeholder, will be replaced by actual abis
@@ -34,5 +36,23 @@ impl EthBridgeEvent {
 
         // TODO: try other variants
         None
+    }
+}
+
+impl EthBridgeEvent {
+    pub fn try_into_bridge_action(
+        self,
+        eth_tx_hash: ethers::types::H256,
+        eth_event_index: u16,
+    ) -> Option<BridgeAction> {
+        match self {
+            EthBridgeEvent::ExampleContract(event) => {
+                Some(BridgeAction::EthToSuiBridgeAction(EthToSuiBridgeAction {
+                    eth_tx_hash,
+                    eth_event_index,
+                    eth_bridge_event: event.clone(),
+                }))
+            }
+        }
     }
 }
