@@ -19,7 +19,7 @@
         errors
       }
       sender {
-        address
+        location
       }
       gasInput {
         gasPrice
