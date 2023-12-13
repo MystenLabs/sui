@@ -178,7 +178,7 @@ jobs:
         run: |
           echo "sha256_ubuntu_release=$(sha256sum sui-binaries-ubuntu-ghcloud/sui-${{ env.sui_tag }}-ubuntu-x86_64.tgz | awk '{print $1}')" >> $GITHUB_ENV
           echo "sha256_macos_x86_release=$(sha256sum sui-binaries-macos-latest-xl/sui-${{ env.sui_tag }}-macos-x86_64.tgz  | awk '{print $1}')" >> $GITHUB_ENV
-          echo "sha256_macos_arm_release$(sha256sum sui-binaries-macos-arm64-self-hosted/sui-${{ env.sui_tag }}-macos-arm64.tgz | awk '{print $1}' )" >> $GITHUB_ENV
+          echo "sha256_macos_arm_release=$(sha256sum sui-binaries-macos-arm64-self-hosted/sui-${{ env.sui_tag }}-macos-arm64.tgz | awk '{print $1}' )" >> $GITHUB_ENV
           
       # Install Jinja2 for templating
       - name: Install Jinja2
