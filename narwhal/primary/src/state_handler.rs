@@ -183,13 +183,15 @@ impl RandomnessState {
         info!(
             "random beacon: state initialized with authority_id={authority_id}, total_weight={total_weight}, t={t}, num_nodes={num_nodes}, oracle initial_prefix={prefix_str:?}",
         );
+
+        let dkg_output = store.dkg_output();
         Some(Self {
             store,
             tx_system_messages,
             party,
             has_sent_confirmation: false,
             vss_key_output,
-            dkg_output: None,
+            dkg_output,
             authority_id,
             leader_schedule,
             network,
@@ -200,21 +202,6 @@ impl RandomnessState {
             partial_sigs: BTreeMap::new(),
             partial_sig_sender: None,
         })
-    }
-
-    fn has_dkg_output(&self) -> bool {
-        self.dkg_output.is_some() || self.store.has_dkg_output()
-    }
-
-    fn dkg_output(&mut self) -> Option<&dkg::Output<PkG, EncG>> {
-        if self.dkg_output.is_some() {
-            return self.dkg_output.as_ref();
-        }
-        let dkg_output = self.store.dkg_output();
-        if dkg_output.is_some() {
-            self.dkg_output = dkg_output;
-        }
-        self.dkg_output.as_ref()
     }
 
     fn set_dkg_output(&mut self, output: dkg::Output<PkG, EncG>) {
@@ -259,7 +246,7 @@ impl RandomnessState {
             // DKG messages are processed in consensus order.
             return;
         }
-        if self.has_dkg_output() {
+        if self.dkg_output.is_some() {
             // Once we have completed DKG, no more `Confirmation`s are needed.
             return;
         }
@@ -293,7 +280,7 @@ impl RandomnessState {
         }
 
         // Once we have enough Confirmations, process them and update shares.
-        if !self.has_dkg_output() && self.store.has_used_messages() {
+        if self.dkg_output.is_none() && self.store.has_used_messages() {
             match self.party.complete(
                 self.store.used_messages().as_ref().expect("checked above"),
                 &self.store.confirmations(),
@@ -312,7 +299,7 @@ impl RandomnessState {
                 Err(e) => error!("random beacon: error while processing DKG Confirmations: {e:?}"),
             }
             // Begin randomness generation.
-            if self.has_dkg_output() {
+            if self.dkg_output.is_some() {
                 info!("random beacon: start randomness generation");
                 self.send_partial_signatures().await;
             }
@@ -322,7 +309,7 @@ impl RandomnessState {
     async fn update_narwhal_round(&mut self, round: Round) {
         self.narhwal_round = round;
         // Re-send partial signatures to new leader, in case the last one failed.
-        if self.has_dkg_output() && (self.last_narwhal_round_sent <= round) {
+        if self.dkg_output.is_some() && (self.last_narwhal_round_sent <= round) {
             self.send_partial_signatures().await;
         }
     }
@@ -344,7 +331,7 @@ impl RandomnessState {
 
         if self.cached_sigs.is_none() || self.cached_sigs.as_ref().unwrap().0 != randomness_round {
             let shares = {
-                let Some(dkg_output) = self.dkg_output() else {
+                let Some(dkg_output) = &self.dkg_output else {
                     error!("random beacon: called send_partial_signatures before DKG completed");
                     return;
                 };
@@ -408,9 +395,12 @@ impl RandomnessState {
         round: RandomnessRound,
         sigs: Vec<RandomnessPartialSignature>,
     ) {
-        let Some(dkg_output) = self.dkg_output() else {
-            error!("random beacon: called receive_partial_signatures before DKG completed");
-            return;
+        let vss_pk = {
+            let Some(dkg_output) = &self.dkg_output else {
+                error!("random beacon: called receive_partial_signatures before DKG completed");
+                return;
+            };
+            &dkg_output.vss_pk
         };
         let randomness_round = self.store.randomness_round();
         if round < randomness_round {
@@ -468,15 +458,13 @@ impl RandomnessState {
         };
 
         // Try to verify the aggregated signature all at once. (Should work in the happy path.)
-        if ThresholdBls12381MinSig::verify(dkg_output.vss_pk.c0(), &round.signature_message(), &sig)
-            .is_err()
-        {
+        if ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig).is_err() {
             // If verifiation fails, some of the inputs must be invalid. We have to go through
             // one-by-one to find which.
             // TODO: add test for individual sig verification.
             self.partial_sigs.retain(|&(r, authority_id), partial_sigs| {
                 if ThresholdBls12381MinSig::partial_verify_batch(
-                    &dkg_output.vss_pk,
+                    vss_pk,
                     &r.signature_message(),
                      partial_sigs.as_slice(),
                     &mut rand::thread_rng(),
@@ -508,11 +496,9 @@ impl RandomnessState {
                     return;
                 }
             };
-            if let Err(e) = ThresholdBls12381MinSig::verify(
-                dkg_output.vss_pk.c0(),
-                &round.signature_message(),
-                &sig,
-            ) {
+            if let Err(e) =
+                ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig)
+            {
                 error!("Error while verifying randomness partial signatures after removing invalid partials: {e:?}");
                 return;
             }
