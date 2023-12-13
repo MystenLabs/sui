@@ -76,16 +76,6 @@ impl ServerBuilder {
         format!("{}:{}", self.host, self.port)
     }
 
-    pub fn max_query_depth(mut self, max_depth: u32) -> Self {
-        self.schema = self.schema.limit_depth(max_depth as usize);
-        self
-    }
-
-    pub fn max_query_nodes(mut self, max_nodes: u32) -> Self {
-        self.schema = self.schema.limit_complexity(max_nodes as usize);
-        self
-    }
-
     pub fn context_data(mut self, context_data: impl Any + Send + Sync) -> Self {
         self.schema = self.schema.data(context_data);
         self
@@ -211,8 +201,6 @@ impl ServerBuilder {
         let metrics = RequestMetrics::new(&registry);
 
         builder = builder
-            .max_query_depth(config.service.limits.max_query_depth)
-            .max_query_nodes(config.service.limits.max_query_nodes)
             .context_data(config.service.clone())
             .context_data(pg_conn_pool)
             .context_data(Resolver::new(package_cache))
@@ -416,9 +404,17 @@ pub mod tests {
             let db_url: String = connection_config.db_url.clone();
             let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
             let pg_conn_pool = PgManager::new(reader, Limits::default());
+            let server_config = ServiceConfig {
+                limits: Limits {
+                    max_query_depth: depth,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(pg_conn_pool)
-                .max_query_depth(depth)
+                .context_data(server_config)
+                .extension(QueryLimitsChecker::default())
                 .build_schema();
             schema.execute(query).await
         }
@@ -443,7 +439,10 @@ pub mod tests {
             .map(|e| e.message)
             .collect();
 
-        assert_eq!(errs, vec!["Query is nested too deep.".to_string()]);
+        assert_eq!(
+            errs,
+            vec!["Query has too many levels of nesting. The maximum allowed is 0".to_string()]
+        );
         let errs: Vec<_> = exec_query_depth_limit(
             2,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
@@ -455,7 +454,10 @@ pub mod tests {
         .into_iter()
         .map(|e| e.message)
         .collect();
-        assert_eq!(errs, vec!["Query is nested too deep.".to_string()]);
+        assert_eq!(
+            errs,
+            vec!["Query has too many levels of nesting. The maximum allowed is 2".to_string()]
+        );
     }
 
     pub async fn test_query_node_limit_impl() {
@@ -469,9 +471,17 @@ pub mod tests {
             let db_url: String = connection_config.db_url.clone();
             let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
             let pg_conn_pool = PgManager::new(reader, Limits::default());
+            let server_config = ServiceConfig {
+                limits: Limits {
+                    max_query_nodes: nodes,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(pg_conn_pool)
-                .max_query_nodes(nodes)
+                .context_data(server_config)
+                .extension(QueryLimitsChecker::default())
                 .build_schema();
             schema.execute(query).await
         }
@@ -495,7 +505,10 @@ pub mod tests {
             .into_iter()
             .map(|e| e.message)
             .collect();
-        assert_eq!(err, vec!["Query is too complex.".to_string()]);
+        assert_eq!(
+            err,
+            vec!["Query has too many nodes. The maximum allowed is 0".to_string()]
+        );
 
         let err: Vec<_> = exec_query_node_limit(
             4,
@@ -508,7 +521,10 @@ pub mod tests {
         .into_iter()
         .map(|e| e.message)
         .collect();
-        assert_eq!(err, vec!["Query is too complex.".to_string()]);
+        assert_eq!(
+            err,
+            vec!["Query has too many nodes. The maximum allowed is 4".to_string()]
+        );
     }
 
     pub async fn test_query_default_page_limit_impl() {
@@ -611,8 +627,6 @@ pub mod tests {
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
         let pg_conn_pool = PgManager::new(reader, service_config.limits);
         let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
-            .max_query_depth(service_config.limits.max_query_depth)
-            .max_query_nodes(service_config.limits.max_query_nodes)
             .context_data(service_config)
             .context_data(pg_conn_pool)
             .context_data(metrics)
