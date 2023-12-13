@@ -21,6 +21,7 @@ module scratch_off::game {
     use scratch_off::math;
     use sui::table::{Self, Table};
     use sui::package;
+    use sui::kiosk::{Self, Kiosk};
 
     // --------------- Constants ---------------
     const EInvalidInputs: u64 = 0;
@@ -29,6 +30,8 @@ module scratch_off::game {
     const ENotAuthorizedEmployee: u64 = 3;
     const EWrongStore: u64 = 4;
     const ENotExactAmount: u64 = 5;
+
+    const ETicketNotEvaluated: u64 = 6;
 
     // --------------- Events ---------------
     struct NewDrawing<phantom T> has copy, drop {
@@ -41,6 +44,17 @@ module scratch_off::game {
         player: address,
         amount_won: u64,
         tickets_opened: u64,
+    }
+
+    /// A giftbox to help us preserve royalties + kiosk lock.
+    struct GiftBox has key {
+        id: UID,
+        ticket: Ticket
+    }
+
+    // A hot-potato to make sure we either lock or use the ticket.
+    struct UseOrLockPromise {
+        ticket_id: ID
     }
 
     struct Ticket has key, store {
@@ -126,61 +140,20 @@ module scratch_off::game {
         coin::take(&mut store.prize_pool, value, ctx)
     }
 
-    public fun total_players<Asset>(store: &ConvenienceStore<Asset>): u64 {
-        table::length(&store.player_metadata)
-    }
-
-    public fun leaderboard<Asset>(store: &ConvenienceStore<Asset>): &LeaderBoard {
-       &store.leaderboard 
-    }
-
-    public fun leaderboard_players(leaderboard: &LeaderBoard): vector<address> {
-        leaderboard.leaderboard_players
-    }
-
-    public fun winning_tickets<Asset>(store: &ConvenienceStore<Asset>): &vector<PrizeStruct> {
-        &store.winning_tickets
-    }
-
-    public fun table_contains_player(player_metadata: &Table<address, Metadata>, target_address: address): bool {
-        table::contains(player_metadata, target_address)
-    }
-
-    public fun player_metadata<Asset>(store: &ConvenienceStore<Asset>): &Table<address, Metadata> {
-        &store.player_metadata
-    }
-
-    public fun get_target_player_metadata(player_metadata: &Table<address, Metadata>, target_address: address): &Metadata {
-        table::borrow(player_metadata, target_address)
-    }
-
-    public fun get_player_metadata_mut(player_metadata: &mut Table<address, Metadata>, target_address: address): &mut Metadata {
-        table::borrow_mut(player_metadata, target_address)
-    }
-
-    public fun original_ticket_count<Asset>(store: &ConvenienceStore<Asset>): u64 {
-        store.original_ticket_count
-    }
-
-    public fun tickets_left<Asset>(store: &ConvenienceStore<Asset>): u64 {
-        store.original_ticket_count - store.tickets_evaluated
-    }
-
-    public fun tickets_issued<Asset>(store: &ConvenienceStore<Asset>): u64 {
-        store.tickets_issued
-    }
-
-    public fun prize_pool_balance<Asset>(store: &ConvenienceStore<Asset>): u64 {
-        balance::value(&store.prize_pool)
-    }
-
     /// OTW to claim Publisher object, in order to create Display.
     struct GAME has drop {}
 
     /// We claim the cap for updating display
     fun init(otw: GAME, ctx: &mut TxContext){
         package::claim_and_keep(otw, ctx);
+
+        // TODO: 
+        // Create a Transfer Policy using the publisher object
+        // wrap it in our SINGLE store :)
+        // Add an `unlocking` function that will resolve a `TransferRequest`
+        // and return our `UseOrLockPromise` to the user.
     }
+    
 
     /// Initializes the store with all of the lottery tickets.
     /// We allow the user of the store.
@@ -268,7 +241,37 @@ module scratch_off::game {
             player,
             drawing_count
         };
-        transfer::public_transfer(ticket, player);
+
+        transfer::transfer(GiftBox {
+            id: object::new(ctx),
+            ticket
+        }, player);
+    }
+
+    // un-wrap a gift box.
+    public fun unwrap_giftbox(gift_box: GiftBox): (Ticket, UseOrLockPromise) {
+        let GiftBox { id, ticket } = gift_box;
+
+        let ticket_id = object::id(&ticket);
+
+        (ticket, UseOrLockPromise {
+            ticket_id
+        })
+    }
+
+    // Prove that the item was locked in the kiosk.
+    public fun prove_locked_in_kiosk(
+        kiosk: &Kiosk,
+        promise: UseOrLockPromise
+    ) {
+        let UseOrLockPromise { ticket_id } = promise;
+        assert!(kiosk::is_locked(kiosk, ticket_id), ETicketNotEvaluated);
+    }
+    
+    // Time to prove we've locked it or used it.
+    public fun prove_evaluated<Asset>(store: &ConvenienceStore<Asset>, promise: UseOrLockPromise){
+        let UseOrLockPromise { ticket_id } = promise;
+        assert!(ticket_exists<Asset>(store, ticket_id), ETicketNotEvaluated);
     }
 
     /// Calls evaluate ticket by adding it as a dynamic field to the store
@@ -445,6 +448,57 @@ module scratch_off::game {
             amount_won: reward_balance,
             tickets_opened: drawing_count
         });
+    }
+
+
+    /// === Getters === 
+    /// 
+    public fun total_players<Asset>(store: &ConvenienceStore<Asset>): u64 {
+        table::length(&store.player_metadata)
+    }
+
+    public fun leaderboard<Asset>(store: &ConvenienceStore<Asset>): &LeaderBoard {
+       &store.leaderboard 
+    }
+
+    public fun leaderboard_players(leaderboard: &LeaderBoard): vector<address> {
+        leaderboard.leaderboard_players
+    }
+
+    public fun winning_tickets<Asset>(store: &ConvenienceStore<Asset>): &vector<PrizeStruct> {
+        &store.winning_tickets
+    }
+
+    public fun table_contains_player(player_metadata: &Table<address, Metadata>, target_address: address): bool {
+        table::contains(player_metadata, target_address)
+    }
+
+    public fun player_metadata<Asset>(store: &ConvenienceStore<Asset>): &Table<address, Metadata> {
+        &store.player_metadata
+    }
+
+    public fun get_target_player_metadata(player_metadata: &Table<address, Metadata>, target_address: address): &Metadata {
+        table::borrow(player_metadata, target_address)
+    }
+
+    public fun get_player_metadata_mut(player_metadata: &mut Table<address, Metadata>, target_address: address): &mut Metadata {
+        table::borrow_mut(player_metadata, target_address)
+    }
+
+    public fun original_ticket_count<Asset>(store: &ConvenienceStore<Asset>): u64 {
+        store.original_ticket_count
+    }
+
+    public fun tickets_left<Asset>(store: &ConvenienceStore<Asset>): u64 {
+        store.original_ticket_count - store.tickets_evaluated
+    }
+
+    public fun tickets_issued<Asset>(store: &ConvenienceStore<Asset>): u64 {
+        store.tickets_issued
+    }
+
+    public fun prize_pool_balance<Asset>(store: &ConvenienceStore<Asset>): u64 {
+        balance::value(&store.prize_pool)
     }
 
     // --------------- House Accessors ---------------
