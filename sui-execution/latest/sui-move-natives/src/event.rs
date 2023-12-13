@@ -75,7 +75,7 @@ pub fn emit(
     );
 
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    let max_event_emit_size = obj_runtime.local_config.max_event_emit_size;
+    let max_event_emit_size = obj_runtime.protocol_config.max_event_emit_size();
     let ev_size = u64::from(tag_size + event_value_size);
     // Check if the event size is within the limit
     if ev_size > max_event_emit_size {
@@ -90,7 +90,10 @@ pub fn emit(
 
     // Check that the size contribution of the event is within the total size limit
     // This feature is guarded as its only present in some versions
-    if let Some(max_event_emit_size_total) = obj_runtime.local_config.max_event_emit_size_total {
+    if let Some(max_event_emit_size_total) = obj_runtime
+        .protocol_config
+        .max_event_emit_size_total_as_option()
+    {
         let total_events_size = obj_runtime.state.total_events_size() + ev_size;
         if total_events_size > max_event_emit_size_total {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)

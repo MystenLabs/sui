@@ -132,7 +132,10 @@ mod checked {
             tx_context: &'a mut TxContext,
             gas_charger: &'a mut GasCharger,
             inputs: Vec<CallArg>,
-        ) -> Result<Self, ExecutionError> {
+        ) -> Result<Self, ExecutionError>
+        where
+            'a: 'state,
+        {
             let mut linkage_view = LinkageView::new(Box::new(state_view.as_sui_resolver()));
             let mut input_object_map = BTreeMap::new();
             let inputs = inputs
