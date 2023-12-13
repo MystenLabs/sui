@@ -160,10 +160,7 @@ pub struct TransactionInfoResponse {
 pub struct HandleCertificateResponseV2 {
     pub signed_effects: SignedTransactionEffects,
     pub events: TransactionEvents,
-    /// Unused and ignored right now.
-    /// But in future the validator may return some of the input objects, e.g.  clock or other
-    /// small objects, that were used by this transaction, in order to facilitate lower latency
-    /// local execution for the full node client that requested the transaction execution.
+    /// Not used. Full node local execution fast path was deprecated.
     pub fastpath_input_objects: Vec<Object>,
 }
 
