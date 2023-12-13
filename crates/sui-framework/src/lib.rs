@@ -71,7 +71,7 @@ impl SystemPackage {
             &self.modules(),
             OBJECT_START_VERSION,
             self.dependencies.to_vec(),
-            TransactionDigest::genesis(),
+            TransactionDigest::genesis_marker(),
         )
     }
 }
@@ -183,7 +183,7 @@ pub async fn compare_system_package<S: ObjectStore>(
                     dependencies,
                     // Genesis is fine here, we only use it to calculate an object ref that we can use
                     // for all validators to commit to the same bytes in the update
-                    TransactionDigest::genesis(),
+                    TransactionDigest::genesis_marker(),
                 )
                 .compute_object_reference(),
             );
