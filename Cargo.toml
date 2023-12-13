@@ -364,6 +364,7 @@ msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "1a5
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
+nonempty = "0.9.0"
 notify = "6.1.1"
 ntest = "0.9.0"
 num-bigint = "0.4.3"
