@@ -408,12 +408,9 @@ impl RandomnessState {
         round: RandomnessRound,
         sigs: Vec<RandomnessPartialSignature>,
     ) {
-        let dkg_output = match self.store.dkg_output() {
-            Some(dkg_output) => dkg_output,
-            None => {
-                error!("random beacon: called receive_partial_signatures before DKG completed");
-                return;
-            }
+        let Some(dkg_output) = self.dkg_output() else {
+            error!("random beacon: called receive_partial_signatures before DKG completed");
+            return;
         };
         let randomness_round = self.store.randomness_round();
         if round < randomness_round {
@@ -499,7 +496,7 @@ impl RandomnessState {
                 &self
                     .partial_sigs
                     .iter()
-                    .filter(|&((round, _), _)| *round == self.randomness_round)
+                    .filter(|&((round, _), _)| *round == randomness_round)
                     .flat_map(|(_, sigs)| sigs)
                     .cloned()
                     .collect::<Vec<_>>(),
