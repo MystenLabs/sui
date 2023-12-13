@@ -86,7 +86,7 @@
 >  address(
 >    address: "0x5094652429957619e6efa79a404a6714d1126e63f551f4b6c7fb76440f8118c9"
 >  ) {
->    address
+>    location
 >    balance {
 >      coinType {
 >        repr
@@ -127,9 +127,6 @@
 >  address(address: "0x2") {
 >    transactionBlockConnection(relation: SENT, filter: { package: "0x2" }) {
 >      nodes {
->        sender {
->          address
->        }
 >        gasInput {
 >          gasPrice
 >          gasBudget
@@ -254,9 +251,6 @@
 >            __typename
 >          }
 >          digest
->          sender {
->            address
->          }
 >          expiration {
 >            epochId
 >          }
@@ -335,9 +329,6 @@
 >      edges {
 >        node {
 >          digest
->          sender {
->            address
->          }
 >          expiration {
 >            epochId
 >          }
@@ -361,9 +352,6 @@
 >      edges {
 >        node {
 >          digest
->          sender {
->            address
->          }
 >          expiration {
 >            epochId
 >          }
@@ -391,9 +379,6 @@
 >      edges {
 >        node {
 >          digest
->          sender {
->            address
->          }
 >          expiration {
 >            epochId
 >          }
@@ -624,16 +609,6 @@
 >          edges {
 >            cursor
 >            node {
->              sender {
->                address
->              }
->              effects {
->                gasEffects {
->                  gasObject {
->                    address
->                  }
->                }
->              }
 >              gasInput {
 >                gasPrice
 >                gasBudget
@@ -661,16 +636,6 @@
 >        cursor
 >        node {
 >          digest
->          sender {
->            address
->          }
->          effects {
->            gasEffects {
->              gasObject {
->                address
->              }
->            }
->          }
 >          gasInput {
 >            gasPrice
 >            gasBudget
@@ -696,16 +661,6 @@
 >      edges {
 >        cursor
 >        node {
->          sender {
->            address
->          }
->          effects {
->            gasEffects {
->              gasObject {
->                address
->              }
->            }
->          }
 >          gasInput {
 >            gasPrice
 >            gasBudget
@@ -726,19 +681,13 @@
 >    filter: {eventPackage: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13", eventModule: "Market", eventType: "ChangePriceEvent<0x2::sui::SUI>"}
 >  ) {
 >    nodes {
->      sendingModule {
+>      sendingModuleId {
 >        name
 >        package {
 >          asObject {
 >            digest
 >          }
 >        }
->      }
->      type {
->        repr
->      }
->      senders {
->        address
 >      }
 >      timestamp
 >      json
@@ -761,14 +710,8 @@
 >      endCursor
 >    }
 >    nodes {
->      sendingModule {
+>      sendingModuleId {
 >        name
->      }
->      type {
->        repr
->      }
->      senders {
->        address
 >      }
 >      timestamp
 >      json
@@ -790,14 +733,8 @@
 >      endCursor
 >    }
 >    nodes {
->      sendingModule {
+>      sendingModuleId {
 >        name
->      }
->      type {
->        repr
->      }
->      senders {
->        address
 >      }
 >      timestamp
 >      json
@@ -839,7 +776,6 @@
 >  object(
 >    address: "0x04e20ddf36af412a4096f9014f4a565af9e812db9a05cc40254846cf6ed0ad91"
 >  ) {
->    address
 >    version
 >    digest
 >    storageRebate
@@ -880,7 +816,7 @@
 ### Filter On Generic Type
 
 ><pre>{
->  objectConnection(filter: {type: "0x2::coin::Coin"}) {
+>  objectConnection(filter: {ty: "0x2::coin::Coin"}) {
 >    edges {
 >      node {
 >        asMoveObject {
@@ -899,7 +835,7 @@
 ### Filter On Type
 
 ><pre>{
->  objectConnection(filter: {type: "0x3::staking_pool::StakedSui"}) {
+>  objectConnection(filter: {ty: "0x3::staking_pool::StakedSui"}) {
 >    edges {
 >      node {
 >        asMoveObject {
@@ -1132,7 +1068,7 @@
 >  owner(
 >    address: "0x931f293ce7f65fd5ebe9542653e1fd92fafa03dda563e13b83be35da8a2eecbe"
 >  ) {
->    address
+>    location
 >  }
 >}</pre>
 
@@ -1202,7 +1138,6 @@
 >    maxQueryDepth
 >    maxQueryNodes
 >    maxDbQueryCost
->    defaultPageSize
 >    maxPageSize
 >    requestTimeoutMs
 >    maxQueryPayloadSize
@@ -1219,7 +1154,7 @@
 >  address(
 >    address: "0xc0a5b916d0e406ddde11a29558cd91b29c49e644eef597b7424a622955280e1e"
 >  ) {
->    address
+>    location
 >    balance(type: "0x2::sui::SUI") {
 >      coinType {
 >        repr
@@ -1309,7 +1244,7 @@
 ><pre>{
 >  transactionBlock(digest: "HvTjk3ELg8gRofmB1GgrpLHBFeA53QKmUKGEuhuypezg") {
 >    sender {
->      address
+>      location
 >    }
 >    gasInput {
 >      gasSponsor {
@@ -1326,7 +1261,9 @@
 >    kind {
 >      __typename
 >    }
->    signatures
+>    signatures {
+>       base64Sig
+>    }
 >    digest
 >    expiration {
 >      epochId
@@ -1346,7 +1283,7 @@
 >  ) {
 >    previousTransactionBlock {
 >      sender {
->        address
+>        location
 >      }
 >      kind {
 >        __typename
@@ -1356,19 +1293,13 @@
 >            referenceGasPrice
 >          }
 >          round
->          commitTimestamp
->          consensusCommitDigest
+>          timestamp
 >        }
 >        ... on ChangeEpochTransaction {
 >          computationCharge
 >          storageCharge
 >          startTimestamp
 >          storageRebate
->        }
->        ... on GenesisTransaction {
->          objectConnection {
->            nodes { address }
->          }
 >        }
 >      }
 >    }
@@ -1387,7 +1318,7 @@
 >  ) {
 >    nodes {
 >      sender {
->        address
+>        location
 >      }
 >      gasInput {
 >        gasPrice
@@ -1431,7 +1362,7 @@
 >  ) {
 >    nodes {
 >      sender {
->        address
+>        location
 >      }
 >      gasInput {
 >        gasPrice
@@ -1483,7 +1414,7 @@
 >  ) {
 >    nodes {
 >      sender {
->        address
+>        location
 >      }
 >      gasInput {
 >        gasPrice
@@ -1506,7 +1437,7 @@
 >  ) {
 >    nodes {
 >      sender {
->        address
+>        location
 >      }
 >      gasInput {
 >        gasPrice
@@ -1530,7 +1461,7 @@
 >  ) {
 >    nodes {
 >      sender {
->        address
+>        location
 >      }
 >      gasInput {
 >        gasPrice
@@ -1552,7 +1483,7 @@
 >  ) {
 >    nodes {
 >      sender {
->        address
+>        location
 >      }
 >      gasInput {
 >        gasPrice
@@ -1574,7 +1505,7 @@
 >  ) {
 >    nodes {
 >      sender {
->        address
+>        location
 >      }
 >      gasInput {
 >        gasPrice
@@ -1594,7 +1525,7 @@
 >  ) {
 >    nodes {
 >      sender {
->        address
+>        location
 >      }
 >      gasInput {
 >        gasPrice
@@ -1612,7 +1543,7 @@
 >  transactionBlockConnection(filter: { kind: SYSTEM_TX }) {
 >    nodes {
 >      sender {
->        address
+>        location
 >      }
 >      gasInput {
 >        gasPrice
@@ -1646,7 +1577,7 @@
 >        errors
 >      }
 >      sender {
->        address
+>        location
 >      }
 >      gasInput {
 >        gasPrice
@@ -1687,7 +1618,7 @@
 >        }
 >        balanceChanges {
 >          owner {
->            address
+>            location
 >            balance(type: "0x2::sui::SUI") {
 >              totalBalance
 >            }
@@ -1701,7 +1632,7 @@
 >        }
 >        dependencies {
 >          sender {
->            address
+>            location
 >          }
 >        }
 >      }
