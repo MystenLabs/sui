@@ -105,6 +105,17 @@ module scratch_off::game {
         public_key: vector<u8>,
     }     
 
+    /// Emergency fund withdrawal function
+    public fun withdraw_funds<Asset>(
+        store_cap: &StoreCap,
+        store: &mut ConvenienceStore<Asset>,
+        ctx: &mut TxContext
+    ): Coin<Asset> {
+        assert!(object::id(store) == store_cap.store_id, ENotAuthorizedEmployee);
+        let value = balance::value(&store.prize_pool);
+        coin::take(&mut store.prize_pool, value, ctx)
+    }
+
     public fun total_players<Asset>(store: &ConvenienceStore<Asset>): u64 {
         table::length(&store.player_metadata)
     }
