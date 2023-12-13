@@ -36,8 +36,8 @@
   epoch(id: 1) {
     validatorSet {
       activeValidators {
-		apy
-	  }
+        apy
+      }
     }
   }
 }
