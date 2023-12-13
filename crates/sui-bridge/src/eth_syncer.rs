@@ -9,6 +9,7 @@
 use crate::error::BridgeResult;
 use crate::eth_client::EthClient;
 use crate::retry_with_max_delay;
+use crate::types::EthLog;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -46,10 +47,7 @@ where
         self,
     ) -> BridgeResult<(
         Vec<JoinHandle<()>>,
-        mysten_metrics::metered_channel::Receiver<(
-            ethers::types::Address,
-            Vec<ethers::types::Log>,
-        )>,
+        mysten_metrics::metered_channel::Receiver<(ethers::types::Address, Vec<EthLog>)>,
         watch::Receiver<u64>,
     )> {
         let (eth_evnets_tx, eth_events_rx) = mysten_metrics::metered_channel::channel(
@@ -121,7 +119,7 @@ where
         mut last_finalized_block_receiver: watch::Receiver<u64>,
         events_sender: mysten_metrics::metered_channel::Sender<(
             ethers::types::Address,
-            Vec<ethers::types::Log>,
+            Vec<EthLog>,
         )>,
         eth_client: Arc<EthClient<P>>,
     ) {
@@ -170,7 +168,8 @@ mod tests {
     use std::{collections::HashSet, str::FromStr};
 
     use ethers::types::{
-        Address, Block, BlockNumber, Filter, FilterBlockOption, Log, ValueOrArray, U64,
+        Address, Block, BlockNumber, Filter, FilterBlockOption, Log, TransactionReceipt,
+        ValueOrArray, U256, U64,
     };
     use prometheus::Registry;
     use tokio::sync::mpsc::error::TryRecvError;
@@ -178,6 +177,7 @@ mod tests {
     use crate::eth_mock_provider::EthMockProvider;
 
     use super::*;
+    use ethers::types::TxHash;
 
     #[tokio::test]
     async fn test_last_finalized_block() -> anyhow::Result<()> {
@@ -193,7 +193,16 @@ mod tests {
         let addresses = HashMap::from_iter(vec![(Address::zero(), 100)]);
         let log = Log {
             address: Address::zero(),
+            transaction_hash: Some(TxHash::random()),
+            block_number: Some(U64::from(777)),
+            log_index: Some(U256::from(3)),
             ..Default::default()
+        };
+        let eth_log = EthLog {
+            block_number: 777,
+            tx_hash: log.transaction_hash.unwrap(),
+            log_index_in_tx: 0,
+            log: log.clone(),
         };
         mock_get_logs(&mock_provider, Address::zero(), 100, 777, vec![log.clone()]);
         let (_handles, mut logs_rx, mut finalized_block_rx) =
@@ -207,7 +216,7 @@ mod tests {
         assert_eq!(*finalized_block_rx.borrow(), 777);
         let (contract_address, received_logs) = logs_rx.recv().await.unwrap();
         assert_eq!(contract_address, Address::zero());
-        assert_eq!(received_logs, vec![log.clone()]);
+        assert_eq!(received_logs, vec![eth_log.clone()]);
         assert_eq!(logs_rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
         mock_get_logs(&mock_provider, Address::zero(), 778, 888, vec![log.clone()]);
@@ -217,7 +226,7 @@ mod tests {
         assert_eq!(*finalized_block_rx.borrow(), 888);
         let (contract_address, received_logs) = logs_rx.recv().await.unwrap();
         assert_eq!(contract_address, Address::zero());
-        assert_eq!(received_logs, vec![log]);
+        assert_eq!(received_logs, vec![eth_log]);
         assert_eq!(logs_rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
         Ok(())
@@ -239,7 +248,16 @@ mod tests {
 
         let log1 = Log {
             address: Address::zero(),
+            transaction_hash: Some(TxHash::random()),
+            block_number: Some(U64::from(101)),
+            log_index: Some(U256::from(5)),
             ..Default::default()
+        };
+        let eth_log1 = EthLog {
+            block_number: log1.block_number.unwrap().as_u64(),
+            tx_hash: log1.transaction_hash.unwrap(),
+            log_index_in_tx: 0,
+            log: log1.clone(),
         };
         mock_get_logs(
             &mock_provider,
@@ -250,6 +268,9 @@ mod tests {
         );
         let log2 = Log {
             address: another_address,
+            transaction_hash: Some(TxHash::random()),
+            block_number: Some(U64::from(201)),
+            log_index: Some(U256::from(6)),
             ..Default::default()
         };
         // Mock logs for another_address although it shouldn't be queried. We don't expect to
@@ -271,14 +292,22 @@ mod tests {
         // The latest finalized block stays at 198.
         finalized_block_rx.changed().await.unwrap();
         assert_eq!(*finalized_block_rx.borrow(), 198);
-        assert_eq!(logs_rx.recv().await.unwrap().1, vec![log1.clone()]);
+        assert_eq!(logs_rx.recv().await.unwrap().1, vec![eth_log1.clone()]);
         // log2 should not be received as another_address's start block is 200.
         assert_eq!(logs_rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
         let log1 = Log {
             address: Address::zero(),
             block_number: Some(U64::from(200)),
+            transaction_hash: Some(TxHash::random()),
+            log_index: Some(U256::from(7)),
             ..Default::default()
+        };
+        let eth_log1 = EthLog {
+            block_number: log1.block_number.unwrap().as_u64(),
+            tx_hash: log1.transaction_hash.unwrap(),
+            log_index_in_tx: 0,
+            log: log1.clone(),
         };
         mock_get_logs(
             &mock_provider,
@@ -289,8 +318,16 @@ mod tests {
         );
         let log2 = Log {
             address: another_address,
+            transaction_hash: Some(TxHash::random()),
             block_number: Some(U64::from(201)),
+            log_index: Some(U256::from(9)),
             ..Default::default()
+        };
+        let eth_log2 = EthLog {
+            block_number: log2.block_number.unwrap().as_u64(),
+            tx_hash: log2.transaction_hash.unwrap(),
+            log_index_in_tx: 0,
+            log: log2.clone(),
         };
         mock_get_logs(
             &mock_provider,
@@ -312,7 +349,7 @@ mod tests {
         });
         assert_eq!(
             logs_set,
-            HashSet::from_iter(vec![format!("{:?}", log1), format!("{:?}", log2)])
+            HashSet::from_iter(vec![format!("{:?}", eth_log1), format!("{:?}", eth_log2)])
         );
         // No more finalized block change, no more logs.
         assert_eq!(logs_rx.try_recv().unwrap_err(), TryRecvError::Empty);
@@ -329,6 +366,8 @@ mod tests {
             .unwrap();
     }
 
+    // Mocks eth_getLogs and eth_getTransactionReceipt for the given address and block range.
+    // The input log needs to have transaction_hash set.
     fn mock_get_logs(
         mock_provider: &EthMockProvider,
         address: Address,
@@ -348,7 +387,21 @@ mod tests {
                     topics: [None, None, None, None],
                 }
             ],
-            logs,
+            logs.clone(),
         ).unwrap();
+
+        for log in logs {
+            mock_provider
+                .add_response::<[TxHash; 1], TransactionReceipt, TransactionReceipt>(
+                    "eth_getTransactionReceipt",
+                    [log.transaction_hash.unwrap()],
+                    TransactionReceipt {
+                        block_number: log.block_number,
+                        logs: vec![log],
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+        }
     }
 }
