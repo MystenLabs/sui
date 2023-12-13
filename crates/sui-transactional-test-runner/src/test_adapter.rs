@@ -501,7 +501,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 show_headers,
                 show_service_version,
                 variables,
-                interpolations,
             }) => {
                 let file = data.ok_or_else(|| anyhow::anyhow!("Missing GraphQL query"))?;
                 let contents = std::fs::read_to_string(file.path())?;

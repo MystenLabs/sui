@@ -146,8 +146,6 @@ pub struct RunGraphqlCommand {
     pub show_service_version: bool,
     #[clap(long = "variables", num_args(1..))]
     pub variables: Vec<String>,
-    #[clap(long = "interpolations", num_args(1..))]
-    pub interpolations: Vec<String>,
 }
 
 #[derive(Debug, clap::Parser)]
