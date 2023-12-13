@@ -480,7 +480,7 @@ mod tests {
         let object = ObjectInner {
             owner: Owner::AddressOwner(owner.into()),
             data,
-            previous_transaction: TransactionDigest::genesis(),
+            previous_transaction: TransactionDigest::genesis_marker(),
             storage_rebate: 0,
         }
         .into();

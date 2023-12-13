@@ -103,7 +103,7 @@ async fn extract_one_system_tx(
     mut txs: Vec<TransactionDigest>,
 ) -> Option<TransactionDigest> {
     let opts = SuiTransactionBlockResponseOptions::full_content();
-    txs.retain(|q| *q != TransactionDigest::genesis());
+    txs.retain(|q| *q != TransactionDigest::genesis_marker());
 
     for ch in txs.chunks(*QUERY_MAX_RESULT_LIMIT) {
         match rpc_client

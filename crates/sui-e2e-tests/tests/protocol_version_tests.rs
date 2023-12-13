@@ -983,7 +983,7 @@ mod sim_only_tests {
     fn sui_system_package_object(fixture: &str) -> Object {
         Object::new_package(
             &sui_system_modules(fixture),
-            TransactionDigest::genesis(),
+            TransactionDigest::genesis_marker(),
             u64::MAX,
             &[
                 BuiltInFramework::get_package_by_id(&MOVE_STDLIB_PACKAGE_ID).genesis_move_package(),

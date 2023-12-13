@@ -325,7 +325,7 @@ async fn test_quorum_map_and_reduce_timeout() {
         .collect();
     let pkg = Object::new_package_for_testing(
         &modules,
-        TransactionDigest::genesis(),
+        TransactionDigest::genesis_marker(),
         BuiltInFramework::genesis_move_packages(),
     )
     .unwrap();
