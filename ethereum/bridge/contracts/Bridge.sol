@@ -25,27 +25,55 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 
 	uint64 public version;
 	uint8 public messageVersion;
-	// nonce for replay protection
-	uint64 public sequenceNumber;
-	// Bridge treasury for mint/burn bridged tokens
-	// treasury: BridgeTreasury
-	// Use a mapping from bytes32 to BridgeMessage
-	mapping(bytes32 => BridgeMessage) public pendingMessages;
-	// Use a mapping from bytes32 to ApprovedBridgeMessage
-	mapping(bytes32 => ApprovedBridgeMessage) public approvedMessages;
 
 	bool public running;
-	uint64 public lastEmergencyOpSeqNum;
 
-	uint16 public constant MAX_TOTAL_WEIGHT = 10000;
-	uint256 public constant MAX_SINGLE_VALIDATOR_STAKE = 1000;
+	uint16 public constant MAX_TOTAL_STAKE = 10000; // 100%
+	uint256 public constant MAX_SINGLE_COMMITEE_MEMBER_STAKE = 1000; // 10%
 	uint256 public constant APPROVAL_THRESHOLD = 3333;
+	// Maximum amount of tokens that can be transferred per transaction
+	uint256 public constant MAX_TRANSFER_AMOUNT = 1000;
+	// Maximum amount of tokens that can be transferred by an address per day
+	uint256 public constant MAX_DAILY_TRANSFER_AMOUNT = 10000;
+
+	uint8 public constant SUI_MAINNET = 0;
+	uint8 public constant SUI_TESTNET = 1;
+	uint8 public constant SUI_DEVNET = 2;
+	uint8 public constant ETH_MAINNET = 10;
+	uint8 public constant ETH_SEPOLIA = 11;
 
 	// A mapping from address to validator
 	mapping(address => Member) public committee;
 
-	// Mapping of user address to nonce
-	mapping(address => uint256) public nonces;
+	mapping(MessageType => uint64) sequenceNumbers;
+	uint8[] private messageTypesInSequenceNumbersMapping;
+	uint64 public lastEmergencyOpSeqNum;
+
+	// Mapping to store the transfer history
+	mapping(uint256 => uint256[]) public transferHistory;
+
+	// Modifier to check the daily transfer limit
+	modifier checkDailyLimit(uint256 transferTime, uint256 _amount) {
+		// Calculate the sum of transfers during the past 24 hours
+		uint256 sum = 0;
+		for (uint256 i = 0; i < transferHistory[transferTime].length; i++) {
+			uint256 historyAmount = transferHistory[transferTime][i];
+			// Only consider transfers that happened within the past 24 hours
+			if (block.timestamp - transferTime <= 24 hours) {
+				sum += historyAmount;
+			}
+		}
+		// Require that the sum of transfers plus the current amount is less than or equal to the daily limit
+		require(sum + _amount <= MAX_DAILY_TRANSFER_AMOUNT, 'Daily transfer limit exceeded');
+		_;
+	}
+
+	// Modifier to check the maximum transfer amount
+	modifier checkMaxAmount(uint256 _amount) {
+		// Require that the amount is less than or equal to the maximum amount
+		require(_amount <= MAX_TRANSFER_AMOUNT, 'Maximum transfer amount exceeded');
+		_;
+	}
 
 	/**
 	 * @dev Modifier to make a function callable only when the contract is Running.
@@ -63,6 +91,12 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		_;
 	}
 
+	// the modifier to check if the caller is a validator
+	modifier onlyCommittee() {
+		require(committee[msg.sender].stake > 0, 'Only committee memebers can call this function');
+		_;
+	}
+
 	// Function to pause the bridge
 	function pauseBridge() private whenRunning {
 		running = false;
@@ -76,25 +110,110 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 	function initialize(Member[] calldata _committeeMembers) public initializer {
 		__UUPSUpgradeable_init();
 
+		uint256 totalStake = 0;
 		for (uint256 i = 0; i < _committeeMembers.length; i++) {
 			addCommitteeMember(_committeeMembers[i].account, _committeeMembers[i].stake);
 			emit CommitteeMemberAdded(_committeeMembers[i].account, _committeeMembers[i].stake);
+			totalStake += _committeeMembers[i].stake;
 		}
+
+		require(totalStake <= MAX_TOTAL_STAKE, 'Total stake is too high');
 		running = true;
 		version = 1;
 		messageVersion = 1;
+		lastEmergencyOpSeqNum = 0;
 	}
 
-	function approveBridgeMessage(
+	function executeDeposit(bytes memory data) public {
+		address tokenAddress;
+		address recipient;
+		uint256 amount;
+
+		(tokenAddress, recipient, amount) = abi.decode(data, (address, address, uint256));
+
+		// Check the daily transfer limit for the recipient
+		// checkDailyLimit(recipient, amount);
+
+		// Check the maximum transfer amount
+		// checkMaxAmount(amount);
+
+		// Transfer the tokens from the handler to the recipient
+		_safeTransfer(tokenAddress, recipient, amount);
+
+		// Record the transfer history for the recipient
+		transferHistory[block.timestamp].push(amount);
+	}
+
+	function processBridgeMessage(
 		BridgeMessage calldata bridgeMessage,
 		bytes[] calldata signatures
-	) public whenRunning returns (bool, uint256) {
+	) public whenRunning {
 		require(bridgeMessage.messageVersion == messageVersion, 'Invalid message version');
 
+		/**
+		// retrieve pending message if source chain is Ethereum
+		if (bridgeMessage.sourceChain == ChainID.ETH) {
+			BridgeMessageKey memory bridgeMessageKey = BridgeMessageKey(
+				bridgeMessage.sourceChain,
+				bridgeMessage.seqNum
+			);
+
+			// BridgeMessage memory pendingMessage = pendingMessages[
+			// 	keccak256(abi.encode(bridgeMessageKey))
+			// ];
+		}
+		*/
+
+		if (bridgeMessage.messageType == MessageType.EMERGENCY_OP) {
+			require(
+				bridgeMessage.sequenceNumber == 1,
+				'Not enough signatures to approve the emergency operation'
+			);
+			(address[] memory seen, ) = verifySignatures(bridgeMessage, signatures);
+			require(seen.length >= 2, 'Not enough signatures to approve the emergency operation');
+			pauseBridge();
+		}
+	}
+
+	function freezeBridge(
+		BridgeMessage calldata bridgeMessage,
+		bytes[] calldata signatures
+	) public whenRunning {
+		require(bridgeMessage.messageVersion == messageVersion, 'Invalid message version');
+		require(bridgeMessage.messageType == MessageType.EMERGENCY_OP, 'Invalid message type');
+		uint64 emergencyOpSeqNum = nextSeqNum(bridgeMessage.messageType);
+		require(
+			bridgeMessage.sequenceNumber == emergencyOpSeqNum,
+			'Invalid sequence number for the emergency operation'
+		);
+		(address[] memory seen, ) = verifySignatures(bridgeMessage, signatures);
+		require(seen.length >= 2, 'Not enough signatures to approve the emergency operation');
+		pauseBridge();
+	}
+
+	function unfreezeBridge(
+		BridgeMessage calldata bridgeMessage,
+		bytes[] calldata signatures
+	) public whenNotRunning {
+		require(bridgeMessage.messageVersion == messageVersion, 'Invalid message version');
+		require(bridgeMessage.messageType == MessageType.EMERGENCY_OP, 'Invalid message type');
+		uint64 emergencyOpSeqNum = nextSeqNum(bridgeMessage.messageType);
+		require(
+			bridgeMessage.sequenceNumber == emergencyOpSeqNum,
+			'Invalid sequence number for the emergency operation'
+		);
+		(, uint256 totalStake) = verifySignatures(bridgeMessage, signatures);
+		require(totalStake >= 5100, 'Not enough signatures to approve the emergency operation');
+		pauseBridge();
+	}
+
+	function verifySignatures(
+		BridgeMessage calldata bridgeMessage,
+		bytes[] calldata signatures
+	) private view returns (address[] memory, uint256) {
 		// Declare an array to store the recovered addresses
 		address[] memory seen = new address[](signatures.length);
 		uint256 seenIndex = 0;
-
 		uint256 totalStake = 0;
 		bytes32 hash = ethSignedMessageHash(bridgeMessage);
 
@@ -128,21 +247,7 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 			totalStake += member.stake;
 		}
 
-		// retrieve pending message if source chain is Ethereum
-		if (bridgeMessage.sourceChain == ChainID.ETH) {
-			BridgeMessageKey memory bridgeMessageKey = BridgeMessageKey(
-				bridgeMessage.sourceChain,
-				bridgeMessage.seqNum
-			);
-
-			BridgeMessage memory pendingMessage = pendingMessages[
-				keccak256(abi.encode(bridgeMessageKey))
-			];
-		}
-
-		if (bridgeMessage.messageType == MessageType.EMERGENCY_OP) pauseBridge();
-
-		return (true, totalStake);
+		return (seen, totalStake);
 	}
 
 	function resumePausedBridge(
@@ -174,12 +279,13 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		if (bridgeMessage.messageType == MessageType.EMERGENCY_OP) resumeBridge();
 	}
 
-	// Check also weight. i.e. no more than 33% of the total weight
-	// A function to add a validator
 	function addCommitteeMember(address _pk, uint256 _stake) private {
 		// Check if the address is not zero
 		require(_pk != address(0), 'Zero address.');
-
+		// Check if the stake is not zero
+		require(_stake != 0, 'Zero stake.');
+		// Check if the stake is not too high
+		require(_stake <= MAX_SINGLE_COMMITEE_MEMBER_STAKE, 'Stake is too high');
 		// Check if the address is not already a validator
 		require(committee[_pk].account == address(0), 'Already a Committee Member.');
 
@@ -234,7 +340,7 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 			abi.encodePacked(
 				bridgeMessage.messageType,
 				bridgeMessage.messageVersion,
-				bridgeMessage.seqNum,
+				bridgeMessage.sequenceNumber,
 				bridgeMessage.sourceChain,
 				bridgeMessage.payload
 			)
@@ -251,58 +357,23 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		return ECDSA.recover(hash, signature);
 	}
 
-	// Define a function to set a pending message
-	function setPendingMessage(BridgeMessageKey memory key, BridgeMessage memory value) external {
-		// Generate a hash of the key values
-		bytes32 hash = keccak256(abi.encode(key));
-		// Store the value in the mapping
-		pendingMessages[hash] = value;
-	}
-
-	// Define a function to get a pending message
-	function getPendingMessage(
-		BridgeMessageKey memory key
-	) external view returns (BridgeMessage memory) {
-		// Generate a hash of the key values
-		bytes32 hash = keccak256(abi.encode(key));
-		// Return the value from the mapping
-		return pendingMessages[hash];
-	}
-
-	// Define a function to remove a pending message
-	function removePendingMessage(BridgeMessageKey memory key) external {
-		// Generate a hash of the key values
-		bytes32 hash = keccak256(abi.encode(key));
-		// Delete the value from the mapping
-		delete pendingMessages[hash];
-	}
-
-	// Define a function to set an approved message
-	function setApprovedMessage(
-		BridgeMessageKey memory key,
-		ApprovedBridgeMessage memory value
-	) external {
-		// Generate a hash of the key values
-		bytes32 hash = keccak256(abi.encode(key));
-		// Store the value in the mapping
-		approvedMessages[hash] = value;
-	}
-
-	// Define a function to get an approved message
-	function getApprovedMessage(
-		BridgeMessageKey memory key
-	) external view returns (ApprovedBridgeMessage memory) {
-		// Generate a hash of the key values
-		bytes32 hash = keccak256(abi.encode(key));
-		// Return the value from the mapping
-		return approvedMessages[hash];
-	}
-
-	// Define a function to remove an approved message
-	function removeApprovedMessage(BridgeMessageKey memory key) external {
-		// Generate a hash of the key values
-		bytes32 hash = keccak256(abi.encode(key));
-		// Delete the value from the mapping
-		delete approvedMessages[hash];
+	function nextSeqNum(MessageType msgType) private returns (uint64) {
+		// Check if the message type is already in the mapping
+		for (uint256 i = 0; i < messageTypesInSequenceNumbersMapping.length; i++) {
+			if (messageTypesInSequenceNumbersMapping[i] == uint8(msgType)) {
+				// Get the sequence number for the message type
+				uint64 seqNum = sequenceNumbers[msgType];
+				// Increment the sequence number by 1 and update the mapping
+				sequenceNumbers[msgType] = seqNum + 1;
+				// Return the original sequence number
+				return seqNum;
+			}
+		}
+		// Set the sequence number for the message type to 0
+		sequenceNumbers[msgType] = 0;
+		// Add the message type to the mapping
+		messageTypesInSequenceNumbersMapping.push(uint8(msgType));
+		// Return 0
+		return 0;
 	}
 }

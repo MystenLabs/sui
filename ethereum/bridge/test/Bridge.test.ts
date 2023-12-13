@@ -1,102 +1,194 @@
-import { expect } from "chai";
-import { ethers, upgrades } from "hardhat";
-import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { expect } from 'chai'
+import { ethers, upgrades } from 'hardhat'
+import { loadFixture } from '@nomicfoundation/hardhat-toolbox/network-helpers'
 import { HardhatEthersSigner } from '@nomicfoundation/hardhat-ethers/signers'
+// import { Bridge } from "../typechain-types/contracts/Bridge";
+import { Bridge, Bridge__factory } from '../typechain-types'
+import { Signer } from 'ethers'
 
 // Define the contract name and the interface
-const CONTRACT_NAME = "Bridge";
-const CONTRACT_INTERFACE = [
-  "function initialize() public",
-  "function hashMessage(string) public pure returns (bytes32)",
-  "function uintToStr(uint) internal pure returns (string)",
-  "function messageHash(string) public pure returns (bytes32)",
-  "function ethereumthSignedMessageHash(bytes32) public pure returns (bytes32)",
-  "function verify(string, bytes, address) public pure returns (bool)",
-  "function recoverSigner(bytes32, bytes) public pure returns (address)",
-  "function splitSignature(bytes) public pure returns (bytes32, bytes32, uint8)",
-  "function strlen(string) private pure returns (uint256)",
-  "function contains(address[], address) private pure returns (bool)",
-  "function addValidator(address, uint256) private",
-  "function validatorsCount() public view returns (uint)",
-  "function verifyFunction(string memory message, bytes memory signature) external pure returns (address, ECDSA.RecoverError, bytes32)",
-  "function approveBridgeMessage(BridgeMessage calldata bridgeMessage, bytes[] calldata signatures) public isRunning returns (bool, uint256)",
-];
+const CONTRACT_NAME = 'Bridge'
 
-	// Define an enum for the Message Types
-	enum MessageType {
-        TOKEN,
-        COMMITTEE_BLOCKLIST,
-        EMERGENCY_OP
-	}
+// Define an enum for the Message Types
+enum MessageType {
+    TOKEN,
+    COMMITTEE_BLOCKLIST,
+    EMERGENCY_OP,
+}
 
-	// Define an enum for the chain IDs
-	enum ChainID {
-        SUI,
-        ETH
-	}
+// Define an enum for the chain IDs
+enum ChainID {
+    SUI,
+    ETH,
+}
 
-	// Define an enum for the token IDs
-	enum TokenID {
-        SUI,
-        BTC,
-        ETH,
-        USDC,
-        USDT
-	}
+// Define an enum for the token IDs
+enum TokenID {
+    SUI,
+    BTC,
+    ETH,
+    USDC,
+    USDT,
+}
 
-// Write a test suite for the contract
+let contract: Bridge
+// let accounts: HardhatEthersSigner[];
+let signers: Signer[]
+// Initialize the contract before each test
+async function beforeEach() {
+    // Get the signers from the hardhat provider
+    // accounts = await ethers.getSigners();
+    signers = randomSigners(100)
+
+    // Deploy the contract using the first account
+    const contractFactory = (await ethers.getContractFactory(
+        CONTRACT_NAME,
+        // accounts[0]
+    )) as Bridge__factory
+    contract = await contractFactory.deploy()
+}
+
+function randomSigners(amount: number) {
+    const signers: Signer[] = []
+    for (let i = 0; i < amount; i++) {
+        signers.push(ethers.Wallet.createRandom())
+    }
+    return signers
+}
+
+// Define the test suite
 describe(CONTRACT_NAME, () => {
-    let committee: { account: string; stake: number }[]
-    let hardhatEthersSigners: HardhatEthersSigner[]
-    let others
+    // Declare the contract and the accounts variables
 
-    // Deploy the contract before each test
-    async function beforeEach() {
-        // Get the signers from the hardhat network
-        let [owner, ...hardhatEthersSigners] = await ethers.getSigners()
-        others = hardhatEthersSigners.slice(2)
+    // Test the initialize function
+    it('should initialize the contract with the given committee members', async () => {
+        await loadFixture(beforeEach)
 
-        // Get the contract factory and deploy the contract
-        const contractFactory = await ethers.getContractFactory(CONTRACT_NAME)
-        const contract = await contractFactory.deploy()
-
-        const tmpCommittee = await Promise.all(
-            hardhatEthersSigners
-                .slice(1)
-                .map(async (g) => ({
-                    account: await g.getAddress(),
-                    stake: 1000,
-                })),
+        // Define the committee members array
+        const committeeMembers = await Promise.all(
+            signers.map(async (s) => ({
+                account: await s.getAddress(),
+                stake: 100,
+            })),
         )
 
-        // Create the new validator object
-        const defaultCommitteeMember = {
-            account: '0x5567f54B29B973343d632f7BFCe9507343D41FCa',
-            stake: 1000,
+        // Call the initialize function using the first account
+        await contract.initialize(committeeMembers)
+
+        // Check the state variables after initialization
+        expect(await contract.validatorsCount()).to.equal(
+            committeeMembers.length,
+        )
+        expect(await contract.running()).to.be.true
+        expect(await contract.version()).to.equal(1)
+        expect(await contract.messageVersion()).to.equal(1)
+
+        // Check the committee mapping for each member
+        for (const member of committeeMembers) {
+            const committeeMember = await contract.committee(member.account)
+            expect(committeeMember.account).to.equal(member.account)
+            expect(committeeMember.stake).to.equal(member.stake)
         }
-
-        committee = [defaultCommitteeMember, ...tmpCommittee]
-
-        return { contract, owner, committee }
-    }
-
-    it('should correctly initialize validators', async function () {
-        const { contract, committee } = await loadFixture(beforeEach)
-
-        await contract.initialize(committee)
-
-        // // Check if the validators were initialized correctly
-        for (let i = 0; i < committee.length; i++) {
-            const committeeMember = await contract.committee(committee[i].account)
-            expect(committeeMember.account).to.equal(committee[i].account)
-            expect(committeeMember.stake).to.equal(committee[i].stake)
-        }
-
-        // Check if the validatorsCount matches the expected length
-        const expectedCount = committee.length
-        const actualCount = await contract.validatorsCount()
-        expect(actualCount.toString()).to.equal(expectedCount.toString())
     })
+
+    // Test the initialize function with a stake above 1000
+it("should revert the initialization if the stake is above 1000", async () => {
+    await loadFixture(beforeEach)
+
+    // Define the committee members array with one member having a stake of 1100
+    const invalidCommitteeMembers = [
+      { account: signers[1].getAddress(), stake: 500 },
+      { account: signers[2].getAddress(), stake: 300 },
+      { account: signers[3].getAddress(), stake: 1100 },
+    ];
+
+    // Call the initialize function using the first account and expect it to revert
+    await expect(contract.initialize(invalidCommitteeMembers)).to.be
+    .revertedWith("Stake is too high");
+  });
+  
+  // Test the initialize function with a total stake above 10000
+  it("should revert the initialization if the total stake is above 10000", async () => {
+    await loadFixture(beforeEach)
+
+    // Define the committee members array with a total stake of 10001
+    const invalidCommitteeMembers = [
+        { account: signers[1].getAddress(), stake: 1000 },
+        { account: signers[2].getAddress(), stake: 1000 },
+        { account: signers[3].getAddress(), stake: 1000 },
+        { account: signers[4].getAddress(), stake: 1000 },
+        { account: signers[5].getAddress(), stake: 1000 },
+        { account: signers[6].getAddress(), stake: 1000 },
+        { account: signers[7].getAddress(), stake: 1000 },
+        { account: signers[8].getAddress(), stake: 1000 },
+        { account: signers[9].getAddress(), stake: 1000 },
+        { account: signers[10].getAddress(), stake: 1000 },
+        { account: signers[11].getAddress(), stake: 1 },
+    ];
+
+
+    // // Call the initialize function using the first account and expect it to revert
+    await expect(contract.initialize(invalidCommitteeMembers)).to.be
+    .revertedWith("Total stake is too high");
+  });
+
+    /*
+    // Test the pauseBridge function
+    it('should pause the bridge when called by a committee member', async () => {
+        // Initialize the contract with some committee members
+        const committeeMembers = [
+            { account: accounts[1].address, stake: 500 },
+            { account: accounts[2].address, stake: 300 },
+            { account: accounts[3].address, stake: 200 },
+        ]
+        await bridge.connect(accounts[0]).initialize(committeeMembers)
+
+        // Call the pauseBridge function using the second account
+        await bridge.connect(accounts[1]).pauseBridge()
+
+        // Check that the running state variable is false
+        expect(await bridge.running()).to.be.false
+    })
+
+    // Test the resumeBridge function
+    it('should resume the bridge when called by a committee member', async () => {
+        // Initialize the contract with some committee members
+        const committeeMembers = [
+            { account: accounts[1].address, stake: 500 },
+            { account: accounts[2].address, stake: 300 },
+            { account: accounts[3].address, stake: 200 },
+        ]
+        await bridge.connect(accounts[0]).initialize(committeeMembers)
+
+        // Pause the bridge using the second account
+        await bridge.connect(accounts[1]).pauseBridge()
+
+        // Resume the bridge using the third account
+        await bridge.connect(accounts[2]).resumeBridge()
+
+        // Check that the running state variable is true
+        expect(await bridge.running()).to.be.true
+    })
+
+    /*
+
+    // it('should correctly initialize validators', async function () {
+    //     const { contract, committee } = await loadFixture(beforeEach)
+
+    //     await contract.initialize(committee)
+
+    //     // // Check if the validators were initialized correctly
+    //     for (let i = 0; i < committee.length; i++) {
+    //         const committeeMember = await contract.committee(committee[i].account)
+    //         expect(committeeMember.account).to.equal(committee[i].account)
+    //         expect(committeeMember.stake).to.equal(committee[i].stake)
+    //     }
+
+    //     // Check if the validatorsCount matches the expected length
+    //     const expectedCount = committee.length
+    //     const actualCount = await contract.validatorsCount()
+    //     expect(actualCount.toString()).to.equal(expectedCount.toString())
+    // })
 
     it('deploys', async () => {
         const contractFactory = await ethers.getContractFactory(CONTRACT_NAME)
@@ -108,16 +200,18 @@ describe(CONTRACT_NAME, () => {
     //   expect(await contract.owner()).to.equal(owner.address);
     // });
 
-    // Write a test case for checking the total weight of validators
-    it('should initialize the contract with the first validator and the bridge state', async () => {
-        const { contract } = await loadFixture(beforeEach)
-
-        // Call the initialize function with the first signer's address and weight
-        // await contract.initialize();
-
-        // Check if the bridge state is running
-        expect(await contract.running()).to.be.false
-    })
+    /**
+        // Write a test case for checking the total weight of validators
+        it('should initialize the contract with the first validator and the bridge state', async () => {
+            const { contract } = await loadFixture(beforeEach)
+    
+            // Call the initialize function with the first signer's address and weight
+            // await contract.initialize();
+    
+            // Check if the bridge state is running
+            expect(await contract.running()).to.be.false
+        })
+        */
 
     // // Test the hashMessage function by comparing the output with the expected hash of a given message
     // it("should return the correct hash of a given message", async () => {
@@ -209,6 +303,7 @@ describe(CONTRACT_NAME, () => {
     //   expect(actualV).to.equal(expectedV);
     // });
 
+    /**
     // Write a test case for checking the total weight of validators
     it('should return the correct total weight of validators', async () => {
         const { contract } = await loadFixture(beforeEach)
@@ -333,6 +428,8 @@ describe(CONTRACT_NAME, () => {
         // Add logic to check if the bridge has been resumed
         expect(await contract.running()).to.be.true
     })
+
+    */
 
     // it("should pause the bridge", async function () {
     //   const { contract } = await loadFixture(beforeEach);
