@@ -13,6 +13,9 @@
       edges {
         node {
           digest
+          sender {
+            location
+          }
           expiration {
             epochId
           }
