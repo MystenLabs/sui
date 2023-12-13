@@ -85,7 +85,7 @@ jobs:
         run: |
           echo "s3_archive_exist=$(curl -Is https://sui-releases.s3.us-east-1.amazonaws.com/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz | head -n 1 | grep '200 OK')" >> $GITHUB_ENV
 
-      - name: Download archive
+      - name: Download archive, if it exists
         if: ${{ env.s3_archive_exist != '' }}
         shell: bash
         run: |
@@ -116,7 +116,11 @@ jobs:
           echo "C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_PATH
           echo "PQ_LIB_DIR=C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_ENV
           echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
-          echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV          
+          echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
+          
+      - name: Install aws for ${{ matrix.os }}
+        if: ${{ matrix.os == 'macos-latest-xl' && env.sui_tag != 'main' && env.s3_archive_exist == '' }}
+        uses: chrislennon/action-aws-cli@v1.1
 
       - name: cargo build (release) for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' && env.s3_archive_exist == '' }}
