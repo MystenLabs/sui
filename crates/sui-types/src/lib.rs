@@ -120,6 +120,7 @@ pub const SUI_AUTHENTICATOR_STATE_OBJECT_ID: ObjectID =
 pub const SUI_RANDOMNESS_STATE_ADDRESS: AccountAddress = address_from_single_byte(8);
 pub const SUI_RANDOMNESS_STATE_OBJECT_ID: ObjectID =
     ObjectID::from_address(SUI_RANDOMNESS_STATE_ADDRESS);
+pub const GAS_STATS_TARGET: &str = "gas_stats";
 
 /// Return `true` if `addr` is a special system package that can be upgraded at epoch boundaries.
 /// All new system package ID's must be added here.

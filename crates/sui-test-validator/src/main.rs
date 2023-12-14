@@ -10,7 +10,7 @@ use axum::{
 };
 use clap::Parser;
 use http::{Method, StatusCode};
-use std::{net::SocketAddr, sync::Arc};
+use std::{env, net::SocketAddr, sync::Arc};
 use sui_cluster_test::{
     cluster::{Cluster, LocalNewCluster},
     config::{ClusterTestOpt, Env},
@@ -95,9 +95,13 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
-        .with_env()
-        .init();
+    let mut telemetry_config = telemetry_subscribers::TelemetryConfig::new().with_env();
+
+    if let Some(file_path) = env::var_os("GAS_STATS_FILE") {
+        telemetry_config = telemetry_config.with_log_file(file_path.to_str().unwrap());
+    }
+
+    let (_guard, _filter_handle) = telemetry_config.init();
 
     let args = Args::parse();
     let Args {
