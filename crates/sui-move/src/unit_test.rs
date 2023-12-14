@@ -132,7 +132,7 @@ fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions
         store,
         BTreeMap::new(),
         false,
-        &ProtocolConfig::get_for_max_version_UNSAFE(),
+        Box::leak(Box::new(ProtocolConfig::get_for_max_version_UNSAFE())), // leak for testing
         metrics,
         0, // epoch id
     ));
