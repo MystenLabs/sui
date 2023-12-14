@@ -114,6 +114,15 @@ module scratch_off::game {
         public_key: vector<u8>,
     }
 
+    /// Set the new public key in case our account gets compromised
+    public fun set_public_key(
+        _store_cap: &StoreCap,
+        store: &mut ConvenienceStore,
+        new_pub_key: vector<u8>,
+    ) {
+        store.public_key = new_pub_key;
+    }
+
     /// Emergency fund withdrawal function
     public fun withdraw_funds(
         _store_cap: &StoreCap,
