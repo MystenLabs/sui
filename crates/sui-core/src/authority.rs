@@ -738,7 +738,6 @@ impl AuthorityState {
                 tx_digest,
                 &input_object_kinds,
                 &receiving_objects_refs,
-                epoch_store.protocol_config(),
                 epoch_store.epoch(),
             )
             .await?;

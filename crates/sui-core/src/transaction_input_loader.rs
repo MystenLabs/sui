@@ -40,7 +40,6 @@ impl TransactionInputLoader {
         _tx_digest: &TransactionDigest,
         input_object_kinds: &[InputObjectKind],
         receiving_objects: &[ObjectRef],
-        _protocol_config: &ProtocolConfig,
         epoch_id: EpochId,
     ) -> SuiResult<(InputObjects, ReceivingObjects)> {
         // Length of input_object_kinds have beeen checked via validity_check() for ProgrammableTransaction.
