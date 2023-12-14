@@ -1600,6 +1600,9 @@ impl AuthorityState {
         let protocol_config = epoch_store.protocol_config();
         transaction_kind.check_version_supported(protocol_config)?;
 
+        // No validity check of the transaction is performed per comment above
+        // `dev_inspect_transaction_block()` in sui-sdk.
+
         let max_tx_gas = protocol_config.max_tx_gas();
         let reference_gas_price = epoch_store.reference_gas_price();
         let gas_price = match gas_price {
