@@ -304,7 +304,7 @@
 ### <a id=196609></a>
 ### Multiple Selections
 ####  Get the checkpoint at sequence 9769 and show
-####  the new committe authority and stake units
+####  the new committee authority and stake units
 
 ><pre>{
 >  checkpoint(id: { sequenceNumber: 9769 }) {

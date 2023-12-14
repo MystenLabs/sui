@@ -1834,7 +1834,7 @@ type Query {
 	eventConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	"""
-	Fetch the protocl config by protocol version (defaults to the latest protocol
+	Fetch the protocol config by protocol version (defaults to the latest protocol
 	version known to the GraphQL)
 	"""
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
@@ -2298,7 +2298,7 @@ type TransactionBlock {
 	"""
 	gasInput: GasInput
 	"""
-	The type of this transaction as well as the commmands and/or parameters comprising the
+	The type of this transaction as well as the commands and/or parameters comprising the
 	transaction of this kind.
 	"""
 	kind: TransactionBlockKind
