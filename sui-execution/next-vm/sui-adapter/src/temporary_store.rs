@@ -1100,7 +1100,7 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         &mut self,
         _wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
     ) {
-        panic!("Unused in v1")
+        unreachable!("Unused in next-vm")
     }
 }
 
