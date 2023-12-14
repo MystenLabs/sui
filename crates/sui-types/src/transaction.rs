@@ -110,42 +110,45 @@ pub enum ObjectArg {
 fn type_tag_validity_check(
     tag: &TypeTag,
     config: &ProtocolConfig,
-    depth: u32,
-    starting_count: usize,
-) -> UserInputResult<usize> {
-    fp_ensure!(
-        depth < config.max_type_argument_depth(),
-        UserInputError::SizeLimitExceeded {
-            limit: "maximum type argument depth in a call transaction".to_string(),
-            value: config.max_type_argument_depth().to_string()
+    starting_count: &mut usize,
+) -> UserInputResult<()> {
+    let mut stack = vec![(tag, 1)];
+    while let Some((tag, depth)) = stack.pop() {
+        *starting_count += 1;
+        fp_ensure!(
+            *starting_count < config.max_type_arguments() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum type arguments in a call transaction".to_string(),
+                value: config.max_type_arguments().to_string()
+            }
+        );
+        fp_ensure!(
+            depth < config.max_type_argument_depth(),
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum type argument depth in a call transaction".to_string(),
+                value: config.max_type_argument_depth().to_string()
+            }
+        );
+        match tag {
+            TypeTag::Bool
+            | TypeTag::U8
+            | TypeTag::U64
+            | TypeTag::U128
+            | TypeTag::Address
+            | TypeTag::Signer
+            | TypeTag::U16
+            | TypeTag::U32
+            | TypeTag::U256 => (),
+            TypeTag::Vector(t) => {
+                stack.push((t, depth + 1));
+            }
+            TypeTag::Struct(s) => {
+                let next_depth = depth + 1;
+                stack.extend(s.type_params.iter().map(|t| (t, next_depth)));
+            }
         }
-    );
-    let count = 1 + match tag {
-        TypeTag::Bool
-        | TypeTag::U8
-        | TypeTag::U64
-        | TypeTag::U128
-        | TypeTag::Address
-        | TypeTag::Signer
-        | TypeTag::U16
-        | TypeTag::U32
-        | TypeTag::U256 => 0,
-        TypeTag::Vector(t) => {
-            type_tag_validity_check(t.as_ref(), config, depth + 1, starting_count + 1)?
-        }
-        TypeTag::Struct(s) => s.type_params.iter().try_fold(0, |accum, t| {
-            let count = accum + type_tag_validity_check(t, config, depth + 1, starting_count + 1)?;
-            fp_ensure!(
-                count + starting_count < config.max_type_arguments() as usize,
-                UserInputError::SizeLimitExceeded {
-                    limit: "maximum type arguments in a call transaction".to_string(),
-                    value: config.max_type_arguments().to_string()
-                }
-            );
-            Ok(count)
-        })?,
-    };
-    Ok(count)
+    }
+    Ok(())
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -715,15 +718,8 @@ impl ProgrammableMoveCall {
         ));
         fp_ensure!(!is_blocked, UserInputError::BlockedMoveFunction);
         let mut type_arguments_count = 0;
-        for tag in self.type_arguments.iter() {
-            type_arguments_count += type_tag_validity_check(tag, config, 1, type_arguments_count)?;
-            fp_ensure!(
-                type_arguments_count < config.max_type_arguments() as usize,
-                UserInputError::SizeLimitExceeded {
-                    limit: "maximum type arguments in a call transaction".to_string(),
-                    value: config.max_type_arguments().to_string()
-                }
-            );
+        for tag in &self.type_arguments {
+            type_tag_validity_check(tag, config, &mut type_arguments_count)?;
         }
         fp_ensure!(
             self.arguments.len() < config.max_arguments() as usize,
@@ -815,14 +811,8 @@ impl Command {
                     UserInputError::EmptyCommandInput
                 );
                 if let Some(ty) = ty_opt {
-                    let type_arguments_count = type_tag_validity_check(ty, config, 1, 0)?;
-                    fp_ensure!(
-                        type_arguments_count < config.max_type_arguments() as usize,
-                        UserInputError::SizeLimitExceeded {
-                            limit: "maximum type arguments in a call transaction".to_string(),
-                            value: config.max_type_arguments().to_string()
-                        }
-                    );
+                    let mut type_arguments_count = 0;
+                    type_tag_validity_check(ty, config, &mut type_arguments_count)?;
                 }
                 fp_ensure!(
                     args.len() < config.max_arguments() as usize,
