@@ -12503,7 +12503,6 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
- "sui-core",
  "sui-json",
  "sui-json-rpc",
  "sui-json-rpc-types",
