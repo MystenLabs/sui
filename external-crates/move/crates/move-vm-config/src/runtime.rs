@@ -3,6 +3,7 @@
 
 use crate::verifier::{VerifierConfig, DEFAULT_MAX_CONSTANT_VECTOR_LEN};
 use move_binary_format::file_format_common::VERSION_MAX;
+#[cfg(feature = "gas-profiler")]
 use once_cell::sync::Lazy;
 
 #[cfg(feature = "gas-profiler")]

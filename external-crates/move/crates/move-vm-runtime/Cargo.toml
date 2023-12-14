@@ -22,10 +22,10 @@ smallvec.workspace = true
 
 move-bytecode-verifier = { path = "../move-bytecode-verifier" }
 move-core-types.workspace = true
-move-vm-config = { workspace = true, features = ["gas-profiler"] }
-move-vm-types = { workspace = true, features = ["gas-profiler"] }
+move-vm-config.workspace = true
+move-vm-types.workspace = true
 move-binary-format.workspace = true
-move-vm-profiler = { workspace = true, features = ["gas-profiler"] }
+move-vm-profiler.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true

@@ -12,11 +12,11 @@ sui-protocol-config.workspace = true
 sui-types.workspace = true
 
 move-binary-format.workspace = true
-move-vm-config = { workspace = true, features = ["gas-profiler"]}
+move-vm-config.workspace = true
 
-sui-adapter-latest = { path = "latest/sui-adapter", features = ["gas-profiler"] }
-sui-adapter-v0 = { path = "v0/sui-adapter", features = ["gas-profiler"] }
-sui-adapter-v1 = { path = "v1/sui-adapter", features = ["gas-profiler"] }
+sui-adapter-latest = { path = "latest/sui-adapter" }
+sui-adapter-v0 = { path = "v0/sui-adapter" }
+sui-adapter-v1 = { path = "v1/sui-adapter" }
 sui-adapter-next-vm = { path = "next-vm/sui-adapter" }
 # sui-adapter-$CUT = { path = "$CUT/sui-adapter" }
 sui-move-natives-latest = { path = "latest/sui-move-natives" }
@@ -35,10 +35,10 @@ move-bytecode-verifier-v0 = { path = "../external-crates/move/move-execution/v0/
 move-bytecode-verifier-v1 = { path = "../external-crates/move/move-execution/v1/crates/move-bytecode-verifier" }
 move-bytecode-verifier-next-vm = { path = "../external-crates/move/move-execution/next-vm/crates/move-bytecode-verifier" }
 # move-bytecode-verifier-$CUT = { path = "../external-crates/move/move-execution/$CUT/crates/move-bytecode-verifier" }
-move-vm-runtime-latest = { path = "../external-crates/move/crates/move-vm-runtime", package = "move-vm-runtime", features = ["gas-profiler"] }
-move-vm-runtime-v0 = { path = "../external-crates/move/move-execution/v0/move-vm/runtime", features = ["gas-profiler"] }
+move-vm-runtime-latest = { path = "../external-crates/move/crates/move-vm-runtime", package = "move-vm-runtime" }
+move-vm-runtime-v0 = { path = "../external-crates/move/move-execution/v0/move-vm/runtime" }
 move-vm-runtime-v1 = { path = "../external-crates/move/move-execution/v1/crates/move-vm-runtime" }
-move-vm-runtime-next-vm = { path = "../external-crates/move/move-execution/next-vm/crates/move-vm-runtime", features = ["gas-profiler"] }
+move-vm-runtime-next-vm = { path = "../external-crates/move/move-execution/next-vm/crates/move-vm-runtime" }
 # move-vm-runtime-$CUT = { path = "../external-crates/move/move-execution/$CUT/crates/move-vm-runtime" }
 workspace-hack.workspace = true
 
