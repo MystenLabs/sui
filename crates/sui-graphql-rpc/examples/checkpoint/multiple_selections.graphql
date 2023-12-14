@@ -1,5 +1,5 @@
 # Get the checkpoint at sequence 9769 and show
-# the new committe authority and stake units
+# the new committee authority and stake units
 {
   checkpoint(id: { sequenceNumber: 9769 }) {
     digest
