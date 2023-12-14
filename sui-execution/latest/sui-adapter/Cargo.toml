@@ -17,18 +17,18 @@ serde.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
-move-vm-config = { workspace = true, features = ["gas-profiler"] }
-move-vm-types = { workspace = true, features = ["gas-profiler"] }
+move-vm-config.workspace = true
+move-vm-types.workspace = true
 
 move-bytecode-verifier = { path = "../../../external-crates/move/crates/move-bytecode-verifier" }
-move-vm-runtime = { path = "../../../external-crates/move/crates/move-vm-runtime", features = ["gas-profiler"] }
-move-vm-profiler = { path = "../../../external-crates/move/crates/move-vm-profiler", features = ["gas-profiler"]}
+move-vm-runtime = { path = "../../../external-crates/move/crates/move-vm-runtime" }
+move-vm-profiler = { path = "../../../external-crates/move/crates/move-vm-profiler"}
 sui-move-natives = { path = "../sui-move-natives", package = "sui-move-natives-latest" }
 sui-verifier = { path = "../sui-verifier", package = "sui-verifier-latest" }
 
 sui-macros.workspace = true
 sui-protocol-config.workspace = true
-sui-types = { workspace = true, features = ["gas-profiler"] }
+sui-types.workspace = true
 parking_lot.workspace = true
 workspace-hack.workspace = true
 

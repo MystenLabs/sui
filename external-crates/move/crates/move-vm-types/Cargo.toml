@@ -18,7 +18,7 @@ bcs.workspace = true
 
 move-core-types.workspace = true
 move-binary-format.workspace = true
-move-vm-profiler = { workspace = true, features = ["gas-profiler"] }
+move-vm-profiler.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

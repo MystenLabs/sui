@@ -18,9 +18,9 @@ serde.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
-move-vm-config = { workspace = true, features = ["gas-profiler"] }
-move-vm-profiler = { workspace = true, features = ["gas-profiler"] }
-move-vm-types = { workspace = true, features = ["gas-profiler"] }
+move-vm-config.workspace = true
+move-vm-profiler.workspace = true
+move-vm-types.workspace = true
 
 move-bytecode-verifier = { path = "../../../external-crates/move/move-execution/v0/move-bytecode-verifier", package = "move-bytecode-verifier-v0" }
 move-vm-runtime = { path = "../../../external-crates/move/move-execution/v0/move-vm/runtime", package = "move-vm-runtime-v0", features = ["gas-profiler"] }
@@ -29,7 +29,7 @@ sui-verifier = { path = "../sui-verifier", package = "sui-verifier-v0" }
 
 sui-macros.workspace = true
 sui-protocol-config.workspace = true
-sui-types = { workspace = true, features = ["gas-profiler"] }
+sui-types.workspace = true
 parking_lot.workspace = true
 workspace-hack.workspace = true
 

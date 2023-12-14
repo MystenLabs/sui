@@ -36,7 +36,7 @@ reqwest.workspace = true
 im.workspace = true
 
 sui-config.workspace = true
-sui-execution = { path = "../../sui-execution", features = ["gas-profiler"] }
+sui-execution = { path = "../../sui-execution" }
 sui-swarm-config.workspace = true
 sui-genesis-builder.workspace = true
 sui-types = { workspace = true, features = ["gas-profiler"]}
