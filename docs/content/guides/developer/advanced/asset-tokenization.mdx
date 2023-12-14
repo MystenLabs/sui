@@ -841,7 +841,7 @@ a6563740f7075626c69635f7472616e736665720673656e64657204736f6d6506737472696e
 </details>
 ```
 
-Copy the output you receive and paste it in the return instruction of the `getBytecode` method, which is located inside the [bytecode-template.ts](https://github.com/MystenLabs/asset-tokenization/blob/main/setup/src/utils/genesis_bytecode.ts) file.
+Copy the output you receive and paste it in the return instruction of the `getBytecode` method, which is located inside the [bytecode-template.ts](https://github.com/MystenLabs/asset-tokenization/blob/main/setup/src/utils/bytecode-template.ts) file.
 
 Additionally, because the template package contains two modules, and therefore has another dependency, you also need to retrieve the bytecode of the genesis module in a similar fashion. This module bytecode, however, is not edited and isn't used as is. This operation is not directly relevant to the WASM library, but is necessary to successfully deploy the edited template module. To acquire the bytecode for genesis, navigate to the `template` folder and run:
 
