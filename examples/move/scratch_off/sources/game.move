@@ -28,6 +28,7 @@ module scratch_off::game {
     const EInvalidBlsSig: u64 = 1;
     const ENoTicketsLeft: u64 = 2;
     const ENotExactAmount: u64 = 3;
+    const EStoreClosed: u64 = 4;
 
     // --------------- Events ---------------
     struct NewDrawing has copy, drop {
@@ -112,6 +113,16 @@ module scratch_off::game {
         /// Leaderboard for top 20 
         leaderboard: LeaderBoard,
         public_key: vector<u8>,
+        is_active: bool
+    }
+
+    /// Sets the store to closed in case of emergency
+    public fun set_is_active(
+        _store_cap: &StoreCap,
+        store: &mut ConvenienceStore,
+        is_active: bool,
+    ) {
+        store.is_active = is_active;
     }
 
     /// Set the new public key in case our account gets compromised
@@ -157,7 +168,8 @@ module scratch_off::game {
                 leaderboard_players: vector[],
                 leaderboard_player_metadata: table::new(ctx),
             },
-            public_key: vector[]
+            public_key: vector[], 
+            is_active: true
         };
 
         transfer::share_object(new_store);
@@ -249,6 +261,7 @@ module scratch_off::game {
         ctx: &mut TxContext
     ): ID {
         assert!(store.tickets_issued <= store.original_ticket_count, ENoTicketsLeft);
+        assert!(store.is_active, EStoreClosed);
 
         let ticket_id = object::uid_to_inner(&ticket.id);
 
@@ -494,7 +507,8 @@ module scratch_off::game {
                 leaderboard_players: vector[],
                 leaderboard_player_metadata: table::new(ctx),
             },
-            public_key: vector[]
+            public_key: vector[],
+            is_active: true
         };
         transfer::share_object(new_store);
         transfer::public_transfer(StoreCap {
