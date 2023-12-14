@@ -17,7 +17,7 @@ mod checked {
     use sui_types::transaction::{
         CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
         ReceivingObjectReadResult, ReceivingObjects, TransactionData, TransactionDataAPI,
-        TransactionKind, VersionedProtocolMessage,
+        TransactionKind, VersionedProtocolMessage as _,
     };
     use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
@@ -74,12 +74,13 @@ mod checked {
         receiving_objects: ReceivingObjects,
         metrics: &Arc<BytecodeVerifierMetrics>,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
+        // Cheap validity checks that is ok to run multiple times during processing.
         transaction.check_version_supported(protocol_config)?;
         transaction.validity_check(protocol_config)?;
+
         // Runs verifier, which could be expensive.
         check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
 
-        check_input_objects(&input_objects, protocol_config)?;
         let gas_status = get_gas_status(
             &input_objects,
             transaction.gas(),
@@ -101,10 +102,12 @@ mod checked {
         gas_object: Object,
         metrics: &Arc<BytecodeVerifierMetrics>,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
+        // Cheap validity checks that is ok to run multiple times during processing.
         transaction.check_version_supported(protocol_config)?;
         transaction.validity_check_no_gas_check(protocol_config)?;
+
+        // Runs verifier, which could be expensive.
         check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
-        check_input_objects(&input_objects, protocol_config)?;
 
         let gas_object_ref = gas_object.compute_object_reference();
         input_objects.push(ObjectReadResult::new_from_gas_object(&gas_object));
@@ -128,19 +131,16 @@ mod checked {
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
-        // This should not happen - validators should not have signed the txn in the first place.
-        assert!(
-            cert.data()
-                .transaction_data()
-                .check_version_supported(protocol_config)
-                .is_ok(),
-            "Certificate formed with unsupported message version {:?}",
-            cert.message_version(),
-        );
+        // Cheap validity checks that is ok to run multiple times during processing.
+        let tx_data = cert.data().transaction_data();
+        tx_data
+            .check_version_supported(protocol_config)
+            .expect("Certified transaction should be valid");
+        tx_data
+            .validity_check(protocol_config)
+            .expect("Certified transaction should be valid");
 
         let tx_data = &cert.data().intent_message().value;
-
-        check_input_objects(&input_objects, protocol_config)?;
         let gas_status = get_gas_status(
             &input_objects,
             tx_data.gas(),
@@ -172,7 +172,6 @@ mod checked {
             ))
             .into());
         }
-        check_input_objects(&input_objects, config)?;
         let mut used_objects: HashSet<SuiAddress> = HashSet::new();
         for input_object in input_objects.iter() {
             let Some(object) = input_object.as_object() else {
@@ -307,22 +306,6 @@ mod checked {
         Ok(())
     }
 
-    pub fn check_input_objects(
-        objects: &InputObjects,
-        protocol_config: &ProtocolConfig,
-    ) -> SuiResult {
-        fp_ensure!(
-            objects.len() <= protocol_config.max_input_objects() as usize,
-            UserInputError::SizeLimitExceeded {
-                limit: "maximum input objects in a transaction".to_string(),
-                value: protocol_config.max_input_objects().to_string()
-            }
-            .into()
-        );
-
-        Ok(())
-    }
-
     /// Check transaction gas data/info and gas coins consistency.
     /// Return the gas status to be used for the lifecycle of the transaction.
     #[instrument(level = "trace", skip_all)]
@@ -441,13 +424,13 @@ mod checked {
 
                 // This is an invariant - we just load the object with the given ID and version.
                 assert_eq!(
-                object.version(),
-                sequence_number,
-                "The fetched object version {} does not match the requested version {}, object id: {}",
-                object.version(),
-                sequence_number,
-                object.id(),
-            );
+                    object.version(),
+                    sequence_number,
+                    "The fetched object version {} does not match the requested version {}, object id: {}",
+                    object.version(),
+                    sequence_number,
+                    object.id(),
+                );
 
                 // Check the digest matches - user could give a mismatched ObjectDigest
                 let expected_digest = object.digest();
