@@ -833,18 +833,7 @@ impl Command {
                     }
                 );
             }
-            Command::Publish(modules, _dep_ids) => {
-                fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput);
-                fp_ensure!(
-                    modules.len() < config.max_modules_in_publish() as usize,
-                    UserInputError::SizeLimitExceeded {
-                        limit: "maximum modules in a programmable transaction publish command"
-                            .to_string(),
-                        value: config.max_modules_in_publish().to_string()
-                    }
-                );
-            }
-            Command::Upgrade(modules, _, _, _) => {
+            Command::Publish(modules, _) | Command::Upgrade(modules, _, _, _) => {
                 fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
                     modules.len() < config.max_modules_in_publish() as usize,
@@ -918,15 +907,11 @@ impl ProgrammableTransaction {
         for input in inputs {
             input.validity_check(config)?
         }
-        let mut publish_count = 0u64;
-        for command in commands {
-            command.validity_check(config)?;
-            match command {
-                Command::Publish(_, _) | Command::Upgrade(_, _, _, _) => publish_count += 1,
-                _ => (),
-            }
-        }
         if let Some(max_publish_commands) = config.max_publish_or_upgrade_per_ptb_as_option() {
+            let publish_count = commands
+                .iter()
+                .filter(|c| matches!(c, Command::Publish(_, _) | Command::Upgrade(_, _, _, _)))
+                .count() as u64;
             fp_ensure!(
                 publish_count <= max_publish_commands,
                 UserInputError::MaxPublishCountExceeded {
@@ -935,6 +920,10 @@ impl ProgrammableTransaction {
                 }
             );
         }
+        for command in commands {
+            command.validity_check(config)?;
+        }
+
         Ok(())
     }
 
