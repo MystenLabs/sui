@@ -7,9 +7,9 @@ use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 
-use sui_json_rpc::api::MoveUtilsServer;
 use sui_json_rpc::error::SuiRpcInputError;
 use sui_json_rpc::SuiRpcModule;
+use sui_json_rpc_api::MoveUtilsServer;
 use sui_json_rpc_types::ObjectValueKind;
 use sui_json_rpc_types::SuiMoveNormalizedType;
 use sui_json_rpc_types::{
@@ -155,6 +155,6 @@ impl SuiRpcModule for MoveUtilsApiV2 {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_json_rpc::api::MoveUtilsOpenRpc::module_doc()
+        sui_json_rpc_api::MoveUtilsOpenRpc::module_doc()
     }
 }

@@ -7,8 +7,8 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
 
-use sui_json_rpc::api::{ReadApiClient, ReadApiServer};
 use sui_json_rpc::SuiRpcModule;
+use sui_json_rpc_api::{ReadApiClient, ReadApiServer};
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, CheckpointPage, ProtocolConfigResponse, SuiEvent,
     SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
@@ -387,6 +387,6 @@ where
     }
 
     fn rpc_doc_module() -> Module {
-        sui_json_rpc::api::ReadApiOpenRpc::module_doc()
+        sui_json_rpc_api::ReadApiOpenRpc::module_doc()
     }
 }
