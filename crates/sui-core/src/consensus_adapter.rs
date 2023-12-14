@@ -824,6 +824,8 @@ impl ConsensusAdapter {
             // Note that there could be a race condition here where we enter this check in RejectAllCerts state.
             // In that case we don't need to send EndOfPublish because condition to enter
             // RejectAllCerts is when 2f+1 other validators already sequenced their EndOfPublish message.
+            // Also note that we could sent multiple EndOfPublish due to that multiple tasks can enter here with
+            // pending_count == 0. This doesn't affect correctness.
             if epoch_store
                 .get_reconfig_state_read_lock_guard()
                 .is_reject_user_certs()
