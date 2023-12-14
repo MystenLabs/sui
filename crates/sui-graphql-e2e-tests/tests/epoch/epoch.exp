@@ -15,7 +15,7 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 4 'run'. lines 16-18:
-events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: C, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("StakingRequestEvent"), type_params: [] }, contents: [238, 200, 46, 64, 19, 251, 166, 48, 169, 106, 19, 152, 17, 73, 253, 13, 104, 253, 255, 233, 100, 45, 194, 20, 146, 117, 157, 165, 47, 29, 161, 135, 251, 197, 26, 138, 207, 9, 111, 134, 25, 141, 95, 164, 112, 98, 14, 214, 162, 10, 188, 9, 185, 78, 168, 145, 239, 2, 154, 93, 227, 243, 151, 19, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 1, 0, 0, 0, 0, 0, 0, 0, 0, 228, 11, 84, 2, 0, 0, 0] }
+events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: C, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("StakingRequestEvent"), type_params: [] }, contents: [14, 235, 134, 32, 68, 242, 136, 89, 66, 234, 187, 200, 211, 170, 76, 170, 161, 251, 3, 35, 10, 81, 104, 194, 165, 28, 76, 149, 194, 89, 103, 133, 251, 197, 26, 138, 207, 9, 111, 134, 25, 141, 95, 164, 112, 98, 14, 214, 162, 10, 188, 9, 185, 78, 168, 145, 239, 2, 154, 93, 227, 243, 151, 19, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 1, 0, 0, 0, 0, 0, 0, 0, 0, 228, 11, 84, 2, 0, 0, 0] }
 created: object(4,0)
 mutated: object(_), 0x0000000000000000000000000000000000000000000000000000000000000005, object(0,0)
 deleted: object(3,0)
