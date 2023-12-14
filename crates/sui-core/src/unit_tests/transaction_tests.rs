@@ -20,6 +20,8 @@ use sui_types::{
     zk_login_util::DEFAULT_JWK_BYTES,
 };
 
+use sui_macros::sim_test;
+
 use crate::{
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     authority_server::{AuthorityServer, AuthorityServerHandle},
@@ -30,7 +32,7 @@ use super::*;
 
 pub use crate::authority::authority_test_utils::init_state_with_ids;
 
-#[tokio::test]
+#[sim_test]
 async fn test_handle_transfer_transaction_bad_signature() {
     do_transaction_test(
         1,
@@ -45,7 +47,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
     .await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_handle_transfer_transaction_no_signature() {
     do_transaction_test(
         1,
@@ -57,7 +59,7 @@ async fn test_handle_transfer_transaction_no_signature() {
     .await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_handle_transfer_transaction_extra_signature() {
     do_transaction_test(
         1,
@@ -71,20 +73,20 @@ async fn test_handle_transfer_transaction_extra_signature() {
 }
 
 // TODO: verify that these cases are not exploitable via consensus input
-#[tokio::test]
+#[sim_test]
 async fn test_empty_sender_signed_data() {
     do_transaction_test(
         0,
         |_| {},
         |tx| {
             let data = tx.data_mut_for_testing();
-            *data.inner_vec_mut_for_testing() = vec![];
+            data.inner_vec_mut_for_testing().clear();
         },
     )
     .await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_multiple_sender_signed_data() {
     do_transaction_test(
         0,
@@ -103,7 +105,7 @@ async fn test_multiple_sender_signed_data() {
     .await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_duplicate_sender_signed_data() {
     do_transaction_test(
         0,
@@ -119,7 +121,7 @@ async fn test_duplicate_sender_signed_data() {
     .await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_empty_gas_data() {
     do_transaction_test_skip_cert_checks(
         0,
@@ -131,7 +133,7 @@ async fn test_empty_gas_data() {
     .await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_duplicate_gas_data() {
     do_transaction_test_skip_cert_checks(
         0,
@@ -145,7 +147,7 @@ async fn test_duplicate_gas_data() {
     .await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_gas_wrong_owner_matches_sender() {
     do_transaction_test(
         1,
@@ -160,7 +162,7 @@ async fn test_gas_wrong_owner_matches_sender() {
     .await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_gas_wrong_owner() {
     do_transaction_test(
         1,
@@ -309,7 +311,7 @@ async fn do_transaction_test_impl(
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_zklogin_transfer_with_bad_ephemeral_sig() {
     do_zklogin_transaction_test(
         1,
@@ -340,7 +342,7 @@ fn zklogin_key_pair_and_inputs() -> Vec<(Ed25519KeyPair, ZkLoginInputs)> {
     vec![(key1, inputs1), (key2, inputs2)]
 }
 
-#[tokio::test]
+#[sim_test]
 async fn zklogin_test_cached_proof_wrong_key() {
     telemetry_subscribers::init_for_testing();
     let (
