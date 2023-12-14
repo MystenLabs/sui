@@ -6,7 +6,7 @@ module scratch_off::test_game {
     
     use scratch_off::game::{Self, ConvenienceStore, ENoTicketsLeft, StoreCap, player_metadata,
      tickets_left, leaderboard, prize_pool_balance, leaderboard_players, get_target_player_metadata,
-     tickets_claimed, amount_won, tickets_issued, init_for_testing, stock_store, Ticket};
+     tickets_claimed, amount_won, tickets_issued, init_for_testing, stock_store, Ticket, SetUpCap};
 
     #[test_only] use sui::test_scenario::{Self, Scenario};
     #[test_only] use sui::coin::{mint_for_testing};
@@ -34,11 +34,11 @@ module scratch_off::test_game {
         };
         ts::next_tx(scenario, creator);
         {
-            let store_cap: StoreCap = ts::take_from_sender(scenario);
+            let setup_cap: SetUpCap = ts::take_from_sender(scenario);
             let store: ConvenienceStore = ts::take_shared(scenario);
             let coin = mint_for_testing<SUI>(coin_amount, ts::ctx(scenario));
             stock_store(
-                &store_cap,
+                setup_cap,
                 &mut store,
                 coin,
                 number_of_prizes,
@@ -47,7 +47,6 @@ module scratch_off::test_game {
                 max_leaderboard_size,
                 ts::ctx(scenario)
             );
-            ts::return_to_sender(scenario, store_cap);
             ts::return_shared(store);
         }
     }

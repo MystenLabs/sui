@@ -27,9 +27,7 @@ module scratch_off::game {
     const EInvalidInputs: u64 = 0;
     const EInvalidBlsSig: u64 = 1;
     const ENoTicketsLeft: u64 = 2;
-    const ENotAuthorizedEmployee: u64 = 3;
-    const EWrongStore: u64 = 4;
-    const ENotExactAmount: u64 = 5;
+    const ENotExactAmount: u64 = 3;
 
     // --------------- Events ---------------
     struct NewDrawing has copy, drop {
@@ -46,8 +44,6 @@ module scratch_off::game {
 
     struct Ticket has key, store {
         id: UID,
-        /// Which store this ticket belongs to
-        convenience_store_id: ID,
         /// Original receiver address, but on evaluation this is set to the ctx::sender addr
         player: address,
         // Number of tickets that are in a given ticket
@@ -82,16 +78,18 @@ module scratch_off::game {
     /// Capability for the cap to manage the store id
     struct StoreCap has key, store {
         id: UID,
-        store_id: ID
+    }
+
+    struct SetUpCap has key, store {
+        id: UID,
     }
 
     public fun mint_child_store_cap(
-        store_cap: &StoreCap,
+        _store_cap: &StoreCap,
         ctx: &mut TxContext
     ): StoreCap {
         StoreCap {
             id: object::new(ctx),
-            store_id: store_cap.store_id
         }
     }
 
@@ -118,11 +116,10 @@ module scratch_off::game {
 
     /// Emergency fund withdrawal function
     public fun withdraw_funds(
-        store_cap: &StoreCap,
+        _store_cap: &StoreCap,
         store: &mut ConvenienceStore,
         ctx: &mut TxContext
     ): Coin<SUI> {
-        assert!(object::id(store) == store_cap.store_id, ENotAuthorizedEmployee);
         let value = balance::value(&store.prize_pool);
         coin::take(&mut store.prize_pool, value, ctx)
     }
@@ -136,7 +133,6 @@ module scratch_off::game {
         package::claim_and_keep(otw, ctx);
 
         let store_uid = object::new(ctx);
-        let store_id = object::uid_to_inner(&store_uid);
         let new_store = ConvenienceStore {
             id: store_uid,
             creator: tx_context::sender(ctx),
@@ -156,11 +152,11 @@ module scratch_off::game {
         };
 
         transfer::share_object(new_store);
-
-        // TODO: Before we launch this contract
         transfer::public_transfer(StoreCap {
             id: object::new(ctx),
-            store_id
+        }, tx_context::sender(ctx));
+        transfer::public_transfer(SetUpCap {
+            id: object::new(ctx),
         }, tx_context::sender(ctx));
     }
     
@@ -170,7 +166,7 @@ module scratch_off::game {
     /// We purposely design the convenience store to be an owned object so that we
     /// don't need to make this in a shared format.
     public fun stock_store(
-        _store_cap: &StoreCap,
+        setup_cap: SetUpCap,
         store: &mut ConvenienceStore,
         coin: Coin<SUI>, 
         number_of_prizes: vector<u64>,
@@ -182,6 +178,8 @@ module scratch_off::game {
         let number_of_prizes_len = vector::length(&number_of_prizes);
         let value_of_prizes_len = vector::length(&value_of_prizes);
         assert!(number_of_prizes_len == value_of_prizes_len, EInvalidInputs);
+        let SetUpCap { id } = setup_cap;
+        object::delete(id);
 
         let winning_tickets = vector<PrizeStruct>[];
         let idx = 0;
@@ -217,18 +215,16 @@ module scratch_off::game {
 
     /// Initializes a ticket and sends it to someone.
     public fun send_ticket(
-        store_cap: &StoreCap,
+        _store_cap: &StoreCap,
         player: address,
         store: &mut ConvenienceStore,
         drawing_count: u64,
         ctx: &mut TxContext
     ) {
-        assert!(store_cap.store_id == object::id(store), ENotAuthorizedEmployee);
         assert!(store.tickets_issued + drawing_count <= store.original_ticket_count, ENoTicketsLeft);
         store.tickets_issued = store.tickets_issued + drawing_count;
         let ticket = Ticket {
             id: object::new(ctx),
-            convenience_store_id: object::uid_to_inner(&store.id),
             player,
             drawing_count
         };
@@ -244,7 +240,6 @@ module scratch_off::game {
         ctx: &mut TxContext
     ): ID {
         assert!(store.tickets_issued <= store.original_ticket_count, ENoTicketsLeft);
-        assert!(object::id(store) == ticket.convenience_store_id, EWrongStore);
 
         let ticket_id = object::uid_to_inner(&ticket.id);
 
@@ -273,7 +268,6 @@ module scratch_off::game {
         if (!ticket_exists(store, ticket_id)) return;
         let Ticket {
             id,
-            convenience_store_id: _,
             player,
             drawing_count
         } = dof::remove<ID, Ticket>(&mut store.id, ticket_id);
@@ -476,7 +470,6 @@ module scratch_off::game {
     #[test_only]
     public fun init_for_testing(ctx: &mut TxContext){
         let store_uid = object::new(ctx);
-        let store_id = object::uid_to_inner(&store_uid);
         let new_store = ConvenienceStore {
             id: store_uid,
             creator: tx_context::sender(ctx),
@@ -497,7 +490,9 @@ module scratch_off::game {
         transfer::share_object(new_store);
         transfer::public_transfer(StoreCap {
             id: object::new(ctx),
-            store_id
+        }, tx_context::sender(ctx));
+        transfer::public_transfer(SetUpCap {
+            id: object::new(ctx),
         }, tx_context::sender(ctx));
     }
     
@@ -512,7 +507,6 @@ module scratch_off::game {
         if (!ticket_exists(store, ticket_id)) return;
         let Ticket {
             id,
-            convenience_store_id: _,
             player,
             drawing_count
         } = dof::remove<ID, Ticket>(&mut store.id, ticket_id);
