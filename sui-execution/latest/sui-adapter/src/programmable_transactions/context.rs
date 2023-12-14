@@ -841,8 +841,8 @@ mod checked {
                     .into_iter()
                     .filter_map(|(id, loaded)| loaded.is_modified.then_some(id))
                     .collect(),
-                created_object_ids: created_object_ids.into_iter().map(|id| id).collect(),
-                deleted_object_ids: deleted_object_ids.into_iter().map(|id| id).collect(),
+                created_object_ids: created_object_ids.into_iter().collect(),
+                deleted_object_ids: deleted_object_ids.into_iter().collect(),
                 user_events,
             }))
         }
