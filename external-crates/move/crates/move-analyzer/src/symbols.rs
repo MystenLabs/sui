@@ -164,6 +164,14 @@ pub enum IdentOnHover {
         /// Field type
         Type,
     ),
+    Local(
+        /// Name
+        Symbol,
+        /// Type
+        Type,
+        /// Should displayed definition be preceded by `let`?
+        bool,
+    ),
 }
 
 /// Information about both the use identifier (source file is specified wherever an instance of this
@@ -219,6 +227,21 @@ pub struct FunctionDef {
     #[derivative(PartialOrd = "ignore")]
     #[derivative(Ord = "ignore")]
     on_hover: IdentOnHover,
+}
+
+/// Definition of a local (or parameter)
+#[allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
+#[derive(Derivative, Debug, Clone, Eq, PartialEq)]
+#[derivative(PartialOrd, Ord)]
+struct LocalDef {
+    /// Location of the definition
+    def_loc: DefLoc,
+    /// Type of definition
+    #[derivative(PartialOrd = "ignore")]
+    #[derivative(Ord = "ignore")]
+    def_type: Type,
+    /// Is directly declared with `let` (i.e., not a parameter and not declared with unpack)?
+    with_let: bool,
 }
 
 /// Module-level definitions
@@ -347,6 +370,13 @@ impl fmt::Display for IdentOnHover {
                     type_to_ide_string(t)
                 )
             }
+            Self::Local(name, t, is_decl) => {
+                if *is_decl {
+                    write!(f, "let {}: {}", name, type_to_ide_string(t))
+                } else {
+                    write!(f, "{}: {}", name, type_to_ide_string(t))
+                }
+            }
         }
     }
 }
@@ -398,7 +428,7 @@ fn typed_id_list_to_ide_string(names: &[Symbol], types: &[Type], separate_lines:
 fn type_to_ide_string(sp!(_, t): &Type) -> String {
     match t {
         Type_::Unit => "()".to_string(),
-        Type_::Ref(m, r) => format!("&{} {}", if *m { "mut" } else { "" }, type_to_ide_string(r)),
+        Type_::Ref(m, r) => format!("&{}{}", if *m { "mut " } else { "" }, type_to_ide_string(r)),
         Type_::Param(tp) => {
             format!("{}", tp.user_specified_name)
         }
@@ -1215,6 +1245,7 @@ impl Symbolicator {
                 references,
                 use_defs,
                 ptype.clone(),
+                false, /* with_let */
             );
         }
 
@@ -1316,7 +1347,7 @@ impl Symbolicator {
     /// Get symbols for a sequence representing function body
     fn seq_item_symbols(
         &self,
-        scope: &mut OrdMap<Symbol, DefLoc>,
+        scope: &mut OrdMap<Symbol, LocalDef>,
         seq_item: &SequenceItem,
         references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
         use_defs: &mut UseDefMap,
@@ -1347,12 +1378,14 @@ impl Symbolicator {
         &self,
         define: bool,
         lvalues: &LValueList,
-        scope: &mut OrdMap<Symbol, DefLoc>,
+        scope: &mut OrdMap<Symbol, LocalDef>,
         references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
         use_defs: &mut UseDefMap,
     ) {
         for lval in &lvalues.value {
-            self.lvalue_symbols(define, lval, scope, references, use_defs);
+            self.lvalue_symbols(
+                define, lval, scope, references, use_defs, false, /* for unpack */
+            );
         }
     }
 
@@ -1361,9 +1394,10 @@ impl Symbolicator {
         &self,
         define: bool,
         lval: &LValue,
-        scope: &mut OrdMap<Symbol, DefLoc>,
+        scope: &mut OrdMap<Symbol, LocalDef>,
         references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
         use_defs: &mut UseDefMap,
+        for_unpack: bool,
     ) {
         match &lval.value {
             LValue_::Var { var, ty: t, .. } => {
@@ -1375,16 +1409,10 @@ impl Symbolicator {
                         references,
                         use_defs,
                         *t.clone(),
+                        define && !for_unpack, // with_let (only for simple definition, e.g., `let t = 1;``)
                     );
                 } else {
-                    self.add_local_use_def(
-                        &var.value.name,
-                        &var.loc,
-                        references,
-                        scope,
-                        use_defs,
-                        *t.clone(),
-                    )
+                    self.add_local_use_def(&var.value.name, &var.loc, references, scope, use_defs)
                 }
             }
             LValue_::Unpack(ident, name, tparams, fields) => {
@@ -1409,7 +1437,7 @@ impl Symbolicator {
         name: &StructName,
         tparams: &Vec<Type>,
         fields: &Fields<(Type, LValue)>,
-        scope: &mut OrdMap<Symbol, DefLoc>,
+        scope: &mut OrdMap<Symbol, LocalDef>,
         references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
         use_defs: &mut UseDefMap,
     ) {
@@ -1426,7 +1454,9 @@ impl Symbolicator {
                 use_defs,
             );
             // add definition or use of a variable used for struct field unpacking
-            self.lvalue_symbols(define, lvalue, scope, references, use_defs);
+            self.lvalue_symbols(
+                define, lvalue, scope, references, use_defs, true, /* for_unpack */
+            );
         }
         // add type params
         for t in tparams {
@@ -1438,7 +1468,7 @@ impl Symbolicator {
     fn exp_symbols(
         &self,
         exp: &Exp,
-        scope: &mut OrdMap<Symbol, DefLoc>,
+        scope: &mut OrdMap<Symbol, LocalDef>,
         references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
         use_defs: &mut UseDefMap,
     ) {
@@ -1447,33 +1477,12 @@ impl Symbolicator {
             E::Move {
                 from_user: _,
                 var: v,
-            } => self.add_local_use_def(
-                &v.value.name,
-                &v.loc,
-                references,
-                scope,
-                use_defs,
-                exp.ty.clone(),
-            ),
+            } => self.add_local_use_def(&v.value.name, &v.loc, references, scope, use_defs),
             E::Copy {
                 from_user: _,
                 var: v,
-            } => self.add_local_use_def(
-                &v.value.name,
-                &v.loc,
-                references,
-                scope,
-                use_defs,
-                exp.ty.clone(),
-            ),
-            E::Use(v) => self.add_local_use_def(
-                &v.value.name,
-                &v.loc,
-                references,
-                scope,
-                use_defs,
-                exp.ty.clone(),
-            ),
+            } => self.add_local_use_def(&v.value.name, &v.loc, references, scope, use_defs),
+            E::Use(v) => self.add_local_use_def(&v.value.name, &v.loc, references, scope, use_defs),
             E::Constant(mod_ident, name) => self.add_const_use_def(
                 mod_ident,
                 &name.value(),
@@ -1579,14 +1588,9 @@ impl Symbolicator {
             E::TempBorrow(_, exp) => {
                 self.exp_symbols(exp, scope, references, use_defs);
             }
-            E::BorrowLocal(_, var) => self.add_local_use_def(
-                &var.value.name,
-                &var.loc,
-                references,
-                scope,
-                use_defs,
-                exp.ty.clone(),
-            ),
+            E::BorrowLocal(_, var) => {
+                self.add_local_use_def(&var.value.name, &var.loc, references, scope, use_defs)
+            }
             E::Cast(exp, t) => {
                 self.exp_symbols(exp, scope, references, use_defs);
                 self.add_type_id_use_def(t, references, use_defs);
@@ -1631,7 +1635,7 @@ impl Symbolicator {
     fn mod_call_symbols(
         &self,
         mod_call: &ModuleCall,
-        scope: &mut OrdMap<Symbol, DefLoc>,
+        scope: &mut OrdMap<Symbol, LocalDef>,
         references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
         use_defs: &mut UseDefMap,
     ) {
@@ -1666,7 +1670,7 @@ impl Symbolicator {
         name: &StructName,
         tparams: &Vec<Type>,
         fields: &Fields<(Type, Exp)>,
-        scope: &mut OrdMap<Symbol, DefLoc>,
+        scope: &mut OrdMap<Symbol, LocalDef>,
         references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
         use_defs: &mut UseDefMap,
     ) {
@@ -1990,10 +1994,11 @@ impl Symbolicator {
         &self,
         pos: &Loc,
         name: &Symbol,
-        scope: &mut OrdMap<Symbol, DefLoc>,
+        scope: &mut OrdMap<Symbol, LocalDef>,
         references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
         use_defs: &mut UseDefMap,
-        use_type: Type,
+        def_type: Type,
+        with_let: bool,
     ) {
         match Self::get_start_loc(pos, &self.files, &self.file_id_mapping) {
             Some(name_start) => {
@@ -2001,13 +2006,20 @@ impl Symbolicator {
                     fhash: pos.file_hash(),
                     start: name_start,
                 };
-                scope.insert(*name, def_loc);
+                scope.insert(
+                    *name,
+                    LocalDef {
+                        def_loc,
+                        def_type: def_type.clone(),
+                        with_let,
+                    },
+                );
                 // in other languages only one definition is allowed per scope but in move an (and
                 // in rust) a variable can be re-defined in the same scope replacing the previous
                 // definition
 
                 // enter self-definition for def name
-                let on_hover = IdentOnHover::Type(use_type);
+                let on_hover = IdentOnHover::Local(*name, def_type, with_let);
                 let ident_type_def_loc = self.on_hover_to_type_def_loc(&on_hover);
                 use_defs.insert(
                     name_start.line,
@@ -2037,9 +2049,8 @@ impl Symbolicator {
         use_name: &Symbol,
         use_pos: &Loc,
         references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
-        scope: &OrdMap<Symbol, DefLoc>,
+        scope: &OrdMap<Symbol, LocalDef>,
         use_defs: &mut UseDefMap,
-        use_type: Type,
     ) {
         let name_start = match Self::get_start_loc(use_pos, &self.files, &self.file_id_mapping) {
             Some(v) => v,
@@ -2049,9 +2060,11 @@ impl Symbolicator {
             }
         };
 
-        if let Some(def_loc) = scope.get(use_name) {
-            let doc_string = self.extract_doc_string(&def_loc.start, &def_loc.fhash);
-            let on_hover = IdentOnHover::Type(use_type);
+        if let Some(local_def) = scope.get(use_name) {
+            let doc_string =
+                self.extract_doc_string(&local_def.def_loc.start, &local_def.def_loc.fhash);
+            let on_hover =
+                IdentOnHover::Local(*use_name, local_def.def_type.clone(), local_def.with_let);
             let ident_type_def_loc = self.on_hover_to_type_def_loc(&on_hover);
             use_defs.insert(
                 name_start.line,
@@ -2059,8 +2072,8 @@ impl Symbolicator {
                     references,
                     use_pos.file_hash(),
                     name_start,
-                    def_loc.fhash,
-                    def_loc.start,
+                    local_def.def_loc.fhash,
+                    local_def.def_loc.start,
                     use_name,
                     on_hover,
                     ident_type_def_loc,
@@ -2078,6 +2091,7 @@ impl Symbolicator {
             IdentOnHover::Function(_, _, _, _, _, _, ret) => self.type_def_loc(ret),
             IdentOnHover::Struct(mod_ident, name, _, _, _) => self.find_struct(mod_ident, name),
             IdentOnHover::Field(_, _, _, t) => self.type_def_loc(t),
+            IdentOnHover::Local(_, t, _) => self.type_def_loc(t),
         }
     }
 
@@ -2603,7 +2617,7 @@ fn docstring_test() {
         14,
         15,
         "M6.move",
-        "Symbols::M6::DocumentedStruct",
+        "s: Symbols::M6::DocumentedStruct",
         Some((4, 11, "M6.move")),
         None,
     );
@@ -2659,7 +2673,7 @@ fn docstring_test() {
         14,
         15,
         "M6.move",
-        "Symbols::M6::DocumentedStruct",
+        "s: Symbols::M6::DocumentedStruct",
         Some((4, 11, "M6.move")),
         Some("A documented function that unpacks a DocumentedStruct\n"),
     );
@@ -2781,7 +2795,7 @@ fn docstring_test() {
         43,
         39,
         "M6.move",
-        "T",
+        "param: T",
         None,
         None,
     );
@@ -2852,7 +2866,7 @@ fn symbols_test() {
         9,
         15,
         "M1.move",
-        "Symbols::M1::SomeStruct",
+        "s: Symbols::M1::SomeStruct",
         Some((2, 11, "M1.move")),
     );
     // struct name in param type (unpack function)
@@ -2904,7 +2918,7 @@ fn symbols_test() {
         10,
         37,
         "M1.move",
-        "u64",
+        "value: u64",
         None,
     );
     // moved var in unpack assignment (unpack function)
@@ -2917,7 +2931,7 @@ fn symbols_test() {
         9,
         15,
         "M1.move",
-        "Symbols::M1::SomeStruct",
+        "s: Symbols::M1::SomeStruct",
         Some((2, 11, "M1.move")),
     );
     // copied var in an assignment (cp function)
@@ -2930,7 +2944,7 @@ fn symbols_test() {
         14,
         11,
         "M1.move",
-        "u64",
+        "value: u64",
         None,
     );
     // struct name return type (pack function)
@@ -3138,7 +3152,7 @@ fn symbols_test() {
         44,
         12,
         "M1.move",
-        "Symbols::M1::SomeStruct",
+        "let s: Symbols::M1::SomeStruct",
         Some((2, 11, "M1.move")),
     );
     // borrow local (mut function)
@@ -3151,7 +3165,7 @@ fn symbols_test() {
         55,
         12,
         "M1.move",
-        "&mut u64",
+        "let tmp: u64",
         None,
     );
     // LHS in mutation statement (mut function)
@@ -3164,7 +3178,7 @@ fn symbols_test() {
         56,
         12,
         "M1.move",
-        "&mut u64",
+        "let r: &mut u64",
         None,
     );
     // RHS in mutation statement (mut function)
@@ -3242,7 +3256,7 @@ fn symbols_test() {
         74,
         12,
         "M1.move",
-        "& u64",
+        "let r: &u64",
         None,
     );
     // unary operator (unary function)
@@ -3255,7 +3269,7 @@ fn symbols_test() {
         78,
         14,
         "M1.move",
-        "bool",
+        "p: bool",
         None,
     );
     // temp borrow (temp_borrow function)
@@ -3281,7 +3295,7 @@ fn symbols_test() {
         93,
         12,
         "M1.move",
-        "& Symbols::M1::OuterStruct",
+        "let outer: Symbols::M1::OuterStruct",
         Some((87, 11, "M1.move")),
     );
     // chain second element (chain_access function)
@@ -3333,7 +3347,7 @@ fn symbols_test() {
         107,
         12,
         "M1.move",
-        "& Symbols::M1::OuterStruct",
+        "let outer: Symbols::M1::OuterStruct",
         Some((87, 11, "M1.move")),
     );
     // chain second element when borrowing (chain_access_borrow function)
@@ -3372,7 +3386,7 @@ fn symbols_test() {
         113,
         12,
         "M1.move",
-        "u128",
+        "let tmp: u128",
         None,
     );
     // constant in an annotation (annot function)
@@ -3398,7 +3412,7 @@ fn symbols_test() {
         122,
         21,
         "M1.move",
-        "Symbols::M2::SomeOtherStruct",
+        "p: Symbols::M2::SomeOtherStruct",
         Some((2, 11, "M2.move")),
     );
     // struct type param use (struct_param function)
@@ -3411,7 +3425,7 @@ fn symbols_test() {
         122,
         21,
         "M1.move",
-        "Symbols::M2::SomeOtherStruct",
+        "p: Symbols::M2::SomeOtherStruct",
         Some((2, 11, "M2.move")),
     );
     // struct type local var def (struct_var function)
@@ -3424,7 +3438,7 @@ fn symbols_test() {
         127,
         12,
         "M1.move",
-        "Symbols::M2::SomeOtherStruct",
+        "let tmp: Symbols::M2::SomeOtherStruct",
         Some((2, 11, "M2.move")),
     );
     // struct type local var use (struct_var function)
@@ -3437,7 +3451,7 @@ fn symbols_test() {
         127,
         12,
         "M1.move",
-        "Symbols::M2::SomeOtherStruct",
+        "let tmp: Symbols::M2::SomeOtherStruct",
         Some((2, 11, "M2.move")),
     );
 
@@ -3496,7 +3510,7 @@ fn symbols_test() {
         6,
         39,
         "M3.move",
-        "T",
+        "param: T",
         None,
     );
     // generic type in param type (type_param_arg function)
@@ -3550,6 +3564,19 @@ fn symbols_test() {
         "M3.move",
         "T",
         None,
+    );
+    // parameter (struct_type_param_arg function) of generic struct type
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        11,
+        8,
+        10,
+        33,
+        "M3.move",
+        "param: Symbols::M3::ParamStruct<T>",
+        Some((2, 11, "M3.move")),
     );
     // generic type in pack (pack_type_param function)
     assert_use_def(
@@ -3607,7 +3634,7 @@ fn symbols_test() {
         2,
         16,
         "M4.move",
-        "u64",
+        "tmp: u64",
         None,
     );
     // param name in RHS (if_cond function)
@@ -3620,7 +3647,7 @@ fn symbols_test() {
         4,
         12,
         "M4.move",
-        "u64",
+        "let tmp: u64",
         None,
     );
     // var in if's true branch (if_cond function)
@@ -3633,7 +3660,7 @@ fn symbols_test() {
         4,
         12,
         "M4.move",
-        "u64",
+        "let tmp: u64",
         None,
     );
     // redefined var in if's false branch (if_cond function)
@@ -3646,7 +3673,7 @@ fn symbols_test() {
         9,
         16,
         "M4.move",
-        "u64",
+        "let tmp: u64",
         None,
     );
     // var name in while loop condition (while_loop function)
@@ -3659,7 +3686,7 @@ fn symbols_test() {
         18,
         12,
         "M4.move",
-        "u64",
+        "let tmp: u64",
         None,
     );
     // var name in while loop's inner block (while_loop function)
@@ -3672,7 +3699,7 @@ fn symbols_test() {
         18,
         12,
         "M4.move",
-        "u64",
+        "let tmp: u64",
         None,
     );
     // redefined var name in while loop's inner block (while_loop function)
@@ -3685,7 +3712,7 @@ fn symbols_test() {
         23,
         20,
         "M4.move",
-        "u64",
+        "let tmp: u64",
         None,
     );
     // var name in while loop's main block (while_loop function)
@@ -3698,7 +3725,7 @@ fn symbols_test() {
         18,
         12,
         "M4.move",
-        "u64",
+        "let tmp: u64",
         None,
     );
     // redefined var name in while loop's inner block (loop function)
@@ -3711,7 +3738,7 @@ fn symbols_test() {
         39,
         20,
         "M4.move",
-        "u64",
+        "let tmp: u64",
         None,
     );
     // var name in loop's main block (loop function)
@@ -3724,7 +3751,7 @@ fn symbols_test() {
         34,
         12,
         "M4.move",
-        "u64",
+        "let tmp: u64",
         None,
     );
     // const in a different module in the same file
