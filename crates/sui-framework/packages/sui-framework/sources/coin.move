@@ -10,10 +10,12 @@ module sui::coin {
     use std::option::{Self, Option};
     use sui::balance::{Self, Balance, Supply};
     use sui::tx_context::TxContext;
-    use sui::object::{Self, UID};
+    use sui::object::{Self, UID, ID};
     use sui::transfer;
     use sui::url::{Self, Url};
     use std::vector;
+    use sui::table::{Self, Table};
+    use sui::vec_set::{Self,VecSet};
 
     /// A type passed to create_supply is not a one-time witness.
     const EBadWitness: u64 = 0;
@@ -52,6 +54,19 @@ module sui::coin {
     struct TreasuryCap<phantom T> has key, store {
         id: UID,
         total_supply: Supply<T>
+    }
+
+    struct FreezeCap<phantom T> has key, store {
+        id: UID,
+        package: ID,
+    }
+
+    struct Freezer has key {
+        id: UID,
+        // how many coins have been frozen for this address
+        frozen_count: Table<address, u64>,
+        // what addresses are banned for an address?
+        frozen_addressess: Table<ID, VecSet<address>>,
     }
 
     // === Supply <-> TreasuryCap morphing and accessors  ===
@@ -208,6 +223,40 @@ module sui::coin {
         )
     }
 
+    /// This creates a new currency, via `create_currency`, but with an extra capability that
+    /// allows for specific addresses to have their coins frozen. Those addresses will not
+    /// be able to interact with the coin
+    public fun create_freezable_currency<T: drop>(
+        witness: T,
+        decimals: u8,
+        symbol: vector<u8>,
+        name: vector<u8>,
+        description: vector<u8>,
+        icon_url: Option<Url>,
+        ctx: &mut TxContext
+    ): (TreasuryCap<T>, FreezeCap<T>, CoinMetadata<T>) {
+        let (treasury_cap, metadata) = create_currency(
+            witness,
+            decimals,
+            symbol,
+            name,
+            description,
+            icon_url,
+            ctx
+        );
+        let package = {
+            let type_name = std::type_name::get_with_original_ids<T>();
+            let package_addr =
+                sui::address::from_ascii_string(&std::type_name::get_address(&type_name));
+            object::id_from_address(package_addr)
+        };
+        let freeze_cap = FreezeCap {
+            id: object::new(ctx),
+            package,
+        };
+        (treasury_cap, freeze_cap, metadata)
+    }
+
     /// Create a coin worth `value`. and increase the total supply
     /// in `cap` accordingly.
     public fun mint<T>(
@@ -234,6 +283,43 @@ module sui::coin {
         let Coin { id, balance } = c;
         object::delete(id);
         balance::decrease_supply(&mut cap.total_supply, balance)
+    }
+
+    public fun freeze_address<T>(
+       freezer: &mut Freezer,
+       freeze_cap: &mut FreezeCap<T>,
+       addr: address,
+       _ctx: &mut TxContext
+    ) {
+        let coin_package = freeze_cap.package;
+        if (!table::contains(&freezer.frozen_addressess, coin_package)) {
+            table::add(&mut freezer.frozen_addressess, coin_package, vec_set::empty());
+        };
+        let frozen_addresses = table::borrow_mut(&mut freezer.frozen_addressess, coin_package);
+        let already_frozen = vec_set::contains(frozen_addresses, &addr);
+        if (already_frozen) return;
+
+        vec_set::insert(frozen_addresses, addr);
+        if (!table::contains(&freezer.frozen_count, addr)) {
+            table::add(&mut freezer.frozen_count, addr, 0);
+        };
+        let frozen_count = table::borrow_mut(&mut freezer.frozen_count, addr);
+        *frozen_count = *frozen_count + 1;
+    }
+
+    public fun unfreeze_address<T>(
+       freezer: &mut Freezer,
+       freeze_cap: &mut FreezeCap<T>,
+       addr: address,
+       _ctx: &mut TxContext
+    ) {
+        let coin_package = freeze_cap.package;
+        let frozen_addresses = table::borrow_mut(&mut freezer.frozen_addressess, coin_package);
+        assert!(vec_set::contains(frozen_addresses, &addr), /* TODO */ 0);
+        let frozen_addresses = table::borrow_mut(&mut freezer.frozen_addressess, coin_package);
+        vec_set::remove(frozen_addresses, &addr);
+        let frozen_count = table::borrow_mut(&mut freezer.frozen_count, addr);
+        *frozen_count = *frozen_count - 1;
     }
 
     // === Entrypoints ===
