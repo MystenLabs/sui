@@ -175,8 +175,8 @@ pub struct UseDef {
     col_start: u32,
     /// Column where the (use) identifier location ends on a given line
     col_end: u32,
-    /// Type of the (use) identifier
-    use_type: IdentOnHover,
+    /// Information displayed for on-hover request.
+    on_hover: IdentOnHover,
     /// Location of the definition
     def_loc: DefLoc,
     /// Location of the type definition
@@ -194,7 +194,7 @@ struct FieldDef {
     start: Position,
     #[derivative(PartialOrd = "ignore")]
     #[derivative(Ord = "ignore")]
-    ident_type: IdentOnHover,
+    on_hover: IdentOnHover,
 }
 
 /// Definition of a struct
@@ -206,7 +206,7 @@ struct StructDef {
     field_defs: Vec<FieldDef>,
     #[derivative(PartialOrd = "ignore")]
     #[derivative(Ord = "ignore")]
-    ident_type: IdentOnHover,
+    on_hover: IdentOnHover,
 }
 
 #[allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
@@ -218,7 +218,7 @@ pub struct FunctionDef {
     attrs: Vec<String>,
     #[derivative(PartialOrd = "ignore")]
     #[derivative(Ord = "ignore")]
-    ident_type: IdentOnHover,
+    on_hover: IdentOnHover,
 }
 
 /// Module-level definitions
@@ -261,7 +261,7 @@ struct UseDefMap(BTreeMap<u32, BTreeSet<UseDef>>);
 
 /// Maps a function name to its usage definition
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct FunctionIdentTypeMap(BTreeMap<String, IdentOnHover>);
+pub struct FunctionOnHoverMap(BTreeMap<String, IdentOnHover>);
 
 /// Result of the symbolication process
 pub struct Symbols {
@@ -613,7 +613,7 @@ impl UseDef {
         def_fhash: FileHash,
         def_start: Position,
         use_name: &Symbol,
-        use_type: IdentOnHover,
+        on_hover: IdentOnHover,
         type_def_loc: Option<DefLoc>,
         doc_string: Option<String>,
     ) -> Self {
@@ -632,7 +632,7 @@ impl UseDef {
         Self {
             col_start: use_start.character,
             col_end,
-            use_type,
+            on_hover,
             def_loc,
             type_def_loc,
             doc_string,
@@ -680,7 +680,7 @@ impl UseDefMap {
     }
 }
 
-impl FunctionIdentTypeMap {
+impl FunctionOnHoverMap {
     fn new() -> Self {
         Self(BTreeMap::new())
     }
@@ -848,7 +848,7 @@ impl Symbolicator {
 
         let mut references = BTreeMap::new();
         let mut file_use_defs = BTreeMap::new();
-        let mut function_ident_type = FunctionIdentTypeMap::new();
+        let mut function_on_hover = FunctionOnHoverMap::new();
 
         for (pos, module_ident, module_def) in modules {
             let mut use_defs = mod_use_defs.remove(module_ident).unwrap();
@@ -857,7 +857,7 @@ impl Symbolicator {
                 module_def,
                 &mut references,
                 &mut use_defs,
-                &mut function_ident_type,
+                &mut function_on_hover,
             );
 
             let fpath = match source_files.get(&pos.file_hash()) {
@@ -926,7 +926,7 @@ impl Symbolicator {
                     field_defs.push(FieldDef {
                         name: *fname,
                         start,
-                        ident_type: IdentOnHover::Field(mod_ident.value, *name, *fname, t.clone()),
+                        on_hover: IdentOnHover::Field(mod_ident.value, *name, *fname, t.clone()),
                     });
                     field_types.push(t.clone());
                 }
@@ -947,7 +947,7 @@ impl Symbolicator {
                 StructDef {
                     name_start,
                     field_defs,
-                    ident_type: IdentOnHover::Struct(
+                    on_hover: IdentOnHover::Struct(
                         mod_ident.value,
                         *name,
                         def.type_parameters
@@ -988,7 +988,7 @@ impl Symbolicator {
                     continue;
                 }
             };
-            let ident_type = IdentOnHover::Function(
+            let on_hover = IdentOnHover::Function(
                 fun.visibility,
                 mod_ident.value,
                 *name,
@@ -1020,7 +1020,7 @@ impl Symbolicator {
                         .iter()
                         .map(|(_loc, name, _attr)| name.to_string())
                         .collect(),
-                    ident_type,
+                    on_hover,
                 },
             );
         }
@@ -1068,7 +1068,7 @@ impl Symbolicator {
         mod_def: &ModuleDefinition,
         references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
         use_defs: &mut UseDefMap,
-        function_ident_type: &mut FunctionIdentTypeMap,
+        function_on_hover: &mut FunctionOnHoverMap,
     ) {
         let mod_ident = self.current_mod.unwrap();
         for (pos, name, fun) in &mod_def.functions {
@@ -1078,9 +1078,9 @@ impl Symbolicator {
 
             let mod_sym = self.mod_outer_defs.get(&mod_ident.value).unwrap();
             let fun_def = mod_sym.functions.get(name).unwrap();
-            let use_type = fun_def.ident_type.clone();
+            let use_type = fun_def.on_hover.clone();
 
-            let fun_type_def = self.ident_type_def_loc(&use_type);
+            let fun_type_def = self.on_hover_to_type_def_loc(&use_type);
             let use_def = UseDef::new(
                 references,
                 pos.file_hash(),
@@ -1095,15 +1095,15 @@ impl Symbolicator {
 
             use_defs.insert(name_start.line, use_def);
             self.fun_symbols(fun, references, use_defs);
-            function_ident_type.insert(name.to_string(), use_type);
+            function_on_hover.insert(name.to_string(), use_type);
         }
 
         for (pos, name, c) in &mod_def.constants {
             // enter self-definition for const name (unwrap safe - done when inserting def)
             let name_start = Self::get_start_loc(&pos, &self.files, &self.file_id_mapping).unwrap();
             let doc_string = self.extract_doc_string(&name_start, &pos.file_hash());
-            let ident_type = IdentOnHover::Type(c.signature.clone());
-            let ident_type_def = self.ident_type_def_loc(&ident_type);
+            let on_hover = IdentOnHover::Type(c.signature.clone());
+            let ident_type_def_loc = self.on_hover_to_type_def_loc(&on_hover);
             use_defs.insert(
                 name_start.line,
                 UseDef::new(
@@ -1113,8 +1113,8 @@ impl Symbolicator {
                     pos.file_hash(),
                     name_start,
                     name,
-                    ident_type,
-                    ident_type_def,
+                    on_hover,
+                    ident_type_def_loc,
                     doc_string,
                 ),
             );
@@ -1126,8 +1126,8 @@ impl Symbolicator {
             let doc_string = self.extract_doc_string(&name_start, &pos.file_hash());
             let mod_sym = self.mod_outer_defs.get(&mod_ident.value).unwrap();
             let struct_def = mod_sym.structs.get(name).unwrap();
-            let use_type = struct_def.ident_type.clone();
-            let struct_type_def = self.ident_type_def_loc(&use_type);
+            let use_type = struct_def.on_hover.clone();
+            let struct_type_def = self.on_hover_to_type_def_loc(&use_type);
             use_defs.insert(
                 name_start.line,
                 UseDef::new(
@@ -1165,8 +1165,8 @@ impl Symbolicator {
                 self.add_type_id_use_def(t, references, use_defs);
                 // enter self-definition for field name (unwrap safe - done when inserting def)
                 let start = Self::get_start_loc(&fpos, &self.files, &self.file_id_mapping).unwrap();
-                let ident_type = IdentOnHover::Type(t.clone());
-                let ident_type_def = self.ident_type_def_loc(&ident_type);
+                let on_hover = IdentOnHover::Type(t.clone());
+                let ident_type_def_loc = self.on_hover_to_type_def_loc(&on_hover);
                 let doc_string = self.extract_doc_string(&start, &fpos.file_hash());
                 use_defs.insert(
                     start.line,
@@ -1177,8 +1177,8 @@ impl Symbolicator {
                         fpos.file_hash(),
                         start,
                         fname,
-                        ident_type,
-                        ident_type_def,
+                        on_hover,
+                        ident_type_def_loc,
                         doc_string,
                     ),
                 );
@@ -1710,9 +1710,9 @@ impl Symbolicator {
                 let tname = tp.user_specified_name.value;
                 let fhash = tp.user_specified_name.loc.file_hash();
                 // enter self-definition for type param
-                let ident_type =
+                let on_hover =
                     IdentOnHover::Type(sp(tp.user_specified_name.loc, Type_::Param(tp.clone())));
-                let ident_type_def = self.ident_type_def_loc(&ident_type);
+                let ident_type_def_loc = self.on_hover_to_type_def_loc(&on_hover);
 
                 use_defs.insert(
                     start.line,
@@ -1723,8 +1723,8 @@ impl Symbolicator {
                         fhash,
                         start,
                         &tname,
-                        ident_type,
-                        ident_type_def,
+                        on_hover,
+                        ident_type_def_loc,
                         None, // no doc string for type params
                     ),
                 );
@@ -1781,10 +1781,10 @@ impl Symbolicator {
             use_pos,
             |use_name, name_start, mod_defs| match mod_defs.constants.get(use_name) {
                 Some(def_start) => {
-                    let ident_type = IdentOnHover::Type(use_type.clone());
+                    let on_hover = IdentOnHover::Type(use_type.clone());
                     let def_fhash = self.mod_outer_defs.get(&module_ident).unwrap().fhash;
                     let doc_string = self.extract_doc_string(def_start, &def_fhash);
-                    let ident_type_def = self.ident_type_def_loc(&ident_type);
+                    let ident_type_def_loc = self.on_hover_to_type_def_loc(&on_hover);
 
                     use_defs.insert(
                         name_start.line,
@@ -1795,8 +1795,8 @@ impl Symbolicator {
                             def_fhash,
                             *def_start,
                             use_name,
-                            ident_type,
-                            ident_type_def,
+                            on_hover,
+                            ident_type_def_loc,
                             doc_string,
                         ),
                     );
@@ -1823,8 +1823,8 @@ impl Symbolicator {
                 Some(func_def) => {
                     let def_fhash = self.mod_outer_defs.get(&module_ident.value).unwrap().fhash;
                     let doc_string = self.extract_doc_string(&func_def.start, &def_fhash);
-                    let use_type = func_def.ident_type.clone();
-                    let ident_type_def_loc = self.ident_type_def_loc(&use_type);
+                    let on_hover = func_def.on_hover.clone();
+                    let ident_type_def_loc = self.on_hover_to_type_def_loc(&on_hover);
                     use_defs.insert(
                         name_start.line,
                         UseDef::new(
@@ -1834,7 +1834,7 @@ impl Symbolicator {
                             def_fhash,
                             func_def.start,
                             use_name,
-                            use_type,
+                            on_hover,
                             ident_type_def_loc,
                             doc_string,
                         ),
@@ -1860,8 +1860,8 @@ impl Symbolicator {
             use_pos,
             |use_name, name_start, mod_defs| match mod_defs.structs.get(use_name) {
                 Some(def) => {
-                    let ident_type = def.ident_type.clone();
-                    let ident_type_def = self.ident_type_def_loc(&ident_type);
+                    let on_hover = def.on_hover.clone();
+                    let ident_type_def_loc = self.on_hover_to_type_def_loc(&on_hover);
                     let def_fhash = self.mod_outer_defs.get(module_ident).unwrap().fhash;
                     let doc_string = self.extract_doc_string(&def.name_start, &def_fhash);
                     use_defs.insert(
@@ -1873,8 +1873,8 @@ impl Symbolicator {
                             def_fhash,
                             def.name_start,
                             use_name,
-                            ident_type,
-                            ident_type_def,
+                            on_hover,
+                            ident_type_def_loc,
                             doc_string,
                         ),
                     );
@@ -1902,8 +1902,8 @@ impl Symbolicator {
                 Some(def) => {
                     for fdef in &def.field_defs {
                         if fdef.name == *use_name {
-                            let ident_type = fdef.ident_type.clone();
-                            let ident_type_def = self.ident_type_def_loc(&ident_type);
+                            let on_hover = fdef.on_hover.clone();
+                            let ident_type_def_loc = self.on_hover_to_type_def_loc(&on_hover);
                             let def_fhash = self.mod_outer_defs.get(module_ident).unwrap().fhash;
                             let doc_string = self.extract_doc_string(&fdef.start, &def_fhash);
                             use_defs.insert(
@@ -1915,8 +1915,8 @@ impl Symbolicator {
                                     def_fhash,
                                     fdef.start,
                                     use_name,
-                                    ident_type,
-                                    ident_type_def,
+                                    on_hover,
+                                    ident_type_def_loc,
                                     doc_string,
                                 ),
                             );
@@ -1943,8 +1943,8 @@ impl Symbolicator {
                 match Self::get_start_loc(pos, &self.files, &self.file_id_mapping) {
                     Some(name_start) => match self.type_params.get(&use_name) {
                         Some(def_loc) => {
-                            let ident_type = IdentOnHover::Type(id_type.clone());
-                            let ident_type_def = self.ident_type_def_loc(&ident_type);
+                            let on_hover = IdentOnHover::Type(id_type.clone());
+                            let ident_type_def_loc = self.on_hover_to_type_def_loc(&on_hover);
                             let doc_string =
                                 self.extract_doc_string(&def_loc.start, &def_loc.fhash);
                             use_defs.insert(
@@ -1956,8 +1956,8 @@ impl Symbolicator {
                                     def_loc.fhash,
                                     def_loc.start,
                                     &use_name,
-                                    ident_type,
-                                    ident_type_def,
+                                    on_hover,
+                                    ident_type_def_loc,
                                     doc_string,
                                 ),
                             );
@@ -2007,8 +2007,8 @@ impl Symbolicator {
                 // definition
 
                 // enter self-definition for def name
-                let ident_type = IdentOnHover::Type(use_type);
-                let ident_type_def = self.ident_type_def_loc(&ident_type);
+                let on_hover = IdentOnHover::Type(use_type);
+                let ident_type_def_loc = self.on_hover_to_type_def_loc(&on_hover);
                 use_defs.insert(
                     name_start.line,
                     UseDef::new(
@@ -2018,8 +2018,8 @@ impl Symbolicator {
                         pos.file_hash(),
                         name_start,
                         name,
-                        ident_type,
-                        ident_type_def,
+                        on_hover,
+                        ident_type_def_loc,
                         None, // no doc string for locals or function params
                     ),
                 );
@@ -2051,8 +2051,8 @@ impl Symbolicator {
 
         if let Some(def_loc) = scope.get(use_name) {
             let doc_string = self.extract_doc_string(&def_loc.start, &def_loc.fhash);
-            let ident_type = IdentOnHover::Type(use_type);
-            let ident_type_def = self.ident_type_def_loc(&ident_type);
+            let on_hover = IdentOnHover::Type(use_type);
+            let ident_type_def_loc = self.on_hover_to_type_def_loc(&on_hover);
             use_defs.insert(
                 name_start.line,
                 UseDef::new(
@@ -2062,8 +2062,8 @@ impl Symbolicator {
                     def_loc.fhash,
                     def_loc.start,
                     use_name,
-                    ident_type,
-                    ident_type_def,
+                    on_hover,
+                    ident_type_def_loc,
                     doc_string,
                 ),
             );
@@ -2072,8 +2072,8 @@ impl Symbolicator {
         }
     }
 
-    fn ident_type_def_loc(&self, ident_type: &IdentOnHover) -> Option<DefLoc> {
-        match ident_type {
+    fn on_hover_to_type_def_loc(&self, on_hover: &IdentOnHover) -> Option<DefLoc> {
+        match on_hover {
             IdentOnHover::Type(t) => self.type_def_loc(t),
             IdentOnHover::Function(_, _, _, _, _, _, ret) => self.type_def_loc(ret),
             IdentOnHover::Struct(mod_ident, name, _, _, _) => self.find_struct(mod_ident, name),
@@ -2267,9 +2267,9 @@ pub fn on_hover_request(context: &Context, request: &Request, symbols: &Symbols)
             let contents = HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
                 value: if let Some(s) = &u.doc_string {
-                    format!("```rust\n{}\n```\n{}", u.use_type, s)
+                    format!("```rust\n{}\n```\n{}", u.on_hover, s)
                 } else {
-                    format!("```rust\n{}\n```", u.use_type)
+                    format!("```rust\n{}\n```", u.on_hover)
                 },
             });
             let range = None;
@@ -2485,7 +2485,7 @@ fn assert_use_def_with_doc_string(
         .unwrap()
         .as_str()
         .ends_with(def_file));
-    assert_eq!(type_str, format!("{}", use_def.use_type));
+    assert_eq!(type_str, format!("{}", use_def.on_hover));
 
     assert_eq!(doc_string.map(|s| s.to_string()), use_def.doc_string);
     match use_def.type_def_loc {
