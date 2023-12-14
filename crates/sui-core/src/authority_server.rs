@@ -290,32 +290,8 @@ impl ValidatorService {
         } = self;
 
         let transaction = request.into_inner();
-        transaction.verify_user_input()?;
 
         let epoch_store = state.load_epoch_store_one_call_per_task();
-        if !epoch_store.protocol_config().zklogin_auth() && transaction.has_zklogin_sig() {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "zklogin is not enabled on this network".to_string(),
-            }
-            .into());
-        }
-        if !epoch_store.protocol_config().supports_upgraded_multisig()
-            && transaction.has_upgraded_multisig()
-        {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "upgraded multisig format not enabled on this network".to_string(),
-            }
-            .into());
-        }
-
-        // Cheap validity checks for a transaction, including input size limits.
-        let tx_data = transaction.data().transaction_data();
-        tx_data
-            .check_version_supported(epoch_store.protocol_config())
-            .map_err(Into::<SuiError>::into)?;
-        tx_data
-            .validity_check(epoch_store.protocol_config())
-            .map_err(Into::<SuiError>::into)?;
 
         // Enforce overall transaction size limit.
         let tx_size = bcs::serialized_size(&transaction).map_err(|e| {
@@ -336,6 +312,33 @@ impl ValidatorService {
             }
             .into()
         );
+
+        transaction.verify_user_input()?;
+
+        // Cheap validity checks for a transaction, including input size limits.
+        let tx_data = transaction.data().transaction_data();
+        tx_data
+            .check_version_supported(epoch_store.protocol_config())
+            .map_err(Into::<SuiError>::into)?;
+        tx_data
+            .validity_check(epoch_store.protocol_config())
+            .map_err(Into::<SuiError>::into)?;
+
+        if !epoch_store.protocol_config().zklogin_auth() && transaction.has_zklogin_sig() {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "zklogin is not enabled on this network".to_string(),
+            }
+            .into());
+        }
+
+        if !epoch_store.protocol_config().supports_upgraded_multisig()
+            && transaction.has_upgraded_multisig()
+        {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "upgraded multisig format not enabled on this network".to_string(),
+            }
+            .into());
+        }
 
         let overload_check_res =
             state.check_system_overload(&consensus_adapter, transaction.data());
@@ -399,6 +402,26 @@ impl ValidatorService {
         fp_ensure!(
             !certificate.is_system_tx(),
             SuiError::InvalidSystemTransaction.into()
+        );
+
+        // Enforce overall transaction size limit.
+        let tx_size = bcs::serialized_size(&certificate.data()).map_err(|e| {
+            SuiError::TransactionSerializationError {
+                error: e.to_string(),
+            }
+        })?;
+        let max_tx_size_bytes = epoch_store.protocol_config().max_tx_size_bytes();
+        fp_ensure!(
+            tx_size as u64 <= max_tx_size_bytes,
+            SuiError::UserInputError {
+                error: UserInputError::SizeLimitExceeded {
+                    limit: format!(
+                        "serialized transaction size exceeded maximum of {max_tx_size_bytes}"
+                    ),
+                    value: tx_size.to_string(),
+                }
+            }
+            .into()
         );
 
         certificate.verify_user_input()?;
