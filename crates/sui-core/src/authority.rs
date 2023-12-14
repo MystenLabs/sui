@@ -2525,24 +2525,32 @@ impl AuthorityState {
                     );
                     let mut object_scanned: u64 = 0;
                     let mut wrapped_objects_to_remove = vec![];
-                    for (object_key, object) in self.database.perpetual_tables.objects.range_iter(
+                    for db_result in self.database.perpetual_tables.objects.safe_range_iter(
                         ObjectKey::min_for_id(&start_id)..=ObjectKey::max_for_id(&end_id),
                     ) {
-                        object_scanned += 1;
-                        if object_scanned % 100000 == 0 {
-                            info!(
-                                "[Re-accumulate] Task {}: object scanned: {}",
-                                index, object_scanned,
-                            );
-                        }
-                        if matches!(prev.1.inner(), StoreObject::Wrapped)
-                            && object_key.0 != prev.0 .0
-                        {
-                            wrapped_objects_to_remove
-                                .push(WrappedObject::new(prev.0 .0, prev.0 .1));
-                        }
+                        match db_result {
+                            Ok((object_key, object)) => {
+                                object_scanned += 1;
+                                if object_scanned % 100000 == 0 {
+                                    info!(
+                                        "[Re-accumulate] Task {}: object scanned: {}",
+                                        index, object_scanned,
+                                    );
+                                }
+                                if matches!(prev.1.inner(), StoreObject::Wrapped)
+                                    && object_key.0 != prev.0 .0
+                                {
+                                    wrapped_objects_to_remove
+                                        .push(WrappedObject::new(prev.0 .0, prev.0 .1));
+                                }
 
-                        prev = (object_key, object);
+                                prev = (object_key, object);
+                            }
+                            Err(err) => {
+                                warn!("Object iterator encounter RocksDB error {:?}", err);
+                                return Err(err);
+                            }
+                        }
                     }
                     if matches!(prev.1.inner(), StoreObject::Wrapped) {
                         wrapped_objects_to_remove.push(WrappedObject::new(prev.0 .0, prev.0 .1));
@@ -2553,7 +2561,7 @@ impl AuthorityState {
                         object_scanned,
                         wrapped_objects_to_remove.len(),
                     );
-                    (wrapped_objects_to_remove, object_scanned)
+                    Ok((wrapped_objects_to_remove, object_scanned))
                 }));
             }
             let (last_checkpoint_of_epoch, cur_accumulator) = self
@@ -2563,7 +2571,8 @@ impl AuthorityState {
                 pending_tasks.into_iter().fold(
                     (cur_accumulator, 0u64, 0usize),
                     |(mut accumulator, total_objects_scanned, total_wrapped_objects), task| {
-                        let (wrapped_objects_to_remove, object_scanned) = task.join().unwrap();
+                        let (wrapped_objects_to_remove, object_scanned) =
+                            task.join().unwrap().unwrap();
                         accumulator.remove_all(
                             wrapped_objects_to_remove
                                 .iter()

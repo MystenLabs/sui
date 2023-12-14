@@ -1070,11 +1070,11 @@ impl AuthorityPerEpochStore {
         from_checkpoint: CheckpointSequenceNumber,
         to_checkpoint: CheckpointSequenceNumber,
     ) -> SuiResult<Vec<(CheckpointSequenceNumber, Accumulator)>> {
-        Ok(self
-            .tables()?
+        self.tables()?
             .state_hash_by_checkpoint
-            .range_iter(from_checkpoint..=to_checkpoint)
-            .collect())
+            .safe_range_iter(from_checkpoint..=to_checkpoint)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(SuiError::StorageError)
     }
 
     /// Returns future containing the state digest for the given epoch

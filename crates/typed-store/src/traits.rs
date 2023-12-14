@@ -66,8 +66,11 @@ where
     /// TODO: find better name
     fn range_iter(&'a self, range: impl RangeBounds<K>) -> Self::Iterator;
 
-    /// Same as `iter` but performs status check
+    /// Same as `iter` but performs status check.
     fn safe_iter(&'a self) -> Self::SafeIterator;
+
+    // Same as `range_iter` but performs status check.
+    fn safe_range_iter(&'a self, range: impl RangeBounds<K>) -> Self::SafeIterator;
 
     /// Returns an iterator over each key in the map.
     fn keys(&'a self) -> Self::Keys;
