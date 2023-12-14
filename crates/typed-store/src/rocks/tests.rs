@@ -40,6 +40,18 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for TestIteratorWrap
 }
 
 // Creates an Iterator based on `use_safe_iter` on `db`.
+fn get_iter<K, V>(db: &DBMap<K, V>, use_safe_iter: bool) -> TestIteratorWrapper<'_, K, V>
+where
+    K: Serialize + DeserializeOwned,
+    V: Serialize + DeserializeOwned,
+{
+    match use_safe_iter {
+        true => TestIteratorWrapper::SafeIter(db.safe_iter()),
+        false => TestIteratorWrapper::Iter(db.unbounded_iter()),
+    }
+}
+
+// Creates an range Iterator based on `use_safe_iter` on `db`.
 fn get_range_iter<K, V>(
     db: &DBMap<K, V>,
     range: impl RangeBounds<K>,
@@ -52,17 +64,6 @@ where
     match use_safe_iter {
         true => TestIteratorWrapper::SafeIter(db.safe_range_iter(range)),
         false => TestIteratorWrapper::Iter(db.range_iter(range)),
-    }
-}
-
-fn get_iter<K, V>(db: &DBMap<K, V>, use_safe_iter: bool) -> TestIteratorWrapper<'_, K, V>
-where
-    K: Serialize + DeserializeOwned,
-    V: Serialize + DeserializeOwned,
-{
-    match use_safe_iter {
-        true => TestIteratorWrapper::SafeIter(db.safe_iter()),
-        false => TestIteratorWrapper::Iter(db.unbounded_iter()),
     }
 }
 
@@ -788,41 +789,32 @@ async fn test_range_iter(
         }
     }
 
+    // Tests basic range iterating with inclusive end.
     let db_iter = get_range_iter(&db, 10..=20, use_safe_iter);
-
     assert_eq!(
         (10..21).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
         db_iter.collect::<Vec<_>>()
     );
 
+    // Tests range with min start and exclusive end.
     let db_iter = get_range_iter(&db, ..20, use_safe_iter);
-
     assert_eq!(
         (1..20).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
         db_iter.collect::<Vec<_>>()
     );
 
+    // Tests range with max end.
     let db_iter = get_range_iter(&db, 60.., use_safe_iter);
-
     assert_eq!(
         (60..100).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
         db_iter.collect::<Vec<_>>()
     );
 
-    let db_iter = get_range_iter(&db, 60..70, use_safe_iter)
-        .skip_prior_to(&200)
-        .unwrap();
-
-    assert_eq!(
-        (69..70).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
-        db_iter.collect::<Vec<_>>()
-    );
-
+    // Tests range with seek to the middle of the range.
     // Skip prior to will return an iterator starting with an "unexpected" key if the sought one is not in the table
     let db_iter = get_range_iter(&db, 1..=99, use_safe_iter)
         .skip_prior_to(&50)
         .unwrap();
-
     assert_eq!(
         (49..50)
             .chain(51..100)
@@ -831,10 +823,10 @@ async fn test_range_iter(
         db_iter.collect::<Vec<_>>()
     );
 
+    // Tests seeking to the beginning of the range.
     let db_iter = get_range_iter(&db, 1..=99, use_safe_iter)
         .skip_prior_to(&1)
         .unwrap();
-
     assert_eq!(
         (1..50)
             .chain(51..100)
@@ -846,7 +838,6 @@ async fn test_range_iter(
     let db_iter = get_range_iter(&db, 2..=99, use_safe_iter)
         .skip_prior_to(&2)
         .unwrap();
-
     assert_eq!(
         (2..50)
             .chain(51..100)
@@ -855,10 +846,18 @@ async fn test_range_iter(
         db_iter.collect::<Vec<_>>()
     );
 
+    // Tests seeking to the end of the range.
+    let db_iter = get_range_iter(&db, 60..70, use_safe_iter)
+        .skip_prior_to(&200)
+        .unwrap();
+    assert_eq!(
+        (69..70).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
     let db_iter = get_range_iter(&db, 2..99, use_safe_iter)
         .skip_prior_to(&2)
         .unwrap();
-
     assert_eq!(
         (2..50)
             .chain(51..99)
@@ -875,7 +874,7 @@ async fn test_range_iter(
         db_iter.collect::<Vec<_>>()
     );
 
-    // Skip to a key which is not within the bounds (bound is [1, 50))
+    // Skip to a key which is not within the bounds (bound is [1, 50], but 50 doesn't exist in DB)
     let db_iter = get_range_iter(&db, 1..=50, use_safe_iter)
         .skip_to(&50)
         .unwrap();

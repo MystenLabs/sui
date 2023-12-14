@@ -1183,6 +1183,7 @@ impl<K, V> DBMap<K, V> {
         )
     }
 
+    // Creates an RocksDB read option with lower and upper bounds set corresponding to `range`.
     fn create_read_options_with_range(&self, range: impl RangeBounds<K>) -> ReadOptions
     where
         K: Serialize,

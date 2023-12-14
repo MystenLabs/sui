@@ -2530,7 +2530,10 @@ impl AuthorityState {
 
                                 prev = (object_key, object);
                             }
-                            Err(err) => return Err(err),
+                            Err(err) => {
+                                warn!("Object iterator encounter RocksDB error {:?}", err);
+                                return Err(err);
+                            }
                         }
                     }
                     if matches!(prev.1.inner(), StoreObject::Wrapped) {

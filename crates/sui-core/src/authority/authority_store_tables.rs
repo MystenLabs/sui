@@ -167,11 +167,12 @@ impl AuthorityPerpetualTables {
         else {
             return None;
         };
-        iter.reverse().next().and_then(|db_result| {
-            db_result
-                .map(|(key, o)| self.object(&key, o).ok().flatten())
-                .ok()
-                .flatten()
+        iter.reverse().next().and_then(|db_result| match db_result {
+            Ok((key, o)) => self.object(&key, o).ok().flatten(),
+            Err(err) => {
+                warn!("Object iterator encountered RocksDB error {:?}", err);
+                None
+            }
         })
     }
 
