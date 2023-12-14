@@ -315,6 +315,10 @@ impl Builder {
         } else {
             assert!(unsigned_genesis.authenticator_state_object().is_none());
         }
+        assert_eq!(
+            protocol_config.random_beacon(),
+            unsigned_genesis.has_randomness_state_object()
+        );
 
         assert_eq!(
             self.validators.len(),
@@ -1038,12 +1042,21 @@ pub fn generate_genesis_system_object(
             vec![],
         )?;
 
-        // Step 3: Create the AuthenticatorState object, unless it has been disabled (which only
+        // Step 3: Create ProtocolConfig-controlled system objects, unless disabled (which only
         // happens in tests).
         if protocol_config.create_authenticator_state_in_genesis() {
             builder.move_call(
                 SUI_FRAMEWORK_ADDRESS.into(),
                 ident_str!("authenticator_state").to_owned(),
+                ident_str!("create").to_owned(),
+                vec![],
+                vec![],
+            )?;
+        }
+        if protocol_config.random_beacon() {
+            builder.move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                ident_str!("random").to_owned(),
                 ident_str!("create").to_owned(),
                 vec![],
                 vec![],
