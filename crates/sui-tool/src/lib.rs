@@ -21,6 +21,7 @@ use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_network::default_mysten_network_config;
 use sui_protocol_config::Chain;
 use sui_sdk::SuiClientBuilder;
+use sui_storage::object_store::http::HttpDownloaderBuilder;
 use sui_types::accumulator::Accumulator;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_grpc::LayoutGenerationOption;
@@ -48,7 +49,7 @@ use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::storage::RocksDbStore;
 use sui_snapshot::reader::StateSnapshotReaderV1;
 use sui_snapshot::setup_db_state;
-use sui_storage::object_store::util::{copy_file, get_path};
+use sui_storage::object_store::util::{copy_file, exists, get_path};
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_storage::verify_checkpoint_range;
 use sui_types::messages_checkpoint::{CheckpointCommitment, ECMHLiveObjectSetDigest};
@@ -792,6 +793,30 @@ fn start_summary_sync(
         checkpoint_store.update_highest_pruned_checkpoint(&checkpoint)?;
         Ok::<(), anyhow::Error>(())
     })
+}
+
+pub async fn check_completed_snapshot(
+    snapshot_store_config: &ObjectStoreConfig,
+    epoch: EpochId,
+) -> Result<(), anyhow::Error> {
+    let success_marker = format!("epoch_{}/_SUCCESS", epoch);
+    let remote_object_store = if snapshot_store_config.no_sign_request {
+        snapshot_store_config.make_http()?
+    } else {
+        snapshot_store_config.make().map(Arc::new)?
+    };
+    if exists(&remote_object_store, &get_path(success_marker.as_str())).await {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "missing success marker at {}/{}",
+            snapshot_store_config
+                .bucket
+                .as_ref()
+                .unwrap_or(&"unknown_bucket".to_string()),
+            success_marker
+        ))
+    }
 }
 
 pub async fn download_formal_snapshot(
