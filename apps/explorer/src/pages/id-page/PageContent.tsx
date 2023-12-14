@@ -7,14 +7,12 @@ import { Divider } from '~/ui/Divider';
 import { FieldsContent } from '~/pages/object-result/views/TokenView';
 import { TabHeader } from '~/ui/Tabs';
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
-import { TransactionsForAddressTable } from '~/components/transactions/TransactionsForAddress';
+import { TransactionsForAddress } from '~/components/transactions/TransactionsForAddress';
 import TransactionBlocksForAddress from '~/components/TransactionBlocksForAddress';
 import { useBreakpoint } from '~/hooks/useBreakpoint';
 import { OwnedCoins } from '~/components/OwnedCoins';
 import { OwnedObjects } from '~/components/OwnedObjects';
 import { LOCAL_STORAGE_SPLIT_PANE_KEYS, SplitPanes } from '~/ui/SplitPanes';
-import { useSuiClient } from '@mysten/dapp-kit';
-import { useQuery } from '@tanstack/react-query';
 
 const LEFT_RIGHT_PANEL_MIN_SIZE = 30;
 
@@ -67,43 +65,16 @@ function OwnedObjectsSection({ address }: { address: string }) {
 }
 
 function TransactionsSection({ address, isObject }: { address: string; isObject: boolean }) {
-	const client = useSuiClient();
-
-	const {
-		data: transactionsForAddressData,
-		isPending,
-		isError,
-	} = useQuery({
-		queryKey: ['transactions-for-address', address],
-		queryFn: () =>
-			client.queryTransactionBlocks({
-				filter: {
-					FromAndToAddress: {
-						from: address,
-						to: address,
-					},
-				},
-				order: 'descending',
-				limit: 100,
-				options: {
-					showEffects: true,
-					showInput: true,
-				},
-			}),
-		enabled: !isObject,
-	});
-
 	return (
 		<ErrorBoundary>
 			{isObject ? (
-				<TransactionBlocksForAddress address={address} />
+				<div data-testid="object-txn-table">
+					<TransactionBlocksForAddress address={address} />
+				</div>
 			) : (
-				<TransactionsForAddressTable
-					data={transactionsForAddressData?.data ?? []}
-					isPending={isPending}
-					isError={isError}
-					address={address}
-				/>
+				<div data-testid="address-txn-table">
+					<TransactionsForAddress type="address" address={address} />
+				</div>
 			)}
 		</ErrorBoundary>
 	);

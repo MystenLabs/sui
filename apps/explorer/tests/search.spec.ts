@@ -15,7 +15,7 @@ test('can search for an address', async ({ page }) => {
 	const address = await faucet();
 	await page.goto('/');
 	await search(page, address);
-	await expect(page).toHaveURL(`/address/${address}`);
+	await expect(page).toHaveURL(`/id/${address}`);
 });
 
 test('can search for objects', async ({ page }) => {
@@ -25,7 +25,7 @@ test('can search for objects', async ({ page }) => {
 	const { objectId } = tx.effects!.created![0].reference;
 	await page.goto('/');
 	await search(page, objectId);
-	await expect(page).toHaveURL(`/object/${objectId}`);
+	await expect(page).toHaveURL(`/id/${objectId}`);
 });
 
 test('can search for transaction', async ({ page }) => {

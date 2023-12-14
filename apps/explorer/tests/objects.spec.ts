@@ -27,6 +27,15 @@ test.describe('Owned Objects', () => {
 
 		// Find a reference to the owning address:
 		await page.getByText(address.slice(0, 4)).click();
-		await expect(page).toHaveURL(`/address/${address}`);
+		await expect(page).toHaveURL(`/id/${address}`);
 	});
+});
+
+test('object page should redirect to id page', async ({ page }) => {
+	const address = await faucet();
+	const tx = await split_coin(address);
+
+	const { objectId } = tx.effects!.created![0].reference;
+	await page.goto(`/object/${objectId}`);
+	await expect(page).toHaveURL(`/id/${objectId}`);
 });

@@ -7,13 +7,13 @@ import { faucet, split_coin } from './utils/localnet';
 
 test('address page', async ({ page }) => {
 	const address = await faucet();
-	await page.goto(`/address/${address}`);
+	await page.goto(`/id/${address}`);
 	await expect(page.getByRole('heading', { name: address })).toBeVisible();
 });
 
 test('owned objects (coins) are displayed', async ({ page }) => {
 	const address = await faucet();
-	await page.goto(`/address/${address}`);
+	await page.goto(`/id/${address}`);
 	await expect(await page.getByTestId('ownedcoinlabel')).toContainText('SUI');
 });
 
@@ -28,6 +28,12 @@ test('owned objects (coins) are displayed', async ({ page }) => {
 test('transactions table is displayed', async ({ page }) => {
 	const address = await faucet();
 	await split_coin(address);
+	await page.goto(`/id/${address}`);
+	await page.getByTestId('address-txn-table').locator('td').first().waitFor();
+});
+
+test('address page should redirect to id page', async ({ page }) => {
+	const address = await faucet();
 	await page.goto(`/address/${address}`);
-	await page.getByTestId('tx').locator('td').first().waitFor();
+	await expect(page).toHaveURL(`/id/${address}`);
 });
