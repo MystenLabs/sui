@@ -91,7 +91,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "*PR* <https://github.com/MystenLabs/sui/pull/15370|15370>\n*Author* <@${{ env.slack_id }}>\n<@U03LRLPR1QX> and <@U04A8V9E203> please review release notes for upcoming `v1.16.0` release.\n *Release Notes:*\n${{ env.release_notes }}\n"
+                  "text": "*PR* <https://github.com/MystenLabs/sui/pull/15370|15370> by <@${{ env.slack_id }}>\n<@U03LRLPR1QX> and <@U04A8V9E203> please review release notes for upcoming `v1.16.0` release.\n *Release Notes:*\n${{ env.release_notes }}\n"
                 }
               },
               {
