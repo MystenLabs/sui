@@ -2356,7 +2356,7 @@ type TransactionBlockEffects {
 	"""
 	The transaction that ran to produce these effects.
 	"""
-	transactionBlock: TransactionBlock!
+	transactionBlock: TransactionBlock
 	"""
 	Whether the transaction executed successfully or not.
 	"""
@@ -2406,7 +2406,7 @@ type TransactionBlockEffects {
 	"""
 	Base64 encoded bcs serialization of the on-chain transaction effects.
 	"""
-	bcs: Base64
+	bcs: Base64!
 }
 
 input TransactionBlockFilter {

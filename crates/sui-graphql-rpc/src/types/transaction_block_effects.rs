@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{context_data::db_data_provider::PgManager, error::Error};
 use async_graphql::*;
+use either::Either;
 use sui_indexer::models_v2::transactions::StoredTransaction;
 use sui_types::{
     effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
     execution_status::ExecutionStatus as NativeExecutionStatus,
+    transaction::TransactionData as NativeTransactionData,
 };
-
-use crate::{context_data::db_data_provider::PgManager, error::Error};
 
 use super::{
     balance_change::BalanceChange, base64::Base64, checkpoint::Checkpoint, date_time::DateTime,
@@ -18,9 +19,9 @@ use super::{
 
 #[derive(Clone)]
 pub(crate) struct TransactionBlockEffects {
-    /// Representation of transaction effects in the Indexer's Store.  The indexer stores the
-    /// transaction data and its effects together, in one table.
-    pub stored: StoredTransaction,
+    /// Representation of transaction effects in the Indexer's Store or
+    /// the native representation of transaction effects.
+    pub tx_data: Either<StoredTransaction, NativeTransactionData>,
 
     /// Deserialized representation of `stored.raw_effects`.
     pub native: NativeTransactionEffects,
@@ -35,8 +36,12 @@ pub enum ExecutionStatus {
 #[Object]
 impl TransactionBlockEffects {
     /// The transaction that ran to produce these effects.
-    async fn transaction_block(&self) -> Result<TransactionBlock> {
-        TransactionBlock::try_from(self.stored.clone()).extend()
+    async fn transaction_block(&self) -> Result<Option<TransactionBlock>> {
+        self.tx_data
+            .as_ref()
+            .left()
+            .map(|stored_tx| TransactionBlock::try_from(stored_tx.clone()).extend())
+            .transpose()
     }
 
     /// Whether the transaction executed successfully or not.
@@ -119,8 +124,12 @@ impl TransactionBlockEffects {
     /// The effect this transaction had on the balances (sum of coin values per coin type) of
     /// addresses and objects.
     async fn balance_changes(&self) -> Result<Option<Vec<BalanceChange>>> {
-        let mut changes = Vec::with_capacity(self.stored.balance_changes.len());
-        for change in self.stored.balance_changes.iter().flatten() {
+        let Some(stored_tx) = self.tx_data.as_ref().left() else {
+            return Ok(None);
+        };
+
+        let mut changes = Vec::with_capacity(stored_tx.balance_changes.len());
+        for change in stored_tx.balance_changes.iter().flatten() {
             changes.push(BalanceChange::read(change).extend()?);
         }
 
@@ -129,7 +138,7 @@ impl TransactionBlockEffects {
 
     /// Timestamp corresponding to the checkpoint this transaction was finalized in.
     async fn timestamp(&self) -> Option<DateTime> {
-        DateTime::from_ms(self.stored.timestamp_ms)
+        DateTime::from_ms(self.tx_data.as_ref().left()?.timestamp_ms)
     }
 
     /// The epoch this transaction was finalized in.
@@ -144,9 +153,11 @@ impl TransactionBlockEffects {
 
     /// The checkpoint this transaction was finalized in.
     async fn checkpoint(&self, ctx: &Context<'_>) -> Result<Option<Checkpoint>> {
-        let checkpoint = self.stored.checkpoint_sequence_number as u64;
+        let Some(stored_tx) = self.tx_data.as_ref().left() else {
+            return Ok(None);
+        };
         ctx.data_unchecked::<PgManager>()
-            .fetch_checkpoint(None, Some(checkpoint))
+            .fetch_checkpoint(None, Some(stored_tx.checkpoint_sequence_number as u64))
             .await
             .extend()
     }
@@ -154,8 +165,16 @@ impl TransactionBlockEffects {
     // TODO: event_connection: EventConnection
 
     /// Base64 encoded bcs serialization of the on-chain transaction effects.
-    async fn bcs(&self) -> Option<Base64> {
-        Some(Base64::from(&self.stored.raw_effects))
+    async fn bcs(&self) -> Result<Base64> {
+        let bytes = if let Some(stored) = self.tx_data.as_ref().left() {
+            stored.raw_effects.clone()
+        } else {
+            bcs::to_bytes(&self.native)
+                .map_err(|e| Error::Internal(format!("Error serializing transaction effects: {e}")))
+                .extend()?
+        };
+
+        Ok(Base64::from(bytes))
     }
 }
 
@@ -167,6 +186,9 @@ impl TryFrom<StoredTransaction> for TransactionBlockEffects {
             Error::Internal(format!("Error deserializing transaction effects: {e}"))
         })?;
 
-        Ok(TransactionBlockEffects { stored, native })
+        Ok(TransactionBlockEffects {
+            tx_data: Either::Left(stored),
+            native,
+        })
     }
 }
