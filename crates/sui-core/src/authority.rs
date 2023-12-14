@@ -53,6 +53,7 @@ use tracing::{debug, error, info, instrument, trace, warn, Instrument};
 
 use self::authority_store::ExecutionLockWriteGuard;
 use self::authority_store_pruner::AuthorityStorePruningMetrics;
+use self::authority_store_types::ExecutionState;
 pub use authority_notify_read::EffectsNotifyRead;
 pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
@@ -154,6 +155,7 @@ use crate::state_accumulator::{AccumulatorStore, StateAccumulator, WrappedObject
 use crate::subscription_handler::SubscriptionHandler;
 use crate::transaction_input_loader::TransactionInputLoader;
 use crate::transaction_manager::TransactionManager;
+use tokio::sync::RwLock;
 
 #[cfg(msim)]
 use sui_types::committee::CommitteeTrait;
@@ -776,6 +778,8 @@ pub struct AuthorityState {
 
     /// Current overload status in this authority. Updated periodically.
     pub overload_info: AuthorityOverloadInfo,
+
+    execution_state: RwLock<ExecutionState>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -821,6 +825,49 @@ impl AuthorityState {
                         .clone()
                 });
         Ok(commitments)
+    }
+
+    // Killswitch that will result in loss of liveness, to be used for
+    // emergencies such as execution nondeterminism forks
+    #[allow(non_snake_case)]
+    pub async fn halt_all_execution_UNSAFE(&self, exec_state: ExecutionState) -> SuiResult {
+        match exec_state {
+            ExecutionState::Live => {
+                error!("Halting all execution!");
+                // order is important here. First acquire the lock,
+                // then set persisted state in case of crash, then
+                // update in-memory state.
+                let mut guard = self.execution_state.write().await;
+                self.database
+                    .perpetual_tables
+                    .set_execution_state(exec_state.clone())?;
+                *guard = exec_state;
+            }
+            _ => {
+                warn!("Execution already halted");
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn restore_execution_state(&self) -> SuiResult {
+        let mut guard = self.execution_state.write().await;
+        match *guard {
+            ExecutionState::Live => {
+                info!("Execution already live");
+            }
+            _ => {
+                self.database
+                    .perpetual_tables
+                    .set_execution_state(ExecutionState::Live)?;
+                *guard = ExecutionState::Live;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn get_execution_state(&self) -> ExecutionState {
+        self.execution_state.read().await.clone()
     }
 
     /// This is a private method and should be kept that way. It doesn't check whether
@@ -2078,7 +2125,6 @@ impl AuthorityState {
             let cur_stake = (**committee).weight(&self.name);
             if cur_stake > 0 {
                 FAIL_STATE.with_borrow_mut(|fail_state| {
-                    //let (&mut failing_stake, &mut failing_validators) = fail_state;
                     if fail_state.0 < committee.validity_threshold() {
                         fail_state.0 += cur_stake;
                         fail_state.1.insert(self.name);
@@ -2577,6 +2623,12 @@ impl AuthorityState {
         archive_readers: ArchiveReaderBalancer,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
+        let execution_state = RwLock::new(
+            store
+                .perpetual_tables
+                .get_execution_state()
+                .expect("Failed to get execution state"),
+        );
 
         let metrics = Arc::new(AuthorityMetrics::new(prometheus_registry));
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
@@ -2628,6 +2680,7 @@ impl AuthorityState {
             debug_dump_config,
             authority_overload_config: authority_overload_config.clone(),
             overload_info: AuthorityOverloadInfo::default(),
+            execution_state,
         });
 
         // Start a task to execute ready certificates.

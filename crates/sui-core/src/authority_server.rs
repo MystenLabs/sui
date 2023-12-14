@@ -34,10 +34,11 @@ use sui_types::{
 };
 use tap::TapFallible;
 use tokio::task::JoinHandle;
-use tracing::{error_span, info, Instrument};
+use tracing::{error_span, info, warn, Instrument};
 
 use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::{
+    authority::authority_store_types::ExecutionState,
     authority::AuthorityState,
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
 };
@@ -396,6 +397,21 @@ impl ValidatorService {
         certificate
             .data()
             .validity_check(epoch_store.protocol_config())?;
+
+        match self.state.get_execution_state().await {
+            ExecutionState::Live => {}
+            exec_state => {
+                warn!(
+                    "Rejecting tx cert with digest {:?} due to execution state: {:?}",
+                    certificate.digest(),
+                    exec_state
+                );
+                let err = SuiError::ExecutionHalted {
+                    reason: exec_state.to_string(),
+                };
+                return Err(err.into());
+            }
+        }
 
         let shared_object_tx = certificate.contains_shared_object();
 

@@ -7,10 +7,11 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 use sui_macros::register_fail_point;
-use sui_macros::register_fail_point_if;
 use sui_macros::sim_test;
+use sui_macros::{clear_fail_point, register_fail_point_if};
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use test_cluster::TestClusterBuilder;
+use tracing::info;
 
 #[sim_test]
 async fn basic_checkpoints_integration_test() {
@@ -71,6 +72,22 @@ async fn checkpoint_split_brain_test() {
     tokio::time::sleep(Duration::from_secs(20)).await;
 
     // all honest validators should eventually detect a split brain
-    let final_count = count_split_brain_nodes.lock().unwrap();
-    assert!(final_count.load(Ordering::Relaxed) >= 1);
+    {
+        let final_count = count_split_brain_nodes.lock().unwrap();
+        assert!(final_count.load(Ordering::Relaxed) >= 1);
+    }
+
+    // now check that new transaction requests fail. Clear the fail point first,
+    // to ensure this has no effect on our ability to execute
+    clear_fail_point("split_brain_reached");
+
+    let tx = make_transfer_sui_transaction(&test_cluster.wallet, None, None).await;
+    let response = test_cluster
+        .wallet
+        .execute_transaction_may_fail(tx)
+        .await
+        .unwrap();
+
+    info!("TESTING -- response errors: {:?}", response.errors);
+    assert!(response.errors.is_empty());
 }

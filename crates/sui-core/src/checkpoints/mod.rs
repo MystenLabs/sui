@@ -29,6 +29,7 @@ use sui_types::base_types::ConciseableName;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_store_types::ExecutionState;
 use crate::consensus_handler::SequencedConsensusTransactionKey;
 use chrono::Utc;
 use rand::rngs::OsRng;
@@ -1541,10 +1542,11 @@ impl CheckpointSignatureAggregator {
             "Checking for split brain condition"
         );
         if self.signatures_by_digest.quorum_unreachable() {
-            // TODO: at this point we should immediately halt processing
-            // of new transaction certificates to avoid building on top of
-            // forked output
-            // self.halt_all_execution();
+            // At this point we should immediately halt processing
+            // of new transaction certificates to avoid building on
+            // top of forked output
+            let state_clone = self.state.clone();
+            spawn_monitored_task!(halt_all_execution(state_clone));
 
             let digests_by_stake_messages = self
                 .signatures_by_digest
@@ -1573,6 +1575,13 @@ impl CheckpointSignatureAggregator {
             });
         }
     }
+}
+
+async fn halt_all_execution(state: Arc<AuthorityState>) {
+    state
+        .halt_all_execution_UNSAFE(ExecutionState::NetworkForked)
+        .await
+        .expect("Failed to halt all execution");
 }
 
 /// Create data dump containing relevant data for diagnosing cause of the

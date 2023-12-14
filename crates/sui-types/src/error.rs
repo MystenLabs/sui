@@ -475,6 +475,8 @@ pub enum SuiError {
     #[serde(rename = "GenericStorageError")]
     #[error("DEPRECATED")]
     DEPRECATED_GenericStorageError,
+    #[error("Network has temporarily halted new transaction execution with reason: {reason:?}")]
+    ExecutionHalted { reason: String },
     #[error(
         "Attempted to access {object} through parent {given_parent}, \
         but it's actual parent is {actual_owner}"
@@ -739,6 +741,7 @@ impl SuiError {
         let retryable = match self {
             // Network error
             SuiError::RpcError { .. } => true,
+            SuiError::ExecutionHalted { .. } => true,
 
             // Reconfig error
             SuiError::ValidatorHaltedAtEpochEnd => true,
