@@ -4,11 +4,9 @@
 import { wrapCreateBrowserRouter } from '@sentry/react';
 import { createBrowserRouter, Navigate, useLocation, useParams } from 'react-router-dom';
 
-import AddressResult from './address-result/AddressResult';
 import CheckpointDetail from './checkpoints/CheckpointDetail';
 import EpochDetail from './epochs/EpochDetail';
 import Home from './home/Home';
-import { ObjectResult } from './object-result/ObjectResult';
 import { Recent } from './recent';
 import TransactionResult from './transaction-result/TransactionResult';
 import { ValidatorDetails } from './validator/ValidatorDetails';
@@ -31,15 +29,13 @@ export const router = sentryCreateBrowserRouter([
 		children: [
 			{ path: '/', element: <Home /> },
 			{ path: 'recent', element: <Recent /> },
-			{ path: 'object/:id', element: <ObjectResult /> },
 			{ path: 'checkpoint/:id', element: <CheckpointDetail /> },
 			{ path: 'epoch/current', element: <EpochDetail /> },
 			{ path: 'txblock/:id', element: <TransactionResult /> },
 			{ path: 'epoch/:id', element: <EpochDetail /> },
-			{ path: 'address/:id', element: <AddressResult /> },
 			{ path: 'validators', element: <ValidatorPageResult /> },
 			{ path: 'validator/:id', element: <ValidatorDetails /> },
-			{ path: 'experimental--id/:id', element: <IdPage /> },
+			{ path: 'id/:id', element: <IdPage /> },
 		],
 	},
 	{
@@ -49,7 +45,7 @@ export const router = sentryCreateBrowserRouter([
 	// Support legacy routes:
 	{
 		path: '/objects/:id',
-		element: <RedirectWithId base="object" />,
+		element: <RedirectWithId base="id" />,
 	},
 	{
 		path: '/transaction/:id',
@@ -61,7 +57,15 @@ export const router = sentryCreateBrowserRouter([
 	},
 	{
 		path: '/addresses/:id',
-		element: <RedirectWithId base="address" />,
+		element: <RedirectWithId base="id" />,
+	},
+	{
+		path: '/address/:id',
+		element: <RedirectWithId base="id" />,
+	},
+	{
+		path: '/object/:id',
+		element: <RedirectWithId base="id" />,
 	},
 	// 404 route:
 	{ path: '*', element: <Navigate to="/" replace /> },
