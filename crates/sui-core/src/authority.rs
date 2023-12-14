@@ -713,6 +713,10 @@ impl AuthorityState {
         let tx_digest = transaction.digest();
         let tx_data = transaction.data().transaction_data();
 
+        // Cheap validity checks for a transaction, including input size limits.
+        tx_data.check_version_supported(epoch_store.protocol_config())?;
+        tx_data.validity_check(epoch_store.protocol_config())?;
+
         let input_object_kinds = tx_data.input_objects()?;
         let receiving_objects_refs = tx_data.receiving_objects();
 
@@ -1349,7 +1353,12 @@ impl AuthorityState {
         let _scope = monitored_scope("Execution::prepare_certificate");
         let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
 
-        // check_certificate_input also checks shared object locks when loading the shared objects.
+        // Cheap validity checks for a transaction, including input size limits.
+        let tx_data = certificate.data().transaction_data();
+        tx_data.check_version_supported(epoch_store.protocol_config())?;
+        tx_data.validity_check(epoch_store.protocol_config())?;
+
+        // The cost of re-auditing a transaction before execution is tolerated.
         let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
             certificate,
             input_objects,
@@ -1418,6 +1427,10 @@ impl AuthorityState {
                 error: "dry-exec does not support system transactions".to_string(),
             });
         }
+
+        // Cheap validity checks for a transaction, including input size limits.
+        transaction.check_version_supported(epoch_store.protocol_config())?;
+        transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
 
         let input_object_kinds = transaction.input_objects()?;
         let receiving_object_refs = transaction.receiving_objects();
@@ -1586,6 +1599,9 @@ impl AuthorityState {
 
         let protocol_config = epoch_store.protocol_config();
         transaction_kind.check_version_supported(protocol_config)?;
+
+        // No validity check of the transaction is performed per comment above
+        // `dev_inspect_transaction_block()` in sui-sdk.
 
         let max_tx_gas = protocol_config.max_tx_gas();
         let reference_gas_price = epoch_store.reference_gas_price();

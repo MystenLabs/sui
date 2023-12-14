@@ -904,6 +904,14 @@ impl ProgrammableTransaction {
                 value: config.max_programmable_tx_commands().to_string()
             }
         );
+        let total_inputs = self.input_objects()?.len() + self.receiving_objects().len();
+        fp_ensure!(
+            total_inputs <= config.max_input_objects() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum input + receiving objects in a transaction".to_string(),
+                value: config.max_input_objects().to_string()
+            }
+        );
         for input in inputs {
             input.validity_check(config)?
         }
@@ -1254,6 +1262,8 @@ impl TransactionKind {
     pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         match self {
             TransactionKind::ProgrammableTransaction(p) => p.validity_check(config)?,
+            // All transactiond kinds below are assumed to be system,
+            // and no validity or limit checks are performed.
             TransactionKind::ChangeEpoch(_)
             | TransactionKind::Genesis(_)
             | TransactionKind::ConsensusCommitPrologue(_)

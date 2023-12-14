@@ -290,18 +290,15 @@ impl ValidatorService {
         } = self;
 
         let transaction = request.into_inner();
-
         transaction.verify_user_input()?;
 
         let epoch_store = state.load_epoch_store_one_call_per_task();
-
         if !epoch_store.protocol_config().zklogin_auth() && transaction.has_zklogin_sig() {
             return Err(SuiError::UnsupportedFeatureError {
                 error: "zklogin is not enabled on this network".to_string(),
             }
             .into());
         }
-
         if !epoch_store.protocol_config().supports_upgraded_multisig()
             && transaction.has_upgraded_multisig()
         {
@@ -310,6 +307,15 @@ impl ValidatorService {
             }
             .into());
         }
+
+        // Cheap validity checks for a transaction, including input size limits.
+        let tx_data = transaction.data().transaction_data();
+        tx_data
+            .check_version_supported(epoch_store.protocol_config())
+            .map_err(Into::<SuiError>::into)?;
+        tx_data
+            .validity_check(epoch_store.protocol_config())
+            .map_err(Into::<SuiError>::into)?;
 
         // Enforce overall transaction size limit.
         let tx_size = bcs::serialized_size(&transaction).map_err(|e| {
@@ -330,6 +336,7 @@ impl ValidatorService {
             }
             .into()
         );
+
         let overload_check_res =
             state.check_system_overload(&consensus_adapter, transaction.data());
         if let Err(error) = overload_check_res {
@@ -339,6 +346,7 @@ impl ValidatorService {
                 .inc();
             return Err(error.into());
         }
+
         let _handle_tx_metrics_guard = metrics.handle_transaction_latency.start_timer();
 
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
