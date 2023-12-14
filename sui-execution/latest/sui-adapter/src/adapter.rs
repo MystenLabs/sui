@@ -113,7 +113,7 @@ mod checked {
         child_resolver: &'r dyn ChildObjectResolver,
         input_objects: BTreeMap<ObjectID, object_runtime::InputObject>,
         is_metered: bool,
-        protocol_config: &ProtocolConfig,
+        protocol_config: &'r ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         current_epoch_id: EpochId,
     ) -> NativeContextExtensions<'r> {
