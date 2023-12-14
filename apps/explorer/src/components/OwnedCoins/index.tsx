@@ -201,7 +201,7 @@ export function OwnedCoins({ id }: { id: string }) {
 					)}
 
 					{!hasCoinsBalance && (
-						<div className="flex h-20 items-center justify-center md:h-full">
+						<div className="flex h-20 items-center justify-center md:h-coinsAndAssetsContainer">
 							<Text variant="body/medium" color="steel-dark">
 								No Coins owned
 							</Text>
