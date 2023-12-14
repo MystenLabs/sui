@@ -223,7 +223,7 @@ impl Query {
             .extend()
     }
 
-    /// Fetch the protocl config by protocol version (defaults to the latest protocol
+    /// Fetch the protocol config by protocol version (defaults to the latest protocol
     /// version known to the GraphQL)
     async fn protocol_config(
         &self,
