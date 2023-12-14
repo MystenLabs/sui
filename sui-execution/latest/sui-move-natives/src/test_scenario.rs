@@ -5,7 +5,7 @@ use crate::{
     get_nth_struct_field, legacy_test_cost,
     object_runtime::{ObjectRuntime, RuntimeResults},
 };
-use linked_hash_map::LinkedHashMap;
+use indexmap::{IndexMap, IndexSet};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
@@ -36,8 +36,7 @@ const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
 const E_INVALID_SHARED_OR_IMMUTABLE_USAGE: u64 = 1;
 const E_OBJECT_NOT_FOUND_CODE: u64 = 4;
 
-// LinkedHashSet has a bug for accessing the back/last element
-type Set<K> = LinkedHashMap<K, ()>;
+type Set<K> = IndexSet<K>;
 
 // This function updates the inventories based on the transfers and deletes that occurred in the
 // transaction
@@ -87,7 +86,7 @@ pub fn end_transaction(
         .map(|(id, _, _)| *id)
         .collect::<BTreeSet<_>>();
     let inventories = &mut object_runtime_ref.test_inventories;
-    let mut new_object_values = LinkedHashMap::new();
+    let mut new_object_values = IndexMap::new();
     let mut transferred = vec![];
     // cleanup inventories
     // we will remove all changed objects
@@ -95,7 +94,7 @@ pub fn end_transaction(
     // - written objects are removed and later replaced to mark new values and new owners
     // - child objects will not be reflected in transfers, but need to be no longer retrievable
     for id in deleted_object_ids
-        .keys()
+        .iter()
         .chain(writes.keys())
         .chain(&all_active_child_objects)
     {
@@ -123,7 +122,7 @@ pub fn end_transaction(
                 .get(&id)
                 .map(|shared_or_imm_owner| shared_or_imm_owner != &owner)
                 .unwrap_or(/* not incorrect */ false);
-        if created_object_ids.contains_key(&id) {
+        if created_object_ids.contains(&id) {
             created.push(id);
         } else {
             written.push(id);
@@ -136,7 +135,7 @@ pub fn end_transaction(
                     .or_default()
                     .entry(ty)
                     .or_default()
-                    .insert(id, ());
+                    .insert(id);
             }
             Owner::ObjectOwner(_) => (),
             Owner::Shared { .. } => {
@@ -144,20 +143,20 @@ pub fn end_transaction(
                     .shared_inventory
                     .entry(ty)
                     .or_default()
-                    .insert(id, ());
+                    .insert(id);
             }
             Owner::Immutable => {
                 inventories
                     .immutable_inventory
                     .entry(ty)
                     .or_default()
-                    .insert(id, ());
+                    .insert(id);
             }
         }
     }
     // deletions already handled above, but we drop the delete kind for the effects
     let mut deleted = vec![];
-    for (id, _) in deleted_object_ids {
+    for id in deleted_object_ids {
         incorrect_shared_or_imm_handling =
             incorrect_shared_or_imm_handling || taken_shared_or_imm.contains_key(&id);
         deleted.push(id);
@@ -265,7 +264,7 @@ pub fn take_from_address_by_id(
                 .address_inventories
                 .get(&account)
                 .and_then(|inv| inv.get(&specified_ty))
-                .map(|s| s.contains_key(x))
+                .map(|s| s.contains(x))
                 .unwrap_or(false)
         },
         &inventories.objects,
@@ -295,7 +294,7 @@ pub fn ids_for_address(
         .address_inventories
         .get(&account)
         .and_then(|inv| inv.get(&specified_ty))
-        .map(|s| s.keys().map(|id| pack_id(*id)).collect::<Vec<Value>>())
+        .map(|s| s.iter().map(|id| pack_id(*id)).collect::<Vec<Value>>())
         .unwrap_or_default();
     let ids_vector = Value::vector_for_testing_only(ids);
     Ok(NativeResult::ok(legacy_test_cost(), smallvec![ids_vector]))
@@ -362,7 +361,7 @@ pub fn take_immutable_by_id(
             inventories
                 .immutable_inventory
                 .get(&specified_ty)
-                .map(|s| s.contains_key(x))
+                .map(|s| s.contains(x))
                 .unwrap_or(false)
         },
         &inventories.objects,
@@ -444,7 +443,7 @@ pub fn take_shared_by_id(
             inventories
                 .shared_inventory
                 .get(&specified_ty)
-                .map(|s| s.contains_key(x))
+                .map(|s| s.contains(x))
                 .unwrap_or(false)
         },
         &inventories.objects,
@@ -540,7 +539,7 @@ fn most_recent_at_ty_opt(
     ty: Type,
 ) -> Option<Value> {
     let s = inv.get(&ty)?;
-    let most_recent_id = s.keys().filter(|id| !taken.contains_key(id)).last()?;
+    let most_recent_id = s.iter().filter(|id| !taken.contains_key(id)).last()?;
     Some(pack_id(*most_recent_id))
 }
 

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use better_any::{Tid, TidAble};
-use linked_hash_map::LinkedHashMap;
+use indexmap::map::IndexMap;
+use indexmap::set::IndexSet;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
@@ -49,8 +50,7 @@ pub enum ObjectEvent {
     DeleteObjectID(ObjectID),
 }
 
-// LinkedHashSet has a bug for accessing the back/last element
-type Set<K> = LinkedHashMap<K, ()>;
+type Set<K> = IndexSet<K>;
 
 #[derive(Default)]
 pub(crate) struct TestInventories {
@@ -71,7 +71,7 @@ pub struct LoadedRuntimeObject {
 }
 
 pub struct RuntimeResults {
-    pub writes: LinkedHashMap<ObjectID, (Owner, Type, Value)>,
+    pub writes: IndexMap<ObjectID, (Owner, Type, Value)>,
     pub user_events: Vec<(Type, StructTag, Value)>,
     // Loaded child objects, their loaded version/digest and whether they were modified.
     pub loaded_child_objects: BTreeMap<ObjectID, LoadedRuntimeObject>,
@@ -88,11 +88,11 @@ pub(crate) struct ObjectRuntimeState {
     deleted_ids: Set<ObjectID>,
     // transfers to a new owner (shared, immutable, object, or account address)
     // TODO these struct tags can be removed if type_to_type_tag was exposed in the session
-    transfers: LinkedHashMap<ObjectID, (Owner, Type, Value)>,
+    transfers: IndexMap<ObjectID, (Owner, Type, Value)>,
     events: Vec<(Type, StructTag, Value)>,
     // total size of events emitted so far
     total_events_size: u64,
-    received: LinkedHashMap<ObjectID, DynamicallyLoadedObjectMetadata>,
+    received: IndexMap<ObjectID, DynamicallyLoadedObjectMetadata>,
 }
 
 #[derive(Tid)]
@@ -164,10 +164,10 @@ impl<'a> ObjectRuntime<'a> {
                 input_objects: input_object_owners,
                 new_ids: Set::new(),
                 deleted_ids: Set::new(),
-                transfers: LinkedHashMap::new(),
+                transfers: IndexMap::new(),
                 events: vec![],
                 total_events_size: 0,
-                received: LinkedHashMap::new(),
+                received: IndexMap::new(),
             },
             is_metered,
             protocol_config,
@@ -195,9 +195,10 @@ impl<'a> ObjectRuntime<'a> {
         // remove from deleted_ids for the case in dynamic fields where the Field object was deleted
         // and then re-added in a single transaction. In that case, we also skip adding it
         // to new_ids.
-        if self.state.deleted_ids.remove(&id).is_none() {
+        let was_present = self.state.deleted_ids.remove(&id);
+        if !was_present {
             // mark the id as new
-            self.state.new_ids.insert(id, ());
+            self.state.new_ids.insert(id);
         }
         Ok(())
     }
@@ -222,9 +223,9 @@ impl<'a> ObjectRuntime<'a> {
                 ));
         };
 
-        let was_new = self.state.new_ids.remove(&id).is_some();
+        let was_new = self.state.new_ids.remove(&id);
         if !was_new {
-            self.state.deleted_ids.insert(id, ());
+            self.state.deleted_ids.insert(id);
         }
         Ok(())
     }
@@ -250,12 +251,12 @@ impl<'a> ObjectRuntime<'a> {
             SUI_RANDOMNESS_STATE_OBJECT_ID,
         ]
         .contains(&id);
-        let transfer_result = if self.state.new_ids.contains_key(&id) {
+        let transfer_result = if self.state.new_ids.contains(&id) {
             TransferResult::New
         } else if is_framework_obj {
             // framework objects are always created when they are transferred, but the id is
             // hard-coded so it is not yet in new_ids
-            self.state.new_ids.insert(id, ());
+            self.state.new_ids.insert(id);
             TransferResult::New
         } else if let Some(prev_owner) = self.state.input_objects.get(&id) {
             match (&owner, prev_owner) {
@@ -494,7 +495,7 @@ impl ObjectRuntimeState {
                 // was modified, so mark it as mutated and transferred
                 Op::Modify(v) => {
                     debug_assert!(!self.transfers.contains_key(&child));
-                    debug_assert!(!self.new_ids.contains_key(&child));
+                    debug_assert!(!self.new_ids.contains(&child));
                     debug_assert!(loaded_child_objects.contains_key(&child));
                     self.transfers
                         .insert(child, (Owner::ObjectOwner(parent.into()), ty, v));
@@ -509,12 +510,12 @@ impl ObjectRuntimeState {
                 Op::Delete => {
                     // was transferred so not actually deleted
                     if self.transfers.contains_key(&child) {
-                        debug_assert!(!self.deleted_ids.contains_key(&child));
+                        debug_assert!(!self.deleted_ids.contains(&child));
                     }
                     // ID was deleted too was deleted so mark as deleted
-                    if self.deleted_ids.contains_key(&child) {
+                    if self.deleted_ids.contains(&child) {
                         debug_assert!(!self.transfers.contains_key(&child));
-                        debug_assert!(!self.new_ids.contains_key(&child));
+                        debug_assert!(!self.new_ids.contains(&child));
                     }
                 }
             }
@@ -538,7 +539,7 @@ impl ObjectRuntimeState {
         // mutation category in effects.
         // TODO: This could get error-prone quickly: what if we forgot to mark an object as modified? There may be a cleaner
         // sulution.
-        let written_objects: LinkedHashMap<_, _> = transfers
+        let written_objects: IndexMap<_, _> = transfers
             .into_iter()
             .map(|(id, (owner, type_, value))| {
                 if let Some(loaded_child) = loaded_child_objects.get_mut(&id) {
@@ -547,7 +548,7 @@ impl ObjectRuntimeState {
                 (id, (owner, type_, value))
             })
             .collect();
-        for deleted_id in deleted_ids.keys() {
+        for deleted_id in &deleted_ids {
             if let Some(loaded_child) = loaded_child_objects.get_mut(deleted_id) {
                 loaded_child.is_modified = true;
             }

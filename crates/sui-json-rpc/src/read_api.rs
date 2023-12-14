@@ -7,10 +7,10 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::future::join_all;
+use indexmap::map::IndexMap;
 use itertools::Itertools;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
-use linked_hash_map::LinkedHashMap;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::annotated_value::{MoveStruct, MoveStructLayout, MoveValue};
 use move_core_types::language_storage::StructTag;
@@ -212,8 +212,8 @@ impl ReadApi {
         let opts = opts.unwrap_or_default();
 
         // use LinkedHashMap to dedup and can iterate in insertion order.
-        let mut temp_response: LinkedHashMap<&TransactionDigest, IntermediateTransactionResponse> =
-            LinkedHashMap::from_iter(
+        let mut temp_response: IndexMap<&TransactionDigest, IntermediateTransactionResponse> =
+            IndexMap::from_iter(
                 digests
                     .iter()
                     .map(|k| (k, IntermediateTransactionResponse::new(*k))),
