@@ -21,7 +21,6 @@ module scratch_off::game {
     use scratch_off::math;
     use sui::table::{Self, Table};
     use sui::package;
-    use sui::kiosk::{Self, Kiosk};
     use sui::sui::SUI;
 
     // --------------- Constants ---------------
@@ -31,8 +30,6 @@ module scratch_off::game {
     const ENotAuthorizedEmployee: u64 = 3;
     const EWrongStore: u64 = 4;
     const ENotExactAmount: u64 = 5;
-
-    const ETicketNotEvaluated: u64 = 6;
 
     // --------------- Events ---------------
     struct NewDrawing has copy, drop {
@@ -45,17 +42,6 @@ module scratch_off::game {
         player: address,
         amount_won: u64,
         tickets_opened: u64,
-    }
-
-    /// A giftbox to help us preserve royalties + kiosk lock.
-    struct GiftBox has key {
-        id: UID,
-        ticket: Ticket
-    }
-
-    // A hot-potato to make sure we either lock or use the ticket.
-    struct UseOrLockPromise {
-        ticket_id: ID
     }
 
     struct Ticket has key, store {
@@ -128,7 +114,7 @@ module scratch_off::game {
         /// Leaderboard for top 20 
         leaderboard: LeaderBoard,
         public_key: vector<u8>,
-    }     
+    }
 
     /// Emergency fund withdrawal function
     public fun withdraw_funds(
@@ -145,14 +131,37 @@ module scratch_off::game {
     struct GAME has drop {}
 
     /// We claim the cap for updating display
+    /// This function will be called with a burner account
     fun init(otw: GAME, ctx: &mut TxContext){
         package::claim_and_keep(otw, ctx);
 
-        // TODO: 
-        // Create a Transfer Policy using the publisher object
-        // wrap it in our SINGLE store :)
-        // Add an `unlocking` function that will resolve a `TransferRequest`
-        // and return our `UseOrLockPromise` to the user.
+        let store_uid = object::new(ctx);
+        let store_id = object::uid_to_inner(&store_uid);
+        let new_store = ConvenienceStore {
+            id: store_uid,
+            creator: tx_context::sender(ctx),
+            prize_pool: balance::zero(),
+            winning_tickets: vector[], 
+            original_ticket_count: 0,
+            tickets_issued: 0, 
+            tickets_evaluated: 0,
+            player_metadata: table::new(ctx),
+            leaderboard: LeaderBoard {
+                lowest_sui_won: 0,
+                max_players: 10,
+                leaderboard_players: vector[],
+                leaderboard_player_metadata: table::new(ctx),
+            },
+            public_key: vector[]
+        };
+
+        transfer::share_object(new_store);
+
+        // TODO: Before we launch this contract
+        transfer::public_transfer(StoreCap {
+            id: object::new(ctx),
+            store_id
+        }, tx_context::sender(ctx));
     }
     
 
@@ -160,21 +169,22 @@ module scratch_off::game {
     /// We allow the user of the store.
     /// We purposely design the convenience store to be an owned object so that we
     /// don't need to make this in a shared format.
-    public fun open_store(
+    public fun stock_store(
+        _store_cap: &StoreCap,
+        store: &mut ConvenienceStore,
         coin: Coin<SUI>, 
         number_of_prizes: vector<u64>,
         value_of_prizes: vector<u64>,
         public_key: vector<u8>,
         max_players_in_leaderboard: u64,
-        ctx: &mut TxContext
-    ): StoreCap {
+        _ctx: &TxContext
+    ) {
         let number_of_prizes_len = vector::length(&number_of_prizes);
         let value_of_prizes_len = vector::length(&value_of_prizes);
         assert!(number_of_prizes_len == value_of_prizes_len, EInvalidInputs);
 
         let winning_tickets = vector<PrizeStruct>[];
         let idx = 0;
-        let prize_pool = balance::zero<SUI>();
         let winning_ticket_count = 0;
         let required_funds = 0;
 
@@ -195,36 +205,14 @@ module scratch_off::game {
             winning_ticket_count = winning_ticket_count + target_prize_amount;
             idx = idx + 1;
         };
-
         assert!(coin::value(&coin) == required_funds, ENotExactAmount);
-        balance::join(&mut prize_pool, coin::into_balance(coin));
 
-        let store_uid = object::new(ctx);
-        let store_id = object::uid_to_inner(&store_uid);
-        let new_store = ConvenienceStore {
-            id: store_uid,
-            creator: tx_context::sender(ctx),
-            prize_pool,
-            winning_tickets, 
-            original_ticket_count: winning_ticket_count,
-            tickets_issued: 0, 
-            tickets_evaluated: 0,
-            player_metadata: table::new(ctx),
-            leaderboard: LeaderBoard {
-                lowest_sui_won: 0,
-                max_players: max_players_in_leaderboard,
-                leaderboard_players: vector[],
-                leaderboard_player_metadata: table::new(ctx),
-            },
-            public_key,
-        };
-
-        transfer::share_object(new_store);
-        
-        StoreCap {
-            id: object::new(ctx),
-            store_id
-        }
+        // Set all the important variables in the store
+        store.winning_tickets = winning_tickets;
+        store.original_ticket_count = winning_ticket_count;
+        store.leaderboard.max_players = max_players_in_leaderboard;
+        store.public_key = public_key;
+        balance::join(&mut store.prize_pool, coin::into_balance(coin));
     }
 
     /// Initializes a ticket and sends it to someone.
@@ -244,40 +232,7 @@ module scratch_off::game {
             player,
             drawing_count
         };
-
-        transfer::transfer(GiftBox {
-            id: object::new(ctx),
-            ticket
-        }, player);
-    }
-
-    // un-wrap a gift box.
-    public fun unwrap_giftbox(gift_box: GiftBox): (Ticket, UseOrLockPromise) {
-        let GiftBox { id, ticket } = gift_box;
-
-        let ticket_id = object::id(&ticket);
-        object::delete(id);
-        (ticket, UseOrLockPromise {
-            ticket_id
-        })
-    }
-
-    // Prove that the item was locked in the kiosk.
-    public fun prove_locked_in_kiosk(
-        kiosk: &Kiosk,
-        promise: UseOrLockPromise
-    ) {
-        let UseOrLockPromise { ticket_id } = promise;
-        assert!(kiosk::is_locked(kiosk, ticket_id), ETicketNotEvaluated);
-    }
-    
-    // Time to prove we've locked it or used it.
-    public fun prove_evaluated(
-        store: &ConvenienceStore, 
-        promise: UseOrLockPromise
-    ) {
-        let UseOrLockPromise { ticket_id } = promise;
-        assert!(ticket_exists(store, ticket_id), ETicketNotEvaluated);
+        transfer::public_transfer(ticket, player);
     }
 
     /// Calls evaluate ticket by adding it as a dynamic field to the store
@@ -518,6 +473,34 @@ module scratch_off::game {
     }
 
     // Tests
+    #[test_only]
+    public fun init_for_testing(ctx: &mut TxContext){
+        let store_uid = object::new(ctx);
+        let store_id = object::uid_to_inner(&store_uid);
+        let new_store = ConvenienceStore {
+            id: store_uid,
+            creator: tx_context::sender(ctx),
+            prize_pool: balance::zero(),
+            winning_tickets: vector[], 
+            original_ticket_count: 0,
+            tickets_issued: 0, 
+            tickets_evaluated: 0,
+            player_metadata: table::new(ctx),
+            leaderboard: LeaderBoard {
+                lowest_sui_won: 0,
+                max_players: 10,
+                leaderboard_players: vector[],
+                leaderboard_player_metadata: table::new(ctx),
+            },
+            public_key: vector[]
+        };
+        transfer::share_object(new_store);
+        transfer::public_transfer(StoreCap {
+            id: object::new(ctx),
+            store_id
+        }, tx_context::sender(ctx));
+    }
+    
     #[test_only]
     public fun finish_evaluation_for_testing(
         ticket_id: ID,

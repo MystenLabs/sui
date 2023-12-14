@@ -4,16 +4,15 @@
 #[test_only]
 module scratch_off::test_game {
     
-    use scratch_off::game::{Self, ConvenienceStore, ENoTicketsLeft, StoreCap, Ticket, player_metadata,
+    use scratch_off::game::{Self, ConvenienceStore, ENoTicketsLeft, StoreCap, player_metadata,
      tickets_left, leaderboard, prize_pool_balance, leaderboard_players, get_target_player_metadata,
-     tickets_claimed, amount_won, tickets_issued, GiftBox, unwrap_giftbox, prove_evaluated};
+     tickets_claimed, amount_won, tickets_issued, init_for_testing, stock_store, Ticket};
 
     #[test_only] use sui::test_scenario::{Self, Scenario};
     #[test_only] use sui::coin::{mint_for_testing};
     use sui::test_scenario as ts;
     use std::vector;
     use sui::sui::SUI;
-    use sui::transfer;
 
     const ALICE_ADDRESS: address = @0xAAAA;
     const BOB_ADDRESS: address = @0xBBBB;
@@ -31,9 +30,16 @@ module scratch_off::test_game {
     ) {
         ts::next_tx(scenario, creator);
         {
+            init_for_testing(ts::ctx(scenario));
+        };
+        ts::next_tx(scenario, creator);
+        {
+            let store_cap: StoreCap = ts::take_from_sender(scenario);
+            let store: ConvenienceStore = ts::take_shared(scenario);
             let coin = mint_for_testing<SUI>(coin_amount, ts::ctx(scenario));
-
-            let cap = game::open_store(
+            stock_store(
+                &store_cap,
+                &mut store,
                 coin,
                 number_of_prizes,
                 value_of_prizes,
@@ -41,8 +47,8 @@ module scratch_off::test_game {
                 max_leaderboard_size,
                 ts::ctx(scenario)
             );
-
-            transfer::public_transfer(cap, OWNER_ADDRESS);
+            ts::return_to_sender(scenario, store_cap);
+            ts::return_shared(store);
         }
     }
 
@@ -139,14 +145,12 @@ module scratch_off::test_game {
         ts::next_tx(&mut test, ALICE_ADDRESS);
         {
 
-            let giftbox: GiftBox = ts::take_from_sender(&test);
-            let (ticket, promise) = unwrap_giftbox(giftbox);
+            let ticket: Ticket = ts::take_from_sender(&test);
             let store: ConvenienceStore = ts::take_shared(&test);
 
             assert!(prize_pool_balance(&store) == 3, 0);
 
             let id = game::evaluate_ticket(ticket, &mut store, ts::ctx(&mut test));
-            prove_evaluated(&store, promise);
             game::finish_evaluation_for_testing(id, b"test", &mut store, ts::ctx(&mut test));
             assert!(tickets_left(&store) == 0, 0);
             assert!(prize_pool_balance(&store) == 0, 0);
@@ -185,11 +189,9 @@ module scratch_off::test_game {
         };
         ts::next_tx(&mut test, ALICE_ADDRESS);
         {
-            let giftbox: GiftBox = ts::take_from_sender(&test);
-            let (ticket, promise) = unwrap_giftbox(giftbox);
+            let ticket: Ticket = ts::take_from_sender(&test);
             let store: ConvenienceStore = ts::take_shared(&test);
             let id = game::evaluate_ticket(ticket, &mut store, ts::ctx(&mut test));
-            prove_evaluated(&store, promise);
             game::finish_evaluation_for_testing(id, b"test", &mut store, ts::ctx(&mut test));
             let leaderboard = leaderboard(&store);
             let players_list = leaderboard_players(leaderboard);
@@ -198,12 +200,9 @@ module scratch_off::test_game {
         };
         ts::next_tx(&mut test, BOB_ADDRESS);
         {
-            let giftbox: GiftBox = ts::take_from_sender(&test);
-            let (ticket, promise) = unwrap_giftbox(giftbox);
-
+            let ticket: Ticket = ts::take_from_sender(&test);
             let store: ConvenienceStore = ts::take_shared(&test);
             let id = game::evaluate_ticket(ticket, &mut store, ts::ctx(&mut test));
-            prove_evaluated(&store, promise);
             game::finish_evaluation_for_testing(id, b"test", &mut store, ts::ctx(&mut test));
             let leaderboard = leaderboard(&store);
             let players_list = leaderboard_players(leaderboard);
@@ -214,16 +213,11 @@ module scratch_off::test_game {
         };
         ts::next_tx(&mut test, BOB_ADDRESS);
         {
-            let giftbox_2: GiftBox = ts::take_from_sender(&test);
-            let giftbox_3: GiftBox = ts::take_from_sender(&test);
-            let (ticket_2, promise_2) = unwrap_giftbox(giftbox_2);
-            let (ticket_3, promise_3) = unwrap_giftbox(giftbox_3);
+            let ticket_2: Ticket = ts::take_from_sender(&test);
+            let ticket_3: Ticket = ts::take_from_sender(&test);
             let store: ConvenienceStore = ts::take_shared(&test);
             let id = game::evaluate_ticket(ticket_2, &mut store, ts::ctx(&mut test));
             let id_2 = game::evaluate_ticket(ticket_3, &mut store, ts::ctx(&mut test));
-            prove_evaluated(&store, promise_2);
-            prove_evaluated(&store, promise_3);
-
             game::finish_evaluation_for_testing(id, b"test", &mut store, ts::ctx(&mut test));
             game::finish_evaluation_for_testing(id_2, b"test", &mut store, ts::ctx(&mut test));
 
@@ -274,11 +268,9 @@ module scratch_off::test_game {
         };
         ts::next_tx(&mut test, ALICE_ADDRESS);
         {
-            let giftbox: GiftBox = ts::take_from_sender(&test);
-            let (ticket, promise) = unwrap_giftbox(giftbox);
+            let ticket: Ticket = ts::take_from_sender(&test);
             let store: ConvenienceStore = ts::take_shared(&test);
             let id = game::evaluate_ticket(ticket, &mut store, ts::ctx(&mut test));
-            prove_evaluated(&store, promise);
             game::finish_evaluation_for_testing(id, b"test", &mut store, ts::ctx(&mut test));
             let leaderboard = leaderboard(&store);
             let players_list = leaderboard_players(leaderboard);
@@ -287,11 +279,9 @@ module scratch_off::test_game {
         };
         ts::next_tx(&mut test, BOB_ADDRESS);
         {
-            let giftbox: GiftBox = ts::take_from_sender(&test);
-            let (ticket, promise) = unwrap_giftbox(giftbox);
+            let ticket: Ticket = ts::take_from_sender(&test);
             let store: ConvenienceStore = ts::take_shared(&test);
             let id = game::evaluate_ticket(ticket, &mut store, ts::ctx(&mut test));
-            prove_evaluated(&store, promise);
             game::finish_evaluation_for_testing(id, b"test", &mut store, ts::ctx(&mut test));
             let leaderboard = leaderboard(&store);
             let players_list = leaderboard_players(leaderboard);
@@ -302,11 +292,9 @@ module scratch_off::test_game {
         };
         ts::next_tx(&mut test, BOB_ADDRESS);
         {
-            let giftbox: GiftBox = ts::take_from_sender(&test);
-            let (ticket, promise) = unwrap_giftbox(giftbox);
+            let ticket: Ticket = ts::take_from_sender(&test);
             let store: ConvenienceStore = ts::take_shared(&test);
             let id = game::evaluate_ticket(ticket, &mut store, ts::ctx(&mut test));
-            prove_evaluated(&store, promise);
             game::finish_evaluation_for_testing(id, b"test", &mut store, ts::ctx(&mut test));
             let leaderboard = leaderboard(&store);
             let players_list = leaderboard_players(leaderboard);
@@ -382,10 +370,8 @@ module scratch_off::test_game {
         {
             let store: ConvenienceStore = ts::take_shared(&test);
             assert!(prize_pool_balance(&store) == 3, 0);
-            let giftbox: GiftBox = ts::take_from_sender(&test);
-            let (ticket, promise) = unwrap_giftbox(giftbox);
+            let ticket: Ticket = ts::take_from_sender(&test);
             let id = game::evaluate_ticket(ticket, &mut store, ts::ctx(&mut test));
-            prove_evaluated(&store, promise);
             game::finish_evaluation_for_testing(id, b"test", &mut store, ts::ctx(&mut test));
             assert!(tickets_left(&store) == 2, 0);
             assert!(prize_pool_balance(&store) == 2, 0);
@@ -420,13 +406,10 @@ module scratch_off::test_game {
         };
         ts::next_tx(&mut test, ALICE_ADDRESS);
         {
-            let giftbox: GiftBox = ts::take_from_sender(&test);
-            let (ticket, promise) = unwrap_giftbox(giftbox);
+            let ticket: Ticket = ts::take_from_sender(&test);
             let store: ConvenienceStore = ts::take_shared(&test);
             assert!(prize_pool_balance(&store) == 5500, 0);
-
             let id = game::evaluate_ticket(ticket, &mut store, ts::ctx(&mut test));
-            prove_evaluated(&store, promise);
             game::finish_evaluation_for_testing(id, b"test", &mut store, ts::ctx(&mut test));
             assert!(tickets_left(&store) == 1759, 0);
 
