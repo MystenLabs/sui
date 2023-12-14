@@ -154,6 +154,16 @@ pub enum IdentOnHover {
         /// Field types
         Vec<Type>,
     ),
+    Field(
+        /// Defining module of the containing struct
+        ModuleIdent_,
+        /// Name of the containing struct
+        Symbol,
+        /// Field name
+        Symbol,
+        /// Field type
+        Type,
+    ),
 }
 
 /// Information about both the use identifier (source file is specified wherever an instance of this
@@ -176,10 +186,15 @@ pub struct UseDef {
 }
 
 /// Definition of a struct field
-#[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
+#[allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
+#[derive(Derivative, Debug, Clone, PartialEq, Eq)]
+#[derivative(PartialOrd, Ord)]
 struct FieldDef {
     name: Symbol,
     start: Position,
+    #[derivative(PartialOrd = "ignore")]
+    #[derivative(Ord = "ignore")]
+    ident_type: IdentOnHover,
 }
 
 /// Definition of a struct
@@ -319,6 +334,17 @@ impl fmt::Display for IdentOnHover {
                     name,
                     type_args_str,
                     typed_id_list_to_ide_string(field_names, field_types, true),
+                )
+            }
+            Self::Field(mod_ident, struct_name, name, t) => {
+                write!(
+                    f,
+                    "{}::{}::{}\n{}: {}",
+                    addr_to_ide_string(&mod_ident.address),
+                    mod_ident.module.value(),
+                    struct_name,
+                    name,
+                    type_to_ide_string(t)
                 )
             }
         }
@@ -900,6 +926,7 @@ impl Symbolicator {
                     field_defs.push(FieldDef {
                         name: *fname,
                         start,
+                        ident_type: IdentOnHover::Field(mod_ident.value, *name, *fname, t.clone()),
                     });
                     field_types.push(t.clone());
                 }
@@ -1388,7 +1415,7 @@ impl Symbolicator {
     ) {
         // add use of the struct name
         self.add_struct_use_def(ident, &name.value(), &name.loc(), references, use_defs);
-        for (fpos, fname, (_, (t, lvalue))) in fields {
+        for (fpos, fname, (_, (_, lvalue))) in fields {
             // add use of the field name
             self.add_field_use_def(
                 &ident.value,
@@ -1397,7 +1424,6 @@ impl Symbolicator {
                 &fpos,
                 references,
                 use_defs,
-                t,
             );
             // add definition or use of a variable used for struct field unpacking
             self.lvalue_symbols(define, lvalue, scope, references, use_defs);
@@ -1596,7 +1622,6 @@ impl Symbolicator {
                     use_pos,
                     references,
                     use_defs,
-                    field_type,
                 );
             }
             _ => (),
@@ -1647,7 +1672,7 @@ impl Symbolicator {
     ) {
         // add use of the struct name
         self.add_struct_use_def(ident, &name.value(), &name.loc(), references, use_defs);
-        for (fpos, fname, (_, (t, init_exp))) in fields {
+        for (fpos, fname, (_, (_, init_exp))) in fields {
             // add use of the field name
             self.add_field_use_def(
                 &ident.value,
@@ -1656,7 +1681,6 @@ impl Symbolicator {
                 &fpos,
                 references,
                 use_defs,
-                t,
             );
             // add field initialization expression
             self.exp_symbols(init_exp, scope, references, use_defs);
@@ -1837,7 +1861,6 @@ impl Symbolicator {
             |use_name, name_start, mod_defs| match mod_defs.structs.get(use_name) {
                 Some(def) => {
                     let ident_type = def.ident_type.clone();
-
                     let ident_type_def = self.ident_type_def_loc(&ident_type);
                     let def_fhash = self.mod_outer_defs.get(module_ident).unwrap().fhash;
                     let doc_string = self.extract_doc_string(&def.name_start, &def_fhash);
@@ -1870,7 +1893,6 @@ impl Symbolicator {
         use_pos: &Loc,
         references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
         use_defs: &mut UseDefMap,
-        use_type: &Type,
     ) {
         self.add_outer_use_def(
             module_ident,
@@ -1880,9 +1902,8 @@ impl Symbolicator {
                 Some(def) => {
                     for fdef in &def.field_defs {
                         if fdef.name == *use_name {
-                            let ident_type = IdentOnHover::Type(use_type.clone());
+                            let ident_type = fdef.ident_type.clone();
                             let ident_type_def = self.ident_type_def_loc(&ident_type);
-
                             let def_fhash = self.mod_outer_defs.get(module_ident).unwrap().fhash;
                             let doc_string = self.extract_doc_string(&fdef.start, &def_fhash);
                             use_defs.insert(
@@ -2056,6 +2077,7 @@ impl Symbolicator {
             IdentOnHover::Type(t) => self.type_def_loc(t),
             IdentOnHover::Function(_, _, _, _, _, _, ret) => self.type_def_loc(ret),
             IdentOnHover::Struct(mod_ident, name, _, _, _) => self.find_struct(mod_ident, name),
+            IdentOnHover::Field(_, _, _, t) => self.type_def_loc(t),
         }
     }
 
@@ -2623,7 +2645,7 @@ fn docstring_test() {
         6,
         8,
         "M6.move",
-        "u64",
+        "Symbols::M6::DocumentedStruct\ndocumented_field: u64",
         None,
         Some("A documented field\n"),
     );
@@ -2869,7 +2891,7 @@ fn symbols_test() {
         3,
         8,
         "M1.move",
-        "u64",
+        "Symbols::M1::SomeStruct\nsome_field: u64",
         None,
     );
     // bound variable in unpack (unpack function)
@@ -2947,7 +2969,7 @@ fn symbols_test() {
         3,
         8,
         "M1.move",
-        "u64",
+        "Symbols::M1::SomeStruct\nsome_field: u64",
         None,
     );
     // const in pack (pack function)
@@ -3103,7 +3125,7 @@ fn symbols_test() {
         3,
         8,
         "M1.move",
-        "u64",
+        "Symbols::M1::SomeStruct\nsome_field: u64",
         None,
     );
     // vector constructor second element var (vec function)
@@ -3272,8 +3294,8 @@ fn symbols_test() {
         88,
         8,
         "M1.move",
-        "Symbols::M1::OuterStruct",
-        Some((87, 11, "M1.move")),
+        "Symbols::M1::OuterStruct\nsome_struct: Symbols::M1::SomeStruct",
+        Some((2, 11, "M1.move")),
     );
     // chain access third element (chain_access function)
     assert_use_def(
@@ -3285,8 +3307,8 @@ fn symbols_test() {
         3,
         8,
         "M1.move",
-        "Symbols::M1::SomeStruct",
-        Some((2, 11, "M1.move")),
+        "Symbols::M1::SomeStruct\nsome_field: u64",
+        None,
     );
     // chain second element after the block (chain_access_block function)
     assert_use_def(
@@ -3298,8 +3320,8 @@ fn symbols_test() {
         88,
         8,
         "M1.move",
-        "Symbols::M1::OuterStruct",
-        Some((87, 11, "M1.move")),
+        "Symbols::M1::OuterStruct\nsome_struct: Symbols::M1::SomeStruct",
+        Some((2, 11, "M1.move")),
     );
     // chain access first element when borrowing (chain_access_borrow function)
     assert_use_def(
@@ -3324,8 +3346,8 @@ fn symbols_test() {
         88,
         8,
         "M1.move",
-        "Symbols::M1::OuterStruct",
-        Some((87, 11, "M1.move")),
+        "Symbols::M1::OuterStruct\nsome_struct: Symbols::M1::SomeStruct",
+        Some((2, 11, "M1.move")),
     );
     // chain access third element when borrowing (chain_access_borrow function)
     assert_use_def(
@@ -3337,8 +3359,8 @@ fn symbols_test() {
         3,
         8,
         "M1.move",
-        "Symbols::M1::SomeStruct",
-        Some((2, 11, "M1.move")),
+        "Symbols::M1::SomeStruct\nsome_field: u64",
+        None,
     );
     // variable in cast (cast function)
     assert_use_def(
