@@ -162,14 +162,18 @@ impl AuthorityPerpetualTables {
     ) -> Option<Object> {
         let Ok(iter) = self
             .objects
-            .range_iter(ObjectKey::min_for_id(&object_id)..=ObjectKey::max_for_id(&object_id))
+            .safe_range_iter(ObjectKey::min_for_id(&object_id)..=ObjectKey::max_for_id(&object_id))
             .skip_prior_to(&ObjectKey(object_id, version))
         else {
             return None;
         };
-        iter.reverse()
-            .next()
-            .and_then(|(key, o)| self.object(&key, o).ok().flatten())
+        iter.reverse().next().and_then(|db_result| match db_result {
+            Ok((key, o)) => self.object(&key, o).ok().flatten(),
+            Err(err) => {
+                warn!("Object iterator encountered RocksDB error {:?}", err);
+                None
+            }
+        })
     }
 
     fn construct_object(
