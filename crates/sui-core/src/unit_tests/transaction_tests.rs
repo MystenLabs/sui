@@ -15,7 +15,10 @@ use sui_types::{
     error::{SuiError, UserInputError},
     multisig::{MultiSig, MultiSigPublicKey},
     signature::GenericSignature,
-    transaction::{AuthenticatorStateUpdate, TransactionDataAPI, TransactionExpiration},
+    transaction::{
+        AuthenticatorStateUpdate, GenesisTransaction, TransactionDataAPI, TransactionExpiration,
+        TransactionKind,
+    },
     utils::{to_sender_signed_transaction, TestData},
     zk_login_authenticator::ZkLoginAuthenticator,
     zk_login_util::DEFAULT_JWK_BYTES,
@@ -257,6 +260,26 @@ async fn test_gas_wrong_owner() {
                 SuiError::SignerSignatureNumberMismatch {
                     expected: 2,
                     actual: 1
+                }
+            );
+        },
+    )
+    .await;
+}
+
+#[sim_test]
+async fn test_user_sends_system_transaction() {
+    do_transaction_test_skip_cert_checks(
+        0,
+        |tx| {
+            *tx.kind_mut() = TransactionKind::Genesis(GenesisTransaction { objects: vec![] });
+        },
+        |_| {},
+        |err| {
+            assert_matches!(
+                err,
+                SuiError::UserInputError {
+                    error: UserInputError::Unsupported { .. }
                 }
             );
         },
