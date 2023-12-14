@@ -20,30 +20,30 @@ import { getPureSerializationType, isTxContext } from './serializer.js';
 import type { TransactionBlockDataBuilder } from './TransactionBlockData.js';
 import type { MoveCallTransaction, TransactionBlockInput } from './Transactions.js';
 
-export interface TransactionBlockFeatureRequests {
-	'txb:normalizeInputs': object;
-	'txb:resolveObjectReferences': object;
-	'txb:setGasPrice': object;
-	'txb:setGasBudget': {
-		maxTxGas: number;
-		maxTxSizeBytes: number;
-	};
-	'txb:setGasPayment': {
-		maxGasObjects: number;
-	};
-	'txb:validate': {
-		maxPureArgumentSize: number;
-	};
-}
-
-export type ResolveFeatureFn = <T extends keyof TransactionBlockFeatureRequests>(
-	feature: T,
-	blockData: TransactionBlockDataBuilder,
-	data?: TransactionBlockFeatureRequests[T],
-) => Promise<void>;
-
-export interface FeatureProvider {
-	resolveFeature: ResolveFeatureFn;
+export type MaybePromise<T> = T | Promise<T>;
+export interface TransactionBlockPlugin {
+	normalizeInputs?: (blockData: TransactionBlockDataBuilder) => MaybePromise<void>;
+	resolveObjectReferences?: (blockData: TransactionBlockDataBuilder) => MaybePromise<void>;
+	setGasPrice?: (blockData: TransactionBlockDataBuilder) => MaybePromise<void>;
+	setGasBudget?: (
+		blockData: TransactionBlockDataBuilder,
+		options: {
+			maxTxGas: number;
+			maxTxSizeBytes: number;
+		},
+	) => MaybePromise<void>;
+	setGasPayment?: (
+		blockData: TransactionBlockDataBuilder,
+		options: {
+			maxGasObjects: number;
+		},
+	) => MaybePromise<void>;
+	validate?: (
+		blockData: TransactionBlockDataBuilder,
+		options: {
+			maxPureArgumentSize: number;
+		},
+	) => MaybePromise<void>;
 }
 
 // The maximum objects that can be fetched at once using multiGetObjects.
@@ -57,60 +57,28 @@ const chunk = <T>(arr: T[], size: number): T[][] =>
 		arr.slice(i * size, i * size + size),
 	);
 
-export class DefaultFeatureProvider implements FeatureProvider {
-	#providers: FeatureProvider[];
+export class DefaultTransactionBlockFeatures implements TransactionBlockPlugin {
+	#plugins: TransactionBlockPlugin[];
 	#getClient: () => SuiClient;
 
-	constructor(providers: FeatureProvider[], getClient: () => SuiClient) {
-		this.#providers = providers;
+	constructor(plugins: TransactionBlockPlugin[], getClient: () => SuiClient) {
+		this.#plugins = plugins;
 		this.#getClient = getClient;
 	}
 
-	resolveFeature: ResolveFeatureFn = async (feature, blockData, data) => {
-		for (const provider of this.#providers) {
-			if (provider.resolveFeature) {
-				await provider.resolveFeature(feature, blockData, data);
-			}
-		}
-
-		switch (feature) {
-			case 'txb:setGasPrice': {
-				await this.#setGasPrice(blockData);
-				break;
-			}
-			case 'txb:normalizeInputs': {
-				await this.#normalizeInputs(blockData);
-				break;
-			}
-			case 'txb:resolveObjectReferences': {
-				await this.#resolveObjectReferences(blockData);
-				break;
-			}
-
-			case 'txb:setGasBudget': {
-				await this.#setGasBudget(
-					blockData,
-					data as TransactionBlockFeatureRequests['txb:setGasBudget'],
-				);
-				break;
-			}
-
-			case 'txb:setGasPayment': {
-				await this.#setGasPayment(
-					blockData,
-					data as TransactionBlockFeatureRequests['txb:setGasPayment'],
-				);
-				break;
-			}
-
-			case 'txb:validate': {
-				this.#validate(blockData, data as TransactionBlockFeatureRequests['txb:validate']);
-				break;
+	#runHook = async <T extends keyof TransactionBlockPlugin>(
+		hook: T,
+		...args: Parameters<NonNullable<TransactionBlockPlugin[T]>>
+	) => {
+		for (const plugin of this.#plugins) {
+			if (plugin[hook]) {
+				await (plugin[hook] as () => unknown)(...(args as unknown as []));
 			}
 		}
 	};
 
-	#setGasPrice = async (blockData: TransactionBlockDataBuilder) => {
+	setGasPrice: NonNullable<TransactionBlockPlugin['setGasPrice']> = async (blockData) => {
+		await this.#runHook('setGasPrice', blockData);
 		if (blockData.gasConfig.price) {
 			return;
 		}
@@ -118,10 +86,11 @@ export class DefaultFeatureProvider implements FeatureProvider {
 		blockData.gasConfig.price = await this.#getClient().getReferenceGasPrice();
 	};
 
-	#setGasBudget = async (
-		blockData: TransactionBlockDataBuilder,
-		options: NonNullable<TransactionBlockFeatureRequests['txb:setGasBudget']>,
+	setGasBudget: NonNullable<TransactionBlockPlugin['setGasBudget']> = async (
+		blockData,
+		options,
 	) => {
+		await this.#runHook('setGasBudget', blockData, options);
 		if (!blockData.gasConfig.budget) {
 			const dryRunResult = await this.#getClient().dryRunTransactionBlock({
 				transactionBlock: blockData.build({
@@ -160,13 +129,14 @@ export class DefaultFeatureProvider implements FeatureProvider {
 	};
 
 	// The current default is just picking _all_ coins we can which may not be ideal.
-	#setGasPayment = async (
-		blockData: TransactionBlockDataBuilder,
-		{ maxGasObjects }: TransactionBlockFeatureRequests['txb:setGasPayment'],
+	setGasPayment: NonNullable<TransactionBlockPlugin['setGasPayment']> = async (
+		blockData,
+		options,
 	) => {
+		await this.#runHook('setGasPayment', blockData, options);
 		if (blockData.gasConfig.payment) {
-			if (blockData.gasConfig.payment.length > maxGasObjects) {
-				throw new Error(`Payment objects exceed maximum amount: ${maxGasObjects}`);
+			if (blockData.gasConfig.payment.length > options.maxGasObjects) {
+				throw new Error(`Payment objects exceed maximum amount: ${options.maxGasObjects}`);
 			}
 		}
 
@@ -199,7 +169,7 @@ export class DefaultFeatureProvider implements FeatureProvider {
 
 				return !matchingInput;
 			})
-			.slice(0, maxGasObjects - 1)
+			.slice(0, options.maxGasObjects - 1)
 			.map((coin) => ({
 				objectId: coin.coinObjectId,
 				digest: coin.digest,
@@ -213,7 +183,10 @@ export class DefaultFeatureProvider implements FeatureProvider {
 		blockData.gasConfig.payment = paymentCoins.map((payment) => mask(payment, SuiObjectRef));
 	};
 
-	#resolveObjectReferences = async (blockData: TransactionBlockDataBuilder) => {
+	resolveObjectReferences: NonNullable<TransactionBlockPlugin['resolveObjectReferences']> = async (
+		blockData,
+	) => {
+		await this.#runHook('resolveObjectReferences', blockData);
 		const { inputs } = blockData;
 
 		// Keep track of the object references that will need to be resolved at the end of the transaction.
@@ -297,7 +270,8 @@ export class DefaultFeatureProvider implements FeatureProvider {
 		}
 	};
 
-	#normalizeInputs = async (blockData: TransactionBlockDataBuilder) => {
+	normalizeInputs: NonNullable<TransactionBlockPlugin['normalizeInputs']> = async (blockData) => {
+		await this.#runHook('normalizeInputs', blockData);
 		const { inputs, transactions } = blockData;
 		const moveModulesToResolve: MoveCallTransaction[] = [];
 
@@ -410,21 +384,19 @@ export class DefaultFeatureProvider implements FeatureProvider {
 		}
 	};
 
-	#validate(
-		blockData: TransactionBlockDataBuilder,
-		{ maxPureArgumentSize }: TransactionBlockFeatureRequests['txb:validate'],
-	) {
+	validate: NonNullable<TransactionBlockPlugin['validate']> = async (blockData, options) => {
+		await this.#runHook('validate', blockData, options);
 		// Validate all inputs are the correct size:
 		blockData.inputs.forEach((input, index) => {
 			if (is(input.value, PureCallArg)) {
-				if (input.value.Pure.length > maxPureArgumentSize) {
+				if (input.value.Pure.length > options.maxPureArgumentSize) {
 					throw new Error(
-						`Input at index ${index} is too large, max pure input size is ${maxPureArgumentSize} bytes, got ${input.value.Pure.length} bytes`,
+						`Input at index ${index} is too large, max pure input size is ${options.maxPureArgumentSize} bytes, got ${input.value.Pure.length} bytes`,
 					);
 				}
 			}
 		});
-	}
+	};
 }
 
 function isReceivingType(normalizedType: SuiMoveNormalizedType): boolean {
