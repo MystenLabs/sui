@@ -8,12 +8,11 @@ import { is, mask } from 'superstruct';
 import type { ProtocolConfig, SuiClient } from '../client/index.js';
 import type { SignatureWithBytes, Signer } from '../cryptography/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
-import type { FeatureProvider } from './FeatureProvider.js';
-import { DefaultFeatureProvider } from './FeatureProvider.js';
 import { getIdFromCallArg, Inputs, ObjectCallArg, SuiObjectRef } from './Inputs.js';
 import { createPure } from './pure.js';
 import type { TransactionExpiration } from './TransactionBlockData.js';
 import { TransactionBlockDataBuilder } from './TransactionBlockData.js';
+import { DefaultTransactionBlockFeatures } from './TransactionBlockPlugin.js';
 import type { TransactionArgument, TransactionType } from './Transactions.js';
 import { TransactionBlockInput, Transactions } from './Transactions.js';
 import { create } from './utils.js';
@@ -506,15 +505,6 @@ export class TransactionBlock {
 		return this.#blockData.getDigest();
 	}
 
-	async #prepareGasPrice(featureProvider: FeatureProvider) {
-		await featureProvider.resolveFeature('txb:setGasPrice', this.#blockData);
-	}
-
-	async #prepareTransactions(featureProvider: FeatureProvider) {
-		await featureProvider.resolveFeature('txb:normalizeInputs', this.#blockData);
-		await featureProvider.resolveFeature('txb:resolveObjectReferences', this.#blockData);
-	}
-
 	/**
 	 * Prepare the transaction by validating the transaction data and resolving all inputs
 	 * so that it can be built into bytes.
@@ -528,26 +518,27 @@ export class TransactionBlock {
 			options.protocolConfig = await options.client.getProtocolConfig();
 		}
 
-		const featureProvider = new DefaultFeatureProvider([], () => expectClient(options));
-		await this.#prepareTransactions(featureProvider);
+		const plugins = new DefaultTransactionBlockFeatures([], () => expectClient(options));
+		await plugins.normalizeInputs(this.#blockData);
+		await plugins.resolveObjectReferences(this.#blockData);
 
 		if (!options.onlyTransactionKind) {
 			// TODO: this was previously done in parallel with prepareTransactions, should we allow feature providers to execute in parallel?
-			await this.#prepareGasPrice(featureProvider);
+			await plugins.setGasPrice(this.#blockData);
 
-			await featureProvider.resolveFeature('txb:setGasBudget', this.#blockData, {
+			await plugins.setGasBudget(this.#blockData, {
 				maxTxGas: this.#getConfig('maxTxGas', options),
 				maxTxSizeBytes: this.#getConfig('maxTxSizeBytes', options),
 			});
 
 			// TODO: this was previously done before budgeting, but it seems like it should be done after?
-			await featureProvider.resolveFeature('txb:setGasPayment', this.#blockData, {
+			await plugins.setGasPayment(this.#blockData, {
 				maxGasObjects: this.#getConfig('maxGasObjects', options),
 			});
 		}
 
 		// Perform final validation on the transaction:
-		await featureProvider.resolveFeature('txb:validate', this.#blockData, {
+		await plugins.validate(this.#blockData, {
 			maxPureArgumentSize: this.#getConfig('maxPureArgumentSize', options),
 		});
 	}
