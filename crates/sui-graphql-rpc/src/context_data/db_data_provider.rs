@@ -25,6 +25,7 @@ use crate::{
         move_object::MoveObject,
         move_package::MovePackage,
         move_type::MoveType,
+        name_service_name::{NameServiceName, SuinsRegistration},
         object::{Object, ObjectFilter},
         protocol_config::{ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs},
         safe_mode::SafeMode,
@@ -1484,6 +1485,73 @@ impl PgManager {
         };
 
         Ok(Some(supply))
+    }
+
+    pub(crate) async fn fetch_name_service_names(
+        &self,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        name_service_config: &NameServiceConfig,
+        owner: SuiAddress,
+    ) -> Result<Option<Connection<String, NameServiceName>>, Error> {
+        let suins_registration_type = format!(
+            "{}::suins_registration::SuinsRegistration",
+            name_service_config.package_address
+        );
+        let struct_tag = parse_to_struct_tag(&suins_registration_type)
+            .map_err(|e| Error::Internal(e.to_string()))?;
+
+        let obj_filter = ObjectFilter {
+            type_: Some(suins_registration_type),
+            owner: Some(owner),
+            object_ids: None,
+            object_keys: None,
+        };
+
+        let objs = self
+            .multi_get_objs(
+                first,
+                after,
+                last,
+                before,
+                Some(obj_filter),
+                Some(OwnerType::Address),
+            )
+            .await?;
+
+        let Some((stored_objs, has_next_page)) = objs else {
+            return Ok(None);
+        };
+
+        let mut connection = Connection::new(false, has_next_page);
+        for stored_obj in stored_objs {
+            let object = Object::try_from(stored_obj)?;
+
+            let move_object = MoveObject::try_from(&object).map_err(|_| {
+                Error::Internal(format!(
+                    "Expected {} to be a coin, but it's not an object",
+                    object.address,
+                ))
+            })?;
+
+            let nsn = NameServiceName::try_from(&move_object).map_err(|_| {
+                Error::Internal(format!(
+                    "Expected {} to be a suins registration object, but it is not",
+                    object.address,
+                ))
+            })?;
+
+            let cursor = move_object
+                .native
+                .id()
+                .to_canonical_string(/* with_prefix */ true);
+
+            connection.edges.push(Edge::new(cursor, nsn));
+        }
+
+        Ok(Some(connection))
     }
 }
 
