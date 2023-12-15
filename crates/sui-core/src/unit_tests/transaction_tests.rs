@@ -47,6 +47,8 @@ use crate::{
 };
 
 use super::*;
+use fastcrypto::traits::AggregateAuthenticator;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 pub use crate::authority::authority_test_utils::init_state_with_ids;
 
@@ -862,4 +864,150 @@ async fn zk_multisig_test() {
     assert!(dbg!(err).is_err());
 
     check_locks(authority_state.clone(), vec![object_id]).await;
+}
+
+#[tokio::test]
+async fn test_oversized_txn() {
+    telemetry_subscribers::init_for_testing();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
+    let max_txn_size = authority_state
+        .epoch_store_for_testing()
+        .protocol_config()
+        .max_tx_size_bytes() as usize;
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let obj_ref = object.compute_object_reference();
+
+    // Construct an oversized txn.
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        // Put a lot of commands in the txn so it's large.
+        for _ in 0..(1024 * 16) {
+            builder.transfer_object(recipient, obj_ref).unwrap();
+        }
+        builder.finish()
+    };
+
+    let txn_data = TransactionData::new_programmable(sender, vec![obj_ref], pt, 0, 0);
+
+    let txn = to_sender_signed_transaction(txn_data, &sender_key);
+    let tx_size = bcs::serialized_size(&txn).unwrap();
+
+    // Making sure the txn is larger than the max txn size.
+    assert!(tx_size > max_txn_size);
+
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
+
+    let server = AuthorityServer::new_for_test(
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
+        authority_state.clone(),
+        consensus_address,
+    );
+
+    let server_handle = server.spawn_for_test().await.unwrap();
+
+    let client = NetworkAuthorityClient::connect(server_handle.address())
+        .await
+        .unwrap();
+
+    let res = client.handle_transaction(txn).await;
+    // The txn should be rejected due to its size.
+    assert!(res
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("serialized transaction size exceeded maximum"));
+}
+
+#[tokio::test]
+async fn test_very_large_certificate() {
+    telemetry_subscribers::init_for_testing();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let gas_object_id = ObjectID::random();
+    let authority_state =
+        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let transfer_transaction = init_transfer_transaction(
+        |_| {},
+        sender,
+        &sender_key,
+        recipient,
+        object.compute_object_reference(),
+        gas_object.compute_object_reference(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
+    );
+
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
+
+    let server = AuthorityServer::new_for_test(
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
+        authority_state.clone(),
+        consensus_address,
+    );
+
+    let server_handle = server.spawn_for_test().await.unwrap();
+
+    let client = NetworkAuthorityClient::connect(server_handle.address())
+        .await
+        .unwrap();
+
+    let auth_sig = client
+        .handle_transaction(transfer_transaction.clone())
+        .await
+        .unwrap()
+        .status
+        .into_signed_for_testing();
+
+    let signatures: BTreeMap<_, _> = vec![auth_sig]
+        .into_iter()
+        .map(|a| (a.authority, a.signature))
+        .collect();
+
+    // Insert a lot into the bitmap so the cert is very large, while the txn inside is reasonably sized.
+    let mut signers_map = roaring::bitmap::RoaringBitmap::new();
+    signers_map.insert_range(0..52108864);
+    let sigs: Vec<AuthoritySignature> = signatures.into_values().collect();
+
+    let quorum_signature = sui_types::crypto::AuthorityQuorumSignInfo {
+        epoch: 0,
+        signature: sui_types::crypto::AggregateAuthoritySignature::aggregate(&sigs)
+            .map_err(|e| SuiError::InvalidSignature {
+                error: e.to_string(),
+            })
+            .expect("Validator returned invalid signature"),
+        signers_map,
+    };
+    let cert = sui_types::message_envelope::Envelope::new_from_data_and_sig(
+        transfer_transaction.into_data(),
+        quorum_signature,
+    );
+
+    let res = client.handle_certificate_v2(cert).await;
+    assert!(res.is_err());
+    let err = res.err().unwrap();
+    // The resulting error should be a RpcError with a message length too large.
+    assert!(
+        matches!(err, SuiError::RpcError(..))
+            && err.to_string().contains("message length too large")
+    );
 }

@@ -11593,6 +11593,7 @@ dependencies = [
  "pretty_assertions",
  "prometheus",
  "rand 0.8.5",
+ "roaring",
  "rocksdb",
  "scopeguard",
  "serde",
