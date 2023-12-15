@@ -10,7 +10,11 @@ use prometheus::{
 use prometheus_parse::Scrape;
 
 pub const LATENCY_S: &str = "latency_s";
-const LATENCY_SEC_BUCKETS: &[f64] = &[0.01, 0.015, 0.025, 0.05, 0.1, 0.25, 0.5, 0.75, 1., 2.0];
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01, 0.011, 0.012, 0.013,
+    0.014, 0.015, 0.016, 0.017, 0.018, 0.019, 0.02, 0.021, 0.022, 0.023, 0.024, 0.025, 0.026,
+    0.027, 0.028, 0.029,
+];
 pub const START_TIME_S: &str = "start_time_s";
 pub const LAST_UPDATE_S: &str = "last_update_s";
 pub const BENCHMARK_DURATION: &str = "benchmark_duration";

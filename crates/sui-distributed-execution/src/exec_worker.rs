@@ -812,6 +812,16 @@ impl<
                         // epoch_txs_semaphore -= 1;
                         // assert!(epoch_txs_semaphore >= 0);
                     } else if let SailfishMessage::ProposeExec(full_tx) = msg {
+
+                        // JUST FOR TESTING --- COMMENT THIS OUT FOR REAL EXECUTION
+                        // num_tx += 1;
+                        // if num_tx == 1 {
+                        //     // Expose the start time as a metric. Should be done only once.
+                        //     worker_metrics.register_start_time();
+                        // }
+                        // self.update_metrics(&full_tx, &worker_metrics);
+
+                        // AND THEN UNCOMMENT THIS
                         if full_tx.is_epoch_change() {
                             // don't queue to manager, but store to epoch_change_tx
                             epoch_change_tx = Some(full_tx);

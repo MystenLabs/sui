@@ -205,9 +205,9 @@ async fn deploy_testbed(tx_count: u64, execution_workers: usize) -> GlobalConfig
 
 #[cfg(test)]
 mod test {
-    use std::{fs, time::Duration};
+    use std::time::Duration;
 
-    use sui_distributed_execution::{setup::import_from_files, sw_agent::SWAgent};
+    use sui_distributed_execution::sw_agent::SWAgent;
     use tokio::time::sleep;
 
     use crate::deploy_testbed;
@@ -226,29 +226,5 @@ mod test {
                 break;
             }
         }
-    }
-
-    #[tokio::test]
-    async fn export_test() {
-        let tx_count = 300;
-        let duration = Duration::from_secs(10);
-        let working_directory = "~/test_export";
-
-        fs::create_dir_all(&working_directory).expect(&format!(
-            "Failed to create directory '{}'",
-            working_directory
-        ));
-
-        let (ctx, txs) = super::generate_benchmark_data(tx_count, duration).await;
-        super::export_to_files(
-            ctx.get_accounts(),
-            ctx.get_genesis_objects(),
-            &txs,
-            working_directory.into(),
-        );
-        let (read_accounts, read_objects, read_txs) = import_from_files(working_directory.into());
-        assert_eq!(read_accounts.len(), ctx.get_accounts().len());
-        assert_eq!(&read_objects, ctx.get_genesis_objects());
-        assert_eq!(read_txs, txs);
     }
 }

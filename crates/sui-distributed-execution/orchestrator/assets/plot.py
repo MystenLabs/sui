@@ -16,7 +16,7 @@ from itertools import cycle
 # the following dependencies: `pip install matplotlib`.
 
 
-def ramp_up(scraper, ramp_up_threshold=60):
+def ramp_up(scraper, ramp_up_threshold=5):
     # ramp_up_duration, ramp_up_count = 0, 0
     # ramp_up_sum, ramp_up_square_sum = 0, 0
     # for data in scraper:
@@ -80,7 +80,7 @@ def aggregate_stdev_latency(measurement, workload):
 
             first_term = latency_square_sum / count
             second_term = (latency_sum / count) ** 2
-            if round(first_term - second_term) != 0:
+            if round(first_term - second_term) > 0:
                 stdev += [math.sqrt(first_term - second_term)]
             else:
                 stdev += [0]
@@ -234,6 +234,7 @@ class Plotter:
             )
         plt.xlim(xmin=0)
         plt.ylim(bottom=0)
+        plt.ylim(top=0.03)
         if plot_type == PlotType.L_GRAPH:
             plt.ylim(top=self.y_max)
         plt.xlabel(x_label, fontweight="bold")
@@ -388,7 +389,7 @@ if __name__ == "__main__":
     for r in args.seq_workers:
         parameters = PlotParameters(r, args.exec_workers, args.faults)
         plotter = Plotter(
-            args.dir, parameters, args.y_max, args.legend_columns, median=False
+            args.dir, parameters, args.y_max, args.legend_columns, median=True
         )
         plotter.plot_latency_throughput(args.workload)
         # plotter.plot_scalability(args.max_latencies, args.workload)
