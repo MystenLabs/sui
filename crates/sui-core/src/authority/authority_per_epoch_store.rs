@@ -2237,7 +2237,7 @@ impl AuthorityPerEpochStore {
                 // the lock is not yet dropped.
                 lock=?lock.as_ref(),
                 final_round=?final_round,
-                "Received 2f+1 EndOfPublish messages, notifying last checkpoint"
+                "Notified last checkpoint"
             );
             self.record_end_of_message_quorum_time_metric();
         }
@@ -2314,8 +2314,8 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult<(
         Vec<VerifiedExecutableTransaction>,
         Vec<SequencedConsensusTransactionKey>, // keys to notify as complete
-        Option<parking_lot::RwLockWriteGuard<ReconfigState>>,
-        bool, // final round
+        Option<RwLockWriteGuard<ReconfigState>>,
+        bool, // true if final round
     )> {
         let mut verified_certificates = Vec::with_capacity(transactions.len());
         let mut notifications = Vec::with_capacity(transactions.len());
@@ -2397,19 +2397,25 @@ impl AuthorityPerEpochStore {
             shared_input_next_versions.into_iter(),
         )?;
 
-        let lock = self.process_end_of_publish_transactions(batch, end_of_publish_transactions)?;
-        let (lock, final_round) =
-            self.process_end_of_all_transactions(batch, lock, commit_has_deferred_txns)?;
+        let (lock, final_round) = self.process_end_of_publish_transactions_and_reconfig(
+            batch,
+            end_of_publish_transactions,
+            commit_has_deferred_txns,
+        )?;
 
         Ok((verified_certificates, notifications, lock, final_round))
     }
 
-    fn process_end_of_publish_transactions(
+    fn process_end_of_publish_transactions_and_reconfig(
         &self,
         write_batch: &mut DBBatch,
         transactions: &[VerifiedSequencedConsensusTransaction],
-    ) -> SuiResult<Option<parking_lot::RwLockWriteGuard<ReconfigState>>> {
-        let mut ret = None;
+        commit_has_deferred_txns: bool,
+    ) -> SuiResult<(
+        Option<RwLockWriteGuard<ReconfigState>>,
+        bool, // true if final round
+    )> {
+        let mut lock = None;
 
         for transaction in transactions {
             let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
@@ -2426,7 +2432,7 @@ impl AuthorityPerEpochStore {
 
                 // It is ok to just release lock here as this function is the only place that transition into RejectAllCerts state
                 // And this function itself is always executed from consensus task
-                let collected_end_of_publish = if ret.is_none()
+                let collected_end_of_publish = if lock.is_none()
                     && self
                         .get_reconfig_state_read_lock_guard()
                         .should_accept_consensus_certs()
@@ -2443,16 +2449,16 @@ impl AuthorityPerEpochStore {
                 };
 
                 if collected_end_of_publish {
-                    assert!(ret.is_none());
+                    assert!(lock.is_none());
                     debug!(
                         "Collected enough end_of_publish messages with last message from validator {:?}",
                         authority.concise()
                     );
-                    let mut lock = self.get_reconfig_state_write_lock_guard();
-                    lock.close_all_certs();
-                    self.store_reconfig_state_batch(&lock, write_batch)?;
+                    let mut l = self.get_reconfig_state_write_lock_guard();
+                    l.close_all_certs();
+                    self.store_reconfig_state_batch(&l, write_batch)?;
                     // Holding this lock until end of process_consensus_transactions_and_commit_boundary() where we write batch to DB
-                    ret = Some(lock);
+                    lock = Some(l);
                 };
                 // Important: we actually rely here on fact that ConsensusHandler panics if its
                 // operation returns error. If some day we won't panic in ConsensusHandler on error
@@ -2461,22 +2467,12 @@ impl AuthorityPerEpochStore {
                 self.record_consensus_message_processed(write_batch, transaction.key())?;
             } else {
                 panic!(
-                    "process_end_of_publish_transactions called with non-end-of-publish transaction"
+                    "process_end_of_publish_transactions_and_reconfig called with non-end-of-publish transaction"
                 );
             }
         }
-        Ok(ret)
-    }
 
-    fn process_end_of_all_transactions<'a>(
-        &'a self,
-        write_batch: &mut DBBatch,
-        lock: Option<parking_lot::RwLockWriteGuard<'a, ReconfigState>>,
-        commit_has_deferred_txns: bool,
-    ) -> SuiResult<(
-        Option<parking_lot::RwLockWriteGuard<'a, ReconfigState>>,
-        bool,
-    )> {
+        // Determine if we're ready to advance reconfig state to RejectAllTx.
         let is_reject_all_certs = if let Some(lock) = &lock {
             lock.is_reject_all_certs()
         } else {
@@ -2492,11 +2488,8 @@ impl AuthorityPerEpochStore {
             return Ok((lock, false));
         }
 
-        let mut lock = if let Some(lock) = lock {
-            lock
-        } else {
-            self.get_reconfig_state_write_lock_guard()
-        };
+        // Acquire lock to advance state if we don't already have it.
+        let mut lock = lock.unwrap_or_else(|| self.get_reconfig_state_write_lock_guard());
         lock.close_all_tx();
         self.store_reconfig_state_batch(&lock, write_batch)?;
         Ok((Some(lock), true))
