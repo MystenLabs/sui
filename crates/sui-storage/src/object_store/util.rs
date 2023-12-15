@@ -34,6 +34,10 @@ pub async fn get<S: ObjectStoreGetExt>(store: &S, src: &Path) -> Result<Bytes> {
     Ok(bytes)
 }
 
+pub async fn exists<S: ObjectStoreGetExt>(store: &S, src: &Path) -> bool {
+    store.get_bytes(src).await.is_ok()
+}
+
 pub async fn put<S: ObjectStorePutExt>(store: &S, src: &Path, bytes: Bytes) -> Result<()> {
     retry(backoff::ExponentialBackoff::default(), || async {
         if !bytes.is_empty() {
