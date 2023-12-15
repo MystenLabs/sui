@@ -79,7 +79,7 @@ mod checked {
             reference_gas_price,
             transaction,
             &input_objects,
-            transaction.gas(),
+            &[],
         )?;
         check_receiving_objects(&input_objects, &receiving_objects)?;
         // Runs verifier, which could be expensive.
@@ -125,13 +125,13 @@ mod checked {
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
-        let tx_data = cert.data().transaction_data();
+        let transaction = cert.data().transaction_data();
         let gas_status = check_transaction_input_inner(
             protocol_config,
             reference_gas_price,
-            tx_data,
+            transaction,
             &input_objects,
-            tx_data.gas(),
+            &[],
         )?;
         // NB: We do not check receiving objects when executing. Only at signing time do we check.
         // NB: move verifier is only checked at signing time, not at execution.
@@ -190,11 +190,18 @@ mod checked {
         reference_gas_price: u64,
         transaction: &TransactionData,
         input_objects: &InputObjects,
-        gas: &[ObjectRef],
+        // Overrides the gas objects in the transaction.
+        gas_override: &[ObjectRef],
     ) -> SuiResult<SuiGasStatus> {
         // Cheap validity checks that is ok to run multiple times during processing.
         transaction.check_version_supported(protocol_config)?;
-        transaction.validity_check(protocol_config)?;
+        let gas = if gas_override.is_empty() {
+            transaction.validity_check(protocol_config)?;
+            transaction.gas()
+        } else {
+            transaction.validity_check_no_gas_check(protocol_config)?;
+            gas_override
+        };
 
         let gas_status = get_gas_status(
             input_objects,
