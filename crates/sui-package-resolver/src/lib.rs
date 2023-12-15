@@ -222,12 +222,32 @@ impl<S: PackageStore> Resolver<S> {
     pub async fn type_layout(&self, mut tag: TypeTag) -> Result<MoveTypeLayout> {
         let mut context = ResolutionContext::default();
 
-        // (1). Fetch all the information from this cache that is necessary to resolve types
+        // (1). Fetch all the information from this store that is necessary to resolve types
         // referenced by this tag.
-        context.add_type_tag(&mut tag, &self.package_store).await?;
+        context
+            .add_type_tag(&mut tag, &self.package_store, /* introspect */ true)
+            .await?;
 
         // (2). Use that information to resolve the tag into a layout.
-        context.resolve_type_tag(&tag)
+        context.resolve_layout(&tag)
+    }
+
+    /// Return the abilities of a concrete type, based on the abilities in its type definition, and
+    /// the abilities of its concrete type parameters: An instance of a generic type has `store`,
+    /// `copy, or `drop` if its definition has the ability, and all its non-phantom type parameters
+    /// have the ability as well. Similar rules apply for `key` except that it requires its type
+    /// parameters to have `store`.
+    pub async fn abilities(&self, mut tag: TypeTag) -> Result<AbilitySet> {
+        let mut context = ResolutionContext::default();
+
+        // (1). Fetch all the information from this store that is necessary to resolve types
+        // referenced by this tag.
+        context
+            .add_type_tag(&mut tag, &self.package_store, /* introspect */ false)
+            .await?;
+
+        // (2). Use that information to calculate the type's abilities.
+        context.resolve_abilities(&tag)
     }
 }
 
@@ -591,19 +611,24 @@ impl StructKey {
 }
 
 impl ResolutionContext {
-    /// Add all the necessary information to resolve `tag` into this resolution context, fetching
-    /// data from `cache` as necessary. Also updates package addresses in `tag` to point to runtime
-    /// IDs instead of storage IDs to ensure queries made using these addresses during the
-    /// resolution phase find the relevant field information in the context.
-    async fn add_type_tag<T: PackageStore + ?Sized>(
+    /// Gather definitions for types that contribute to the definition of `tag` into this resolution
+    /// context, fetching data from the `store` as necessary. Also updates package addresses in
+    /// `tag` to point to runtime IDs instead of storage IDs to ensure queries made using these
+    /// addresses during the subsequent resolution phase find the relevant type information in the
+    /// context.
+    ///
+    /// The `introspect` flag controls whether the traversal looks inside types at their fields
+    /// (which is necessary for layout resolution) or not (only explores the outer type and any type
+    /// parameters).
+    async fn add_type_tag<S: PackageStore + ?Sized>(
         &mut self,
         tag: &mut TypeTag,
-        store: &T,
+        store: &S,
+        introspect: bool,
     ) -> Result<()> {
         use TypeTag as T;
 
         let mut frontier = vec![tag];
-        //let cloned_store = store.clone();
         while let Some(tag) = frontier.pop() {
             match tag {
                 T::Address
@@ -639,8 +664,10 @@ impl ResolutionContext {
                         continue;
                     }
 
-                    for (_, sig) in &struct_def.fields {
-                        self.add_signature(sig.clone(), store, &context).await?;
+                    if introspect {
+                        for (_, sig) in &struct_def.fields {
+                            self.add_signature(sig.clone(), store, &context).await?;
+                        }
                     }
 
                     self.structs.insert(key, struct_def);
@@ -701,7 +728,7 @@ impl ResolutionContext {
     /// Translate a type `tag` into its layout using only the information contained in this context.
     /// Requires that the necessary information was added to the context through calls to
     /// `add_type_tag` and `add_signature` before being called.
-    fn resolve_type_tag(&self, tag: &TypeTag) -> Result<MoveTypeLayout> {
+    fn resolve_layout(&self, tag: &TypeTag) -> Result<MoveTypeLayout> {
         use MoveTypeLayout as L;
         use TypeTag as T;
 
@@ -717,7 +744,7 @@ impl ResolutionContext {
             T::U128 => L::U128,
             T::U256 => L::U256,
 
-            T::Vector(tag) => L::Vector(Box::new(self.resolve_type_tag(tag)?)),
+            T::Vector(tag) => L::Vector(Box::new(self.resolve_layout(tag)?)),
 
             T::Struct(s) => {
                 // TODO (optimization): Could introduce a layout cache to further speed up
@@ -753,7 +780,7 @@ impl ResolutionContext {
                 // tag.
                 let param_layouts = type_params
                     .iter()
-                    .map(|tag| self.resolve_type_tag(tag))
+                    .map(|tag| self.resolve_layout(tag))
                     .collect::<Result<Vec<_>>>()?;
 
                 // SAFETY: `param_layouts` contains `MoveTypeLayout`-s that are generated by this
@@ -817,8 +844,6 @@ impl ResolutionContext {
             )),
 
             O::Struct(key, params) => {
-                assert!(self.structs.contains_key(key), "Missing: {key:#?}");
-
                 // SAFETY: `add_signature` ensures `structs` has an element with this key.
                 let def = &self.structs[key];
 
@@ -857,6 +882,49 @@ impl ResolutionContext {
             }
         })
     }
+
+    /// Calculate the abilities for a concrete type `tag`. Requires that the necessary information
+    /// was added to the context through calls to `add_type_tag` before being called.
+    fn resolve_abilities(&self, tag: &TypeTag) -> Result<AbilitySet> {
+        use TypeTag as T;
+        Ok(match tag {
+            T::Signer => return Err(Error::UnexpectedSigner),
+
+            T::Bool | T::U8 | T::U16 | T::U32 | T::U64 | T::U128 | T::U256 | T::Address => {
+                AbilitySet::PRIMITIVES
+            }
+
+            T::Vector(tag) => self.resolve_abilities(tag)?.intersect(AbilitySet::VECTOR),
+
+            T::Struct(s) => {
+                // SAFETY: `add_type_tag` ensures `structs` has an element with this key.
+                let key = StructRef::from(s.as_ref());
+                let def = &self.structs[&key];
+
+                if def.type_params.len() != s.type_params.len() {
+                    return Err(Error::TypeArityMismatch(
+                        def.type_params.len(),
+                        s.type_params.len(),
+                    ));
+                }
+
+                let param_abilities: Result<Vec<AbilitySet>> = s
+                    .type_params
+                    .iter()
+                    .map(|p| self.resolve_abilities(p))
+                    .collect();
+
+                AbilitySet::polymorphic_abilities(
+                    def.abilities,
+                    def.type_params.iter().map(|p| p.is_phantom),
+                    param_abilities?.into_iter(),
+                )
+                // This error is unexpected because the only reason it would fail is because of a
+                // type parameter arity mismatch, which we check for above.
+                .map_err(|e| Error::UnexpectedError(Box::new(e)))?
+            }
+        })
+    }
 }
 
 impl<'s> From<&'s StructTag> for StructRef<'s, 's> {
@@ -890,6 +958,7 @@ fn read_signature(idx: SignatureIndex, bytecode: &CompiledModule) -> Result<Vec<
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
+    use move_binary_format::file_format::Ability;
     use std::sync::Arc;
     use std::{path::PathBuf, str::FromStr, sync::RwLock};
 
@@ -1499,6 +1568,172 @@ mod tests {
         ));
     }
 
+    /// Primitive types should have the expected primitive abilities
+    #[tokio::test]
+    async fn test_primitive_abilities() {
+        use Ability as A;
+        use AbilitySet as S;
+
+        let (_, cache) = package_cache([]);
+        let resolver = Resolver::new(cache);
+
+        for prim in ["address", "bool", "u8", "u16", "u32", "u64", "u128", "u256"] {
+            assert_eq!(
+                resolver.abilities(type_(prim)).await.unwrap(),
+                S::EMPTY | A::Copy | A::Drop | A::Store,
+                "Unexpected primitive abilities for: {prim}",
+            );
+        }
+    }
+
+    /// Generic type abilities depend on the abilities of their type parameters.
+    #[tokio::test]
+    async fn test_simple_generic_abilities() {
+        use Ability as A;
+        use AbilitySet as S;
+
+        let (_, cache) = package_cache([
+            (1, build_package("sui"), sui_types()),
+            (1, build_package("d0"), d0_types()),
+        ]);
+        let resolver = Resolver::new(cache);
+
+        let a1 = resolver
+            .abilities(type_("0xd0::m::T<u32, u64>"))
+            .await
+            .unwrap();
+        assert_eq!(a1, S::EMPTY | A::Copy | A::Drop | A::Store);
+
+        let a2 = resolver
+            .abilities(type_("0xd0::m::T<0xd0::m::S, u64>"))
+            .await
+            .unwrap();
+        assert_eq!(a2, S::EMPTY | A::Drop | A::Store);
+
+        let a3 = resolver
+            .abilities(type_("0xd0::m::T<0xd0::m::R, 0xd0::m::S>"))
+            .await
+            .unwrap();
+        assert_eq!(a3, S::EMPTY | A::Drop);
+
+        let a4 = resolver
+            .abilities(type_("0xd0::m::T<0xd0::m::Q, 0xd0::m::R>"))
+            .await
+            .unwrap();
+        assert_eq!(a4, S::EMPTY);
+    }
+
+    /// Generic abilities also need to handle nested type parameters
+    #[tokio::test]
+    async fn test_nested_generic_abilities() {
+        use Ability as A;
+        use AbilitySet as S;
+
+        let (_, cache) = package_cache([
+            (1, build_package("sui"), sui_types()),
+            (1, build_package("d0"), d0_types()),
+        ]);
+        let resolver = Resolver::new(cache);
+
+        let a1 = resolver
+            .abilities(type_("0xd0::m::T<0xd0::m::T<0xd0::m::R, u32>, u64>"))
+            .await
+            .unwrap();
+        assert_eq!(a1, S::EMPTY | A::Copy | A::Drop);
+    }
+
+    /// Key is different from other abilities in that it requires fields to have `store`, rather
+    /// than itself.
+    #[tokio::test]
+    async fn test_key_abilities() {
+        use Ability as A;
+        use AbilitySet as S;
+
+        let (_, cache) = package_cache([
+            (1, build_package("sui"), sui_types()),
+            (1, build_package("d0"), d0_types()),
+        ]);
+        let resolver = Resolver::new(cache);
+
+        let a1 = resolver
+            .abilities(type_("0xd0::m::O<u32, u64>"))
+            .await
+            .unwrap();
+        assert_eq!(a1, S::EMPTY | A::Key | A::Store);
+
+        let a2 = resolver
+            .abilities(type_("0xd0::m::O<0xd0::m::S, u64>"))
+            .await
+            .unwrap();
+        assert_eq!(a2, S::EMPTY | A::Key | A::Store);
+
+        // We would not be able to get an instance of this type, but in case the question is asked,
+        // its abilities would be empty.
+        let a3 = resolver
+            .abilities(type_("0xd0::m::O<0xd0::m::R, u64>"))
+            .await
+            .unwrap();
+        assert_eq!(a3, S::EMPTY);
+
+        // Key does not propagate up by itself, so this type is also uninhabitable.
+        let a4 = resolver
+            .abilities(type_("0xd0::m::O<0xd0::m::P, u32>"))
+            .await
+            .unwrap();
+        assert_eq!(a4, S::EMPTY);
+    }
+
+    /// Phantom types don't impact abilities
+    #[tokio::test]
+    async fn test_phantom_abilities() {
+        use Ability as A;
+        use AbilitySet as S;
+
+        let (_, cache) = package_cache([
+            (1, build_package("sui"), sui_types()),
+            (1, build_package("d0"), d0_types()),
+        ]);
+        let resolver = Resolver::new(cache);
+
+        let a1 = resolver
+            .abilities(type_("0xd0::m::O<u32, 0xd0::m::R>"))
+            .await
+            .unwrap();
+        assert_eq!(a1, S::EMPTY | A::Key | A::Store);
+    }
+
+    #[tokio::test]
+    async fn test_err_ability_arity() {
+        let (_, cache) = package_cache([
+            (1, build_package("sui"), sui_types()),
+            (1, build_package("d0"), d0_types()),
+        ]);
+        let resolver = Resolver::new(cache);
+
+        // Too few
+        let err = resolver
+            .abilities(type_("0xd0::m::T<u8>"))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::TypeArityMismatch(2, 1)));
+
+        // Too many
+        let err = resolver
+            .abilities(type_("0xd0::m::T<u8, u16, u32>"))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::TypeArityMismatch(2, 3)));
+    }
+
+    #[tokio::test]
+    async fn test_err_ability_signer() {
+        let (_, cache) = package_cache([]);
+        let resolver = Resolver::new(cache);
+
+        let err = resolver.abilities(type_("signer")).await.unwrap_err();
+        assert!(matches!(err, Error::UnexpectedSigner));
+    }
+
     /***** Test Helpers ***************************************************************************/
 
     type TypeOriginTable = Vec<StructKey>;
@@ -1532,6 +1767,17 @@ mod tests {
         vec![struct_("0xc0", "m", "T0")]
     }
 
+    fn d0_types() -> TypeOriginTable {
+        vec![
+            struct_("0xd0", "m", "O"),
+            struct_("0xd0", "m", "P"),
+            struct_("0xd0", "m", "Q"),
+            struct_("0xd0", "m", "R"),
+            struct_("0xd0", "m", "S"),
+            struct_("0xd0", "m", "T"),
+        ]
+    }
+
     fn s0_types() -> TypeOriginTable {
         vec![struct_("0x1", "m", "T0")]
     }
@@ -1542,6 +1788,10 @@ mod tests {
         types.extend([struct_("0x1", "m", "T1")]);
 
         types
+    }
+
+    fn sui_types() -> TypeOriginTable {
+        vec![struct_("0x2", "object", "UID")]
     }
 
     /// Build an in-memory package cache from locally compiled packages.  Assumes that all packages

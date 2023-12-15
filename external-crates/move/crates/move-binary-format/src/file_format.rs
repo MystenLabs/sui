@@ -643,7 +643,7 @@ pub struct AbilitySet(u8);
 impl AbilitySet {
     /// The empty ability set
     pub const EMPTY: Self = Self(0);
-    /// Abilities for `Bool`, `U8`, `U64`, `U128`, and `Address`
+    /// Abilities for `Bool`, `U8`, `U16`, `U32`, `U64`, `U128`, `U256`, and `Address`
     pub const PRIMITIVES: AbilitySet =
         Self((Ability::Copy as u8) | (Ability::Drop as u8) | (Ability::Store as u8));
     /// Abilities for `Reference` and `MutableReference`
