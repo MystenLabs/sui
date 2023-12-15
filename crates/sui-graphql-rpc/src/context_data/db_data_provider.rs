@@ -695,12 +695,11 @@ impl PgManager {
     pub(crate) async fn fetch_validator_apys(
         &self,
         address: &NativeSuiAddress,
-        epoch: Option<&u64>,
     ) -> Result<Option<f64>, Error> {
         let governance_api = GovernanceReadApiV2::new(self.inner.clone());
 
         governance_api
-            .get_validator_apy(address, epoch)
+            .get_validator_apy(address)
             .await
             .map_err(|e| Error::Internal(format!("{e}")))
     }
