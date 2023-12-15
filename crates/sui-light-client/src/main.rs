@@ -6,13 +6,13 @@ use async_trait::async_trait;
 use move_core_types::account_address::AccountAddress;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 
-use sui_rest_api::{CheckpointData, CheckpointTransaction, Client};
+use sui_rest_api::{CheckpointData, Client};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     committee::Committee,
     crypto::AuthorityQuorumSignInfo,
     digests::TransactionDigest,
-    effects::TransactionEffects,
+    effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
     message_envelope::Envelope,
     messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSummary, EndOfEpochData},
     object::Data,
@@ -357,7 +357,7 @@ async fn write_full_checkpoint(
 async fn get_full_checkpoint(config: &Config, seq: u64) -> anyhow::Result<CheckpointData> {
     let mut checkpoint_path = config.checkpoint_summary_dir.clone();
     checkpoint_path.push("untrusted_cache");
-    checkpoint_path.push(format!("{}.yaml", seq));
+    checkpoint_path.push(format!("{}.bcs", seq));
 
     // Try reading the cache
     if let Ok(ckpt) = read_full_checkpoint(&checkpoint_path).await {
@@ -374,10 +374,49 @@ async fn get_full_checkpoint(config: &Config, seq: u64) -> anyhow::Result<Checkp
     Ok(full_check_point)
 }
 
+fn assert_contains_transaction_effects(
+    checkpoint: &CheckpointData,
+    committee: &Committee,
+    tid: TransactionDigest,
+) -> anyhow::Result<(TransactionEffects, Option<TransactionEvents>)> {
+    let summary = &checkpoint.checkpoint_summary;
+
+    // Verify the checkpoint summary using the committee
+    summary.clone().verify(committee)?;
+
+    // Check the validty of the checkpoint contents
+    let contents = &checkpoint.checkpoint_contents;
+    anyhow::ensure!(
+        contents.digest() == &summary.content_digest,
+        "The content digest in the checkpoint summary does not match the digest of the checkpoint contents"
+    );
+
+    // Check the validity of the transaction
+    let matching_tx = checkpoint
+        .transactions
+        .iter()
+        // Note that we get the digest of the effects to ensure this is
+        // indeed the correct effects that are authenticated in the contents.
+        .find(|tx| tx.effects.execution_digests().transaction == tid)
+        .ok_or(anyhow!("Transaction not found in checkpoint contents"))?;
+
+    // The effects are correct by the check above that creates matching_tx
+
+    // Check the events are all correct.
+    let events_digest = matching_tx.events.as_ref().map(|events| events.digest());
+    anyhow::ensure!(
+        events_digest.as_ref() == matching_tx.effects.events_digest(),
+        "Events digest does not match"
+    );
+
+    // Since we do not check objects we do not return them
+    Ok((matching_tx.effects.clone(), matching_tx.events.clone()))
+}
+
 async fn check_transaction_tid(
     config: &Config,
     tid: TransactionDigest,
-) -> anyhow::Result<(TransactionEffects, CheckpointTransaction)> {
+) -> anyhow::Result<(TransactionEffects, Option<TransactionEvents>)> {
     let sui_mainnet: Arc<sui_sdk::SuiClient> = Arc::new(
         SuiClientBuilder::default()
             .build("http://ord-mnt-rpcbig-06.mainnet.sui.io:9000")
@@ -396,9 +435,6 @@ async fn check_transaction_tid(
 
     // Download the full checkpoint for this sequence number
     let full_check_point = get_full_checkpoint(config, seq).await?;
-    let summary = &full_check_point.checkpoint_summary;
-
-    // Check the validity of the checkpoint summary
 
     // Load the list of stored checkpoints
     let checkpoints_list: CheckpointsList = read_checkpoint_list(config)?;
@@ -427,41 +463,9 @@ async fn check_transaction_tid(
 
     // Make a commitee object using this
     let committee = Committee::new(prev_ckp.epoch().saturating_add(1), prev_committee);
+    println!("Committee: {:?}", prev_ckp.sequence_number());
 
-    // Verify the checkpoint summary using the committee
-    summary
-        .clone()
-        .verify(&committee)
-        .expect("The signatures on the downloaded checkpoint summary are not valid");
-
-    // Check the validty of the checkpoint contents
-
-    let contents = &full_check_point.checkpoint_contents;
-    if contents.digest() != &summary.content_digest {
-        return Err(anyhow!("The content digest in the checkpoint summary does not match the digest of the checkpoint contents"));
-    };
-
-    // Check the validity of the transaction
-
-    let found: &Vec<_> = &full_check_point
-        .checkpoint_contents
-        .enumerate_transactions(summary)
-        .filter(|(_, t)| t.transaction == tid)
-        .collect();
-
-    let exec_digests = found
-        .first()
-        .ok_or(anyhow!("Transaction not found in checkpoint contents"))?;
-
-    let matching_tx = full_check_point
-        .transactions
-        .iter()
-        // Note that we get the digest of the effects to ensure this is
-        // indeed the correct effects that are authenticated in the contents.
-        .find(|tx| &tx.effects.execution_digests() == exec_digests.1)
-        .ok_or(anyhow!("Transaction not found in checkpoint contents"))?;
-
-    Ok((matching_tx.effects.clone(), matching_tx.clone()))
+    assert_contains_transaction_effects(&full_check_point, &committee, tid)
 }
 
 #[tokio::main]
@@ -482,24 +486,24 @@ pub async fn main() {
         config.checkpoint_summary_dir.display()
     );
 
+    let client: Client = Client::new(config.full_node_url.as_str());
+    let remote_package_store = RemotePackageStore::new(client, config.clone());
+    let resolver = Resolver::new(remote_package_store);
+
     match args.command {
         Some(SCommands::Transaction { tid }) => {
-            let (_, transaction) =
+            let (effects, events) =
                 check_transaction_tid(&config, TransactionDigest::from_str(&tid).unwrap())
                     .await
                     .unwrap();
 
-            let exec_digests = transaction.effects.execution_digests();
+            let exec_digests = effects.execution_digests();
             println!(
                 "Executed TID: {} Effects: {}",
                 exec_digests.transaction, exec_digests.effects
             );
 
-            for event in transaction.events.as_ref().unwrap().data.iter() {
-                let client: Client = Client::new(config.full_node_url.as_str());
-                let remote_package_store = RemotePackageStore::new(client, config.clone());
-                let resolver = Resolver::new(remote_package_store);
-
+            for event in events.as_ref().unwrap().data.iter() {
                 let type_layout = resolver
                     .type_layout(event.type_.clone().into())
                     .await
@@ -530,15 +534,13 @@ pub async fn main() {
             let (effects, _) = check_transaction_tid(&config, object.previous_transaction)
                 .await
                 .unwrap();
+
             // check that this object ID, version and hash is in the effects
             effects
                 .all_changed_objects()
                 .iter()
                 .find(|oref| oref.0 == object.compute_object_reference())
                 .unwrap();
-
-            let remote_package_store = RemotePackageStore::new(client, config.clone());
-            let resolver = Resolver::new(remote_package_store);
 
             if let Data::Move(move_object) = &object.data {
                 let object_type = move_object.type_().clone();
@@ -571,5 +573,130 @@ pub async fn main() {
                 .expect("Failed to sync checkpoints");
         }
         _ => {}
+    }
+}
+
+// Make a test namespace
+#[cfg(test)]
+mod tests {
+    use sui_types::messages_checkpoint::FullCheckpointContents;
+
+    use super::*;
+    use std::path::PathBuf;
+
+    async fn read_data() -> (Committee, CheckpointData) {
+        let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        d.push("example_config/20873329.yaml");
+
+        let mut reader = fs::File::open(d.clone()).unwrap();
+        let metadata = fs::metadata(&d).unwrap();
+        let mut buffer = vec![0; metadata.len() as usize];
+        reader.read_exact(&mut buffer).unwrap();
+        let checkpoint: Envelope<CheckpointSummary, AuthorityQuorumSignInfo<true>> =
+            bcs::from_bytes(&buffer)
+                .map_err(|_| anyhow!("Unable to parse checkpoint file"))
+                .unwrap();
+
+        let prev_committee = checkpoint
+            .end_of_epoch_data
+            .as_ref()
+            .ok_or(anyhow!(
+                "Expected all checkpoints to be end-of-epoch checkpoints"
+            ))
+            .unwrap()
+            .next_epoch_committee
+            .iter()
+            .cloned()
+            .collect();
+
+        // Make a commitee object using this
+        let committee = Committee::new(checkpoint.epoch().saturating_add(1), prev_committee);
+
+        let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        d.push("example_config/20958462.bcs");
+
+        let full_checkpoint = read_full_checkpoint(&d).await.unwrap();
+
+        (committee, full_checkpoint)
+    }
+
+    #[tokio::test]
+    async fn test_checkpoint_all_good() {
+        let (committee, full_checkpoint) = read_data().await;
+
+        assert_contains_transaction_effects(
+            &full_checkpoint,
+            &committee,
+            TransactionDigest::from_str("8RiKBwuAbtu8zNCtz8SrcfHyEUzto6zi6cMVA9t4WhWk").unwrap(),
+        )
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_checkpoint_bad_committee() {
+        let (mut committee, full_checkpoint) = read_data().await;
+
+        // Change committee
+        committee.epoch += 10;
+
+        assert!(assert_contains_transaction_effects(
+            &full_checkpoint,
+            &committee,
+            TransactionDigest::from_str("8RiKBwuAbtu8zNCtz8SrcfHyEUzto6zi6cMVA9t4WhWk").unwrap(),
+        )
+        .is_err());
+    }
+
+    #[tokio::test]
+    async fn test_checkpoint_no_transaction() {
+        let (committee, full_checkpoint) = read_data().await;
+
+        assert!(assert_contains_transaction_effects(
+            &full_checkpoint,
+            &committee,
+            TransactionDigest::from_str("8RiKBwuAbtu8zNCtz8SrcfHyEUzto6zj6cMVA9t4WhWk").unwrap(),
+        )
+        .is_err());
+    }
+
+    #[tokio::test]
+    async fn test_checkpoint_bad_contents() {
+        let (committee, mut full_checkpoint) = read_data().await;
+
+        // Change contents
+        let random_contents = FullCheckpointContents::random_for_testing();
+        full_checkpoint.checkpoint_contents = random_contents.checkpoint_contents();
+
+        assert!(assert_contains_transaction_effects(
+            &full_checkpoint,
+            &committee,
+            TransactionDigest::from_str("8RiKBwuAbtu8zNCtz8SrcfHyEUzto6zj6cMVA9t4WhWk").unwrap(),
+        )
+        .is_err());
+    }
+
+    #[tokio::test]
+    async fn test_checkpoint_bad_events() {
+        let (committee, mut full_checkpoint) = read_data().await;
+
+        let event = full_checkpoint.transactions[4]
+            .events
+            .as_ref()
+            .unwrap()
+            .data[0]
+            .clone();
+
+        for t in &mut full_checkpoint.transactions {
+            if let Some(events) = &mut t.events {
+                events.data.push(event.clone());
+            }
+        }
+
+        assert!(assert_contains_transaction_effects(
+            &full_checkpoint,
+            &committee,
+            TransactionDigest::from_str("8RiKBwuAbtu8zNCtz8SrcfHyEUzto6zj6cMVA9t4WhWk").unwrap(),
+        )
+        .is_err());
     }
 }
