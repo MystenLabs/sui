@@ -8,9 +8,9 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use tokio::sync::mpsc;
 use tokio::sync::oneshot;
-use tokio::sync::{broadcast, mpsc};
-use tracing::{debug, info};
+use tracing::info;
 
 pub struct WorkerPool<W: Worker> {
     pub task_name: String,
@@ -29,7 +29,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
     pub async fn run(
         self,
         mut current_checkpoint_number: CheckpointSequenceNumber,
-        mut checkpoint_receiver: broadcast::Receiver<CheckpointData>,
+        mut checkpoint_receiver: mpsc::Receiver<CheckpointData>,
         executor_progress_sender: mpsc::Sender<(String, CheckpointSequenceNumber)>,
     ) {
         info!(
@@ -37,6 +37,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
             self.task_name, self.concurrency, current_checkpoint_number
         );
         let mut updates: HashSet<u64> = HashSet::new();
+        let mut in_progress = 0;
 
         let (progress_sender, mut progress_receiver) = mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
         let mut workers = vec![];
@@ -77,22 +78,19 @@ impl<W: Worker + 'static> WorkerPool<W> {
         // main worker pool loop
         loop {
             tokio::select! {
-                checkpoint_result = checkpoint_receiver.recv() => {
-                    match checkpoint_result {
-                        Ok(checkpoint) => {
-                            let sequence_number = checkpoint.checkpoint_summary.sequence_number;
-                            if sequence_number < current_checkpoint_number {
-                                continue;
-                            }
-                            let worker_id = (sequence_number % self.concurrency as u64) as usize;
-                            debug!("received checkpoint for processing {} for workflow {}", sequence_number, self.task_name);
-                            workers[worker_id].0.send(checkpoint).await.expect("failed to dispatch a task");
-                        }
-                        Err(_) => break,
+                Some(checkpoint) = checkpoint_receiver.recv(), if in_progress < MAX_CHECKPOINTS_IN_PROGRESS => {
+                    let sequence_number = checkpoint.checkpoint_summary.sequence_number;
+                    if sequence_number < current_checkpoint_number {
+                        continue;
                     }
+                    let worker_id = (sequence_number % self.concurrency as u64) as usize;
+                    info!("received checkpoint for processing {} for workflow {}", sequence_number, self.task_name);
+                    in_progress += 1;
+                    workers[worker_id].0.send(checkpoint).await.expect("failed to dispatch a task");
                 }
                 Some(status_update) = progress_receiver.recv() => {
-                    debug!("finished checkpoint processing {} for workflow {}", status_update, self.task_name);
+                    info!("finished checkpoint processing {} for workflow {}", status_update, self.task_name);
+                    in_progress -= 1;
                     updates.insert(status_update);
                     if status_update == current_checkpoint_number {
                         while updates.remove(&current_checkpoint_number) {

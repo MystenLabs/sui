@@ -11585,6 +11585,7 @@ dependencies = [
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
  "backoff",
+ "base64-url",
  "bcs",
  "futures",
  "mysten-metrics",
