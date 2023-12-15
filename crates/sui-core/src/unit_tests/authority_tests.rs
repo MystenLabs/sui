@@ -3098,7 +3098,7 @@ async fn test_invalid_authenticator_state_parameter() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = authority_state.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store.verify_transaction(transaction).unwrap();
 
     let Err(e) = authority_state
         .handle_transaction(&epoch_store, transaction)
@@ -3153,7 +3153,7 @@ async fn test_invalid_randomness_parameter() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = authority_state.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store.verify_transaction(transaction).unwrap();
 
     let Err(e) = authority_state
         .handle_transaction(&epoch_store, transaction)
