@@ -46,6 +46,9 @@ struct Inner<'a> {
     // If it was a child object, it resolves to the root parent's sequence number.
     // Otherwise, it is just the sequence number at the beginning of the transaction.
     root_version: BTreeMap<ObjectID, SequenceNumber>,
+    // A map from a wrapped object to the object it was contained in at the
+    // beginning of the transaction.
+    wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
     // cached objects from the resolver. An object might be in this map but not in the store
     // if it's existence was queried, but the value was not used.
     cached_objects: BTreeMap<ObjectID, Option<Object>>,
@@ -291,6 +294,10 @@ impl<'a> Inner<'a> {
             debug_assert!(contained_uids.contains(&child));
             for id in contained_uids {
                 self.root_version.insert(id, v);
+                if id != child {
+                    let prev = self.wrapped_object_containers.insert(id, child);
+                    debug_assert!(prev.is_none())
+                }
             }
         }
         Ok(ObjectResult::Loaded((
@@ -333,6 +340,7 @@ impl<'a> ChildObjectStore<'a> {
     pub(super) fn new(
         resolver: &'a dyn ChildObjectResolver,
         root_version: BTreeMap<ObjectID, SequenceNumber>,
+        wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
         is_metered: bool,
         protocol_config: &'a ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -342,6 +350,7 @@ impl<'a> ChildObjectStore<'a> {
             inner: Inner {
                 resolver,
                 root_version,
+                wrapped_object_containers,
                 cached_objects: BTreeMap::new(),
                 is_metered,
                 protocol_config,
@@ -386,6 +395,10 @@ impl<'a> ChildObjectStore<'a> {
                         })?;
                     for id in contained_uids {
                         self.inner.root_version.insert(id, child_version);
+                        if id != child {
+                            let prev = self.inner.wrapped_object_containers.insert(id, child);
+                            debug_assert!(prev.is_none())
+                        }
                     }
                     (ObjectResult::Loaded(v), obj_meta)
                 }
@@ -566,6 +579,10 @@ impl<'a> ChildObjectStore<'a> {
 
     pub(super) fn cached_objects(&self) -> &BTreeMap<ObjectID, Option<Object>> {
         &self.inner.cached_objects
+    }
+
+    pub(super) fn wrapped_object_containers(&self) -> &BTreeMap<ObjectID, ObjectID> {
+        &self.inner.wrapped_object_containers
     }
 
     // retrieve the `Op` effects for the child objects

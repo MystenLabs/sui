@@ -138,6 +138,7 @@ impl<'a> ObjectRuntime<'a> {
     ) -> Self {
         let mut input_object_owners = BTreeMap::new();
         let mut root_version = BTreeMap::new();
+        let mut wrapped_object_containers = BTreeMap::new();
         for (id, input_object) in input_objects {
             let InputObject {
                 contained_uids,
@@ -148,12 +149,17 @@ impl<'a> ObjectRuntime<'a> {
             debug_assert!(contained_uids.contains(&id));
             for contained_uid in contained_uids {
                 root_version.insert(contained_uid, version);
+                if contained_uid != id {
+                    let prev = wrapped_object_containers.insert(contained_uid, id);
+                    debug_assert!(prev.is_none());
+                }
             }
         }
         Self {
             child_object_store: ChildObjectStore::new(
                 object_resolver,
                 root_version,
+                wrapped_object_containers,
                 is_metered,
                 protocol_config,
                 metrics.clone(),
@@ -442,6 +448,12 @@ impl<'a> ObjectRuntime<'a> {
                     .map(|(id, meta)| (*id, meta.clone())),
             )
             .collect()
+    }
+
+    /// A map from wrapped objects to the object that wraps them at the beginning of the
+    /// transaction.
+    pub fn wrapped_object_containers(&self) -> BTreeMap<ObjectID, ObjectID> {
+        self.child_object_store.wrapped_object_containers().clone()
     }
 }
 

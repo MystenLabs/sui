@@ -48,6 +48,8 @@ pub struct TemporaryStore<'backing> {
     execution_results: ExecutionResultsV2,
     /// Objects that were loaded during execution (dynamic fields + received objects).
     loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
+    /// A map from wrapped object to its container. Used during expensive invariant checks.
+    wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
     protocol_config: &'backing ProtocolConfig,
 
     /// Every package that was loaded from DB store during execution.
@@ -81,6 +83,7 @@ impl<'backing> TemporaryStore<'backing> {
             execution_results: ExecutionResultsV2::default(),
             protocol_config,
             loaded_runtime_objects: BTreeMap::new(),
+            wrapped_object_containers: BTreeMap::new(),
             runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
             receiving_objects,
         }
@@ -501,6 +504,29 @@ impl<'backing> TemporaryStore<'backing> {
         self.loaded_runtime_objects.extend(loaded_runtime_objects);
     }
 
+    pub fn save_wrapped_object_containers(
+        &mut self,
+        wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
+    ) {
+        #[cfg(debug_assertions)]
+        {
+            for (id, container1) in &wrapped_object_containers {
+                if let Some(container2) = self.wrapped_object_containers.get(id) {
+                    assert_eq!(container1, container2);
+                }
+            }
+            for (id, container1) in &self.wrapped_object_containers {
+                if let Some(container2) = wrapped_object_containers.get(id) {
+                    assert_eq!(container1, container2);
+                }
+            }
+        }
+        // Merge the two maps because we may be calling the execution engine more than once
+        // (e.g. in advance epoch transaction, where we may be publishing a new system package).
+        self.wrapped_object_containers
+            .extend(wrapped_object_containers);
+    }
+
     pub fn estimate_effects_size_upperbound(&self) -> usize {
         if self.protocol_config.enable_effects_v2() {
             TransactionEffects::estimate_effects_size_upperbound_v2(
@@ -607,113 +633,121 @@ impl<'backing> TemporaryStore<'backing> {
 }
 
 impl<'backing> TemporaryStore<'backing> {
-    /// returns lists of (objects whose owner we must authenticate, objects whose owner has already been authenticated)
-    fn get_objects_to_authenticate(
-        &self,
-        sender: &SuiAddress,
-        gas_charger: &mut GasCharger,
-        is_epoch_change: bool,
-    ) -> SuiResult<(Vec<ObjectID>, HashSet<ObjectID>)> {
-        let gas_objs: HashSet<&ObjectID> = gas_charger.gas_coins().iter().map(|g| &g.0).collect();
-        let mut objs_to_authenticate = Vec::new();
-        let mut authenticated_objs = HashSet::new();
-        for (id, obj) in &self.input_objects {
-            if gas_objs.contains(id) {
-                // gas could be owned by either the sender (common case) or sponsor (if this is a sponsored tx,
-                // which we do not know inside this function).
-                // either way, no object ownership chain should be rooted in a gas object
-                // thus, consider object authenticated, but don't add it to authenticated_objs
-                continue;
-            }
-            match &obj.owner {
-                Owner::AddressOwner(a) => {
-                    assert!(sender == a, "Input object not owned by sender");
-                    authenticated_objs.insert(*id);
-                }
-                Owner::Shared { .. } => {
-                    authenticated_objs.insert(*id);
-                }
-                Owner::Immutable => {
-                    // object is authenticated, but it cannot own other objects,
-                    // so we should not add it to `authenticated_objs`
-                    // However, we would definitely want to add immutable objects
-                    // to the set of autehnticated roots if we were doing runtime
-                    // checks inside the VM instead of after-the-fact in the temporary
-                    // store. Here, we choose not to add them because this will catch a
-                    // bug where we mutate or delete an object that belongs to an immutable
-                    // object (though it will show up somewhat opaquely as an authentication
-                    // failure), whereas adding the immutable object to the roots will prevent
-                    // us from catching this.
-                }
-                Owner::ObjectOwner(_parent) => {
-                    unreachable!("Input objects must be address owned, shared, or immutable")
-                }
-            }
-        }
-
-        for id in &self.execution_results.modified_objects {
-            if authenticated_objs.contains(id) || gas_objs.contains(id) {
-                continue;
-            }
-            let old_obj = self.store.get_object(id)?.unwrap_or_else(|| {
-                panic!("Modified object must exist in the store: ID = {:?}", id)
-            });
-            match &old_obj.owner {
-                // ObjectOwner = dynamic field mutations
-                // AddressOwner = received object
-                Owner::ObjectOwner(_) | Owner::AddressOwner(_) => {
-                    objs_to_authenticate.push(*id);
-                }
-                Owner::Shared { .. } => {
-                    unreachable!("Should already be in authenticated_objs")
-                }
-                Owner::Immutable => {
-                    assert!(is_epoch_change, "Immutable objects cannot be written, except for Sui Framework/Move stdlib upgrades at epoch change boundaries");
-                    // Note: this assumes that the only immutable objects an epoch change tx can update are system packages,
-                    // but in principle we could allow others.
-                    assert!(
-                        is_system_package(*id),
-                        "Only system packages can be upgraded"
-                    );
-                }
-            }
-        }
-        Ok((objs_to_authenticate, authenticated_objs))
-    }
-
-    // check that every object read is owned directly or indirectly by sender, sponsor, or a shared object input
+    // check that every object read is owned directly or indirectly by sender, sponsor,
+    // or a shared object input
     pub fn check_ownership_invariants(
         &self,
         sender: &SuiAddress,
         gas_charger: &mut GasCharger,
+        mutable_inputs: &HashSet<ObjectID>,
         is_epoch_change: bool,
     ) -> SuiResult<()> {
-        let (mut objects_to_authenticate, mut authenticated_objects) =
-            self.get_objects_to_authenticate(sender, gas_charger, is_epoch_change)?;
+        let gas_objs: HashSet<&ObjectID> = gas_charger.gas_coins().iter().map(|g| &g.0).collect();
+        // mark input objects as authenticated
+        let mut authenticated_for_mutation: HashSet<_> = self
+            .input_objects
+            .iter()
+            .filter_map(|(id, obj)| {
+                if gas_objs.contains(id) {
+                    // gas could be owned by either the sender (common case) or sponsor
+                    // (if this is a sponsored tx, which we do not know inside this function).
+                    // Either way, no object ownership chain should be rooted in a gas object
+                    // thus, consider object authenticated, but don't add it to authenticated_objs
+                    return None;
+                }
+                match &obj.owner {
+                    Owner::AddressOwner(a) => {
+                        assert!(sender == a, "Input object not owned by sender");
+                        Some(id)
+                    }
+                    Owner::Shared { .. } => Some(id),
+                    Owner::Immutable => {
+                        // object is authenticated, but it cannot own other objects,
+                        // so we should not add it to `authenticated_objs`
+                        // However, we would definitely want to add immutable objects
+                        // to the set of authenticated roots if we were doing runtime
+                        // checks inside the VM instead of after-the-fact in the temporary
+                        // store. Here, we choose not to add them because this will catch a
+                        // bug where we mutate or delete an object that belongs to an immutable
+                        // object (though it will show up somewhat opaquely as an authentication
+                        // failure), whereas adding the immutable object to the roots will prevent
+                        // us from catching this.
+                        None
+                    }
+                    Owner::ObjectOwner(_parent) => {
+                        unreachable!("Input objects must be address owned, shared, or immutable")
+                    }
+                }
+            })
+            .filter(|id| {
+                // remove any non-mutable inputs. This will remove deleted or readonly shared
+                // objects
+                mutable_inputs.contains(id)
+            })
+            .copied()
+            .collect();
 
+        // check all modified objects are authenticated (excluding gas objects)
+        let mut objects_to_authenticate = self
+            .execution_results
+            .modified_objects
+            .iter()
+            .filter(|id| !gas_objs.contains(id))
+            .copied()
+            .collect::<Vec<_>>();
         // Map from an ObjectID to the ObjectID that covers it.
-        let mut covered = BTreeMap::new();
         while let Some(to_authenticate) = objects_to_authenticate.pop() {
-            let Some(old_obj) = self.store.get_object(&to_authenticate)? else {
-                // lookup failure is expected when the parent is an "object-less" UID (e.g., the ID of a table or bag)
-                // we cannot distinguish this case from an actual authentication failure, so continue
+            if authenticated_for_mutation.contains(&to_authenticate) {
+                // object has been authenticated
                 continue;
-            };
-            let parent = match &old_obj.owner {
-                Owner::ObjectOwner(parent) | Owner::AddressOwner(parent) => ObjectID::from(*parent),
-                owner => panic!(
-                    "Unauthenticated root at {to_authenticate:?} with owner {owner:?}\n\
-             Potentially covering objects in: {covered:#?}",
-                ),
-            };
-
-            if authenticated_objects.contains(&parent) {
-                authenticated_objects.insert(to_authenticate);
-            } else if !covered.contains_key(&parent) {
-                objects_to_authenticate.push(parent);
             }
-
-            covered.insert(to_authenticate, parent);
+            let wrapped_parent = self.wrapped_object_containers.get(&to_authenticate);
+            let parent = if let Some(container_id) = wrapped_parent {
+                // If the object is wrapped, then the container must be authenticated.
+                // For example, the ID is for a wrapped table or bag.
+                *container_id
+            } else {
+                let Some(old_obj) = self.store.get_object(&to_authenticate)? else {
+                    panic!(
+                        "
+                        Failed to load object {to_authenticate:?}. \n\
+                        If it cannot be loaded, \
+                        we would expect it to be in the wrapped object map: {:?}",
+                        &self.wrapped_object_containers
+                    )
+                };
+                match &old_obj.owner {
+                    Owner::ObjectOwner(parent) => ObjectID::from(*parent),
+                    Owner::AddressOwner(parent) => {
+                        // For Receiving<_> objects, the address owner is actually an object.
+                        // If it was actually an address, we should have caught it as an input and
+                        // it would already have been in authenticated_for_mutation
+                        ObjectID::from(*parent)
+                    }
+                    owner @ Owner::Shared { .. } => panic!(
+                        "Unauthenticated root at {to_authenticate:?} with owner {owner:?}\n\
+                        Potentially covering objects in: {authenticated_for_mutation:#?}",
+                    ),
+                    Owner::Immutable => {
+                        assert!(
+                            is_epoch_change,
+                            "Immutable objects cannot be written, except for \
+                            Sui Framework/Move stdlib upgrades at epoch change boundaries"
+                        );
+                        // Note: this assumes that the only immutable objects an epoch change
+                        // tx can update are system packages,
+                        // but in principle we could allow others.
+                        assert!(
+                            is_system_package(to_authenticate),
+                            "Only system packages can be upgraded"
+                        );
+                        continue;
+                    }
+                }
+            };
+            // we now assume the object is authenticated and must check the parent
+            authenticated_for_mutation.insert(to_authenticate);
+            objects_to_authenticate.push(parent);
         }
         Ok(())
     }
@@ -1094,6 +1128,13 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     ) {
         TemporaryStore::save_loaded_runtime_objects(self, loaded_runtime_objects)
+    }
+
+    fn save_wrapped_object_containers(
+        &mut self,
+        wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
+    ) {
+        TemporaryStore::save_wrapped_object_containers(self, wrapped_object_containers)
     }
 }
 
