@@ -15,7 +15,7 @@
 //! * [GovernanceApi] - provides functionality related to staking
 //! * [QuorumDriverApi] - provides functionality to execute a transaction
 //! block and submit it to the fullnode(s)
-//! * [ReadApi] - provides functions for retriving data about different
+//! * [ReadApi] - provides functions for retrieving data about different
 //! objects and transactions
 //! * [TransactionBuilder] - provides functions for building transactions
 //!
@@ -29,7 +29,7 @@
 //! folder of your Rust project.
 //!
 //! The main building block for the Sui Rust SDK is the [SuiClientBuilder],
-//! which provides a simple and straightforward way of connectiong to a Sui
+//! which provides a simple and straightforward way of connecting to a Sui
 //! network and having access to the different available APIs.
 //!
 //! A simple example that connects to a running Sui local network,
@@ -84,7 +84,7 @@ use serde_json::Value;
 
 use move_core_types::language_storage::StructTag;
 pub use sui_json as json;
-use sui_json_rpc::{
+use sui_json_rpc_api::{
     CLIENT_SDK_TYPE_HEADER, CLIENT_SDK_VERSION_HEADER, CLIENT_TARGET_API_VERSION_HEADER,
 };
 pub use sui_json_rpc_types as rpc_types;

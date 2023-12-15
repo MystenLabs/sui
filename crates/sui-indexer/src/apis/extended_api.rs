@@ -5,10 +5,10 @@ use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 
-use sui_json_rpc::api::{
+use sui_json_rpc::SuiRpcModule;
+use sui_json_rpc_api::{
     validate_limit, ExtendedApiServer, QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
 };
-use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
     AddressMetrics, CheckpointedObjectID, EpochInfo, EpochMetricsPage, EpochPage, MoveCallMetrics,
     NetworkMetrics, Page, QueryObjectsPage, SuiObjectDataFilter, SuiObjectResponse,
@@ -190,6 +190,6 @@ where
     }
 
     fn rpc_doc_module() -> Module {
-        sui_json_rpc::api::ExtendedApiOpenRpc::module_doc()
+        sui_json_rpc_api::ExtendedApiOpenRpc::module_doc()
     }
 }

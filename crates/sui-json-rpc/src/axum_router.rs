@@ -19,7 +19,7 @@ use jsonrpsee::{core::server::rpc_module::Methods, server::logger::Logger};
 use serde_json::value::RawValue;
 
 use crate::routing_layer::RpcRouter;
-use crate::CLIENT_TARGET_API_VERSION_HEADER;
+use sui_json_rpc_api::CLIENT_TARGET_API_VERSION_HEADER;
 
 pub const MAX_RESPONSE_SIZE: u32 = 2 << 30;
 
@@ -204,7 +204,7 @@ async fn process_request<L: Logger>(
 }
 
 /// Figure out if this is a sufficiently complete request that we can extract an [`Id`] out of, or just plain
-/// unparseable garbage.
+/// unparsable garbage.
 pub fn prepare_error(data: &str) -> (Id<'_>, ErrorCode) {
     match serde_json::from_str::<InvalidRequest>(data) {
         Ok(InvalidRequest { id }) => (id, ErrorCode::InvalidRequest),

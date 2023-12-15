@@ -19,6 +19,10 @@ use tracing::{debug, error, info, instrument, warn};
 
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
+use sui_json_rpc_api::{
+    validate_limit, JsonRpcMetrics, ReadApiOpenRpc, ReadApiServer, QUERY_MAX_RESULT_LIMIT,
+    QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
+};
 use sui_json_rpc_types::{
     BalanceChange, Checkpoint, CheckpointId, CheckpointPage, DisplayFieldsResponse, EventFilter,
     ObjectChange, ProtocolConfigResponse, SuiEvent, SuiGetPastObjectRequest, SuiMoveStruct,
@@ -46,9 +50,6 @@ use sui_types::sui_serde::BigInt;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionDataAPI;
 
-use crate::api::JsonRpcMetrics;
-use crate::api::{validate_limit, ReadApiServer};
-use crate::api::{QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS};
 use crate::authority_state::{StateRead, StateReadError, StateReadResult};
 use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
 use crate::with_tracing;
@@ -1043,7 +1044,7 @@ impl SuiRpcModule for ReadApi {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::ReadApiOpenRpc::module_doc()
+        ReadApiOpenRpc::module_doc()
     }
 }
 

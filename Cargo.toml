@@ -108,6 +108,7 @@ members = [
     "crates/sui-indexer",
     "crates/sui-json",
     "crates/sui-json-rpc",
+    "crates/sui-json-rpc-api",
     "crates/sui-json-rpc-tests",
     "crates/sui-json-rpc-types",
     "crates/sui-keys",
@@ -581,6 +582,7 @@ sui-genesis-builder = { path = "crates/sui-genesis-builder" }
 sui-indexer = { path = "crates/sui-indexer" }
 sui-json = { path = "crates/sui-json" }
 sui-json-rpc = { path = "crates/sui-json-rpc" }
+sui-json-rpc-api = { path = "crates/sui-json-rpc-api" }
 sui-json-rpc-types = { path = "crates/sui-json-rpc-types" }
 sui-keys = { path = "crates/sui-keys" }
 sui-kvstore = { path = "crates/sui-kvstore" }

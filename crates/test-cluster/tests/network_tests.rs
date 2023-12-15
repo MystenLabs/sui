@@ -3,7 +3,7 @@
 
 use move_binary_format::access::ModuleAccess;
 use sui_framework::BuiltInFramework;
-use sui_json_rpc::api::ReadApiClient;
+use sui_json_rpc_api::ReadApiClient;
 use sui_json_rpc_types::SuiObjectResponse;
 use sui_macros::sim_test;
 use sui_types::{
