@@ -140,7 +140,6 @@ impl Extension for LoggerExtension {
                             }
                         }
                     }
-
                     error!(
                         target: "async-graphql",
                         "[Response] path={} message={}", path, err.message,

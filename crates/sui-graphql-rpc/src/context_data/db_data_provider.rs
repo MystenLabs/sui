@@ -49,6 +49,7 @@ use sui_types::{
     },
     TypeTag,
 };
+use tracing::error;
 
 #[cfg(feature = "pg_backend")]
 use super::pg_backend::{PgQueryExecutor, QueryBuilder};
@@ -184,9 +185,18 @@ impl PgManager {
         let after = after
             .map(|cursor| self.parse_obj_cursor(&cursor))
             .transpose()?;
-        let coin_type = parse_to_type_tag(Some(coin_type))
-            .map_err(|e| Error::InvalidCoinType(e.to_string()))?
-            .to_canonical_string(/* with_prefix */ true);
+        let parsed_coin_type = parse_to_type_tag(Some(coin_type.clone()))
+            .map_err(|e| Error::InvalidCoinType(e.to_string()));
+
+        if parsed_coin_type.is_err() {
+            // TODO once we merge use the new PgManager
+            // self.metrics
+            // .request_metrics
+            // .request_client_input_error
+            // .inc();
+            error!("Invalid coin type: {coin_type}");
+        }
+        let coin_type = parsed_coin_type?.to_canonical_string(/* with_prefix */ true);
         let result: Option<Vec<StoredObject>> = self
             .run_query_async_with_cost(
                 move || {
@@ -406,6 +416,7 @@ impl PgManager {
         let mut connection = Connection::new(false, false);
         for (balance, count, coin_type) in balances {
             let (Some(balance), Some(count), Some(coin_type)) = (balance, count, coin_type) else {
+                error!("Expected fields are missing on balance calculation");
                 return Err(Error::Internal(
                     "Expected fields are missing on balance calculation".to_string(),
                 ));

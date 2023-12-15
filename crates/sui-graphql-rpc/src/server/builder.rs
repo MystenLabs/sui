@@ -4,6 +4,7 @@
 use crate::config::{MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD};
 use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
+use crate::metrics::{DBMetrics, Metrics, RequestMetrics};
 use crate::mutation::Mutation;
 use crate::{
     config::ServerConfig,
@@ -15,7 +16,6 @@ use crate::{
         query_limits_checker::{QueryLimitsChecker, ShowUsage},
         timeout::Timeout,
     },
-    metrics::RequestMetrics,
     server::version::{check_version_middleware, set_version_middleware},
     types::query::{Query, SuiGraphQLSchema},
 };
@@ -24,25 +24,23 @@ use async_graphql::extensions::Tracing;
 use async_graphql::EmptySubscription;
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use axum::extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo, State};
 use axum::http::HeaderMap;
+use axum::middleware::{self};
 use axum::response::IntoResponse;
 use axum::routing::{post, MethodRouter, Route};
-use axum::{
-    extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo},
-    middleware,
-};
 use axum::{headers::Header, Router};
 use http::Request;
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Body;
 use hyper::Server as HyperServer;
 use std::convert::Infallible;
-use std::{any::Any, net::SocketAddr, sync::Arc, time::Instant};
+use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::sync::OnceCell;
 use tower::{Layer, Service};
-use tracing::warn;
+use tracing::{info, warn};
 
 pub struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
@@ -63,15 +61,17 @@ pub(crate) struct ServerBuilder {
 
     schema: SchemaBuilder<Query, Mutation, EmptySubscription>,
     router: Option<Router>,
+    metrics: Option<Metrics>,
 }
 
 impl ServerBuilder {
-    pub fn new(port: u16, host: String) -> Self {
+    pub fn new(port: u16, host: String, metrics: Option<Metrics>) -> Self {
         Self {
             port,
             host,
             schema: async_graphql::Schema::build(Query, Mutation, EmptySubscription),
             router: None,
+            metrics,
         }
     }
 
@@ -109,7 +109,12 @@ impl ServerBuilder {
                 .route("/", post(graphql_handler))
                 .route("/graphql", post(graphql_handler))
                 .route("/health", axum::routing::get(health_checks))
-                .layer(middleware::from_fn(check_version_middleware))
+                .with_state(self.metrics.clone())
+                .route_layer(middleware::from_fn_with_state(
+                    self.metrics.clone(),
+                    check_version_middleware,
+                ))
+                // .layer(middleware::from_fn(check_version_middleware))
                 .layer(middleware::from_fn(set_version_middleware));
             self.router = Some(router);
         }
@@ -157,8 +162,32 @@ impl ServerBuilder {
     }
 
     pub async fn from_config(config: &ServerConfig) -> Result<Self, Error> {
-        let mut builder =
-            ServerBuilder::new(config.connection.port, config.connection.host.clone());
+        // PROMETHEUS
+        let prom_addr: SocketAddr = format!(
+            "{}:{}",
+            config.connection.prom_url, config.connection.prom_port
+        )
+        .parse()
+        .map_err(|_| {
+            Error::Internal(format!(
+                "Failed to parse url {}, port {} into socket address",
+                config.connection.prom_url, config.connection.prom_port
+            ))
+        })?;
+        let registry_service = mysten_metrics::start_prometheus_server(prom_addr);
+        info!("Starting Prometheus HTTP endpoint at {}", prom_addr);
+        let registry = registry_service.default_registry();
+
+        // METRICS
+        let request_metrics = RequestMetrics::new(&registry);
+        let db_metrics = DBMetrics::new(&registry);
+        let metrics = Metrics::new(db_metrics, request_metrics);
+
+        let mut builder = ServerBuilder::new(
+            config.connection.port,
+            config.connection.host.clone(),
+            Some(metrics.clone()),
+        );
 
         let name_service_config = config.name_service.clone();
         let reader = PgManager::reader_with_config(
@@ -166,7 +195,9 @@ impl ServerBuilder {
             config.connection.db_pool_size,
         )
         .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
-        let db = Db::new(reader.clone(), config.service.limits);
+
+        // DB
+        let db = Db::new(reader.clone(), config.service.limits, Some(metrics.clone()));
         let pg_conn_pool = PgManager::new(reader.clone(), config.service.limits);
         let package_store = DbPackageStore(reader);
         let package_cache = PackageStoreWithLruCache::new(package_store);
@@ -187,23 +218,6 @@ impl ServerBuilder {
             None
         };
 
-        let prom_addr: SocketAddr = format!(
-            "{}:{}",
-            config.connection.prom_url, config.connection.prom_port
-        )
-        .parse()
-        .map_err(|_| {
-            Error::Internal(format!(
-                "Failed to parse url {}, port {} into socket address",
-                config.connection.prom_url, config.connection.prom_port
-            ))
-        })?;
-        let registry_service = mysten_metrics::start_prometheus_server(prom_addr);
-        println!("Starting Prometheus HTTP endpoint at {}", prom_addr);
-        let registry = registry_service.default_registry();
-
-        let metrics = RequestMetrics::new(&registry);
-
         builder = builder
             .context_data(config.service.clone())
             .context_data(db)
@@ -214,7 +228,7 @@ impl ServerBuilder {
             ))
             .context_data(sui_sdk_client)
             .context_data(name_service_config)
-            .context_data(Arc::new(metrics))
+            .context_data(metrics.clone())
             .context_data(config.clone());
 
         if config.internal_features.feature_gate {
@@ -238,7 +252,14 @@ impl ServerBuilder {
 
         // TODO: uncomment once impl
         // if config.internal_features.open_telemetry {
-        //     let tracer;
+        //     let config = opentelemetry::sdk::trace::config()
+        //         .with_resource(Resource::new(vec![opentelemetry::KeyValue::new(
+        //             "service.name",
+        //             "sui-graphql-rpc",
+        //         )]))
+        //         .with_sampler(Sampler::ParentBased(Box::new(sampler.clone())));
+
+        //     let sampler = SamplingFilter::new(config.sample_rate);
         //     builder = builder.extension(OpenTelemetry::new(tracer));
         // }
 
@@ -247,11 +268,15 @@ impl ServerBuilder {
 }
 
 async fn graphql_handler(
+    State(metrics): State<Option<Metrics>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
+    let timer = metrics
+        .clone()
+        .map(|m| m.request_metrics.query_latency.start_timer());
     let mut req = req.into_inner();
     if headers.contains_key(ShowUsage::name()) {
         req.data.insert(ShowUsage)
@@ -259,7 +284,18 @@ async fn graphql_handler(
     // Capture the IP address of the client
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
-    schema.execute(req).await.into()
+    let result = schema.execute(req).await;
+    if let Some(timer) = timer {
+        timer.observe_duration();
+    }
+    if let Some(m) = metrics {
+        if result.is_ok() {
+            m.inc_num_query_success();
+        } else {
+            m.inc_errors(result.errors.clone());
+        }
+    }
+    result.into()
 }
 
 async fn health_checks(
@@ -369,9 +405,9 @@ pub mod tests {
             let mut cfg = ServiceConfig::default();
             cfg.limits.request_timeout_ms = timeout.as_millis() as u64;
 
-            let db = Db::new(reader.clone(), cfg.limits);
+            let db = Db::new(reader.clone(), cfg.limits, None);
             let pg_conn_pool = PgManager::new(reader, cfg.limits);
-            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), None)
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(cfg)
@@ -380,6 +416,7 @@ pub mod tests {
                 })
                 .extension(Timeout)
                 .build_schema();
+
             schema.execute("{ chainIdentifier }").await
         }
 
@@ -419,9 +456,9 @@ pub mod tests {
                 },
                 ..Default::default()
             };
-            let db = Db::new(reader.clone(), service_config.limits);
+            let db = Db::new(reader.clone(), service_config.limits, None);
             let pg_conn_pool = PgManager::new(reader, service_config.limits);
-            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), None)
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(service_config)
@@ -488,9 +525,9 @@ pub mod tests {
                 },
                 ..Default::default()
             };
-            let db = Db::new(reader.clone(), service_config.limits);
+            let db = Db::new(reader.clone(), service_config.limits, None);
             let pg_conn_pool = PgManager::new(reader, service_config.limits);
-            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), None)
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(service_config)
@@ -557,9 +594,9 @@ pub mod tests {
         };
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-        let db = Db::new(reader.clone(), service_config.limits);
+        let db = Db::new(reader.clone(), service_config.limits, None);
         let pg_conn_pool = PgManager::new(reader, service_config.limits);
-        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), None)
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)
@@ -606,9 +643,9 @@ pub mod tests {
         let service_config = ServiceConfig::default();
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-        let db = Db::new(reader.clone(), service_config.limits);
+        let db = Db::new(reader.clone(), service_config.limits, None);
         let pg_conn_pool = PgManager::new(reader, service_config.limits);
-        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), None)
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)
@@ -647,9 +684,9 @@ pub mod tests {
         let service_config = ServiceConfig::default();
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-        let db = Db::new(reader.clone(), service_config.limits);
+        let db = Db::new(reader.clone(), service_config.limits, None);
         let pg_conn_pool = PgManager::new(reader, service_config.limits);
-        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), None)
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)
