@@ -143,7 +143,6 @@ module sui_system::validator_set {
     const EValidatorAlreadyRemoved: u64 = 11;
     const ENotAPendingValidator: u64 = 12;
     const EValidatorSetEmpty: u64 = 13;
-
     const EInvalidCap: u64 = 101;
 
 
@@ -325,6 +324,7 @@ module sui_system::validator_set {
         validator::request_withdraw_stake(validator, staked_sui, ctx)
     }
 
+    // ==== Stakes Withdrawn by batch ====
     // ==== validator config setting functions ====
 
     public(friend) fun request_set_commission_rate(

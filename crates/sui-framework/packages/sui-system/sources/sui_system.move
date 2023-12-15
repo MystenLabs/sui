@@ -268,6 +268,28 @@ module sui_system::sui_system {
         transfer::public_transfer(staked_sui, tx_context::sender(ctx));
     }
 
+    //TODO: Gree - Batch withdrawn stakes
+    /// Withdraw stakes from a validator's staking pool in batch
+    public entry fun request_withdraw_stake_batch(
+        wrapper: &mut SuiSystemState,
+        staked_suis: vector<StakedSui>,
+        ctx: &mut TxContext,
+    ) {
+        let withdrawn_stakes = request_withdraw_stake_batch_non_entry(wrapper, staked_suis, ctx);
+        transfer::public_transfer(coin::from_balance(withdrawn_stakes, ctx), tx_context::sender(ctx));
+    }
+
+
+    //Non-entry version of `request_withdraw_stake_batch` that returns the withdrawn SUI instead of transferring it to the sender.
+    public fun request_withdraw_stake_batch_non_entry(
+        wrapper: &mut SuiSystemState,
+        staked_suis: vector<StakedSui>,
+        ctx: &mut TxContext,
+    ) : Balance<SUI> {
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::request_withdraw_stake_batch(self, staked_suis, ctx)
+    }
+
     /// Withdraw stake from a validator's staking pool.
     public entry fun request_withdraw_stake(
         wrapper: &mut SuiSystemState,

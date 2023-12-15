@@ -352,7 +352,7 @@ module sui_system::validator {
         staking_pool::process_pending_stake(&mut self.staking_pool);
         self.next_epoch_stake = self.next_epoch_stake + stake_amount;
     }
-
+    //TODO: Main withdraw function
     /// Request to withdraw stake from the validator's staking pool, processed at the end of the epoch.
     public(friend) fun request_withdraw_stake(
         self: &mut Validator,

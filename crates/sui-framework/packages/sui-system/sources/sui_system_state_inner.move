@@ -232,7 +232,8 @@ module sui_system::sui_system_state_inner {
     const EStakeWithdrawBeforeActivation: u64 = 6;
     const ESafeModeGasNotProcessed: u64 = 7;
     const EAdvancedToWrongEpoch: u64 = 8;
-
+    //TODO:revist to confirm
+    const EStakesIsEmpty: u64 = 9;
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
 
     // ==== functions that can only be called by genesis ====
@@ -543,6 +544,39 @@ module sui_system::sui_system_state_inner {
         validator_set::request_withdraw_stake(
             &mut self.validators, staked_sui, ctx,
         )
+    }
+
+    //TODO: revisit this function - Gree - How to handle the return type???
+    /// Not sure this will required a seperate request_withdraw_stake_batch in validator_set.move.
+    /// Currently, just iterating over the stakes to withdraw stakes one by one by calling validator_set::request_withdraw_stake. 
+    /// Withdraw staked SUIs by batch from a validator's staking pool.
+    public(friend) fun request_withdraw_stake_batch(
+        self: &mut SuiSystemStateInnerV2,
+        stakes: vector<StakedSui>,
+        ctx: &TxContext,
+    ) : Balance<SUI> {
+
+        let total_withdrawn =balance::zero();
+        
+        let len = vector::length(&stakes);
+        let i = 0;
+        assert!(len < 0, EStakesIsEmpty);
+        while (i < len) {
+    
+            let stake = vector::pop_back(&mut stakes);
+            let withdrawn = validator_set::request_withdraw_stake(
+                &mut self.validators, 
+                stake, 
+                ctx,
+            );
+            balance::join(&mut total_withdrawn, withdrawn);
+            
+            i = i + 1;
+            
+        };
+        vector::destroy_empty(stakes);
+        total_withdrawn
+        
     }
 
     /// Report a validator as a bad or non-performant actor in the system.
@@ -1052,7 +1086,7 @@ module sui_system::sui_system_state_inner {
         let validator_set = &self.validators;
         validator_set::active_validator_addresses(validator_set)
     }
-
+    //TODO: revisit this function - reference for batch withdrawn
     /// Extract required Balance from vector of Coin<SUI>, transfer the remainder back to sender.
     fun extract_coin_balance(coins: vector<Coin<SUI>>, amount: option::Option<u64>, ctx: &mut TxContext): Balance<SUI> {
         let merged_coin = vector::pop_back(&mut coins);
