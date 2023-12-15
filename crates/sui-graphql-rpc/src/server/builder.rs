@@ -19,8 +19,8 @@ use crate::{
     server::version::{check_version_middleware, set_version_middleware},
     types::query::{Query, SuiGraphQLSchema},
 };
-use async_graphql::extensions::ApolloTracing;
 use async_graphql::extensions::Tracing;
+use async_graphql::extensions::{ApolloTracing, OpenTelemetry};
 use async_graphql::EmptySubscription;
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
@@ -36,6 +36,7 @@ use http::Request;
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Body;
 use hyper::Server as HyperServer;
+use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::TracerProvider};
 use std::convert::Infallible;
 use std::{any::Any, net::SocketAddr, sync::Arc, time::Instant};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
@@ -238,7 +239,14 @@ impl ServerBuilder {
 
         // TODO: uncomment once impl
         // if config.internal_features.open_telemetry {
-        //     let tracer;
+        //     let config = opentelemetry::sdk::trace::config()
+        //         .with_resource(Resource::new(vec![opentelemetry::KeyValue::new(
+        //             "service.name",
+        //             "sui-graphql-rpc",
+        //         )]))
+        //         .with_sampler(Sampler::ParentBased(Box::new(sampler.clone())));
+
+        //     let sampler = SamplingFilter::new(config.sample_rate);
         //     builder = builder.extension(OpenTelemetry::new(tracer));
         // }
 
@@ -380,6 +388,7 @@ pub mod tests {
                 })
                 .extension(Timeout)
                 .build_schema();
+
             schema.execute("{ chainIdentifier }").await
         }
 

@@ -37,6 +37,7 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::Instant;
 use sui_graphql_rpc_headers::LIMITS_HEADER;
 use tokio::sync::Mutex;
 
@@ -135,11 +136,18 @@ impl Extension for QueryLimitsChecker {
         variables: &Variables,
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
+        let instant = Instant::now();
         let cfg = ctx
             .data::<ServiceConfig>()
             .expect("No service config provided in schema data");
 
         if query.len() > cfg.limits.max_query_payload_size as usize {
+            if let Some(metrics) = ctx.data_opt::<Arc<RequestMetrics>>() {
+                metrics
+                    .query_payload_error
+                    .with_label_values(&["validation"])
+                    .inc_by(1);
+            }
             return Err(graphql_error(
                 code::GRAPHQL_VALIDATION_FAILED,
                 format!(
@@ -188,6 +196,7 @@ impl Extension for QueryLimitsChecker {
             )?;
             max_depth_seen = max_depth_seen.max(running_costs.depth);
         }
+        let elapsed = instant.elapsed();
 
         if ctx.data_opt::<ShowUsage>().is_some() {
             *self.validation_result.lock().await = Some(ValidationRes {
