@@ -94,7 +94,6 @@ function TransactionBlocksForAddress({
 	filter = FILTER_VALUES.CHANGED,
 	header,
 }: TransactionBlocksForAddressProps) {
-	// const [filterValue, setFilterValue] = useState(filter);
 	const [currentPageState, dispatch] = useReducer(reducer, {
 		InputObject: 0,
 		ChangedObject: 0,
