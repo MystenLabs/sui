@@ -16,6 +16,7 @@ use tracing::{debug, info, instrument};
 
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
+use sui_json_rpc_api::{cap_page_limit, CoinReadApiOpenRpc, CoinReadApiServer, JsonRpcMetrics};
 use sui_json_rpc_types::Balance;
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
@@ -31,7 +32,6 @@ use sui_types::parse_sui_struct_tag;
 #[cfg(test)]
 use mockall::automock;
 
-use crate::api::{cap_page_limit, CoinReadApiServer, JsonRpcMetrics};
 use crate::authority_state::StateRead;
 use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
 use crate::{with_tracing, SuiRpcModule};
@@ -75,7 +75,7 @@ impl SuiRpcModule for CoinReadApi {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::CoinReadApiOpenRpc::module_doc()
+        CoinReadApiOpenRpc::module_doc()
     }
 }
 

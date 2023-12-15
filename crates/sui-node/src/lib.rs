@@ -23,7 +23,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::{LazyNarwhalClient, SubmitToConsensus};
-use sui_json_rpc::api::JsonRpcMetrics;
+use sui_json_rpc_api::JsonRpcMetrics;
 use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
 use sui_types::base_types::ConciseableName;
 use sui_types::digests::ChainIdentifier;

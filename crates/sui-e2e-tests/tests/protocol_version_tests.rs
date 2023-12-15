@@ -62,7 +62,7 @@ mod sim_only_tests {
     use std::sync::Arc;
     use sui_core::authority::framework_injection;
     use sui_framework::BuiltInFramework;
-    use sui_json_rpc::api::WriteApiClient;
+    use sui_json_rpc_api::WriteApiClient;
     use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
     use sui_macros::*;
     use sui_move_build::{BuildConfig, CompiledPackage};

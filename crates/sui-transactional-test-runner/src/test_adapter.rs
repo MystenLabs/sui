@@ -50,7 +50,7 @@ use sui_graphql_rpc::config::ConnectionConfig;
 use sui_graphql_rpc::test_infra::cluster::serve_executor;
 use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
 use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
-use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
+use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{DevInspectResults, SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_rest_api::node_state_getter::NodeStateGetter;
@@ -1794,7 +1794,7 @@ async fn init_val_fullnode_executor(
         test_account
     };
 
-    // For each named Sui account without an address value, create an account with an adddress
+    // For each named Sui account without an address value, create an account with an address
     // and a gas object
     for n in account_names {
         let test_account = mk_account();

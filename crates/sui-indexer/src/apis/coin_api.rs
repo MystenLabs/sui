@@ -5,9 +5,9 @@ use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
-use sui_json_rpc::api::CoinReadApiClient;
-use sui_json_rpc::api::CoinReadApiServer;
 use sui_json_rpc::SuiRpcModule;
+use sui_json_rpc_api::CoinReadApiClient;
+use sui_json_rpc_api::CoinReadApiServer;
 use sui_json_rpc_types::{Balance, CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
 use sui_types::balance::Supply;
@@ -75,6 +75,6 @@ impl SuiRpcModule for CoinReadApi {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_json_rpc::api::CoinReadApiOpenRpc::module_doc()
+        sui_json_rpc_api::CoinReadApiOpenRpc::module_doc()
     }
 }

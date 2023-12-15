@@ -40,6 +40,7 @@ move-core-types.workspace = true
 sui-core.workspace = true
 sui-framework.workspace = true
 sui-json-rpc.workspace = true
+sui-json-rpc-api.workspace = true
 sui-node.workspace = true
 sui-macros.workspace = true
 sui-simulator.workspace = true
