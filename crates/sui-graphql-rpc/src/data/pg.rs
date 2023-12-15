@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Instant;
+
 use super::{BoxedQuery, QueryExecutor};
-use crate::{config::Limits, error::Error};
+use crate::{config::Limits, error::Error, metrics::Metrics};
 use async_trait::async_trait;
 use diesel::{
     pg::Pg,
@@ -12,14 +14,21 @@ use diesel::{
 };
 use sui_indexer::indexer_reader::IndexerReader;
 
+use tracing::{error, info};
+
 pub(crate) struct PgManager_ {
     pub inner: IndexerReader,
     pub limits: Limits,
+    pub metrics: Option<Metrics>,
 }
 
 impl PgManager_ {
-    pub(crate) fn new(inner: IndexerReader, limits: Limits) -> Self {
-        Self { inner, limits }
+    pub(crate) fn new(inner: IndexerReader, limits: Limits, metrics: Option<Metrics>) -> Self {
+        Self {
+            inner,
+            limits,
+            metrics,
+        }
     }
 }
 
@@ -37,13 +46,23 @@ impl QueryExecutor for PgManager_ {
         U: Send + 'static,
     {
         let max_cost = self.limits.max_db_query_cost;
-        self.inner
+        let instant = Instant::now();
+        let result = self
+            .inner
             .run_query_async(move |conn| {
                 query_cost::log(conn, max_cost, query());
                 query().get_result(conn)
             })
             .await
-            .map_err(|e| Error::Internal(e.to_string()))
+            .map_err(|e| Error::Internal(e.to_string()));
+        let elapsed = instant.elapsed();
+        if let Some(metrics) = &self.metrics {
+            metrics.observe_db_data(elapsed.as_secs_f64(), result.is_ok());
+        }
+        if result.is_err() {
+            info!(target: "async-graphql", "DB query error: {:?}", result.as_ref().err());
+        }
+        result
     }
 
     async fn results<Q, ST, QS, GB, U>(&self, query: Q) -> Result<Vec<U>, Error>
@@ -56,13 +75,24 @@ impl QueryExecutor for PgManager_ {
         U: Send + 'static,
     {
         let max_cost = self.limits.max_db_query_cost;
-        self.inner
+        let instant = Instant::now();
+        let result = self
+            .inner
             .run_query_async(move |conn| {
                 query_cost::log(conn, max_cost, query());
                 query().get_results(conn)
             })
             .await
-            .map_err(|e| Error::Internal(e.to_string()))
+            .map_err(|e| Error::Internal(e.to_string()));
+        let elapsed = instant.elapsed();
+
+        if let Some(metrics) = &self.metrics {
+            metrics.observe_db_data(elapsed.as_secs_f64(), result.is_ok());
+        }
+        if result.is_err() {
+            info!(target: "async-graphql", "DB query error: {:?}", result.as_ref().err());
+        }
+        result
     }
 
     async fn optional<Q, ST, QS, GB, U>(&self, query: Q) -> Result<Option<U>, Error>
@@ -75,13 +105,23 @@ impl QueryExecutor for PgManager_ {
         U: Send + 'static,
     {
         let max_cost = self.limits.max_db_query_cost;
-        self.inner
+        let instant = Instant::now();
+        let result = self
+            .inner
             .run_query_async(move |conn| {
                 query_cost::log(conn, max_cost, query());
                 query().get_result(conn).optional()
             })
             .await
-            .map_err(|e| Error::Internal(e.to_string()))
+            .map_err(|e| Error::Internal(e.to_string()));
+        let elapsed = instant.elapsed();
+        if let Some(metrics) = &self.metrics {
+            metrics.observe_db_data(elapsed.as_secs_f64(), result.is_ok());
+        }
+        if result.is_err() {
+            error!(target: "async-graphql", "DB query error: {:?}", result.as_ref().err());
+        }
+        result
     }
 }
 
