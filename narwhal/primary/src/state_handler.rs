@@ -160,7 +160,7 @@ impl RandomnessState {
                 .expect("validity threshold should fit in u16"),
             protocol_config.random_beacon_reduction_allowed_delta(),
         );
-        let total_weight = nodes.n();
+        let total_weight = nodes.total_weight();
         let num_nodes = nodes.num_nodes();
         let prefix_str = format!(
             "dkg {} {}",
@@ -343,7 +343,7 @@ impl RandomnessState {
             self.cached_sigs = Some((
                 randomness_round,
                 ThresholdBls12381MinSig::partial_sign_batch(
-                    shares,
+                    shares.iter(),
                     &randomness_round.signature_message(),
                 ),
             ));
@@ -438,16 +438,10 @@ impl RandomnessState {
         // If we have enough partial signatures, aggregate them.
         let mut sig = match ThresholdBls12381MinSig::aggregate(
             self.party.t(),
-            // TODO: ThresholdBls12381MinSig::aggregate immediately just makes an iterator of the
-            // given slice. Can we change its interface to accept an iterator directly, to avoid
-            // all the extra copying?
-            &self
-                .partial_sigs
+            self.partial_sigs
                 .iter()
                 .filter(|&((round, _), _)| *round == randomness_round)
-                .flat_map(|(_, sigs)| sigs)
-                .cloned()
-                .collect::<Vec<_>>(),
+                .flat_map(|(_, sigs)| sigs),
         ) {
             Ok(sig) => sig,
             Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => return, // wait for more input
@@ -466,7 +460,7 @@ impl RandomnessState {
                 if ThresholdBls12381MinSig::partial_verify_batch(
                     vss_pk,
                     &r.signature_message(),
-                     partial_sigs.as_slice(),
+                     partial_sigs.iter(),
                     &mut rand::thread_rng(),
                 )
                 .is_err()
@@ -478,16 +472,10 @@ impl RandomnessState {
             });
             sig = match ThresholdBls12381MinSig::aggregate(
                 self.party.t(),
-                // TODO: ThresholdBls12381MinSig::aggregate immediately just makes an iterator of the
-                // given slice. Can we change its interface to accept an iterator directly, to avoid
-                // all the extra copying?
-                &self
-                    .partial_sigs
+                self.partial_sigs
                     .iter()
                     .filter(|&((round, _), _)| *round == randomness_round)
-                    .flat_map(|(_, sigs)| sigs)
-                    .cloned()
-                    .collect::<Vec<_>>(),
+                    .flat_map(|(_, sigs)| sigs),
             ) {
                 Ok(sig) => sig,
                 Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => return, // wait for more input
