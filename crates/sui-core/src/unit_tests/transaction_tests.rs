@@ -889,7 +889,7 @@ async fn test_oversized_txn() {
         let mut builder = ProgrammableTransactionBuilder::new();
         // Put a lot of commands in the txn so it's large.
         for _ in 0..(1024 * 16) {
-            builder.transfer_object(recipient, obj_ref.clone()).unwrap();
+            builder.transfer_object(recipient, obj_ref).unwrap();
         }
         builder.finish()
     };
