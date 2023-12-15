@@ -229,7 +229,7 @@ pub struct SuiNode {
 
     _state_archive_handle: Option<broadcast::Sender<()>>,
 
-    _state_snapshot_uploader_handle: Option<oneshot::Sender<()>>,
+    _state_snapshot_uploader_handle: Option<broadcast::Sender<()>>,
     _kv_store_uploader_handle: Option<oneshot::Sender<()>>,
 }
 
@@ -813,7 +813,7 @@ impl SuiNode {
     fn start_state_snapshot(
         config: &NodeConfig,
         prometheus_registry: &Registry,
-    ) -> Result<Option<oneshot::Sender<()>>> {
+    ) -> Result<Option<tokio::sync::broadcast::Sender<()>>> {
         if let Some(remote_store_config) = &config.state_snapshot_write_config.object_store_config {
             let snapshot_uploader = StateSnapshotUploader::new(
                 &config.db_checkpoint_path(),

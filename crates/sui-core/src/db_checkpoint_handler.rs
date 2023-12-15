@@ -21,7 +21,7 @@ use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::mutex_table::RwLockTable;
 use sui_storage::object_store::util::{
     copy_recursively, find_all_dirs_with_epoch_prefix, find_missing_epochs_dirs,
-    path_to_filesystem, put, write_snapshot_manifest,
+    path_to_filesystem, put, run_manifest_update_loop, write_snapshot_manifest,
 };
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use tracing::{debug, error, info};
@@ -138,9 +138,13 @@ impl DBCheckpointHandler {
                 self.clone(),
                 kill_sender.subscribe(),
             ));
+            tokio::task::spawn(run_manifest_update_loop(
+                self.output_object_store.as_ref().unwrap().clone(),
+                kill_sender.subscribe(),
+            ));
         } else {
             // if db checkpoint remote store is not specified, cleanup loop
-            // is run to immediately mark db checkpoint upload as succesful
+            // is run to immediately mark db checkpoint upload as successful
             // so that they can be snapshotted and garbage collected
             tokio::task::spawn(Self::run_db_checkpoint_cleanup_loop(
                 self.clone(),
@@ -233,6 +237,7 @@ impl DBCheckpointHandler {
         }
         Ok(())
     }
+
     async fn prune_and_compact(&self, db_path: PathBuf, epoch: u64) -> Result<()> {
         let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
         let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
@@ -327,6 +332,7 @@ impl DBCheckpointHandler {
         }
         Ok(())
     }
+
     async fn garbage_collect_old_db_checkpoints(&self) -> Result<Vec<u64>> {
         let local_checkpoints_by_epoch =
             find_all_dirs_with_epoch_prefix(&self.input_object_store, None).await?;
@@ -451,7 +457,6 @@ mod tests {
         assert!(!local_epoch0_checkpoint.join("file1").exists());
         assert!(!local_epoch0_checkpoint.join("file2").exists());
         assert!(!local_epoch0_checkpoint.join("data").join("file3").exists());
-
         Ok(())
     }
 
