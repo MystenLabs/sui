@@ -2129,6 +2129,41 @@ impl SenderSignedData {
         let hash = digest.finalize();
         SenderSignedDataDigest::new(hash.into())
     }
+
+    /// Perform cheap validity checks on the sender signed transaction, including its size,
+    /// input count, command count, etc.
+    pub fn validity_check(&self, config: &ProtocolConfig) -> SuiResult {
+        // Enforce overall transaction size limit.
+        let tx_size =
+            bcs::serialized_size(self).map_err(|e| SuiError::TransactionSerializationError {
+                error: e.to_string(),
+            })?;
+        let max_tx_size_bytes = config.max_tx_size_bytes();
+
+        fp_ensure!(
+            tx_size as u64 <= max_tx_size_bytes,
+            SuiError::UserInputError {
+                error: UserInputError::SizeLimitExceeded {
+                    limit: format!(
+                        "serialized transaction size exceeded maximum of {max_tx_size_bytes}"
+                    ),
+                    value: tx_size.to_string(),
+                }
+            }
+        );
+
+        self.verify_user_input()?;
+
+        let tx_data = self.transaction_data();
+        tx_data
+            .check_version_supported(config)
+            .map_err(Into::<SuiError>::into)?;
+        tx_data
+            .validity_check(config)
+            .map_err(Into::<SuiError>::into)?;
+
+        Ok(())
+    }
 }
 
 impl VersionedProtocolMessage for SenderSignedData {
