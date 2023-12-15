@@ -55,14 +55,28 @@ jobs:
 
     steps:
     - name: Reading Release notes
-      id: rel-notes
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         echo "Processing ${{ matrix.pr }} PR"
         export rel_notes=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }}} --jq ".body" | awk '/### Release notes/{p=1; next} p' | grep '\S')
-        echo "::set-output name=release_notes::${rel_notes}"
-    
+        echo "release_notes=${rel_notes}" >> $GITHUB_ENV
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@67fbcbb121271f7775d2e7715933280b06314838 # pin@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-west-2
+
+    - name: Get PR author
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        export author=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }}} --jq ".user.login")
+        export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg AUTHOR "${author}" '.[] | if .github_handle == $AUTHOR then .slack_id else empty end')
+        echo "slack_id=$(echo ${slack_id} | tr -d '"')" >> $GITHUB_ENV
+
     - name: Post to a Slack channel
       uses: slackapi/slack-github-action@34c3fd73326693ef04728f8611669d918a2d781d # pin@v1.19.0
       env:
@@ -77,7 +91,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "*PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}>\n <@U03LRLPR1QX> and <@U04A8V9E203> please review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.\n *Release Notes:*\n${{ steps.rel-notes.outputs.release_notes }}\n"
+                  "text": "*PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}> by <@${{ env.slack_id }}>\n<@U03LRLPR1QX> and <@U04A8V9E203> please review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.\n *Release Notes:*\n${{ env.release_notes }}\n"
                 }
               },
               {
