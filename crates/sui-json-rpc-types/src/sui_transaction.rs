@@ -587,6 +587,7 @@ pub trait SuiTransactionBlockEffectsAPI {
     fn executed_epoch(&self) -> EpochId;
     fn transaction_digest(&self) -> &TransactionDigest;
     fn gas_cost_summary(&self) -> &GasCostSummary;
+    fn lamport_version(&self) -> SequenceNumber;
 
     /// Return an iterator of mutated objects, but excluding the gas object.
     fn mutated_excluding_gas(&self) -> Vec<OwnedObjectRef>;
@@ -709,6 +710,12 @@ impl SuiTransactionBlockEffectsAPI for SuiTransactionBlockEffectsV1 {
 
     fn gas_cost_summary(&self) -> &GasCostSummary {
         &self.gas_used
+    }
+
+    fn lamport_version(&self) -> SequenceNumber {
+        SequenceNumber::lamport_increment(
+            self.modified_at_versions.iter().map(|q| q.sequence_number),
+        )
     }
 
     fn mutated_excluding_gas(&self) -> Vec<OwnedObjectRef> {

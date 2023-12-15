@@ -6,8 +6,9 @@ use async_graphql::*;
 use either::Either;
 use sui_indexer::models_v2::transactions::StoredTransaction;
 use sui_types::{
-    effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
-    execution_status::ExecutionStatus as NativeExecutionStatus,
+    effects::{
+        InputSharedObject, TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI,
+    },
     transaction::TransactionData as NativeTransactionData,
 };
 
@@ -15,6 +16,11 @@ use super::{
     balance_change::BalanceChange, base64::Base64, checkpoint::Checkpoint, date_time::DateTime,
     epoch::Epoch, gas::GasEffects, object_change::ObjectChange,
     transaction_block::TransactionBlock, unchanged_shared_object::UnchangedSharedObject,
+};
+use std::collections::HashSet;
+use sui_json_rpc_types::SuiExecutionStatus;
+use sui_json_rpc_types::{
+    SuiTransactionBlockEffects as PreCommitTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
 };
 
 #[derive(Clone)]
@@ -24,7 +30,9 @@ pub(crate) struct TransactionBlockEffects {
     pub tx_data: Either<StoredTransaction, NativeTransactionData>,
 
     /// Deserialized representation of `stored.raw_effects`.
-    pub native: NativeTransactionEffects,
+    /// Or representation returned from the JSON-RPC server in case of tx execution.
+    /// TODO: remove this once we rework execution
+    pub effects: Either<NativeTransactionEffects, PreCommitTransactionBlockEffects>,
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -46,79 +54,111 @@ impl TransactionBlockEffects {
 
     /// Whether the transaction executed successfully or not.
     async fn status(&self) -> Option<ExecutionStatus> {
-        Some(match self.native.status() {
-            NativeExecutionStatus::Success => ExecutionStatus::Success,
-            NativeExecutionStatus::Failure { .. } => ExecutionStatus::Failure,
+        let sucess = match self.effects {
+            Either::Left(ref native) => native.status().is_ok(),
+            Either::Right(ref pre_commit_effects) => pre_commit_effects.status().is_ok(),
+        };
+
+        Some(match sucess {
+            true => ExecutionStatus::Success,
+            false => ExecutionStatus::Failure,
         })
     }
 
     /// The latest version of all objects (apart from packages) that have been created or modified
     /// by this transaction, immediately following this transaction.
     async fn lamport_version(&self) -> u64 {
-        self.native.lamport_version().value()
+        match self.effects {
+            Either::Left(ref native) => native.lamport_version(),
+            Either::Right(ref pre_commit_effects) => pre_commit_effects.lamport_version(),
+        }
+        .value()
     }
 
     /// The reason for a transaction failure, if it did fail.
     async fn errors(&self) -> Option<String> {
-        match self.native.status() {
-            NativeExecutionStatus::Success => None,
-
-            NativeExecutionStatus::Failure {
-                error,
-                command: None,
-            } => Some(error.to_string()),
-
-            NativeExecutionStatus::Failure {
-                error,
-                command: Some(command),
-            } => {
-                // Convert the command index into an ordinal.
-                let command = command + 1;
-                let suffix = match command % 10 {
-                    1 => "st",
-                    2 => "nd",
-                    3 => "rd",
-                    _ => "th",
-                };
-
-                Some(format!("{error} in {command}{suffix} command."))
+        let status = match self.effects {
+            Either::Left(ref native) => {
+                // Convert to SuiExecutionStatus for consistency with response from FN
+                SuiExecutionStatus::from(native.status().clone())
             }
+            Either::Right(ref pre_commit_effects) => pre_commit_effects.status().clone(),
+        };
+
+        match status {
+            SuiExecutionStatus::Success => None,
+
+            SuiExecutionStatus::Failure { error } => Some(error),
         }
     }
 
     /// Transactions whose outputs this transaction depends upon.
     async fn dependencies(&self, ctx: &Context<'_>) -> Result<Option<Vec<TransactionBlock>>> {
+        let dependencies = match self.effects {
+            Either::Left(ref native) => native.dependencies(),
+            Either::Right(ref pre_commit_effects) => pre_commit_effects.dependencies(),
+        };
         ctx.data_unchecked::<PgManager>()
-            .fetch_txs_by_digests(self.native.dependencies())
+            .fetch_txs_by_digests(dependencies)
             .await
             .extend()
     }
 
     /// Effects to the gas object.
     async fn gas_effects(&self) -> Option<GasEffects> {
-        Some(GasEffects::from(&self.native))
+        let gas_eff = match self.effects {
+            Either::Left(ref native) => GasEffects::from(native),
+            Either::Right(ref pre_commit_effects) => {
+                GasEffects::from_json_rpc_effects(pre_commit_effects)
+            }
+        };
+        Some(gas_eff)
     }
 
     /// Shared objects that are referenced by but not changed by this transaction.
     async fn unchanged_shared_objects(&self) -> Option<Vec<UnchangedSharedObject>> {
-        Some(
-            self.native
+        Some(match self.effects {
+            Either::Left(ref native) => native
                 .input_shared_objects()
-                .into_iter()
-                .filter_map(|input| UnchangedSharedObject::try_from(input).ok())
+                .iter()
+                .filter_map(|input| UnchangedSharedObject::try_from(input.clone()).ok())
                 .collect(),
-        )
+            Either::Right(ref pre_commit_effects) => {
+                let modified: HashSet<_> = pre_commit_effects
+                    .modified_at_versions()
+                    .iter()
+                    .map(|(r, _)| *r)
+                    .collect();
+                pre_commit_effects
+                    .shared_objects()
+                    .iter()
+                    .map(|r| {
+                        if modified.contains(&r.object_id) {
+                            InputSharedObject::Mutate(r.to_object_ref())
+                        } else {
+                            InputSharedObject::ReadOnly(r.to_object_ref())
+                        }
+                    })
+                    .filter_map(|input| UnchangedSharedObject::try_from(input).ok())
+                    .collect()
+            }
+        })
     }
 
     /// The effect this transaction had on objects on-chain.
     async fn object_changes(&self) -> Option<Vec<ObjectChange>> {
-        Some(
-            self.native
-                .object_changes()
-                .into_iter()
-                .map(|native| ObjectChange { native })
-                .collect(),
-        )
+        match self.effects {
+            Either::Left(ref native) => Some(
+                native
+                    .object_changes()
+                    .into_iter()
+                    .map(|native| ObjectChange { native })
+                    .collect(),
+            ),
+
+            // TODO: implement this for pre-commit effects
+            Either::Right(ref _pre_commit_effects) => None,
+        }
     }
 
     /// The effect this transaction had on the balances (sum of coin values per coin type) of
@@ -143,9 +183,13 @@ impl TransactionBlockEffects {
 
     /// The epoch this transaction was finalized in.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
+        let executed_epoch = match self.effects {
+            Either::Left(ref native) => native.executed_epoch(),
+            Either::Right(ref pre_commit_effects) => pre_commit_effects.executed_epoch(),
+        };
         Ok(Some(
             ctx.data_unchecked::<PgManager>()
-                .fetch_epoch_strict(self.native.executed_epoch())
+                .fetch_epoch_strict(executed_epoch)
                 .await
                 .extend()?,
         ))
@@ -165,16 +209,23 @@ impl TransactionBlockEffects {
     // TODO: event_connection: EventConnection
 
     /// Base64 encoded bcs serialization of the on-chain transaction effects.
-    async fn bcs(&self) -> Result<Base64> {
+    async fn bcs(&self) -> Result<Option<Base64>> {
         let bytes = if let Some(stored) = self.tx_data.as_ref().left() {
-            stored.raw_effects.clone()
+            Some(stored.raw_effects.clone())
         } else {
-            bcs::to_bytes(&self.native)
-                .map_err(|e| Error::Internal(format!("Error serializing transaction effects: {e}")))
-                .extend()?
+            match self.effects {
+                Either::Left(ref native) => Some(
+                    bcs::to_bytes(native)
+                        .map_err(|e| {
+                            Error::Internal(format!("Error serializing transaction effects: {e}"))
+                        })
+                        .extend()?,
+                ),
+                Either::Right(_) => None,
+            }
         };
 
-        Ok(Base64::from(bytes))
+        Ok(bytes.map(|bytes| Base64::from(bytes)))
     }
 }
 
@@ -188,7 +239,7 @@ impl TryFrom<StoredTransaction> for TransactionBlockEffects {
 
         Ok(TransactionBlockEffects {
             tx_data: Either::Left(stored),
-            native,
+            effects: Either::Left(native),
         })
     }
 }

@@ -727,6 +727,10 @@ type ExecutionResult {
 	The digest field captures the digest of the transaction block
 	"""
 	digest: String!
+	"""
+	The effects field captures the effects of the transaction block
+	"""
+	effects: TransactionBlockEffects!
 }
 
 enum ExecutionStatus {
@@ -2410,7 +2414,7 @@ type TransactionBlockEffects {
 	"""
 	Base64 encoded bcs serialization of the on-chain transaction effects.
 	"""
-	bcs: Base64!
+	bcs: Base64
 }
 
 input TransactionBlockFilter {

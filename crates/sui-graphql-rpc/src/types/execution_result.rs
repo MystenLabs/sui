@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::types::transaction_block_effects::TransactionBlockEffects;
 use async_graphql::*;
 
 #[derive(SimpleObject, Clone)]
@@ -10,5 +11,7 @@ pub(crate) struct ExecutionResult {
 
     /// The digest field captures the digest of the transaction block
     pub digest: String,
-    // TODO: add support for `TransactionBlockEffects` field
+
+    /// The effects field captures the effects of the transaction block
+    pub effects: TransactionBlockEffects,
 }
