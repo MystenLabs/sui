@@ -388,11 +388,6 @@ impl ValidatorService {
         );
 
         // CRITICAL! Validators should never sign an external system transaction.
-        fp_ensure!(
-            !certificate.is_system_tx(),
-            SuiError::InvalidSystemTransaction.into()
-        );
-
         certificate.verify_user_input()?;
 
         let shared_object_tx = certificate.contains_shared_object();
