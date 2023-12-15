@@ -225,7 +225,7 @@ impl TransactionBlockEffects {
             }
         };
 
-        Ok(bytes.map(|bytes| Base64::from(bytes)))
+        Ok(bytes.map(Base64::from))
     }
 }
 
