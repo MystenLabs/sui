@@ -45,7 +45,7 @@ Response: {
       "validatorSet": {
         "activeValidators": [
           {
-            "apy": "0.000000026827535082318832"
+            "apy": 0
           }
         ]
       }

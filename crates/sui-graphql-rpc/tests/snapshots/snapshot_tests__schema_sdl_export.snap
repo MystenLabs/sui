@@ -2737,9 +2737,10 @@ type Validator {
 	"""
 	reportRecords: [Address!]
 	"""
-	The apy of this validator.
+	The apy of this validator in basis points.
+	To get the APY in percentage, multiply by 10_000.
 	"""
-	apy: Float
+	apy: Int
 }
 
 type ValidatorCredentials {
