@@ -1485,7 +1485,7 @@ async fn test_handle_sponsored_transaction() {
     );
     let dual_signed_tx =
         to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &sponsor_key]);
-    let dual_signed_tx = authority_state.verify_transaction(dual_signed_tx).unwrap();
+    let dual_signed_tx = epoch_store.verify_transaction(dual_signed_tx).unwrap();
 
     authority_state
         .handle_transaction(&epoch_store, dual_signed_tx.clone())
@@ -1534,7 +1534,7 @@ async fn test_handle_sponsored_transaction() {
     );
     let dual_signed_tx =
         to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &wrong_owner_key]);
-    let dual_signed_tx = authority_state.verify_transaction(dual_signed_tx).unwrap();
+    let dual_signed_tx = epoch_store.verify_transaction(dual_signed_tx).unwrap();
     let error = authority_state
         .handle_transaction(&epoch_store, dual_signed_tx.clone())
         .await
@@ -1563,7 +1563,7 @@ async fn test_handle_sponsored_transaction() {
     );
     let dual_signed_tx =
         to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &third_party_key]);
-    let dual_signed_tx = authority_state.verify_transaction(dual_signed_tx).unwrap();
+    let dual_signed_tx = epoch_store.verify_transaction(dual_signed_tx).unwrap();
     let error = authority_state
         .handle_transaction(&epoch_store, dual_signed_tx.clone())
         .await
@@ -1678,7 +1678,7 @@ async fn test_objected_owned_gas() {
     );
 
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let transaction = authority_state.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store.verify_transaction(transaction).unwrap();
     let result = authority_state
         .handle_transaction(&epoch_store, transaction)
         .await;
@@ -1852,7 +1852,7 @@ async fn test_publish_non_existing_dependent_module() {
         rgp,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let transaction = authority.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store.verify_transaction(transaction).unwrap();
     let response = authority
         .handle_transaction(&epoch_store, transaction)
         .await;
@@ -2173,7 +2173,7 @@ async fn test_missing_package() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let transaction = authority_state.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store.verify_transaction(transaction).unwrap();
     let result = authority_state
         .handle_transaction(&epoch_store, transaction)
         .await;
@@ -2221,7 +2221,7 @@ async fn test_type_argument_dependencies() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(data, &s1_key);
-    let transaction = authority_state.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store.verify_transaction(transaction).unwrap();
     authority_state
         .handle_transaction(&epoch_store, transaction)
         .await
@@ -2247,7 +2247,7 @@ async fn test_type_argument_dependencies() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(data, &s2_key);
-    let transaction = authority_state.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store.verify_transaction(transaction).unwrap();
     authority_state
         .handle_transaction(&epoch_store, transaction)
         .await
@@ -2273,7 +2273,7 @@ async fn test_type_argument_dependencies() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(data, &s3_key);
-    let transaction = authority_state.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store.verify_transaction(transaction).unwrap();
     let result = authority_state
         .handle_transaction(&epoch_store, transaction)
         .await;
@@ -2980,7 +2980,7 @@ async fn test_refusal_to_sign_consensus_commit_prologue() {
 
     // Sender is able to sign it.
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = authority_state.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store.verify_transaction(transaction).unwrap();
 
     // But the authority should refuse to handle it.
     assert!(matches!(
@@ -3017,7 +3017,7 @@ async fn test_refusal_to_sign_consensus_commit_prologue_v2() {
 
     // Sender is able to sign it.
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = authority_state.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store.verify_transaction(transaction).unwrap();
 
     // But the authority should refuse to handle it.
     assert!(matches!(
@@ -3055,7 +3055,7 @@ async fn test_invalid_mutable_clock_parameter() {
     .unwrap();
 
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = authority_state.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store.verify_transaction(transaction).unwrap();
 
     let Err(e) = authority_state
         .handle_transaction(&epoch_store, transaction)
@@ -3098,7 +3098,7 @@ async fn test_invalid_authenticator_state_parameter() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = authority_state.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store.verify_transaction(transaction).unwrap();
 
     let Err(e) = authority_state
         .handle_transaction(&epoch_store, transaction)
@@ -3153,7 +3153,7 @@ async fn test_invalid_randomness_parameter() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = authority_state.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store.verify_transaction(transaction).unwrap();
 
     let Err(e) = authority_state
         .handle_transaction(&epoch_store, transaction)
@@ -3240,7 +3240,7 @@ async fn test_valid_immutable_clock_parameter() {
     .unwrap();
 
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = authority_state.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store.verify_transaction(transaction).unwrap();
     authority_state
         .handle_transaction(&epoch_store, transaction)
         .await
@@ -3299,7 +3299,7 @@ async fn test_transfer_sui_no_amount() {
 
     // Make sure transaction handling works as usual.
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = authority_state.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store.verify_transaction(transaction).unwrap();
     authority_state
         .handle_transaction(&epoch_store, transaction.clone())
         .await
@@ -4645,7 +4645,7 @@ async fn make_test_transaction(
     for authority in authorities {
         let epoch_store = authority.load_epoch_store_one_call_per_task();
         let transaction = transaction.clone();
-        let transaction = authority.verify_transaction(transaction).unwrap();
+        let transaction = epoch_store.verify_transaction(transaction).unwrap();
         let response = authority
             .handle_transaction(&epoch_store, transaction.clone())
             .await
