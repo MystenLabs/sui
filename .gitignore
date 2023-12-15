@@ -68,3 +68,6 @@ genesis.blob
 fullnode.yaml
 suidb/
 benchmarking/data
+
+# experiment results
+results/
