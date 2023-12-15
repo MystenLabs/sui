@@ -519,24 +519,23 @@ fn ast_exp_to_ide_string(exp: &Exp) -> Option<String> {
     match e {
         UE::Constant(mod_ident, name) => Some(format!("{mod_ident}::{name}")),
         UE::Value(v) => Some(ast_value_to_ide_string(v)),
-        UE::Vector(_, _, _, exp) => ast_exp_to_ide_string(&exp).map(|s| format!("[{s}]")),
+        UE::Vector(_, _, _, exp) => ast_exp_to_ide_string(exp).map(|s| format!("[{s}]")),
         UE::Block(seq) => {
             let seq_items = seq
                 .iter()
-                .map(|s| ast_seq_item_to_ide_string(s))
+                .map(ast_seq_item_to_ide_string)
                 .collect::<Vec<_>>();
             if seq_items.iter().any(|o| o.is_none()) {
                 // even if only one element cannot be turned into string, don't try displaying block content at all
                 return None;
             }
-            Some(format!(
-                "{}",
+            Some(
                 seq_items
                     .into_iter()
                     .map(|o| o.unwrap())
                     .collect::<Vec<_>>()
-                    .join(", ")
-            ))
+                    .join(", "),
+            )
         }
         UE::ExpList(list) => {
             let items = list
@@ -550,14 +549,13 @@ fn ast_exp_to_ide_string(exp: &Exp) -> Option<String> {
                 // even if only one element cannot be turned into string, don't try displaying expression list at all
                 return None;
             }
-            Some(format!(
-                "{}",
+            Some(
                 items
                     .into_iter()
                     .map(|o| o.unwrap())
                     .collect::<Vec<_>>()
-                    .join(", ")
-            ))
+                    .join(", "),
+            )
         }
         UE::UnaryExp(op, exp) => {
             let Some(s) = ast_exp_to_ide_string(exp) else {
