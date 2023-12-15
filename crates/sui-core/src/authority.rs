@@ -738,7 +738,6 @@ impl AuthorityState {
                 tx_digest,
                 &input_object_kinds,
                 &receiving_objects_refs,
-                epoch_store.protocol_config(),
                 epoch_store.epoch(),
             )
             .await?;
@@ -1358,7 +1357,7 @@ impl AuthorityState {
         tx_data.check_version_supported(epoch_store.protocol_config())?;
         tx_data.validity_check(epoch_store.protocol_config())?;
 
-        // The cost of re-auditing a transaction before execution is tolerated.
+        // The cost of partially re-auditing a transaction before execution is tolerated.
         let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
             certificate,
             input_objects,
@@ -1599,9 +1598,7 @@ impl AuthorityState {
 
         let protocol_config = epoch_store.protocol_config();
         transaction_kind.check_version_supported(protocol_config)?;
-
-        // No validity check of the transaction is performed per comment above
-        // `dev_inspect_transaction_block()` in sui-sdk.
+        transaction_kind.validity_check(protocol_config)?;
 
         let max_tx_gas = protocol_config.max_tx_gas();
         let reference_gas_price = epoch_store.reference_gas_price();
