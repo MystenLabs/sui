@@ -4,8 +4,10 @@
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::traits::{EncodeDecodeBase64, KeyPair};
 use fastcrypto_zkp::bn254::zk_login::{parse_jwks, OIDCProvider, ZkLoginInputs};
+use mysten_network::Multiaddr;
 use rand::{rngs::StdRng, SeedableRng};
 use shared_crypto::intent::{Intent, IntentMessage};
+use std::ops::Deref;
 use sui_types::{
     authenticator_state::ActiveJwk,
     base_types::dbg_addr,
@@ -1009,5 +1011,80 @@ async fn test_very_large_certificate() {
     assert!(
         matches!(err, SuiError::RpcError(..))
             && err.to_string().contains("message length too large")
+    );
+}
+
+#[tokio::test]
+async fn test_handle_certificate_errors() {
+    telemetry_subscribers::init_for_testing();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let gas_object_id = ObjectID::random();
+    let authority_state =
+        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let transfer_transaction = init_transfer_transaction(
+        |_| {},
+        sender,
+        &sender_key,
+        recipient,
+        object.compute_object_reference(),
+        gas_object.compute_object_reference(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
+    );
+
+    let consensus_address: Multiaddr = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
+
+    let server = AuthorityServer::new_for_test(
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
+        authority_state.clone(),
+        consensus_address.clone(),
+    );
+
+    let server_handle = server.spawn_for_test().await.unwrap();
+
+    let client = NetworkAuthorityClient::connect(server_handle.address())
+        .await
+        .unwrap();
+
+    // Test handle certificate from the wrong epoch
+    let epoch_store = authority_state.epoch_store_for_testing();
+    let next_epoch = epoch_store.epoch() + 1;
+    let signed_transaction = VerifiedSignedTransaction::new(
+        next_epoch,
+        VerifiedTransaction::new_unchecked(transfer_transaction.clone()),
+        authority_state.name,
+        &*authority_state.secret,
+    );
+
+    let mut committee = epoch_store.committee().deref().clone();
+    committee.epoch = next_epoch;
+    let ct = CertifiedTransaction::new(
+        transfer_transaction.data().clone(),
+        vec![signed_transaction.auth_sig().clone()],
+        &committee,
+    )
+    .unwrap();
+
+    let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+    assert_matches!(
+        err,
+        SuiError::WrongEpoch {
+            expected_epoch: 0,
+            actual_epoch: 1
+        }
     );
 }

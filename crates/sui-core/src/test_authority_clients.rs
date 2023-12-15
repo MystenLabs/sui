@@ -294,6 +294,7 @@ impl AuthorityAPI for MockAuthorityApi {
 #[derive(Clone)]
 pub struct HandleTransactionTestAuthorityClient {
     pub tx_info_resp_to_return: SuiResult<HandleTransactionResponse>,
+    pub cert_resp_to_return: SuiResult<HandleCertificateResponseV2>,
     // If set, sleep for this duration before responding to a request.
     // This is useful in testing a timeout scenario.
     pub sleep_duration_before_responding: Option<Duration>,
@@ -315,7 +316,10 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         &self,
         _certificate: CertifiedTransaction,
     ) -> Result<HandleCertificateResponseV2, SuiError> {
-        unimplemented!()
+        if let Some(duration) = self.sleep_duration_before_responding {
+            tokio::time::sleep(duration).await;
+        }
+        self.cert_resp_to_return.clone()
     }
 
     async fn handle_object_info_request(
@@ -358,6 +362,7 @@ impl HandleTransactionTestAuthorityClient {
     pub fn new() -> Self {
         Self {
             tx_info_resp_to_return: Err(SuiError::Unknown("".to_string())),
+            cert_resp_to_return: Err(SuiError::Unknown("".to_string())),
             sleep_duration_before_responding: None,
         }
     }
@@ -372,6 +377,18 @@ impl HandleTransactionTestAuthorityClient {
 
     pub fn reset_tx_info_response(&mut self) {
         self.tx_info_resp_to_return = Err(SuiError::Unknown("".to_string()));
+    }
+
+    pub fn set_cert_resp_to_return(&mut self, resp: HandleCertificateResponseV2) {
+        self.cert_resp_to_return = Ok(resp);
+    }
+
+    pub fn set_cert_resp_to_return_error(&mut self, error: SuiError) {
+        self.cert_resp_to_return = Err(error);
+    }
+
+    pub fn reset_cert_response(&mut self) {
+        self.cert_resp_to_return = Err(SuiError::Unknown("".to_string()));
     }
 
     pub fn set_sleep_duration_before_responding(&mut self, duration: Duration) {
