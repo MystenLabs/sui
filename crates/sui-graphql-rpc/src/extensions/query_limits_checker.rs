@@ -7,7 +7,7 @@ use crate::error::code;
 use crate::error::code::INTERNAL_SERVER_ERROR;
 use crate::error::graphql_error;
 use crate::error::graphql_error_at_pos;
-use crate::metrics::RequestMetrics;
+use crate::metrics::Metrics;
 use async_graphql::extensions::NextParseQuery;
 use async_graphql::extensions::NextRequest;
 use async_graphql::parser::types::Directive;
@@ -39,6 +39,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use sui_graphql_rpc_headers::LIMITS_HEADER;
 use tokio::sync::Mutex;
+use tracing::error;
 
 /// Only display usage information if this header was in the request.
 pub(crate) struct ShowUsage;
@@ -135,11 +136,28 @@ impl Extension for QueryLimitsChecker {
         variables: &Variables,
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
+        let latency_timer = ctx
+            .data_opt::<Metrics>()
+            .map(|x| x.request_metrics.query_validation_latency.start_timer());
+        let timer_latency_by_path = ctx.data_opt::<Metrics>().map(|x| {
+            x.request_metrics
+                .query_validation_latency_by_path
+                // TODO make the path here
+                .with_label_values(&["path"])
+                .start_timer()
+        });
         let cfg = ctx
             .data::<ServiceConfig>()
             .expect("No service config provided in schema data");
 
         if query.len() > cfg.limits.max_query_payload_size as usize {
+            if let Some(metrics) = ctx.data_opt::<Arc<Metrics>>() {
+                metrics
+                    .request_metrics
+                    .query_payload_error
+                    .with_label_values(&["validation"])
+                    .inc_by(1);
+            }
             return Err(graphql_error(
                 code::GRAPHQL_VALIDATION_FAILED,
                 format!(
@@ -185,8 +203,15 @@ impl Extension for QueryLimitsChecker {
                 sel_set,
                 &mut running_costs,
                 variables,
+                ctx,
             )?;
             max_depth_seen = max_depth_seen.max(running_costs.depth);
+        }
+        if let Some(timer) = latency_timer {
+            timer.observe_duration();
+        }
+        if let Some(timer) = timer_latency_by_path {
+            timer.observe_duration();
         }
 
         if ctx.data_opt::<ShowUsage>().is_some() {
@@ -199,15 +224,23 @@ impl Extension for QueryLimitsChecker {
                 num_fragments: doc.fragments.len() as u32,
             });
         }
-        if let Some(metrics) = ctx.data_opt::<Arc<RequestMetrics>>() {
+        if let Some(metrics) = ctx.data_opt::<Metrics>() {
             metrics
+                .request_metrics
                 .input_nodes
                 .observe(running_costs.input_nodes as f64);
             metrics
+                .request_metrics
                 .output_nodes
                 .observe(running_costs.output_nodes as f64);
-            metrics.query_depth.observe(running_costs.depth as f64);
-            metrics.query_payload_size.observe(query.len() as f64);
+            metrics
+                .request_metrics
+                .query_depth
+                .observe(running_costs.depth as f64);
+            metrics
+                .request_metrics
+                .query_payload_size
+                .observe(query.len() as f64);
         }
         Ok(doc)
     }
@@ -222,6 +255,7 @@ impl QueryLimitsChecker {
         sel_set: &Positioned<SelectionSet>,
         cost: &mut ComponentCost,
         variables: &Variables,
+        ctx: &ExtensionContext<'_>,
     ) -> ServerResult<()> {
         // Use BFS to analyze the query and count the number of nodes and the depth of the query
         struct ToVisit<'s> {
@@ -238,7 +272,7 @@ impl QueryLimitsChecker {
                 parent_node_count: 1,
             });
             cost.input_nodes += 1;
-            check_limits(limits, cost, Some(selection.pos))?;
+            check_limits(limits, cost, Some(selection.pos), ctx)?;
         }
 
         // Track the number of nodes at first level if any
@@ -247,7 +281,7 @@ impl QueryLimitsChecker {
         while !que.is_empty() {
             // Signifies the start of a new level
             cost.depth += 1;
-            check_limits(limits, cost, None)?;
+            check_limits(limits, cost, None, ctx)?;
             while level_len > 0 {
                 // Ok to unwrap since we checked for empty queue
                 // and level_len > 0
@@ -274,7 +308,7 @@ impl QueryLimitsChecker {
                                 parent_node_count: current_count,
                             });
                             cost.input_nodes += 1;
-                            check_limits(limits, cost, Some(field_sel.pos))?;
+                            check_limits(limits, cost, Some(field_sel.pos), ctx)?;
                         }
                     }
 
@@ -301,7 +335,7 @@ impl QueryLimitsChecker {
                                 parent_node_count,
                             });
                             cost.input_nodes += 1;
-                            check_limits(limits, cost, Some(selection.pos))?;
+                            check_limits(limits, cost, Some(selection.pos), ctx)?;
                         }
                     }
 
@@ -313,7 +347,7 @@ impl QueryLimitsChecker {
                                 parent_node_count,
                             });
                             cost.input_nodes += 1;
-                            check_limits(limits, cost, Some(selection.pos))?;
+                            check_limits(limits, cost, Some(selection.pos), ctx)?;
                         }
                     }
                 }
@@ -326,8 +360,16 @@ impl QueryLimitsChecker {
     }
 }
 
-fn check_limits(limits: &Limits, cost: &ComponentCost, pos: Option<Pos>) -> ServerResult<()> {
+fn check_limits(
+    limits: &Limits,
+    cost: &ComponentCost,
+    pos: Option<Pos>,
+    ctx: &ExtensionContext<'_>,
+) -> ServerResult<()> {
     if cost.input_nodes > limits.max_query_nodes {
+        if let Some(metrics) = ctx.data_opt::<Metrics>() {
+            metrics.inc_num_bad_input_errors("cost");
+        }
         return Err(ServerError::new(
             format!(
                 "Query has too many nodes. The maximum allowed is {}",
@@ -338,6 +380,10 @@ fn check_limits(limits: &Limits, cost: &ComponentCost, pos: Option<Pos>) -> Serv
     }
 
     if cost.depth > limits.max_query_depth {
+        if let Some(metrics) = ctx.data_opt::<Metrics>() {
+            metrics.inc_num_bad_input_errors("cost");
+        }
+        error!(target: "async-graphql", "Query has too many levels of nesting {}", cost.depth);
         return Err(ServerError::new(
             format!(
                 "Query has too many levels of nesting. The maximum allowed is {}",
@@ -348,6 +394,11 @@ fn check_limits(limits: &Limits, cost: &ComponentCost, pos: Option<Pos>) -> Serv
     }
 
     if cost.output_nodes > limits.max_output_nodes {
+        if let Some(metrics) = ctx.data_opt::<Metrics>() {
+            // TODO is this a client error though?
+            metrics.inc_num_bad_input_errors("cost");
+        }
+        error!(target: "async-graphql", "Query will result in too many output nodes: {}", cost.output_nodes);
         return Err(ServerError::new(
             format!(
                 "Query will result in too many output nodes. The maximum allowed is {}, estimated {}",

@@ -31,6 +31,7 @@ use sui_types::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
     },
 };
+use tracing::error;
 
 #[cfg(feature = "pg_backend")]
 use super::pg_backend::{PgQueryExecutor, QueryBuilder};
