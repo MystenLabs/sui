@@ -950,6 +950,15 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         Ok(())
     }
 
+    // The `objects_snapshot` table maintains a delayed snapshot of the `objects` table,
+    // controlled by `object_snapshot_max_checkpoint_lag` (max lag) and
+    // `object_snapshot_min_checkpoint_lag` (min lag). For instance, with a max lag of 900
+    // and a min lag of 300 checkpoints, the `objects_snapshot` table will lag behind the
+    // `objects` table by 300 to 900 checkpoints. The snapshot is updated when the lag
+    // exceeds the max lag threshold, and updates continue until the lag is reduced to
+    // the min lag threshold. Then, we have a consistent read range between
+    // `latest_snapshot_cp` and `latest_cp` based on `objects_snapshot` and `objects_history`,
+    // where the size of this range varies between the min and max lag values.
     async fn persist_object_snapshot(&self) -> Result<(), IndexerError> {
         let latest_cp = self
             .get_latest_tx_checkpoint_sequence_number()?
