@@ -34,9 +34,9 @@ export function useResolveSuiNSAddress(name?: string | null, enabled?: boolean) 
 	});
 }
 
-export function useResolveSuiNSName(address?: string | null) {
+export function useResolveSuiNSName(address?: string | null, enabled?: boolean) {
 	const client = useSuiClient();
-	const enabled = useSuiNSEnabled();
+	const enabledSuiNs = useSuiNSEnabled();
 
 	return useQuery({
 		queryKey: ['resolve-suins-name', address],
@@ -49,7 +49,7 @@ export function useResolveSuiNSName(address?: string | null) {
 
 			return data[0] || null;
 		},
-		enabled: !!address && enabled,
+		enabled: !!address && enabled && enabledSuiNs,
 		refetchOnWindowFocus: false,
 		retry: false,
 	});

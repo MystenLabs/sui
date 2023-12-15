@@ -3,13 +3,11 @@
 
 import { useGetDynamicFields, useGetObject } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
-import { type SuiObjectResponse } from '@mysten/sui.js/client';
 import { Heading } from '@mysten/ui';
 import { type ReactNode, useState } from 'react';
 
 import { DynamicFieldsCard } from '~/components/Object/DynamicFieldsCard';
 import { ObjectFieldsCard } from '~/components/Object/ObjectFieldsCard';
-import TransactionBlocksForAddress from '~/components/TransactionBlocksForAddress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
 
 function FieldsContainer({ children }: { children: ReactNode }) {
@@ -113,17 +111,5 @@ export function FieldsContent({ objectId }: { objectId: string }) {
 				</TabsContent>
 			)}
 		</Tabs>
-	);
-}
-
-export function TokenView({ data }: { data: SuiObjectResponse }) {
-	const objectId = data.data?.objectId!;
-
-	return (
-		<div className="flex flex-col flex-nowrap gap-14">
-			<FieldsContent objectId={objectId} />
-
-			<TransactionBlocksForAddress address={objectId} header="Transaction Blocks" />
-		</div>
 	);
 }

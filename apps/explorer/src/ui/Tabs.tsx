@@ -119,29 +119,34 @@ export function TabHeader({
 	children,
 	noGap,
 	tooltip,
+	after,
 }: {
 	size?: TabSize;
 	title: string;
 	children: ReactNode;
 	noGap?: boolean;
 	tooltip?: string;
+	after?: ReactNode;
 }) {
 	return (
 		<Tabs size={size} defaultValue="tab">
 			<TabsList>
-				<TabsTrigger value="tab">
-					{title}
-					{tooltip && (
-						<Tooltip
-							tip={tooltip}
-							onOpen={() => {
-								ampli.activatedTooltip({ tooltipLabel: title });
-							}}
-						>
-							<InfoSvg />
-						</Tooltip>
-					)}
-				</TabsTrigger>
+				<div className="flex w-full justify-between">
+					<TabsTrigger value="tab">
+						{title}
+						{tooltip && (
+							<Tooltip
+								tip={tooltip}
+								onOpen={() => {
+									ampli.activatedTooltip({ tooltipLabel: title });
+								}}
+							>
+								<InfoSvg />
+							</Tooltip>
+						)}
+					</TabsTrigger>
+					{after}
+				</div>
 			</TabsList>
 			<TabsContent value="tab" noGap={noGap}>
 				{children}

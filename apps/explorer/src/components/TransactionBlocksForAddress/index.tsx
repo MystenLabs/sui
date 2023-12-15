@@ -3,7 +3,7 @@
 
 import { type TransactionFilter } from '@mysten/sui.js/client';
 import { Heading, RadioGroup, RadioGroupItem } from '@mysten/ui';
-import { useReducer, useState } from 'react';
+import { useReducer } from 'react';
 
 import { genTableDataFromTxData } from '../transactions/TxCardUtils';
 import {
@@ -94,7 +94,7 @@ function TransactionBlocksForAddress({
 	filter = FILTER_VALUES.CHANGED,
 	header,
 }: TransactionBlocksForAddressProps) {
-	const [filterValue, setFilterValue] = useState(filter);
+	// const [filterValue, setFilterValue] = useState(filter);
 	const [currentPageState, dispatch] = useReducer(reducer, {
 		InputObject: 0,
 		ChangedObject: 0,
@@ -102,10 +102,10 @@ function TransactionBlocksForAddress({
 
 	const { data, isPending, isFetching, isFetchingNextPage, fetchNextPage, hasNextPage } =
 		useGetTransactionBlocks({
-			[filterValue]: address,
+			[filter]: address,
 		} as TransactionFilter);
 
-	const currentPage = currentPageState[filterValue];
+	const currentPage = currentPageState[filter];
 	const cardData =
 		data && data.pages[currentPage]
 			? genTableDataFromTxData(data.pages[currentPage].data)
@@ -113,15 +113,13 @@ function TransactionBlocksForAddress({
 
 	return (
 		<div data-testid="tx">
-			<div className="flex items-center justify-between border-b border-gray-45 pb-5">
-				{header && (
+			{header && (
+				<div className="flex items-center justify-between border-b border-gray-45 pb-5">
 					<Heading color="gray-90" variant="heading4/semibold">
 						{header}
 					</Heading>
-				)}
-
-				<FiltersControl filterValue={filterValue} setFilterValue={setFilterValue} />
-			</div>
+				</div>
+			)}
 
 			<div className={clsx(header && 'pt-5', 'flex flex-col space-y-5 text-left xl:pr-10')}>
 				{isPending || isFetching || isFetchingNextPage || !cardData ? (
@@ -147,7 +145,7 @@ function TransactionBlocksForAddress({
 							// Make sure we are at the end before fetching another page
 							if (
 								data &&
-								currentPageState[filterValue] === data?.pages.length - 1 &&
+								currentPageState[filter] === data?.pages.length - 1 &&
 								!isPending &&
 								!isFetching
 							) {
@@ -155,26 +153,24 @@ function TransactionBlocksForAddress({
 							}
 							dispatch({
 								type: PAGE_ACTIONS.NEXT,
-
-								filterValue,
+								filterValue: filter,
 							});
 						}}
 						hasNext={
 							(Boolean(hasNextPage) && Boolean(data?.pages[currentPage])) ||
 							currentPage < (data?.pages.length ?? 0) - 1
 						}
-						hasPrev={currentPageState[filterValue] !== 0}
+						hasPrev={currentPageState[filter] !== 0}
 						onPrev={() =>
 							dispatch({
 								type: PAGE_ACTIONS.PREV,
-
-								filterValue,
+								filterValue: filter,
 							})
 						}
 						onFirst={() =>
 							dispatch({
 								type: PAGE_ACTIONS.FIRST,
-								filterValue,
+								filterValue: filter,
 							})
 						}
 					/>
