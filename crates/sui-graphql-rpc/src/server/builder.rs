@@ -107,7 +107,6 @@ impl ServerBuilder {
             let router: Router = Router::new()
                 .route("/", post(graphql_handler))
                 .route("/health", axum::routing::get(health_checks))
-                .route("/schema", axum::routing::get(get_schema))
                 .layer(middleware::from_fn(check_version_middleware))
                 .layer(middleware::from_fn(set_version_middleware));
             self.router = Some(router);
@@ -238,19 +237,6 @@ impl ServerBuilder {
 
         Ok(builder)
     }
-}
-
-async fn get_schema() -> impl axum::response::IntoResponse {
-    let schema = include_str!("../../schema/current_progress_schema.graphql").to_string();
-    let schema = format!(
-        r#"
-    <span style="white-space: pre;">{}
-    </span>
-    "#,
-        schema
-    );
-
-    axum::response::Html(schema)
 }
 
 async fn graphql_handler(

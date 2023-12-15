@@ -12,13 +12,33 @@ use sui_types::{
     crypto::{
         get_key_pair, AccountKeyPair, PublicKey, Signature, SuiKeyPair, ZkLoginPublicIdentifier,
     },
+    error::{SuiError, UserInputError},
     multisig::{MultiSig, MultiSigPublicKey},
     signature::GenericSignature,
-    transaction::{AuthenticatorStateUpdate, TransactionDataAPI, TransactionExpiration},
+    transaction::{
+        AuthenticatorStateUpdate, GenesisTransaction, TransactionDataAPI, TransactionExpiration,
+        TransactionKind,
+    },
     utils::{to_sender_signed_transaction, TestData},
     zk_login_authenticator::ZkLoginAuthenticator,
     zk_login_util::DEFAULT_JWK_BYTES,
 };
+
+use sui_macros::sim_test;
+
+macro_rules! assert_matches {
+    ($expression:expr, $pattern:pat $(if $guard: expr)?) => {
+        match $expression {
+            $pattern $(if $guard)? => {}
+            ref e => panic!(
+                "assertion failed: `(left == right)` \
+                 (left: `{:?}`, right: `{:?}`)",
+                e,
+                stringify!($pattern $(if $guard)?)
+            ),
+        }
+    };
+}
 
 use crate::{
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
@@ -27,10 +47,12 @@ use crate::{
 };
 
 use super::*;
+use fastcrypto::traits::AggregateAuthenticator;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 pub use crate::authority::authority_test_utils::init_state_with_ids;
 
-#[tokio::test]
+#[sim_test]
 async fn test_handle_transfer_transaction_bad_signature() {
     do_transaction_test(
         1,
@@ -41,11 +63,14 @@ async fn test_handle_transfer_transaction_bad_signature() {
             *data.tx_signatures_mut_for_testing() =
                 vec![Signature::new_secure(data.intent_message(), &unknown_key).into()];
         },
+        |err| {
+            assert_matches!(err, SuiError::SignerSignatureAbsent { .. });
+        },
     )
     .await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_handle_transfer_transaction_no_signature() {
     do_transaction_test(
         1,
@@ -53,11 +78,20 @@ async fn test_handle_transfer_transaction_no_signature() {
         |tx| {
             *tx.data_mut_for_testing().tx_signatures_mut_for_testing() = vec![];
         },
+        |err| {
+            assert_matches!(
+                err,
+                SuiError::SignerSignatureNumberMismatch {
+                    expected: 1,
+                    actual: 0
+                }
+            );
+        },
     )
     .await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_handle_transfer_transaction_extra_signature() {
     do_transaction_test(
         1,
@@ -66,25 +100,42 @@ async fn test_handle_transfer_transaction_extra_signature() {
             let sigs = tx.data_mut_for_testing().tx_signatures_mut_for_testing();
             sigs.push(sigs[0].clone());
         },
+        |err| {
+            assert_matches!(
+                err,
+                SuiError::SignerSignatureNumberMismatch {
+                    expected: 1,
+                    actual: 2
+                }
+            );
+        },
     )
     .await;
 }
 
 // TODO: verify that these cases are not exploitable via consensus input
-#[tokio::test]
+#[sim_test]
 async fn test_empty_sender_signed_data() {
     do_transaction_test(
         0,
         |_| {},
         |tx| {
             let data = tx.data_mut_for_testing();
-            *data.inner_vec_mut_for_testing() = vec![];
+            data.inner_vec_mut_for_testing().clear();
+        },
+        |err| {
+            assert_matches!(
+                err,
+                SuiError::UserInputError {
+                    error: UserInputError::Unsupported { .. }
+                }
+            );
         },
     )
     .await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_multiple_sender_signed_data() {
     do_transaction_test(
         0,
@@ -99,11 +150,19 @@ async fn test_multiple_sender_signed_data() {
                 TransactionExpiration::Epoch(123);
             tx_vec.push(new);
         },
+        |err| {
+            assert_matches!(
+                err,
+                SuiError::UserInputError {
+                    error: UserInputError::Unsupported { .. }
+                }
+            );
+        },
     )
     .await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_duplicate_sender_signed_data() {
     do_transaction_test(
         0,
@@ -115,11 +174,19 @@ async fn test_duplicate_sender_signed_data() {
             let new = tx_vec[0].clone();
             tx_vec.push(new);
         },
+        |err| {
+            assert_matches!(
+                err,
+                SuiError::UserInputError {
+                    error: UserInputError::Unsupported { .. }
+                }
+            );
+        },
     )
     .await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_empty_gas_data() {
     do_transaction_test_skip_cert_checks(
         0,
@@ -127,11 +194,19 @@ async fn test_empty_gas_data() {
             tx.gas_data_mut().payment = vec![];
         },
         |_| {},
+        |err| {
+            assert_matches!(
+                err,
+                SuiError::UserInputError {
+                    error: UserInputError::MissingGasPayment
+                }
+            );
+        },
     )
     .await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_duplicate_gas_data() {
     do_transaction_test_skip_cert_checks(
         0,
@@ -141,11 +216,19 @@ async fn test_duplicate_gas_data() {
             gas_data.payment.push(new_gas);
         },
         |_| {},
+        |err| {
+            assert_matches!(
+                err,
+                SuiError::UserInputError {
+                    error: UserInputError::MutableObjectUsedMoreThanOnce { .. }
+                }
+            );
+        },
     )
     .await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_gas_wrong_owner_matches_sender() {
     do_transaction_test(
         1,
@@ -156,11 +239,14 @@ async fn test_gas_wrong_owner_matches_sender() {
             *tx.sender_mut_for_testing() = new_addr;
         },
         |_| {},
+        |err| {
+            assert_matches!(err, SuiError::SignerSignatureAbsent { .. });
+        },
     )
     .await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_gas_wrong_owner() {
     do_transaction_test(
         1,
@@ -170,6 +256,35 @@ async fn test_gas_wrong_owner() {
             gas_data.owner = new_addr;
         },
         |_| {},
+        |err| {
+            assert_matches!(
+                err,
+                SuiError::SignerSignatureNumberMismatch {
+                    expected: 2,
+                    actual: 1
+                }
+            );
+        },
+    )
+    .await;
+}
+
+#[sim_test]
+async fn test_user_sends_system_transaction() {
+    do_transaction_test_skip_cert_checks(
+        0,
+        |tx| {
+            *tx.kind_mut() = TransactionKind::Genesis(GenesisTransaction { objects: vec![] });
+        },
+        |_| {},
+        |err| {
+            assert_matches!(
+                err,
+                SuiError::UserInputError {
+                    error: UserInputError::Unsupported { .. }
+                }
+            );
+        },
     )
     .await;
 }
@@ -200,12 +315,14 @@ async fn do_transaction_test_skip_cert_checks(
     expected_sig_errors: u64,
     pre_sign_mutations: impl FnOnce(&mut TransactionData),
     post_sign_mutations: impl FnOnce(&mut Transaction),
+    err_check: impl Fn(&SuiError),
 ) {
     do_transaction_test_impl(
         expected_sig_errors,
         false,
         pre_sign_mutations,
         post_sign_mutations,
+        err_check,
     )
     .await
 }
@@ -214,12 +331,14 @@ async fn do_transaction_test(
     expected_sig_errors: u64,
     pre_sign_mutations: impl FnOnce(&mut TransactionData),
     post_sign_mutations: impl FnOnce(&mut Transaction),
+    err_check: impl Fn(&SuiError),
 ) {
     do_transaction_test_impl(
         expected_sig_errors,
         true,
         pre_sign_mutations,
         post_sign_mutations,
+        err_check,
     )
     .await
 }
@@ -229,6 +348,7 @@ async fn do_transaction_test_impl(
     check_forged_cert: bool,
     pre_sign_mutations: impl FnOnce(&mut TransactionData),
     post_sign_mutations: impl FnOnce(&mut Transaction),
+    err_check: impl Fn(&SuiError),
 ) {
     telemetry_subscribers::init_for_testing();
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
@@ -276,10 +396,11 @@ async fn do_transaction_test_impl(
 
     post_sign_mutations(&mut transfer_transaction);
 
-    assert!(client
+    let err = client
         .handle_transaction(transfer_transaction.clone())
         .await
-        .is_err());
+        .unwrap_err();
+    err_check(&err);
 
     check_locks(authority_state.clone(), vec![object_id]).await;
 
@@ -303,13 +424,15 @@ async fn do_transaction_test_impl(
 
         let ct = CertifiedTransaction::new_from_data_and_sig(plain_tx.into_data(), cert_sig);
 
-        assert!(client.handle_certificate_v2(ct.clone()).await.is_err());
+        let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+        err_check(&err);
         epoch_store.clear_signature_cache();
-        assert!(client.handle_certificate_v2(ct.clone()).await.is_err());
+        let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+        err_check(&err);
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_zklogin_transfer_with_bad_ephemeral_sig() {
     do_zklogin_transaction_test(
         1,
@@ -340,7 +463,7 @@ fn zklogin_key_pair_and_inputs() -> Vec<(Ed25519KeyPair, ZkLoginInputs)> {
     vec![(key1, inputs1), (key2, inputs2)]
 }
 
-#[tokio::test]
+#[sim_test]
 async fn zklogin_test_cached_proof_wrong_key() {
     telemetry_subscribers::init_for_testing();
     let (
@@ -741,4 +864,150 @@ async fn zk_multisig_test() {
     assert!(dbg!(err).is_err());
 
     check_locks(authority_state.clone(), vec![object_id]).await;
+}
+
+#[tokio::test]
+async fn test_oversized_txn() {
+    telemetry_subscribers::init_for_testing();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
+    let max_txn_size = authority_state
+        .epoch_store_for_testing()
+        .protocol_config()
+        .max_tx_size_bytes() as usize;
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let obj_ref = object.compute_object_reference();
+
+    // Construct an oversized txn.
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        // Put a lot of commands in the txn so it's large.
+        for _ in 0..(1024 * 16) {
+            builder.transfer_object(recipient, obj_ref).unwrap();
+        }
+        builder.finish()
+    };
+
+    let txn_data = TransactionData::new_programmable(sender, vec![obj_ref], pt, 0, 0);
+
+    let txn = to_sender_signed_transaction(txn_data, &sender_key);
+    let tx_size = bcs::serialized_size(&txn).unwrap();
+
+    // Making sure the txn is larger than the max txn size.
+    assert!(tx_size > max_txn_size);
+
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
+
+    let server = AuthorityServer::new_for_test(
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
+        authority_state.clone(),
+        consensus_address,
+    );
+
+    let server_handle = server.spawn_for_test().await.unwrap();
+
+    let client = NetworkAuthorityClient::connect(server_handle.address())
+        .await
+        .unwrap();
+
+    let res = client.handle_transaction(txn).await;
+    // The txn should be rejected due to its size.
+    assert!(res
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("serialized transaction size exceeded maximum"));
+}
+
+#[tokio::test]
+async fn test_very_large_certificate() {
+    telemetry_subscribers::init_for_testing();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let gas_object_id = ObjectID::random();
+    let authority_state =
+        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let transfer_transaction = init_transfer_transaction(
+        |_| {},
+        sender,
+        &sender_key,
+        recipient,
+        object.compute_object_reference(),
+        gas_object.compute_object_reference(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
+    );
+
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
+
+    let server = AuthorityServer::new_for_test(
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
+        authority_state.clone(),
+        consensus_address,
+    );
+
+    let server_handle = server.spawn_for_test().await.unwrap();
+
+    let client = NetworkAuthorityClient::connect(server_handle.address())
+        .await
+        .unwrap();
+
+    let auth_sig = client
+        .handle_transaction(transfer_transaction.clone())
+        .await
+        .unwrap()
+        .status
+        .into_signed_for_testing();
+
+    let signatures: BTreeMap<_, _> = vec![auth_sig]
+        .into_iter()
+        .map(|a| (a.authority, a.signature))
+        .collect();
+
+    // Insert a lot into the bitmap so the cert is very large, while the txn inside is reasonably sized.
+    let mut signers_map = roaring::bitmap::RoaringBitmap::new();
+    signers_map.insert_range(0..52108864);
+    let sigs: Vec<AuthoritySignature> = signatures.into_values().collect();
+
+    let quorum_signature = sui_types::crypto::AuthorityQuorumSignInfo {
+        epoch: 0,
+        signature: sui_types::crypto::AggregateAuthoritySignature::aggregate(&sigs)
+            .map_err(|e| SuiError::InvalidSignature {
+                error: e.to_string(),
+            })
+            .expect("Validator returned invalid signature"),
+        signers_map,
+    };
+    let cert = sui_types::message_envelope::Envelope::new_from_data_and_sig(
+        transfer_transaction.into_data(),
+        quorum_signature,
+    );
+
+    let res = client.handle_certificate_v2(cert).await;
+    assert!(res.is_err());
+    let err = res.err().unwrap();
+    // The resulting error should be a RpcError with a message length too large.
+    assert!(
+        matches!(err, SuiError::RpcError(..))
+            && err.to_string().contains("message length too large")
+    );
 }

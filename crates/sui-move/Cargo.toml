@@ -33,7 +33,6 @@ tokio = { workspace = true, features = ["full"] }
 move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime" }
 sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
 
-sui-core = { workspace = true, optional = true }
 sui-move-build.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
@@ -65,6 +64,6 @@ build = []
 coverage = []
 disassemble = []
 prove = []
-unit_test = ["build", "dep:once_cell", "dep:sui-core"]
+unit_test = ["build", "dep:once_cell"]
 calibrate = []
 all = ["build", "coverage", "disassemble", "prove", "unit_test", "calibrate"]

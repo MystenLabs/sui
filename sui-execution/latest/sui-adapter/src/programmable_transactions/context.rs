@@ -726,7 +726,7 @@ mod checked {
             for package in new_packages {
                 let package_obj = Object::new_from_package(package, tx_digest);
                 let id = package_obj.id();
-                created_object_ids.insert(id, ());
+                created_object_ids.insert(id);
                 written_objects.insert(id, package_obj);
             }
             for (id, additional_write) in additional_writes {
@@ -810,7 +810,7 @@ mod checked {
                 } else {
                     // If it's not in the written objects, the object must have been deleted. Otherwise
                     // it's an error.
-                    if !deleted_object_ids.contains_key(id) {
+                    if !deleted_object_ids.contains(id) {
                         return Err(ExecutionError::new(
                             ExecutionErrorKind::SharedObjectOperationNotAllowed,
                             Some(
@@ -841,8 +841,8 @@ mod checked {
                     .into_iter()
                     .filter_map(|(id, loaded)| loaded.is_modified.then_some(id))
                     .collect(),
-                created_object_ids: created_object_ids.into_iter().map(|(id, _)| id).collect(),
-                deleted_object_ids: deleted_object_ids.into_iter().map(|(id, _)| id).collect(),
+                created_object_ids: created_object_ids.into_iter().collect(),
+                deleted_object_ids: deleted_object_ids.into_iter().collect(),
                 user_events,
             }))
         }

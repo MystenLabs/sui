@@ -15,6 +15,7 @@ use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVer
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
+use sui_json_rpc_api::{JsonRpcMetrics, WriteApiOpenRpc, WriteApiServer};
 use sui_json_rpc_types::{
     DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlock,
     SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
@@ -34,8 +35,6 @@ use sui_types::transaction::{
 };
 use tracing::instrument;
 
-use crate::api::JsonRpcMetrics;
-use crate::api::WriteApiServer;
 use crate::authority_state::StateRead;
 use crate::error::{Error, SuiRpcInputError};
 use crate::{
@@ -314,6 +313,6 @@ impl SuiRpcModule for TransactionExecutionApi {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::WriteApiOpenRpc::module_doc()
+        WriteApiOpenRpc::module_doc()
     }
 }

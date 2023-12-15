@@ -1317,7 +1317,10 @@ async fn test_access_old_object_pruned() {
         let epoch_store = state.epoch_store_for_testing();
         assert_eq!(
             state
-                .handle_transaction(&epoch_store, state.verify_transaction(tx.clone()).unwrap())
+                .handle_transaction(
+                    &epoch_store,
+                    epoch_store.verify_transaction(tx.clone()).unwrap()
+                )
                 .await
                 .unwrap_err(),
             SuiError::UserInputError {

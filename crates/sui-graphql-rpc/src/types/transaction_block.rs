@@ -82,7 +82,7 @@ impl TransactionBlock {
         Some(GasInput::from(self.native.transaction_data().gas_data()))
     }
 
-    /// The type of this transaction as well as the commmands and/or parameters comprising the
+    /// The type of this transaction as well as the commands and/or parameters comprising the
     /// transaction of this kind.
     async fn kind(&self) -> Option<TransactionBlockKind> {
         Some(TransactionBlockKind::from(

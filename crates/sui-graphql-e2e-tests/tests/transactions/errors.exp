@@ -20,7 +20,7 @@ Response: {
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "MoveAbort(MoveLocation { module: ModuleId { address: 00cc077085024849b290aa0b6d88bb5793d457e99fe08b472b7fcd73f775bf91, name: Identifier(\"m\") }, function: 1, instruction: 1, function_name: Some(\"boom\") }, 42) in command 0"
+            "errors": "MoveAbort(MoveLocation { module: ModuleId { address: 4d08ca97f492a96f392814d537325148b423d2b021410982613329980bfc925e, name: Identifier(\"m\") }, function: 1, instruction: 1, function_name: Some(\"boom\") }, 42) in command 0"
           }
         }
       ]
@@ -43,7 +43,7 @@ Response: {
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "MoveAbort(MoveLocation { module: ModuleId { address: 00cc077085024849b290aa0b6d88bb5793d457e99fe08b472b7fcd73f775bf91, name: Identifier(\"m\") }, function: 1, instruction: 1, function_name: Some(\"boom\") }, 42) in command 2"
+            "errors": "MoveAbort(MoveLocation { module: ModuleId { address: 4d08ca97f492a96f392814d537325148b423d2b021410982613329980bfc925e, name: Identifier(\"m\") }, function: 1, instruction: 1, function_name: Some(\"boom\") }, 42) in command 2"
           }
         }
       ]
