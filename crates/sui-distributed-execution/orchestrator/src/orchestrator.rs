@@ -369,12 +369,15 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics<T>, T: BenchmarkType> Orchestrator
         // many ssh connections for too long.
         let commit = &self.settings.repository.commit;
         let command = [
+            "git restore .",
             &format!("git fetch origin {commit}"),
             &format!("(git checkout -b {commit} {commit} || git checkout origin/{commit})"),
             "source $HOME/.cargo/env",
             // &format!("cargo build --release"),
         ]
         .join(" && ");
+
+        println!("command: {}", command);
 
         let active = self.instances.iter().filter(|x| x.is_active()).cloned();
 
@@ -437,6 +440,7 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics<T>, T: BenchmarkType> Orchestrator
         for path in self.protocol_commands.db_directories() {
             command.push(format!("(rm -rf {} || true)", path.display()));
         }
+
         if cleanup {
             command.push("(rm -rf ~/*log* || true)".into());
         }

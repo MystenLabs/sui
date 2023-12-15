@@ -502,8 +502,8 @@ impl SequenceWorkerState {
             if counter % 1000 == 0 && counter != 0 {
                 tracing::debug!("Submitted {} txs", counter * chunks_size);
             }
-            let now = Metrics::now().as_secs_f64();
             for tx in chunk {
+                let now = Metrics::now().as_secs_f64();
                 let full_tx = TransactionWithEffects {
                     tx: tx.data().clone(),
                     ground_truth_effects: None,
