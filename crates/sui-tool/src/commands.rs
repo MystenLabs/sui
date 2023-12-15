@@ -711,7 +711,10 @@ impl ToolCommand {
                 };
 
                 if let Err(e) = check_completed_snapshot(&snapshot_store_config, epoch).await {
-                    panic!("Aborting snapshot restore: {}", e);
+                    panic!(
+                        "Aborting snapshot restore: {}, snapshot may not be uploaded yet",
+                        e
+                    );
                 }
                 if formal {
                     let verify = verify.unwrap_or(true);
