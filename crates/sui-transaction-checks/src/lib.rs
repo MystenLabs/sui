@@ -74,22 +74,17 @@ mod checked {
         receiving_objects: ReceivingObjects,
         metrics: &Arc<BytecodeVerifierMetrics>,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
-        // Cheap validity checks that is ok to run multiple times during processing.
-        transaction.check_version_supported(protocol_config)?;
-        transaction.validity_check(protocol_config)?;
-
-        // Runs verifier, which could be expensive.
-        check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
-
-        let gas_status = get_gas_status(
-            &input_objects,
-            transaction.gas(),
+        let gas_status = check_transaction_input_inner(
             protocol_config,
             reference_gas_price,
             transaction,
+            &input_objects,
+            &[],
         )?;
-        check_objects(transaction, &input_objects)?;
         check_receiving_objects(&input_objects, &receiving_objects)?;
+        // Runs verifier, which could be expensive.
+        check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
+
         Ok((gas_status, input_objects.into_checked()))
     }
 
@@ -102,28 +97,27 @@ mod checked {
         gas_object: Object,
         metrics: &Arc<BytecodeVerifierMetrics>,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
-        // Cheap validity checks that is ok to run multiple times during processing.
-        transaction.check_version_supported(protocol_config)?;
-        transaction.validity_check_no_gas_check(protocol_config)?;
-
-        // Runs verifier, which could be expensive.
-        check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
-
         let gas_object_ref = gas_object.compute_object_reference();
         input_objects.push(ObjectReadResult::new_from_gas_object(&gas_object));
 
-        let gas_status = get_gas_status(
-            &input_objects,
-            &[gas_object_ref],
+        let gas_status = check_transaction_input_inner(
             protocol_config,
             reference_gas_price,
             transaction,
+            &input_objects,
+            &[gas_object_ref],
         )?;
-        check_objects(transaction, &input_objects)?;
         check_receiving_objects(&input_objects, &receiving_objects)?;
+        // Runs verifier, which could be expensive.
+        check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
+
         Ok((gas_status, input_objects.into_checked()))
     }
 
+    // Since the purpose of this function is to audit certified transactions,
+    // the checks here should be a strict subset of the checks in check_transaction_input().
+    // For checks not performed in this function but in check_transaction_input(),
+    // we should add a comment calling out the difference.
     #[instrument(level = "trace", skip_all)]
     pub fn check_certificate_input(
         cert: &VerifiedExecutableTransaction,
@@ -131,25 +125,17 @@ mod checked {
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
-        // Cheap validity checks that is ok to run multiple times during processing.
-        let tx_data = cert.data().transaction_data();
-        tx_data
-            .check_version_supported(protocol_config)
-            .expect("Certified transaction should be valid");
-        tx_data
-            .validity_check(protocol_config)
-            .expect("Certified transaction should be valid");
-
-        let tx_data = &cert.data().intent_message().value;
-        let gas_status = get_gas_status(
-            &input_objects,
-            tx_data.gas(),
+        let transaction = cert.data().transaction_data();
+        let gas_status = check_transaction_input_inner(
             protocol_config,
             reference_gas_price,
-            tx_data,
+            transaction,
+            &input_objects,
+            &[],
         )?;
-        check_objects(tx_data, &input_objects)?;
         // NB: We do not check receiving objects when executing. Only at signing time do we check.
+        // NB: move verifier is only checked at signing time, not at execution.
+
         Ok((gas_status, input_objects.into_checked()))
     }
 
@@ -196,6 +182,37 @@ mod checked {
         ));
 
         Ok((gas_object_ref, input_objects.into_checked()))
+    }
+
+    // Common checks performed for transactions and certificates.
+    fn check_transaction_input_inner(
+        protocol_config: &ProtocolConfig,
+        reference_gas_price: u64,
+        transaction: &TransactionData,
+        input_objects: &InputObjects,
+        // Overrides the gas objects in the transaction.
+        gas_override: &[ObjectRef],
+    ) -> SuiResult<SuiGasStatus> {
+        // Cheap validity checks that is ok to run multiple times during processing.
+        transaction.check_version_supported(protocol_config)?;
+        let gas = if gas_override.is_empty() {
+            transaction.validity_check(protocol_config)?;
+            transaction.gas()
+        } else {
+            transaction.validity_check_no_gas_check(protocol_config)?;
+            gas_override
+        };
+
+        let gas_status = get_gas_status(
+            input_objects,
+            gas,
+            protocol_config,
+            reference_gas_price,
+            transaction,
+        )?;
+        check_objects(transaction, input_objects)?;
+
+        Ok(gas_status)
     }
 
     fn check_receiving_objects(
