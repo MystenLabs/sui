@@ -381,7 +381,7 @@ impl-serde-468e82937335b1c9 = { package = "impl-serde", version = "0.3", default
 impl-serde-9fbad63c4bcf4a8f = { package = "impl-serde", version = "0.4", default-features = false }
 include_dir = { version = "0.7", features = ["glob"] }
 indenter = { version = "0.3" }
-indexmap-dff4ba8e3ae991db = { package = "indexmap", version = "1", default-features = false, features = ["serde", "std"] }
+indexmap-dff4ba8e3ae991db = { package = "indexmap", version = "1", default-features = false, features = ["std"] }
 indexmap-f595c2ba2a3f28df = { package = "indexmap", version = "2", features = ["serde"] }
 indicatif = { version = "0.17" }
 inout = { version = "0.1", default-features = false, features = ["std"] }
@@ -1261,7 +1261,7 @@ impl-trait-for-tuples = { version = "0.2", default-features = false }
 include_dir = { version = "0.7", features = ["glob"] }
 include_dir_macros = { version = "0.7", default-features = false }
 indenter = { version = "0.3" }
-indexmap-dff4ba8e3ae991db = { package = "indexmap", version = "1", default-features = false, features = ["serde", "std"] }
+indexmap-dff4ba8e3ae991db = { package = "indexmap", version = "1", default-features = false, features = ["std"] }
 indexmap-f595c2ba2a3f28df = { package = "indexmap", version = "2", features = ["serde"] }
 indicatif = { version = "0.17" }
 inout = { version = "0.1", default-features = false, features = ["std"] }
