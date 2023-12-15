@@ -336,7 +336,7 @@ hyper = "0.14.20"
 hyper-rustls = { version = "0.24", features = ["rustls-native-certs", "http2"] }
 im = "15"
 impl-trait-for-tuples = "0.2.0"
-indexmap = { version = "1.9.2", features = ["serde"] }
+indexmap = { version = "2.1.0", features = ["serde"] }
 indicatif = "0.17.2"
 inquire = "0.6.0"
 insta = { version = "1.21.1", features = ["redactions", "yaml", "json"] }
@@ -352,7 +352,6 @@ jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b3007847
 ] }
 json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4" }
 leb128 = "0.2.5"
-linked-hash-map = "0.5.6"
 lru = "0.10"
 markdown-gen = "1.2.1"
 match_opt = "0.1.2"
