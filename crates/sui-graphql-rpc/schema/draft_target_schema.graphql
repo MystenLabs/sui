@@ -1241,6 +1241,8 @@ type MoveType {
   signature: MoveTypeSignature!
   # Structured representation of the "shape" of values that match this type.
   layout: MoveTypeLayout!
+  # The abilities this concrete type has.
+  abilities: [MoveAbility!]!
 }
 
 # Represents types that could contain references or free type

@@ -1112,9 +1112,10 @@ type MoveObject {
 	"""
 	contents: MoveValue
 	"""
-	Determines whether a tx can transfer this object
+	Determines whether a transaction can transfer this object, using the TransferObjects
+	command, which requires its type to have the `store` ability.
 	"""
-	hasPublicTransfer: Boolean
+	hasPublicTransfer: Boolean!
 	"""
 	Attempts to convert the Move object into an Object
 	This provides additional information such as version and digest on the top-level
@@ -1268,6 +1269,10 @@ type MoveType {
 	Structured representation of the "shape" of values that match this type.
 	"""
 	layout: MoveTypeLayout!
+	"""
+	The abilities this concrete type has.
+	"""
+	abilities: [MoveAbility!]!
 }
 
 """
