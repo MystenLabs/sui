@@ -32,7 +32,8 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::{
     AuthenticatorStateUpdate, CertifiedTransaction, SenderSignedData, SharedInputObject,
-    TransactionDataAPI, TransactionKind, VerifiedCertificate, VerifiedSignedTransaction,
+    Transaction, TransactionDataAPI, TransactionKind, VerifiedCertificate,
+    VerifiedSignedTransaction, VerifiedTransaction,
 };
 use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -2005,6 +2006,13 @@ impl AuthorityPerEpochStore {
             Either::Left((_, _f)) => Err(()),
             Either::Right((result, _)) => Ok(result),
         }
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub fn verify_transaction(&self, tx: Transaction) -> SuiResult<VerifiedTransaction> {
+        self.signature_verifier
+            .verify_tx(tx.data())
+            .map(|_| VerifiedTransaction::new_from_verified(tx))
     }
 
     /// Verifies transaction signatures and other data

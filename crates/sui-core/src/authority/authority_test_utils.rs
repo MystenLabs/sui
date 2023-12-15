@@ -54,7 +54,7 @@ pub async fn certify_transaction(
 ) -> Result<VerifiedCertificate, SuiError> {
     // Make the initial request
     let epoch_store = authority.load_epoch_store_one_call_per_task();
-    let transaction = authority.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store.verify_transaction(transaction).unwrap();
 
     let response = authority
         .handle_transaction(&epoch_store, transaction.clone())
@@ -256,7 +256,10 @@ pub fn init_transfer_transaction(
         gas_price,
     );
     let tx = to_sender_signed_transaction(data, secret);
-    authority_state.verify_transaction(tx).unwrap()
+    authority_state
+        .epoch_store_for_testing()
+        .verify_transaction(tx)
+        .unwrap()
 }
 
 pub fn init_certified_transfer_transaction(
@@ -286,7 +289,7 @@ pub fn init_certified_transaction(
     authority_state: &AuthorityState,
 ) -> VerifiedCertificate {
     let epoch_store = authority_state.epoch_store_for_testing();
-    let transaction = authority_state.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store.verify_transaction(transaction).unwrap();
 
     let vote = VerifiedSignedTransaction::new(
         0,
@@ -309,7 +312,7 @@ pub async fn certify_shared_obj_transaction_no_execution(
     transaction: Transaction,
 ) -> Result<VerifiedCertificate, SuiError> {
     let epoch_store = authority.load_epoch_store_one_call_per_task();
-    let transaction = authority.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store.verify_transaction(transaction).unwrap();
     let response = authority
         .handle_transaction(&epoch_store, transaction.clone())
         .await?;
