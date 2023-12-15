@@ -175,7 +175,7 @@ pub async fn verify_package(
             SourceMode::Verify,
         )
         .await
-        .map_err(|e| anyhow!("Network {}: {}", network, e))?;
+        .map_err(|e| anyhow!("Network {network}: {e}"))?;
 
     let mut address_map = AddressLookup::new();
     let address = compiled_package
