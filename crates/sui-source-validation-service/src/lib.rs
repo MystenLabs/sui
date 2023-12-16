@@ -174,7 +174,8 @@ pub async fn verify_package(
             /* verify_deps */ false,
             SourceMode::Verify,
         )
-        .await?;
+        .await
+        .map_err(|e| anyhow!("Network {network}: {e}"))?;
 
     let mut address_map = AddressLookup::new();
     let address = compiled_package
@@ -438,6 +439,8 @@ pub async fn watch_for_upgrades(
                     channel.send(result).unwrap();
                     break Ok(());
                 }
+                info!("Shutting down server (resync performed on restart)");
+                std::process::exit(1)
             }
             Some(_) => {
                 info!("Saw failed transaction when listening to upgrades.")
