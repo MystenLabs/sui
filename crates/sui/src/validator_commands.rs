@@ -165,6 +165,7 @@ pub enum SuiValidatorCommand {
     },
 }
 
+//TODO: Add withdraw stake command - Gree
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum SuiValidatorCommandResponse {
