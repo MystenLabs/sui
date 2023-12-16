@@ -1,0 +1,293 @@
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 6-42:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7622800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'programmable'. lines 44-46:
+created: object(2,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2910800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'create-checkpoint'. lines 48-48:
+Checkpoint created: 1
+
+task 4 'run-graphql'. lines 50-69:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": [
+              {
+                "outputState": {
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                      },
+                      "data": {
+                        "Struct": [
+                          {
+                            "name": "id",
+                            "value": {
+                              "UID": [
+                                2,
+                                21,
+                                14,
+                                191,
+                                227,
+                                208,
+                                23,
+                                194,
+                                114,
+                                107,
+                                212,
+                                130,
+                                246,
+                                211,
+                                200,
+                                166,
+                                53,
+                                22,
+                                163,
+                                152,
+                                215,
+                                217,
+                                142,
+                                46,
+                                230,
+                                147,
+                                150,
+                                118,
+                                78,
+                                4,
+                                188,
+                                118
+                              ]
+                            }
+                          },
+                          {
+                            "name": "balance",
+                            "value": {
+                              "Struct": [
+                                {
+                                  "name": "value",
+                                  "value": {
+                                    "Number": "299999988444520"
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "json": {
+                        "id": "0x02150ebfe3d017c2726bd482f6d3c8a63516a398d7d98e2ee69396764e04bc76",
+                        "balance": {
+                          "value": "299999988444520"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "outputState": {
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x6155c09ba2d296bd9f9cf41fe83beb2ccfe1e3bc3bdeaca9bee9a2a7e808d87f::m::Foo"
+                      },
+                      "data": {
+                        "Struct": [
+                          {
+                            "name": "id",
+                            "value": {
+                              "UID": [
+                                115,
+                                95,
+                                22,
+                                77,
+                                199,
+                                104,
+                                49,
+                                41,
+                                63,
+                                49,
+                                207,
+                                189,
+                                1,
+                                6,
+                                190,
+                                180,
+                                175,
+                                169,
+                                235,
+                                37,
+                                212,
+                                96,
+                                97,
+                                77,
+                                10,
+                                123,
+                                167,
+                                250,
+                                243,
+                                247,
+                                179,
+                                43
+                              ]
+                            }
+                          },
+                          {
+                            "name": "f0",
+                            "value": {
+                              "ID": [
+                                115,
+                                95,
+                                22,
+                                77,
+                                199,
+                                104,
+                                49,
+                                41,
+                                63,
+                                49,
+                                207,
+                                189,
+                                1,
+                                6,
+                                190,
+                                180,
+                                175,
+                                169,
+                                235,
+                                37,
+                                212,
+                                96,
+                                97,
+                                77,
+                                10,
+                                123,
+                                167,
+                                250,
+                                243,
+                                247,
+                                179,
+                                43
+                              ]
+                            }
+                          },
+                          {
+                            "name": "f1",
+                            "value": {
+                              "Bool": true
+                            }
+                          },
+                          {
+                            "name": "f2",
+                            "value": {
+                              "Number": "42"
+                            }
+                          },
+                          {
+                            "name": "f3",
+                            "value": {
+                              "Number": "43"
+                            }
+                          },
+                          {
+                            "name": "f4",
+                            "value": {
+                              "String": "hello"
+                            }
+                          },
+                          {
+                            "name": "f5",
+                            "value": {
+                              "String": "world"
+                            }
+                          },
+                          {
+                            "name": "f6",
+                            "value": {
+                              "Vector": [
+                                {
+                                  "Address": [
+                                    115,
+                                    95,
+                                    22,
+                                    77,
+                                    199,
+                                    104,
+                                    49,
+                                    41,
+                                    63,
+                                    49,
+                                    207,
+                                    189,
+                                    1,
+                                    6,
+                                    190,
+                                    180,
+                                    175,
+                                    169,
+                                    235,
+                                    37,
+                                    212,
+                                    96,
+                                    97,
+                                    77,
+                                    10,
+                                    123,
+                                    167,
+                                    250,
+                                    243,
+                                    247,
+                                    179,
+                                    43
+                                  ]
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "name": "f7",
+                            "value": {
+                              "Option": {
+                                "Number": "44"
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      "json": {
+                        "id": "0x735f164dc76831293f31cfbd0106beb4afa9eb25d460614d0a7ba7faf3f7b32b",
+                        "f0": "0x735f164dc76831293f31cfbd0106beb4afa9eb25d460614d0a7ba7faf3f7b32b",
+                        "f1": true,
+                        "f2": 42,
+                        "f3": "43",
+                        "f4": "hello",
+                        "f5": "world",
+                        "f6": [
+                          "0x735f164dc76831293f31cfbd0106beb4afa9eb25d460614d0a7ba7faf3f7b32b"
+                        ],
+                        "f7": 44
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
