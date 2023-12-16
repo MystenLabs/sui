@@ -44,6 +44,12 @@ impl<'a> NativeContextExtensions<'a> {
             .unwrap()
     }
 
+    pub fn dump(&self) {
+        for x in self.map.keys() {
+            println!("key: {:?}", x);
+        }
+    }
+
     pub fn remove<T: TidAble<'a>>(&mut self) -> T {
         // can't use expect below because it requires `T: Debug`.
         match self
