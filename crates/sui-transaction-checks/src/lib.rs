@@ -10,7 +10,7 @@ mod checked {
     use std::collections::{BTreeMap, HashSet};
     use std::sync::Arc;
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::base_types::ObjectRef;
+    use sui_types::base_types::{ObjectID, ObjectRef};
     use sui_types::error::{UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::metrics::BytecodeVerifierMetrics;
@@ -379,18 +379,15 @@ mod checked {
             return Err(UserInputError::ObjectInputArityViolation);
         }
 
+        let gas_coins: HashSet<ObjectID> =
+            HashSet::from_iter(transaction.gas().iter().map(|obj_ref| obj_ref.0));
         for object in objects.iter() {
             let input_object_kind = object.input_object_kind;
 
             match &object.object {
                 ObjectReadResultKind::Object(object) => {
                     // For Gas Object, we check the object is owned by gas owner
-                    // TODO: this is a quadratic check and though limits are low we should do it differently
-                    let owner_address = if transaction
-                        .gas()
-                        .iter()
-                        .any(|obj_ref| *obj_ref.0 == *object.id())
-                    {
+                    let owner_address = if gas_coins.contains(&object.id()) {
                         transaction.gas_owner()
                     } else {
                         transaction.sender()
