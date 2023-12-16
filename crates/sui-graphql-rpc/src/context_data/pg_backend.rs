@@ -29,6 +29,7 @@ use sui_indexer::{
     types_v2::OwnerType,
 };
 use sui_types::parse_sui_struct_tag;
+use tracing::info;
 
 pub(crate) struct PgQueryBuilder;
 
@@ -631,16 +632,38 @@ impl PgQueryExecutor for PgManager {
         self.inner
             .spawn_blocking(move |this| {
                 let query = query_builder_fn()?;
-                let explain_result: String = this
-                    .run_query(|conn| query.explain().get_result(conn))
-                    .map_err(|e| Error::Internal(e.to_string()))?;
-                let cost = extract_cost(&explain_result)?;
-                if cost > max_db_query_cost as f64 {
-                    return Err(DbValidationError::QueryCostExceeded(
-                        cost as u64,
-                        max_db_query_cost,
-                    )
-                    .into());
+                let explain_result: Option<String> =
+                    match this.run_query(|conn| query.explain().get_result(conn)) {
+                        Ok(result) => Some(result),
+                        Err(e) => {
+                            info!(
+                                target: "async-graphql",
+                                "Failed to get explain result: {}", e
+                            );
+                            None
+                        }
+                    };
+
+                if let Some(explain_result) = explain_result {
+                    let cost = match extract_cost(&explain_result) {
+                        Ok(cost) => Some(cost),
+                        Err(e) => {
+                            info!(
+                                target: "async-graphql",
+                                "Failed to get cost from explain result: {}", e
+                            );
+                            None
+                        }
+                    };
+
+                    if let Some(cost) = cost {
+                        if cost > max_db_query_cost as f64 {
+                            info!(
+                                target: "async-graphql",
+                                "Query cost {} exceeded max_db_query_cost {}", cost, max_db_query_cost
+                            );
+                        }
+                    }
                 }
 
                 let query = query_builder_fn()?;
