@@ -660,7 +660,7 @@ impl PgQueryExecutor for PgManager {
                         if cost > max_db_query_cost as f64 {
                             info!(
                                 target: "async-graphql",
-                                "Query cost {} exceeded max_db_query_cost {}", cost, max_db_query_cost
+                                cost,
                             );
                         }
                     }
