@@ -557,12 +557,8 @@ fn ast_exp_to_ide_string(exp: &Exp) -> Option<String> {
                     .join(", "),
             )
         }
-        UE::UnaryExp(op, exp) => {
-            let Some(s) = ast_exp_to_ide_string(exp) else {
-                return None;
-            };
-            Some(format!("{op}{s}"))
-        }
+        UE::UnaryExp(op, exp) => ast_exp_to_ide_string(exp).map(|s| format!("{op}{s}")),
+
         UE::BinopExp(lexp, op, _, rexp) => {
             let Some(ls) = ast_exp_to_ide_string(lexp) else {
                 return None;
