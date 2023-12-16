@@ -406,7 +406,7 @@ dependencies = [
  "derivative",
  "digest 0.10.6",
  "itertools",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "num-traits",
  "paste",
  "rustc_version",
@@ -429,7 +429,7 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7abe79b0e4288889c4574159ab790824d0033b9fdcb2a112a3182fac2e514565"
 dependencies = [
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "num-traits",
  "proc-macro2 1.0.66",
  "quote 1.0.33",
@@ -495,7 +495,7 @@ dependencies = [
  "ark-serialize-derive",
  "ark-std",
  "digest 0.10.6",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
 ]
 
 [[package]]
@@ -3162,7 +3162,7 @@ dependencies = [
  "asn1-rs",
  "displaydoc",
  "nom",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "num-traits",
  "rusticata-macros",
 ]
@@ -4120,7 +4120,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.7"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=643831ec3b67bdd2b5f998c0bec1b7c91823351f#643831ec3b67bdd2b5f998c0bec1b7c91823351f"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=9579a60fbffe15c0f65626ae55998bf8ef42e193#9579a60fbffe15c0f65626ae55998bf8ef42e193"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -4151,6 +4151,7 @@ dependencies = [
  "hkdf",
  "lazy_static",
  "merlin",
+ "num-bigint 0.4.4",
  "once_cell",
  "p256",
  "rand 0.8.5",
@@ -4176,7 +4177,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=643831ec3b67bdd2b5f998c0bec1b7c91823351f#643831ec3b67bdd2b5f998c0bec1b7c91823351f"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=9579a60fbffe15c0f65626ae55998bf8ef42e193#9579a60fbffe15c0f65626ae55998bf8ef42e193"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2 1.0.66",
@@ -4187,7 +4188,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=643831ec3b67bdd2b5f998c0bec1b7c91823351f#643831ec3b67bdd2b5f998c0bec1b7c91823351f"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=9579a60fbffe15c0f65626ae55998bf8ef42e193#9579a60fbffe15c0f65626ae55998bf8ef42e193"
 dependencies = [
  "bcs",
  "bincode",
@@ -4208,7 +4209,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=643831ec3b67bdd2b5f998c0bec1b7c91823351f#643831ec3b67bdd2b5f998c0bec1b7c91823351f"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=9579a60fbffe15c0f65626ae55998bf8ef42e193#9579a60fbffe15c0f65626ae55998bf8ef42e193"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -4227,7 +4228,7 @@ dependencies = [
  "im",
  "lazy_static",
  "neptune",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "once_cell",
  "regex",
  "reqwest",
@@ -6386,7 +6387,7 @@ dependencies = [
  "dirs-next",
  "hex",
  "move-core-types",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "once_cell",
  "serde",
  "sha2 0.9.9",
@@ -7813,7 +7814,7 @@ version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b05180d69e3da0e530ba2a1dae5110317e49e3b7f3d41be227dc5f92e49ee7af"
 dependencies = [
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "num-complex",
  "num-integer",
  "num-iter",
@@ -7834,9 +7835,9 @@ dependencies = [
 
 [[package]]
 name = "num-bigint"
-version = "0.4.3"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f93ab6289c7b344a8a9f60f88d80aa20032336fe78da341afc91c8a2341fc75f"
+checksum = "608e7659b5c3d7cba262d894801b9ec9d00de989e8a82bd4bef91d08da45cdc0"
 dependencies = [
  "autocfg",
  "num-integer",
@@ -7898,7 +7899,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0638a1c9d0a3c0914158145bc76cff373a75a627e6ecbfb71cbe6f453a5a19b0"
 dependencies = [
  "autocfg",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "num-integer",
  "num-traits",
 ]
@@ -8435,7 +8436,7 @@ dependencies = [
  "hashbrown 0.14.1",
  "lz4",
  "num",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "paste",
  "seq-macro",
  "snap",
@@ -9884,7 +9885,7 @@ dependencies = [
  "hex-literal 0.4.1",
  "hmac 0.12.1",
  "log",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "once_cell",
  "poly1305",
  "rand 0.8.5",
@@ -9930,7 +9931,7 @@ dependencies = [
  "inout",
  "log",
  "md5",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "num-integer",
  "pbkdf2 0.11.0",
  "rand 0.7.3",
@@ -11073,7 +11074,7 @@ dependencies = [
  "json_to_table",
  "move-core-types",
  "move-package",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "prometheus",
  "rand 0.8.5",
  "regex",
@@ -15884,7 +15885,7 @@ dependencies = [
  "nu-ansi-term",
  "num",
  "num-bigint 0.3.3",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "num-bigint-dig",
  "num-complex",
  "num-integer",
@@ -16414,7 +16415,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aed2e7a52e3744ab4d0c05c20aa065258e84c49fd4226f5191b2ed29712710b4"
 dependencies = [
  "bit-vec",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "time",
 ]
 
