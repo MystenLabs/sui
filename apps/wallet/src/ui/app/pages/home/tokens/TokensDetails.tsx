@@ -106,6 +106,9 @@ export function TokenRow({
 
 	const isRenderSwapButton = allowedSwapCoinsList.includes(coinType);
 
+	// TODO: add balanceInUsd API call
+	const balanceInUsd = 0;
+
 	return (
 		<Tag
 			className={clsx(
@@ -172,10 +175,19 @@ export function TokenRow({
 				</div>
 			</div>
 
-			<div className="ml-auto flex flex-col items-end gap-1.5">
+			<div className="ml-auto flex flex-col items-end gap-1">
 				{balance > 0n && (
 					<Text variant="body" color="gray-90" weight="medium">
 						{formatted} {symbol}
+					</Text>
+				)}
+
+				{balanceInUsd > 0 && (
+					<Text variant="subtitle" color="steel-dark" weight="medium">
+						{balanceInUsd.toLocaleString('en', {
+							style: 'currency',
+							currency: 'USD',
+						})}
 					</Text>
 				)}
 			</div>
