@@ -208,7 +208,7 @@ impl TryFrom<(Identifier, A::MoveValue)> for MoveField {
     }
 }
 
-fn try_to_json_value(value: A::MoveValue) -> Result<Value, Error> {
+pub(crate) fn try_to_json_value(value: A::MoveValue) -> Result<Value, Error> {
     use A::MoveValue as V;
     Ok(match value {
         V::U8(n) => Value::Number(n.into()),
