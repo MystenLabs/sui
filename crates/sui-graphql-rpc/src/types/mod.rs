@@ -41,7 +41,6 @@ pub(crate) mod stake;
 pub(crate) mod stake_subsidy;
 pub(crate) mod storage_fund;
 pub(crate) mod sui_address;
-pub(crate) mod sui_system_state_summary;
 pub(crate) mod system_parameters;
 pub(crate) mod transaction_block;
 pub(crate) mod transaction_block_effects;
