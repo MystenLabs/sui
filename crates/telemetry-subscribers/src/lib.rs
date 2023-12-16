@@ -65,7 +65,6 @@ pub struct TelemetryConfig {
     /// Optional Prometheus registry - if present, all enabled span latencies are measured
     pub prom_registry: Option<prometheus::Registry>,
     pub sample_rate: f64,
-    pub target_prefix: Option<String>,
 }
 
 #[must_use]
@@ -256,7 +255,6 @@ impl TelemetryConfig {
             crash_on_panic: false,
             prom_registry: None,
             sample_rate: 1.0,
-            target_prefix: None,
         }
     }
 
@@ -290,11 +288,6 @@ impl TelemetryConfig {
         self
     }
 
-    pub fn with_target_prefix(mut self, prefix: &str) -> Self {
-        self.target_prefix = Some(prefix.to_owned());
-        self
-    }
-
     pub fn with_env(mut self) -> Self {
         if env::var("CRASH_ON_PANIC").is_ok() {
             self.crash_on_panic = true
@@ -323,10 +316,6 @@ impl TelemetryConfig {
 
         if let Ok(sample_rate) = env::var("SAMPLE_RATE") {
             self.sample_rate = sample_rate.parse().expect("Cannot parse SAMPLE_RATE");
-        }
-
-        if let Ok(target_prefix) = env::var("TARGET_PREFIX") {
-            self.target_prefix = Some(target_prefix);
         }
 
         self
