@@ -49,7 +49,12 @@ type MoveTypeLayout =
   | \"bool\"
   | \"u8\" | \"u16\" | ... | \"u256\"
   | { vector: MoveTypeLayout }
-  | { struct: [{ name: string, layout: MoveTypeLayout }] }"
+  | {
+      struct: {
+        type: string,
+        fields: [{ name: string, layout: MoveTypeLayout }],
+      }
+    }"
 );
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -85,7 +90,14 @@ pub(crate) enum MoveTypeLayout {
     U128,
     U256,
     Vector(Box<MoveTypeLayout>),
-    Struct(Vec<MoveFieldLayout>),
+    Struct(MoveStructLayout),
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct MoveStructLayout {
+    #[serde(rename = "type")]
+    type_: String,
+    fields: Vec<MoveFieldLayout>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -211,7 +223,6 @@ impl TryFrom<A::MoveTypeLayout> for MoveTypeLayout {
     type Error = Error;
 
     fn try_from(layout: A::MoveTypeLayout) -> Result<Self, Error> {
-        use A::MoveStructLayout as SL;
         use A::MoveTypeLayout as TL;
 
         Ok(match layout {
@@ -228,13 +239,22 @@ impl TryFrom<A::MoveTypeLayout> for MoveTypeLayout {
             TL::Address => Self::Address,
 
             TL::Vector(v) => Self::Vector(Box::new(Self::try_from(*v)?)),
+            TL::Struct(s) => Self::Struct(s.try_into()?),
+        })
+    }
+}
 
-            TL::Struct(SL { fields, .. }) => Self::Struct(
-                fields
-                    .into_iter()
-                    .map(MoveFieldLayout::try_from)
-                    .collect::<Result<_, _>>()?,
-            ),
+impl TryFrom<A::MoveStructLayout> for MoveStructLayout {
+    type Error = Error;
+
+    fn try_from(layout: A::MoveStructLayout) -> Result<Self, Error> {
+        Ok(Self {
+            type_: layout.type_.to_canonical_string(/* with_prefix */ true),
+            fields: layout
+                .fields
+                .into_iter()
+                .map(MoveFieldLayout::try_from)
+                .collect::<Result<_, _>>()?,
         })
     }
 }

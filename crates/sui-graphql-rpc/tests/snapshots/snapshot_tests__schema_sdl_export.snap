@@ -1285,7 +1285,12 @@ type MoveTypeLayout =
   | "bool"
   | "u8" | "u16" | ... | "u256"
   | { vector: MoveTypeLayout }
-  | { struct: [{ name: string, layout: MoveTypeLayout }] }
+  | {
+      struct: {
+        type: string,
+        fields: [{ name: string, layout: MoveTypeLayout }],
+      }
+    }
 """
 scalar MoveTypeLayout
 
