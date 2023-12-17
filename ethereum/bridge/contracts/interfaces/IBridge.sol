@@ -25,7 +25,7 @@ interface IBridge is IEnums {
 		bytes senderAddress;
 		ChainID targetChain;
 		uint8 targetChainLength;
-		address targetAddress;
+		bytes targetAddress;
 		TokenID tokenType;
 		uint64 amount;
 	}

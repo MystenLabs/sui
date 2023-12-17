@@ -477,10 +477,112 @@ describe(CONTRACT_NAME, () => {
         }
 
         const [msgSender] = await ethers.getSigners()
-        await contract.createBridgeTx(await msgSender.getAddress(), {
+        await contract.initBridgingTokenTx(await msgSender.getAddress(), {
             value: parseEther('1.0'),
         })
 
         expect(await contract.getBalance()).to.equal(parseEther('1.0'))
+    })
+
+    it('should verify token bridging signatures', async () => {
+        await loadFixture(beforeEach)
+
+        // Create a mock bridge message
+        const tbm = {
+            messageType: MessageType.TOKEN,
+            messageVersion: 1,
+            nonce: 0,
+            sourceChain: ChainID.ETH_MAINNET,
+            sourceChainTxIdLength: 0,
+            sourceChainTxId: '0x00',
+            sourceChainEventIndex: 0,
+            senderAddressLength: 0,
+            senderAddress: '0x00',
+            targetChain: ChainID.SUI_MAINNET,
+            targetChainLength: 0,
+            targetAddress: '0x00',
+            tokenType: TokenID.ETH,
+            amount: 1000,
+        }
+
+        // Define the committee members array
+        let committeeMembers: { account: string; stake: number }[] = []
+        let signatures: string[] = []
+
+        for (let i = 0; i < 10; i++) {
+            let wallet = ethers.Wallet.createRandom()
+            committeeMembers.push({
+                account: await wallet.getAddress(),
+                stake: 1000,
+            })
+
+            const messageHash = ethers.solidityPackedKeccak256(
+                [
+                    'string',
+                    'uint8',
+                    'uint8',
+                    'uint64',
+                    'uint8',
+                    'uint8',
+                    'bytes',
+                    'uint8',
+                    'uint8',
+                    'bytes',
+                    'uint8',
+                    'uint8',
+                    'bytes',
+                    'uint8',
+                    'uint64',
+                ],
+                [
+                    'SUI_NATIVE_BRIDGE',
+                    tbm.messageType,
+                    tbm.messageVersion,
+                    tbm.nonce,
+                    tbm.sourceChain,
+                    tbm.sourceChainTxIdLength,
+                    tbm.sourceChainTxId,
+                    tbm.sourceChainEventIndex,
+                    tbm.senderAddressLength,
+                    tbm.senderAddress,
+                    tbm.targetChain,
+                    tbm.targetChainLength,
+                    tbm.targetAddress,
+                    tbm.tokenType,
+                    tbm.amount,
+                ],
+            )
+            const messageHashBinary = ethers.getBytes(messageHash)
+            const signature = await wallet.signMessage(messageHashBinary)
+            signatures.push(signature)
+        }
+
+        // Call the initialize function using the first account
+        await contract.initialize(committeeMembers)
+
+        // Check the state variables after initialization
+        expect(await contract.validatorsCount()).to.equal(
+            committeeMembers.length,
+        )
+        expect(await contract.running()).to.be.true
+        expect(await contract.version()).to.equal(1)
+        expect(await contract.messageVersion()).to.equal(1)
+
+        // Check the committee mapping for each member
+        for (const member of committeeMembers) {
+            const committeeMember = await contract.committee(member.account)
+            expect(committeeMember.account).to.equal(member.account)
+            expect(committeeMember.stake).to.equal(member.stake)
+        }
+
+        // verifyTokenBridgingSignatures
+        const [seen, totalStake] = await contract.verifyTokenBridgingSignatures(
+            tbm,
+            signatures,
+        )
+        expect(seen.length).to.equal(committeeMembers.length)
+        expect(totalStake).to.equal(
+            committeeMembers.map((c) => c.stake).reduce((a, b) => a + b, 0),
+        )
     })
 })

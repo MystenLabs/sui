@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
-import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
-import '@openzeppelin/contracts/utils/cryptography/ECDSA.sol';
-import '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
-import '@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol';
 import '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
 import '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
+import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
+import '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
+import '@openzeppelin/contracts/utils/cryptography/ECDSA.sol';
+import '@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol';
 import {ERC721Upgradeable} from '@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol';
 
 import './interfaces/IBridge.sol';
@@ -17,11 +17,16 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 	using SafeERC20 for IERC20;
 	using MessageHashUtils for bytes32;
 
-	uint64 public validatorsCount = 0;
+	uint64 public validatorsCount;
 
 	uint256[48] __gap;
 
 	mapping(uint256 => bool) public processedNonces;
+
+	// Define a mapping to store the token balances
+	mapping(TokenID => uint256) public tokenBalances;
+	// Define a mapping to store the token contracts
+	mapping(address => IERC20) public tokenContracts;
 
 	uint64 public version;
 	uint8 public messageVersion;
@@ -54,6 +59,12 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 	// Mapping to store the transfer history
 	mapping(uint256 => uint256[]) public transferHistory;
 
+	// Declare the USDT and USDC token contracts
+	IERC20 usdt;
+	IERC20 usdc;
+
+	mapping(bytes32 => address) public tokens;
+
 	// Modifier to check the daily transfer limit
 	modifier checkDailyLimit(uint256 transferTime, uint256 _amount) {
 		// Calculate the sum of transfers during the past 24 hours
@@ -74,6 +85,18 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 	modifier checkMaxAmount(uint256 _amount) {
 		// Require that the amount is less than or equal to the maximum amount
 		require(_amount <= MAX_TRANSFER_AMOUNT, 'Maximum transfer amount exceeded');
+		_;
+	}
+
+	// Define a modifier to check the message version
+	modifier validMessageVersion(BridgeMessage calldata bridgeMessage) {
+		require(bridgeMessage.messageVersion == messageVersion, 'Invalid message version');
+		_;
+	}
+
+	// Define a modifier to check the message version
+	modifier validTokenBridgingMessageVersion(TokenBridgingMessage calldata tokenBridgingMessage) {
+		require(tokenBridgingMessage.messageVersion == messageVersion, 'Invalid message version');
 		_;
 	}
 
@@ -112,6 +135,17 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 	function initialize(Member[] calldata _committeeMembers) public initializer {
 		__UUPSUpgradeable_init();
 
+		validatorsCount = 0;
+
+		// TODO: Remove this
+		// Declare the USDT and USDC contract addresses
+		address USDT_ADDRESS = 0xdAC17F958D2ee523a2206206994597C13D831ec7; // Mainnet address
+		address USDC_ADDRESS = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // Mainnet address
+
+		// Declare the USDT and USDC token contracts
+		usdt = IERC20(USDT_ADDRESS);
+		usdc = IERC20(USDC_ADDRESS);
+
 		uint256 totalStake = 0;
 		for (uint256 i = 0; i < _committeeMembers.length; i++) {
 			addCommitteeMember(_committeeMembers[i].account, _committeeMembers[i].stake);
@@ -145,35 +179,105 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		transferHistory[block.timestamp].push(amount);
 	}
 
-	function processBridgeMessage(
-		BridgeMessage calldata bridgeMessage,
+	function tokenBridging(
+		TokenBridgingMessage calldata tokenBridgingMessage,
 		bytes[] calldata signatures
-	) public whenRunning {
-		require(bridgeMessage.messageVersion == messageVersion, 'Invalid message version');
+	) external payable whenRunning validTokenBridgingMessageVersion(tokenBridgingMessage) {
+		require(tokenBridgingMessage.messageType == MessageType.TOKEN, 'Invalid message type');
 
-		/**
-		// retrieve pending message if source chain is Ethereum
-		if (bridgeMessage.sourceChain == ChainID.ETH) {
-			BridgeMessageKey memory bridgeMessageKey = BridgeMessageKey(
-				bridgeMessage.sourceChain,
-				bridgeMessage.seqNum
-			);
+		// uint64 tokenBridgingSeqNum = nextSeqNum(tokenBridgingMessage.messageType);
+		// require(
+		// 	tokenBridgingMessage.sequenceNumber == tokenBridgingSeqNum,
+		// 	'Invalid sequence number for the token bridging message'
+		// );
 
-			// BridgeMessage memory pendingMessage = pendingMessages[
-			// 	keccak256(abi.encode(bridgeMessageKey))
-			// ];
+		// Verify the signatures
+		(address[] memory seen, uint256 totalStake) = verifyTokenBridgingSignatures(
+			tokenBridgingMessage,
+			signatures
+		);
+
+		if (tokenBridgingMessage.tokenType == TokenID.ETH) {
+			// Require the amount of ETH sent to match the amount parameter
+			require(msg.value == tokenBridgingMessage.amount, 'Incorrect ETH amount');
+			tokenBalances[tokenBridgingMessage.tokenType] += uint256(tokenBridgingMessage.amount);
+		} else if (tokenBridgingMessage.tokenType == TokenID.USDC) {
+			// Transfer the USDC tokens from the caller to the contract
+			// Require the caller to approve the contract to spend their tokens before calling this function
+			usdc.transferFrom(msg.sender, address(this), tokenBridgingMessage.amount);
+			tokenBalances[tokenBridgingMessage.tokenType] += uint256(tokenBridgingMessage.amount);
+		} else if (tokenBridgingMessage.tokenType == TokenID.USDT) {
+			// Transfer the USDT tokens from the caller to the contract
+			// Require the caller to approve the contract to spend their tokens before calling this function
+			usdt.transferFrom(msg.sender, address(this), tokenBridgingMessage.amount);
+			tokenBalances[tokenBridgingMessage.tokenType] += uint256(tokenBridgingMessage.amount);
+		} else {
+			// Revert the transaction if the currency type is invalid
+			revert('Invalid currency type');
 		}
-		*/
+	}
 
-		if (bridgeMessage.messageType == MessageType.EMERGENCY_OP) {
-			require(
-				bridgeMessage.sequenceNumber == 1,
-				'Not enough signatures to approve the emergency operation'
-			);
-			(address[] memory seen, ) = verifySignatures(bridgeMessage, signatures);
-			require(seen.length >= 2, 'Not enough signatures to approve the emergency operation');
-			pauseBridge();
+	function verifyTokenBridgingSignatures(
+		TokenBridgingMessage calldata tbm,
+		bytes[] calldata signatures
+	) public view returns (address[] memory, uint256) {
+		// Declare an array to store the recovered addresses
+		address[] memory seen = new address[](signatures.length);
+		uint256 seenIndex = 0;
+		uint256 totalStake = 0;
+
+		bytes32 hash = keccak256(
+			abi.encodePacked(
+				'SUI_NATIVE_BRIDGE',
+				tbm.messageType,
+				tbm.messageVersion,
+				tbm.nonce,
+				tbm.sourceChain,
+				tbm.sourceChainTxIdLength,
+				tbm.sourceChainTxId,
+				tbm.sourceChainEventIndex,
+				tbm.senderAddressLength,
+				tbm.senderAddress,
+				tbm.targetChain,
+				tbm.targetChainLength,
+				tbm.targetAddress,
+				tbm.tokenType,
+				tbm.amount
+			)
+		);
+		bytes32 signedMessageHash = MessageHashUtils.toEthSignedMessageHash(hash);
+
+		// Verify Signatures
+		for (uint256 i = 0; i < signatures.length; i++) {
+			address recoveredPK = recoverSigner(signedMessageHash, signatures[i]);
+
+			// Check if the address is not zero
+			require(recoveredPK != address(0), 'Invalid signature: Recovered Zero address.');
+
+			// Check if the address has already been seen
+			bool found = false;
+			for (uint256 j = 0; j < seen.length; j++) {
+				if (seen[j] == recoveredPK) {
+					found = true;
+					break;
+				}
+			}
+			require(!found, 'Duplicate signature: Address already seen');
+
+			// Add the address to the array
+			seen[seenIndex++] = recoveredPK;
+
+			// Retrieve the Validator directly from the mapping
+			Member memory member = committee[recoveredPK];
+
+			// Validate the recovered address
+			require(member.account != address(0), 'Invalid Signer, not a committee authority');
+			require(recoveredPK == member.account, 'Invalid signature: Address mismatch');
+
+			totalStake += member.stake;
 		}
+
+		return (seen, totalStake);
 	}
 
 	function freezeBridge(
@@ -382,7 +486,7 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 
 	event BridgeEvent(address from, address to, uint256 amount);
 
-	function createBridgeTx(address to) public payable {
+	function initBridgingTokenTx(address to) public payable {
 		emit BridgeEvent(msg.sender, to, msg.value);
 	}
 }
