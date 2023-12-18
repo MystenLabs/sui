@@ -3,7 +3,7 @@
 
 use mysten_metrics::start_prometheus_server;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use sui_bridge::server::run_server;
+use sui_bridge::server::{handler::BridgeRequestHandler, run_server};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -21,6 +21,7 @@ async fn main() -> anyhow::Result<()> {
 
     // TODO: allow configuration of port
     let socket_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9000);
-    run_server(&socket_address).await;
+
+    run_server(&socket_address, BridgeRequestHandler::new()).await;
     Ok(())
 }
