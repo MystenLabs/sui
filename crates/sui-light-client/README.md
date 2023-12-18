@@ -1,4 +1,4 @@
-This create contains a Command Line Interface light client for Sui.
+This crate contains a Command Line Interface light client for Sui.
 
 # What is a light client?
 
