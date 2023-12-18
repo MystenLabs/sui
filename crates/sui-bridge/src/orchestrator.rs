@@ -60,7 +60,6 @@ where
             store_clone,
             self.eth_events_rx,
         )));
-
         // TODO: spawn bridge committee change watcher task
         task_handles
     }

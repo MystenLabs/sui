@@ -41,22 +41,22 @@ pub fn get_test_authority_and_key(
 }
 
 pub fn get_test_sui_to_eth_bridge_action(
-    sui_tx_digest: TransactionDigest,
-    sui_tx_event_index: u16,
-    nonce: u64,
-    amount: u128,
+    sui_tx_digest: Option<TransactionDigest>,
+    sui_tx_event_index: Option<u16>,
+    nonce: Option<u64>,
+    amount: Option<u128>,
 ) -> BridgeAction {
     BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
-        sui_tx_digest,
-        sui_tx_event_index,
+        sui_tx_digest: sui_tx_digest.unwrap_or_else(TransactionDigest::random),
+        sui_tx_event_index: sui_tx_event_index.unwrap_or(0),
         sui_bridge_event: EmittedSuiToEthTokenBridgeV1 {
-            nonce,
+            nonce: nonce.unwrap_or_default(),
             sui_chain_id: BridgeChainId::SuiTestnet,
             sui_address: SuiAddress::random_for_testing_only(),
             eth_chain_id: BridgeChainId::EthSepolia,
             eth_address: EthAddress::random(),
             token_id: TokenId::Sui,
-            amount,
+            amount: amount.unwrap_or(100_000),
         },
     })
 }
