@@ -2997,15 +2997,15 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
         PE::Dereference(pe) => EE::Dereference(exp(context, *pe)),
         PE::UnaryExp(op, pe) => EE::UnaryExp(op, exp(context, *pe)),
         PE::BinopExp(_pl, op, _pr) if op.value.is_spec_only() && !context.in_spec_context => {
-                let msg = format!(
-                    "`{}` operator only allowed in specifications",
-                    op.value.symbol()
-                );
-                context
-                    .env()
-                    .add_diag(diag!(Syntax::SpecContextRestricted, (loc, msg)));
-                EE::UnresolvedError
-            }
+            let msg = format!(
+                "`{}` operator only allowed in specifications",
+                op.value.symbol()
+            );
+            context
+                .env()
+                .add_diag(diag!(Syntax::SpecContextRestricted, (loc, msg)));
+            EE::UnresolvedError
+        }
         e_ @ PE::BinopExp(..) => {
             process_binops!(
                 (P::BinOp, Loc),

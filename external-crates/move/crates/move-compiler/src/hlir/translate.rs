@@ -14,7 +14,7 @@ use crate::{
     hlir::detect_dead_code::program as detect_dead_code_analysis,
     naming::ast as N,
     parser::ast::{Ability_, BinOp, BinOp_, ConstantName, Field, FunctionName, StructName},
-    shared::{process_binops, ast_debug::AstDebug, unique_map::UniqueMap, *},
+    shared::{ast_debug::AstDebug, process_binops, unique_map::UniqueMap, *},
     sui_mode::ID_FIELD_NAME,
     typing::ast as T,
     FullyCompiledProgram,
