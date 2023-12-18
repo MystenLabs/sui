@@ -7,6 +7,8 @@ use std::{fs, io, path::PathBuf};
 use sui_move::unit_test::run_move_unit_tests;
 use sui_move_build::BuildConfig;
 
+const FILTER_ENV: &str = "FILTER";
+
 #[test]
 #[cfg_attr(msim, ignore)]
 fn run_sui_framework_tests() {
@@ -105,7 +107,8 @@ fn check_move_unit_tests(path: PathBuf) {
     config.config.warnings_are_errors = true;
     config.config.silence_warnings = false;
     let move_config = config.config.clone();
-    let testing_config = UnitTestingConfig::default_with_bound(Some(3_000_000));
+    let mut testing_config = UnitTestingConfig::default_with_bound(Some(3_000_000));
+    testing_config.filter = std::env::var(FILTER_ENV).ok().map(|s| s.to_string());
 
     // build tests first to enable Sui-specific test code verification
     config
