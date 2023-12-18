@@ -227,7 +227,7 @@ export const InputWithActionButton = forwardRef<HTMLInputElement, InputWithActio
 					)}
 
 					{(onActionClicked || info) && (
-						<div className="flex gap-2 items-center justify-end absolute mx-2 right-0 overflow-hidden">
+						<div className="z-10 flex gap-2 items-center justify-end absolute mx-2 right-0 overflow-hidden">
 							{info}
 							{onActionClicked && (
 								<Pill
