@@ -29,6 +29,10 @@ use sui_indexer::{
     types_v2::OwnerType,
 };
 use sui_types::parse_sui_struct_tag;
+use tap::TapFallible;
+use tracing::{info, warn};
+
+pub(crate) const EXPLAIN_COSTING_LOG_TARGET: &str = "gql-explain-costing";
 
 pub(crate) struct PgQueryBuilder;
 
@@ -631,16 +635,41 @@ impl PgQueryExecutor for PgManager {
         self.inner
             .spawn_blocking(move |this| {
                 let query = query_builder_fn()?;
-                let explain_result: String = this
+                let explain_result: Option<String> = this
                     .run_query(|conn| query.explain().get_result(conn))
-                    .map_err(|e| Error::Internal(e.to_string()))?;
-                let cost = extract_cost(&explain_result)?;
-                if cost > max_db_query_cost as f64 {
-                    return Err(DbValidationError::QueryCostExceeded(
-                        cost as u64,
-                        max_db_query_cost,
-                    )
-                    .into());
+                    .tap_err(|e| {
+                        warn!(
+                            target: EXPLAIN_COSTING_LOG_TARGET,
+                            "Failed to get explain result: {}", e
+                        )
+                    })
+                    .ok(); // Fine to not propagate this error as explain-based costing is not critical today
+
+                if let Some(explain_result) = explain_result {
+                    let cost = extract_cost(&explain_result)
+                        .tap_err(|e| {
+                            warn!(
+                                target: EXPLAIN_COSTING_LOG_TARGET,
+                                "Failed to get cost from explain result: {}", e
+                            )
+                        })
+                        .ok(); // Fine to not propagate this error as explain-based costing is not critical today
+
+                    if let Some(cost) = cost {
+                        if cost > max_db_query_cost as f64 {
+                            warn!(
+                                target: EXPLAIN_COSTING_LOG_TARGET,
+                                cost,
+                                max_db_query_cost,
+                                exceeds = true
+                            );
+                        } else {
+                            info!(
+                                target: EXPLAIN_COSTING_LOG_TARGET,
+                                cost,
+                            );
+                        }
+                    }
                 }
 
                 let query = query_builder_fn()?;
