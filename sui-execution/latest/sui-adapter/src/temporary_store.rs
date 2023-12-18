@@ -74,6 +74,21 @@ impl<'backing> TemporaryStore<'backing> {
         let mutable_input_refs = input_objects.mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
         let objects = input_objects.into_object_map();
+        #[cfg(debug_assertions)]
+        {
+            // Ensure that input objects and receiving objects must not overlap.
+            assert!(objects
+                .keys()
+                .collect::<HashSet<_>>()
+                .intersection(
+                    &receiving_objects
+                        .iter()
+                        .map(|oref| &oref.0)
+                        .collect::<HashSet<_>>()
+                )
+                .next()
+                .is_none());
+        }
         Self {
             store,
             tx_digest,
@@ -131,7 +146,7 @@ impl<'backing> TemporaryStore<'backing> {
             if !self.execution_results.modified_objects.contains(id) {
                 // We cannot update here but have to push to `to_be_updated` and update later
                 // because the for loop is holding a reference to `self`, and calling
-                // `self.write_object` requires a mutable reference to `self`.
+                // `self.mutate_input_object` requires a mutable reference to `self`.
                 to_be_updated.push(self.input_objects[id].clone());
             }
         }
@@ -407,6 +422,8 @@ impl<'backing> TemporaryStore<'backing> {
     /// Mutate a mutable input object. This is used to mutate input objects outside of PT execution.
     pub fn mutate_input_object(&mut self, object: Object) {
         let id = object.id();
+        debug_assert!(self.input_objects.contains_key(&id));
+        debug_assert!(!object.is_immutable());
         self.execution_results.modified_objects.insert(id);
         self.execution_results.written_objects.insert(id, object);
     }
@@ -437,8 +454,6 @@ impl<'backing> TemporaryStore<'backing> {
     /// Upgrade system package during epoch change. This requires special treatment
     /// since the system package to be upgraded is not in the input objects.
     /// We could probably fix above to make it less special.
-    /// Due to the special treatment, we need to read from object store explicitly
-    /// to obtain the modified_at information.
     pub fn upgrade_system_package(&mut self, package: Object) {
         let id = package.id();
         assert!(package.is_package() && is_system_package(id));
@@ -465,6 +480,7 @@ impl<'backing> TemporaryStore<'backing> {
     pub fn delete_input_object(&mut self, id: &ObjectID) {
         // there should be no deletion after write
         debug_assert!(!self.execution_results.written_objects.contains_key(id));
+        debug_assert!(self.input_objects.contains_key(id));
         self.execution_results.modified_objects.insert(*id);
         self.execution_results.deleted_object_ids.insert(*id);
     }
@@ -580,7 +596,7 @@ impl<'backing> TemporaryStore<'backing> {
         );
         let mut system_state_wrapper = self
             .read_object(&SUI_SYSTEM_STATE_OBJECT_ID)
-            .expect("0x5 object must be muated in system tx with unmetered storage rebate")
+            .expect("0x5 object must be mutated in system tx with unmetered storage rebate")
             .clone();
         // In unmetered execution, storage_rebate field of mutated object must be 0.
         // If not, we would be dropping SUI on the floor by overriding it.
@@ -616,7 +632,9 @@ impl<'backing> TemporaryStore<'backing> {
                     .or_else(|| self.loaded_runtime_objects.get(object_id).cloned())
                     .unwrap_or_else(|| {
                         debug_assert!(is_system_package(*object_id));
-                        let obj = self.store.get_object(object_id).unwrap().unwrap();
+                        let package_obj =
+                            self.store.get_package_object(object_id).unwrap().unwrap();
+                        let obj = package_obj.object();
                         DynamicallyLoadedObjectMetadata {
                             version: obj.version(),
                             digest: obj.digest(),
@@ -1198,7 +1216,7 @@ impl<'backing> ResourceResolver for TemporaryStore<'backing> {
                 assert!(
                     m.is_type(struct_tag),
                     "Invariant violation: ill-typed object in storage \
-                or bad object request from caller"
+                    or bad object request from caller"
                 );
                 Ok(Some(m.contents().to_vec()))
             }
