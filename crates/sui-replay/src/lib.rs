@@ -16,6 +16,7 @@ use transaction_provider::{FuzzStartPoint, TransactionSource};
 use crate::replay::ExecutionSandboxState;
 use crate::replay::LocalExec;
 use crate::replay::ProtocolVersionSummary;
+use move_vm_config::runtime::get_default_output_filepath;
 use std::env;
 use std::io::BufRead;
 use std::path::PathBuf;
@@ -376,13 +377,7 @@ pub async fn execute_replay_command(
             protocol_version,
             profile_output,
         } => {
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("Error getting system time")
-                .as_nanos();
-            let mut default_name = std::path::PathBuf::from(".");
-            default_name.push(format!("gas_profile_{}_{}.json", tx_digest, now));
-            let output_path = profile_output.or(Some(default_name));
+            let output_path = profile_output.or(Some(get_default_output_filepath()));
 
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);

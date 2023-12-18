@@ -66,7 +66,7 @@ impl Default for VMRuntimeLimitsConfig {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct VMProfilerConfig {
     /// User configured full path override
     pub full_path: std::path::PathBuf,
@@ -74,6 +74,17 @@ pub struct VMProfilerConfig {
     pub track_bytecode_instructions: bool,
     /// Whether or not to use the long name for functions
     pub use_long_function_name: bool,
+}
+
+#[cfg(debug_assertions)]
+impl std::default::Default for VMProfilerConfig {
+    fn default() -> Self {
+        Self {
+            full_path: get_default_output_filepath(),
+            track_bytecode_instructions: false,
+            use_long_function_name: false,
+        }
+    }
 }
 
 #[cfg(feature = "gas-profiler")]
@@ -85,4 +96,10 @@ impl VMProfilerConfig {
             None
         }
     }
+}
+
+pub fn get_default_output_filepath() -> std::path::PathBuf {
+    let mut default_name = std::path::PathBuf::from(".");
+    default_name.push("gas_profile.json");
+    default_name
 }
