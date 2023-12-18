@@ -1,45 +1,30 @@
 {
-  "name": "bridge",
+  "name": "foundry-starter-kit",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "build": "hardhat compile",
-    "test": "hardhat test test/*.js",
-    "coverage": "hardhat coverage --network coverage --temp build --testfiles 'test/*.js'",
-    "lint:js": "prettier ./test/**/*.js --write",
-    "lint:sol": "solhint -f table contracts/**/*.sol",
-    "rinkeby:deploy": "hardhat --network rinkeby deploy",
-    "kovan:deploy": "hardhat --network kovan deploy",
-    "goerli:deploy": "hardhat --network goerli deploy",
-    "ropsten:deploy": "hardhat --network ropsten deploy",
-    "mainnet:deploy": "hardhat --network mainnet deploy"
-  },
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "@openzeppelin/contracts": "^5.0.1",
-    "@openzeppelin/contracts-upgradeable": "^5.0.1"
-  },
+  "description": "Minimal Template for Foundry Projects",
+  "author": "Patrick Collins",
+  "license": "MIT",
+  "files": [
+    "src/**/*.sol"
+  ],
   "devDependencies": {
-    "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
-    "@nomicfoundation/hardhat-ethers": "^3.0.5",
-    "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
-    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
-    "@nomicfoundation/hardhat-verify": "^2.0.0",
-    "@openzeppelin/hardhat-upgrades": "^2.4.3",
-    "@typechain/ethers-v6": "^0.5.0",
-    "@typechain/hardhat": "^9.0.0",
-    "@types/chai": "^4.2.0",
-    "@types/mocha": ">=9.1.0",
-    "chai": "^4.2.0",
-    "dotenv": "^16.3.1",
-    "ethers": "^6.9.0",
-    "hardhat": "^2.19.1",
-    "hardhat-gas-reporter": "^1.0.8",
-    "solidity-coverage": "^0.8.1",
-    "ts-node": "^10.9.1",
-    "typechain": "^8.3.0",
-    "typescript": "^5.3.2"
+    "prettier": "^2.7.1",
+    "prettier-plugin-solidity": "^1.0.0-beta.19"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/smartcontractkit/foundry-starter-kit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/smartcontractkit/foundry-starter-kit/issues"
+  },
+  "scripts": {
+    "setup": "make clean && make build",
+    "sync": "make update",
+    "test": "make test",
+    "snapshot": "make snapshot",
+    "format": "make format",
+    "lint": "make lint",
+    "all": "make all"
   }
 }

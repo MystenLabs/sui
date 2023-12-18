@@ -1,0 +1,12 @@
+[profile.default]
+src = 'src'
+out = 'out'
+libs = ['lib']
+gas_reports = ["*"]
+optimizer = true
+optimizer_runs = 20000
+fs_permissions = [{ access = "read", path = "lib/foundry-chainlink-toolkit/out"}]
+
+# Remappings in remappings.txt
+
+# See more config options https://github.com/gakonst/foundry/tree/master/config

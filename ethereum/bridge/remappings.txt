@@ -1,0 +1,5 @@
+@solmate=lib/solmate/src/
+@std=lib/forge-std/src/
+@clones=lib/clones-with-immutable-args/src/
+@chainlink/=lib/chainlink-brownie-contracts/
+forge-std/=lib/forge-std/src/
