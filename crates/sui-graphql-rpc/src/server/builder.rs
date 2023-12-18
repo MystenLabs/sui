@@ -204,7 +204,10 @@ impl ServerBuilder {
         builder = builder
             .context_data(config.service.clone())
             .context_data(pg_conn_pool)
-            .context_data(Resolver::new(package_cache))
+            .context_data(Resolver::new_with_limits(
+                package_cache,
+                config.service.limits.package_resolver_limits(),
+            ))
             .context_data(sui_sdk_client)
             .context_data(name_service_config)
             .context_data(Arc::new(metrics))
