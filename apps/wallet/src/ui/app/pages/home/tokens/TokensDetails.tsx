@@ -25,7 +25,13 @@ import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import { useFeature } from '@growthbook/growthbook-react';
-import { useAppsBackend, useCoinMetadata, useFormatCoin, useResolveSuiNSName } from '@mysten/core';
+import {
+	useAppsBackend,
+	useBalanceInUSD,
+	useCoinMetadata,
+	useFormatCoin,
+	useResolveSuiNSName,
+} from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Info12, Pin16, Unpin16 } from '@mysten/icons';
 import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
@@ -104,10 +110,9 @@ export function TokenRow({
 	});
 	const allowedSwapCoinsList = useAllowedSwapCoinsList();
 
-	const isRenderSwapButton = allowedSwapCoinsList.includes(coinType);
+	const balanceInUsd = useBalanceInUSD(coinBalance.coinType, coinBalance.totalBalance);
 
-	// TODO: add balanceInUsd API call
-	const balanceInUsd = 0;
+	const isRenderSwapButton = allowedSwapCoinsList.includes(coinType);
 
 	return (
 		<Tag
@@ -182,9 +187,9 @@ export function TokenRow({
 					</Text>
 				)}
 
-				{balanceInUsd > 0 && (
+				{balanceInUsd && balanceInUsd > 0 && (
 					<Text variant="subtitle" color="steel-dark" weight="medium">
-						{balanceInUsd.toLocaleString('en', {
+						{Number(balanceInUsd).toLocaleString('en', {
 							style: 'currency',
 							currency: 'USD',
 						})}
