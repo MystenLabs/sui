@@ -13,3 +13,6 @@
 [submodule "ethereum/bridge/lib/openzeppelin-contracts"]
 	path = ethereum/bridge/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "ethereum/bridge/lib/openzeppelin-upgrades"]
+	path = ethereum/bridge/lib/openzeppelin-upgrades
+	url = https://github.com/OpenZeppelin/openzeppelin-upgrades
