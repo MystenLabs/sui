@@ -14,7 +14,7 @@ import type { BcsType, BcsTypeOptions } from '@mysten/bcs';
 
 import type { MoveCallTransaction } from '../builder/Transactions.js';
 import type { SuiObjectRef as SuiObjectRefType } from '../types/objects.js';
-import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../utils/sui-types.js';
+import { isValidSuiAddress, normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../utils/sui-types.js';
 import { TypeTagSerializer } from './type-tag-serializer.js';
 
 export { TypeTagSerializer } from './type-tag-serializer.js';
@@ -180,6 +180,12 @@ function enumKind<T extends object, Input extends object>(type: BcsType<T, Input
 }
 
 const Address = bcs.bytes(SUI_ADDRESS_LENGTH).transform({
+	validate: (val) => {
+		const address = typeof val === 'string' ? val : toHEX(val);
+		if (!isValidSuiAddress(address)) {
+			throw new Error(`Invalid Sui address ${address}`);
+		}
+	},
 	input: (val: string | Uint8Array) =>
 		typeof val === 'string' ? fromHEX(normalizeSuiAddress(val)) : val,
 	output: (val) => normalizeSuiAddress(toHEX(val)),
