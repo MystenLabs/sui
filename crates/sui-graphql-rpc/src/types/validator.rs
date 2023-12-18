@@ -200,14 +200,14 @@ impl Validator {
         &self.report_records
     }
 
-    /// The apy of this validator in basis points.
+    /// The APY of this validator in basis points.
     /// To get the APY in percentage, divide by 100.
     async fn apy(&self, ctx: &Context<'_>) -> Result<Option<u64>, Error> {
         Ok(ctx
             .data_unchecked::<PgManager>()
             .fetch_validator_apys(&self.validator_summary.sui_address)
             .await?
-            .map(|x| (x * 10_000.0) as u64))
+            .map(|x| (x * 100_00.0) as u64))
     }
 }
 
