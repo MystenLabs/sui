@@ -46,12 +46,7 @@ function Header({
 				subtitle={domainName}
 				before={<ObjectDetailsHeader className="h-6 w-6" />}
 				after={
-					pageType === 'Package' &&
-					data &&
-					'id' in data &&
-					'owner' in data &&
-					'version' in data &&
-					'objType' in data ? (
+					pageType === 'Package' && data && 'id' in data ? (
 						<PackageDetails data={data} />
 					) : (
 						<TotalStaked address={address} />
@@ -60,7 +55,7 @@ function Header({
 			/>
 
 			<ErrorBoundary>
-				{data && pageType !== 'Package' && data && 'error' in data && (
+				{data && pageType !== 'Package' && data && !('id' in data) && (
 					<div className="mt-5">
 						<ObjectView data={data} />
 					</div>
