@@ -4,3 +4,6 @@
 [submodule "ethereum/bridge/lib/solmate"]
 	path = ethereum/bridge/lib/solmate
 	url = https://github.com/rari-capital/solmate
+[submodule "ethereum/bridge/lib/forge-std"]
+	path = ethereum/bridge/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
