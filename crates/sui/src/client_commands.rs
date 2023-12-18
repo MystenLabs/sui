@@ -658,7 +658,7 @@ pub enum SuiClientCommands {
 
         /// If specified, overrides the filepath of the output profile, for example -- /temp/my_profile.json
         /// If an output filepath is not specified, it will output a file `gas_profile_{tx_digest}_{unix_timestamp}.json`
-        #[clap(name = "profile_output")]
+        #[arg(long, short)]
         profile_output: Option<PathBuf>,
     },
 

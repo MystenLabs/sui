@@ -39,7 +39,7 @@ sui-config.workspace = true
 sui-execution = { path = "../../sui-execution" }
 sui-swarm-config.workspace = true
 sui-genesis-builder.workspace = true
-sui-types = { workspace = true, features = ["gas-profiler"]}
+sui-types.workspace = true
 sui-json.workspace = true
 sui-swarm.workspace = true
 sui-json-rpc-types.workspace = true
