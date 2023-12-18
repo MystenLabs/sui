@@ -208,7 +208,7 @@ async fn download_checkpoint_summary(
 /// Run binary search to for each end of epoch checkpoint that is missing
 /// between the latest on the list and the latest checkpoint.
 async fn pre_sync_checkpoints_to_latest(config: &Config) -> anyhow::Result<()> {
-    // Get the local checlpoint list
+    // Get the local checkpoint list
     let mut checkpoints_list: CheckpointsList = read_checkpoint_list(config)?;
     let latest_in_list = checkpoints_list
         .checkpoints
@@ -229,9 +229,9 @@ async fn pre_sync_checkpoints_to_latest(config: &Config) -> anyhow::Result<()> {
         let mut start = last_checkpoint_seq;
         let mut end = latest.sequence_number;
 
-        let taget_epoch = last_epoch + 1;
+        let target_epoch = last_epoch + 1;
         // Print target
-        println!("Target Epoch: {}", taget_epoch);
+        println!("Target Epoch: {}", target_epoch);
         let mut found_summary = None;
 
         while start < end {
@@ -246,12 +246,12 @@ async fn pre_sync_checkpoints_to_latest(config: &Config) -> anyhow::Result<()> {
                 summary.end_of_epoch_data.is_some()
             );
 
-            if summary.epoch() == taget_epoch && summary.end_of_epoch_data.is_some() {
+            if summary.epoch() == target_epoch && summary.end_of_epoch_data.is_some() {
                 found_summary = Some(summary);
                 break;
             }
 
-            if summary.epoch() <= taget_epoch {
+            if summary.epoch() <= target_epoch {
                 start = mid + 1;
             } else {
                 end = mid;
@@ -278,7 +278,7 @@ async fn pre_sync_checkpoints_to_latest(config: &Config) -> anyhow::Result<()> {
 async fn check_and_sync_checkpoints(config: &Config) -> anyhow::Result<()> {
     pre_sync_checkpoints_to_latest(config).await?;
 
-    // Get the local checlpoint list
+    // Get the local checkpoint list
     let checkpoints_list: CheckpointsList = read_checkpoint_list(config)?;
 
     // Load the genesis committee
@@ -345,11 +345,11 @@ async fn read_full_checkpoint(checkpoint_path: &PathBuf) -> anyhow::Result<Check
 
 async fn write_full_checkpoint(
     checkpoint_path: &Path,
-    ckpt: &CheckpointData,
+    checkpoint: &CheckpointData,
 ) -> anyhow::Result<()> {
     let mut writer = fs::File::create(checkpoint_path)?;
     let bytes =
-        bcs::to_bytes(&ckpt).map_err(|_| anyhow!("Unable to serialize checkpoint summary"))?;
+        bcs::to_bytes(&checkpoint).map_err(|_| anyhow!("Unable to serialize checkpoint summary"))?;
     writer.write_all(&bytes)?;
     Ok(())
 }
@@ -360,11 +360,11 @@ async fn get_full_checkpoint(config: &Config, seq: u64) -> anyhow::Result<Checkp
     checkpoint_path.push(format!("{}.bcs", seq));
 
     // Try reading the cache
-    if let Ok(ckpt) = read_full_checkpoint(&checkpoint_path).await {
-        return Ok(ckpt);
+    if let Ok(checkpoint) = read_full_checkpoint(&checkpoint_path).await {
+        return Ok(checkpoint);
     }
 
-    // Downlioading the checkpoint from the server
+    // Downloading the checkpoint from the server
     let client: Client = Client::new(config.full_node_url.as_str());
     let full_check_point = client.get_full_checkpoint(seq).await?;
 
@@ -384,7 +384,7 @@ fn assert_contains_transaction_effects(
     // Verify the checkpoint summary using the committee
     summary.clone().verify(committee)?;
 
-    // Check the validty of the checkpoint contents
+    // Check the validity of the checkpoint contents
     let contents = &checkpoint.checkpoint_contents;
     anyhow::ensure!(
         contents.digest() == &summary.content_digest,
@@ -461,10 +461,8 @@ async fn check_transaction_tid(
         .cloned()
         .collect();
 
-    // Make a commitee object using this
+    // Make a committee object using this
     let committee = Committee::new(prev_ckp.epoch().saturating_add(1), prev_committee);
-    println!("Committee: {:?}", prev_ckp.sequence_number());
-
     assert_contains_transaction_effects(&full_check_point, &committee, tid)
 }
 
@@ -609,7 +607,7 @@ mod tests {
             .cloned()
             .collect();
 
-        // Make a commitee object using this
+        // Make a committee object using this
         let committee = Committee::new(checkpoint.epoch().saturating_add(1), prev_committee);
 
         let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
