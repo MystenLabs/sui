@@ -35,18 +35,18 @@ module bridge::treasury {
     }
 
     public fun burn<T>(self: &mut BridgeTreasury, token: Coin<T>, ctx: &mut TxContext) {
-        create_treasury_if_not_exists<T>(self, ctx);
+        create_treasury_if_not_exist<T>(self, ctx);
         let treasury = object_bag::borrow_mut(&mut self.treasuries, type_name::get<T>());
         coin::burn(treasury, token);
     }
 
     public fun mint<T>(self: &mut BridgeTreasury, amount: u64, ctx: &mut TxContext): Coin<T> {
-        create_treasury_if_not_exists<T>(self, ctx);
+        create_treasury_if_not_exist<T>(self, ctx);
         let treasury = object_bag::borrow_mut(&mut self.treasuries, type_name::get<T>());
         coin::mint(treasury, amount, ctx)
     }
 
-    fun create_treasury_if_not_exists<T>(self: &mut BridgeTreasury, ctx: &mut TxContext) {
+    fun create_treasury_if_not_exist<T>(self: &mut BridgeTreasury, ctx: &mut TxContext) {
         let type = type_name::get<T>();
         if (!object_bag::contains(&self.treasuries, type)) {
             // Lazily create currency if not exists
