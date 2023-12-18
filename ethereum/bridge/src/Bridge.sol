@@ -175,7 +175,7 @@ contract Bridge is IBridge {
 		// checkMaxAmount(amount);
 
 		// Transfer the tokens from the handler to the recipient
-		_safeTransfer(tokenAddress, recipient, amount);
+		transfer(tokenAddress, recipient, amount);
 
 		// Record the transfer history for the recipient
 		transferHistory[block.timestamp].push(amount);
