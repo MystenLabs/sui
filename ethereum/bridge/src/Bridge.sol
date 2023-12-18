@@ -175,7 +175,7 @@ contract Bridge is IBridge {
 		// checkMaxAmount(amount);
 
 		// Transfer the tokens from the handler to the recipient
-		transfer(tokenAddress, recipient, amount);
+		IERC20(tokenAddress).transferFrom(msg.sender, address(this), amount);
 
 		// Record the transfer history for the recipient
 		transferHistory[block.timestamp].push(amount);
@@ -404,7 +404,7 @@ contract Bridge is IBridge {
 	}
 
 	// The contract can be upgraded by the owner
-	function _authorizeUpgrade(address newImplementation) internal override {}
+	// function _authorizeUpgrade(address newImplementation) internal override {}
 
 	// Function to initiate a transfer from the source chain to the destination chain
 	function initiateTransfer(address recipient, uint256 amount) external {
