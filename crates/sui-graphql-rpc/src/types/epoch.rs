@@ -152,7 +152,7 @@ impl Epoch {
         ))
     }
 
-    /// Information about whether last epoch change used safe mode, which happens if the full epoch
+    /// Information about whether the start of this epoch was in safe mode, which happens if the full epoch
     /// change logic fails for some reason.
     async fn safe_mode(&self) -> Option<SafeMode> {
         Some(SafeMode {
@@ -178,7 +178,9 @@ impl Epoch {
         Some(SystemParameters {
             duration_ms: Some(BigInt::from(self.system_state.epoch_duration_ms)),
             stake_subsidy_start_epoch: Some(self.system_state.stake_subsidy_start_epoch),
-            min_validator_count: Some(self.system_state.max_validator_count),
+            // min validator count can be extracted, but it requires some JSON RPC changes,
+            // so we decided to wait on it for now.
+            min_validator_count: None,
             max_validator_count: Some(self.system_state.max_validator_count),
             min_validator_joining_stake: Some(BigInt::from(
                 self.system_state.min_validator_joining_stake,
@@ -195,7 +197,7 @@ impl Epoch {
         })
     }
 
-    /// Parameters related to subsiding staking rewards
+    /// Parameters related to the subsidy that supplements staking rewards
     async fn system_stake_subsidy(&self) -> Option<StakeSubsidy> {
         Some(StakeSubsidy {
             balance: Some(BigInt::from(self.system_state.stake_subsidy_balance)),
