@@ -9,7 +9,8 @@
   ],
   "devDependencies": {
     "prettier": "^2.7.1",
-    "prettier-plugin-solidity": "^1.0.0-beta.19"
+    "prettier-plugin-solidity": "^1.0.0-beta.19",
+    "hardhat": "^2.19.1"
   },
   "repository": {
     "type": "git",
