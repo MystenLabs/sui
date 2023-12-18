@@ -24,6 +24,7 @@ pub struct CheckpointDataToCommit {
     pub tx_indices: Vec<TxIndex>,
     pub display_updates: BTreeMap<String, StoredDisplay>,
     pub object_changes: TransactionObjectChangesToCommit,
+    pub object_history_changes: TransactionObjectChangesToCommit,
     pub packages: Vec<IndexedPackage>,
     pub epoch: Option<EpochToCommit>,
 }

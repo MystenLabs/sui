@@ -65,6 +65,8 @@ pub struct IndexerMetrics {
     pub checkpoint_db_commit_latency_tx_indices_chunks: Histogram,
     pub checkpoint_db_commit_latency_checkpoints: Histogram,
     pub checkpoint_db_commit_latency_epoch: Histogram,
+    pub advance_epoch_latency: Histogram,
+    pub update_object_snapshot_latency: Histogram,
     // average latency of committing 1000 transactions.
     // 1000 is not necessarily the batch size, it's to roughly map average tx commit latency to [0.1, 1] seconds,
     // which is well covered by DB_COMMIT_LATENCY_SEC_BUCKETS.
@@ -383,6 +385,18 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            advance_epoch_latency: register_histogram_with_registry!(
+                "advance_epoch_latency",
+                "Time spent in advancing epoch",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            update_object_snapshot_latency: register_histogram_with_registry!(
+                "update_object_snapshot_latency",
+                "Time spent in updating object snapshot",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
             thousand_transaction_avg_db_commit_latency: register_histogram_with_registry!(
                 "transaction_db_commit_latency",
                 "Average time spent commiting 1000 transactions to the db",

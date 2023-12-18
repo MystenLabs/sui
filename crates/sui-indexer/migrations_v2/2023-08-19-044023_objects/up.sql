@@ -60,8 +60,8 @@ CREATE TABLE objects_history (
 CREATE TABLE objects_history_partition_0 PARTITION OF objects_history FOR VALUES FROM (0) TO (MAXVALUE);
 -- TODO(gegaowp): add corresponding indices for consistent reads of objects_history table
 
--- snapshot table by folding objects_history table until certain epoch,
--- effectively the snapshot of objects at the same epoch,
+-- snapshot table by folding objects_history table until certain checkpoint,
+-- effectively the snapshot of objects at the same checkpoint,
 -- except that it also includes deleted or wrapped objects with the corresponding object_status.
 CREATE TABLE objects_snapshot (
     object_id                   bytea         PRIMARY KEY,
@@ -80,3 +80,7 @@ CREATE TABLE objects_snapshot (
     df_object_type              text,
     df_object_id                bytea
 );
+CREATE INDEX objects_snapshot_checkpoint_sequence_number ON objects_snapshot (checkpoint_sequence_number);
+CREATE INDEX objects_snapshot_owner ON objects_snapshot (owner_type, owner_id) WHERE owner_type BETWEEN 1 AND 2 AND owner_id IS NOT NULL;
+CREATE INDEX objects_snapshot_coin ON objects_snapshot (owner_id, coin_type) WHERE coin_type IS NOT NULL AND owner_type = 1;
+CREATE INDEX objects_snapshot_type ON objects_snapshot (object_type);
