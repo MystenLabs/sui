@@ -101,8 +101,10 @@ module sui::random {
     /// transaction.
     fun update_randomness_state(
         self: &mut Random,
-        // TODO: rounds are increasing monotonically also betweeen epochs.
-        // TODO: need to guarantee that after EoP/last relevant tx, we generate 2 more rounds of randomness.
+        // TODO: rounds are increasing monotonically also betweeen epochs (can be done either on sui side, or here using
+        // a different counter).
+        // TODO: need to guarantee that the last sent partial sig is committed after EoP (but not to generate more)
+        // (locally: after 2f+1 EoP I don't sign anymore, and i wait until the round last signed by me is committed)
         new_round: u64,
         new_bytes: vector<u8>,
         ctx: &TxContext,
