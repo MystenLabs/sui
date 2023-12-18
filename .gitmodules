@@ -1,3 +1,6 @@
 [submodule "ethereum/bridge/lib/chainlink-brownie-contracts"]
 	path = ethereum/bridge/lib/chainlink-brownie-contracts
 	url = https://github.com/smartcontractkit/chainlink-brownie-contracts
+[submodule "ethereum/bridge/lib/solmate"]
+	path = ethereum/bridge/lib/solmate
+	url = https://github.com/rari-capital/solmate
