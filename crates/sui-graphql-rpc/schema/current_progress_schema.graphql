@@ -78,7 +78,7 @@ type Address implements ObjectOwner {
 	The `0x3::staking_pool::StakedSui` objects owned by the given address.
 	"""
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
-	defaultNameServiceName: String
+	defaultSuinsRegistration: String
 	"""
 	This resolver is not supported on the Address type.
 	"""
@@ -646,7 +646,7 @@ type Event {
 	data: MoveData!
 	"""
 	Representation of a Move value in JSON, where:
-	
+
 	- Addresses and UIDs are represented in canonical form, as JSON strings.
 	- Bools are represented by JSON boolean literals.
 	- u8, u16, and u32 are represented as JSON numbers.
@@ -654,7 +654,7 @@ type Event {
 	- Vectors are represented by JSON arrays.
 	- Structs are represented by JSON objects.
 	- Empty optional values are represented by `null`.
-	
+
 	This form is offered as a less verbose convenience in cases where the layout of the type is
 	known by the client.
 	"""
@@ -697,16 +697,16 @@ input EventFilter {
 	Events emitted by a particular module. An event is emitted by a
 	particular module if some function in the module is called by a
 	PTB and emits an event.
-	
+
 	Modules can be filtered by their package, or package::module.
 	"""
 	emittingModule: String
 	"""
 	This field is used to specify the type of event emitted.
-	
+
 	Events can be filtered by their type's package, package::module,
 	or their fully qualified type name.
-	
+
 	Generic types can be queried by either the generic type name, e.g.
 	`0x2::coin::Coin`, or by the full type name, such as
 	`0x2::coin::Coin<0x2::sui::SUI>`.
@@ -1306,7 +1306,7 @@ type MoveValue {
 	data: MoveData!
 	"""
 	Representation of a Move value in JSON, where:
-	
+
 	- Addresses and UIDs are represented in canonical form, as JSON strings.
 	- Bools are represented by JSON boolean literals.
 	- u8, u16, and u32 are represented as JSON numbers.
@@ -1314,7 +1314,7 @@ type MoveValue {
 	- Vectors are represented by JSON arrays.
 	- Structs are represented by JSON objects.
 	- Empty optional values are represented by `null`.
-	
+
 	This form is offered as a less verbose convenience in cases where the layout of the type is
 	known by the client.
 	"""
@@ -1330,12 +1330,12 @@ enum MoveVisibility {
 type Mutation {
 	"""
 	Execute a transaction, committing its effects on chain.
-	
+
 	`txBytes` is a `TransactionData` struct that has been BCS-encoded
 	and then Base64-encoded.
 	`signatures` are a list of `flag || signature || pubkey` bytes,
 	Base64-encoded.
-	
+
 	Waits until the transaction has been finalized on chain to return
 	its transaction digest.  If the transaction could not be
 	finalized, returns the errors that prevented it, instead.
@@ -1398,7 +1398,7 @@ type Object implements ObjectOwner {
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
 	The coin objects for the given address.
-	
+
 	The type field is a string of the inner type of the coin by which to filter
 	(e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
@@ -1410,7 +1410,7 @@ type Object implements ObjectOwner {
 	"""
 	The domain that a user address has explicitly configured as their default domain
 	"""
-	defaultNameServiceName: String
+	defaultSuinsRegistration: String
 	"""
 	Access a dynamic field on an object using its name.
 	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
@@ -1492,10 +1492,10 @@ input ObjectFilter {
 	"""
 	This field is used to specify the type of objects that should be included in the query
 	results.
-	
+
 	Objects can be filtered by their type's package, package::module, or their fully qualified
 	type name.
-	
+
 	Generic types can be queried by either the generic type name, e.g. `0x2::coin::Coin`, or by
 	the full type name, such as `0x2::coin::Coin<0x2::sui::SUI>`.
 	"""
@@ -1533,7 +1533,7 @@ interface ObjectOwner {
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
-	defaultNameServiceName: String
+	defaultSuinsRegistration: String
 	dynamicField(name: DynamicFieldName!): DynamicField
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
@@ -1611,7 +1611,7 @@ type Owner implements ObjectOwner {
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
 	The coin objects for the given address or object.
-	
+
 	The type field is a string of the inner type of the coin by which to filter
 	(e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
@@ -1620,7 +1620,7 @@ type Owner implements ObjectOwner {
 	The `0x3::staking_pool::StakedSui` objects owned by the given object.
 	"""
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
-	defaultNameServiceName: String
+	defaultSuinsRegistration: String
 	"""
 	Access a dynamic field on an object using its name.
 	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
@@ -1824,7 +1824,7 @@ type Query {
 	transactionBlock(digest: String!): TransactionBlock
 	"""
 	The coin objects that exist in the network.
-	
+
 	The type field is a string of the inner type of the coin by which to filter
 	(e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
@@ -2111,14 +2111,14 @@ type StakedSui {
 	principal: BigInt
 	"""
 	The estimated reward for this stake object, calculated as:
-	
+
 	principal * (initial_stake_rate / current_stake_rate - 1.0)
-	
+
 	Or 0, if this value is negative, where:
-	
+
 	- `initial_stake_rate` is the stake rate at the epoch this stake was activated at.
 	- `current_stake_rate` is the stake rate in the current epoch.
-	
+
 	This value is only available if the stake is active.
 	"""
 	estimatedReward: BigInt
@@ -2167,7 +2167,7 @@ type StorageFund {
 	totalObjectStorageRebates: BigInt
 	"""
 	The portion of the storage fund that will never be refunded through storage rebates.
-	
+
 	The system maintains an invariant that the sum of all storage fees into the storage fund is
 	equal to the sum of of all storage rebates out, the total storage rebates remaining, and the
 	non-refundable balance.
@@ -2292,7 +2292,7 @@ type TransactionBlock {
 	"""
 	The gas input field provides information on what objects were used as gas as well as the
 	owner of the gas object(s) and information on the gas price and budget.
-	
+
 	If the owner of the gas object(s) is not the same as the sender, the transaction block is a
 	sponsored transaction block.
 	"""

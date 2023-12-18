@@ -826,7 +826,7 @@
 >      coinObjectCount
 >      totalBalance
 >    }
->    defaultNameServiceName
+>    defaultSuinsRegistration
 >  }
 >}</pre>
 
@@ -844,7 +844,7 @@
 >    digest
 >    storageRebate
 >    owner {
->      defaultNameServiceName
+>      defaultSuinsRegistration
 >    }
 >    previousTransactionBlock {
 >      digest
@@ -945,7 +945,7 @@
 >      previousTransactionBlock {
 >        digest
 >        sender {
->          defaultNameServiceName
+>          defaultSuinsRegistration
 >        }
 >        gasInput {
 >          gasPrice
@@ -1708,4 +1708,3 @@
 >    }
 >  }
 >}</pre>
-

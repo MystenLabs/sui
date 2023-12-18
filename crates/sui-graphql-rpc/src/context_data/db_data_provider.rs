@@ -25,7 +25,7 @@ use crate::{
         move_object::MoveObject,
         move_package::MovePackage,
         move_type::MoveType,
-        name_service_name::{NameServiceName, SuinsRegistration},
+        name_service_name::SuinsRegistration,
         object::{Object, ObjectFilter},
         protocol_config::{ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs},
         safe_mode::SafeMode,
@@ -1495,7 +1495,7 @@ impl PgManager {
         before: Option<String>,
         name_service_config: &NameServiceConfig,
         owner: SuiAddress,
-    ) -> Result<Option<Connection<String, NameServiceName>>, Error> {
+    ) -> Result<Option<Connection<String, SuinsRegistration>>, Error> {
         let suins_registration_type = format!(
             "{}::suins_registration::SuinsRegistration",
             name_service_config.package_address
@@ -1531,14 +1531,14 @@ impl PgManager {
 
             let move_object = MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(
-                    "Expected {} to be a coin, but it's not an object",
+                    "Expected {} to be a suinsRegistration object, but it's not an object",
                     object.address,
                 ))
             })?;
 
-            let nsn = NameServiceName::try_from(&move_object).map_err(|_| {
+            let nsn = SuinsRegistration::try_from((&move_object, &struct_tag)).map_err(|_| {
                 Error::Internal(format!(
-                    "Expected {} to be a suins registration object, but it is not",
+                    "Expected {} to be a suinsRegistration object, but it is not",
                     object.address,
                 ))
             })?;

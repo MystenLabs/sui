@@ -476,13 +476,13 @@ interface IOwner {
     filter: DynamicFieldFilter,
   ): DynamicFieldConnection!
 
-  defaultNameServiceName: String
-  nameServiceNames(
+  defaultSuinsRegistration: String
+  SuinsRegistrations(
     first: Int,
     after: String,
     last: Int,
     before: String,
-  ): NameServiceNameConnection!
+  ): SuinsRegistrationConnection!
 }
 
 union ObjectOwner = Immutable | Shared | Parent | AddressOwner
@@ -1522,14 +1522,14 @@ type MoveModuleEdge {
   node: MoveModule!
 }
 
-# NameServiceNameConnection
-type NameServiceNameConnection {
-  edges: [NameServiceNameEdge!]!
-  nodes: [NameServiceName!]!
+# SuinsRegistrationConnection
+type SuinsRegistrationConnection {
+  edges: [SuinsRegistrationEdge!]!
+  nodes: [SuinsRegistration!]!
   pageInfo: PageInfo!
 }
 
-type NameServiceNameEdge {
+type SuinsRegistrationEdge {
   cursor: String
   node: String!  # is this correct?
 }

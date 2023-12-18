@@ -10,7 +10,7 @@ use super::{
     balance::Balance,
     coin::Coin,
     dynamic_field::{DynamicField, DynamicFieldName},
-    name_service_name::NameServiceName,
+    name_service_name::SuinsRegistration,
     object::{Object, ObjectFilter},
     stake::StakedSui,
     sui_address::SuiAddress,
@@ -154,7 +154,7 @@ impl Address {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Result<Option<Connection<String, NameServiceName>>> {
+    ) -> Result<Option<Connection<String, SuinsRegistration>>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_name_service_names(
                 first,
