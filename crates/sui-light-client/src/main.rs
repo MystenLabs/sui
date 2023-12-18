@@ -348,8 +348,8 @@ async fn write_full_checkpoint(
     checkpoint: &CheckpointData,
 ) -> anyhow::Result<()> {
     let mut writer = fs::File::create(checkpoint_path)?;
-    let bytes =
-        bcs::to_bytes(&checkpoint).map_err(|_| anyhow!("Unable to serialize checkpoint summary"))?;
+    let bytes = bcs::to_bytes(&checkpoint)
+        .map_err(|_| anyhow!("Unable to serialize checkpoint summary"))?;
     writer.write_all(&bytes)?;
     Ok(())
 }
