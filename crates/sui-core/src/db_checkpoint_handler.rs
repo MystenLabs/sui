@@ -273,7 +273,22 @@ impl DBCheckpointHandler {
             .expect("Expected object store to exist")
             .clone();
         for (epoch, db_path) in dirs {
+            let local_db_path = path_to_filesystem(self.input_root_path.clone(), db_path)?;
             if missing_epochs.contains(epoch) || *epoch >= last_missing_epoch {
+                if self.state_snapshot_enabled {
+                    let snapshot_completed_marker =
+                        local_db_path.join(STATE_SNAPSHOT_COMPLETED_MARKER);
+                    if !snapshot_completed_marker.exists() {
+                        info!("DB checkpoint upload for epoch {} to wait until state snasphot uploaded", *epoch);
+                        continue;
+                    }
+                }
+
+                if self.prune_and_compact_before_upload {
+                    // Invoke pruning and compaction on the db checkpoint
+                    self.prune_and_compact(local_db_path, *epoch).await?;
+                }
+
                 // This writes a single "MANIFEST" file which contains a list of all files that make up a db snapshot
                 write_snapshot_manifest(
                     db_path,
@@ -282,12 +297,6 @@ impl DBCheckpointHandler {
                 )
                 .await?;
 
-                if self.prune_and_compact_before_upload {
-                    // Convert `db_path` to the local filesystem path to where db checkpoint is stored
-                    let local_db_path = path_to_filesystem(self.input_root_path.clone(), db_path)?;
-                    // Invoke pruning and compaction on the db checkpoint
-                    self.prune_and_compact(local_db_path, *epoch).await?;
-                }
                 info!("Copying db checkpoint for epoch: {epoch} to remote storage");
                 copy_recursively(
                     db_path,
