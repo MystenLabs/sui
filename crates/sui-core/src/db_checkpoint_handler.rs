@@ -289,6 +289,12 @@ impl DBCheckpointHandler {
                         continue;
                     }
                 }
+
+                if self.prune_and_compact_before_upload {
+                    // Invoke pruning and compaction on the db checkpoint
+                    self.prune_and_compact(local_db_path, *epoch).await?;
+                }
+
                 // This writes a single "MANIFEST" file which contains a list of all files that make up a db snapshot
                 write_snapshot_manifest(
                     db_path,
@@ -297,10 +303,6 @@ impl DBCheckpointHandler {
                 )
                 .await?;
 
-                if self.prune_and_compact_before_upload {
-                    // Invoke pruning and compaction on the db checkpoint
-                    self.prune_and_compact(local_db_path, *epoch).await?;
-                }
                 info!("Copying db checkpoint for epoch: {epoch} to remote storage");
                 copy_recursively(
                     db_path,
