@@ -16,6 +16,10 @@ const MAX_QUERY_PAYLOAD_SIZE: u32 = 2_000;
 const MAX_DB_QUERY_COST: u64 = 20_000; // Max DB query cost (normally f64) truncated
 const DEFAULT_PAGE_SIZE: u64 = 20; // Default number of elements allowed on a page of a connection
 const MAX_PAGE_SIZE: u64 = 50; // Maximum number of elements allowed on a page of a connection
+const MAX_TYPE_ARGUMENT_DEPTH: u32 = 16;
+const MAX_TYPE_ARGUMENT_WIDTH: u32 = 32;
+const MAX_TYPE_NODES: u32 = 256;
+const MAX_MOVE_VALUE_DEPTH: u32 = 128;
 
 const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 40_000;
 
@@ -62,40 +66,46 @@ pub struct ServiceConfig {
 #[serde(rename_all = "kebab-case")]
 pub struct Limits {
     #[serde(default)]
-    pub(crate) max_query_depth: u32,
+    pub max_query_depth: u32,
     #[serde(default)]
-    pub(crate) max_query_nodes: u32,
+    pub max_query_nodes: u32,
     #[serde(default)]
-    pub(crate) max_query_payload_size: u32,
+    pub max_query_payload_size: u32,
     #[serde(default)]
-    pub(crate) max_db_query_cost: u64,
+    pub max_db_query_cost: u64,
     #[serde(default)]
-    pub(crate) default_page_size: u64,
+    pub default_page_size: u64,
     #[serde(default)]
-    pub(crate) max_page_size: u64,
+    pub max_page_size: u64,
     #[serde(default)]
-    pub(crate) request_timeout_ms: u64,
+    pub request_timeout_ms: u64,
+    #[serde(default)]
+    pub max_type_argument_depth: u32,
+    #[serde(default)]
+    pub max_type_argument_width: u32,
+    #[serde(default)]
+    pub max_type_nodes: u32,
+    #[serde(default)]
+    pub max_move_value_depth: u32,
 }
 
 impl Limits {
-    pub fn max_query_depth(&self) -> u32 {
-        self.max_query_depth
-    }
-
-    pub fn max_query_nodes(&self) -> u32 {
-        self.max_query_nodes
-    }
-
-    pub fn max_query_payload_size(&self) -> u32 {
-        self.max_query_payload_size
-    }
-
     pub fn default_for_simulator_testing() -> Self {
         Self {
             max_query_nodes: 500,
             max_query_depth: 20,
             max_query_payload_size: 5_000,
             ..Self::default()
+        }
+    }
+
+    /// Extract limits for the package resolver.
+    pub fn package_resolver_limits(&self) -> sui_package_resolver::Limits {
+        sui_package_resolver::Limits {
+            max_type_argument_depth: self.max_type_argument_depth as usize,
+            max_type_argument_width: self.max_type_argument_width as usize,
+            max_type_nodes: self.max_type_nodes as usize,
+            max_move_value_depth: self.max_move_value_depth as usize,
         }
     }
 }
@@ -229,6 +239,28 @@ impl ServiceConfig {
     async fn max_query_payload_size(&self) -> u32 {
         self.limits.max_query_payload_size
     }
+
+    /// Maximum nesting allowed in type arguments in Move Types resolved by this service.
+    async fn max_type_argument_depth(&self) -> u32 {
+        self.limits.max_type_argument_depth
+    }
+
+    /// Maximum number of type arguments passed into a generic instantiation of a Move Type resolved
+    /// by this service.
+    async fn max_type_argument_width(&self) -> u32 {
+        self.limits.max_type_argument_width
+    }
+
+    /// Maximum number of structs that need to be processed when calculating the layout of a single
+    /// Move Type.
+    async fn max_type_nodes(&self) -> u32 {
+        self.limits.max_type_nodes
+    }
+
+    /// Maximum nesting allowed in struct fields when calculating the layout of a single Move Type.
+    async fn max_move_value_depth(&self) -> u32 {
+        self.limits.max_move_value_depth
+    }
 }
 
 impl Default for ConnectionConfig {
@@ -254,6 +286,10 @@ impl Default for Limits {
             default_page_size: DEFAULT_PAGE_SIZE,
             max_page_size: MAX_PAGE_SIZE,
             request_timeout_ms: DEFAULT_REQUEST_TIMEOUT_MS,
+            max_type_argument_depth: MAX_TYPE_ARGUMENT_DEPTH,
+            max_type_argument_width: MAX_TYPE_ARGUMENT_WIDTH,
+            max_type_nodes: MAX_TYPE_NODES,
+            max_move_value_depth: MAX_MOVE_VALUE_DEPTH,
         }
     }
 }
@@ -373,6 +409,10 @@ mod tests {
                 default-page-size = 20
                 max-page-size = 50
                 request-timeout-ms = 27000
+                max-type-argument-depth = 32
+                max-type-argument-width = 64
+                max-type-nodes = 128
+                max-move-value-depth = 256
             "#,
         )
         .unwrap();
@@ -386,6 +426,10 @@ mod tests {
                 default_page_size: 20,
                 max_page_size: 50,
                 request_timeout_ms: 27_000,
+                max_type_argument_depth: 32,
+                max_type_argument_width: 64,
+                max_type_nodes: 128,
+                max_move_value_depth: 256,
             },
             ..Default::default()
         };
@@ -444,6 +488,10 @@ mod tests {
                 default-page-size = 10
                 max-page-size = 20
                 request-timeout-ms = 30000
+                max-type-argument-depth = 32
+                max-type-argument-width = 64
+                max-type-nodes = 128
+                max-move-value-depth = 256
 
                 [experiments]
                 test-flag = true
@@ -460,6 +508,10 @@ mod tests {
                 default_page_size: 10,
                 max_page_size: 20,
                 request_timeout_ms: 30_000,
+                max_type_argument_depth: 32,
+                max_type_argument_width: 64,
+                max_type_nodes: 128,
+                max_move_value_depth: 256,
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),
             experiments: Experiments { test_flag: true },

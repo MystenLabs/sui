@@ -42,6 +42,23 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 pub struct Resolver<S> {
     package_store: S,
+    // TODO Remove when limits all implemented
+    #[allow(dead_code)]
+    limits: Option<Limits>,
+}
+
+/// Optional configuration that imposes limits on the work that the resolver can do for each
+/// request.
+#[derive(Debug)]
+pub struct Limits {
+    /// Maximum recursion depth through type parameters.
+    pub max_type_argument_depth: usize,
+    /// Maximum number of type arguments in a single type instantiation.
+    pub max_type_argument_width: usize,
+    /// Maximum size for the resolution context.
+    pub max_type_nodes: usize,
+    /// Maximum recursion depth through struct fields.
+    pub max_move_value_depth: usize,
 }
 
 /// Store which fetches package for the given address from the backend db and caches it
@@ -203,7 +220,17 @@ as_ref_impl!(Box<dyn PackageStore>);
 
 impl<S> Resolver<S> {
     pub fn new(package_store: S) -> Self {
-        Self { package_store }
+        Self {
+            package_store,
+            limits: None,
+        }
+    }
+
+    pub fn new_with_limits(package_store: S, limits: Limits) -> Self {
+        Self {
+            package_store,
+            limits: Some(limits),
+        }
     }
 
     pub fn package_store(&self) -> &S {

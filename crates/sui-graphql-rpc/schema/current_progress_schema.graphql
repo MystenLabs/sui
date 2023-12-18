@@ -2021,6 +2021,24 @@ type ServiceConfig {
 	Maximum length of a query payload string.
 	"""
 	maxQueryPayloadSize: Int!
+	"""
+	Maximum nesting allowed in type arguments in Move Types resolved by this service.
+	"""
+	maxTypeArgumentDepth: Int!
+	"""
+	Maximum number of type arguments passed into a generic instantiation of a Move Type resolved
+	by this service.
+	"""
+	maxTypeArgumentWidth: Int!
+	"""
+	Maximum number of structs that need to be processed when calculating the layout of a single
+	Move Type.
+	"""
+	maxTypeNodes: Int!
+	"""
+	Maximum nesting allowed in struct fields when calculating the layout of a single Move Type.
+	"""
+	maxMoveValueDepth: Int!
 }
 
 """
