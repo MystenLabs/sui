@@ -1060,7 +1060,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
 
 fn exp_(context: &mut Context, initial_ne: N::Exp) -> T::Exp {
     use N::Exp_ as NE;
-    let out_exp = process_binops!(
+    process_binops!(
         (BinOp, Loc),
         T::Exp,
         initial_ne,
@@ -1074,8 +1074,7 @@ fn exp_(context: &mut Context, initial_ne: N::Exp) -> T::Exp {
             let er = value_stack.pop().expect("ICE binop hlir issue");
             binop(context, el, bop, loc, er)
         }
-    );
-    out_exp
+    )
 }
 
 fn binop(context: &mut Context, el: T::Exp, bop: BinOp, loc: Loc, er: T::Exp) -> T::Exp {
