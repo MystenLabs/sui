@@ -53,10 +53,13 @@ impl BridgeOrchestratorTables {
             .map_err(|e| BridgeError::StorageError(format!("Couldn't write batch: {:?}", e)))
     }
 
-    pub(crate) fn remove_pending_actions(&self, actions: &[BridgeAction]) -> BridgeResult<()> {
+    pub(crate) fn remove_pending_actions(
+        &self,
+        actions: &[BridgeActionDigest],
+    ) -> BridgeResult<()> {
         let mut batch = self.pending_actions.batch();
         batch
-            .delete_batch(&self.pending_actions, actions.iter().map(|a| a.digest()))
+            .delete_batch(&self.pending_actions, actions)
             .map_err(|e| {
                 BridgeError::StorageError(format!("Couldn't delete from pending_actions: {:?}", e))
             })?;
@@ -144,16 +147,16 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let store = BridgeOrchestratorTables::new(temp_dir.path());
 
-        let action1 = get_test_sui_to_eth_bridge_action(TransactionDigest::random(), 0, 99, 10000);
+        let action1 = get_test_sui_to_eth_bridge_action(None, Some(0), Some(99), Some(10000));
 
-        let action2 = get_test_sui_to_eth_bridge_action(TransactionDigest::random(), 2, 100, 10000);
+        let action2 = get_test_sui_to_eth_bridge_action(None, Some(2), Some(100), Some(10000));
 
         // in the beginning it's empty
         let actions = store.get_all_pending_actions().unwrap();
         assert!(actions.is_empty());
 
         // remove non existing entry is ok
-        store.remove_pending_actions(&[action1.clone()]).unwrap();
+        store.remove_pending_actions(&[action1.digest()]).unwrap();
 
         store
             .insert_pending_actions(&vec![action1.clone(), action2.clone()])
@@ -180,7 +183,7 @@ mod tests {
         );
 
         // remove action 2
-        store.remove_pending_actions(&[action2.clone()]).unwrap();
+        store.remove_pending_actions(&[action2.digest()]).unwrap();
         let actions = store.get_all_pending_actions().unwrap();
         assert_eq!(
             actions,
@@ -188,7 +191,7 @@ mod tests {
         );
 
         // remove action 1
-        store.remove_pending_actions(&[action1.clone()]).unwrap();
+        store.remove_pending_actions(&[action1.digest()]).unwrap();
         let actions = store.get_all_pending_actions().unwrap();
         assert!(actions.is_empty());
 

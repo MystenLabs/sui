@@ -757,7 +757,36 @@ impl SuiTransactionBlockEffectsAPI for SuiTransactionBlockEffectsV1 {
     }
 }
 
-impl SuiTransactionBlockEffects {}
+impl SuiTransactionBlockEffects {
+    #[cfg(any(feature = "test-utils", test))]
+    pub fn new_for_testing(
+        transaction_digest: TransactionDigest,
+        updated_gas_obj_ref: ObjectRef,
+        updated_gas_owner: Owner,
+        status: SuiExecutionStatus,
+    ) -> Self {
+        Self::V1(SuiTransactionBlockEffectsV1 {
+            transaction_digest,
+            status,
+            gas_object: OwnedObjectRef {
+                owner: updated_gas_owner,
+                reference: updated_gas_obj_ref.into(),
+            },
+            executed_epoch: 0,
+            modified_at_versions: vec![],
+            gas_used: GasCostSummary::default(),
+            shared_objects: vec![],
+            created: vec![],
+            mutated: vec![],
+            unwrapped: vec![],
+            deleted: vec![],
+            unwrapped_then_deleted: vec![],
+            wrapped: vec![],
+            events_digest: None,
+            dependencies: vec![],
+        })
+    }
+}
 
 impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
     type Error = SuiError;
