@@ -29,7 +29,10 @@ use sui_indexer::{
     types_v2::OwnerType,
 };
 use sui_types::parse_sui_struct_tag;
-use tracing::info;
+use tap::TapFallible;
+use tracing::{info, warn};
+
+pub(crate) const EXPLAIN_COSTING_LOG_TARGET: &str = "gql-explain-costing";
 
 pub(crate) struct PgQueryBuilder;
 
@@ -632,34 +635,37 @@ impl PgQueryExecutor for PgManager {
         self.inner
             .spawn_blocking(move |this| {
                 let query = query_builder_fn()?;
-                let explain_result: Option<String> =
-                    match this.run_query(|conn| query.explain().get_result(conn)) {
-                        Ok(result) => Some(result),
-                        Err(e) => {
-                            info!(
-                                target: "async-graphql",
-                                "Failed to get explain result: {}", e
-                            );
-                            None
-                        }
-                    };
+                let explain_result: Option<String> = this
+                    .run_query(|conn| query.explain().get_result(conn))
+                    .tap_err(|e| {
+                        warn!(
+                            target: EXPLAIN_COSTING_LOG_TARGET,
+                            "Failed to get explain result: {}", e
+                        )
+                    })
+                    .ok(); // Fine to not propagate this error as explain-based costing is not critical today
 
                 if let Some(explain_result) = explain_result {
-                    let cost = match extract_cost(&explain_result) {
-                        Ok(cost) => Some(cost),
-                        Err(e) => {
-                            info!(
-                                target: "async-graphql",
+                    let cost = extract_cost(&explain_result)
+                        .tap_err(|e| {
+                            warn!(
+                                target: EXPLAIN_COSTING_LOG_TARGET,
                                 "Failed to get cost from explain result: {}", e
-                            );
-                            None
-                        }
-                    };
+                            )
+                        })
+                        .ok(); // Fine to not propagate this error as explain-based costing is not critical today
 
                     if let Some(cost) = cost {
                         if cost > max_db_query_cost as f64 {
+                            warn!(
+                                target: EXPLAIN_COSTING_LOG_TARGET,
+                                cost,
+                                max_db_query_cost,
+                                exceeds = true
+                            );
+                        } else {
                             info!(
-                                target: "async-graphql",
+                                target: EXPLAIN_COSTING_LOG_TARGET,
                                 cost,
                             );
                         }

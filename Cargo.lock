@@ -11982,6 +11982,7 @@ dependencies = [
  "sui-sdk",
  "sui-swarm-config",
  "sui-types",
+ "tap",
  "telemetry-subscribers",
  "test-cluster",
  "thiserror",

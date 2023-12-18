@@ -43,6 +43,7 @@ shared-crypto.workspace = true
 similar.workspace = true
 sui-sdk.workspace = true
 sui-types.workspace = true
+tap.workspace = true
 telemetry-subscribers.workspace = true
 tracing.workspace = true
 tokio.workspace = true
