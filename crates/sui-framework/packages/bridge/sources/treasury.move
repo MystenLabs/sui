@@ -18,8 +18,6 @@ module bridge::treasury {
     use bridge::usdt;
     use bridge::usdt::USDT;
 
-    friend bridge::bridge;
-
     const EUnsupportedTokenType: u64 = 0;
     const ENotSystemAddress: u64 = 1;
 
