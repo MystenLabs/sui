@@ -10,3 +10,6 @@
 [submodule "ethereum/bridge/lib/ds-test"]
 	path = ethereum/bridge/lib/ds-test
 	url = https://github.com/dapphub/ds-test
+[submodule "ethereum/bridge/lib/openzeppelin-contracts"]
+	path = ethereum/bridge/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
