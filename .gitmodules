@@ -7,3 +7,6 @@
 [submodule "ethereum/bridge/lib/forge-std"]
 	path = ethereum/bridge/lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
+[submodule "ethereum/bridge/lib/ds-test"]
+	path = ethereum/bridge/lib/ds-test
+	url = https://github.com/dapphub/ds-test
