@@ -308,6 +308,8 @@ where
         // Index Objects
         let object_changes: TransactionObjectChangesToCommit =
             Self::index_objects(data.clone(), &metrics, &module_resolver);
+        let object_history_changes: TransactionObjectChangesToCommit =
+            Self::index_objects_history(data.clone(), &module_resolver);
 
         let (checkpoint, db_transactions, db_events, db_indices, db_displays) = {
             let CheckpointData {
@@ -345,6 +347,7 @@ where
             tx_indices: db_indices,
             display_updates: db_displays,
             object_changes,
+            object_history_changes,
             packages,
             epoch,
         })
@@ -579,6 +582,75 @@ where
                             object.clone(),
                             df_info,
                         ))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        TransactionObjectChangesToCommit {
+            changed_objects,
+            deleted_objects: indexed_deleted_objects,
+        }
+    }
+
+    // similar to index_objects, but objects_history keeps all versions of objects
+    fn index_objects_history(
+        data: CheckpointData,
+        module_resolver: &impl GetModule,
+    ) -> TransactionObjectChangesToCommit {
+        let checkpoint_seq = data.checkpoint_summary.sequence_number;
+        let deleted_objects = data
+            .transactions
+            .iter()
+            .flat_map(|tx| get_deleted_objects(&tx.effects))
+            .collect::<Vec<_>>();
+        let indexed_deleted_objects: Vec<IndexedDeletedObject> = deleted_objects
+            .into_iter()
+            .map(|o| IndexedDeletedObject {
+                object_id: o.0,
+                object_version: o.1.value(),
+                checkpoint_sequence_number: checkpoint_seq,
+            })
+            .collect();
+
+        let (latest_objects, _) = get_latest_objects(data.output_objects());
+        let history_object_map = data
+            .output_objects()
+            .into_iter()
+            .map(|o| ((o.id(), o.version()), o.clone()))
+            .collect::<HashMap<_, _>>();
+
+        let changed_objects: Vec<IndexedObject> = data
+            .transactions
+            .iter()
+            .flat_map(|tx| {
+                let CheckpointTransaction {
+                    transaction: tx,
+                    effects: fx,
+                    ..
+                } = tx;
+                fx.all_changed_objects()
+                    .into_iter()
+                    .map(|(oref, _owner, _kind)| {
+                        let history_object = history_object_map.get(&(oref.0, oref.1)).unwrap_or_else(|| {
+                            panic!(
+                                "object {:?} version {:?} not found in CheckpointData (tx_digest: {})",
+                                oref.0,
+                                oref.1,
+                                tx.digest()
+                            )
+                        });
+                        assert_eq!(oref.2, history_object.digest());
+                        let df_info =
+                            try_create_dynamic_field_info(history_object, &latest_objects, module_resolver)
+                                .unwrap_or_else(|e| {
+                                    panic!(
+                                        "failed to create dynamic field info for history obj: {:?}:{:?}. Err: {e}",
+                                        history_object.id(),
+                                        history_object.version()
+                                    )
+                                });
+
+                        IndexedObject::from_object(checkpoint_seq, history_object.clone(), df_info)
                     })
                     .collect::<Vec<_>>()
             })

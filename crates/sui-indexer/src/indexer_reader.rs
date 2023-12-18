@@ -18,7 +18,7 @@ use crate::{
     },
     schema_v2::{
         address_metrics, checkpoints, display, epochs, events, move_call_metrics, objects,
-        packages, transactions,
+        objects_snapshot, packages, transactions,
     },
     types_v2::{IndexerResult, OwnerType},
     PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection,
@@ -1636,6 +1636,31 @@ impl IndexerReader {
                     treasury_cap_obj_id
                 )))?;
         Ok(TreasuryCap::try_from(treasury_cap_obj_object)?.total_supply)
+    }
+
+    pub fn get_consistent_read_range(&self) -> Result<(i64, i64), IndexerError> {
+        let latest_checkpoint_sequence = self
+            .run_query(|conn| {
+                checkpoints::table
+                    .select(checkpoints::sequence_number)
+                    .order(checkpoints::sequence_number.desc())
+                    .first::<i64>(conn)
+                    .optional()
+            })?
+            .unwrap_or_default();
+        let latest_object_snapshot_checkpoint_sequence = self
+            .run_query(|conn| {
+                objects_snapshot::table
+                    .select(objects_snapshot::checkpoint_sequence_number)
+                    .order(objects_snapshot::checkpoint_sequence_number.desc())
+                    .first::<i64>(conn)
+                    .optional()
+            })?
+            .unwrap_or_default();
+        Ok((
+            latest_object_snapshot_checkpoint_sequence,
+            latest_checkpoint_sequence,
+        ))
     }
 }
 

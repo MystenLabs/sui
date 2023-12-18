@@ -38,8 +38,8 @@ use crate::models_v2::objects::{
 use crate::models_v2::packages::StoredPackage;
 use crate::models_v2::transactions::StoredTransaction;
 use crate::schema_v2::{
-    checkpoints, display, epochs, events, objects, objects_history, packages, transactions,
-    tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
+    checkpoints, display, epochs, events, objects, objects_history, objects_snapshot, packages,
+    transactions, tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
 };
 use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
 use crate::store::module_resolver_v2::IndexerStoreModuleResolver;
@@ -74,6 +74,37 @@ const PG_COMMIT_PARALLEL_CHUNK_SIZE_PER_DB_TX: usize = 500;
 // Having this number too high may cause many db deadlocks because of
 // optimistic locking.
 const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE_PER_DB_TX: usize = 500;
+const OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG: usize = 900;
+const OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG: usize = 300;
+
+// with rn = 1, we only select the latest version of each object,
+// so that we don't have to update the same object multiple times.
+const UPDATE_OBJECTS_SNAPSHOT_QUERY: &str = r"
+INSERT INTO objects_snapshot (object_id, object_version, object_status, object_digest, checkpoint_sequence_number, owner_type, owner_id, object_type, serialized_object, coin_type, coin_balance, df_kind, df_name, df_object_type, df_object_id)
+SELECT object_id, object_version, object_status, object_digest, checkpoint_sequence_number, owner_type, owner_id, object_type, serialized_object, coin_type, coin_balance, df_kind, df_name, df_object_type, df_object_id
+FROM (
+    SELECT *,
+           ROW_NUMBER() OVER (PARTITION BY object_id ORDER BY object_version DESC) as rn
+    FROM objects_history
+    WHERE checkpoint_sequence_number >= $1 AND checkpoint_sequence_number < $2
+) as subquery
+WHERE rn = 1
+ON CONFLICT (object_id) DO UPDATE
+SET object_version = EXCLUDED.object_version,
+    object_status = EXCLUDED.object_status,
+    object_digest = EXCLUDED.object_digest,
+    checkpoint_sequence_number = EXCLUDED.checkpoint_sequence_number,
+    owner_type = EXCLUDED.owner_type,
+    owner_id = EXCLUDED.owner_id,
+    object_type = EXCLUDED.object_type,
+    serialized_object = EXCLUDED.serialized_object,
+    coin_type = EXCLUDED.coin_type,
+    coin_balance = EXCLUDED.coin_balance,
+    df_kind = EXCLUDED.df_kind,
+    df_name = EXCLUDED.df_name,
+    df_object_type = EXCLUDED.df_object_type,
+    df_object_id = EXCLUDED.df_object_id;
+";
 
 #[derive(Clone)]
 pub struct PgIndexerStoreV2 {
@@ -82,6 +113,8 @@ pub struct PgIndexerStoreV2 {
     metrics: IndexerMetrics,
     parallel_chunk_size: usize,
     parallel_objects_chunk_size: usize,
+    object_snapshot_min_checkpoint_lag: usize,
+    object_snapshot_max_checkpoint_lag: usize,
     partition_manager: PgPartitionManager,
 }
 
@@ -98,6 +131,16 @@ impl PgIndexerStoreV2 {
             .unwrap_or_else(|_e| PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE_PER_DB_TX.to_string())
             .parse::<usize>()
             .unwrap();
+        let object_snapshot_min_checkpoint_lag =
+            std::env::var("OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG")
+                .unwrap_or_else(|_e| OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG.to_string())
+                .parse::<usize>()
+                .unwrap();
+        let object_snapshot_max_checkpoint_lag =
+            std::env::var("OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG")
+                .unwrap_or_else(|_e| OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG.to_string())
+                .parse::<usize>()
+                .unwrap();
         let partition_manager = PgPartitionManager::new(blocking_cp.clone())
             .expect("Failed to initialize partition manager");
 
@@ -107,6 +150,8 @@ impl PgIndexerStoreV2 {
             metrics,
             parallel_chunk_size,
             parallel_objects_chunk_size,
+            object_snapshot_min_checkpoint_lag,
+            object_snapshot_max_checkpoint_lag,
             partition_manager,
         }
     }
@@ -123,6 +168,18 @@ impl PgIndexerStoreV2 {
                 .map(|v| v.map(|v| v as u64))
         })
         .context("Failed reading latest checkpoint sequence number from PostgresDB")
+    }
+
+    fn get_latest_object_snapshot_checkpoint_sequence_number(
+        &self,
+    ) -> Result<Option<u64>, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            objects_snapshot::dsl::objects_snapshot
+                .select(max(objects_snapshot::checkpoint_sequence_number))
+                .first::<Option<i64>>(conn)
+                .map(|v| v.map(|v| v as u64))
+        })
+        .context("Failed reading latest object snapshot checkpoint sequence number from PostgresDB")
     }
 
     // Note: here we treat Deleted as NotExists too
@@ -317,6 +374,22 @@ impl PgIndexerStoreV2 {
                 mutated_objects.len() + deleted_object_ids.len(),
             )
         })
+    }
+
+    fn persist_object_snapshot(&self, start_cp: u64, end_cp: u64) -> Result<(), IndexerError> {
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                RunQueryDsl::execute(
+                    diesel::sql_query(UPDATE_OBJECTS_SNAPSHOT_QUERY)
+                        .bind::<diesel::sql_types::BigInt, _>(start_cp as i64)
+                        .bind::<diesel::sql_types::BigInt, _>(end_cp as i64),
+                    conn,
+                )
+            },
+            Duration::from_secs(10)
+        )?;
+        Ok(())
     }
 
     fn persist_checkpoints(&self, checkpoints: Vec<IndexedCheckpoint>) -> Result<(), IndexerError> {
@@ -701,16 +774,19 @@ impl PgIndexerStoreV2 {
                     EpochPartitionData::compose_data(epoch_to_commit, last_epoch);
                 let table_partitions = self.partition_manager.get_table_partitions()?;
                 for (table, last_partition) in table_partitions {
+                    let guard = self.metrics.advance_epoch_latency.start_timer();
                     self.partition_manager.advance_table_epoch_partition(
                         table.clone(),
                         last_partition,
                         &epoch_partition_data,
                     )?;
-                    // update objects_snapshot with objects_history of last epoch
-                    if table == *"objects_history" {
-                        self.partition_manager
-                            .update_objects_snapshot(&epoch_partition_data)?;
-                    }
+                    let elapsed = guard.stop_and_record();
+                    info!(
+                        elapsed,
+                        "Advanced epoch partition {} for table {}",
+                        last_partition,
+                        table.clone()
+                    );
                 }
             } else {
                 tracing::error!("Last epoch: {} from PostgresDB is None.", last_epoch_id);
@@ -787,6 +863,15 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
             .await
     }
 
+    async fn get_latest_object_snapshot_checkpoint_sequence_number(
+        &self,
+    ) -> Result<Option<u64>, IndexerError> {
+        self.execute_in_blocking_worker(|this| {
+            this.get_latest_object_snapshot_checkpoint_sequence_number()
+        })
+        .await
+    }
+
     async fn get_object_read(
         &self,
         object_id: ObjectID,
@@ -837,7 +922,7 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         if object_changes.is_empty() {
             return Ok(());
         }
-        let objects = make_final_list_of_objects_to_commit(object_changes);
+        let objects = make_objects_history_to_commit(object_changes);
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_objects_history
@@ -862,6 +947,47 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
             })?;
         let elapsed = guard.stop_and_record();
         info!(elapsed, "Persisted {} objects history", len);
+        Ok(())
+    }
+
+    // The `objects_snapshot` table maintains a delayed snapshot of the `objects` table,
+    // controlled by `object_snapshot_max_checkpoint_lag` (max lag) and
+    // `object_snapshot_min_checkpoint_lag` (min lag). For instance, with a max lag of 900
+    // and a min lag of 300 checkpoints, the `objects_snapshot` table will lag behind the
+    // `objects` table by 300 to 900 checkpoints. The snapshot is updated when the lag
+    // exceeds the max lag threshold, and updates continue until the lag is reduced to
+    // the min lag threshold. Then, we have a consistent read range between
+    // `latest_snapshot_cp` and `latest_cp` based on `objects_snapshot` and `objects_history`,
+    // where the size of this range varies between the min and max lag values.
+    async fn persist_object_snapshot(&self) -> Result<(), IndexerError> {
+        let latest_cp = self
+            .get_latest_tx_checkpoint_sequence_number()?
+            .unwrap_or_default();
+        let latest_snapshot_cp = self
+            .get_latest_object_snapshot_checkpoint_sequence_number()?
+            .unwrap_or_default();
+
+        if latest_cp <= latest_snapshot_cp + self.object_snapshot_max_checkpoint_lag as u64 {
+            return Ok(());
+        }
+        // make sure cp 0 is handled
+        let start_cp = if latest_snapshot_cp == 0 {
+            0
+        } else {
+            latest_snapshot_cp + 1
+        };
+        // with MAX and MIN, the CSR range will vary from MIN cps to MAX cps
+        let snapshot_window = self.object_snapshot_max_checkpoint_lag as u64
+            - self.object_snapshot_min_checkpoint_lag as u64;
+        let guard = self.metrics.update_object_snapshot_latency.start_timer();
+        self.persist_object_snapshot(start_cp, start_cp + snapshot_window)?;
+        let elapsed = guard.stop_and_record();
+        info!(
+            elapsed,
+            "Persisted snapshot for checkpoints from {} to {}",
+            start_cp,
+            start_cp + snapshot_window,
+        );
         Ok(())
     }
 
@@ -1052,6 +1178,31 @@ fn make_final_list_of_objects_to_commit(
             latest_objects
                 .into_values()
                 .map(StoredObject::from)
+                .map(ObjectChangeToCommit::MutatedObject),
+        )
+        .collect()
+}
+
+fn make_objects_history_to_commit(
+    tx_object_changes: Vec<TransactionObjectChangesToCommit>,
+) -> Vec<ObjectChangeToCommit> {
+    let deleted_objects: Vec<StoredDeletedObject> = tx_object_changes
+        .clone()
+        .into_iter()
+        .flat_map(|changes| changes.deleted_objects)
+        .map(|o| o.into())
+        .collect();
+    let mutated_objects: Vec<StoredObject> = tx_object_changes
+        .into_iter()
+        .flat_map(|changes| changes.changed_objects)
+        .map(|o| o.into())
+        .collect();
+    deleted_objects
+        .into_iter()
+        .map(ObjectChangeToCommit::DeletedObject)
+        .chain(
+            mutated_objects
+                .into_iter()
                 .map(ObjectChangeToCommit::MutatedObject),
         )
         .collect()
