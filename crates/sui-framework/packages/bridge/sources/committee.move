@@ -14,8 +14,6 @@ module bridge::committee {
     use bridge::message::{Self, BridgeMessage};
     use bridge::message_types;
 
-    friend bridge::bridge;
-
     const ESignatureBelowThreshold: u64 = 0;
     const EDuplicatedSignature: u64 = 1;
     const EInvalidSignature: u64 = 2;
@@ -49,7 +47,7 @@ module bridge::committee {
         let thresholds = vec_map::empty();
         vec_map::insert(&mut thresholds, message_types::token(), 10);
 
-        BridgeCommittee{
+        BridgeCommittee {
             pub_keys,
             thresholds
         }
@@ -73,7 +71,7 @@ module bridge::committee {
             let signature = vector::borrow(&signatures, i);
             let pubkey = ecdsa_k1::secp256k1_ecrecover(signature, &message_bytes, 0);
             // check duplicate
-            assert!(!vec_set::contains(&seen_pub_key,&pubkey), EDuplicatedSignature);
+            assert!(!vec_set::contains(&seen_pub_key, &pubkey), EDuplicatedSignature);
             // make sure pub key is part od the committee
             assert!(vec_map::contains(&self.pub_keys, &pubkey), EInvalidSignature);
             // get committee signature weight and check pubkey is part of the committee
