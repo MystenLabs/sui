@@ -4,7 +4,7 @@
 import { Flag16, Info12 } from '@mysten/icons';
 import { Heading, Placeholder, Text } from '@mysten/ui';
 
-import CallIcon from './icons/transactions/call.svg';
+import CallIcon from './icons/transactions/call.svg?react';
 import { Banner } from '~/ui/Banner';
 import { CopyToClipboard } from '~/ui/CopyToClipboard';
 

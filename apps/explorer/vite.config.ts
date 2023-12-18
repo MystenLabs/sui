@@ -11,24 +11,7 @@ process.env.VITE_VERCEL_ENV = process.env.VERCEL_ENV || 'development';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-	plugins: [
-		react({
-			plugins: [
-				[
-					'@swc/plugin-relay',
-					{
-						rootDir: __dirname,
-						artifactDirectory: 'src/__generated__',
-						language: 'typescript',
-						eagerEsModules: true,
-					},
-				],
-			],
-		}),
-		svgr({
-			include: '**/*.svg',
-		}),
-	],
+	plugins: [react({}), svgr({})],
 	test: {
 		// Omit end-to-end tests:
 		exclude: [...configDefaults.exclude, 'tests/**'],

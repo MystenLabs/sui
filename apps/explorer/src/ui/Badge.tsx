@@ -4,8 +4,8 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ReactNode } from 'react';
 
-import CheckIcon from './icons/check_12x12.svg';
-import XIcon from './icons/x.svg';
+import CheckIcon from './icons/check_12x12.svg?react';
+import XIcon from './icons/x.svg?react';
 
 const badgeStyles = cva(
 	['inline-flex justify-center items-center gap-1 py-1 px-3 rounded-xl text-body font-medium'],

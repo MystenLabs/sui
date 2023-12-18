@@ -110,7 +110,7 @@
 	"devDependencies": {
 		"@iarna/toml": "^2.2.5",
 		"@mysten/build-scripts": "workspace:*",
-		"@types/node": "^20.4.2",
+		"@types/node": "^20.10.5",
 		"@types/tmp": "^0.2.3",
 		"@types/ws": "^8.5.9",
 		"cross-env": "^7.0.3",

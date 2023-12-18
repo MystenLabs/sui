@@ -16,9 +16,9 @@
 		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
 	},
 	"devDependencies": {
-		"@svgr/cli": "^7.0.0",
-		"@svgr/core": "^7.0.0",
-		"@types/react": "^18.2.15",
+		"@svgr/cli": "^8.1.0",
+		"@svgr/core": "^8.1.0",
+		"@types/react": "^18.2.45",
 		"react": "^18.2.0",
 		"rimraf": "^5.0.1",
 		"typescript": "^5.1.6"

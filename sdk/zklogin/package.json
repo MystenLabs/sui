@@ -42,7 +42,7 @@
 	"homepage": "https://github.com/mystenlabs/sui#readme",
 	"devDependencies": {
 		"@mysten/build-scripts": "workspace:*",
-		"@types/node": "^20.4.2",
+		"@types/node": "^20.10.5",
 		"tsx": "^3.12.7",
 		"typescript": "^5.1.6",
 		"vitest": "^1.0.4"

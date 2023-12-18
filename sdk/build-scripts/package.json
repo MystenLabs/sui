@@ -23,14 +23,14 @@
 	},
 	"devDependencies": {
 		"@types/postcss-prefix-selector": "^1.16.1",
-		"@vanilla-extract/esbuild-plugin": "^2.3.0",
+		"@vanilla-extract/esbuild-plugin": "^2.3.1",
 		"autoprefixer": "^10.4.14",
 		"esbuild": "^0.19.9",
-		"postcss": "^8.4.31",
+		"postcss": "^8.4.32",
 		"postcss-prefix-selector": "^1.16.0",
 		"typescript": "^5.1.6"
 	},
 	"dependencies": {
-		"@types/node": "^20.4.2"
+		"@types/node": "^20.10.5"
 	}
 }

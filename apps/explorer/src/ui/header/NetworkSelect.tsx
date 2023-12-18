@@ -19,8 +19,8 @@ import { useEffect, useState } from 'react';
 import { z } from 'zod';
 
 import { NavItem } from './NavItem';
-import CheckIcon from '../icons/check_16x16.svg';
-import MenuIcon from '../icons/menu.svg';
+import CheckIcon from '../icons/check_16x16.svg?react';
+import MenuIcon from '../icons/menu.svg?react';
 
 import type { ComponentProps, ReactNode } from 'react';
 

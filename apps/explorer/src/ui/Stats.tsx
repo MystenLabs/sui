@@ -4,7 +4,7 @@
 import { Heading, Text } from '@mysten/ui';
 import clsx from 'clsx';
 
-import InfoSvg from './icons/info_10x10.svg';
+import InfoSvg from './icons/info_10x10.svg?react';
 import { Tooltip } from '~/ui/Tooltip';
 import { ampli } from '~/utils/analytics/ampli';
 

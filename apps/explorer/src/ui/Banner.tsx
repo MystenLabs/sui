@@ -6,7 +6,7 @@ import { Text, IconButton } from '@mysten/ui';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ReactNode } from 'react';
 
-import InfoIcon from './icons/info.svg';
+import InfoIcon from './icons/info.svg?react';
 
 const bannerStyles = cva(
 	'inline-flex text-pBodySmall font-medium overflow-hidden gap-2 items-center flex-nowrap relative',

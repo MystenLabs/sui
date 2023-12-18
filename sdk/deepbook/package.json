@@ -43,7 +43,7 @@
 		"@mysten/sui.js": "workspace:*"
 	},
 	"devDependencies": {
-		"@types/node": "^20.4.2",
+		"@types/node": "^20.10.5",
 		"tmp": "^0.2.1",
 		"ts-node": "^10.9.1",
 		"ts-retry-promise": "^0.7.0",
