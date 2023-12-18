@@ -1083,3 +1083,56 @@ pub mod known_attributes {
         }
     }
 }
+
+//**************************************************************************************************
+// Binop Processing Macro
+//**************************************************************************************************
+
+macro_rules! process_binops {
+    ($optype:ty,
+     $valtype:ty,
+     $e:expr,
+     $work_pat:pat,
+     $work_exp:expr,
+     $binop_pat:pat => $binop_rhs:block,
+     $default:block,
+     $value_stack:ident,
+     $op_pat:pat => $op_rhs:block
+    ) => {{
+        enum Pn {
+            Op($optype),
+            Val($valtype),
+        }
+
+        let mut pn_stack: Vec<Pn> = vec![];
+        let mut work_queue = vec![$e];
+
+        while let Some($work_pat) = work_queue.pop() {
+            if let $binop_pat = $work_exp {
+                let (lhs, op, rhs) = $binop_rhs;
+                pn_stack.push(Pn::Op(op));
+                work_queue.push(rhs);
+                work_queue.push(lhs);
+            } else {
+                let result = $default;
+                pn_stack.push(Pn::Val(result));
+            }
+        }
+
+        let mut $value_stack = vec![];
+        for entry in pn_stack.into_iter().rev() {
+            match entry {
+                Pn::Op($op_pat) => {
+                    let op_result = $op_rhs;
+                    $value_stack.push(op_result);
+                }
+                Pn::Val(v) => $value_stack.push(v),
+            }
+        }
+        let result = $value_stack.pop().unwrap();
+        assert!($value_stack.is_empty());
+        result
+    }};
+}
+
+pub(crate) use process_binops;
