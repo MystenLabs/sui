@@ -8,9 +8,10 @@
     "src/**/*.sol"
   ],
   "devDependencies": {
+    "dotenv": "^16.3.1",
+    "hardhat": "^2.19.1",
     "prettier": "^2.7.1",
-    "prettier-plugin-solidity": "^1.0.0-beta.19",
-    "hardhat": "^2.19.1"
+    "prettier-plugin-solidity": "^1.0.0-beta.19"
   },
   "repository": {
     "type": "git",
