@@ -167,14 +167,14 @@ where
 mod tests {
     use std::{collections::HashSet, str::FromStr};
 
-    use ethers::types::{
-        Address, Block, BlockNumber, Filter, FilterBlockOption, Log, TransactionReceipt,
-        ValueOrArray, U256, U64,
-    };
+    use ethers::types::{Address, Log, U256, U64};
     use prometheus::Registry;
     use tokio::sync::mpsc::error::TryRecvError;
 
-    use crate::eth_mock_provider::EthMockProvider;
+    use crate::{
+        eth_mock_provider::EthMockProvider,
+        test_utils::{mock_get_logs, mock_last_finalized_block},
+    };
 
     use super::*;
     use ethers::types::TxHash;
@@ -186,7 +186,7 @@ mod tests {
         mysten_metrics::init_metrics(&registry);
         let mock_provider = EthMockProvider::new();
         mock_last_finalized_block(&mock_provider, 777);
-        let client = EthClient::new_mocked(mock_provider.clone()).await?;
+        let client = EthClient::new_mocked(mock_provider.clone());
         let result = client.get_last_finalized_block_id().await.unwrap();
         assert_eq!(result, 777);
 
@@ -240,7 +240,7 @@ mod tests {
 
         let mock_provider = EthMockProvider::new();
         mock_last_finalized_block(&mock_provider, 198);
-        let client = EthClient::new_mocked(mock_provider.clone()).await?;
+        let client = EthClient::new_mocked(mock_provider.clone());
 
         let another_address =
             Address::from_str("0x00000000219ab540356cbb839cbe05303d7705fa").unwrap();
@@ -354,54 +354,5 @@ mod tests {
         // No more finalized block change, no more logs.
         assert_eq!(logs_rx.try_recv().unwrap_err(), TryRecvError::Empty);
         Ok(())
-    }
-
-    fn mock_last_finalized_block(mock_provider: &EthMockProvider, block_number: u64) {
-        let block = Block::<ethers::types::TxHash> {
-            number: Some(U64::from(block_number)),
-            ..Default::default()
-        };
-        mock_provider
-            .add_response("eth_getBlockByNumber", ("finalized", false), block)
-            .unwrap();
-    }
-
-    // Mocks eth_getLogs and eth_getTransactionReceipt for the given address and block range.
-    // The input log needs to have transaction_hash set.
-    fn mock_get_logs(
-        mock_provider: &EthMockProvider,
-        address: Address,
-        from_block: u64,
-        to_block: u64,
-        logs: Vec<Log>,
-    ) {
-        mock_provider.add_response::<[ethers::types::Filter; 1], Vec<ethers::types::Log>, Vec<ethers::types::Log>>(
-            "eth_getLogs",
-            [
-                Filter {
-                    block_option: FilterBlockOption::Range {
-                        from_block: Some(BlockNumber::Number(U64::from(from_block))),
-                        to_block: Some(BlockNumber::Number(U64::from(to_block))),
-                    },
-                    address: Some(ValueOrArray::Value(address)),
-                    topics: [None, None, None, None],
-                }
-            ],
-            logs.clone(),
-        ).unwrap();
-
-        for log in logs {
-            mock_provider
-                .add_response::<[TxHash; 1], TransactionReceipt, TransactionReceipt>(
-                    "eth_getTransactionReceipt",
-                    [log.transaction_hash.unwrap()],
-                    TransactionReceipt {
-                        block_number: log.block_number,
-                        logs: vec![log],
-                        ..Default::default()
-                    },
-                )
-                .unwrap();
-        }
     }
 }
