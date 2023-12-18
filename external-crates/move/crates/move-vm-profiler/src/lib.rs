@@ -1,19 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+#[cfg(feature = "gas-profiler")]
 use move_vm_config::runtime::VMProfilerConfig;
 use serde::Serialize;
+#[cfg(feature = "gas-profiler")]
 use std::collections::BTreeMap;
-
 #[cfg(feature = "gas-profiler")]
 use tracing::info;
 
+#[cfg(feature = "gas-profiler")]
 #[derive(Debug, Clone, Serialize)]
 pub struct FrameName {
     name: String,
     file: String,
 }
 
-#[allow(dead_code)]
+#[cfg(feature = "gas-profiler")]
 #[derive(Debug, Clone, Serialize)]
 pub struct Shared {
     frames: Vec<FrameName>,
@@ -42,7 +44,7 @@ pub struct Profile {
     events: Vec<Event>,
 }
 
-#[allow(dead_code)]
+#[cfg(feature = "gas-profiler")]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GasProfiler {

@@ -25,6 +25,7 @@ use move_core_types::{
     u256,
     vm_status::StatusCode,
 };
+#[cfg(feature = "gas-profiler")]
 use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     gas::{GasMeter, SimpleInstruction},
@@ -113,6 +114,7 @@ pub struct GasStatus<'a> {
     cost_table: &'a CostTable,
     gas_left: InternalGas,
     charge: bool,
+    #[cfg(feature = "gas-profiler")]
     profiler: Option<GasProfiler>,
 }
 
@@ -126,6 +128,7 @@ impl<'a> GasStatus<'a> {
             gas_left: gas_left.to_unit(),
             cost_table,
             charge: true,
+            #[cfg(feature = "gas-profiler")]
             profiler: None,
         }
     }
@@ -139,6 +142,7 @@ impl<'a> GasStatus<'a> {
             gas_left: InternalGas::new(0),
             cost_table: &ZERO_COST_SCHEDULE,
             charge: false,
+            #[cfg(feature = "gas-profiler")]
             profiler: None,
         }
     }
@@ -469,10 +473,12 @@ impl<'b> GasMeter for GasStatus<'b> {
         self.gas_left
     }
 
+    #[cfg(feature = "gas-profiler")]
     fn get_profiler_mut(&mut self) -> Option<&mut GasProfiler> {
         self.profiler.as_mut()
     }
 
+    #[cfg(feature = "gas-profiler")]
     fn set_profiler(&mut self, profiler: GasProfiler) {
         self.profiler = Some(profiler);
     }
