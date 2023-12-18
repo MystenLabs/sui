@@ -45,3 +45,4 @@ shared-crypto.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
 sui-json-rpc-types = { workspace = true, features = ["test-utils"] }
 sui-config.workspace = true
+sui-keys.workspace = true
