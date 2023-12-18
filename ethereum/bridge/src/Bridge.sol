@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-import '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
 import '@openzeppelin/contracts/utils/cryptography/ECDSA.sol';
 import '@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol';
-import {ERC721Upgradeable} from '@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol';
+// import '@openzeppelin-upgradeable/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
+// import {ERC721Upgradeable} from '@openzeppelin-upgradeable/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol';
 
 import './interfaces/IBridge.sol';
 
 // Bridge contract
-contract Bridge is UUPSUpgradeable, ERC721Upgradeable, IBridge {
+contract Bridge is IBridge {
 	using SafeERC20 for IERC20;
 	using MessageHashUtils for bytes32;
 
