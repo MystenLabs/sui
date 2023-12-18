@@ -34,6 +34,14 @@ output-single-feature = true
 workspace-members = [ "sui-move" ]
 third-party = [
     { name = "object_store" },
+    { name = "move-vm-config", path = "external-crates/move/crates/move-vm-config" },
+    { name = "move-vm-runtime", path = "external-crates/move/crates/move-vm-runtime" },
+    { name = "move-vm-profiler", path = "external-crates/move/crates/move-vm-profiler" },
+    { name = "move-vm-runtime-next-vm", path = "external-crates/move/move-execution/next-vm/crates/move-vm-runtime" },
+    { name = "move-vm-runtime-v0", path = "external-crates/move/move-execution/v0/move-vm/runtime" },
+    { name = "move-vm-runtime-v1", path = "external-crates/move/move-execution/v1/crates/move-vm-runtime" },
+    { name = "move-vm-test-utils", path = "external-crates/move/crates/move-vm-test-utils" },
+    { name = "move-vm-types", path = "external-crates/move/crates/move-vm-types" },
 ]
 
 [final-excludes]

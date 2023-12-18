@@ -23,7 +23,7 @@ move-vm-profiler.workspace = true
 move-vm-types.workspace = true
 
 move-bytecode-verifier = { path = "../../../external-crates/move/move-execution/v0/move-bytecode-verifier", package = "move-bytecode-verifier-v0" }
-move-vm-runtime = { path = "../../../external-crates/move/move-execution/v0/move-vm/runtime", package = "move-vm-runtime-v0", features = ["gas-profiler"] }
+move-vm-runtime = { path = "../../../external-crates/move/move-execution/v0/move-vm/runtime", package = "move-vm-runtime-v0"}
 sui-move-natives = { path = "../sui-move-natives", package = "sui-move-natives-v0" }
 sui-verifier = { path = "../sui-verifier", package = "sui-verifier-v0" }
 
