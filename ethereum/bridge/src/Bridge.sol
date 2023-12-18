@@ -134,8 +134,8 @@ contract Bridge is IBridge {
 		running = true;
 	}
 
-	function initialize(Member[] calldata _committeeMembers) public initializer {
-		__UUPSUpgradeable_init();
+	function initialize(Member[] calldata _committeeMembers) public {
+		// __UUPSUpgradeable_init();
 
 		validatorsCount = 0;
 
