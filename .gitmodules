@@ -1,0 +1,3 @@
+[submodule "ethereum/bridge/lib/chainlink-brownie-contracts"]
+	path = ethereum/bridge/lib/chainlink-brownie-contracts
+	url = https://github.com/smartcontractkit/chainlink-brownie-contracts
