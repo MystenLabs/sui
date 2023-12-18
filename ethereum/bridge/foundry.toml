@@ -32,3 +32,5 @@ block_timestamp = 0                                           # the value of `bl
 block_difficulty = 0                                          # the value of `block.difficulty` in tests
 gas_reports = ["*"]
 fs_permissions = [{ access = "read", path = "lib/foundry-chainlink-toolkit/out"}]
+solc-version = "0.8.20"
+via_ir = true
