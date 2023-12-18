@@ -12,6 +12,7 @@ use crate::effects::{InputSharedObject, TransactionEffectsAPI};
 use crate::execution::SharedInput;
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
+use crate::is_system_package;
 use crate::message_envelope::Message;
 use crate::object::{Owner, OBJECT_START_VERSION};
 use crate::transaction::SenderSignedData;
@@ -507,29 +508,54 @@ impl TransactionEffectsV2 {
                 (ObjectIn::NotExist, ObjectOut::PackageWrite(_), IDOperation::Created) => {
                     // created Move package or user Move package upgrade.
                 }
-                (ObjectIn::Exist((_, old_owner)), ObjectOut::NotExist, IDOperation::None) => {
+                (
+                    ObjectIn::Exist(((old_version, _), old_owner)),
+                    ObjectOut::NotExist,
+                    IDOperation::None,
+                ) => {
                     // wrapped.
-                    assert!(!old_owner.is_shared(), "Cannot wrap shared object");
-                }
-                (ObjectIn::Exist(_), ObjectOut::NotExist, IDOperation::Deleted) => {
-                    // deleted.
+                    assert!(old_version.value() < self.lamport_version.value());
+                    assert!(
+                        !old_owner.is_shared() && !old_owner.is_immutable(),
+                        "Cannot wrap shared or immutable object"
+                    );
                 }
                 (
-                    ObjectIn::Exist(((old_version, old_digest), _)),
-                    ObjectOut::ObjectWrite((new_digest, _)),
+                    ObjectIn::Exist(((old_version, _), old_owner)),
+                    ObjectOut::NotExist,
+                    IDOperation::Deleted,
+                ) => {
+                    // deleted.
+                    assert!(old_version.value() < self.lamport_version.value());
+                    assert!(!old_owner.is_immutable(), "Cannot delete immutable object");
+                }
+                (
+                    ObjectIn::Exist(((old_version, old_digest), old_owner)),
+                    ObjectOut::ObjectWrite((new_digest, new_owner)),
                     IDOperation::None,
                 ) => {
                     // mutated.
                     assert!(old_version.value() < self.lamport_version.value());
                     assert_ne!(old_digest, new_digest);
+                    assert!(!old_owner.is_immutable(), "Cannot mutate immutable object");
+                    if old_owner.is_shared() {
+                        assert!(new_owner.is_shared(), "Cannot un-share an object");
+                    } else {
+                        assert!(!new_owner.is_shared(), "Cannot share an existing object");
+                    }
                 }
                 (
-                    ObjectIn::Exist(((old_version, _), _)),
-                    ObjectOut::PackageWrite((new_version, _)),
+                    ObjectIn::Exist(((old_version, old_digest), old_owner)),
+                    ObjectOut::PackageWrite((new_version, new_digest)),
                     IDOperation::None,
                 ) => {
                     // system package upgrade.
+                    assert!(
+                        old_owner.is_immutable() && is_system_package(*id),
+                        "Must be a system package"
+                    );
                     assert_eq!(old_version.value() + 1, new_version.value());
+                    assert_ne!(old_digest, new_digest);
                 }
                 _ => {
                     panic!("Impossible object change: {:?}, {:?}", id, change);
