@@ -20,3 +20,5 @@ node_modules
 secrets.json
 # macOS
 .DS_Store
+
+/out
