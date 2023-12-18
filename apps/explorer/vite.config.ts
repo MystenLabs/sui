@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// <reference types="vitest" />
-import react from '@vitejs/plugin-react';
+import react from '@vitejs/plugin-react-swc';
 import { defineConfig } from 'vite';
-import pluginRewriteAll from 'vite-plugin-rewrite-all';
 import svgr from 'vite-plugin-svgr';
 import { configDefaults } from 'vitest/config';
 
@@ -12,7 +11,24 @@ process.env.VITE_VERCEL_ENV = process.env.VERCEL_ENV || 'development';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-	plugins: [react(), svgr(), pluginRewriteAll()],
+	plugins: [
+		react({
+			plugins: [
+				[
+					'@swc/plugin-relay',
+					{
+						rootDir: __dirname,
+						artifactDirectory: 'src/__generated__',
+						language: 'typescript',
+						eagerEsModules: true,
+					},
+				],
+			],
+		}),
+		svgr({
+			include: '**/*.svg',
+		}),
+	],
 	test: {
 		// Omit end-to-end tests:
 		exclude: [...configDefaults.exclude, 'tests/**'],

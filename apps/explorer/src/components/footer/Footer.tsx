@@ -5,7 +5,7 @@ import { Text } from '@mysten/ui';
 
 import { LegalLinks, LegalText } from './Legal';
 import { footerLinks, socialLinks } from './footerLinks';
-import { ReactComponent as MystenLabsRed } from '../../assets/MystenLabs_Red.svg';
+import MystenLabsRed from '../../assets/MystenLabs_Red.svg';
 import { Link } from '~/ui/Link';
 
 function FooterLinks() {

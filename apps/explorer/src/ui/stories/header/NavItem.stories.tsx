@@ -4,7 +4,7 @@
 import { type Meta, type StoryObj } from '@storybook/react';
 
 import { NavItem, type NavItemProps } from '../../header/NavItem';
-import { ReactComponent as CheckIcon } from '../../icons/check_24x24.svg';
+import CheckIcon from '../../icons/check_24x24.svg';
 
 export default {
 	component: NavItem,
