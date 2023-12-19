@@ -25,7 +25,6 @@ use move_core_types::{
     u256,
     vm_status::StatusCode,
 };
-#[cfg(feature = "gas-profiler")]
 use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     gas::{GasMeter, SimpleInstruction},
@@ -114,7 +113,6 @@ pub struct GasStatus<'a> {
     cost_table: &'a CostTable,
     gas_left: InternalGas,
     charge: bool,
-    #[cfg(feature = "gas-profiler")]
     profiler: Option<GasProfiler>,
 }
 
@@ -128,7 +126,6 @@ impl<'a> GasStatus<'a> {
             gas_left: gas_left.to_unit(),
             cost_table,
             charge: true,
-            #[cfg(feature = "gas-profiler")]
             profiler: None,
         }
     }
@@ -142,7 +139,6 @@ impl<'a> GasStatus<'a> {
             gas_left: InternalGas::new(0),
             cost_table: &ZERO_COST_SCHEDULE,
             charge: false,
-            #[cfg(feature = "gas-profiler")]
             profiler: None,
         }
     }
@@ -473,12 +469,10 @@ impl<'b> GasMeter for GasStatus<'b> {
         self.gas_left
     }
 
-    #[cfg(feature = "gas-profiler")]
     fn get_profiler_mut(&mut self) -> Option<&mut GasProfiler> {
         self.profiler.as_mut()
     }
 
-    #[cfg(feature = "gas-profiler")]
     fn set_profiler(&mut self, profiler: GasProfiler) {
         self.profiler = Some(profiler);
     }
@@ -511,18 +505,12 @@ pub fn zero_cost_instruction_table() -> Vec<(Bytecode, GasCost)> {
     use Bytecode::*;
 
     vec![
-        (
-            MoveToDeprecated(StructDefinitionIndex::new(0)),
-            GasCost::new(0, 0),
-        ),
+        (MoveToDeprecated(StructDefinitionIndex::new(0)), GasCost::new(0, 0)),
         (
             MoveToGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(0, 0),
         ),
-        (
-            MoveFromDeprecated(StructDefinitionIndex::new(0)),
-            GasCost::new(0, 0),
-        ),
+        (MoveFromDeprecated(StructDefinitionIndex::new(0)), GasCost::new(0, 0)),
         (
             MoveFromGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(0, 0),
@@ -584,10 +572,7 @@ pub fn zero_cost_instruction_table() -> Vec<(Bytecode, GasCost)> {
         (LdTrue, GasCost::new(0, 0)),
         (Mod, GasCost::new(0, 0)),
         (BrFalse(0), GasCost::new(0, 0)),
-        (
-            ExistsDeprecated(StructDefinitionIndex::new(0)),
-            GasCost::new(0, 0),
-        ),
+        (ExistsDeprecated(StructDefinitionIndex::new(0)), GasCost::new(0, 0)),
         (
             ExistsGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(0, 0),
@@ -659,10 +644,7 @@ pub fn unit_cost_schedule() -> CostTable {
 pub fn bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
     use Bytecode::*;
     vec![
-        (
-            MoveToDeprecated(StructDefinitionIndex::new(0)),
-            GasCost::new(13, 1),
-        ),
+        (MoveToDeprecated(StructDefinitionIndex::new(0)), GasCost::new(13, 1)),
         (
             MoveToGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(27, 1),
@@ -732,10 +714,7 @@ pub fn bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
         (LdTrue, GasCost::new(1, 1)),
         (Mod, GasCost::new(1, 1)),
         (BrFalse(0), GasCost::new(1, 1)),
-        (
-            ExistsDeprecated(StructDefinitionIndex::new(0)),
-            GasCost::new(41, 1),
-        ),
+        (ExistsDeprecated(StructDefinitionIndex::new(0)), GasCost::new(41, 1)),
         (
             ExistsGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(34, 1),
