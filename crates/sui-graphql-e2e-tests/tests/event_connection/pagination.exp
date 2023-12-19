@@ -1,4 +1,4 @@
-processed 8 tasks
+processed 9 tasks
 
 init:
 A: object(0,0)
@@ -184,6 +184,56 @@ Response: {
               "new_value": "1"
             },
             "bcs": "AQAAAAAAAAA="
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 8 'run-graphql'. lines 96-116:
+Response: {
+  "data": {
+    "eventConnection": {
+      "edges": [
+        {
+          "cursor": "3:0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "type": {
+              "repr": "0xba9d8235634328c134d29355e51c81de5f36a748397cb756614091def06a0307::M1::EventA"
+            },
+            "senders": [
+              {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            ],
+            "json": {
+              "new_value": "1"
+            },
+            "bcs": "AQAAAAAAAAA="
+          }
+        },
+        {
+          "cursor": "3:1",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "type": {
+              "repr": "0xba9d8235634328c134d29355e51c81de5f36a748397cb756614091def06a0307::M1::EventA"
+            },
+            "senders": [
+              {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            ],
+            "json": {
+              "new_value": "2"
+            },
+            "bcs": "AgAAAAAAAAA="
           }
         }
       ]

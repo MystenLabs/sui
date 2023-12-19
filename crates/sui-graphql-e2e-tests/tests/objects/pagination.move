@@ -34,10 +34,10 @@ module Test::M1 {
 
 //# create-checkpoint
 
-//# run-graphql --variables A
+//# run-graphql
 {
   # select all objects owned by A
-  address(address: $A) {
+  address(address: "@{A}") {
     objectConnection {
       edges {
         cursor
@@ -46,10 +46,10 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --variables A
+//# run-graphql
 {
   # select the first 2 objects owned by A
-  address(address: $A) {
+  address(address: "@{A}") {
     objectConnection(first: 2) {
       edges {
         cursor
@@ -58,13 +58,13 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --variables A obj_5_0
+//# run-graphql
 {
-  address(address: $A) {
+  address(address: "@{A}") {
     # select the 2nd and 3rd objects
     # note that order does not correspond
     # to order in which objects were created
-    objectConnection(first: 2 after: $obj_5_0) {
+    objectConnection(first: 2 after: "@{obj_5_0}") {
       edges {
         cursor
       }
@@ -72,11 +72,11 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --variables A obj_4_0
+//# run-graphql
 {
-  address(address: $A) {
+  address(address: "@{A}") {
     # select 4th and last object
-    objectConnection(first: 2 after: $obj_4_0) {
+    objectConnection(first: 2 after: "@{obj_4_0}") {
       edges {
         cursor
       }
@@ -84,11 +84,22 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --variables A obj_3_0
+//# run-graphql
 {
-  address(address: $A) {
+  address(address: "@{A}") {
     # select 3rd and 4th object
-    objectConnection(last: 2 before: $obj_3_0) {
+    objectConnection(last: 2 before: "@{obj_3_0}") {
+      edges {
+        cursor
+      }
+    }
+  }
+}
+
+//# run-graphql
+{
+  address(address: "@{A}") {
+    objectConnection(last: 2) {
       edges {
         cursor
       }

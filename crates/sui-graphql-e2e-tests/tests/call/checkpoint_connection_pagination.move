@@ -12,6 +12,9 @@
 // last: 4, after: "6" -> error
 // last: 4, before: "6" -> checkpoints 2, 3, 4, 5
 // last: 4, before: "6", after: "3" -> error
+// no first or last -> checkpoints 0, 1, 2, 3
+// first: 4 -> checkpoints 0, 1, 2, 3
+// last: 4 -> checkpoints 9, 10, 11, 12
 
 //# init --addresses Test=0x0 --simulator
 
@@ -65,6 +68,35 @@
 //# run-graphql
 {
   checkpointConnection(last: 4, before: "6", after: "3") {
+    nodes {
+      sequenceNumber
+    }
+  }
+}
+
+//# run-graphql
+{
+  checkpointConnection {
+    nodes {
+      sequenceNumber
+    }
+  }
+}
+
+
+//# run-graphql
+{
+  checkpointConnection(first: 4) {
+    nodes {
+      sequenceNumber
+    }
+  }
+}
+
+
+//# run-graphql
+{
+  checkpointConnection(last: 4) {
     nodes {
       sequenceNumber
     }
