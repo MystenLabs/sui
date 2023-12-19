@@ -10,18 +10,33 @@ use bytes::Bytes;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use indicatif::ProgressBar;
+use itertools::Itertools;
 use object_store::path::Path;
 use object_store::{DynObjectStore, Error, ObjectStore};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::time::Instant;
 use tracing::{error, warn};
 use url::Url;
 
 pub const MANIFEST_FILENAME: &str = "MANIFEST";
+
+#[derive(Serialize, Deserialize)]
+
+pub struct Manifest {
+    available_epochs: Vec<u64>,
+}
+
+impl Manifest {
+    pub fn new(available_epochs: Vec<u64>) -> Self {
+        Manifest { available_epochs }
+    }
+}
 
 pub async fn get<S: ObjectStoreGetExt>(store: &S, src: &Path) -> Result<Bytes> {
     let bytes = retry(backoff::ExponentialBackoff::default(), || async {
@@ -200,6 +215,49 @@ pub async fn find_all_dirs_with_epoch_prefix(
         }
     }
     Ok(dirs)
+}
+
+pub async fn list_all_epochs(object_store: Arc<DynObjectStore>) -> Result<Vec<u64>> {
+    let remote_epoch_dirs = find_all_dirs_with_epoch_prefix(&object_store, None).await?;
+    let mut out = vec![];
+    let mut success_marker_found = false;
+    for (epoch, path) in remote_epoch_dirs.iter().sorted() {
+        let success_marker = path.child("_SUCCESS");
+        let get_result = object_store.get(&success_marker).await;
+        match get_result {
+            Err(_) => {
+                if !success_marker_found {
+                    error!("No success marker found for epoch: {epoch}");
+                }
+            }
+            Ok(_) => {
+                out.push(*epoch);
+                success_marker_found = true;
+            }
+        }
+    }
+    Ok(out)
+}
+
+pub async fn run_manifest_update_loop(
+    store: Arc<DynObjectStore>,
+    mut recv: tokio::sync::broadcast::Receiver<()>,
+) -> Result<()> {
+    let mut update_interval = tokio::time::interval(Duration::from_secs(300));
+    loop {
+        tokio::select! {
+            _now = update_interval.tick() => {
+                if let Ok(epochs) = list_all_epochs(store.clone()).await {
+                    let manifest_path = Path::from(MANIFEST_FILENAME);
+                    let manifest = Manifest::new(epochs);
+                    let bytes = serde_json::to_string(&manifest)?;
+                    put(&store, &manifest_path, Bytes::from(bytes)).await?;
+                }
+            },
+             _ = recv.recv() => break,
+        }
+    }
+    Ok(())
 }
 
 /// This function will find all child directories in the input store which are of the form "epoch_num"
