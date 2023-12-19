@@ -23,6 +23,7 @@ use sui_types::error::SuiResult;
 use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
 use sui_types::{base_types::SUI_ADDRESS_LENGTH, committee::EpochId};
 
+// Can this ever be different from TOTAL_VOTING_POWER? If so, please doc comment.
 pub const BRIDGE_AUTHORITY_TOTAL_VOTING_POWER: u64 = 10000;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -77,6 +78,7 @@ impl BridgeCommittee {
     }
 
     pub fn is_active_member(&self, member: &BridgeAuthorityPublicKeyBytes) -> bool {
+        // Use `is_some_and`.
         self.members.contains_key(member) && !self.members.get(member).unwrap().is_blocklisted
     }
 
@@ -169,6 +171,7 @@ pub enum BridgeChainId {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum TokenId {
+    // SUI instead of Sui.
     Sui = 0,
     BTC = 1,
     ETH = 2,
@@ -199,6 +202,7 @@ pub struct EthToSuiBridgeAction {
 /// Its relationship with BridgeEvent is similar to the relationship between
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum BridgeAction {
+    // Might need better names to distinguish the case between wrapped Eth on Sui back to Eth, vs native Sui to Eth.
     /// Sui to Eth bridge action
     SuiToEthBridgeAction(SuiToEthBridgeAction),
     /// Eth to sui bridge action
@@ -321,6 +325,7 @@ pub struct EthLog {
     pub block_number: u64,
     pub tx_hash: H256,
     pub log_index_in_tx: u16,
+    // Do we still need log here, or can we just keep the essentials only?
     pub log: Log,
 }
 
@@ -483,7 +488,7 @@ mod tests {
 
     #[test]
     fn test_bridge_committee_filter_blocklisted_authorities() -> anyhow::Result<()> {
-        // Note: today BridgeCommitte does not shuffle authorities
+        // Note: today BridgeCommittee does not shuffle authorities
         let (authority1, _, _) = get_test_authority_and_key(5000, 9999);
         let (mut authority2, _, _) = get_test_authority_and_key(3000, 9999);
         authority2.is_blocklisted = true;

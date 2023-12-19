@@ -108,6 +108,7 @@ impl BridgeOrchestratorTables {
             .map_err(|e| BridgeError::StorageError(format!("Couldn't write batch: {:?}", e)))
     }
 
+    // Is this a test-only function?
     pub(crate) fn get_all_pending_actions(
         &self,
     ) -> BridgeResult<HashMap<BridgeActionDigest, BridgeAction>> {

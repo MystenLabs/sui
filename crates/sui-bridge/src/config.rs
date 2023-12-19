@@ -35,6 +35,7 @@ pub struct BridgeNodeConfig {
     pub run_client: bool,
     /// The gas object to use for paying for gas fees for the client. It needs to
     /// be owned by the address associated with bridge client key.
+    // Why is this Option? When should it be None?
     pub bridge_client_gas_object: Option<ObjectID>,
     /// Rpc url for Sui fullnode, used for query stuff and submit transactions.
     pub sui_rpc_url: String,

@@ -81,7 +81,7 @@ where
 
     async fn run_event_listening_task(
         // The module where interested events are defined.
-        // Moudle is always of bridge package 0x9.
+        // Module is always of bridge package 0x9.
         module: Identifier,
         mut next_cursor: TransactionDigest,
         events_sender: mysten_metrics::metered_channel::Sender<(Identifier, Vec<SuiEvent>)>,
@@ -96,6 +96,8 @@ where
         let mut interval = time::interval(query_interval);
         interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
         loop {
+            // Why using a tick? I would expect we do a tiny amount of sleep if events is empty.
+            // If it's not empty we want to keep pulling.
             interval.tick().await;
             let Ok(events) = retry_with_max_delay!(
                 sui_client.query_events_by_module(PACKAGE_ID, module.clone(), next_cursor),

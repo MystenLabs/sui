@@ -26,6 +26,7 @@ pub struct BridgeOrchestrator<C> {
     _sui_client: Arc<SuiClient<C>>,
     sui_events_rx: mysten_metrics::metered_channel::Receiver<(Identifier, Vec<SuiEvent>)>,
     eth_events_rx: mysten_metrics::metered_channel::Receiver<(ethers::types::Address, Vec<EthLog>)>,
+    // Would be good to have an overview on how WAL works for crash recovery.
     store: Arc<BridgeOrchestratorTables>,
 }
 
@@ -103,6 +104,7 @@ where
                     warn!("Sui event not recognized: {:?}", sui_event);
                     continue;
                 }
+                // Use let else instead of unwrap.
                 // Unwrap safe: checked above
                 let bridge_event: SuiBridgeEvent = opt_bridge_event.unwrap();
 
@@ -119,6 +121,9 @@ where
                 store
                     .insert_pending_actions(&actions)
                     .expect("Store operation should not fail");
+                // Could you add comments to explain how does the WAL work here?
+                // i.e. if we crash here, what happens?
+                // How do we prevent double execution of actions?
                 for action in actions {
                     submit_to_executor(&executor_tx, action)
                         .await
@@ -206,7 +211,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sui_watcher_task() {
-        // Note: this test may fail beacuse of the following reasons:
+        // Note: this test may fail because of the following reasons:
         // the SuiEvent's struct tag does not match the ones in events.rs
 
         let (sui_events_tx, sui_events_rx, _eth_events_tx, eth_events_rx, sui_client, store) =
@@ -230,7 +235,7 @@ mod tests {
             .unwrap();
 
         let start = std::time::Instant::now();
-        // Executor should ahve received the action
+        // Executor should have received the action
         assert_eq!(
             executor_requested_action_rx.recv().await.unwrap(),
             bridge_action.digest()
@@ -257,7 +262,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_eth_watcher_task() {
-        // Note: this test may fail beacuse of the following reasons:
+        // Note: this test may fail because of the following reasons:
         // 1. Log and BridgeAction returned from `get_test_log_and_action` are not in sync
         // 2. Log returned from `get_test_log_and_action` is not parseable log (not abigen!, check abi.rs)
 
@@ -287,7 +292,7 @@ mod tests {
             .await
             .unwrap();
 
-        // Executor should ahve received the action
+        // Executor should have received the action
         assert_eq!(
             executor_requested_action_rx.recv().await.unwrap(),
             bridge_action.digest()
