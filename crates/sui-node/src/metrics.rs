@@ -136,6 +136,7 @@ pub fn start_metrics_push_task(config: &sui_config::NodeConfig, registry: Regist
             interval.tick().await;
 
             if let Err(error) = push_metrics(&client, &url, &registry).await {
+                client = MetricsPushClient::new(config.network_key_pair().copy());
                 tracing::warn!("unable to push metrics: {error}");
             }
         }
