@@ -11,6 +11,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
     use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
+    use sui_graphql_rpc::client::ClientError;
     use sui_graphql_rpc::config::ConnectionConfig;
     use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
     use sui_types::digests::ChainIdentifier;
@@ -246,6 +247,50 @@ mod tests {
             .await;
 
         assert!(res.is_err());
+
+        let bad_variables = vec![
+            GraphqlQueryVariable {
+                name: "framework addr".to_string(),
+                ty: "SuiAddress!".to_string(),
+                value: json!("0x2"),
+            },
+            GraphqlQueryVariable {
+                name: " deepbook_addr".to_string(),
+                ty: "SuiAddress!".to_string(),
+                value: json!("0xdee9"),
+            },
+            GraphqlQueryVariable {
+                name: "4deepbook_addr".to_string(),
+                ty: "SuiAddressP!".to_string(),
+                value: json!("0xdee9"),
+            },
+            GraphqlQueryVariable {
+                name: "".to_string(),
+                ty: "SuiAddress!".to_string(),
+                value: json!("0xdee9"),
+            },
+            GraphqlQueryVariable {
+                name: " ".to_string(),
+                ty: "SuiAddress!".to_string(),
+                value: json!("0xdee9"),
+            },
+        ];
+
+        for var in bad_variables {
+            let res = cluster
+                .graphql_client
+                .execute_to_graphql(query.to_string(), true, vec![var.clone()], vec![])
+                .await;
+
+            assert!(res.is_err());
+            assert!(
+                res.unwrap_err().to_string()
+                    == ClientError::InvalidVariableName {
+                        var_name: var.name.clone()
+                    }
+                    .to_string()
+            );
+        }
     }
 
     #[tokio::test]
