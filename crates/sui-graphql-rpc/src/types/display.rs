@@ -9,10 +9,17 @@ use sui_types::collection_types::VecMap;
 use crate::error::Error;
 use sui_json_rpc_types::SuiMoveValue;
 
+/// The set of named templates defined on-chain for the type of this object,
+/// to be handled off-chain. The server substitutes data from the object
+/// into these templates to generate a display string per template.
 #[derive(Debug, SimpleObject)]
 pub(crate) struct DisplayEntry {
+    /// The identifier for a particular template string of the Display object.
     pub key: String,
-    pub value: String,
+    /// The template string for the key with placeholder values substituted.
+    pub value: Option<String>,
+    /// An error string describing why the template could not be rendered.
+    pub error: Option<String>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -29,6 +36,24 @@ pub(crate) enum DisplayRenderError {
     UnexpectedMoveValue,
 }
 
+impl DisplayEntry {
+    pub(crate) fn create_value(key: String, value: String) -> Self {
+        Self {
+            key,
+            value: Some(value),
+            error: None,
+        }
+    }
+
+    pub(crate) fn create_error(key: String, error: String) -> Self {
+        Self {
+            key,
+            value: None,
+            error: Some(error),
+        }
+    }
+}
+
 pub(crate) fn get_rendered_fields(
     fields: VecMap<String, String>,
     move_struct: &MoveStruct,
@@ -36,11 +61,11 @@ pub(crate) fn get_rendered_fields(
     let mut rendered_fields: Vec<DisplayEntry> = vec![];
 
     for entry in fields.contents.iter() {
-        let rendered_value = parse_template(&entry.value, move_struct)?;
-        rendered_fields.push(DisplayEntry {
-            key: entry.key.clone(),
-            value: rendered_value,
-        });
+        let rendered_value = match parse_template(&entry.value, move_struct) {
+            Ok(value) => DisplayEntry::create_value(entry.key.clone(), value),
+            Err(e) => DisplayEntry::create_error(entry.key.clone(), e.to_string()),
+        };
+        rendered_fields.push(rendered_value);
     }
 
     Ok(rendered_fields)
@@ -52,7 +77,7 @@ pub(crate) fn get_rendered_fields(
 ///          | [:utf8:]
 /// Defers resolution down to the IDENT to get_value_from_move_struct,
 /// and substitutes the result into the PART template.
-fn parse_template(template: &str, move_struct: &MoveStruct) -> Result<String, Error> {
+fn parse_template(template: &str, move_struct: &MoveStruct) -> Result<String, DisplayRenderError> {
     let mut output = template.to_string();
     let mut var_name = String::new();
     let mut in_braces = false;
@@ -70,8 +95,7 @@ fn parse_template(template: &str, move_struct: &MoveStruct) -> Result<String, Er
             }
             '}' if !escaped => {
                 in_braces = false;
-                let value = get_value_from_move_struct(move_struct, &var_name)
-                    .map_err(|e| Error::Internal(e.to_string()))?;
+                let value = get_value_from_move_struct(move_struct, &var_name)?;
                 output = output.replace(&format!("{{{}}}", var_name), &value.to_string());
             }
             _ if !escaped => {
@@ -124,7 +148,7 @@ pub(crate) fn get_value_from_move_struct(
             _ => Err(DisplayRenderError::UnexpectedMoveValue),
         })?;
 
-    // TODO: implement Display for MoveData and use that instead
+    // TODO: move off dependency on SuiMoveValue
     let sui_move_value: SuiMoveValue = result.clone().into();
 
     match sui_move_value {

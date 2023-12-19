@@ -96,6 +96,9 @@ impl Object {
         Some(BigInt::from(self.native.storage_rebate))
     }
 
+    /// The set of named templates defined on-chain for the type of this object,
+    /// to be handled off-chain. The server substitutes data from the object
+    /// into these templates to generate a display string per template.
     async fn display(&self, ctx: &Context<'_>) -> Result<Option<Vec<DisplayEntry>>> {
         let resolver: &Resolver<PackageCache> = ctx
             .data()
