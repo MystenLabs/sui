@@ -24,7 +24,7 @@ use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_sdk::SuiClientBuilder;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
-use sui_types::crypto::{PublicKey, SuiKeyPair, ZkLoginPublicIdentifier};
+use sui_types::crypto::{PublicKey, SuiKeyPair};
 use sui_types::multisig::{MultiSig, MultiSigPublicKey};
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::Transaction;

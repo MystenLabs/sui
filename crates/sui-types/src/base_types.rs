@@ -27,7 +27,6 @@ use crate::governance::STAKED_SUI_STRUCT_NAME;
 use crate::governance::STAKING_POOL_MODULE_NAME;
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::multisig::MultiSigPublicKey;
-use crate::multisig_legacy::MultiSigPublicKeyLegacy;
 use crate::object::{Object, Owner};
 use crate::parse_sui_struct_tag;
 use crate::signature::GenericSignature;
@@ -543,7 +542,7 @@ impl SuiAddress {
             .map(SuiAddress)
     }
 
-    /// This derives a zkLogin address by parising the iss and address_seed from [struct ZkLoginAuthenticator].
+    /// This derives a zkLogin address by parsing the iss and address_seed from [struct ZkLoginAuthenticator].
     /// Define as iss_bytes_len || iss_bytes || padded_32_byte_address_seed. This is to be differentiated with
     /// try_from_unpadded defined below.
     pub fn try_from_padded(inputs: &ZkLoginInputs) -> SuiResult<Self> {
@@ -629,14 +628,6 @@ impl From<&PublicKey> for SuiAddress {
     }
 }
 
-impl From<&MultiSigPublicKeyLegacy> for SuiAddress {
-    /// Derive a SuiAddress from [struct MultiSigPublicKeyLegacy].
-    fn from(multisig_pk: &MultiSigPublicKeyLegacy) -> Self {
-        let pk: MultiSigPublicKey = multisig_pk.clone().into();
-        (&pk).into()
-    }
-}
-
 impl From<&MultiSigPublicKey> for SuiAddress {
     /// Derive a SuiAddress from [struct MultiSigPublicKey]. A MultiSig address
     /// is defined as the 32-byte Blake2b hash of serializing the flag, the
@@ -684,7 +675,11 @@ impl TryFrom<&GenericSignature> for SuiAddress {
                 Ok(SuiAddress::from(&pub_key))
             }
             GenericSignature::MultiSig(ms) => Ok(ms.get_pk().into()),
-            GenericSignature::MultiSigLegacy(ms) => Ok(ms.get_pk().into()),
+            GenericSignature::MultiSigLegacy(ms) => {
+                Ok(crate::multisig::MultiSig::try_from(ms.clone())?
+                    .get_pk()
+                    .into())
+            }
             GenericSignature::ZkLoginAuthenticator(zklogin) => {
                 SuiAddress::try_from_unpadded(&zklogin.inputs)
             }

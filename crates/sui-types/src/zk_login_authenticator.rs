@@ -110,17 +110,16 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
     where
         T: Serialize,
     {
-        if aux_verify_data.verify_legacy_zklogin_address {
-            // If the verify_legacy_zklogin_address flag is set, then try to derive with both ways (padded and unpadded address_seed) as valid signature.
-            if author != SuiAddress::try_from_padded(&self.inputs)?
-                && author != SuiAddress::try_from_unpadded(&self.inputs)?
+        // Always evaluate the unpadded address derivation.
+        if author != SuiAddress::try_from_unpadded(&self.inputs)? {
+            // If the verify_legacy_zklogin_address flag is set, also evaluate the padded address derivation.
+            if !aux_verify_data.verify_legacy_zklogin_address
+                || author != SuiAddress::try_from_padded(&self.inputs)?
             {
                 return Err(SuiError::InvalidAddress);
             }
-        } else if author != SuiAddress::try_from_unpadded(&self.inputs)? {
-            // otherwise, only try to derive with unpadded address_seed and see if the sender matches.
-            return Err(SuiError::InvalidAddress);
         }
+
         // Only when supported_providers list is not empty, we check if the provider is supported. Otherwise,
         // we just use the JWK map to check if its supported.
         if !aux_verify_data.supported_providers.is_empty()

@@ -113,11 +113,7 @@ fn multisig_scenarios() {
         3,
     )
     .unwrap();
-
-    // Address parsing remain the same.
     let addr_2 = SuiAddress::from(&multisig_pk_2);
-    let addr_legacy_2 = SuiAddress::from(&multisig_pk_legacy_2);
-    assert_eq!(addr_2, addr_legacy_2);
 
     // sig1 and sig2 (3 of 6) verifies ok.
     let multi_sig_6 =
@@ -508,9 +504,14 @@ fn multisig_legacy_serde_test() {
     let sig0 = Signature::new_secure(&msg, &keys[0]).into();
     let sig2 = Signature::new_secure(&msg, &keys[2]).into();
 
-    let multisig_pk_legacy =
-        MultiSigPublicKeyLegacy::new(vec![pk1, pk2, pk3], vec![1, 2, 3], 3).unwrap();
-    let addr: SuiAddress = (&multisig_pk_legacy).into();
+    let multisig_pk_legacy = MultiSigPublicKeyLegacy::new(
+        vec![pk1.clone(), pk2.clone(), pk3.clone()],
+        vec![1, 2, 3],
+        3,
+    )
+    .unwrap();
+    let multisig_pk = MultiSigPublicKey::new(vec![pk1, pk2, pk3], vec![1, 2, 3], 3).unwrap();
+    let addr: SuiAddress = (&multisig_pk).into();
 
     let multi_sig_legacy = MultiSigLegacy::combine(vec![sig0, sig2], multisig_pk_legacy).unwrap();
 

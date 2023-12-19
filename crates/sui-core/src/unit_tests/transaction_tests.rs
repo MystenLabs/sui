@@ -492,7 +492,7 @@ async fn zklogin_test_cached_proof_wrong_key() {
     */
 
     let (ephemeral_key, zklogin) = &zklogin_key_pair_and_inputs()[0];
-    let sender = SuiAddress::try_from_padded(&zklogin).unwrap();
+    let sender = SuiAddress::try_from_padded(zklogin).unwrap();
     let recipient = dbg_addr(2);
 
     let mut transfer_transaction2 = init_zklogin_transfer(
