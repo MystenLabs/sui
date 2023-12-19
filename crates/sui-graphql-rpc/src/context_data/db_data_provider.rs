@@ -17,7 +17,7 @@ use crate::{
         digest::Digest,
         dynamic_field::{DynamicField, DynamicFieldName},
         end_of_epoch_data::EndOfEpochData,
-        epoch::{from_epoch_and_system_state, Epoch},
+        epoch::Epoch,
         event::{Event, EventFilter},
         gas::GasCostSummary,
         move_function::MoveFunction,
