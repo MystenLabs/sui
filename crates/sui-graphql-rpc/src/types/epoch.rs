@@ -24,7 +24,6 @@ use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary
 #[derive(Clone, Debug)]
 pub(crate) struct Epoch {
     pub stored: StoredEpochInfo,
-    pub system_state: NativeSuiSystemStateSummary,
 }
 
 #[Object]
@@ -144,7 +143,7 @@ impl Epoch {
     async fn system_state_summary(&self, ctx: &Context<'_>) -> Result<SystemStateSummary> {
         let state = ctx
             .data_unchecked::<PgManager>()
-            .fetch_system_state_summary(self.stored.epoch as u64)
+            .fetch_system_state_summary(Some(self.stored.epoch as u64))
             .await?;
         Ok(SystemStateSummary { native: state })
     }
@@ -201,12 +200,8 @@ impl Epoch {
     }
 }
 
-pub fn from_epoch_and_system_state(
-    stored: StoredEpochInfo,
-    system_state: NativeSuiSystemStateSummary,
-) -> Epoch {
-    Epoch {
-        stored,
-        system_state,
+impl From<StoredEpochInfo> for Epoch {
+    fn from(stored: StoredEpochInfo) -> Self {
+        Epoch { stored }
     }
 }

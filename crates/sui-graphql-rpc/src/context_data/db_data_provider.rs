@@ -672,25 +672,14 @@ impl PgManager {
             .get_epoch(None)
             .await?
             .ok_or_else(|| Error::Internal("Latest epoch not found".to_string()))?;
-        let system_state = self.fetch_latest_sui_system_state().await?;
-        Ok(from_epoch_and_system_state(stored_epoch, system_state))
+        Ok(Epoch::from(stored_epoch))
     }
 
     // To be used in scenarios where epoch may not exist, such as when epoch_id is provided by caller
     pub(crate) async fn fetch_epoch(&self, epoch_id: u64) -> Result<Option<Epoch>, Error> {
         let epoch_id_i64 = i64::try_from(epoch_id)
             .map_err(|_| Error::Internal("Failed to convert epoch id to i64".to_string()))?;
-        let system_state = self.fetch_latest_sui_system_state().await?;
-        // we are in the latest epoch
-        if system_state.epoch == epoch_id {
-            Ok(self
-                .get_epoch(Some(epoch_id_i64))
-                .await?
-                .map(|e| from_epoch_and_system_state(e, system_state)))
-        } else {
-            // we need to fetch historical system state data
-            Ok(None)
-        }
+        Ok(self.get_epoch(Some(epoch_id_i64)).await?.map(Epoch::from))
     }
 
     // To be used in scenarios where epoch is expected to exist
@@ -1180,17 +1169,14 @@ impl PgManager {
 
     pub(crate) async fn fetch_system_state_summary(
         &self,
-        epoch: u64,
+        epoch: Option<u64>,
     ) -> Result<NativeSuiSystemStateSummary, Error> {
-        let result = self
-            .inner
-            .spawn_blocking(|this| this.get_latest_sui_system_state())
-            .await?;
-        if result.epoch == epoch {
-            Ok(result)
-        } else {
-            // get the
-            // self.inner.spawn_blocking(| this | this.get_dynamic_fields_raw_in_blocking_task(, , ))
+        match epoch {
+            Some(e) => {}
+            None => Ok(self
+                .inner
+                .spawn_blocking(|this| this.get_latest_sui_system_state())
+                .await?),
         }
     }
 
