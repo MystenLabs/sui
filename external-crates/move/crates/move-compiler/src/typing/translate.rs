@@ -1058,25 +1058,6 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
     Box::new(exp_(context, *ne))
 }
 
-fn exp_(context: &mut Context, initial_ne: N::Exp) -> T::Exp {
-    use N::Exp_ as NE;
-    process_binops!(
-        (BinOp, Loc),
-        T::Exp,
-        initial_ne,
-        sp!(loc, cur_),
-        cur_,
-        NE::BinopExp(lhs, op, rhs) => { (*lhs, (op, loc), *rhs) },
-        { exp_inner(context, sp(loc, cur_)) },
-        value_stack,
-        (bop, loc) => {
-            let el = value_stack.pop().expect("ICE binop hlir issue");
-            let er = value_stack.pop().expect("ICE binop hlir issue");
-            binop(context, el, bop, loc, er)
-        }
-    )
-}
-
 fn binop(context: &mut Context, el: T::Exp, bop: BinOp, loc: Loc, er: T::Exp) -> T::Exp {
     use BinOp_::*;
     use T::UnannotatedExp_ as TE;
@@ -1150,9 +1131,28 @@ fn binop(context: &mut Context, el: T::Exp, bop: BinOp, loc: Loc, er: T::Exp) ->
     )
 }
 
-fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
+fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
     use N::Exp_ as NE;
     use T::UnannotatedExp_ as TE;
+
+    if matches!(ne_, NE::BinopExp(..)) {
+        return process_binops!(
+            (BinOp, Loc),
+            T::Exp,
+            sp(eloc, ne_),
+            sp!(loc, cur_),
+            cur_,
+            NE::BinopExp(lhs, op, rhs) => { (*lhs, (op, loc), *rhs) },
+            { exp_(context, sp(loc, cur_)) },
+            value_stack,
+            (bop, loc) => {
+                let el = value_stack.pop().expect("ICE binop typing issue");
+                let er = value_stack.pop().expect("ICE binop typing issue");
+                binop(context, el, bop, loc, er)
+            }
+        );
+    }
+
     let (ty, e_) = match ne_ {
         NE::Unit { trailing } => (sp(eloc, Type_::Unit), TE::Unit { trailing }),
         NE::Value(sp!(vloc, Value_::InferredNum(v))) => (

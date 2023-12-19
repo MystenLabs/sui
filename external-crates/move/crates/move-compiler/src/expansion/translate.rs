@@ -3017,8 +3017,8 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
                 { exp(context, *e) },
                 value_stack,
                 (bop, loc) => {
-                    let el = value_stack.pop().expect("ICE binop hlir issue");
-                    let er = value_stack.pop().expect("ICE binop hlir issue");
+                    let el = value_stack.pop().expect("ICE binop expansion issue");
+                    let er = value_stack.pop().expect("ICE binop expansion issue");
                     Box::new(sp(loc, EE::BinopExp(el, bop, er)))
                 }
             )
