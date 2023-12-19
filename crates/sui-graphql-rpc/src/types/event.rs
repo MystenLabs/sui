@@ -18,7 +18,7 @@ pub(crate) struct Event {
     pub stored: StoredEvent,
 }
 
-#[derive(InputObject, Clone)]
+#[derive(InputObject, Clone, Default)]
 pub(crate) struct EventFilter {
     pub sender: Option<SuiAddress>,
     pub transaction_digest: Option<String>,

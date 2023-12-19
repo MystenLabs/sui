@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use async_graphql::*;
+use async_graphql::{connection::Connection, *};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer::models_v2::transactions::StoredTransaction;
 use sui_types::{
@@ -13,7 +13,12 @@ use sui_types::{
 use crate::{context_data::db_data_provider::PgManager, error::Error};
 
 use super::{
-    address::Address, base64::Base64, epoch::Epoch, gas::GasInput, sui_address::SuiAddress,
+    address::Address,
+    base64::Base64,
+    epoch::Epoch,
+    event::{Event, EventFilter},
+    gas::GasInput,
+    sui_address::SuiAddress,
     transaction_block_effects::TransactionBlockEffects,
     transaction_block_kind::TransactionBlockKind,
 };
@@ -107,6 +112,30 @@ impl TransactionBlock {
         Ok(Some(
             TransactionBlockEffects::try_from(self.stored.clone()).extend()?,
         ))
+    }
+
+    /// Events emitted by this transaction block.
+    async fn events(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        filter: Option<EventFilter>,
+    ) -> Result<Option<Connection<String, Event>>> {
+        let mut event_filter = match filter {
+            Some(filter) => filter,
+            None => EventFilter::default(),
+        };
+
+        // Overwrite with the current transaction's digest.
+        event_filter.transaction_digest = Some(Base58::encode(&self.stored.transaction_digest));
+
+        ctx.data_unchecked::<PgManager>()
+            .fetch_events(first, after, last, before, Some(event_filter))
+            .await
+            .extend()
     }
 
     /// This field is set by senders of a transaction block. It is an epoch reference that sets a
