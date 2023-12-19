@@ -55,7 +55,6 @@ impl MetricsPushClient {
             .identity(identity)
             .build()
             .unwrap();
-        println!("created new client");
         MetricsPushClient {
             certificate,
             client,
