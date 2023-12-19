@@ -40,6 +40,7 @@ use move_package::{
 };
 use move_package::{
     resolution::resolution_graph::Package, source_package::parsed_manifest::CustomDepInfo,
+    source_package::parsed_manifest::SourceManifest,
 };
 use move_symbol_pool::Symbol;
 use serde_reflection::Registry;
@@ -600,10 +601,7 @@ impl PackageHooks for SuiPackageHooks {
         Ok(())
     }
 
-    fn custom_resolve_pkg_name(
-        &self,
-        manifest: &move_package::source_package::parsed_manifest::SourceManifest,
-    ) -> anyhow::Result<Symbol> {
+    fn custom_resolve_pkg_name(&self, manifest: &SourceManifest) -> anyhow::Result<Symbol> {
         Ok(manifest.package.name)
     }
 }
