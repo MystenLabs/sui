@@ -47,6 +47,7 @@ storybook-static/
 web-ext-artifacts/
 .next/
 next-env.d.ts
+.swc/
 
 # App test artifacts
 coverage/
