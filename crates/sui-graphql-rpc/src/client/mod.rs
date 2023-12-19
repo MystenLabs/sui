@@ -27,6 +27,11 @@ pub enum ClientError {
     #[error("{item_type} at pos {idx} must not be empty")]
     InvalidEmptyItem { item_type: String, idx: usize },
     #[error(
+        "Invalid variable name: `{var_name}`. Variable names must be non-empty and start with a letter or underscore, and may only contain letters, digits, and underscores."
+    )]
+    InvalidVariableName { var_name: String },
+
+    #[error(
         "Conflicting type definitions for variable {var_name}: {var_type_prev} vs {var_type_curr}"
     )]
     VariableDefinitionConflict {

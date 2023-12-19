@@ -113,7 +113,11 @@ pub fn resolve_variables(
     let mut var_vals: BTreeMap<String, Value> = BTreeMap::new();
 
     for (idx, GraphqlQueryVariable { name, ty, value }) in vars.iter().enumerate() {
-        // todo: check that name is valid identifier
+        if !is_valid_variable_name(name) {
+            return Err(ClientError::InvalidVariableName {
+                var_name: name.to_owned(),
+            });
+        }
         if name.trim().is_empty() {
             return Err(ClientError::InvalidEmptyItem {
                 item_type: "Variable name".to_owned(),
@@ -147,4 +151,30 @@ pub fn resolve_variables(
     }
 
     Ok((type_defs, var_vals))
+}
+
+pub const fn is_valid_variable_name_char(c: char) -> bool {
+    matches!(c, '_' | 'a'..='z' | 'A'..='Z' | '0'..='9')
+}
+
+/// Returns `true` if all bytes in `b` after the offset `start_offset` are valid
+/// ASCII variable name characters.
+const fn all_bytes_valid(b: &[u8], start_offset: usize) -> bool {
+    let mut i = start_offset;
+    while i < b.len() {
+        if !is_valid_variable_name_char(b[i] as char) {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+pub const fn is_valid_variable_name(s: &str) -> bool {
+    let b = s.as_bytes();
+    match b {
+        [b'a'..=b'z', ..] | [b'A'..=b'Z', ..] => all_bytes_valid(b, 1),
+        [b'_', ..] if b.len() > 1 => all_bytes_valid(b, 1),
+        _ => false,
+    }
 }
