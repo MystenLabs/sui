@@ -185,9 +185,11 @@ pub enum OpenSignatureBody {
 
 /// Information necessary to convert a type tag into a type layout.
 #[derive(Debug, Default)]
-struct ResolutionContext {
+struct ResolutionContext<'l> {
     /// Definitions (field information) for structs referred to by types added to this context.
     structs: BTreeMap<StructKey, StructDef>,
+    /// Limits configuration from the calling resolver.
+    limits: Option<&'l Limits>,
 }
 
 /// Interface to abstract over access to a store of live packages.  Used to override the default
@@ -247,7 +249,7 @@ impl<S: PackageStore> Resolver<S> {
     /// structs in terms of their defining ID (i.e. their package ID always points to the first
     /// package that introduced them).
     pub async fn type_layout(&self, mut tag: TypeTag) -> Result<MoveTypeLayout> {
-        let mut context = ResolutionContext::default();
+        let mut context = ResolutionContext::new(self.limits.as_ref());
 
         // (1). Fetch all the information from this store that is necessary to resolve types
         // referenced by this tag.
@@ -270,7 +272,7 @@ impl<S: PackageStore> Resolver<S> {
     /// have the ability as well. Similar rules apply for `key` except that it requires its type
     /// parameters to have `store`.
     pub async fn abilities(&self, mut tag: TypeTag) -> Result<AbilitySet> {
-        let mut context = ResolutionContext::default();
+        let mut context = ResolutionContext::new(self.limits.as_ref());
 
         // (1). Fetch all the information from this store that is necessary to resolve types
         // referenced by this tag.
@@ -647,7 +649,14 @@ impl StructKey {
     }
 }
 
-impl ResolutionContext {
+impl<'l> ResolutionContext<'l> {
+    fn new(limits: Option<&'l Limits>) -> Self {
+        ResolutionContext {
+            structs: BTreeMap::new(),
+            limits,
+        }
+    }
+
     /// Gather definitions for types that contribute to the definition of `tag` into this resolution
     /// context, fetching data from the `store` as necessary. Also updates package addresses in
     /// `tag` to point to runtime IDs instead of storage IDs to ensure queries made using these
@@ -698,6 +707,16 @@ impl ResolutionContext {
                     // query and/or write into `self.structs.
                     s.address = context.runtime_id;
                     let key = StructRef::from(s.as_ref()).as_key();
+
+                    if let Some(l) = self.limits {
+                        let params = s.type_params.len();
+                        if params > l.max_type_argument_width {
+                            return Err(Error::TooManyTypeParams(
+                                l.max_type_argument_width,
+                                params,
+                            ));
+                        }
+                    }
 
                     for (param, def) in s.type_params.iter_mut().zip(struct_def.type_params.iter())
                     {
@@ -752,6 +771,16 @@ impl ResolutionContext {
                 O::Vector(sig) => frontier.push(*sig),
 
                 O::Struct(key, params) => {
+                    if let Some(l) = self.limits {
+                        let params = params.len();
+                        if params > l.max_type_argument_width {
+                            return Err(Error::TooManyTypeParams(
+                                l.max_type_argument_width,
+                                params,
+                            ));
+                        }
+                    }
+
                     frontier.extend(params.into_iter());
 
                     if self.structs.contains_key(&key) {
@@ -1785,6 +1814,30 @@ mod tests {
 
         let err = resolver.abilities(type_("signer")).await.unwrap_err();
         assert!(matches!(err, Error::UnexpectedSigner));
+    }
+
+    #[tokio::test]
+    async fn test_err_too_many_type_params() {
+        let (_, cache) = package_cache([
+            (1, build_package("sui"), sui_types()),
+            (1, build_package("d0"), d0_types()),
+        ]);
+
+        let resolver = Resolver::new_with_limits(
+            cache,
+            Limits {
+                max_type_argument_width: 1,
+                max_type_argument_depth: 100,
+                max_type_nodes: 100,
+                max_move_value_depth: 100,
+            },
+        );
+
+        let err = resolver
+            .abilities(type_("0xd0::m::O<u32, u64>"))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::TooManyTypeParams(1, 2)));
     }
 
     /***** Test Helpers ***************************************************************************/
