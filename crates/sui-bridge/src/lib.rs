@@ -4,6 +4,7 @@
 pub mod abi;
 pub mod action_executor;
 pub mod client;
+pub mod config;
 pub mod crypto;
 pub mod error;
 pub mod eth_client;

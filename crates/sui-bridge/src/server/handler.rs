@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::str::FromStr;
+use std::sync::Arc;
 
 use crate::crypto::{BridgeAuthorityKeyPair, BridgeAuthoritySignInfo};
 use crate::error::BridgeError;
@@ -36,14 +37,21 @@ pub trait BridgeRequestHandlerTrait {
 
 pub struct BridgeRequestHandler {
     signer: BridgeAuthorityKeyPair,
-    eth_client: EthClient<ethers::providers::Http>,
-    sui_client: SuiClient<SuiSdkClient>,
+    eth_client: Arc<EthClient<ethers::providers::Http>>,
+    sui_client: Arc<SuiClient<SuiSdkClient>>,
 }
 
-#[allow(clippy::new_without_default)]
 impl BridgeRequestHandler {
-    pub fn new() -> Self {
-        unimplemented!()
+    pub fn new(
+        signer: BridgeAuthorityKeyPair,
+        sui_client: Arc<SuiClient<SuiSdkClient>>,
+        eth_client: Arc<EthClient<ethers::providers::Http>>,
+    ) -> Self {
+        Self {
+            signer,
+            eth_client,
+            sui_client,
+        }
     }
 }
 
