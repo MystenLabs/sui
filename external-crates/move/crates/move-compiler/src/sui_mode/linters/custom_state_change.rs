@@ -89,7 +89,7 @@ impl SimpleAbsIntConstructor for CustomStateChangeVerifier {
         _env: &CompilationEnv,
         _program: &'a Program,
         context: &'a CFGContext<'a>,
-        _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
+        _init_state: &mut State,
     ) -> Option<Self::AI<'a>> {
         let MemberName::Function(fn_name) = context.member else {
             return None;

@@ -37,9 +37,13 @@ impl TypingVisitor for CoinFieldVisitor {
         program: &mut T::Program_,
     ) {
         for (_, _, mdef) in program.modules.iter() {
+            if mdef.attributes.is_test_or_test_only() {
+                continue;
+            }
             env.add_warning_filter_scope(mdef.warning_filter.clone());
             mdef.structs
                 .iter()
+                .filter(|(_, _, sdef)| !sdef.attributes.is_test_or_test_only())
                 .for_each(|(sloc, sname, sdef)| struct_def(env, *sname, sdef, sloc));
             env.pop_warning_filter_scope();
         }
