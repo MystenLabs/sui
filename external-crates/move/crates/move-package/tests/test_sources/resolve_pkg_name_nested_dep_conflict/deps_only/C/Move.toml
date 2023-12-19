@@ -2,7 +2,7 @@
 name = "C"
 
 [dependencies.A]
-resolver = "../../../resolvers/successful_subst.sh"
+resolver = "../../../resolvers/successful_subst_name_resolution.sh"
 
 [dependencies.A.packages]
 Contains = "Anything"
