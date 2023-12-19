@@ -2996,19 +2996,33 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
         PE::Continue(name) => EE::Continue(name),
         PE::Dereference(pe) => EE::Dereference(exp(context, *pe)),
         PE::UnaryExp(op, pe) => EE::UnaryExp(op, exp(context, *pe)),
-        PE::BinopExp(pl, op, pr) => {
-            if op.value.is_spec_only() && !context.in_spec_context {
-                let msg = format!(
-                    "`{}` operator only allowed in specifications",
-                    op.value.symbol()
-                );
-                context
-                    .env()
-                    .add_diag(diag!(Syntax::SpecContextRestricted, (loc, msg)));
-                EE::UnresolvedError
-            } else {
-                EE::BinopExp(exp(context, *pl), op, exp(context, *pr))
-            }
+        PE::BinopExp(_pl, op, _pr) if op.value.is_spec_only() && !context.in_spec_context => {
+            let msg = format!(
+                "`{}` operator only allowed in specifications",
+                op.value.symbol()
+            );
+            context
+                .env()
+                .add_diag(diag!(Syntax::SpecContextRestricted, (loc, msg)));
+            EE::UnresolvedError
+        }
+        e_ @ PE::BinopExp(..) => {
+            process_binops!(
+                (P::BinOp, Loc),
+                Box<E::Exp>,
+                Box::new(sp(loc, e_)),
+                e,
+                *e,
+                sp!(loc, PE::BinopExp(lhs, op, rhs)) => { (lhs, (op, loc), rhs) },
+                { exp(context, *e) },
+                value_stack,
+                (bop, loc) => {
+                    let el = value_stack.pop().expect("ICE binop expansion issue");
+                    let er = value_stack.pop().expect("ICE binop expansion issue");
+                    Box::new(sp(loc, EE::BinopExp(el, bop, er)))
+                }
+            )
+            .value
         }
         PE::Borrow(mut_, pr) => EE::Borrow(mut_, exp(context, *pr)),
         pdotted_ @ PE::Dot(_, _) => match exp_dotted(context, sp(loc, pdotted_)) {
