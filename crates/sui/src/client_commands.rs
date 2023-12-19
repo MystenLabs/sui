@@ -67,11 +67,14 @@ use tabled::{
         Modify as TableModify, Panel as TablePanel, Style as TableStyle,
     },
 };
-#[cfg(not(feature = "gas-profiler"))]
-use tracing::error;
+
 use tracing::info;
 
 use crate::key_identity::{get_identity_address, KeyIdentity};
+
+#[path = "unit_tests/profiler_tests.rs"]
+#[cfg(test)]
+mod profiler_tests;
 
 macro_rules! serialize_or_execute {
     ($tx_data:expr, $serialize_unsigned:expr, $serialize_signed:expr, $context:expr, $result_variant:ident) => {{
@@ -718,12 +721,14 @@ impl SuiClientCommands {
                 profile_output,
             } => {
                 #[cfg(not(feature = "gas-profiler"))]
-                error!("gas-profiler feature is not enabled, rebuild or reinstall with --features gas-profiler");
+                {
+                    if true {
+                        return Err(anyhow!("gas-profiler feature is not enabled, rebuild or reinstall with --features gas-profiler"));
+                    }
+                }
 
                 let cmd = ReplayToolCommand::ProfileTransaction {
                     tx_digest,
-                    show_effects: false,
-                    diag: false,
                     executor_version: None,
                     protocol_version: None,
                     profile_output,

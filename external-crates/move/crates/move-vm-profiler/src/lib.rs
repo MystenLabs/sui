@@ -141,10 +141,7 @@ impl GasProfiler {
     }
 
     pub fn open_frame(&mut self, frame_name: String, metadata: String, gas_start: u64) {
-        if self.config.is_none() {
-            return;
-        }
-        if self.start_gas == 0 {
+        if self.config.is_none() || self.start_gas == 0 {
             return;
         }
 
