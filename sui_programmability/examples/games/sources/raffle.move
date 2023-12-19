@@ -1,30 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// A basic lottery game that depends on Sui randomness.
+/// A basic raffle game that depends on Sui randomness.
 ///
-/// Anyone can create a new lottery game with an end time and a cost per ticket. After the end time, anyone can trigger
-/// a function to determine the winner, and the owner of the winning ticket can redeem the entire balance of the game.
+/// Anyone can create a new game with an end time and a cost per ticket. After the end time, anyone can trigger
+/// the functions to determine the winner, and the owner of the winning ticket can redeem the entire balance of the game.
 ///
-module games::lottery {
+
+module games::raffle {
     use std::option::{Self, Option};
     use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
     use sui::coin::{Self, Coin};
     use sui::object::{Self, ID, UID};
-    use sui::random::{Self, RandomnessRequest, RandomRounds};
+    use sui::random::{Self, RandomGeneratorRequest, Random};
     use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::TxContext;
 
-    /// Error codes
     const EGameInProgress: u64 = 0;
-    const EGameAlreadyCompleted: u64 = 1;
-    const ENoParticipants: u64 = 2;
+    const EGameAlreadyClosed: u64 = 1;
+    const ECloseNotCalled: u64 = 2;
     const EInvalidAmount: u64 = 3;
     const EGameMistmatch: u64 = 4;
-    const ENotWinner: u64 = 4;
     const EWrongGameWinner: u64 = 5;
+    const EGameAlreadyCompleted: u64 = 6;
 
     /// Game represents a set of parameters of a single game.
     struct Game has key {
@@ -33,7 +33,7 @@ module games::lottery {
         participants: u32,
         end_time: u64,
         balance: Balance<SUI>,
-        randomness_request: Option<RandomnessRequest>,
+        randomness_request: Option<RandomGeneratorRequest>,
         winner: Option<u32>,
     }
 
@@ -58,18 +58,20 @@ module games::lottery {
         transfer::share_object(game);
     }
 
-    public fun set_randomness_request(game: &mut Game, rr: &RandomRounds, clock: &Clock, ctx: &mut TxContext) {
+    /// Anyone can close the game after the end time. This fixes the randomness for determining the winner.
+    public fun close_game(game: &mut Game, r: &Random, clock: &Clock, ctx: &mut TxContext) {
         assert!(game.end_time <= clock::timestamp_ms(clock), EGameInProgress);
-        assert!(option::is_none(&game.randomness_request), EGameAlreadyCompleted);
+        assert!(option::is_none(&game.randomness_request), EGameAlreadyClosed);
         assert!(option::is_none(&game.winner), EGameAlreadyCompleted);
-        game.randomness_request = option::some(random::create_randomness_request(rr, ctx));
+        game.randomness_request = option::some(random::new_request(r, ctx));
     }
 
-    public fun determine_winner(game: &mut Game, rr: &RandomRounds, ctx: &mut TxContext) {
-        assert!(option::is_some(&game.randomness_request), 0); // TODO: error code
+    /// Anyone can determine the winner after the randomness has been fixed.
+    public fun determine_winner(game: &mut Game, r: &Random, ctx: &mut TxContext) {
+        assert!(option::is_some(&game.randomness_request), ECloseNotCalled);
         assert!(option::is_none(&game.winner), EGameAlreadyCompleted);
         let randomness_request = option::extract(&mut game.randomness_request);
-        let gen = random::fulfill_and_create_generator(&randomness_request, rr);
+        let gen = random::fulfill(&randomness_request, r);
         let winner = random::generate_u32_in_range(&mut gen, 1, game.participants);
         game.winner = option::some(winner);
     }
@@ -78,10 +80,8 @@ module games::lottery {
     public fun play(game: &mut Game, coin: Coin<SUI>, clock: &Clock, ctx: &mut TxContext): Ticket {
         assert!(game.end_time > clock::timestamp_ms(clock), EGameAlreadyCompleted);
         assert!(coin::value(&coin) == game.cost_in_sui, EInvalidAmount);
-
         game.participants = game.participants + 1;
         coin::put(&mut game.balance, coin);
-
         Ticket {
             id: object::new(ctx),
             game_id: object::id(game),
@@ -89,7 +89,8 @@ module games::lottery {
         }
     }
 
-    /// The winner can take the prize.
+    /// The winner can take the total balance.
+    /// (Alternative design is to combine determine_winner and redeem into a single function.)
     public fun redeem(ticket: Ticket, game: &mut Game, ctx: &mut TxContext): Coin<SUI> {
         assert!(object::id(game) == ticket.game_id, EGameMistmatch);
         assert!(option::contains(&game.winner, &ticket.participant_index), EWrongGameWinner);
@@ -119,13 +120,18 @@ module games::lottery {
     }
 
     #[test_only]
-    public fun get_winner_obj(game: &Game): Option<u32> {
+    public fun get_winner(game: &Game): Option<u32> {
         game.winner
     }
 
     #[test_only]
     public fun get_balance(game: &Game): u64 {
         balance::value(&game.balance)
+    }
+
+    #[test_only]
+    public fun get_randomness_request(game: &Game): &Option<RandomGeneratorRequest> {
+        &game.randomness_request
     }
 
 }

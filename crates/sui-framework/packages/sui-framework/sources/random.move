@@ -7,6 +7,7 @@ module sui::random {
     use std::option;
     use std::option::Option;
     use std::vector;
+    use sui::event;
     use sui::dynamic_field;
     use sui::address::to_bytes;
     use sui::hmac::hmac_sha3_256;
@@ -17,14 +18,22 @@ module sui::random {
 
     // Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 0;
-    const EWrongInnerVersion: u64 = 1;
+    const EWrongRoundsVersion: u64 = 1;
     const EInvalidRandomnessUpdate: u64 = 2;
     const EInvalidRange: u64 = 3;
+    const ERoundNotAvailableYet: u64 = 4;
+    const ERoundTooOld: u64 = 5;
 
     const CURRENT_VERSION: u64 = 1;
     const RAND_OUTPUT_LEN: u16 = 32;
 
-    ////////////////////////////////////
+    // TODO: changes/assumptions on the Sui side:
+    // 1. Rounds are increasing monotonically also betweeen epochs (can also be done here if needed).
+    // 2. guarantee that the last sent partial sig is committed after EoP (but not to generate more).
+    // 3. first round is 1 (though can be handled here if needed).
+
+
+    ///
     /// Global randomness state.
     ///
 
@@ -32,16 +41,24 @@ module sui::random {
     /// The actual state is stored in a versioned inner field.
     struct Random has key {
         id: UID,
-        // The inner object must never be accessed outside this module as it could be used for accessing global
-        // randomness via deserialization of RandomInner.
-        inner: Versioned,
+        rounds: Versioned,
     }
 
-    struct RandomInner has store {
+    /// Container for historical randomness values.
+    struct Rounds has store {
+        id: UID,
         version: u64,
-        epoch: u64,
-        randomness_round: u64,
-        random_bytes: vector<u8>,
+
+        max_size: u64,
+        oldest_round: u64,
+        latest_round: u64,
+        // The actual randomness must never be accessed outside this module as it could be used for accessing global
+        // randomness via bcs::to_bytes(). We use dynamic fields to store the randomness values.
+    }
+
+    /// Event for new randomness value.
+    struct NewRandomness has copy, drop {
+        round: u64,
     }
 
     #[allow(unused_function)]
@@ -50,156 +67,96 @@ module sui::random {
     /// Can only be called by genesis or change_epoch transactions.
     fun create(ctx: &mut TxContext) {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
-
         let version = CURRENT_VERSION;
-
-        let inner = RandomInner {
+        let rounds = Rounds {
+            id: object::randomness_round(), // TODO: what is the right way to do this, another fixed address?
             version,
-            epoch: tx_context::epoch(ctx),
-            randomness_round: 0,
-            random_bytes: vector[],
+            max_size: 1,
+            oldest_round: 1,
+            latest_round: 0,
         };
-
         let self = Random {
             id: object::randomness_state(),
-            inner: versioned::create(version, inner, ctx),
+            rounds: versioned::create(version, rounds, ctx),
         };
         transfer::share_object(self);
     }
 
-    #[test_only]
-    public fun create_for_testing(ctx: &mut TxContext) {
-        create(ctx);
-    }
-
-    fun load_inner_mut(
+    fun load_rounds_mut(
         self: &mut Random,
-    ): &mut RandomInner {
-        let version = versioned::version(&self.inner);
-
+    ): &mut Rounds {
+        let version = versioned::version(&self.rounds);
         // Replace this with a lazy update function when we add a new version of the inner object.
-        assert!(version == CURRENT_VERSION, EWrongInnerVersion);
-        let inner: &mut RandomInner = versioned::load_value_mut(&mut self.inner);
-        assert!(inner.version == version, EWrongInnerVersion);
-        inner
+        assert!(version == CURRENT_VERSION, EWrongRoundsVersion);
+        let rounds: &mut Rounds = versioned::load_value_mut(&mut self.rounds);
+        assert!(rounds.version == version, EWrongRoundsVersion);
+        rounds
     }
 
-    fun load_inner(
+    fun load_rounds(
         self: &Random,
-    ): &RandomInner {
-        let version = versioned::version(&self.inner);
-
+    ): &Rounds {
+        let version = versioned::version(&self.rounds);
         // Replace this with a lazy update function when we add a new version of the inner object.
-        assert!(version == CURRENT_VERSION, EWrongInnerVersion);
-        let inner: &RandomInner = versioned::load_value(&self.inner);
-        assert!(inner.version == version, EWrongInnerVersion);
-        inner
+        assert!(version == CURRENT_VERSION, EWrongRoundsVersion);
+        let rounds: &Rounds = versioned::load_value(&self.rounds);
+        assert!(rounds.version == version, EWrongRoundsVersion);
+        rounds
+    }
+
+    fun add_round(r: &mut Rounds, new_max_size: u64, round: u64, value: vector<u8>) {
+        assert!(round == r.latest_round + 1, EInvalidRandomnessUpdate);
+        r.max_size = new_max_size;
+        r.latest_round = round;
+        // Remove old rounds if needed.
+        while (r.max_size < r.latest_round - r.oldest_round + 1) {
+            dynamic_field::remove<u64, vector<u8>>(&mut r.id, r.oldest_round);
+            r.oldest_round = r.oldest_round + 1;
+        };
+        dynamic_field::add(&mut r.id, round, value);
+        event::emit(NewRandomness { round });
+    }
+
+    fun round_bytes(r: &Rounds, round: u64): &vector<u8> {
+        assert!(round >= r.oldest_round, ERoundTooOld);
+        assert!(round <= r.latest_round, ERoundNotAvailableYet);
+        dynamic_field::borrow(&r.id, round)
     }
 
     #[allow(unused_function)]
-    /// Record new randomness. Called when executing the RandomnessStateUpdate system
-    /// transaction.
+    /// Record new randomness. Called when executing the RandomnessStateUpdate system transaction.
     fun update_randomness_state(
         self: &mut Random,
-        // TODO: rounds are increasing monotonically also betweeen epochs (can be done either on sui side, or here using
-        // a different counter).
-        // TODO: need to guarantee that the last sent partial sig is committed after EoP (but not to generate more)
-        // (locally: after 2f+1 EoP I don't sign anymore, and i wait until the round last signed by me is committed)
         new_round: u64,
         new_bytes: vector<u8>,
+        new_max_size: u64,
         ctx: &TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
-
-        // Randomness should only be incremented.
-        let epoch = tx_context::epoch(ctx);
-        let inner = load_inner_mut(self);
-        assert!(
-            (epoch == inner.epoch + 1 && inner.randomness_round == 0) ||
-                (new_round == inner.randomness_round + 1),
-            EInvalidRandomnessUpdate
-        );
-
-        inner.epoch = tx_context::epoch(ctx);
-        inner.randomness_round = new_round;
-        inner.random_bytes = new_bytes;
-
-        // TODO: Update also the RandomRounds object (with add_round).
-    }
-
-    #[test_only]
-    public fun update_randomness_state_for_testing(
-        self: &mut Random,
-        new_round: u64,
-        new_bytes: vector<u8>,
-        ctx: &TxContext,
-    ) {
-        update_randomness_state(self, new_round, new_bytes, ctx);
-    }
-
-
-    ////////////////////////////////////
-    /// RandomRounds store the last X random values.
-    ///
-    // TODO: better name?
-    // TODO: create as a singleton.
-
-    /// Container for historical randomness values.
-    struct RandomRounds has key {
-        id: UID,
-        max_size: u64,
-        oldest_round: u64,
-        latest_round: u64,
-        // The actual randomness must never be accessed outside this module as it could be used for accessing global
-        // randomness via bcs::to_bytes(). We use dynamic fields to store the randomness values.
-    }
-
-    fun create_random_rounds() {
-        transfer::share_object(RandomRounds {
-            id: object::randomness_state(), // TODO: update
-            max_size: 1,
-            oldest_round: 1,
-            latest_round: 0,
-        });
-    }
-
-    #[test_only]
-    public fun create_random_rounds_for_testing(ctx: &mut TxContext) {
-        create(ctx);
-    }
-
-    // The entry function for Sui. This function also updates the max_size if needed.
-    fun add_random_round(rr:&mut RandomRounds, new_max_size: u64, round: u64, value: vector<u8>) {
-        assert!(new_max_size > 0, 1);
-        assert!(round == rr.latest_round + 1, 2);
-        rr.max_size = new_max_size;
-        rr.latest_round = round;
-        while (rr.max_size < rr.latest_round - rr.oldest_round + 1) {
-            dynamic_field::remove<u64, vector<u8>>(&mut rr.id, rr.oldest_round);
-            rr.oldest_round = rr.oldest_round + 1;
-        };
-        dynamic_field::add(&mut rr.id, round, value);
+        let rounds = load_rounds_mut(self);
+        add_round(rounds, new_max_size, new_round, new_bytes);
     }
 
     /// Set of inputs that can be used to create a RandomGenerator
-    // TODO: better name?
-    struct RandomnessRequest has store {
+    struct RandomGeneratorRequest has store {
         round: u64,
         seed: vector<u8>,
     }
 
-    public fun create_randomness_request(rr: &RandomRounds, ctx: &mut TxContext): RandomnessRequest {
-        RandomnessRequest {
-            round: rr.latest_round + 2, // next round that is safe when the current transaction is executed.
-            seed: to_bytes(fresh_object_address(ctx)), // globally unique (thuogh predictable).
+    /// Create a new request for a unique random generator.
+    public fun new_request(r: &Random, ctx: &mut TxContext): RandomGeneratorRequest {
+        let rounds = load_rounds(r);
+        RandomGeneratorRequest {
+            round: rounds.latest_round + 2, // Next round that is safe when the current transaction is executed.
+            seed: to_bytes(fresh_object_address(ctx)), // Globally unique (though predictable).
         }
     }
 
-    /// Deterministic derivation of the seed for the given round.
-    public fun fulfill_and_create_generator(req: &RandomnessRequest, rr: &RandomRounds): RandomGenerator {
-        assert!(req.round >= rr.oldest_round && req.round <= rr.latest_round, 0); // TODO: better error
-        let randomness = dynamic_field::borrow(&rr.id, req.round);
+    /// Deterministic construction of a random generator from a request and the global randomness.
+    public fun fulfill(req: &RandomGeneratorRequest, r: &Random): RandomGenerator {
+        let rounds = load_rounds(r);
+        let randomness = round_bytes(rounds, req.round);
         let seed = hmac_sha3_256(randomness, &req.seed);
         RandomGenerator {
             seed,
@@ -208,38 +165,26 @@ module sui::random {
         }
     }
 
-    public fun is_available(req: &RandomnessRequest, rr: &RandomRounds): bool {
-        req.round >= rr.oldest_round && req.round <= rr.latest_round
+    public fun is_available(req: &RandomGeneratorRequest, r: &Random): bool {
+        let rounds = load_rounds(r);
+        req.round >= rounds.oldest_round && req.round <= rounds.latest_round
     }
 
-    public fun is_too_old(req: &RandomnessRequest, rr: &RandomRounds): bool {
-        req.round < rr.oldest_round
+    public fun is_too_old(req: &RandomGeneratorRequest, r: &Random): bool {
+        let rounds = load_rounds(r);
+        req.round < rounds.oldest_round
     }
 
-    public fun required_round(req: &RandomnessRequest): u64 {
+    public fun required_round(req: &RandomGeneratorRequest): u64 {
         req.round
     }
 
-    // TODO: Decide on how dapps could know when to call fulfill_and_create_generator.
-    // Options:
-    //  1. [Polling, Node APIs] tx1 calls create_randomness_request which returns the required randomness round either
-    //     as an output or as an event (or read directly from the chain)
-    //     -> dapp reads the value of RandomRounds from FN until the relevant randomness is available
-    //     -> sends tx2 that calls fulfill_and_create_generator
-    //  2. [Events] tx1 calls create_randomness_request which returns the required randomness round (as before)
-    //     -> waits for emitted event "round X is available" (by the random module)
-    //     -> sends tx2 that calls fulfill_and_create_generator
-    //  3. [Deferred execution for tx2] tx1 calls create_randomness_request
-    //     -> waits for tx1 finalization
-    //     -> sends tx2 that calls fulfill_and_create_generator with the next version of Random; this guarantees that
-    //     once tx2 is executed, the required randomness round is available.
-    // I think that 2 is the simplest to start with; if there is a need, one could implement a public "pusher service"
-    // for tx2.
 
-    ////////////////////////////////////
-    /// Unique randomness generator per seed.
+    ///
+    /// Unique randomness generator.
     ///
 
+    /// Randomness generator. Maintains an internal buffer of random bytes.
     struct RandomGenerator has drop {
         seed: vector<u8>,
         counter: u16,
@@ -355,6 +300,27 @@ module sui::random {
     /// Generate a random u8 in [min, max] (with a bias of 2^{-64}).
     public fun generate_u8_in_range(g: &mut RandomGenerator, min: u8, max: u8): u8 {
         (u128_in_range(g, (min as u128), (max as u128), 9) as u8)
+    }
+
+
+    //
+    // Helper functions for testing.
+    //
+
+    #[test_only]
+    public fun create_for_testing(ctx: &mut TxContext) {
+        create(ctx);
+    }
+
+    #[test_only]
+    public fun update_randomness_state_for_testing(
+        self: &mut Random,
+        new_round: u64,
+        new_bytes: vector<u8>,
+        new_max_size: u64,
+        ctx: &TxContext,
+    ) {
+        update_randomness_state(self, new_round, new_bytes, new_max_size, ctx);
     }
 
     #[test_only]

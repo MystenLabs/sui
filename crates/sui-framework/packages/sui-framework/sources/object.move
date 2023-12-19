@@ -114,6 +114,12 @@ module sui::object {
         }
     }
 
+    public(friend) fun randomness_round(): UID {
+        UID {
+            id: ID { bytes: @0x9 }
+        }
+    }
+
     /// Get the inner `ID` of `uid`
     public fun uid_as_inner(uid: &UID): &ID {
         &uid.id
