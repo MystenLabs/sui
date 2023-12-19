@@ -4,8 +4,6 @@
 /// This module provides functionality for generating secure randomness.
 module sui::random {
     use std::bcs;
-    use std::option;
-    use std::option::Option;
     use std::vector;
     use sui::event;
     use sui::dynamic_field;
@@ -139,7 +137,7 @@ module sui::random {
     }
 
     /// Set of inputs that can be used to create a RandomGenerator
-    struct RandomGeneratorRequest has store {
+    struct RandomGeneratorRequest has store, drop {
         round: u64,
         seed: vector<u8>,
     }
@@ -321,6 +319,12 @@ module sui::random {
         ctx: &TxContext,
     ) {
         update_randomness_state(self, new_round, new_bytes, new_max_size, ctx);
+    }
+
+    #[test_only]
+    public fun get_latest_round(self: &Random): u64 {
+        let rounds = load_rounds(self);
+        rounds.latest_round
     }
 
     #[test_only]

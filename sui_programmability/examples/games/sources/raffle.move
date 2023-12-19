@@ -67,7 +67,7 @@ module games::raffle {
     }
 
     /// Anyone can determine the winner after the randomness has been fixed.
-    public fun determine_winner(game: &mut Game, r: &Random, ctx: &mut TxContext) {
+    public fun determine_winner(game: &mut Game, r: &Random) {
         assert!(option::is_some(&game.randomness_request), ECloseNotCalled);
         assert!(option::is_none(&game.winner), EGameAlreadyCompleted);
         let randomness_request = option::extract(&mut game.randomness_request);

@@ -15,7 +15,7 @@ module games::slot_machine {
 
     use std::vector;
     use sui::balance::{Self, Balance};
-    use sui::coin::{Self, Coin, into_balance};
+    use sui::coin::{Self, Coin};
     use sui::object::{Self, UID};
     use sui::random::{Self, RandomGeneratorRequest, Random};
     use sui::sui::SUI;
@@ -24,9 +24,7 @@ module games::slot_machine {
     use sui::tx_context::{Self, TxContext};
 
     const EWrongCaller: u64 = 0;
-    const EInvalidSpinId: u64 = 1;
-    const ETooManyConcurrentSpins: u64 = 2;
-    const EBetTooLarge: u64 = 3;
+    const EBetTooLarge: u64 = 1;
 
     struct Game has key {
         id: UID,
@@ -71,8 +69,9 @@ module games::slot_machine {
         // Lock the total amount of the spin.
         let locked_balance = balance::split(&mut game.balance, coin::value(&bet));
         coin::put(&mut locked_balance, bet);
+        let spin_id = game.num_of_spins;
         let spin = Spin {
-            spin_id: game.num_of_spins,
+            spin_id,
             recepient: tx_context::sender(ctx),
             locked_balance,
             randomness_request: random::new_request(r, ctx),
@@ -81,14 +80,15 @@ module games::slot_machine {
         // Update the data structure of ongoing spins.
         game.num_of_spins = game.num_of_spins + 1;
         vector::push_back(&mut game.incomplete_spins, spin);
-        table::add(&mut game.spin_id_to_index, spin.spin_id, vector::length(&game.incomplete_spins) - 1);
+        table::add(&mut game.spin_id_to_index, spin_id, vector::length(&game.incomplete_spins) - 1);
 
-        spin.spin_id // TODO: is it better to return as an object?
+        spin_id // TODO: is it better to return as an object?
     }
 
     fun remove_spin(spin_id: u64, game: &mut Game): Spin {
         let i = table::remove(&mut game.spin_id_to_index, spin_id);
-        vector::swap(&mut game.incomplete_spins, i, vector::length(&game.incomplete_spins) - 1);
+        let last = vector::length(&game.incomplete_spins) - 1;
+        vector::swap(&mut game.incomplete_spins, i, last);
         let spin = vector::pop_back(&mut game.incomplete_spins);
         // Update the map to the swapped spin if it wasn't the last spin.
         if (i < vector::length(&game.incomplete_spins)) {
@@ -133,11 +133,12 @@ module games::slot_machine {
             if (random::is_available(&spin.randomness_request, r)) {
                 let spin = remove_spin(spin.spin_id, game);
                 process(spin, game, r, ctx);
-                continue; // not incrementing i
+                continue // not incrementing i
             };
             if (random::is_too_old(&spin.randomness_request, r)) {
                 let spin = remove_spin(spin.spin_id, game);
                 liquidate(spin, game);
+                continue // not incrementing i
             };
             i = i + 1;
         };
