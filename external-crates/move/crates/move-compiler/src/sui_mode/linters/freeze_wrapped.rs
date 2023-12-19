@@ -96,6 +96,25 @@ impl TypingVisitorConstructor for FreezeWrappedVisitor {
 }
 
 impl<'a> TypingVisitorContext for Context<'a> {
+    fn visit_module_custom(
+        &mut self,
+        _ident: E::ModuleIdent,
+        mdef: &mut T::ModuleDefinition,
+    ) -> bool {
+        let should_skip = mdef.attributes.is_test_or_test_only();
+        should_skip
+    }
+
+    fn visit_function_custom(
+        &mut self,
+        _module: E::ModuleIdent,
+        _function_name: P::FunctionName,
+        fdef: &mut T::Function,
+    ) -> bool {
+        let should_skip = fdef.attributes.is_test_or_test_only();
+        should_skip
+    }
+
     fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
         use T::UnannotatedExp_ as E;
         if let E::ModuleCall(fun) = &exp.exp.value {
