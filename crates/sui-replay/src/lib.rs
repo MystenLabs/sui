@@ -69,10 +69,6 @@ pub enum ReplayToolCommand {
     ProfileTransaction {
         #[arg(long, short)]
         tx_digest: String,
-        #[arg(long, short)]
-        show_effects: bool,
-        #[arg(long, short)]
-        diag: bool,
         /// Optional version of the executor to use, if not specified defaults to the one originally used for the transaction.
         #[arg(long, short, allow_hyphen_values = true)]
         executor_version: Option<i64>,
@@ -371,8 +367,6 @@ pub async fn execute_replay_command(
         }
         ReplayToolCommand::ProfileTransaction {
             tx_digest,
-            show_effects,
-            diag,
             executor_version,
             protocol_version,
             profile_output,
@@ -381,7 +375,7 @@ pub async fn execute_replay_command(
 
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
-            let sandbox_state = LocalExec::replay_with_network_config(
+            let _sandbox_state = LocalExec::replay_with_network_config(
                 rpc_url,
                 cfg_path.map(|p| p.to_str().unwrap().to_string()),
                 tx_digest,
@@ -393,16 +387,7 @@ pub async fn execute_replay_command(
             )
             .await?;
 
-            if diag {
-                println!("{:#?}", sandbox_state.pre_exec_diag);
-            }
-            if show_effects {
-                println!("{}", sandbox_state.local_exec_effects);
-            }
-
-            sandbox_state.check_effects()?;
-
-            println!("Execution finished successfully. Local and on-chain effects match.");
+            println!("Execution finished successfully.");
             Some((1u64, 1u64))
         }
 
