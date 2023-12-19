@@ -342,4 +342,22 @@ module sui::random {
         &r.buffer
     }
 
+    #[test_only]
+    public fun advance_random(random: &mut Random, ctx: &TxContext) {
+        let curr_round = get_latest_round(random);
+        update_randomness_state_for_testing(
+            random,
+            curr_round + 1,
+            x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F",
+            3,
+            ctx
+        );
+        update_randomness_state_for_testing(
+            random,
+            curr_round + 2,
+            x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F",
+            3,
+            ctx
+        );
+    }
 }

@@ -4,25 +4,12 @@
 #[test_only]
 module games::slot_machine_tests {
     use sui::coin::{Self, Coin};
-    use sui::random::{Self, update_randomness_state_for_testing, Random};
+    use sui::random::{Self, Random, advance_random};
     use sui::sui::SUI;
     use sui::test_scenario::{Self, Scenario};
     use sui::transfer;
-    use sui::tx_context::TxContext;
 
     use games::slot_machine;
-
-    const RANDOMNESS: vector<u8> = x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F";
-
-    fun update_random(random: &mut Random, round: u64, value: vector<u8>, ctx: &TxContext) {
-        update_randomness_state_for_testing(
-            random,
-            round,
-            value,
-            3,
-            ctx
-        );
-    }
 
     fun mint(addr: address, amount: u64, scenario: &mut Scenario) {
         transfer::public_transfer(coin::mint_for_testing<SUI>(amount, test_scenario::ctx(scenario)), addr);
@@ -41,7 +28,7 @@ module games::slot_machine_tests {
         random::create_for_testing(test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, user0);
         let random = test_scenario::take_shared<Random>(scenario);
-        update_random(&mut random, 1, RANDOMNESS, test_scenario::ctx(scenario));
+        advance_random(&mut random, test_scenario::ctx(scenario));
 
         // Create the game and get back the output objects.
         test_scenario::next_tx(scenario, user0);
@@ -58,8 +45,7 @@ module games::slot_machine_tests {
         let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
         let spin_id = slot_machine::spin(&mut game, coin, &random, test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, user0);
-        update_random(&mut random, 2, RANDOMNESS, test_scenario::ctx(scenario));
-        update_random(&mut random, 3, RANDOMNESS, test_scenario::ctx(scenario));
+        advance_random(&mut random, test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, user2);
         slot_machine::complete(spin_id, &mut game, &random, test_scenario::ctx(scenario));
         assert!(slot_machine::get_balance(&game) == 900, 1); // won 100
@@ -74,8 +60,7 @@ module games::slot_machine_tests {
         let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
         let spin_id = slot_machine::spin(&mut game, coin, &random, test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, user0);
-        update_random(&mut random, 4, RANDOMNESS, test_scenario::ctx(scenario));
-        update_random(&mut random, 5, RANDOMNESS, test_scenario::ctx(scenario));
+        advance_random(&mut random, test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, user2);
         slot_machine::complete(spin_id, &mut game, &random, test_scenario::ctx(scenario));
         assert!(slot_machine::get_balance(&game) == 1100, 1); // lost 200
@@ -89,8 +74,7 @@ module games::slot_machine_tests {
         let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
         let spin_id2 = slot_machine::spin(&mut game, coin, &random, test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, user0);
-        update_random(&mut random, 6, RANDOMNESS, test_scenario::ctx(scenario));
-        update_random(&mut random, 7, RANDOMNESS, test_scenario::ctx(scenario));
+        advance_random(&mut random, test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, user2);
         slot_machine::complete(spin_id1, &mut game, &random, test_scenario::ctx(scenario));
         assert!(slot_machine::get_balance(&game) == 1000, 1); // lost 100, but 200 are still locked
