@@ -87,29 +87,10 @@ pub enum Attribute_ {
 }
 pub type Attribute = Spanned<Attribute_>;
 
-impl Attribute_ {
-    pub fn attribute_name(&self) -> &Name {
-        match self {
-            Attribute_::Name(nm)
-            | Attribute_::Assigned(nm, _)
-            | Attribute_::Parameterized(nm, _) => nm,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AttributeName_ {
     Unknown(Symbol),
     Known(KnownAttribute),
-}
-
-impl AttributeName_ {
-    pub fn name(&self) -> Symbol {
-        match self {
-            Self::Unknown(s) => *s,
-            Self::Known(a) => a.name().into(),
-        }
-    }
 }
 
 pub type AttributeName = Spanned<AttributeName_>;
@@ -601,6 +582,35 @@ impl Hash for Address {
 //**************************************************************************************************
 // impls
 //**************************************************************************************************
+
+impl Attribute_ {
+    pub fn attribute_name(&self) -> &Name {
+        match self {
+            Attribute_::Name(nm)
+            | Attribute_::Assigned(nm, _)
+            | Attribute_::Parameterized(nm, _) => nm,
+        }
+    }
+}
+
+impl AttributeName_ {
+    pub fn name(&self) -> Symbol {
+        match self {
+            Self::Unknown(s) => *s,
+            Self::Known(a) => a.name().into(),
+        }
+    }
+}
+
+impl Attributes {
+    pub fn is_test_or_test_only(&self) -> bool {
+        self.contains_key_(&AttributeName_::Known(KnownAttribute::Testing(
+            known_attributes::TestingAttribute::TestOnly,
+        ))) || self.contains_key_(&AttributeName_::Known(KnownAttribute::Testing(
+            known_attributes::TestingAttribute::Test,
+        )))
+    }
+}
 
 impl UseFuns {
     pub fn new() -> Self {

@@ -5,7 +5,7 @@
 use crate::{
     debug_display, diag,
     diagnostics::{codes::NameResolution, Diagnostic},
-    expansion::ast::{AbilitySet, AttributeName_, ModuleIdent, ModuleIdent_, Visibility},
+    expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Visibility},
     naming::ast::{
         self as N, BlockLabel, BuiltinTypeName_, ResolvedUseFuns, StructDefinition,
         StructTypeParameter, TParam, TParamID, TVar, Type, TypeName, TypeName_, Type_, UseFunKind,
@@ -14,12 +14,7 @@ use crate::{
     parser::ast::{
         Ability_, ConstantName, Field, FunctionName, Mutability, StructName, ENTRY_MODIFIER,
     },
-    shared::{
-        known_attributes::{KnownAttribute, TestingAttribute},
-        program_info::*,
-        unique_map::UniqueMap,
-        *,
-    },
+    shared::{known_attributes::TestingAttribute, program_info::*, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
@@ -356,18 +351,13 @@ impl<'env> Context<'env> {
 
     /// current_module.is_test_only || current_function.is_test_only || current_function.is_test
     fn is_testing_context(&self) -> bool {
-        // TODO should we store this in the context?
-        let test_only = AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::TestOnly));
-        let test = AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::Test));
-
         self.current_module.as_ref().is_some_and(|m| {
             let minfo = self.module_info(m);
-            let is_test_only = minfo.attributes.contains_key_(&test_only);
+            let is_test_only = minfo.attributes.is_test_or_test_only();
             is_test_only
                 || self.current_function.as_ref().is_some_and(|f| {
                     let finfo = minfo.functions.get(f).unwrap();
-                    finfo.attributes.contains_key_(&test_only)
-                        || finfo.attributes.contains_key_(&test)
+                    finfo.attributes.is_test_or_test_only()
                 })
         })
     }
