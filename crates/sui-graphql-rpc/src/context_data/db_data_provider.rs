@@ -664,7 +664,7 @@ impl PgManager {
                     DbValidationError::PageSizeExceeded(f, self.limits.max_page_size).into(),
                 );
             }
-            return Ok(PageLimit::First(f as i64));
+            Ok(PageLimit::First(f as i64))
         } else if let Some(l) = last {
             if l > self.limits.max_page_size {
                 return Err(
