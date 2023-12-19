@@ -1157,16 +1157,8 @@ impl PgManager {
         Ok(Some(domain.to_string()))
     }
 
-    pub(crate) async fn fetch_latest_sui_system_state(
-        &self,
-    ) -> Result<NativeSuiSystemStateSummary, Error> {
-        let result = self
-            .inner
-            .spawn_blocking(|this| this.get_latest_sui_system_state())
-            .await?;
-        Ok(result)
-    }
-
+    /// Fetch the system state summary for the given epoch.
+    /// If no epoch is given, the latest sui system state summary is fetched.
     pub(crate) async fn fetch_system_state_summary(
         &self,
         epoch: Option<u64>,
