@@ -13,6 +13,7 @@ import {
 import { Pagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
+import { useTransactionBlocksForAddress } from '~/hooks/useTransactionBlocksForAddress';
 
 export enum FILTER_VALUES {
 	INPUT = 'InputObject',
@@ -22,6 +23,7 @@ export enum FILTER_VALUES {
 type TransactionBlocksForAddressProps = {
 	address: string;
 	filter?: FILTER_VALUES;
+	pageType: 'Package' | 'Object' | 'Address';
 };
 
 enum PAGE_ACTIONS {
@@ -90,6 +92,7 @@ export function FiltersControl({
 function TransactionBlocksForAddress({
 	address,
 	filter = FILTER_VALUES.CHANGED,
+	pageType,
 }: TransactionBlocksForAddressProps) {
 	const [currentPageState, dispatch] = useReducer(reducer, {
 		InputObject: 0,
@@ -97,20 +100,33 @@ function TransactionBlocksForAddress({
 	});
 
 	const { data, isPending, isFetching, isFetchingNextPage, fetchNextPage, hasNextPage } =
-		useGetTransactionBlocks({
-			[filter]: address,
-		} as TransactionFilter);
+		useGetTransactionBlocks(
+			{
+				[filter]: address,
+			} as TransactionFilter,
+			undefined,
+			undefined,
+			pageType === 'Address',
+		);
+
+	const {
+		data: dataForAddress,
+		isPending: isPendingForAddress,
+		isFetching: isFetchingForAddress,
+	} = useTransactionBlocksForAddress(address, pageType !== 'Address');
 
 	const currentPage = currentPageState[filter];
-	const cardData =
-		data && data.pages[currentPage]
-			? genTableDataFromTxData(data.pages[currentPage].data)
-			: undefined;
+	const currentPageData = pageType === 'Address' ? dataForAddress : data?.pages[currentPage].data;
+	const cardData = genTableDataFromTxData(currentPageData ?? []);
+	const loading =
+		pageType === 'Address'
+			? isPendingForAddress || isFetchingForAddress
+			: isPending || isFetching || isFetchingNextPage;
 
 	return (
-		<div data-testid="tx">
+		<div data-testid="address-txn-table">
 			<div className="flex flex-col space-y-5 pt-5 text-left xl:pr-10">
-				{isPending || isFetching || isFetchingNextPage || !cardData ? (
+				{loading || !cardData ? (
 					<PlaceholderTable
 						rowCount={DEFAULT_TRANSACTIONS_LIMIT}
 						rowHeight="16px"
@@ -118,7 +134,7 @@ function TransactionBlocksForAddress({
 						colWidths={['30%', '30%', '10%', '20%', '10%']}
 					/>
 				) : (
-					<div>
+					<div className="h-600 overflow-auto">
 						<TableCard data={cardData.data} columns={cardData.columns} />
 					</div>
 				)}

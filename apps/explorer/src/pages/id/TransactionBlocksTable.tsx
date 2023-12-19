@@ -6,7 +6,6 @@ import TransactionBlocksForAddress, {
 	FiltersControl,
 } from '~/components/TransactionBlocksForAddress';
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
-import { TransactionsForAddress } from '~/components/transactions/TransactionsForAddress';
 import { useState } from 'react';
 
 export function TransactionBlocksTable({
@@ -30,15 +29,7 @@ export function TransactionBlocksTable({
 			}
 		>
 			<ErrorBoundary>
-				{pageType === 'Address' ? (
-					<div data-testid="address-txn-table">
-						<TransactionsForAddress type="address" address={address} />
-					</div>
-				) : (
-					<div data-testid="object-txn-table">
-						<TransactionBlocksForAddress address={address} filter={filterValue} />
-					</div>
-				)}
+				<TransactionBlocksForAddress address={address} filter={filterValue} pageType={pageType} />
 			</ErrorBoundary>
 		</TabHeader>
 	);
