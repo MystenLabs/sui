@@ -5,12 +5,11 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
-	plugins: [tsconfigPaths()],
+	plugins: [tsconfigPaths({ root: new URL('./', import.meta.url).pathname })],
 	test: {
 		exclude: [...configDefaults.exclude, 'tests/**'],
 		// TODO: Create custom extension environment.
 		environment: 'happy-dom',
-		minThreads: 1,
 		setupFiles: ['./testSetup.ts'],
 		restoreMocks: true,
 	},

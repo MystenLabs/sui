@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { expect, test } from 'vitest';
 
-import { Ed25519Keypair } from '../../typescript/src/keypairs/ed25519';
 import { generateNonce, generateRandomness } from '../src';
 
 test('can generate using `generateRandomness`', () => {
