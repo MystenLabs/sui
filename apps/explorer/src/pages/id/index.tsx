@@ -18,6 +18,7 @@ import { PageContent } from './PageContent';
 import { type DataType, translate } from '~/pages/object-result/ObjectResultType';
 import { PackageDetails } from '~/pages/id/PackageDetails';
 import { type SuiObjectResponse } from '@mysten/sui.js/dist/cjs/client';
+import { Banner } from '~/ui/Banner';
 
 const PACKAGE_TYPE_NAME = 'Move Package';
 
@@ -88,6 +89,7 @@ function PageLayoutContainer() {
 	const isPackage = resp ? resp.objType === PACKAGE_TYPE_NAME : false;
 	const loading = isPending || loadingResolveSuiNSAddress || loadingDomainName;
 	const pageType = isPackage ? 'Package' : isObject ? 'Object' : 'Address';
+	const displayAddress = resolvedAddress || id!;
 
 	return (
 		<PageLayout
@@ -107,12 +109,13 @@ function PageLayoutContainer() {
 				),
 			}}
 			content={
-				<PageContent
-					address={resolvedAddress || id!}
-					error={error}
-					pageType={pageType}
-					data={resp}
-				/>
+				error ? (
+					<Banner variant="error" spacing="lg" fullWidth>
+						Data could not be extracted on the following specified address ID: {displayAddress}
+					</Banner>
+				) : (
+					<PageContent address={displayAddress} pageType={pageType} data={resp} />
+				)
 			}
 		/>
 	);
