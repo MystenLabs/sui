@@ -30,7 +30,7 @@ pub struct CFGContext<'a> {
     pub member: MemberName,
     pub struct_declared_abilities: &'a UniqueMap<ModuleIdent, UniqueMap<StructName, AbilitySet>>,
     pub attributes: &'a Attributes,
-    pub is_entry: Option<Loc>,
+    pub entry: Option<Loc>,
     pub visibility: Visibility,
     pub signature: &'a FunctionSignature,
     pub locals: &'a UniqueMap<Var, SingleType>,

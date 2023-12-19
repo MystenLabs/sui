@@ -101,8 +101,8 @@ impl<'a> TypingVisitorContext for Context<'a> {
         _ident: E::ModuleIdent,
         mdef: &mut T::ModuleDefinition,
     ) -> bool {
-        let should_skip = mdef.attributes.is_test_or_test_only();
-        should_skip
+        // skips if true
+        mdef.attributes.is_test_or_test_only()
     }
 
     fn visit_function_custom(
@@ -111,8 +111,8 @@ impl<'a> TypingVisitorContext for Context<'a> {
         _function_name: P::FunctionName,
         fdef: &mut T::Function,
     ) -> bool {
-        let should_skip = fdef.attributes.is_test_or_test_only();
-        should_skip
+        // skips if true
+        fdef.attributes.is_test_or_test_only()
     }
 
     fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {

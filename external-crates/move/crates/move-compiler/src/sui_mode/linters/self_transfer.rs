@@ -88,7 +88,7 @@ impl SimpleAbsIntConstructor for SelfTransferVerifier {
             return None;
         };
 
-        if context.is_entry.is_some()
+        if context.entry.is_some()
             || context.attributes.is_test_or_test_only()
             || program
                 .modules
