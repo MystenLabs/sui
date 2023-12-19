@@ -1480,38 +1480,52 @@ fn deps_equal<'a>(
     // sub-graph or in the pre-populated combined graph (see pkg_table_for_deps_compare's doc
     // comment for a more detailed explanation). If these were to fail, it would indicate a bug in
     // the algorithm so it's OK to panic here.
-    let graph1_edges: BTreeSet<_> = graph1
+    let graph1_edges = graph1
         .package_graph
         .edges(pkg_name)
         .map(|(_, pkg, dep)| {
             (
-                dep,
                 pkg,
-                graph1_pkg_table
-                    .get(&pkg)
-                    .or_else(|| overrides.get(&pkg))
-                    .unwrap(),
+                (
+                    dep,
+                    graph1_pkg_table
+                        .get(&pkg)
+                        .or_else(|| overrides.get(&pkg))
+                        .unwrap(),
+                ),
             )
         })
-        .collect();
-    let graph2_edges: BTreeSet<_> = graph2
+        .collect::<BTreeMap<PM::PackageName, (&Dependency, &Package)>>();
+    let graph2_edges = graph2
         .package_graph
         .edges(pkg_name)
         .map(|(_, pkg, dep)| {
             (
-                dep,
                 pkg,
-                graph2_pkg_table
-                    .get(&pkg)
-                    .or_else(|| overrides.get(&pkg))
-                    .unwrap(),
+                (
+                    dep,
+                    graph2_pkg_table
+                        .get(&pkg)
+                        .or_else(|| overrides.get(&pkg))
+                        .unwrap(),
+                ),
             )
         })
-        .collect();
+        .collect::<BTreeMap<PM::PackageName, (&Dependency, &Package)>>();
 
-    let (graph1_pkgs, graph2_pkgs): (Vec<_>, Vec<_>) = graph1_edges
-        .symmetric_difference(&graph2_edges)
-        .partition(|dep| graph1_edges.contains(dep));
+    let mut graph1_pkgs = vec![];
+    for (k, v) in graph1_edges.iter() {
+        if !graph2_edges.contains_key(&k) || graph2_edges.get(&k) != Some(&v) {
+            graph1_pkgs.push((v.0, *k, v.1));
+        }
+    }
+    let mut graph2_pkgs = vec![];
+    for (k, v) in graph2_edges.iter() {
+        if !graph1_edges.contains_key(&k) || graph1_edges.get(&k) != Some(&v) {
+            graph2_pkgs.push((v.0, *k, v.1));
+        }
+    }
+
     if graph1_pkgs.is_empty() && graph2_pkgs.is_empty() {
         Ok(())
     } else {
