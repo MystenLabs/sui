@@ -1178,6 +1178,22 @@ impl PgManager {
         Ok(result)
     }
 
+    pub(crate) async fn fetch_system_state_summary(
+        &self,
+        epoch: u64,
+    ) -> Result<NativeSuiSystemStateSummary, Error> {
+        let result = self
+            .inner
+            .spawn_blocking(|this| this.get_latest_sui_system_state())
+            .await?;
+        if result.epoch == epoch {
+            Ok(result)
+        } else {
+            // get the
+            // self.inner.spawn_blocking(| this | this.get_dynamic_fields_raw_in_blocking_task(, , ))
+        }
+    }
+
     pub(crate) async fn fetch_protocol_configs(
         &self,
         protocol_version: Option<u64>,

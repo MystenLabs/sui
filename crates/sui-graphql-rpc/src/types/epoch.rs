@@ -13,6 +13,7 @@ use super::safe_mode::SafeMode;
 use super::stake_subsidy::StakeSubsidy;
 use super::storage_fund::StorageFund;
 use super::system_parameters::SystemParameters;
+use super::system_state_summary::SystemStateSummary;
 use super::transaction_block::{TransactionBlock, TransactionBlockFilter};
 use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
@@ -99,19 +100,6 @@ impl Epoch {
         self.stored.stake_subsidy_amount.map(BigInt::from)
     }
 
-    /// SUI set aside to account for objects stored on-chain, at the start of the epoch.
-
-    async fn storage_fund(&self) -> Option<StorageFund> {
-        Some(StorageFund {
-            total_object_storage_rebates: Some(BigInt::from(
-                self.system_state.storage_fund_total_object_storage_rebates,
-            )),
-            non_refundable_balance: Some(BigInt::from(
-                self.system_state.storage_fund_non_refundable_balance,
-            )),
-        })
-    }
-
     /// The storage fund available in this epoch.
     /// This fund is used to redistribute storage fees from past transactions
     /// to future validators.
@@ -152,62 +140,13 @@ impl Epoch {
         ))
     }
 
-    /// Information about whether the start of this epoch was in safe mode, which happens if the full epoch
-    /// change logic fails for some reason.
-    async fn safe_mode(&self) -> Option<SafeMode> {
-        Some(SafeMode {
-            enabled: Some(self.system_state.safe_mode),
-            gas_summary: Some(GasCostSummary {
-                computation_cost: self.system_state.safe_mode_computation_rewards,
-                storage_cost: self.system_state.safe_mode_storage_rewards,
-                storage_rebate: self.system_state.safe_mode_storage_rebates,
-                non_refundable_storage_fee: self.system_state.safe_mode_non_refundable_storage_fee,
-            }),
-        })
-    }
-
-    /// The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.  This
-    /// version changes whenever the fields contained in the system state object (held in a dynamic
-    /// field attached to `0x5`) change.
-    async fn system_state_version(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.system_state.system_state_version))
-    }
-
-    /// Details of the system that are decided during genesis.
-    async fn system_parameters(&self) -> Option<SystemParameters> {
-        Some(SystemParameters {
-            duration_ms: Some(BigInt::from(self.system_state.epoch_duration_ms)),
-            stake_subsidy_start_epoch: Some(self.system_state.stake_subsidy_start_epoch),
-            // min validator count can be extracted, but it requires some JSON RPC changes,
-            // so we decided to wait on it for now.
-            min_validator_count: None,
-            max_validator_count: Some(self.system_state.max_validator_count),
-            min_validator_joining_stake: Some(BigInt::from(
-                self.system_state.min_validator_joining_stake,
-            )),
-            validator_low_stake_threshold: Some(BigInt::from(
-                self.system_state.validator_low_stake_threshold,
-            )),
-            validator_very_low_stake_threshold: Some(BigInt::from(
-                self.system_state.validator_very_low_stake_threshold,
-            )),
-            validator_low_stake_grace_period: Some(BigInt::from(
-                self.system_state.validator_low_stake_grace_period,
-            )),
-        })
-    }
-
-    /// Parameters related to the subsidy that supplements staking rewards
-    async fn system_stake_subsidy(&self) -> Option<StakeSubsidy> {
-        Some(StakeSubsidy {
-            balance: Some(BigInt::from(self.system_state.stake_subsidy_balance)),
-            distribution_counter: Some(self.system_state.stake_subsidy_distribution_counter),
-            current_distribution_amount: Some(BigInt::from(
-                self.system_state.stake_subsidy_current_distribution_amount,
-            )),
-            period_length: Some(self.system_state.stake_subsidy_period_length),
-            decrease_rate: Some(self.system_state.stake_subsidy_decrease_rate as u64),
-        })
+    #[graphql(flatten)]
+    async fn system_state_summary(&self, ctx: &Context<'_>) -> Result<SystemStateSummary> {
+        let state = ctx
+            .data_unchecked::<PgManager>()
+            .fetch_system_state_summary(self.stored.epoch as u64)
+            .await?;
+        Ok(SystemStateSummary { native: state })
     }
 
     /// The epoch's corresponding checkpoints
