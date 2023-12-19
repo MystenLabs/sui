@@ -16,7 +16,7 @@ import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { ObjectView } from '~/pages/object-result/views/ObjectView';
 import { PageContent } from './PageContent';
 import { type DataType, translate } from '~/pages/object-result/ObjectResultType';
-import { PackageDetails } from '~/pages/id-page/PackageDetails';
+import { PackageDetails } from '~/pages/id/PackageDetails';
 import { type SuiObjectResponse } from '@mysten/sui.js/dist/cjs/client';
 
 const PACKAGE_TYPE_NAME = 'Move Package';
@@ -65,22 +65,22 @@ function Header({
 	);
 }
 
-function PageLayoutContainer({ address }: { address: string }) {
+function PageLayoutContainer() {
 	const { id } = useParams();
 	const isSuiNSAddress = isSuiNSName(id!);
 	const {
 		data: resolvedAddress,
 		isLoading: loadingResolveSuiNSAddress,
 		error: resolveSuinsAddressError,
-	} = useResolveSuiNSAddress(address, isSuiNSAddress);
+	} = useResolveSuiNSAddress(id, isSuiNSAddress);
 
 	const {
 		data: domainName,
 		isLoading: loadingDomainName,
 		error: domainNameError,
-	} = useResolveSuiNSName(address, !isSuiNSAddress);
+	} = useResolveSuiNSName(id, !isSuiNSAddress);
 
-	const { data, isPending, error: getObjectError } = useGetObject(address!);
+	const { data, isPending, error: getObjectError } = useGetObject(id!);
 
 	const isObject = !!data?.data;
 	const error = resolveSuinsAddressError || domainNameError || getObjectError;
@@ -97,7 +97,7 @@ function PageLayoutContainer({ address }: { address: string }) {
 				size: 'md',
 				content: (
 					<Header
-						address={address}
+						address={id!}
 						pageType={pageType}
 						error={error}
 						loading={loading}
@@ -108,7 +108,7 @@ function PageLayoutContainer({ address }: { address: string }) {
 			}}
 			content={
 				<PageContent
-					address={resolvedAddress || address}
+					address={resolvedAddress || id!}
 					error={error}
 					pageType={pageType}
 					data={resp}
@@ -118,8 +118,6 @@ function PageLayoutContainer({ address }: { address: string }) {
 	);
 }
 
-export function IdPage() {
-	const { id } = useParams();
-
-	return <PageLayoutContainer address={id!} />;
+export function Id() {
+	return <PageLayoutContainer />;
 }

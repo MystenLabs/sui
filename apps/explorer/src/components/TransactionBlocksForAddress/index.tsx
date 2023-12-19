@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type TransactionFilter } from '@mysten/sui.js/client';
-import { Heading, RadioGroup, RadioGroupItem } from '@mysten/ui';
+import { RadioGroup, RadioGroupItem } from '@mysten/ui';
 import { useReducer } from 'react';
 
 import { genTableDataFromTxData } from '../transactions/TxCardUtils';
@@ -13,7 +13,6 @@ import {
 import { Pagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
-import clsx from 'clsx';
 
 export enum FILTER_VALUES {
 	INPUT = 'InputObject',
@@ -23,7 +22,6 @@ export enum FILTER_VALUES {
 type TransactionBlocksForAddressProps = {
 	address: string;
 	filter?: FILTER_VALUES;
-	header?: string;
 };
 
 enum PAGE_ACTIONS {
@@ -92,7 +90,6 @@ export function FiltersControl({
 function TransactionBlocksForAddress({
 	address,
 	filter = FILTER_VALUES.CHANGED,
-	header,
 }: TransactionBlocksForAddressProps) {
 	const [currentPageState, dispatch] = useReducer(reducer, {
 		InputObject: 0,
@@ -112,15 +109,7 @@ function TransactionBlocksForAddress({
 
 	return (
 		<div data-testid="tx">
-			{header && (
-				<div className="flex items-center justify-between border-b border-gray-45 pb-5">
-					<Heading color="gray-90" variant="heading4/semibold">
-						{header}
-					</Heading>
-				</div>
-			)}
-
-			<div className={clsx(header && 'pt-5', 'flex flex-col space-y-5 text-left xl:pr-10')}>
+			<div className="flex flex-col space-y-5 pt-5 text-left xl:pr-10">
 				{isPending || isFetching || isFetchingNextPage || !cardData ? (
 					<PlaceholderTable
 						rowCount={DEFAULT_TRANSACTIONS_LIMIT}

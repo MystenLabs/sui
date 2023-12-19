@@ -9,7 +9,7 @@ import { type Direction } from 'react-resizable-panels';
 import { type DataType } from '~/pages/object-result/ObjectResultType';
 import { checkIsPropertyType } from '~/utils/objectUtils';
 
-import { usePackageViewedData } from '~/pages/id-page/utils';
+import { usePackageViewedData } from '~/pages/id/utils';
 
 const splitPanelsOrientation: { label: string; value: Direction }[] = [
 	{ label: 'STACKED', value: 'vertical' },

@@ -15,7 +15,7 @@ import { useBreakpoint } from '~/hooks/useBreakpoint';
 import { OwnedCoins } from '~/components/OwnedCoins';
 import { OwnedObjects } from '~/components/OwnedObjects';
 import { LOCAL_STORAGE_SPLIT_PANE_KEYS, SplitPanes } from '~/ui/SplitPanes';
-import { Modules } from '~/pages/id-page/Modules';
+import { Modules } from '~/pages/id/Modules';
 import { type DataType } from '~/pages/object-result/ObjectResultType';
 import { useState } from 'react';
 
