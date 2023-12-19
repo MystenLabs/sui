@@ -1083,3 +1083,103 @@ pub mod known_attributes {
         }
     }
 }
+
+//**************************************************************************************************
+// Binop Processing Macro
+//**************************************************************************************************
+
+/// A macro to handle binop processing without recursion in various passes. This macro proceeds by:
+///
+/// 1. unravelling nested binops into a work queue;
+/// 2. processing that work queue to create a Polish notation expression stack consisting of `Op`
+///    (operator) and `Val` (value) entries;
+/// 3. processing the expression stack in reverse (RPN-style) alongside a value stack to reassemble
+///    the binary operation expressions;
+/// 4. and, finally, returning the final value left on the value stack.
+///
+/// The macro takes the following arguments:
+///
+///  Type arguments:
+///
+/// * `$optype` - The type contained in the Op entries on the expression stack.
+/// * `$valtype` - The type contained in the Val entries on the expression stack.
+///
+/// Work Queue Arguments:
+///
+/// * `$e` - The initial expression to start processing.
+/// * `$work_pat` - The pattern used to disassemble entries in the work queue. Note that the work
+///    queue may contain any arbitrary type (such as a tuple of a block and expression), so the
+///    work pattern is used to disassemble and bind component parts.
+/// * `$work_exp` - The actual expression to match on, as defined in the `$work_pat`.
+/// * `$binop_pat` - This is a pattern matched against the `$work_exp` that matches if and only if
+///    the `$work_exp` is in fact a binary operation expression.
+/// * `$bind_rhs` - This block is executed when `$work_exp` matches `$binop_pat`, with any pattern
+///   binders from `$binop_pat` in scope. This block must return a 3-tuple consisting of the
+///   left-hand side work queue entry, the `$optype` entry for the operand, and the right-hand side
+///   work queue entry (as `(lhs, op, rhs)`). Note that `lhs` and `rhs` here should have the same
+///   type as the initial `$e`.
+/// * `$default` - This block processes a work queue entry when the pattern match fails, and is
+///   expected to yield a `$valtype` entry. Note this should be the value you would like on your
+///   value stack (i.e., the type of the final result).
+///
+/// Value Stack Arguments:
+///
+/// * `$value_stack` - An identifier that names the value stack.
+/// * `$op_pat` - When the expression stack finds an `Op`, it will match its contents with this.
+/// * `$op_rhs` - This block is executed when an Op is found on the expression stack. Any pattern
+///   binders from `$op_pat` will be in scope. This block must return value for the `$value_stack`,
+///   and can do so by popping the left-hand side and right-hand side results from the
+///   `$value_stack` (in that order). These values should always be available as per the contract
+///   of the macro and how it disassembles and pushes values across its computation.
+///
+/// Examples of usage can be found in `expansion/`, `naming/`, `typing/`, and `hlir/`, in their
+/// respective `translation.rs` implementations.
+
+macro_rules! process_binops {
+    ($optype:ty,
+     $valtype:ty,
+     $e:expr,
+     $work_pat:pat,
+     $work_exp:expr,
+     $binop_pat:pat => $binop_rhs:block,
+     $default:block,
+     $value_stack:ident,
+     $op_pat:pat => $op_rhs:block
+    ) => {{
+        enum Pn {
+            Op($optype),
+            Val($valtype),
+        }
+
+        let mut pn_stack: Vec<Pn> = vec![];
+        let mut work_queue = vec![$e];
+
+        while let Some($work_pat) = work_queue.pop() {
+            if let $binop_pat = $work_exp {
+                let (lhs, op, rhs) = $binop_rhs;
+                pn_stack.push(Pn::Op(op));
+                work_queue.push(rhs);
+                work_queue.push(lhs);
+            } else {
+                let result = $default;
+                pn_stack.push(Pn::Val(result));
+            }
+        }
+
+        let mut $value_stack = vec![];
+        for entry in pn_stack.into_iter().rev() {
+            match entry {
+                Pn::Op($op_pat) => {
+                    let op_result = $op_rhs;
+                    $value_stack.push(op_result);
+                }
+                Pn::Val(v) => $value_stack.push(v),
+            }
+        }
+        let result = $value_stack.pop().unwrap();
+        assert!($value_stack.is_empty());
+        result
+    }};
+}
+
+pub(crate) use process_binops;

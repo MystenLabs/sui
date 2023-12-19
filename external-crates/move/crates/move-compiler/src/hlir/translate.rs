@@ -14,11 +14,12 @@ use crate::{
     hlir::detect_dead_code::program as detect_dead_code_analysis,
     naming::ast as N,
     parser::ast::{Ability_, BinOp, BinOp_, ConstantName, Field, FunctionName, StructName},
-    shared::{ast_debug::AstDebug, unique_map::UniqueMap, *},
+    shared::{ast_debug::AstDebug, process_binops, unique_map::UniqueMap, *},
     sui_mode::ID_FIELD_NAME,
     typing::ast as T,
     FullyCompiledProgram,
 };
+
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
@@ -2038,88 +2039,86 @@ fn process_binops(
     e: T::Exp,
 ) -> H::Exp {
     use T::UnannotatedExp_ as E;
-
-    enum Pn {
-        Op(BinOp, H::Type, Loc),
-        Val(Block, H::Exp),
-    }
-
-    // ----------------------------------------
-    // Convert nested binops into a PN list
-
-    let mut pn_stack = vec![];
-
-    let mut work_queue = vec![(e, result_type)];
-
-    while let Some((exp, ty)) = work_queue.pop() {
-        if let T::Exp {
+    let (mut block, exp) = process_binops!(
+        (BinOp, H::Type, Loc),
+        (Block, H::Exp),
+        (e, result_type),
+        (exp, ty),
+        exp,
+        T::Exp {
             exp: sp!(eloc, E::BinopExp(lhs, op, op_type, rhs)),
             ..
-        } = exp
+        } =>
         {
-            pn_stack.push(Pn::Op(op, ty, eloc));
+            let op = (op, ty, eloc);
             let op_type = freeze_ty(type_(context, *op_type));
-            // push on backwards so when we reverse the stack, we are in RPN order
-            work_queue.push((*rhs, op_type.clone()));
-            work_queue.push((*lhs, op_type));
-        } else {
+            let rhs = (*rhs, op_type.clone());
+            let lhs = (*lhs, op_type);
+            (lhs, op, rhs)
+        },
+        {
             let mut exp_block = make_block!();
             let exp = value(context, &mut exp_block, Some(ty).as_ref(), exp);
-            pn_stack.push(Pn::Val(exp_block, exp));
-        }
-    }
-
-    // ----------------------------------------
-    // Now process as an RPN stack
-
-    let mut value_stack: Vec<(Block, H::Exp)> = vec![];
-
-    for entry in pn_stack.into_iter().rev() {
-        match entry {
-            Pn::Op(sp!(loc, op @ BinOp_::And), ty, eloc) => {
-                let test = value_stack.pop().expect("ICE binop hlir issue");
-                let if_ = value_stack.pop().expect("ICE binop hlir issue");
-                if simple_bool_binop_arg(&if_) {
-                    let (mut test_block, test_exp) = test;
-                    let (mut if_block, if_exp) = if_;
-                    test_block.append(&mut if_block);
-                    let exp = H::exp(ty, sp(eloc, make_binop(test_exp, sp(loc, op), if_exp)));
-                    value_stack.push((test_block, exp));
-                } else {
-                    let else_ = (make_block!(), bool_exp(loc, false));
-                    value_stack.push(make_boolean_binop(context, sp(loc, op), test, if_, else_));
+            (exp_block, exp)
+        },
+        value_stack,
+        (op, ty, eloc) =>
+        {
+            match op {
+                sp!(loc, op @ BinOp_::And) => {
+                    let test = value_stack.pop().expect("ICE binop hlir issue");
+                    let if_ = value_stack.pop().expect("ICE binop hlir issue");
+                    if simple_bool_binop_arg(&if_) {
+                        let (mut test_block, test_exp) = test;
+                        let (mut if_block, if_exp) = if_;
+                        test_block.append(&mut if_block);
+                        let exp = H::exp(ty, sp(eloc, make_binop(test_exp, sp(loc, op), if_exp)));
+                        (test_block, exp)
+                    } else {
+                        let else_ = (make_block!(), bool_exp(loc, false));
+                        make_boolean_binop(
+                            context,
+                            sp(loc, op),
+                            test,
+                            if_,
+                            else_,
+                        )
+                    }
+                }
+                sp!(loc, op @ BinOp_::Or) => {
+                    let test = value_stack.pop().expect("ICE binop hlir issue");
+                    let else_ = value_stack.pop().expect("ICE binop hlir issue");
+                    if simple_bool_binop_arg(&else_) {
+                        let (mut test_block, test_exp) = test;
+                        let (mut else_block, else_exp) = else_;
+                        test_block.append(&mut else_block);
+                        let exp = H::exp(ty, sp(eloc, make_binop(test_exp, sp(loc, op), else_exp)));
+                        (test_block, exp)
+                    } else {
+                        let if_ = (make_block!(), bool_exp(loc, true));
+                        make_boolean_binop(
+                            context,
+                            sp(loc, op),
+                            test,
+                            if_,
+                            else_,
+                        )
+                    }
+                }
+                op => {
+                    let (mut lhs_block, lhs_exp) = value_stack.pop().expect("ICE binop hlir issue");
+                    let (mut rhs_block, rhs_exp) = value_stack.pop().expect("ICE binop hlir issue");
+                    lhs_block.append(&mut rhs_block);
+                    // NB: here we could check if the LHS and RHS are "large" terms and let-bind
+                    // them if they are getting too big.
+                    let exp = H::exp(ty, sp(eloc, make_binop(lhs_exp, op, rhs_exp)));
+                    (lhs_block, exp)
                 }
             }
-            Pn::Op(sp!(loc, op @ BinOp_::Or), ty, eloc) => {
-                let test = value_stack.pop().expect("ICE binop hlir issue");
-                let else_ = value_stack.pop().expect("ICE binop hlir issue");
-                if simple_bool_binop_arg(&else_) {
-                    let (mut test_block, test_exp) = test;
-                    let (mut else_block, else_exp) = else_;
-                    test_block.append(&mut else_block);
-                    let exp = H::exp(ty, sp(eloc, make_binop(test_exp, sp(loc, op), else_exp)));
-                    value_stack.push((test_block, exp));
-                } else {
-                    let if_ = (make_block!(), bool_exp(loc, true));
-                    value_stack.push(make_boolean_binop(context, sp(loc, op), test, if_, else_));
-                }
-            }
-            Pn::Op(op, ty, loc) => {
-                let (mut lhs_block, lhs_exp) = value_stack.pop().expect("ICE binop hlir issue");
-                let (mut rhs_block, rhs_exp) = value_stack.pop().expect("ICE binop hlir issue");
-                lhs_block.append(&mut rhs_block);
-                // nb: here we could check if the LHS and RHS are "large" terms and let-bind them
-                // if they are getting too big.
-                let exp = H::exp(ty, sp(loc, make_binop(lhs_exp, op, rhs_exp)));
-                value_stack.push((lhs_block, exp));
-            }
-            Pn::Val(block, exp) => value_stack.push((block, exp)),
         }
-    }
-    assert!(value_stack.len() == 1, "ICE binop hlir stack unprocessed");
-    let (mut final_block, final_exp) = value_stack.pop().unwrap();
-    input_block.append(&mut final_block);
-    final_exp
+    );
+    input_block.append(&mut block);
+    exp
 }
 
 fn make_binop(lhs: H::Exp, op: BinOp, rhs: H::Exp) -> H::UnannotatedExp_ {

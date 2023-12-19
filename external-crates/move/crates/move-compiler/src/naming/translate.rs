@@ -1383,8 +1383,25 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
 
         EE::Dereference(e) => NE::Dereference(exp(context, *e)),
         EE::UnaryExp(uop, e) => NE::UnaryExp(uop, exp(context, *e)),
-        // FIXME Handling this recursively causes stack overflows for large programs
-        EE::BinopExp(e1, bop, e2) => NE::BinopExp(exp(context, *e1), bop, exp(context, *e2)),
+
+        e_ @ EE::BinopExp(..) => {
+            process_binops!(
+                (P::BinOp, Loc),
+                Box<N::Exp>,
+                Box::new(sp(eloc, e_)),
+                e,
+                *e,
+                sp!(loc, EE::BinopExp(lhs, op, rhs)) => { (lhs, (op, loc), rhs) },
+                { exp(context, *e) },
+                value_stack,
+                (bop, loc) => {
+                    let el = value_stack.pop().expect("ICE binop naming issue");
+                    let er = value_stack.pop().expect("ICE binop naming issue");
+                    Box::new(sp(loc, NE::BinopExp(el, bop, er)))
+                }
+            )
+            .value
+        }
 
         EE::Pack(tn, etys_opt, efields) => {
             match context.resolve_struct_name(eloc, "construction", tn, etys_opt) {
