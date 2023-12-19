@@ -10,7 +10,7 @@
 #    |                                 ^                        
 #    |                                 |                        
 #    +---------------------------------+    
-#                  ov(1)
+#                  ov(4)
 #
 
 [package]
@@ -19,4 +19,4 @@ name = "Root"
 [dependencies]
 A-rename = { local = "./deps_only/A-rename" }
 B = { local = "./deps_only/B" }
-C-rename = { local = "./deps_only/C-rename-v1", override = true }
+C-rename = { local = "./deps_only/C-rename-v4", override = true }

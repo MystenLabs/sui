@@ -67,7 +67,7 @@ ResolvedGraph {
             },
             "C-resolved": Package {
                 kind: Local(
-                    "deps_only/C-rename-v1",
+                    "deps_only/C-rename-v4",
                 ),
                 resolver: None,
             },
@@ -78,7 +78,7 @@ ResolvedGraph {
             "C-resolved",
             "Root",
         },
-        manifest_digest: "E3A916BDF8F4F836A7EFF16FE78A6C1D2DD748303F03254D4EE65BBE3F150C39",
+        manifest_digest: "54F34A4A2644F57BC116C057FC4DDD643C589A8D03E063E813F7585CBBE2AC39",
         deps_digest: "060AD7E57DFB13104F21BE5F5C3759D03F0553FC3229247D9A7A6B45F50D03A3",
     },
     build_options: BuildConfig {
@@ -225,7 +225,7 @@ ResolvedGraph {
                     "C-rename": Internal(
                         InternalDependency {
                             kind: Local(
-                                "deps_only/C-rename-v1",
+                                "deps_only/C-rename-v4",
                             ),
                             subst: None,
                             digest: None,
