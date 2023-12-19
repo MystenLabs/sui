@@ -1,4 +1,4 @@
-processed 15 tasks
+processed 16 tasks
 
 init:
 A: object(0,0)
@@ -43,64 +43,185 @@ gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 
 task 10 'create-checkpoint'. lines 34-34:
 Checkpoint created: 5
 
-task 11 'run-graphql'. lines 36-43:
+task 11 'run-graphql'. lines 36-53:
 Response: {
   "data": {
     "transactionBlockConnection": {
-      "edges": [
+      "nodes": [
         {
-          "cursor": "2"
+          "kind": {
+            "inputConnection": {
+              "nodes": [
+                {
+                  "bytes": "AQAAAAAAAAA="
+                }
+              ]
+            }
+          }
         },
         {
-          "cursor": "3"
+          "kind": {
+            "inputConnection": {
+              "nodes": [
+                {
+                  "bytes": "AgAAAAAAAAA="
+                }
+              ]
+            }
+          }
+        },
+        {
+          "kind": {
+            "inputConnection": {
+              "nodes": [
+                {
+                  "bytes": "AwAAAAAAAAA="
+                }
+              ]
+            }
+          }
+        },
+        {
+          "kind": {
+            "inputConnection": {
+              "nodes": [
+                {
+                  "bytes": "BAAAAAAAAAA="
+                }
+              ]
+            }
+          }
+        },
+        {
+          "kind": {
+            "inputConnection": {
+              "nodes": [
+                {
+                  "bytes": "BQAAAAAAAAA="
+                }
+              ]
+            }
+          }
         }
       ]
     }
   }
 }
 
-task 12 'run-graphql'. lines 45-52:
+task 12 'run-graphql'. lines 55-72:
 Response: {
   "data": {
     "transactionBlockConnection": {
-      "edges": [
+      "nodes": [
         {
-          "cursor": "0"
+          "kind": {
+            "inputConnection": {
+              "nodes": [
+                {
+                  "bytes": "AgAAAAAAAAA="
+                }
+              ]
+            }
+          }
         },
         {
-          "cursor": "1"
-        },
-        {
-          "cursor": "2"
+          "kind": {
+            "inputConnection": {
+              "nodes": [
+                {
+                  "bytes": "AwAAAAAAAAA="
+                }
+              ]
+            }
+          }
         }
       ]
     }
   }
 }
 
-task 13 'run-graphql'. lines 54-61:
+task 13 'run-graphql'. lines 74-91:
 Response: {
   "data": {
     "transactionBlockConnection": {
-      "edges": [
+      "nodes": [
         {
-          "cursor": "2"
+          "kind": {}
+        },
+        {
+          "kind": {
+            "inputConnection": {
+              "nodes": [
+                {
+                  "bytes": "AQAAAAAAAAA="
+                }
+              ]
+            }
+          }
+        },
+        {
+          "kind": {
+            "inputConnection": {
+              "nodes": [
+                {
+                  "bytes": "AgAAAAAAAAA="
+                }
+              ]
+            }
+          }
         }
       ]
     }
   }
 }
 
-task 14 'run-graphql'. lines 63-74:
+task 14 'run-graphql'. lines 93-110:
 Response: {
   "data": {
     "transactionBlockConnection": {
-      "edges": [
+      "nodes": [
         {
-          "cursor": "1"
+          "kind": {
+            "inputConnection": {
+              "nodes": [
+                {
+                  "bytes": "AgAAAAAAAAA="
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 15 'run-graphql'. lines 112-133:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "kind": {
+            "inputConnection": {
+              "nodes": [
+                {
+                  "bytes": "AQAAAAAAAAA="
+                }
+              ]
+            }
+          }
         },
         {
-          "cursor": "2"
+          "kind": {
+            "inputConnection": {
+              "nodes": [
+                {
+                  "bytes": "AgAAAAAAAAA="
+                }
+              ]
+            }
+          }
         }
       ]
     }

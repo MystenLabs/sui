@@ -143,32 +143,31 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         }
 
         // Queries on foreign tables
-        match (filter.package, filter.module, filter.function) {
-            (Some(p), None, None) => {
+        if let Some(p) = filter.package {
+            if let Some(m) = filter.module {
+                if let Some(f) = filter.function {
+                    let subquery = tx_calls::dsl::tx_calls
+                        .filter(tx_calls::dsl::package.eq(p.into_vec()))
+                        .filter(tx_calls::dsl::module.eq(m))
+                        .filter(tx_calls::dsl::func.eq(f))
+                        .select(tx_calls::dsl::tx_sequence_number);
+
+                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
+                } else {
+                    let subquery = tx_calls::dsl::tx_calls
+                        .filter(tx_calls::dsl::package.eq(p.into_vec()))
+                        .filter(tx_calls::dsl::module.eq(m))
+                        .select(tx_calls::dsl::tx_sequence_number);
+
+                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
+                }
+            } else {
                 let subquery = tx_calls::dsl::tx_calls
                     .filter(tx_calls::dsl::package.eq(p.into_vec()))
                     .select(tx_calls::dsl::tx_sequence_number);
 
                 query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
             }
-            (Some(p), Some(m), None) => {
-                let subquery = tx_calls::dsl::tx_calls
-                    .filter(tx_calls::dsl::package.eq(p.into_vec()))
-                    .filter(tx_calls::dsl::module.eq(m))
-                    .select(tx_calls::dsl::tx_sequence_number);
-
-                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-            }
-            (Some(p), Some(m), Some(f)) => {
-                let subquery = tx_calls::dsl::tx_calls
-                    .filter(tx_calls::dsl::package.eq(p.into_vec()))
-                    .filter(tx_calls::dsl::module.eq(m))
-                    .filter(tx_calls::dsl::func.eq(f))
-                    .select(tx_calls::dsl::tx_sequence_number);
-
-                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-            }
-            _ => {}
         }
 
         if let Some(signer) = filter.sign_address {
@@ -196,6 +195,7 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
 
             query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
         }
+
         if let Some(recipient) = filter.recv_address {
             let subquery = tx_recipients::dsl::tx_recipients
                 .filter(tx_recipients::dsl::recipient.eq(recipient.into_vec()))
@@ -203,6 +203,8 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
 
             query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
         }
+
+        // TODO - support paid_address
         if filter.paid_address.is_some() {
             return Err(Error::Internal(
                 "Paid address filter not supported".to_string(),
@@ -216,6 +218,7 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
 
             query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
         }
+
         if let Some(changed_object) = filter.changed_object {
             let subquery = tx_changed_objects::dsl::tx_changed_objects
                 .filter(tx_changed_objects::dsl::object_id.eq(changed_object.into_vec()))
