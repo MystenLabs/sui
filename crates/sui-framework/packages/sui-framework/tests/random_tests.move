@@ -25,6 +25,8 @@ module sui::random_tests {
 
     // TODO: add a test from https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-22r1a.pdf ?
 
+    // TODO: Test Rounds (max_size, old, new, etc)
+
     fun update_random(random: &mut Random, round: u64, value: vector<u8>, ctx: &TxContext) {
         update_randomness_state_for_testing(
             random,
