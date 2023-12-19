@@ -220,6 +220,20 @@ macro_rules! as_ref_impl {
 as_ref_impl!(Arc<dyn PackageStore>);
 as_ref_impl!(Box<dyn PackageStore>);
 
+/// Check $value does not exceed $limit in config, if the limit config exists, returning an error
+/// containing the max value and actual value otherwise.
+macro_rules! check_max_limit {
+    ($err:ident, $config:expr; $limit:ident $op:tt $value:expr) => {
+        if let Some(l) = $config {
+            let max = l.$limit;
+            let val = $value;
+            if !(max $op val) {
+                return Err(Error::$err(max, val));
+            }
+        }
+    };
+}
+
 impl<S> Resolver<S> {
     pub fn new(package_store: S) -> Self {
         Self {
@@ -708,15 +722,10 @@ impl<'l> ResolutionContext<'l> {
                     s.address = context.runtime_id;
                     let key = StructRef::from(s.as_ref()).as_key();
 
-                    if let Some(l) = self.limits {
-                        let params = s.type_params.len();
-                        if params > l.max_type_argument_width {
-                            return Err(Error::TooManyTypeParams(
-                                l.max_type_argument_width,
-                                params,
-                            ));
-                        }
-                    }
+                    check_max_limit!(
+                        TooManyTypeParams, self.limits;
+                        max_type_argument_width >= s.type_params.len()
+                    );
 
                     for (param, def) in s.type_params.iter_mut().zip(struct_def.type_params.iter())
                     {
@@ -734,6 +743,11 @@ impl<'l> ResolutionContext<'l> {
                             self.add_signature(sig.clone(), store, &context).await?;
                         }
                     }
+
+                    check_max_limit!(
+                        TooManyTypeNodes, self.limits;
+                        max_type_nodes > self.structs.len()
+                    );
 
                     self.structs.insert(key, struct_def);
                 }
@@ -771,15 +785,10 @@ impl<'l> ResolutionContext<'l> {
                 O::Vector(sig) => frontier.push(*sig),
 
                 O::Struct(key, params) => {
-                    if let Some(l) = self.limits {
-                        let params = params.len();
-                        if params > l.max_type_argument_width {
-                            return Err(Error::TooManyTypeParams(
-                                l.max_type_argument_width,
-                                params,
-                            ));
-                        }
-                    }
+                    check_max_limit!(
+                        TooManyTypeParams, self.limits;
+                        max_type_argument_width >= params.len()
+                    );
 
                     frontier.extend(params.into_iter());
 
@@ -792,6 +801,12 @@ impl<'l> ResolutionContext<'l> {
                     let struct_def = package.struct_def(&key.module, &key.name)?;
 
                     frontier.extend(struct_def.fields.iter().map(|f| &f.1).cloned());
+
+                    check_max_limit!(
+                        TooManyTypeNodes, self.limits;
+                        max_type_nodes > self.structs.len()
+                    );
+
                     self.structs.insert(key.clone(), struct_def);
                 }
             }
@@ -1838,6 +1853,42 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(err, Error::TooManyTypeParams(1, 2)));
+    }
+
+    #[tokio::test]
+    async fn test_err_too_many_type_nodes() {
+        use Ability as A;
+        use AbilitySet as S;
+
+        let (_, cache) = package_cache([
+            (1, build_package("sui"), sui_types()),
+            (1, build_package("d0"), d0_types()),
+        ]);
+
+        let resolver = Resolver::new_with_limits(
+            cache,
+            Limits {
+                max_type_argument_width: 100,
+                max_type_argument_depth: 100,
+                max_type_nodes: 2,
+                max_move_value_depth: 100,
+            },
+        );
+
+        // This request is OK, because one of O's type parameters is phantom, so we can avoid
+        // loading its definition.
+        let a1 = resolver
+            .abilities(type_("0xd0::m::O<0xd0::m::S, 0xd0::m::Q>"))
+            .await
+            .unwrap();
+        assert_eq!(a1, S::EMPTY | A::Key | A::Store);
+
+        // But this request will hit the limit
+        let err = resolver
+            .abilities(type_("0xd0::m::T<0xd0::m::P, 0xd0::m::Q>"))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::TooManyTypeNodes(2, _)));
     }
 
     /***** Test Helpers ***************************************************************************/
