@@ -692,8 +692,24 @@ impl<'l> ResolutionContext<'l> {
     ) -> Result<()> {
         use TypeTag as T;
 
-        let mut frontier = vec![tag];
-        while let Some(tag) = frontier.pop() {
+        struct ToVisit<'t> {
+            tag: &'t mut TypeTag,
+            depth: usize,
+        }
+
+        let mut frontier = vec![ToVisit { tag, depth: 0 }];
+        while let Some(ToVisit { tag, depth }) = frontier.pop() {
+            macro_rules! push_ty_param {
+                ($tag:expr) => {{
+                    check_max_limit!(
+                        TypeParamNesting, self.limits;
+                        max_type_argument_depth > depth
+                    );
+
+                    frontier.push(ToVisit { tag: $tag, depth: depth + 1 })
+                }}
+            }
+
             match tag {
                 T::Address
                 | T::Bool
@@ -707,7 +723,7 @@ impl<'l> ResolutionContext<'l> {
                     // Nothing further to add to context
                 }
 
-                T::Vector(tag) => frontier.push(tag),
+                T::Vector(tag) => push_ty_param!(tag),
 
                 T::Struct(s) => {
                     let context = store.fetch(s.address).await?;
@@ -730,7 +746,7 @@ impl<'l> ResolutionContext<'l> {
                     for (param, def) in s.type_params.iter_mut().zip(struct_def.type_params.iter())
                     {
                         if !def.is_phantom || visit_phantoms {
-                            frontier.push(param)
+                            push_ty_param!(param);
                         }
                     }
 
@@ -1889,6 +1905,44 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(err, Error::TooManyTypeNodes(2, _)));
+    }
+
+    #[tokio::test]
+    async fn test_err_type_param_nesting() {
+        use Ability as A;
+        use AbilitySet as S;
+
+        let (_, cache) = package_cache([
+            (1, build_package("sui"), sui_types()),
+            (1, build_package("d0"), d0_types()),
+        ]);
+
+        let resolver = Resolver::new_with_limits(
+            cache,
+            Limits {
+                max_type_argument_width: 100,
+                max_type_argument_depth: 2,
+                max_type_nodes: 100,
+                max_move_value_depth: 100,
+            },
+        );
+
+        // This request is OK, because one of O's type parameters is phantom, so we can avoid
+        // loading its definition.
+        let a1 = resolver
+            .abilities(type_(
+                "0xd0::m::O<0xd0::m::S, 0xd0::m::T<vector<u32>, vector<u64>>>",
+            ))
+            .await
+            .unwrap();
+        assert_eq!(a1, S::EMPTY | A::Key | A::Store);
+
+        // But this request will hit the limit
+        let err = resolver
+            .abilities(type_("vector<0xd0::m::T<0xd0::m::O<u64, u32>, u16>>"))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::TypeParamNesting(2, _)));
     }
 
     /***** Test Helpers ***************************************************************************/
