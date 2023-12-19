@@ -1058,79 +1058,6 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
     Box::new(exp_(context, *ne))
 }
 
-fn binop(context: &mut Context, el: T::Exp, bop: BinOp, loc: Loc, er: T::Exp) -> T::Exp {
-    use BinOp_::*;
-    use T::UnannotatedExp_ as TE;
-    let msg = || format!("Incompatible arguments to '{}'", &bop);
-    let (ty, operand_ty) = match &bop.value {
-        Sub | Add | Mul | Mod | Div => {
-            context.add_numeric_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
-            context.add_numeric_constraint(er.exp.loc, bop.value.symbol(), el.ty.clone());
-            let operand_ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
-            (operand_ty.clone(), operand_ty)
-        }
-
-        BitOr | BitAnd | Xor => {
-            context.add_bits_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
-            context.add_bits_constraint(er.exp.loc, bop.value.symbol(), el.ty.clone());
-            let operand_ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
-            (operand_ty.clone(), operand_ty)
-        }
-
-        Shl | Shr => {
-            let msg = || format!("Invalid argument to '{}'", &bop);
-            let u8ty = Type_::u8(er.exp.loc);
-            context.add_bits_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
-            subtype(context, er.exp.loc, msg, er.ty.clone(), u8ty);
-            (el.ty.clone(), el.ty.clone())
-        }
-
-        Lt | Gt | Le | Ge => {
-            context.add_ordered_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
-            context.add_ordered_constraint(er.exp.loc, bop.value.symbol(), el.ty.clone());
-            let operand_ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
-            (Type_::bool(loc), operand_ty)
-        }
-
-        Eq | Neq => {
-            let ability_msg = Some(format!(
-                "'{}' requires the '{}' ability as the value is consumed. Try \
-                         borrowing the values with '&' first.'",
-                &bop,
-                Ability_::Drop,
-            ));
-            context.add_ability_constraint(
-                el.exp.loc,
-                ability_msg.clone(),
-                el.ty.clone(),
-                Ability_::Drop,
-            );
-            context.add_ability_constraint(er.exp.loc, ability_msg, er.ty.clone(), Ability_::Drop);
-            let ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
-            context.add_single_type_constraint(loc, msg(), ty.clone());
-            (Type_::bool(loc), ty)
-        }
-
-        And | Or => {
-            let msg = || format!("Invalid argument to '{}'", &bop);
-            let lloc = el.exp.loc;
-            subtype(context, lloc, msg, el.ty.clone(), Type_::bool(bop.loc));
-            let rloc = er.exp.loc;
-            subtype(context, rloc, msg, er.ty.clone(), Type_::bool(bop.loc));
-            (Type_::bool(loc), Type_::bool(loc))
-        }
-
-        Range | Implies | Iff => panic!("specification operator unexpected"),
-    };
-    T::exp(
-        ty,
-        sp(
-            loc,
-            TE::BinopExp(Box::new(el), bop, Box::new(operand_ty), Box::new(er)),
-        ),
-    )
-}
-
 fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
     use N::Exp_ as NE;
     use T::UnannotatedExp_ as TE;
@@ -1499,6 +1426,79 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
         NE::BinopExp(..) => unreachable!(),
     };
     T::exp(ty, sp(eloc, e_))
+}
+
+fn binop(context: &mut Context, el: T::Exp, bop: BinOp, loc: Loc, er: T::Exp) -> T::Exp {
+    use BinOp_::*;
+    use T::UnannotatedExp_ as TE;
+    let msg = || format!("Incompatible arguments to '{}'", &bop);
+    let (ty, operand_ty) = match &bop.value {
+        Sub | Add | Mul | Mod | Div => {
+            context.add_numeric_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
+            context.add_numeric_constraint(er.exp.loc, bop.value.symbol(), el.ty.clone());
+            let operand_ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
+            (operand_ty.clone(), operand_ty)
+        }
+
+        BitOr | BitAnd | Xor => {
+            context.add_bits_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
+            context.add_bits_constraint(er.exp.loc, bop.value.symbol(), el.ty.clone());
+            let operand_ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
+            (operand_ty.clone(), operand_ty)
+        }
+
+        Shl | Shr => {
+            let msg = || format!("Invalid argument to '{}'", &bop);
+            let u8ty = Type_::u8(er.exp.loc);
+            context.add_bits_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
+            subtype(context, er.exp.loc, msg, er.ty.clone(), u8ty);
+            (el.ty.clone(), el.ty.clone())
+        }
+
+        Lt | Gt | Le | Ge => {
+            context.add_ordered_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
+            context.add_ordered_constraint(er.exp.loc, bop.value.symbol(), el.ty.clone());
+            let operand_ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
+            (Type_::bool(loc), operand_ty)
+        }
+
+        Eq | Neq => {
+            let ability_msg = Some(format!(
+                "'{}' requires the '{}' ability as the value is consumed. Try \
+                         borrowing the values with '&' first.'",
+                &bop,
+                Ability_::Drop,
+            ));
+            context.add_ability_constraint(
+                el.exp.loc,
+                ability_msg.clone(),
+                el.ty.clone(),
+                Ability_::Drop,
+            );
+            context.add_ability_constraint(er.exp.loc, ability_msg, er.ty.clone(), Ability_::Drop);
+            let ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
+            context.add_single_type_constraint(loc, msg(), ty.clone());
+            (Type_::bool(loc), ty)
+        }
+
+        And | Or => {
+            let msg = || format!("Invalid argument to '{}'", &bop);
+            let lloc = el.exp.loc;
+            subtype(context, lloc, msg, el.ty.clone(), Type_::bool(bop.loc));
+            let rloc = er.exp.loc;
+            subtype(context, rloc, msg, er.ty.clone(), Type_::bool(bop.loc));
+            (Type_::bool(loc), Type_::bool(loc))
+        }
+
+        Range | Implies | Iff => panic!("specification operator unexpected"),
+    };
+    T::exp(
+        ty,
+        sp(
+            loc,
+            TE::BinopExp(Box::new(el), bop, Box::new(operand_ty), Box::new(er)),
+        ),
+    )
 }
 
 fn loop_body(
