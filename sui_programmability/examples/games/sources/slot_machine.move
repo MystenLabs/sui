@@ -24,10 +24,9 @@ module games::slot_machine {
     use sui::tx_context::{Self, TxContext};
 
     const EWrongCaller: u64 = 0;
-    const EOngoingSpins: u64 = 1;
+    const EInvalidSpinId: u64 = 1;
     const ETooManyConcurrentSpins: u64 = 2;
     const EBetTooLarge: u64 = 3;
-    const EInvalidSpinId: u64 = 4;
 
     struct Game has key {
         id: UID,
@@ -59,10 +58,9 @@ module games::slot_machine {
         });
     }
 
-    /// The owner can withdraw all the balance from the game if there are no ongoing spins.
+    /// The owner can withdraw all the balance from the game (but not of ongoing spins).
     public fun withdraw(game: &mut Game, ctx: &mut TxContext): Coin<SUI> {
         assert!(tx_context::sender(ctx) == game.owner, EWrongCaller);
-        assert!(vector::length(&game.incomplete_spins) == 0, EOngoingSpins);
         let amount = balance::value(&game.balance);
         coin::take(&mut game.balance, amount, ctx)
     }
