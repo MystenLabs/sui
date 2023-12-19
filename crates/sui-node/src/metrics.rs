@@ -45,6 +45,22 @@ impl MetricsPushClient {
     pub fn client(&self) -> &reqwest::Client {
         &self.client
     }
+
+    /// recreate will return a new instance of self.  we only call this when we hit an error condition
+    /// on posting data. NB do not call this in a fast loop.  we have this to work around the move block
+    pub fn recreate(&self) -> Self {
+        let certificate = self.certificate.to_owned();
+        let identity = certificate.reqwest_identity();
+        let client = reqwest::Client::builder()
+            .identity(identity)
+            .build()
+            .unwrap();
+        println!("created new client");
+        MetricsPushClient {
+            certificate,
+            client,
+        }
+    }
 }
 
 /// Starts a task to periodically push metrics to a configured endpoint if a metrics push endpoint
@@ -69,7 +85,7 @@ pub fn start_metrics_push_task(config: &sui_config::NodeConfig, registry: Regist
         _ => return,
     };
 
-    let client = MetricsPushClient::new(config.network_key_pair().copy());
+    let mut client = MetricsPushClient::new(config.network_key_pair().copy());
 
     async fn push_metrics(
         client: &MetricsPushClient,
@@ -136,7 +152,9 @@ pub fn start_metrics_push_task(config: &sui_config::NodeConfig, registry: Regist
             interval.tick().await;
 
             if let Err(error) = push_metrics(&client, &url, &registry).await {
-                client = MetricsPushClient::new(config.network_key_pair().copy());
+                // aggressively recreate our client connection if we hit an error
+                // since our tick interval is only every min, this should not be racey
+                client = client.recreate();
                 tracing::warn!("unable to push metrics: {error}");
             }
         }
