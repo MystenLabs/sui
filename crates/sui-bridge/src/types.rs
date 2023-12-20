@@ -7,6 +7,8 @@ use crate::crypto::{BridgeAuthorityPublicKey, BridgeAuthoritySignInfo, BridgeAut
 use crate::error::{BridgeError, BridgeResult};
 use crate::events::EmittedSuiToEthTokenBridgeV1;
 use ethers::types::Address as EthAddress;
+use ethers::types::Log;
+use ethers::types::H256;
 pub use ethers::types::H256 as EthTransactionHash;
 use fastcrypto::hash::{HashFunction, Keccak256};
 use rand::seq::SliceRandom;
@@ -151,7 +153,7 @@ pub enum BridgeActionType {
 pub const SUI_TX_DIGEST_LENGTH: usize = 32;
 pub const ETH_TX_HASH_LENGTH: usize = 32;
 
-pub const BRIDGE_MESSAGE_PREFIX: &[u8] = b"SUI_NATIVE_BRIDGE";
+pub const BRIDGE_MESSAGE_PREFIX: &[u8] = b"SUI_BRIDGE_MESSAGE";
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
 #[repr(u8)]
@@ -247,10 +249,11 @@ impl BridgeAction {
                 // Add token amount
                 bytes.extend_from_slice(&e.amount.to_le_bytes());
             }
-            BridgeAction::EthToSuiBridgeAction(_e) =>
+            BridgeAction::EthToSuiBridgeAction(e) =>
             // TODO add formats for other events
             {
-                unimplemented!()
+                // This is just placeholder for testing. We need actual abis to encode this.
+                bytes.extend_from_slice(bcs::to_bytes(e).unwrap().as_slice());
             }
         }
         bytes
@@ -313,6 +316,14 @@ impl Message for BridgeAction {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EthLog {
+    pub block_number: u64,
+    pub tx_hash: H256,
+    pub log_index_in_tx: u16,
+    pub log: Log,
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
@@ -361,7 +372,7 @@ mod tests {
         .to_bytes();
 
         // Construct the expected bytes
-        let prefix_bytes = BRIDGE_MESSAGE_PREFIX.to_vec(); // len: 17
+        let prefix_bytes = BRIDGE_MESSAGE_PREFIX.to_vec(); // len: 18
         let message_type = vec![BridgeActionType::TokenTransfer as u8]; // len: 1
         let message_version = vec![TOKEN_TRANSFER_MESSAGE_VERSION]; // len: 1
         let nonce_bytes = nonce.to_le_bytes().to_vec(); // len: 8
@@ -402,7 +413,7 @@ mod tests {
         // TODO: for each action type add a test to assert the length
         assert_eq!(
             combined_bytes.len(),
-            17 + 1 + 1 + 8 + 1 + 1 + 32 + 2 + 1 + 32 + 1 + 20 + 1 + 1 + 16
+            18 + 1 + 1 + 8 + 1 + 1 + 32 + 2 + 1 + 32 + 1 + 20 + 1 + 1 + 16
         );
 
         Ok(())

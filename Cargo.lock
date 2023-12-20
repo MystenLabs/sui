@@ -11435,6 +11435,7 @@ dependencies = [
  "eyre",
  "fastcrypto",
  "futures",
+ "hex-literal 0.3.4",
  "move-core-types",
  "mysten-metrics",
  "once_cell",
