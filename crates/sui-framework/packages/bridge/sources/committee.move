@@ -14,6 +14,8 @@ module bridge::committee {
     use bridge::message::{Self, BridgeMessage};
     use bridge::message_types;
 
+    friend bridge::bridge;
+
     const ESignatureBelowThreshold: u64 = 0;
     const EDuplicatedSignature: u64 = 1;
     const EInvalidSignature: u64 = 2;
@@ -28,7 +30,7 @@ module bridge::committee {
         thresholds: VecMap<u8, u64>
     }
 
-    public fun create(ctx: &TxContext): BridgeCommittee {
+    public(friend) fun create(ctx: &TxContext): BridgeCommittee {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
 
         // Hardcoded genesis committee

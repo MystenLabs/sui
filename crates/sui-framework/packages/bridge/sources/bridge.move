@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[allow(unused_const)]
 module bridge::bridge {
     use std::option;
     use std::option::{none, Option, some};
@@ -18,7 +17,7 @@ module bridge::bridge {
     use sui::versioned::{Self, Versioned};
 
     use bridge::committee::{Self, BridgeCommittee};
-    use bridge::message::{Self, BridgeMessage, BridgeMessageKey};
+    use bridge::message::{Self, BridgeMessage, BridgeMessageKey, extract_token_bridge_payload};
     use bridge::message_types;
     use bridge::treasury::{Self, BridgeTreasury, token_id};
 
@@ -28,7 +27,7 @@ module bridge::bridge {
     }
 
     struct BridgeInner has store {
-        version: u64,
+        bridge_version: u64,
         chain_id: u8,
         // nonce for replay protection
         sequence_nums: VecMap<u8, u64>,
@@ -51,7 +50,7 @@ module bridge::bridge {
     struct BridgeRecord has store, drop {
         message: BridgeMessage,
         approved_epoch: Option<u64>,
-        signatures: Option<vector<vector<u8>>>,
+        verified_signatures: Option<vector<vector<u8>>>,
         claimed: bool
     }
 
@@ -64,15 +63,17 @@ module bridge::bridge {
     const EUnexpectedSeqNum: u64 = 6;
     const EWrongInnerVersion: u64 = 7;
     const EAlreadyClaimed: u64 = 8;
-    const ERecordAlreadyExists: u64 = 8;
+    const ERecordAlreadyExists: u64 = 9;
+    const EBridgeUnavailable: u64 = 10;
 
     const CURRENT_VERSION: u64 = 1;
 
+    // this method is called once in end of epoch tx to create the bridge
     #[allow(unused_function)]
     fun create(id: UID, chain_id: u8, ctx: &mut TxContext) {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         let bridge_inner = BridgeInner {
-            version: CURRENT_VERSION,
+            bridge_version: CURRENT_VERSION,
             chain_id,
             sequence_nums: vec_map::empty<u8, u64>(),
             committee: committee::create(ctx),
@@ -82,7 +83,7 @@ module bridge::bridge {
         };
         let bridge = Bridge {
             id,
-            inner : versioned::create(CURRENT_VERSION, bridge_inner, ctx)
+            inner: versioned::create(CURRENT_VERSION, bridge_inner, ctx)
         };
         transfer::share_object(bridge);
     }
@@ -95,7 +96,7 @@ module bridge::bridge {
         // TODO: Replace this with a lazy update function when we add a new version of the inner object.
         assert!(version == CURRENT_VERSION, EWrongInnerVersion);
         let inner: &mut BridgeInner = versioned::load_value_mut(&mut self.inner);
-        assert!(inner.version == version, EWrongInnerVersion);
+        assert!(inner.bridge_version == version, EWrongInnerVersion);
         inner
     }
 
@@ -108,7 +109,7 @@ module bridge::bridge {
         // TODO: Replace this with a lazy update function when we add a new version of the inner object.
         assert!(version == CURRENT_VERSION, EWrongInnerVersion);
         let inner: &BridgeInner = versioned::load_value(&self.inner);
-        assert!(inner.version == version, EWrongInnerVersion);
+        assert!(inner.bridge_version == version, EWrongInnerVersion);
         inner
     }
 
@@ -121,7 +122,7 @@ module bridge::bridge {
         ctx: &mut TxContext
     ) {
         let inner = load_inner_mut(self);
-        assert!(!inner.frozen, 0);
+        assert!(!inner.frozen, EBridgeUnavailable);
         let bridge_seq_num = next_seq_num(inner, message_types::token());
         // create bridge message
 
@@ -135,7 +136,7 @@ module bridge::bridge {
             balance::value(coin::balance(&token))
         );
 
-        // burn / escrow token
+        // burn / escrow token, unsupported coins will fail in this step
         treasury::burn(&mut inner.treasury, token, ctx);
 
         // Store pending bridge request
@@ -143,12 +144,11 @@ module bridge::bridge {
         linked_table::push_back(&mut inner.bridge_records, key, BridgeRecord {
             message,
             approved_epoch: none(),
-            signatures: none(),
+            verified_signatures: none(),
             claimed: false,
         });
 
         // emit event
-        // TODO: Approvals for bridge to other chains will not be consummed because claim happens on other chain, we need to archieve old approvals on Sui.
         emit(BridgeEvent { message });
     }
 
@@ -162,21 +162,28 @@ module bridge::bridge {
         let inner = load_inner_mut(self);
         let key = message::key(&message);
 
+        // retrieve pending message if source chain is Sui, the initial message must exist on chain.
+        if (message::message_type(&message) == message_types::token()) {
+            let payload = extract_token_bridge_payload(&message);
+            if (message::token_source_chain(&payload) == inner.chain_id) {
+                let record = linked_table::remove(&mut inner.bridge_records, key);
+                assert!(record.message == message, EMalformedMessageError);
+                // The message should be in pending state (no approval and not claimed)
+                assert!(option::is_none(&record.approved_epoch), ERecordAlreadyExists);
+                assert!(!record.claimed, EAlreadyClaimed)
+            }
+        };
+
         // ensure bridge massage not exist
         assert!(!linked_table::contains(&inner.bridge_records, key), ERecordAlreadyExists);
 
-        // retrieve pending message if source chain is Sui, the initial message must exist on chain.
-        if (message::source_chain(&message) == inner.chain_id) {
-            let record = linked_table::remove(&mut inner.bridge_records, key);
-            assert!(record.message == message, EMalformedMessageError);
-        };
         // verify signatures
         committee::verify_signatures(&inner.committee, message, signatures);
         // Store approval
         linked_table::push_back(&mut inner.bridge_records, key, BridgeRecord {
             message,
             approved_epoch: some(tx_context::epoch(ctx)),
-            signatures: some(signatures),
+            verified_signatures: some(signatures),
             claimed: false
         })
     }
@@ -194,7 +201,7 @@ module bridge::bridge {
         let BridgeRecord {
             message,
             approved_epoch,
-            signatures,
+            verified_signatures: signatures,
             claimed
         } = linked_table::remove(&mut inner.bridge_records, key);
         // ensure this is a token bridge message
@@ -218,7 +225,7 @@ module bridge::bridge {
         linked_table::push_back(&mut inner.bridge_records, key, BridgeRecord {
             message,
             approved_epoch,
-            signatures,
+            verified_signatures: signatures,
             claimed: true
         });
         (token, owner)
