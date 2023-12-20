@@ -115,7 +115,7 @@ type Query {
     filter: ObjectFilter,
   ): ObjectConnection!
 
-  resolveNameServiceAddress(name: String!): Address
+  resolveSuinsRegistrationAddress(name: String!): Address
 
   # NB. Will be moved into a private, explorer-specific extension.
   networkMetrics: NetworkMetrics
@@ -477,7 +477,7 @@ interface IOwner {
   ): DynamicFieldConnection!
 
   defaultSuinsRegistration: String
-  SuinsRegistrations(
+  suinsRegistrations(
     first: Int,
     after: String,
     last: Int,
@@ -1531,7 +1531,18 @@ type SuinsRegistrationConnection {
 
 type SuinsRegistrationEdge {
   cursor: String
-  node: String!  # is this correct?
+  node: SuinsRegistration
+}
+
+type SuinsRegistration {
+	"""
+	Domain name of the SuinsRegistration object
+	"""
+	domain: String!
+	"""
+	Convert the SuinsRegistration object into a Move object
+	"""
+	asMoveObject: MoveObject!
 }
 
 # AddressMetricsConnection

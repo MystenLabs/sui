@@ -4,13 +4,18 @@
 use async_graphql::*;
 use move_core_types::language_storage::StructTag;
 use serde::{Deserialize, Serialize};
-use sui_json_rpc::name_service::Domain;
+use sui_types::id::UID;
 
 use super::move_object::MoveObject;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct Domain {
+    labels: Vec<String>,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct NativeSuinsRegistration {
-    pub id: sui_types::id::UID,
+    pub id: UID,
     pub domain: Domain,
     pub domain_name: String,
     pub expiration_timestamp_ms: u64,

@@ -25,7 +25,6 @@ use crate::{
         move_object::MoveObject,
         move_package::MovePackage,
         move_type::MoveType,
-        name_service_name::SuinsRegistration,
         object::{Object, ObjectFilter},
         protocol_config::{ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs},
         safe_mode::SafeMode,
@@ -34,6 +33,7 @@ use crate::{
         storage_fund::StorageFund,
         sui_address::SuiAddress,
         sui_system_state_summary::SuiSystemStateSummary,
+        suins_registration::SuinsRegistration,
         system_parameters::SystemParameters,
         transaction_block::{TransactionBlock, TransactionBlockFilter},
         validator::Validator,
@@ -1140,7 +1140,7 @@ impl PgManager {
         }))
     }
 
-    pub(crate) async fn default_name_service_name(
+    pub(crate) async fn default_suins_registration(
         &self,
         name_service_config: &NameServiceConfig,
         address: SuiAddress,
@@ -1487,7 +1487,7 @@ impl PgManager {
         Ok(Some(supply))
     }
 
-    pub(crate) async fn fetch_name_service_names(
+    pub(crate) async fn fetch_suins_registrations(
         &self,
         first: Option<u64>,
         after: Option<String>,
@@ -1536,19 +1536,20 @@ impl PgManager {
                 ))
             })?;
 
-            let nsn = SuinsRegistration::try_from((&move_object, &struct_tag)).map_err(|_| {
-                Error::Internal(format!(
-                    "Expected {} to be a suinsRegistration object, but it is not",
-                    object.address,
-                ))
-            })?;
+            let suins_registration = SuinsRegistration::try_from((&move_object, &struct_tag))
+                .map_err(|_| {
+                    Error::Internal(format!(
+                        "Expected {} to be a suinsRegistration object, but it is not",
+                        object.address,
+                    ))
+                })?;
 
             let cursor = move_object
                 .native
                 .id()
                 .to_canonical_string(/* with_prefix */ true);
 
-            connection.edges.push(Edge::new(cursor, nsn));
+            connection.edges.push(Edge::new(cursor, suins_registration));
         }
 
         Ok(Some(connection))

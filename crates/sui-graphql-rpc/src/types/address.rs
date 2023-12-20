@@ -10,10 +10,10 @@ use super::{
     balance::Balance,
     coin::Coin,
     dynamic_field::{DynamicField, DynamicFieldName},
-    name_service_name::SuinsRegistration,
     object::{Object, ObjectFilter},
     stake::StakedSui,
     sui_address::SuiAddress,
+    suins_registration::SuinsRegistration,
     transaction_block::{TransactionBlock, TransactionBlockFilter},
 };
 
@@ -140,14 +140,14 @@ impl Address {
             .extend()
     }
 
-    pub async fn default_name_service_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+    pub async fn default_suins_registration(&self, ctx: &Context<'_>) -> Result<Option<String>> {
         ctx.data_unchecked::<PgManager>()
-            .default_name_service_name(ctx.data_unchecked::<NameServiceConfig>(), self.address)
+            .default_suins_registration(ctx.data_unchecked::<NameServiceConfig>(), self.address)
             .await
             .extend()
     }
 
-    pub async fn name_service_names(
+    pub async fn suins_registrations(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
@@ -156,7 +156,7 @@ impl Address {
         before: Option<String>,
     ) -> Result<Option<Connection<String, SuinsRegistration>>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_name_service_names(
+            .fetch_suins_registrations(
                 first,
                 after,
                 last,
