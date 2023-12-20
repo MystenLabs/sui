@@ -37,6 +37,29 @@ pub(crate) struct DynamicFieldName {
     pub bcs: Base64,
 }
 
+#[derive(InputObject, Clone)]
+pub(crate) struct DynamicFieldFilter {
+    /// Filter the type of dynamic field name.
+    ///
+    /// Names can be filtered by their type's package, package::module, or
+    /// their fully qualified type name.
+    ///
+    /// Generic types can be queried by either the generic type name, e.g.
+    /// `0x2::coin::Coin`, or by the full type name, such as
+    /// `0x2::coin::Coin<0x2::sui::SUI>`.
+    pub name_type: Option<String>,
+
+    /// Filter the type of dynamic field value.
+    ///
+    /// Values can be filtered by their type's package, package::module,
+    /// or their fully qualified type name.
+    ///
+    /// Generic types can be queried by either the generic type name, e.g.
+    /// `0x2::coin::Coin`, or by the full type name, such as
+    /// `0x2::coin::Coin<0x2::sui::SUI>`.
+    pub value_type: Option<String>,
+}
+
 #[Object]
 impl DynamicField {
     /// The string type, data, and serialized value of the DynamicField's 'name' field.
