@@ -35,6 +35,8 @@ pub enum BridgeError {
     MismatchedAuthoritySigner,
     // Signature is over a mismatched action
     MismatchedAction,
+    // Sui transaction failure due to generic error
+    SuiTxFailureGeneric(String),
     // Storage Error
     StorageError(String),
     // Rest API Error

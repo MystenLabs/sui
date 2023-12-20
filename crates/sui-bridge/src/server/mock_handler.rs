@@ -24,6 +24,7 @@ use super::make_router;
 pub struct BridgeRequestMockHandler {
     sui_token_events:
         Arc<Mutex<HashMap<(TransactionDigest, u16), BridgeResult<SignedBridgeAction>>>>,
+    sui_token_events_requested: Arc<Mutex<HashMap<(TransactionDigest, u16), u64>>>,
 }
 
 impl BridgeRequestMockHandler {
@@ -41,6 +42,19 @@ impl BridgeRequestMockHandler {
             .lock()
             .unwrap()
             .insert((tx_digest, idx), response);
+    }
+
+    pub fn get_sui_token_events_requested(
+        &self,
+        tx_digest: TransactionDigest,
+        event_index: u16,
+    ) -> u64 {
+        *self
+            .sui_token_events_requested
+            .lock()
+            .unwrap()
+            .get(&(tx_digest, event_index))
+            .unwrap_or(&0)
     }
 }
 
@@ -69,6 +83,9 @@ impl BridgeRequestHandlerTrait for BridgeRequestMockHandler {
                 tx_digest, event_idx
             );
         }
+        let mut requested = self.sui_token_events_requested.lock().unwrap();
+        let entry = requested.entry((tx_digest, event_idx)).or_default();
+        *entry += 1;
         let result = preset.get(&(tx_digest, event_idx)).unwrap();
         if let Err(e) = result {
             return Err(e.clone());
