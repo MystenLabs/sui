@@ -13,7 +13,10 @@ use sui_indexer::{
 
 use crate::{
     error::Error,
-    types::{event::EventFilter, object::ObjectFilter, transaction_block::TransactionBlockFilter},
+    types::{
+        dynamic_field::DynamicFieldFilter, event::EventFilter, object::ObjectFilter,
+        transaction_block::TransactionBlockFilter,
+    },
 };
 use diesel::{
     query_builder::{BoxedSelectStatement, FromClause, QueryId},
@@ -73,6 +76,13 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
         limit: PageLimit,
         filter: Option<ObjectFilter>,
         owner_type: Option<OwnerType>,
+    ) -> Result<objects::BoxedQuery<'static, DB>, Error>;
+    fn multi_get_dyn_fields(
+        before: Option<Vec<u8>>,
+        after: Option<Vec<u8>>,
+        limit: i64,
+        owner_id: Vec<u8>,
+        filter: Option<DynamicFieldFilter>,
     ) -> Result<objects::BoxedQuery<'static, DB>, Error>;
     fn multi_get_balances(address: Vec<u8>) -> BalanceQuery<'static, DB>;
     fn get_balance(address: Vec<u8>, coin_type: String) -> BalanceQuery<'static, DB>;

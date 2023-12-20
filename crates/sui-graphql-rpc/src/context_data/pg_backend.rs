@@ -9,8 +9,8 @@ use crate::{
     context_data::db_data_provider::PgManager,
     error::Error,
     types::{
-        digest::Digest, event::EventFilter, object::ObjectFilter, sui_address::SuiAddress,
-        transaction_block::TransactionBlockFilter,
+        digest::Digest, dynamic_field::DynamicFieldFilter, event::EventFilter,
+        object::ObjectFilter, sui_address::SuiAddress, transaction_block::TransactionBlockFilter,
     },
 };
 use async_trait::async_trait;
@@ -369,6 +369,164 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
 
         Ok(query)
     }
+
+    fn multi_get_dyn_fields(
+        before: Option<Vec<u8>>,
+        after: Option<Vec<u8>>,
+        limit: i64,
+        owner_id: Vec<u8>,
+        filter: Option<DynamicFieldFilter>,
+    ) -> Result<objects::BoxedQuery<'static, Pg>, Error> {
+        let mut query = order_objs(before, after);
+        query = query.limit(limit + 1);
+
+        query = query
+            .filter(objects::dsl::owner_id.eq(owner_id))
+            .filter(objects::dsl::owner_type.eq(OwnerType::Object as i16));
+
+        let Some(filter) = filter else {
+            return Ok(query);
+        };
+
+        // Unfortunately, selecting on name will always require string matching
+        // This is due to how dynamic field object types are represented in the database
+        // which is 0x2::dynamic_field::Field<K, V> where K and V are the name and value types
+        if let Some(name_type) = filter.name_type {
+            // this should never fail
+            let prefix = parse_sui_struct_tag("0x2::dynamic_field::Field")
+                .map_err(|e| Error::Internal(e.to_string()))?;
+
+            let format = "package[::module[::type[<type_params>]]]";
+            let parts: Vec<_> = name_type.splitn(3, "::").collect();
+
+            if parts.iter().any(|&part| part.is_empty()) {
+                return Err(DbValidationError::InvalidType(
+                    TypeFilterError::MissingComponents(name_type, format).to_string(),
+                ))?;
+            }
+
+            if parts.len() == 1 {
+                // We check for a leading 0x to determine if it is an address
+                // And otherwise process it as a primitive type
+                if parts[0].starts_with("0x") {
+                    let package = SuiAddress::from_str(parts[0])
+                        .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+                    query = query.filter(objects::dsl::object_type.like(format!(
+                        "{}<{}::%",
+                        prefix.to_canonical_display(/* with_prefix */ true),
+                        package
+                    )));
+                } else {
+                    // primitive type as type for 'name'
+                    query = query.filter(objects::dsl::object_type.like(format!(
+                        "{}<{},%",
+                        prefix.to_canonical_display(/* with_prefix */ true),
+                        parts[0]
+                    )));
+                }
+            } else if parts.len() == 2 {
+                // Only package addresses are allowed if there are two or more parts
+                let package = SuiAddress::from_str(parts[0])
+                    .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+                query = query.filter(objects::dsl::object_type.like(format!(
+                    "{}<{}::{}::%",
+                    prefix.to_canonical_display(/* with_prefix */ true),
+                    package,
+                    parts[1]
+                )));
+            } else if parts.len() == 3 {
+                let validated_type = parse_sui_struct_tag(&name_type)
+                    .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+
+                if validated_type.type_params.is_empty() {
+                    query = query.filter(
+                        objects::dsl::object_type
+                            .like(format!(
+                                "{}<{}<%",
+                                prefix.to_canonical_display(/* with_prefix */ true),
+                                validated_type.to_canonical_string(/* with_prefix */ true)
+                            ))
+                            .or(objects::dsl::object_type.like(format!(
+                                "{}<{},%",
+                                prefix.to_canonical_display(/* with_prefix */ true),
+                                validated_type.to_canonical_string(/* with_prefix */ true)
+                            ))),
+                    );
+                } else {
+                    query = query.filter(objects::dsl::object_type.like(format!(
+                        "{}<{},%",
+                        prefix.to_canonical_display(/* with_prefix */ true),
+                        validated_type.to_canonical_string(/* with_prefix */ true)
+                    )));
+                }
+            } else {
+                return Err(DbValidationError::InvalidType(
+                    TypeFilterError::TooManyComponents(name_type, 3, format).to_string(),
+                )
+                .into());
+            }
+        }
+
+        // match value on df_object_type
+        if let Some(value_type) = filter.value_type {
+            let format = "package[::module[::type[<type_params>]]]";
+            let parts: Vec<_> = value_type.splitn(3, "::").collect();
+
+            if parts.iter().any(|&part| part.is_empty()) {
+                return Err(DbValidationError::InvalidType(
+                    TypeFilterError::MissingComponents(value_type, format).to_string(),
+                ))?;
+            }
+
+            if parts.len() == 1 {
+                // We check for a leading 0x to determine if it is an address
+                // And otherwise process it as a primitive type
+                if parts[0].starts_with("0x") {
+                    let package = SuiAddress::from_str(parts[0])
+                        .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+                    query =
+                        query.filter(objects::dsl::df_object_type.like(format!("{}::%", package)));
+                } else {
+                    query = query.filter(objects::dsl::df_object_type.eq(parts[0].to_string()));
+                }
+            } else if parts.len() == 2 {
+                // Only package addresses are allowed if there are two or more parts
+                let package = SuiAddress::from_str(parts[0])
+                    .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+                query = query.filter(
+                    objects::dsl::df_object_type.like(format!("{}::{}::%", package, parts[1])),
+                );
+            } else if parts.len() == 3 {
+                let validated_type = parse_sui_struct_tag(&value_type)
+                    .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+
+                if validated_type.type_params.is_empty() {
+                    query = query.filter(
+                        objects::dsl::df_object_type
+                            .like(format!(
+                                "{}<%",
+                                validated_type.to_canonical_string(/* with_prefix */ true)
+                            ))
+                            .or(objects::dsl::df_object_type
+                                .eq(validated_type.to_canonical_string(/* with_prefix */ true))),
+                    );
+                } else {
+                    query = query.filter(
+                        objects::dsl::df_object_type
+                            .eq(validated_type.to_canonical_string(/* with_prefix */ true)),
+                    );
+                }
+            } else {
+                return Err(DbValidationError::InvalidType(
+                    TypeFilterError::TooManyComponents(value_type, 3, format).to_string(),
+                )
+                .into());
+            }
+        }
+
+        Ok(query)
+    }
+
     fn multi_get_balances(address: Vec<u8>) -> BalanceQuery<'static, Pg> {
         let query = objects::dsl::objects
             .group_by(objects::dsl::coin_type)
