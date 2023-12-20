@@ -147,3 +147,20 @@ module Test::M1 {
 
 //# view-graphql-variables
 // List all the graphql variables
+
+
+//# run-graphql --variables validator_0
+{
+  latestSuiSystemState {
+    validatorSet {
+      activeValidators {
+        address {
+          address
+        }
+      }
+    }
+  }
+  address(address: $validator_0) {
+    address
+  }
+}

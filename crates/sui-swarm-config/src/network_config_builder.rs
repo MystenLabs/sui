@@ -14,7 +14,7 @@ use sui_config::node::OverloadThresholdConfig;
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::{Committee, ProtocolVersion};
-use sui_types::crypto::{AccountKeyPair, KeypairTraits, PublicKey};
+use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, KeypairTraits, PublicKey};
 use sui_types::object::Object;
 
 pub enum CommitteeConfig {
@@ -23,7 +23,7 @@ pub enum CommitteeConfig {
     AccountKeys(Vec<AccountKeyPair>),
     /// Indicates that a committee should be deterministically generated, useing the provided rng
     /// as a source of randomness as well as generating deterministic network port information.
-    Deterministic(NonZeroUsize),
+    Deterministic((NonZeroUsize, Option<Vec<AccountKeyPair>>)),
 }
 
 pub type SupportedProtocolVersionsCallback = Arc<
@@ -95,7 +95,15 @@ impl<R> ConfigBuilder<R> {
     }
 
     pub fn deterministic_committee_size(mut self, committee_size: NonZeroUsize) -> Self {
-        self.committee = CommitteeConfig::Deterministic(committee_size);
+        self.committee = CommitteeConfig::Deterministic((committee_size, None));
+        self
+    }
+
+    pub fn deterministic_committee_validators(mut self, keys: Vec<AccountKeyPair>) -> Self {
+        self.committee = CommitteeConfig::Deterministic((
+            NonZeroUsize::new(keys.len()).expect("Validator keys should be non empty"),
+            Some(keys),
+        ));
         self
     }
 
@@ -257,12 +265,20 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     })
                     .collect::<Vec<_>>()
             }
-            CommitteeConfig::Deterministic(size) => {
+            CommitteeConfig::Deterministic((size, keys)) => {
+                // If no keys are provided, generate them.
+                let keys = keys.unwrap_or(
+                    (0..size.get())
+                        .map(|_| get_key_pair_from_rng(&mut rng).1)
+                        .collect(),
+                );
+
                 let mut configs = vec![];
-                for i in 0..size.into() {
+                for (i, key) in keys.into_iter().enumerate() {
                     let port_offset = 8000 + i * 10;
                     let mut builder = ValidatorGenesisConfigBuilder::new()
                         .with_ip("127.0.0.1".to_owned())
+                        .with_account_key_pair(key)
                         .with_deterministic_ports(port_offset as u16);
                     if let Some(rgp) = self.reference_gas_price {
                         builder = builder.with_gas_price(rgp);

@@ -61,7 +61,7 @@ use sui_storage::{
 };
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_types::base_types::{SequenceNumber, VersionNumber};
-use sui_types::crypto::{get_account_key_pair, get_authority_key_pair};
+use sui_types::crypto::get_authority_key_pair;
 use sui_types::digests::{ConsensusCommitDigest, TransactionDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult};
@@ -1888,7 +1888,7 @@ async fn init_sim_executor(
     let (mut validator_addr, mut validator_key, mut key_copy) = (None, None, None);
     if custom_validator_account {
         // Make a validator account with a gas object
-        let (a, b) = get_account_key_pair();
+        let (a, b): (SuiAddress, Ed25519KeyPair) = get_key_pair_from_rng(&mut rng);
 
         key_copy = Some(
             Ed25519KeyPair::from_bytes(b.as_bytes())

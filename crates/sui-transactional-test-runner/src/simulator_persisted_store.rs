@@ -124,7 +124,9 @@ impl PersistedStore {
             .with_accounts(account_configs);
 
         let config = if let Some(validator_keys) = validator_keys {
-            builder.with_validator_account_keys(validator_keys).build()
+            builder
+                .deterministic_committee_validators(validator_keys)
+                .build()
         } else {
             builder.build()
         };
