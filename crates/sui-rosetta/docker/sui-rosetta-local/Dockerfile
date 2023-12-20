@@ -38,6 +38,7 @@ RUN curl -sSfL https://raw.githubusercontent.com/coinbase/rosetta-cli/master/scr
 # and build the application. At this point no dependencies should need to be
 # built as they were built and cached by the previous layer.
 COPY Cargo.toml Cargo.lock ./
+COPY consensus consensus
 COPY crates crates
 COPY sui-execution sui-execution
 COPY narwhal narwhal
