@@ -303,9 +303,7 @@ Response: {
                       },
                       "json": {
                         "id": "0x1f5de3c4c73a79df873afad8928d4db2f7b92dfb2a98ab117fd2b06bcb1c06ef",
-                        "pool_id": {
-                          "bytes": "0x385908baa1a0de1492dd64ddbda1d7e1e5e359519a103afc6a6eca1735d6bcfa"
-                        },
+                        "pool_id": "0x385908baa1a0de1492dd64ddbda1d7e1e5e359519a103afc6a6eca1735d6bcfa",
                         "stake_activation_epoch": "0",
                         "principal": {
                           "value": "20000000000000000"
@@ -613,9 +611,7 @@ Response: {
                                   }
                                 },
                                 "voting_power": "10000",
-                                "operation_cap_id": {
-                                  "bytes": "0xbbd4d0d866687bc423d279e3b0b6ee7b98fb6d0c383ea35c2b7a3ac8bc1dc5cc"
-                                },
+                                "operation_cap_id": "0xbbd4d0d866687bc423d279e3b0b6ee7b98fb6d0c383ea35c2b7a3ac8bc1dc5cc",
                                 "gas_price": "1000",
                                 "staking_pool": {
                                   "id": "0x385908baa1a0de1492dd64ddbda1d7e1e5e359519a103afc6a6eca1735d6bcfa",
@@ -742,9 +738,7 @@ Response: {
                       },
                       "json": {
                         "id": "0x7f55a19cb0b02c451494cc64e9f670fce8dbc646179fedbf1aa18d36c057ab04",
-                        "name": {
-                          "bytes": "0x385908baa1a0de1492dd64ddbda1d7e1e5e359519a103afc6a6eca1735d6bcfa"
-                        },
+                        "name": "0x385908baa1a0de1492dd64ddbda1d7e1e5e359519a103afc6a6eca1735d6bcfa",
                         "value": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
                       }
                     }
