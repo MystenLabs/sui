@@ -82,7 +82,7 @@ type Address implements ObjectOwner {
 	The `0x3::staking_pool::StakedSui` objects owned by the given address.
 	"""
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
-	defaultSuinsRegistration: String
+	defaultNameServiceName: String
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
 	"""
 	This resolver is not supported on the Address type.
@@ -1415,7 +1415,7 @@ type Object implements ObjectOwner {
 	"""
 	The domain that a user address has explicitly configured as their default domain
 	"""
-	defaultSuinsRegistration: String
+	defaultNameServiceName: String
 	"""
 	Access a dynamic field on an object using its name.
 	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
@@ -1538,7 +1538,7 @@ interface ObjectOwner {
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
-	defaultSuinsRegistration: String
+	defaultNameServiceName: String
 	dynamicField(name: DynamicFieldName!): DynamicField
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
@@ -1625,7 +1625,7 @@ type Owner implements ObjectOwner {
 	The `0x3::staking_pool::StakedSui` objects owned by the given object.
 	"""
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
-	defaultSuinsRegistration: String
+	defaultNameServiceName: String
 	"""
 	Access a dynamic field on an object using its name.
 	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified

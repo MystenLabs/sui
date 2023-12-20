@@ -140,9 +140,9 @@ impl Address {
             .extend()
     }
 
-    pub async fn default_suins_registration(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+    pub async fn default_name_service_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
         ctx.data_unchecked::<PgManager>()
-            .default_suins_registration(ctx.data_unchecked::<NameServiceConfig>(), self.address)
+            .default_name_service_name(ctx.data_unchecked::<NameServiceConfig>(), self.address)
             .await
             .extend()
     }

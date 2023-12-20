@@ -1140,7 +1140,7 @@ impl PgManager {
         }))
     }
 
-    pub(crate) async fn default_suins_registration(
+    pub(crate) async fn default_name_service_name(
         &self,
         name_service_config: &NameServiceConfig,
         address: SuiAddress,

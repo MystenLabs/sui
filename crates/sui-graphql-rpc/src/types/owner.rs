@@ -58,7 +58,7 @@ use sui_types::dynamic_field::DynamicFieldType;
         arg(name = "last", ty = "Option<u64>"),
         arg(name = "before", ty = "Option<String>")
     ),
-    field(name = "default_suins_registration", ty = "Option<String>"),
+    field(name = "default_name_service_name", ty = "Option<String>"),
     // TODO disabled-for-rpc-1.5
     // field(
     //     name = "name_service_connection",
@@ -194,9 +194,9 @@ impl Owner {
             .extend()
     }
 
-    pub async fn default_suins_registration(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+    pub async fn default_name_service_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
         ctx.data_unchecked::<PgManager>()
-            .default_suins_registration(ctx.data_unchecked::<NameServiceConfig>(), self.address)
+            .default_name_service_name(ctx.data_unchecked::<NameServiceConfig>(), self.address)
             .await
             .extend()
     }

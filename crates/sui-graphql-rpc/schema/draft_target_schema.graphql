@@ -476,7 +476,7 @@ interface IOwner {
     filter: DynamicFieldFilter,
   ): DynamicFieldConnection!
 
-  defaultSuinsRegistration: String
+  defaultNameServiceName: String
   suinsRegistrations(
     first: Int,
     after: String,

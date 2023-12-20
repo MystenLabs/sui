@@ -7,7 +7,7 @@
     digest
     storageRebate
     owner {
-      defaultSuinsRegistration
+      defaultNameServiceName
     }
     previousTransactionBlock {
       digest

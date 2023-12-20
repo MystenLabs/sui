@@ -7,7 +7,7 @@
       previousTransactionBlock {
         digest
         sender {
-          defaultSuinsRegistration
+          defaultNameServiceName
         }
         gasInput {
           gasPrice
