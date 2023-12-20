@@ -435,11 +435,16 @@ impl<'env> Context<'env> {
         sp(vloc, nvar_)
     }
 
-    fn resolve_local(&mut self, loc: Loc, verb: &str, sp!(vloc, name): Name) -> Option<N::Var> {
+    fn resolve_local<S: ToString>(
+        &mut self,
+        loc: Loc,
+        variable_msg: impl FnOnce(Symbol) -> S,
+        sp!(vloc, name): Name,
+    ) -> Option<N::Var> {
         let id_opt = self.local_scopes.last().unwrap().get(&name).copied();
         match id_opt {
             None => {
-                let msg = format!("Invalid {}. Unbound variable '{}'", verb, name);
+                let msg = variable_msg(name);
                 self.env
                     .add_diag(diag!(NameResolution::UnboundVariable, (loc, msg)));
                 None
@@ -1250,7 +1255,7 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
             if is_constant_name(&v.value) {
                 access_constant(context, sp(aloc, E::ModuleAccess_::Name(v)))
             } else {
-                match context.resolve_local(eloc, "variable usage", v) {
+                match context.resolve_local(eloc, |name| format!("Unbound variable '{name}'"), v) {
                     None => {
                         debug_assert!(context.env.has_errors());
                         NE::UnresolvedError
@@ -1534,7 +1539,11 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                 .filter_map(|v| {
                     if context.local_scopes.last()?.contains_key(&v.value) {
                         let nv = context
-                            .resolve_local(v.loc, "ICE should always resolve", v)
+                            .resolve_local::<String>(
+                                v.loc,
+                                |_| panic!("ICE should always resolve"),
+                                v,
+                            )
                             .unwrap();
                         Some(nv)
                     } else {
@@ -1628,7 +1637,11 @@ fn lvalue(
                         let is_parameter = false;
                         context.declare_local(is_parameter, n)
                     }
-                    C::Assign => context.resolve_local(loc, "assignment", n)?,
+                    C::Assign => context.resolve_local(
+                        loc,
+                        |name| format!("Invalid assignment. Unbound variable '{name}'"),
+                        n,
+                    )?,
                 };
                 NL::Var {
                     mut_,

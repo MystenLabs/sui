@@ -1370,10 +1370,11 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
                 ),
                 TE::UnresolvedError => (er.ty, TE::UnresolvedError),
                 er_ => {
-                    let mut msg = "Invalid 'move'. Expected a variable.".to_owned();
-                    if matches!(er_, TE::Constant(_, _)) {
-                        msg = format!("{msg}. Cannot 'move' constants");
-                    }
+                    let msg = if matches!(er_, TE::Constant(_, _)) {
+                        "Invalid 'move'. Cannot 'move' constants"
+                    } else {
+                        "Invalid 'move'. Expected a variable or path."
+                    };
                     context
                         .env
                         .add_diag(diag!(TypeSafety::InvalidMoveOp, (loc, msg)));
@@ -2091,8 +2092,8 @@ fn exp_dotted_to_owned_value(
                         loc,
                     );
                     if new_syntax {
-                        let msg = "Invalid 'move'. 'move' on a path access works only with \
-                            variables, e.g. 'move x'";
+                        let msg = "Invalid 'move'. 'move' works only with \
+                            variables, e.g. 'move x'. 'move' on a path access is not supported";
                         context
                             .env
                             .add_diag(diag!(TypeSafety::InvalidMoveOp, (loc, msg)));
@@ -2134,9 +2135,7 @@ fn exp_dotted_to_owned_value(
 fn warn_on_constant_borrow(context: &mut Context, loc: Loc, e: &T::Exp) {
     use T::UnannotatedExp_ as TE;
     if matches!(&e.exp.value, TE::Constant(_, _)) {
-        let msg = "Borrowing, or accessing the field of, \
-            a constant will first copy the entire constant. \
-            Consider first binding the value to a variable to make this copy explicit.";
+        let msg = "This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit";
         context
             .env
             .add_diag(diag!(TypeSafety::ImplicitConstantCopy, (loc, msg)))
