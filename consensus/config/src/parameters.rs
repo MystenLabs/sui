@@ -20,7 +20,7 @@ pub struct Parameters {
 
 impl Parameters {
     pub fn default_leader_timeout() -> Duration {
-        Duration::from_millis(200)
+        Duration::from_millis(250)
     }
 }
 
