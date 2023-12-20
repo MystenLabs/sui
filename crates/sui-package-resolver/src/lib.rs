@@ -225,7 +225,12 @@ impl<S: PackageStore> Resolver<S> {
         // (1). Fetch all the information from this store that is necessary to resolve types
         // referenced by this tag.
         context
-            .add_type_tag(&mut tag, &self.package_store, /* introspect */ true)
+            .add_type_tag(
+                &mut tag,
+                &self.package_store,
+                /* visit_fields */ true,
+                /* visit_phantoms */ true,
+            )
             .await?;
 
         // (2). Use that information to resolve the tag into a layout.
@@ -243,7 +248,12 @@ impl<S: PackageStore> Resolver<S> {
         // (1). Fetch all the information from this store that is necessary to resolve types
         // referenced by this tag.
         context
-            .add_type_tag(&mut tag, &self.package_store, /* introspect */ false)
+            .add_type_tag(
+                &mut tag,
+                &self.package_store,
+                /* visit_fields */ false,
+                /* visit_phantoms */ false,
+            )
             .await?;
 
         // (2). Use that information to calculate the type's abilities.
@@ -617,14 +627,18 @@ impl ResolutionContext {
     /// addresses during the subsequent resolution phase find the relevant type information in the
     /// context.
     ///
-    /// The `introspect` flag controls whether the traversal looks inside types at their fields
+    /// The `visit_fields` flag controls whether the traversal looks inside types at their fields
     /// (which is necessary for layout resolution) or not (only explores the outer type and any type
     /// parameters).
+    ///
+    /// The `visit_phantoms` flag controls whether the traversal recurses through phantom type
+    /// parameters (which is also necessary for type resolution) or not.
     async fn add_type_tag<S: PackageStore + ?Sized>(
         &mut self,
         tag: &mut TypeTag,
         store: &S,
-        introspect: bool,
+        visit_fields: bool,
+        visit_phantoms: bool,
     ) -> Result<()> {
         use TypeTag as T;
 
@@ -658,13 +672,18 @@ impl ResolutionContext {
                     s.address = context.runtime_id;
                     let key = StructRef::from(s.as_ref()).as_key();
 
-                    frontier.extend(s.type_params.iter_mut());
+                    for (param, def) in s.type_params.iter_mut().zip(struct_def.type_params.iter())
+                    {
+                        if !def.is_phantom || visit_phantoms {
+                            frontier.push(param)
+                        }
+                    }
 
                     if self.structs.contains_key(&key) {
                         continue;
                     }
 
-                    if introspect {
+                    if visit_fields {
                         for (_, sig) in &struct_def.fields {
                             self.add_signature(sig.clone(), store, &context).await?;
                         }
@@ -911,7 +930,14 @@ impl ResolutionContext {
                 let param_abilities: Result<Vec<AbilitySet>> = s
                     .type_params
                     .iter()
-                    .map(|p| self.resolve_abilities(p))
+                    .zip(def.type_params.iter())
+                    .map(|(p, d)| {
+                        if d.is_phantom {
+                            Ok(AbilitySet::EMPTY)
+                        } else {
+                            self.resolve_abilities(p)
+                        }
+                    })
                     .collect();
 
                 AbilitySet::polymorphic_abilities(
