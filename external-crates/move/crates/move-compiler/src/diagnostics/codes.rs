@@ -260,8 +260,8 @@ codes!(
         InvalidImmVariableUsage:
             { msg: "invalid usage of immutable variable", severity: NonblockingError },
         InvalidControlFlow: { msg: "invalid control flow", severity: BlockingError },
-        InvalidCopyOp: { msg: "invalid 'copy' usage_msg", severity: NonblockingError },
-        InvalidMoveOp: { msg: "invalid 'move' usage_msg", severity: NonblockingError },
+        InvalidCopyOp: { msg: "invalid 'copy' usage", severity: NonblockingError },
+        InvalidMoveOp: { msg: "invalid 'move' usage", severity: NonblockingError },
         ImplicitConstantCopy: { msg: "implicit copy of a constant", severity: Warning },
     ],
     // errors for ability rules. mostly typing/translate

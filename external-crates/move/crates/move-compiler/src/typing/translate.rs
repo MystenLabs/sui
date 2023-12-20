@@ -1393,7 +1393,7 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
                 ),
                 er_ @ TE::Constant(_, _) => {
                     context.env.check_feature(
-                        FeatureGate::PathRework,
+                        FeatureGate::Move2024Paths,
                         context.current_package(),
                         loc,
                     );
@@ -2086,7 +2086,7 @@ fn exp_dotted_to_owned_value(
             let case = match usage {
                 DottedUsage::Move(loc) => {
                     let new_syntax = context.env.check_feature(
-                        FeatureGate::PathRework,
+                        FeatureGate::Move2024Paths,
                         context.current_package(),
                         loc,
                     );
@@ -2101,7 +2101,7 @@ fn exp_dotted_to_owned_value(
                 }
                 DottedUsage::Copy(loc) => {
                     context.env.check_feature(
-                        FeatureGate::PathRework,
+                        FeatureGate::Move2024Paths,
                         context.current_package(),
                         loc,
                     );

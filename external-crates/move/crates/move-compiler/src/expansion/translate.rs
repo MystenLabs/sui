@@ -3027,7 +3027,7 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
         PE::Borrow(mut_, pdotted) => match exp_dotted(context, *pdotted) {
             Some(edotted) => EE::ExpDotted(E::DottedUsage::Borrow(mut_), Box::new(edotted)),
             None => {
-                assert!(context.env.has_errors());
+                assert!(context.env().has_errors());
                 EE::UnresolvedError
             }
         },
@@ -3129,7 +3129,7 @@ fn move_or_copy_path(context: &mut Context, case: PathCase, pe: P::Exp) -> E::Ex
     match move_or_copy_path_(context, case, pe) {
         Some(e) => e,
         None => {
-            assert!(context.env.has_errors());
+            assert!(context.env().has_errors());
             E::Exp_::UnresolvedError
         }
     }
@@ -3143,7 +3143,7 @@ fn move_or_copy_path_(context: &mut Context, case: PathCase, pe: P::Exp) -> Opti
             if !matches!(&inner.value, E::Exp_::Name(_, _)) {
                 let cmsg = format!("Invalid '{}' of expression", case.case());
                 let emsg = "Expected a name or path access, e.g. 'x' or 'e.f'";
-                context.env.add_diag(diag!(
+                context.env().add_diag(diag!(
                     Syntax::InvalidMoveOrCopy,
                     (cloc, cmsg),
                     (inner.loc, emsg)
@@ -3152,9 +3152,10 @@ fn move_or_copy_path_(context: &mut Context, case: PathCase, pe: P::Exp) -> Opti
             }
         }
         E::ExpDotted_::Dot(_, _) => {
+            let current_package = context.current_package;
             context
-                .env
-                .check_feature(FeatureGate::PathRework, context.current_package, cloc);
+                .env()
+                .check_feature(FeatureGate::Move2024Paths, current_package, cloc);
         }
     }
     Some(match case {

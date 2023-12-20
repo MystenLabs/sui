@@ -13,31 +13,31 @@ error[E04013]: invalid statement or expression in constant
 2 │     const ZED: Z = Z { f: 0 };
   │                    ^^^^^^^^^^ Structs are not supported in constants
 
-error[E04027]: invalid 'move' usage_msg
+error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/meaningless_move.move:19:9
    │
 19 │         move x.y;
    │         ^^^^ Invalid 'move'. 'move' on a path access works only with variables, e.g. 'move x'
 
-error[E04027]: invalid 'move' usage_msg
+error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/meaningless_move.move:20:9
    │
 20 │         move x.y.z;
    │         ^^^^ Invalid 'move'. 'move' on a path access works only with variables, e.g. 'move x'
 
-error[E04027]: invalid 'move' usage_msg
+error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/meaningless_move.move:21:9
    │
 21 │         move x.y.z.f;
    │         ^^^^ Invalid 'move'. 'move' on a path access works only with variables, e.g. 'move x'
 
-error[E04027]: invalid 'move' usage_msg
+error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/meaningless_move.move:22:9
    │
 22 │         move V;
    │         ^^^^ Invalid 'move'. Expected a variable.. Cannot 'move' constants
 
-error[E04027]: invalid 'move' usage_msg
+error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/meaningless_move.move:23:9
    │
 23 │         move ZED.f;
