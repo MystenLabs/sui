@@ -417,25 +417,6 @@ fn run_spec_checker(env: &mut GlobalEnv, units: Vec<AnnotatedCompiledUnit>, mut 
             function_infos,
         );
     }
-
-    // Populate GlobalEnv with model-level information
-    builder.populate_env();
-
-    // After all specs have been processed, warn about any unused schemas.
-    builder.warn_unused_schemas();
-
-    // Apply simplification passes
-    run_spec_simplifier(env);
-}
-
-fn run_spec_simplifier(env: &mut GlobalEnv) {
-    let options = env
-        .get_extension::<ModelBuilderOptions>()
-        .expect("options for model builder");
-    let mut rewriter = SpecRewriterPipeline::new(&options.simplification_pipeline);
-    rewriter
-        .override_with_rewrite(env)
-        .unwrap_or_else(|e| panic!("Failed to run spec simplification: {}", e))
 }
 
 // =================================================================================================
@@ -460,17 +441,4 @@ pub fn parse_addresses_from_options(
         .iter()
         .map(|x| parse_named_address(x))
         .collect()
-}
-
-// =================================================================================================
-// Crate Helpers
-
-/// Helper to project the 1st element from a vector of pairs.
-pub(crate) fn project_1st<T: Clone, R>(v: &[(T, R)]) -> Vec<T> {
-    v.iter().map(|(x, _)| x.clone()).collect()
-}
-
-/// Helper to project the 2nd element from a vector of pairs.
-pub(crate) fn project_2nd<T, R: Clone>(v: &[(T, R)]) -> Vec<R> {
-    v.iter().map(|(_, x)| x.clone()).collect()
 }

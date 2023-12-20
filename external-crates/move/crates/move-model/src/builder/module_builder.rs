@@ -4,8 +4,6 @@
 
 use std::collections::BTreeMap;
 
-use itertools::Itertools;
-
 use move_binary_format::{access::ModuleAccess, file_format::Constant, CompiledModule};
 use move_bytecode_source_map::source_map::SourceMap;
 use move_compiler::{
@@ -18,6 +16,7 @@ use move_ir_types::ast::ConstantName;
 
 use crate::{
     ast::{Attribute, AttributeValue, ModuleName, QualifiedSymbol, Value},
+    builder::exp_translator::ExpTranslator,
     builder::model_builder::{ConstEntry, ModelBuilder},
     model::{FunId, FunctionVisibility, Loc, ModuleId, StructId},
     symbol::{Symbol, SymbolPool},
@@ -450,48 +449,15 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             let params = entry.params.clone();
             let result_type = entry.result_type.clone();
             let mut et = ExpTranslator::new(self);
-            et.translate_fun_as_spec_fun();
             let loc = et.to_loc(&body.loc);
             for (n, ty) in &type_params {
                 et.define_type_param(&loc, *n, ty.clone());
             }
             et.enter_scope();
             for (idx, (n, ty)) in params.iter().enumerate() {
-                et.define_local(&loc, *n, ty.clone(), None, Some(idx));
+                et.define_local(&loc, *n, ty.clone(), Some(idx));
             }
-            let translated = et.translate_seq(&loc, seq, &result_type);
             et.finalize_types();
-            // If no errors were generated, then the function is considered pure.
-            if !*et.errors_generated.borrow() {
-                // Rewrite all type annotations in expressions to skip references.
-                for node_id in translated.node_ids() {
-                    let ty = et.get_node_type(node_id);
-                    et.update_node_type(node_id, ty.skip_reference().clone());
-                }
-                et.called_spec_funs.iter().for_each(|(mid, fid)| {
-                    self.parent.add_edge_to_move_fun_call_graph(
-                        self.module_id.qualified(SpecFunId::new(fun_idx)),
-                        mid.qualified(*fid),
-                    );
-                });
-            }
         }
-    }
-
-    fn deref_move_fun_types(&mut self, full_name: QualifiedSymbol, spec_fun_idx: usize) {
-        self.parent.spec_fun_table.entry(full_name).and_modify(|e| {
-            assert!(e.len() == 1);
-            e[0].arg_types = e[0]
-                .arg_types
-                .iter()
-                .map(|ty| ty.skip_reference().clone())
-                .collect_vec();
-            e[0].type_params = e[0]
-                .type_params
-                .iter()
-                .map(|ty| ty.skip_reference().clone())
-                .collect_vec();
-            e[0].result_type = e[0].result_type.skip_reference().clone();
-        });
     }
 }
