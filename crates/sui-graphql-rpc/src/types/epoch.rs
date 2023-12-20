@@ -12,12 +12,12 @@ use super::transaction_block::{TransactionBlock, TransactionBlockFilter};
 use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
 use async_graphql::*;
-use sui_indexer::models_v2::epoch::StoredEpochInfo;
+use sui_indexer::models_v2::epoch::QueryableEpochInfo;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary as NativeSuiSystemStateSummary;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Epoch {
-    pub stored: StoredEpochInfo,
+    pub stored: QueryableEpochInfo,
 }
 
 #[Object]
@@ -184,8 +184,8 @@ impl Epoch {
     }
 }
 
-impl From<StoredEpochInfo> for Epoch {
-    fn from(e: StoredEpochInfo) -> Self {
+impl From<QueryableEpochInfo> for Epoch {
+    fn from(e: QueryableEpochInfo) -> Self {
         Epoch { stored: e }
     }
 }

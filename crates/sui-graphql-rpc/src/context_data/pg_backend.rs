@@ -60,12 +60,52 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
     fn get_epoch(epoch_id: i64) -> epochs::BoxedQuery<'static, Pg> {
         epochs::dsl::epochs
             .filter(epochs::dsl::epoch.eq(epoch_id))
+            .select((
+                epochs::dsl::epoch,
+                epochs::dsl::first_checkpoint_id,
+                epochs::dsl::epoch_start_timestamp,
+                epochs::dsl::reference_gas_price,
+                epochs::dsl::protocol_version,
+                epochs::dsl::total_stake,
+                epochs::dsl::storage_fund_balance,
+                epochs::dsl::epoch_total_transactions,
+                epochs::dsl::last_checkpoint_id,
+                epochs::dsl::epoch_end_timestamp,
+                epochs::dsl::storage_fund_reinvestment,
+                epochs::dsl::storage_charge,
+                epochs::dsl::storage_rebate,
+                epochs::dsl::stake_subsidy_amount,
+                epochs::dsl::total_gas_fees,
+                epochs::dsl::total_stake_rewards_distributed,
+                epochs::dsl::leftover_storage_fund_inflow,
+                epochs::dsl::epoch_commitments,
+            ))
             .into_boxed()
     }
     fn get_latest_epoch() -> epochs::BoxedQuery<'static, Pg> {
         epochs::dsl::epochs
             .order_by(epochs::dsl::epoch.desc())
             .limit(1)
+            .select((
+                epochs::dsl::epoch,
+                epochs::dsl::first_checkpoint_id,
+                epochs::dsl::epoch_start_timestamp,
+                epochs::dsl::reference_gas_price,
+                epochs::dsl::protocol_version,
+                epochs::dsl::total_stake,
+                epochs::dsl::storage_fund_balance,
+                epochs::dsl::epoch_total_transactions,
+                epochs::dsl::last_checkpoint_id,
+                epochs::dsl::epoch_end_timestamp,
+                epochs::dsl::storage_fund_reinvestment,
+                epochs::dsl::storage_charge,
+                epochs::dsl::storage_rebate,
+                epochs::dsl::stake_subsidy_amount,
+                epochs::dsl::total_gas_fees,
+                epochs::dsl::total_stake_rewards_distributed,
+                epochs::dsl::leftover_storage_fund_inflow,
+                epochs::dsl::epoch_commitments,
+            ))
             .into_boxed()
     }
     fn get_checkpoint_by_digest(digest: Vec<u8>) -> checkpoints::BoxedQuery<'static, Pg> {
