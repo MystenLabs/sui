@@ -2,17 +2,17 @@ error[E03009]: unbound variable
   ┌─ tests/move_check/typing/constant_allowed_but_not_supported.move:4:14
   │
 4 │         move x;
-  │              ^ Invalid variable usage. Unbound variable 'x'
+  │              ^ Unbound variable 'x'
 
 error[E03009]: unbound variable
   ┌─ tests/move_check/typing/constant_allowed_but_not_supported.move:5:14
   │
 5 │         copy y;
-  │              ^ Invalid variable usage. Unbound variable 'y'
+  │              ^ Unbound variable 'y'
 
 error[E03009]: unbound variable
   ┌─ tests/move_check/typing/constant_allowed_but_not_supported.move:6:9
   │
 6 │         z;
-  │         ^ Invalid variable usage. Unbound variable 'z'
+  │         ^ Unbound variable 'z'
 

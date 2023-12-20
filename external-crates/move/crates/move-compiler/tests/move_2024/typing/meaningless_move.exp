@@ -17,37 +17,37 @@ error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/meaningless_move.move:19:9
    │
 19 │         move x.y;
-   │         ^^^^ Invalid 'move'. 'move' on a path access works only with variables, e.g. 'move x'
+   │         ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 
 error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/meaningless_move.move:20:9
    │
 20 │         move x.y.z;
-   │         ^^^^ Invalid 'move'. 'move' on a path access works only with variables, e.g. 'move x'
+   │         ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 
 error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/meaningless_move.move:21:9
    │
 21 │         move x.y.z.f;
-   │         ^^^^ Invalid 'move'. 'move' on a path access works only with variables, e.g. 'move x'
+   │         ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 
 error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/meaningless_move.move:22:9
    │
 22 │         move V;
-   │         ^^^^ Invalid 'move'. Expected a variable.. Cannot 'move' constants
+   │         ^^^^ Invalid 'move'. Cannot 'move' constants
 
 error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/typing/meaningless_move.move:23:9
    │
 23 │         move ZED.f;
-   │         ^^^^ Invalid 'move'. 'move' on a path access works only with variables, e.g. 'move x'
+   │         ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 
 warning[W04028]: implicit copy of a constant
    ┌─ tests/move_2024/typing/meaningless_move.move:23:14
    │
 23 │         move ZED.f;
-   │              ^^^ Borrowing, or accessing the field of, a constant will first copy the entire constant. Consider first binding the value to a variable to make this copy explicit.
+   │              ^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
    │
    = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

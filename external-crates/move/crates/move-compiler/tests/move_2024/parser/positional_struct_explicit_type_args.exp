@@ -17,7 +17,7 @@ error[E03009]: unbound variable
    ┌─ tests/move_2024/parser/positional_struct_explicit_type_args.move:17:22
    │
 17 │         let _ = Foo <u64>(0);
-   │                      ^^^ Invalid variable usage. Unbound variable 'u64'
+   │                      ^^^ Unbound variable 'u64'
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/parser/positional_struct_explicit_type_args.move:17:25

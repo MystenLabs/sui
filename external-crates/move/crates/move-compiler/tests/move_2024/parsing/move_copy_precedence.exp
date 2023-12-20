@@ -18,11 +18,11 @@ error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/parsing/move_copy_precedence.move:14:9
    │
 14 │         move s1.f + 1;
-   │         ^^^^ Invalid 'move'. 'move' on a path access works only with variables, e.g. 'move x'
+   │         ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 
 error[E04027]: invalid 'move' usage
    ┌─ tests/move_2024/parsing/move_copy_precedence.move:16:10
    │
 16 │         &move s2.f;
-   │          ^^^^ Invalid 'move'. 'move' on a path access works only with variables, e.g. 'move x'
+   │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
 

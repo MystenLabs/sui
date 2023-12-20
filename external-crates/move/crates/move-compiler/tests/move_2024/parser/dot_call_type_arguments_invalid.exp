@@ -17,7 +17,7 @@ error[E03009]: unbound variable
    ┌─ tests/move_2024/parser/dot_call_type_arguments_invalid.move:12:18
    │
 12 │         c.uncup <u64> ();
-   │                  ^^^ Invalid variable usage. Unbound variable 'u64'
+   │                  ^^^ Unbound variable 'u64'
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/parser/dot_call_type_arguments_invalid.move:12:21
