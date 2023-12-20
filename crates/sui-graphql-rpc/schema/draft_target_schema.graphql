@@ -115,7 +115,7 @@ type Query {
     filter: ObjectFilter,
   ): ObjectConnection!
 
-  resolveSuinsRegistrationAddress(name: String!): Address
+  resolveNameServiceAddress(name: String!): Address
 
   # NB. Will be moved into a private, explorer-specific extension.
   networkMetrics: NetworkMetrics
