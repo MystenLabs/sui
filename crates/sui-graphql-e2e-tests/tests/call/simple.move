@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses Test=0x0 A=0x42 --simulator
+//# init --addresses Test=0x0 A=0x42 --simulator --custom-validator-account
 
 //# publish
 module Test::M1 {
@@ -29,7 +29,13 @@ module Test::M1 {
 
 //# run Test::M1::create --args 0 @A
 
+//# run Test::M1::create --args 0 @validator_0
+
+//# view-object 0,0
+
 //# view-object 2,0
+
+//# view-object 3,0
 
 //# create-checkpoint 4
 
@@ -89,7 +95,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --variables Test A obj_2_0
+//# run-graphql --variables Test A obj_2_0 validator_0
 {
   address(address: $Test) {
     objectConnection{
@@ -109,6 +115,21 @@ module Test::M1 {
           address
           digest
           kind
+        }
+      }
+    }
+  }
+
+  val_objs: address(address: $validator_0) {
+    objectConnection{
+      edges {
+        node {
+          address
+          digest
+          kind
+            owner {
+            address
+          }
         }
       }
     }
