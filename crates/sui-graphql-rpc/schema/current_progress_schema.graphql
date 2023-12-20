@@ -92,7 +92,7 @@ type Address implements ObjectOwner {
 	This resolver is not supported on the Address type.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
-	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	dynamicFieldConnection(first: Int, after: String, last: Int, before: String, filter: DynamicFieldFilter): DynamicFieldConnection
 }
 
 enum AddressTransactionBlockRelationship {
@@ -511,6 +511,31 @@ type DynamicFieldEdge {
 	A cursor for use in pagination
 	"""
 	cursor: String!
+}
+
+input DynamicFieldFilter {
+	"""
+	Filter the type of dynamic field name.
+	
+	Names can be filtered by their type's package, package::module, or
+	their fully qualified type name.
+	
+	Generic types can be queried by either the generic type name, e.g.
+	`0x2::coin::Coin`, or by the full type name, such as
+	`0x2::coin::Coin<0x2::sui::SUI>`.
+	"""
+	nameType: String
+	"""
+	Filter the type of dynamic field value.
+	
+	Values can be filtered by their type's package, package::module,
+	or their fully qualified type name.
+	
+	Generic types can be queried by either the generic type name, e.g.
+	`0x2::coin::Coin`, or by the full type name, such as
+	`0x2::coin::Coin<0x2::sui::SUI>`.
+	"""
+	valueType: String
 }
 
 input DynamicFieldName {
@@ -1478,7 +1503,7 @@ type Object implements ObjectOwner {
 	The dynamic fields on an object.
 	Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
 	"""
-	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	dynamicFieldConnection(first: Int, after: String, last: Int, before: String, filter: DynamicFieldFilter): DynamicFieldConnection
 }
 
 """
@@ -1585,7 +1610,7 @@ interface ObjectOwner {
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
 	dynamicField(name: DynamicFieldName!): DynamicField
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
-	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	dynamicFieldConnection(first: Int, after: String, last: Int, before: String, filter: DynamicFieldFilter): DynamicFieldConnection
 }
 
 """
@@ -1694,7 +1719,7 @@ type Owner implements ObjectOwner {
 	The dynamic fields on an object.
 	This field exists as a convenience when accessing a dynamic field on a wrapped object.
 	"""
-	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	dynamicFieldConnection(first: Int, after: String, last: Int, before: String, filter: DynamicFieldFilter): DynamicFieldConnection
 }
 
 """
