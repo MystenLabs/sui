@@ -2473,7 +2473,10 @@ dependencies = [
 name = "consensus-config"
 version = "0.1.0"
 dependencies = [
+ "fastcrypto",
  "insta",
+ "multiaddr",
+ "rand 0.8.5",
  "serde",
  "workspace-hack",
 ]
