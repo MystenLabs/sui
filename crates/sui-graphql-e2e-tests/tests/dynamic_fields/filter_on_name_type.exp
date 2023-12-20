@@ -1,0 +1,526 @@
+processed 23 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 6-64:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 10602000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 66-66:
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'run'. lines 68-68:
+created: object(3,0), object(3,1), object(3,2)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 6536000,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
+
+task 4 'run'. lines 70-70:
+created: object(4,0), object(4,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5928000,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
+
+task 5 'run'. lines 72-72:
+created: object(5,0), object(5,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 6292800,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
+
+task 6 'run'. lines 74-74:
+created: object(6,0), object(6,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 6961600,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
+
+task 7 'create-checkpoint'. lines 76-76:
+Checkpoint created: 1
+
+task 8 'view-checkpoint'. lines 78-78:
+CheckpointSummary { epoch: 0, seq: 1, content_digest: 6Ex4fuLtnzCG76YXtszcK1rdRpfpXMVdn5fnS7bedNzs,
+            epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 6000000, storage_cost: 38554800, storage_rebate: 8848224, non_refundable_storage_fee: 89376 }}
+
+task 9 'run-graphql'. lines 80-103:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFieldConnection": {
+        "nodes": [
+          {
+            "name": {
+              "type": {
+                "repr": "bool"
+              },
+              "data": {
+                "Bool": false
+              },
+              "bcs": "AA=="
+            },
+            "value": {
+              "__typename": "MoveValue"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "vector<u8>"
+              },
+              "data": {
+                "Vector": []
+              },
+              "bcs": "AA=="
+            },
+            "value": {
+              "__typename": "MoveValue"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "u64"
+              },
+              "data": {
+                "Number": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            },
+            "value": {
+              "__typename": "MoveObject"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "0x43e42ce746642078b5adb6c5ddcb36344b7b3e6478f8e755ae28f67d1abfe4fb::m::Name<u64>"
+              },
+              "data": {
+                "Struct": [
+                  {
+                    "name": "value",
+                    "value": {
+                      "Number": "42"
+                    }
+                  }
+                ]
+              },
+              "bcs": "KgAAAAAAAAA="
+            },
+            "value": {
+              "__typename": "MoveObject"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "u64"
+              },
+              "data": {
+                "Number": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            },
+            "value": {
+              "__typename": "MoveValue"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "0x43e42ce746642078b5adb6c5ddcb36344b7b3e6478f8e755ae28f67d1abfe4fb::m::Name<0x0000000000000000000000000000000000000000000000000000000000000001::string::String>"
+              },
+              "data": {
+                "Struct": [
+                  {
+                    "name": "value",
+                    "value": {
+                      "String": "Will"
+                    }
+                  }
+                ]
+              },
+              "bcs": "BFdpbGw="
+            },
+            "value": {
+              "__typename": "MoveObject"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 10 'run-graphql'. lines 105-128:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFieldConnection": {
+        "nodes": [
+          {
+            "name": {
+              "type": {
+                "repr": "0x43e42ce746642078b5adb6c5ddcb36344b7b3e6478f8e755ae28f67d1abfe4fb::m::Name<u64>"
+              },
+              "data": {
+                "Struct": [
+                  {
+                    "name": "value",
+                    "value": {
+                      "Number": "42"
+                    }
+                  }
+                ]
+              },
+              "bcs": "KgAAAAAAAAA="
+            },
+            "value": {
+              "__typename": "MoveObject"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "0x43e42ce746642078b5adb6c5ddcb36344b7b3e6478f8e755ae28f67d1abfe4fb::m::Name<0x0000000000000000000000000000000000000000000000000000000000000001::string::String>"
+              },
+              "data": {
+                "Struct": [
+                  {
+                    "name": "value",
+                    "value": {
+                      "String": "Will"
+                    }
+                  }
+                ]
+              },
+              "bcs": "BFdpbGw="
+            },
+            "value": {
+              "__typename": "MoveObject"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 11 'run-graphql'. lines 130-153:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFieldConnection": {
+        "nodes": [
+          {
+            "name": {
+              "type": {
+                "repr": "0x43e42ce746642078b5adb6c5ddcb36344b7b3e6478f8e755ae28f67d1abfe4fb::m::Name<u64>"
+              },
+              "data": {
+                "Struct": [
+                  {
+                    "name": "value",
+                    "value": {
+                      "Number": "42"
+                    }
+                  }
+                ]
+              },
+              "bcs": "KgAAAAAAAAA="
+            },
+            "value": {
+              "__typename": "MoveObject"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "0x43e42ce746642078b5adb6c5ddcb36344b7b3e6478f8e755ae28f67d1abfe4fb::m::Name<0x0000000000000000000000000000000000000000000000000000000000000001::string::String>"
+              },
+              "data": {
+                "Struct": [
+                  {
+                    "name": "value",
+                    "value": {
+                      "String": "Will"
+                    }
+                  }
+                ]
+              },
+              "bcs": "BFdpbGw="
+            },
+            "value": {
+              "__typename": "MoveObject"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 12 'run-graphql'. lines 155-179:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFieldConnection": {
+        "nodes": []
+      }
+    }
+  }
+}
+
+task 13 'run-graphql'. lines 181-205:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFieldConnection": {
+        "nodes": [
+          {
+            "name": {
+              "type": {
+                "repr": "u64"
+              },
+              "data": {
+                "Number": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            },
+            "value": {
+              "__typename": "MoveObject"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "u64"
+              },
+              "data": {
+                "Number": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            },
+            "value": {
+              "__typename": "MoveValue"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 14 'run-graphql'. lines 208-231:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFieldConnection": {
+        "nodes": [
+          {
+            "name": {
+              "type": {
+                "repr": "0x43e42ce746642078b5adb6c5ddcb36344b7b3e6478f8e755ae28f67d1abfe4fb::m::Name<u64>"
+              },
+              "data": {
+                "Struct": [
+                  {
+                    "name": "value",
+                    "value": {
+                      "Number": "42"
+                    }
+                  }
+                ]
+              },
+              "bcs": "KgAAAAAAAAA="
+            },
+            "value": {
+              "__typename": "MoveObject"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "0x43e42ce746642078b5adb6c5ddcb36344b7b3e6478f8e755ae28f67d1abfe4fb::m::Name<0x0000000000000000000000000000000000000000000000000000000000000001::string::String>"
+              },
+              "data": {
+                "Struct": [
+                  {
+                    "name": "value",
+                    "value": {
+                      "String": "Will"
+                    }
+                  }
+                ]
+              },
+              "bcs": "BFdpbGw="
+            },
+            "value": {
+              "__typename": "MoveObject"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 15 'run-graphql'. lines 233-256:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFieldConnection": {
+        "nodes": [
+          {
+            "name": {
+              "type": {
+                "repr": "0x43e42ce746642078b5adb6c5ddcb36344b7b3e6478f8e755ae28f67d1abfe4fb::m::Name<u64>"
+              },
+              "data": {
+                "Struct": [
+                  {
+                    "name": "value",
+                    "value": {
+                      "Number": "42"
+                    }
+                  }
+                ]
+              },
+              "bcs": "KgAAAAAAAAA="
+            },
+            "value": {
+              "__typename": "MoveObject"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 16 'run-graphql'. lines 258-281:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFieldConnection": {
+        "nodes": [
+          {
+            "name": {
+              "type": {
+                "repr": "0x43e42ce746642078b5adb6c5ddcb36344b7b3e6478f8e755ae28f67d1abfe4fb::m::Name<0x0000000000000000000000000000000000000000000000000000000000000001::string::String>"
+              },
+              "data": {
+                "Struct": [
+                  {
+                    "name": "value",
+                    "value": {
+                      "String": "Will"
+                    }
+                  }
+                ]
+              },
+              "bcs": "BFdpbGw="
+            },
+            "value": {
+              "__typename": "MoveObject"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 17 'run-graphql'. lines 285-309:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFieldConnection": {
+        "nodes": []
+      }
+    }
+  }
+}
+
+task 18 'run-graphql'. lines 311-335:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFieldConnection": {
+        "nodes": []
+      }
+    }
+  }
+}
+
+task 19 'run-graphql'. lines 337-361:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFieldConnection": {
+        "nodes": []
+      }
+    }
+  }
+}
+
+task 20 'run-graphql'. lines 363-386:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFieldConnection": {
+        "nodes": [
+          {
+            "name": {
+              "type": {
+                "repr": "vector<u8>"
+              },
+              "data": {
+                "Vector": []
+              },
+              "bcs": "AA=="
+            },
+            "value": {
+              "__typename": "MoveValue"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 21 'run-graphql'. lines 388-412:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFieldConnection": {
+        "nodes": [
+          {
+            "name": {
+              "type": {
+                "repr": "bool"
+              },
+              "data": {
+                "Bool": false
+              },
+              "bcs": "AA=="
+            },
+            "value": {
+              "__typename": "MoveValue"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 22 'run-graphql'. lines 414-438:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFieldConnection": {
+        "nodes": []
+      }
+    }
+  }
+}
