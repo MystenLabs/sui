@@ -38,7 +38,8 @@ impl MoveObject {
     }
 
     /// Determines whether a transaction can transfer this object, using the TransferObjects
-    /// command, which requires its type to have the `key` and `store` abilities.
+    /// transaction command or `sui::transfer::public_transfer`, both of which require the object to
+    /// have the `key` and `store` abilities.
     async fn has_public_transfer(&self, ctx: &Context<'_>) -> Result<bool> {
         let resolver: &Resolver<PackageCache> = ctx
             .data()
