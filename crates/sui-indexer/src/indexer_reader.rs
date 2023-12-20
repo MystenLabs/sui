@@ -392,6 +392,8 @@ impl IndexerReader {
         Ok(system_state)
     }
 
+    /// Retrieve the system state data for the given epoch. If no epoch is given,
+    /// it will retrieve the last known epoch's data and return the system state.
     pub fn get_epoch_sui_system_state(
         &self,
         epoch: Option<EpochId>,
