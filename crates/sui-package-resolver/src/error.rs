@@ -66,4 +66,7 @@ pub enum Error {
 
     #[error("Unexpected error: {0}")]
     UnexpectedError(Box<dyn std::error::Error + Send + Sync + 'static>),
+
+    #[error("Type layout nesting exceeded limit of {0}")]
+    ValueNesting(usize),
 }
