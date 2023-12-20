@@ -13,7 +13,7 @@ use crate::{
     multisig_legacy::{bitmap_to_u16, MultiSigLegacy, MultiSigPublicKeyLegacy},
     signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
     utils::{
-        keys, make_transaction_data, make_zklogin_tx, TestData, DEFAULT_ADDRESS_SEED,
+        keys, load_test_vectors, make_transaction_data, make_zklogin_tx, DEFAULT_ADDRESS_SEED,
         SHORT_ADDRESS_SEED,
     },
     zk_login_authenticator::ZkLoginAuthenticator,
@@ -24,10 +24,13 @@ use fastcrypto::{
     encoding::{Base64, Encoding},
     hash::HashFunction,
     secp256k1::{Secp256k1KeyPair, Secp256k1PrivateKey},
-    traits::{EncodeDecodeBase64, ToFromBytes},
+    traits::ToFromBytes,
 };
-use fastcrypto_zkp::bn254::zk_login::{parse_jwks, JwkId, OIDCProvider, ZkLoginInputs, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
+use fastcrypto_zkp::bn254::{
+    utils::big_int_str_to_bytes,
+    zk_login::{parse_jwks, JwkId, OIDCProvider, ZkLoginInputs, JWK},
+};
 use im::hashmap::HashMap as ImHashMap;
 use once_cell::sync::OnceCell;
 use rand::{rngs::StdRng, SeedableRng};
@@ -110,11 +113,7 @@ fn multisig_scenarios() {
         3,
     )
     .unwrap();
-
-    // Address parsing remain the same.
     let addr_2 = SuiAddress::from(&multisig_pk_2);
-    let addr_legacy_2 = SuiAddress::from(&multisig_pk_legacy_2);
-    assert_eq!(addr_2, addr_legacy_2);
 
     // sig1 and sig2 (3 of 6) verifies ok.
     let multi_sig_6 =
@@ -505,9 +504,14 @@ fn multisig_legacy_serde_test() {
     let sig0 = Signature::new_secure(&msg, &keys[0]).into();
     let sig2 = Signature::new_secure(&msg, &keys[2]).into();
 
-    let multisig_pk_legacy =
-        MultiSigPublicKeyLegacy::new(vec![pk1, pk2, pk3], vec![1, 2, 3], 3).unwrap();
-    let addr: SuiAddress = (&multisig_pk_legacy).into();
+    let multisig_pk_legacy = MultiSigPublicKeyLegacy::new(
+        vec![pk1.clone(), pk2.clone(), pk3.clone()],
+        vec![1, 2, 3],
+        3,
+    )
+    .unwrap();
+    let multisig_pk = MultiSigPublicKey::new(vec![pk1, pk2, pk3], vec![1, 2, 3], 3).unwrap();
+    let addr: SuiAddress = (&multisig_pk).into();
 
     let multi_sig_legacy = MultiSigLegacy::combine(vec![sig0, sig2], multisig_pk_legacy).unwrap();
 
@@ -899,6 +903,7 @@ fn multisig_new_hashed_signature() {
         .verify_authenticator(&msg, addr, None, &VerifyParams::default())
         .is_ok());
 }
+
 #[test]
 fn multisig_zklogin_scenarios() {
     let mut seed = StdRng::from_seed([0; 32]);
@@ -906,28 +911,8 @@ fn multisig_zklogin_scenarios() {
     let skp: SuiKeyPair = SuiKeyPair::Ed25519(kp);
     let pk1 = skp.public();
 
-    // read in test files that has a list of matching zklogin_inputs and its ephemeral private keys.
-    let file = std::fs::File::open("./src/unit_tests/zklogin_test_vectors.json")
-        .expect("Unable to open file");
-    let test_datum: Vec<TestData> = serde_json::from_reader(file).unwrap();
-    let mut pks = vec![];
-    let mut kps_and_zklogin_inputs = vec![];
-    for test in test_datum {
-        let kp = SuiKeyPair::decode_base64(&test.kp).unwrap();
-        let pk_zklogin = PublicKey::ZkLogin(
-            ZkLoginPublicIdentifier::new(
-                &OIDCProvider::Twitch.get_config().iss,
-                &test.address_seed,
-            )
-            .unwrap(),
-        );
-        pks.push(pk_zklogin);
-        kps_and_zklogin_inputs.push((
-            kp,
-            ZkLoginInputs::from_json(&test.zklogin_inputs, &test.address_seed).unwrap(),
-        ));
-    }
-    let inputs = kps_and_zklogin_inputs[0].1.clone();
+    let test_vectors = load_test_vectors();
+    let inputs = test_vectors[0].2.clone();
 
     // pk consistent with the one in make_zklogin_tx
     let pk2 = PublicKey::ZkLogin(
@@ -1064,12 +1049,14 @@ fn multisig_zklogin_scenarios() {
         .is_err());
 
     // test 10 out of 10 multisig with 10 zklogin authenticators verifies.
+    let pks = test_vectors.iter().map(|(_, pk, _)| pk.clone()).collect();
     let multisig_pk = MultiSigPublicKey::new(pks, vec![1; 10], 10).unwrap();
     let multisig_address = SuiAddress::from(&multisig_pk);
     let tx_data = make_transaction_data(multisig_address);
     let msg = IntentMessage::new(Intent::sui_transaction(), tx_data);
+
     let mut zklogin_sigs = vec![];
-    for (kp, inputs) in kps_and_zklogin_inputs {
+    for (kp, _pk, inputs) in test_vectors {
         let eph_sig = Signature::new_secure(&msg, &kp);
         let zklogin_sig =
             GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(inputs, 10, eph_sig));
@@ -1101,6 +1088,89 @@ fn multisig_zklogin_scenarios() {
     assert!(multisig_2
         .verify_authenticator(intent_msg, multisig_addr, Some(10), &aux_verify_data)
         .is_err());
+}
+
+#[test]
+fn zklogin_in_multisig_works_with_both_addresses() {
+    let mut seed = StdRng::from_seed([0; 32]);
+    let kp: Ed25519KeyPair = get_key_pair_from_rng(&mut seed).1;
+    let skp: SuiKeyPair = SuiKeyPair::Ed25519(kp);
+
+    // create a new multisig address based on pk1 and pk2 where pk1 is a zklogin public identifier, with a crafted unpadded bytes.
+    let mut bytes = Vec::new();
+    let binding = OIDCProvider::Twitch.get_config();
+    let iss_bytes = binding.iss.as_bytes();
+    bytes.extend([iss_bytes.len() as u8]);
+    bytes.extend(iss_bytes);
+    // length here is 31 bytes and left unpadded.
+    let address_seed_bytes = big_int_str_to_bytes(SHORT_ADDRESS_SEED).unwrap();
+    bytes.extend(address_seed_bytes);
+
+    let pk1 = PublicKey::ZkLogin(ZkLoginPublicIdentifier(bytes));
+    let pk2 = skp.public();
+    let multisig_pk = MultiSigPublicKey::new(vec![pk1, pk2.clone()], vec![1; 2], 1).unwrap();
+    let multisig_address = SuiAddress::from(&multisig_pk);
+
+    let (kp, _pk, input) = &load_test_vectors()[0];
+    let intent_msg = &IntentMessage::new(
+        Intent::sui_transaction(),
+        make_transaction_data(multisig_address),
+    );
+    let user_signature = Signature::new_secure(intent_msg, kp);
+
+    let modified_inputs =
+        ZkLoginInputs::from_json(&serde_json::to_string(input).unwrap(), SHORT_ADDRESS_SEED)
+            .unwrap();
+    let zklogin_sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
+        modified_inputs.clone(),
+        10,
+        user_signature,
+    ));
+    let multisig = MultiSig::new(vec![zklogin_sig.to_compressed().unwrap()], 1, multisig_pk);
+
+    let parsed: ImHashMap<JwkId, JWK> = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Twitch)
+        .unwrap()
+        .into_iter()
+        .collect();
+
+    let aux_verify_data = VerifyParams::new(parsed, vec![], ZkLoginEnv::Test, true, true);
+    let res = multisig.verify_claims(intent_msg, multisig_address, &aux_verify_data);
+    // since the zklogin inputs is crafted, it is expected that the proof verify failed, but all checks before passes.
+    assert!(
+        matches!(res, Err(crate::error::SuiError::InvalidSignature { error }) if error.contains("General cryptographic error: Groth16 proof verify failed"))
+    );
+
+    // initialize zklogin pk (pk1_padd) with padded address seed
+    let pk1_padded = PublicKey::ZkLogin(
+        ZkLoginPublicIdentifier::new(&OIDCProvider::Twitch.get_config().iss, SHORT_ADDRESS_SEED)
+            .unwrap(),
+    );
+    let multisig_pk_padded = MultiSigPublicKey::new(vec![pk1_padded, pk2], vec![1; 2], 1).unwrap();
+    let multisig_address_padded = SuiAddress::from(&multisig_pk_padded);
+    let modified_inputs_padded =
+        ZkLoginInputs::from_json(&serde_json::to_string(input).unwrap(), SHORT_ADDRESS_SEED)
+            .unwrap();
+    let intent_msg_padded = &IntentMessage::new(
+        Intent::sui_transaction(),
+        make_transaction_data(multisig_address_padded),
+    );
+    let user_signature_padded = Signature::new_secure(intent_msg_padded, kp);
+    let zklogin_sig_padded = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
+        modified_inputs_padded.clone(),
+        10,
+        user_signature_padded,
+    ));
+    let multisig_padded = MultiSig::new(
+        vec![zklogin_sig_padded.to_compressed().unwrap()],
+        1,
+        multisig_pk_padded,
+    );
+
+    let res =
+        multisig_padded.verify_claims(intent_msg_padded, multisig_address_padded, &aux_verify_data);
+    assert!(
+        matches!(res, Err(crate::error::SuiError::InvalidSignature { error }) if error.contains("General cryptographic error: Groth16 proof verify failed"))
+    );
 }
 
 #[test]

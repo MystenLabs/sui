@@ -121,7 +121,13 @@ async fn test_multisig_legacy_e2e() {
     let pk2 = keys[1].public();
     let pk3 = keys[2].public();
 
-    let multisig_pk = MultiSigPublicKeyLegacy::new(
+    let multisig_pk_legacy = MultiSigPublicKeyLegacy::new(
+        vec![pk1.clone(), pk2.clone(), pk3.clone()],
+        vec![1, 1, 1],
+        2,
+    )
+    .unwrap();
+    let multisig_pk = MultiSigPublicKey::new(
         vec![pk1.clone(), pk2.clone(), pk3.clone()],
         vec![1, 1, 1],
         2,
@@ -157,7 +163,7 @@ async fn test_multisig_legacy_e2e() {
     // now send it back
     let transfer_from_multisig = TestTransactionBuilder::new(multisig_addr, new_obj, rgp)
         .transfer_sui(Some(1000000), sender)
-        .build_and_sign_multisig_legacy(multisig_pk, &[&keys[0], &keys[1]]);
+        .build_and_sign_multisig_legacy(multisig_pk_legacy, &[&keys[0], &keys[1]]);
 
     context
         .execute_transaction_must_succeed(transfer_from_multisig)

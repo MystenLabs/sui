@@ -672,9 +672,11 @@ impl KeyToolCommand {
                 weights,
                 threshold,
             } => {
-                let multisig_pk = MultiSigPublicKeyLegacy::new(pks, weights, threshold)?;
+                let multisig_pk_legacy =
+                    MultiSigPublicKeyLegacy::new(pks.clone(), weights.clone(), threshold)?;
+                let multisig_pk = MultiSigPublicKey::new(pks, weights, threshold)?;
                 let address: SuiAddress = (&multisig_pk).into();
-                let multisig = MultiSigLegacy::combine(sigs, multisig_pk)?;
+                let multisig = MultiSigLegacy::combine(sigs, multisig_pk_legacy)?;
                 let generic_sig: GenericSignature = multisig.into();
                 let multisig_legacy_serialized = generic_sig.encode_base64();
 

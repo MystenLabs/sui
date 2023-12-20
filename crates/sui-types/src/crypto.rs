@@ -26,6 +26,7 @@ pub use fastcrypto::traits::{
     VerifyingKey,
 };
 use fastcrypto_zkp::bn254::utils::big_int_str_to_bytes;
+use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
 use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
 use roaring::RoaringBitmap;
@@ -346,6 +347,13 @@ impl PublicKey {
             PublicKey::Secp256r1(_) => Secp256r1SuiSignature::SCHEME,
             PublicKey::ZkLogin(_) => SignatureScheme::ZkLoginAuthenticator,
         }
+    }
+
+    pub fn from_zklogin_inputs(inputs: &ZkLoginInputs) -> SuiResult<Self> {
+        Ok(PublicKey::ZkLogin(ZkLoginPublicIdentifier::new(
+            inputs.get_iss(),
+            inputs.get_address_seed(),
+        )?))
     }
 }
 

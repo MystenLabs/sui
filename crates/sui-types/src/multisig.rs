@@ -149,7 +149,7 @@ impl AuthenticatorTrait for MultiSig {
                         pk.verify(
                             &digest,
                             &s.try_into().map_err(|_| SuiError::InvalidSignature {
-                                error: "Fail to verify single sig".to_string(),
+                                error: "Invalid ed25519 signature bytes".to_string(),
                             })?,
                         )
                     }
@@ -162,7 +162,7 @@ impl AuthenticatorTrait for MultiSig {
                         pk.verify(
                             &digest,
                             &s.try_into().map_err(|_| SuiError::InvalidSignature {
-                                error: "Fail to verify single sig".to_string(),
+                                error: "Invalid k1 signature bytes".to_string(),
                             })?,
                         )
                     }
@@ -175,7 +175,7 @@ impl AuthenticatorTrait for MultiSig {
                         pk.verify(
                             &digest,
                             &s.try_into().map_err(|_| SuiError::InvalidSignature {
-                                error: "Fail to verify single sig".to_string(),
+                                error: "Invalid r1 signature bytes".to_string(),
                             })?,
                         )
                     }
@@ -184,14 +184,18 @@ impl AuthenticatorTrait for MultiSig {
                             .map_err(|_| SuiError::InvalidAuthenticator)?;
                         authenticator
                             .verify_claims(value, SuiAddress::from(subsig_pubkey), verify_params)
-                            .map_err(|_| FastCryptoError::InvalidSignature)
+                            .map_err(|e| FastCryptoError::GeneralError(e.to_string()))
                     }
                 };
             if res.is_ok() {
                 weight_sum += *weight as u16;
             } else {
-                return Err(SuiError::InvalidSignature {
-                    error: format!("Invalid signature for pk={:?}", subsig_pubkey),
+                return res.map_err(|e| SuiError::InvalidSignature {
+                    error: format!(
+                        "Invalid signature for pk={:?} {:?}",
+                        subsig_pubkey,
+                        e.to_string()
+                    ),
                 });
             }
         }
