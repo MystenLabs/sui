@@ -9,7 +9,7 @@ use crate::{context_data::db_data_provider::PgManager, error::Error};
 use super::{
     balance::Balance,
     coin::Coin,
-    dynamic_field::{DynamicField, DynamicFieldName},
+    dynamic_field::{DynamicField, DynamicFieldFilter, DynamicFieldName},
     object::{Object, ObjectFilter},
     stake::StakedSui,
     sui_address::SuiAddress,
@@ -189,6 +189,7 @@ impl Address {
         _after: Option<String>,
         _last: Option<u64>,
         _before: Option<String>,
+        _filter: Option<DynamicFieldFilter>,
     ) -> Result<Option<Connection<String, DynamicField>>> {
         Err(Error::DynamicFieldOnAddress.extend())
     }

@@ -15,7 +15,7 @@ use crate::{
         committee_member::CommitteeMember,
         date_time::DateTime,
         digest::Digest,
-        dynamic_field::{DynamicField, DynamicFieldName},
+        dynamic_field::{DynamicField, DynamicFieldFilter, DynamicFieldName},
         end_of_epoch_data::EndOfEpochData,
         epoch::Epoch,
         event::{Event, EventFilter},
@@ -579,6 +579,53 @@ impl PgManager {
         result
             .map(|mut stored_objs| {
                 let has_next_page = stored_objs.len() as i64 > limit.value();
+                if has_next_page {
+                    stored_objs.pop();
+                }
+
+                if last.is_some() {
+                    stored_objs.reverse();
+                }
+
+                Ok((stored_objs, has_next_page))
+            })
+            .transpose()
+    }
+
+    async fn multi_get_dyn_fields(
+        &self,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        owner_id: SuiAddress,
+        filter: Option<DynamicFieldFilter>,
+    ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
+        let limit = self.validate_page_limit(first, last)?;
+        let before = before
+            .map(|cursor| self.parse_obj_cursor(&cursor))
+            .transpose()?;
+        let after = after
+            .map(|cursor| self.parse_obj_cursor(&cursor))
+            .transpose()?;
+
+        let query = move || {
+            QueryBuilder::multi_get_dyn_fields(
+                before.clone(),
+                after.clone(),
+                limit,
+                owner_id.into_vec(),
+                filter.clone(),
+            )
+        };
+
+        let result: Option<Vec<StoredObject>> = self
+            .run_query_async_with_cost(query, |query| move |conn| query.load(conn).optional())
+            .await?;
+
+        result
+            .map(|mut stored_objs| {
+                let has_next_page = stored_objs.len() as i64 > limit;
                 if has_next_page {
                     stored_objs.pop();
                 }
@@ -1399,21 +1446,10 @@ impl PgManager {
         last: Option<u64>,
         before: Option<String>,
         address: SuiAddress,
+        filter: Option<DynamicFieldFilter>,
     ) -> Result<Option<Connection<String, DynamicField>>, Error> {
-        let filter = ObjectFilter {
-            owner: Some(address),
-            ..Default::default()
-        };
-
         let objs = self
-            .multi_get_objs(
-                first,
-                after,
-                last,
-                before,
-                Some(filter),
-                Some(OwnerType::Object),
-            )
+            .multi_get_dyn_fields(first, after, last, before, address, filter)
             .await?;
 
         let Some((stored_objs, has_next_page)) = objs else {

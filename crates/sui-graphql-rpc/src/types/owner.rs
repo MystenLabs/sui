@@ -3,6 +3,7 @@
 
 use super::address::Address;
 use super::dynamic_field::DynamicField;
+use super::dynamic_field::DynamicFieldFilter;
 use super::dynamic_field::DynamicFieldName;
 use super::stake::StakedSui;
 use super::suins_registration::SuinsRegistration;
@@ -85,6 +86,7 @@ use sui_types::dynamic_field::DynamicFieldType;
         arg(name = "after", ty = "Option<String>"),
         arg(name = "last", ty = "Option<u64>"),
         arg(name = "before", ty = "Option<String>"),
+        arg(name = "filter", ty = "Option<DynamicFieldFilter>")
     )
 )]
 #[derive(Clone, Debug)]
@@ -264,9 +266,10 @@ impl Owner {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
+        filter: Option<DynamicFieldFilter>,
     ) -> Result<Option<Connection<String, DynamicField>>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_dynamic_fields(first, after, last, before, self.address)
+            .fetch_dynamic_fields(first, after, last, before, self.address, filter)
             .await
             .extend()
     }
