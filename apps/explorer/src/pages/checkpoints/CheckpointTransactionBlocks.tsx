@@ -13,12 +13,12 @@ const DEFAULT_TRANSACTIONS_LIMIT = 20;
 
 export function CheckpointTransactionBlocks({ id }: { id: string }) {
 	const [limit, setLimit] = useState(DEFAULT_TRANSACTIONS_LIMIT);
-	const transactions = useGetTransactionBlocks(
-		{
+	const transactions = useGetTransactionBlocks({
+		filter: {
 			Checkpoint: id,
 		},
 		limit,
-	);
+	});
 
 	const { data, isFetching, pagination, isPending } = useCursorPagination(transactions);
 

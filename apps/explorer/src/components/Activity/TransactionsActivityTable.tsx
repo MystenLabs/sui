@@ -39,11 +39,11 @@ export function TransactionsActivityTable({
 		staleTime: Infinity,
 		retry: false,
 	});
-	const transactions = useGetTransactionBlocks(
-		transactionKindFilter ? { TransactionKind: transactionKindFilter } : undefined,
+	const transactions = useGetTransactionBlocks({
+		filter: transactionKindFilter ? { TransactionKind: transactionKindFilter } : undefined,
 		limit,
 		refetchInterval,
-	);
+	});
 	const { data, isFetching, pagination, isPending, isError } = useCursorPagination(transactions);
 	const goToFirstPageRef = useRef(pagination.onFirst);
 	goToFirstPageRef.current = pagination.onFirst;

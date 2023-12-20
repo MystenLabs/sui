@@ -9,8 +9,6 @@ import { type Direction } from 'react-resizable-panels';
 import { type DataType } from '~/pages/object-result/ObjectResultType';
 import { checkIsPropertyType } from '~/utils/objectUtils';
 
-import { usePackageViewedData } from '~/pages/id/utils';
-
 const splitPanelsOrientation: { label: string; value: Direction }[] = [
 	{ label: 'STACKED', value: 'vertical' },
 	{ label: 'SIDE-BY-SIDE', value: 'horizontal' },
@@ -21,9 +19,7 @@ export function Modules({ data }: { data: DataType }) {
 		splitPanelsOrientation[1].value,
 	);
 
-	const viewedData = usePackageViewedData({ data });
-
-	const properties = Object.entries(viewedData.data?.contents)
+	const properties = Object.entries(data.data?.contents)
 		.filter(([key, _]) => key !== 'name')
 		.filter(([_, value]) => checkIsPropertyType(value));
 

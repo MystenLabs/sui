@@ -9,11 +9,11 @@ import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { useState } from 'react';
 
 export function TransactionBlocksTable({
-	pageType,
 	address,
+	isObject,
 }: {
-	pageType: 'Package' | 'Object' | 'Address';
 	address: string;
+	isObject: boolean;
 }) {
 	const [filterValue, setFilterValue] = useState(FILTER_VALUES.CHANGED);
 
@@ -21,7 +21,7 @@ export function TransactionBlocksTable({
 		<TabHeader
 			title="Transaction Blocks"
 			after={
-				pageType !== 'Address' && (
+				isObject && (
 					<div>
 						<FiltersControl filterValue={filterValue} setFilterValue={setFilterValue} />
 					</div>
@@ -29,7 +29,7 @@ export function TransactionBlocksTable({
 			}
 		>
 			<ErrorBoundary>
-				<TransactionBlocksForAddress address={address} filter={filterValue} pageType={pageType} />
+				<TransactionBlocksForAddress address={address} filter={filterValue} isObject={isObject} />
 			</ErrorBoundary>
 		</TabHeader>
 	);

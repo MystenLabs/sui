@@ -39,7 +39,7 @@ const tabStyles = cva(
 		},
 	},
 );
-const tabListStyles = cva(['flex items-center border-gray-45'], {
+const tabListStyles = cva(['flex items-center border-gray-45 w-full justify-between'], {
 	variants: {
 		fullWidth: {
 			true: 'flex-1',
@@ -131,22 +131,20 @@ export function TabHeader({
 	return (
 		<Tabs size={size} defaultValue="tab">
 			<TabsList>
-				<div className="flex w-full justify-between">
-					<TabsTrigger value="tab">
-						{title}
-						{tooltip && (
-							<Tooltip
-								tip={tooltip}
-								onOpen={() => {
-									ampli.activatedTooltip({ tooltipLabel: title });
-								}}
-							>
-								<InfoSvg />
-							</Tooltip>
-						)}
-					</TabsTrigger>
-					{after}
-				</div>
+				<TabsTrigger value="tab">
+					{title}
+					{tooltip && (
+						<Tooltip
+							tip={tooltip}
+							onOpen={() => {
+								ampli.activatedTooltip({ tooltipLabel: title });
+							}}
+						>
+							<InfoSvg />
+						</Tooltip>
+					)}
+				</TabsTrigger>
+				{after}
 			</TabsList>
 			<TabsContent value="tab" noGap={noGap}>
 				{children}

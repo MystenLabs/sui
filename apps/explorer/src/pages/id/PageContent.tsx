@@ -4,19 +4,24 @@
 import { Divider } from '~/ui/Divider';
 import { FieldsContent } from '~/pages/object-result/views/TokenView';
 import { Modules } from '~/pages/id/Modules';
-import { type DataType } from '~/pages/object-result/ObjectResultType';
+import { translate } from '~/pages/object-result/ObjectResultType';
 import { OwnedObjectsSection } from '~/pages/id/OwnedObjectsSection';
 import { TransactionBlocksTable } from '~/pages/id/TransactionBlocksTable';
+import { type SuiObjectResponse } from '@mysten/sui.js/dist/cjs/client';
+
+export const PACKAGE_TYPE_NAME = 'Move Package';
 
 export function PageContent({
 	address,
-	pageType,
 	data,
 }: {
 	address: string;
-	pageType: 'Package' | 'Object' | 'Address';
-	data?: DataType | null;
+	data?: SuiObjectResponse | null;
 }) {
+	const isObject = !!data?.data;
+	const resp = data && isObject ? translate(data) : null;
+	const isPackage = resp ? resp.objType === PACKAGE_TYPE_NAME : false;
+
 	return (
 		<div>
 			<section>
@@ -25,20 +30,20 @@ export function PageContent({
 
 			<Divider />
 
-			{pageType === 'Object' && (
+			{isObject && (
 				<section className="mt-14">
 					<FieldsContent objectId={address} />
 				</section>
 			)}
 
-			{pageType === 'Package' && data && (
+			{isPackage && resp && (
 				<section className="mt-14">
-					<Modules data={data} />
+					<Modules data={resp} />
 				</section>
 			)}
 
 			<section className="mt-14">
-				<TransactionBlocksTable address={address} pageType={pageType} />
+				<TransactionBlocksTable address={address} isObject={isObject} />
 			</section>
 		</div>
 	);

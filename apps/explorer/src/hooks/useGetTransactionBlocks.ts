@@ -9,12 +9,17 @@ import { type PaginatedTransactionResponse, type TransactionFilter } from '@myst
 export const DEFAULT_TRANSACTIONS_LIMIT = 20;
 
 // Fetch transaction blocks
-export function useGetTransactionBlocks(
-	filter?: TransactionFilter,
+export function useGetTransactionBlocks({
+	filter,
 	limit = DEFAULT_TRANSACTIONS_LIMIT,
-	refetchInterval?: number,
-	disabled?: boolean,
-) {
+	refetchInterval,
+	disabled,
+}: {
+	filter?: TransactionFilter;
+	limit?: number;
+	refetchInterval?: number;
+	disabled?: boolean;
+}) {
 	const client = useSuiClient();
 
 	return useInfiniteQuery<PaginatedTransactionResponse>({

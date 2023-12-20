@@ -23,7 +23,7 @@ export enum FILTER_VALUES {
 type TransactionBlocksForAddressProps = {
 	address: string;
 	filter?: FILTER_VALUES;
-	pageType: 'Package' | 'Object' | 'Address';
+	isObject: boolean;
 };
 
 enum PAGE_ACTIONS {
@@ -92,7 +92,7 @@ export function FiltersControl({
 function TransactionBlocksForAddress({
 	address,
 	filter = FILTER_VALUES.CHANGED,
-	pageType,
+	isObject,
 }: TransactionBlocksForAddressProps) {
 	const [currentPageState, dispatch] = useReducer(reducer, {
 		InputObject: 0,
@@ -100,28 +100,25 @@ function TransactionBlocksForAddress({
 	});
 
 	const { data, isPending, isFetching, isFetchingNextPage, fetchNextPage, hasNextPage } =
-		useGetTransactionBlocks(
-			{
+		useGetTransactionBlocks({
+			filter: {
 				[filter]: address,
 			} as TransactionFilter,
-			undefined,
-			undefined,
-			pageType === 'Address',
-		);
+			disabled: !isObject,
+		});
 
 	const {
 		data: dataForAddress,
 		isPending: isPendingForAddress,
 		isFetching: isFetchingForAddress,
-	} = useTransactionBlocksForAddress(address, pageType !== 'Address');
+	} = useTransactionBlocksForAddress(address, isObject);
 
 	const currentPage = currentPageState[filter];
-	const currentPageData = pageType === 'Address' ? dataForAddress : data?.pages[currentPage].data;
+	const currentPageData = isObject ? data?.pages[currentPage].data : dataForAddress;
 	const cardData = genTableDataFromTxData(currentPageData ?? []);
-	const loading =
-		pageType === 'Address'
-			? isPendingForAddress || isFetchingForAddress
-			: isPending || isFetching || isFetchingNextPage;
+	const loading = !isObject
+		? isPendingForAddress || isFetchingForAddress
+		: isPending || isFetching || isFetchingNextPage;
 
 	return (
 		<div data-testid="address-txn-table">
@@ -134,7 +131,7 @@ function TransactionBlocksForAddress({
 						colWidths={['30%', '30%', '10%', '20%', '10%']}
 					/>
 				) : (
-					<div className="h-600 overflow-auto">
+					<div>
 						<TableCard data={cardData.data} columns={cardData.columns} />
 					</div>
 				)}

@@ -6,7 +6,9 @@ import { AddressLink, ObjectLink } from '~/ui/InternalLink';
 import { type ReactNode } from 'react';
 import { Card } from '~/ui/Card';
 import { Divider } from '~/ui/Divider';
-import { usePackageViewedData } from './utils';
+import { useGetTransaction } from '~/hooks/useGetTransaction';
+
+export const GENESIS_TX_DIGEST = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
 function PackageDetail({ label, children }: { label: string; children: ReactNode }) {
 	return (
@@ -22,8 +24,10 @@ function PackageDetail({ label, children }: { label: string; children: ReactNode
 export function PackageDetails({ data }: { data: DataType }) {
 	const objectId = data.id;
 	const version = data.version;
-	const viewedData = usePackageViewedData({ data });
-	const publisherAddress = viewedData.publisherAddress;
+	const { data: txnData } = useGetTransaction(data.data.tx_digest!);
+
+	const publisherAddress =
+		data.data.tx_digest === GENESIS_TX_DIGEST ? 'Genesis' : txnData?.transaction?.data.sender;
 
 	return (
 		<Card spacing="lg">

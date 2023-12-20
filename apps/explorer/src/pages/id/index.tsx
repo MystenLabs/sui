@@ -14,29 +14,30 @@ import { ObjectDetailsHeader } from '@mysten/icons';
 import { TotalStaked } from './TotalStaked';
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { ObjectView } from '~/pages/object-result/views/ObjectView';
-import { PageContent } from './PageContent';
-import { type DataType, translate } from '~/pages/object-result/ObjectResultType';
+import { PACKAGE_TYPE_NAME, PageContent } from './PageContent';
+import { translate } from '~/pages/object-result/ObjectResultType';
 import { PackageDetails } from '~/pages/id/PackageDetails';
 import { type SuiObjectResponse } from '@mysten/sui.js/dist/cjs/client';
 import { Banner } from '~/ui/Banner';
 
-const PACKAGE_TYPE_NAME = 'Move Package';
-
 function Header({
-	pageType,
 	address,
 	domainName,
 	loading,
 	error,
 	data,
 }: {
-	pageType: 'Package' | 'Object' | 'Address';
 	address: string;
 	loading?: boolean;
 	domainName?: string | null;
 	error?: Error | null;
-	data?: DataType | SuiObjectResponse | null;
+	data?: SuiObjectResponse | null;
 }) {
+	const isObject = !!data?.data;
+	const resp = data && isObject && !error ? translate(data) : null;
+	const isPackage = resp ? resp.objType === PACKAGE_TYPE_NAME : false;
+	const pageType = isPackage ? 'Package' : isObject ? 'Object' : 'Address';
+
 	return (
 		<div>
 			<PageHeader
@@ -47,8 +48,8 @@ function Header({
 				subtitle={domainName}
 				before={<ObjectDetailsHeader className="h-6 w-6" />}
 				after={
-					pageType === 'Package' && data && 'id' in data ? (
-						<PackageDetails data={data} />
+					pageType === 'Package' && resp ? (
+						<PackageDetails data={resp} />
 					) : (
 						<TotalStaked address={address} />
 					)
@@ -56,7 +57,7 @@ function Header({
 			/>
 
 			<ErrorBoundary>
-				{data && pageType !== 'Package' && data && !('id' in data) && (
+				{pageType !== 'Package' && data && (
 					<div className="mt-5">
 						<ObjectView data={data} />
 					</div>
@@ -83,12 +84,8 @@ function PageLayoutContainer() {
 
 	const { data, isPending, error: getObjectError } = useGetObject(id!);
 
-	const isObject = !!data?.data;
 	const error = resolveSuinsAddressError || domainNameError || getObjectError;
-	const resp = data && isObject && !error ? translate(data) : null;
-	const isPackage = resp ? resp.objType === PACKAGE_TYPE_NAME : false;
 	const loading = isPending || loadingResolveSuiNSAddress || loadingDomainName;
-	const pageType = isPackage ? 'Package' : isObject ? 'Object' : 'Address';
 	const displayAddress = resolvedAddress || id!;
 
 	return (
@@ -100,21 +97,20 @@ function PageLayoutContainer() {
 				content: (
 					<Header
 						address={id!}
-						pageType={pageType}
 						error={error}
 						loading={loading}
 						domainName={domainName}
-						data={pageType === 'Package' ? resp : data}
+						data={data}
 					/>
 				),
 			}}
 			content={
-				error ? (
+				!loading && error ? (
 					<Banner variant="error" spacing="lg" fullWidth>
 						Data could not be extracted on the following specified address ID: {displayAddress}
 					</Banner>
 				) : (
-					<PageContent address={displayAddress} pageType={pageType} data={resp} />
+					<PageContent address={displayAddress} data={data} />
 				)
 			}
 		/>
