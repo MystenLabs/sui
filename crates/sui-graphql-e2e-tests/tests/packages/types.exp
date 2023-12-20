@@ -1,4 +1,4 @@
-processed 8 tasks
+processed 12 tasks
 
 task 1 'run-graphql'. lines 6-15:
 Response: {
@@ -226,4 +226,58 @@ Response: {
       ]
     }
   }
+}
+
+task 8 'run-graphql'. lines 104-121:
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Internal error occurred while processing request: Error calculating abilities for vector<vector<vector<vector<vector<vector<vector<vector<vector<vector<vector<vector<vector<vector<vector<vector<vector<u8>>>>>>>>>>>>>>>>>: Type parameter nesting exceeded limit of 16",
+      "locations": [
+        {
+          "line": 14,
+          "column": 13
+        }
+      ],
+      "path": [
+        "type",
+        "abilities"
+      ],
+      "extensions": {
+        "code": "INTERNAL_SERVER_ERROR"
+      }
+    }
+  ]
+}
+
+task 9 'publish'. lines 123-140:
+created: object(9,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4461200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 10 'create-checkpoint'. lines 142-142:
+Checkpoint created: 1
+
+task 11 'run-graphql'. lines 144-152:
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Internal error occurred while processing request: Error calculating layout for 0xebbc039f65a88cb9bae1a412314d4fd6823f3db57c66881b2f5c85da8f7de3ff::m::S1<u32>: Type layout nesting exceeded limit of 128",
+      "locations": [
+        {
+          "line": 4,
+          "column": 9
+        }
+      ],
+      "path": [
+        "type",
+        "layout"
+      ],
+      "extensions": {
+        "code": "INTERNAL_SERVER_ERROR"
+      }
+    }
+  ]
 }

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --simulator
+//# init --addresses P0=0x0 --simulator
 
 //# run-graphql
 # Happy path -- valid type, get everything
@@ -98,5 +98,55 @@
 
     prim_vector: type(type: "vector<u64>") {
         abilities
+    }
+}
+
+//# run-graphql
+# Unhappy path, type arguments too deep.
+
+{
+    type(type: """
+        vector<vector<vector<vector<
+        vector<vector<vector<vector<
+        vector<vector<vector<vector<
+        vector<vector<vector<vector<
+            vector<u8>
+        >>>>
+        >>>>
+        >>>>
+        >>>>
+        """) {
+            abilities
+        }
+}
+
+//# publish
+module P0::m {
+    struct S0<T> {
+        xs: vector<vector<vector<vector<
+            vector<vector<vector<vector<
+                T
+            >>>>
+            >>>>
+    }
+
+    struct S1<T> {
+        xss: S0<S0<S0<S0<S0<S0<S0<S0<
+             S0<S0<S0<S0<S0<S0<S0<S0<
+                 T
+             >>>>>>>>
+             >>>>>>>>
+    }
+}
+
+//# create-checkpoint
+
+//# run-graphql
+
+# Unhappy path, value nesting too deep.
+
+{
+    type(type: "@{P0}::m::S1<u32>") {
+        layout
     }
 }
