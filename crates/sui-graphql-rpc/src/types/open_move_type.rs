@@ -83,7 +83,7 @@ pub(crate) enum OpenMoveTypeSignatureBody {
     U128,
     U256,
     Vector(Box<OpenMoveTypeSignatureBody>),
-    Struct {
+    Datatype {
         package: String,
         module: String,
         #[serde(rename = "type")]
@@ -158,7 +158,7 @@ impl From<OpenSignatureBody> for OpenMoveTypeSignatureBody {
 
             OSB::Vector(signature) => OMTSB::Vector(Box::new(OMTSB::from(*signature))),
 
-            OSB::Struct(struct_, type_params) => OMTSB::Struct {
+            OSB::Datatype(struct_, type_params) => OMTSB::Datatype {
                 package: struct_.package.to_canonical_string(/* with_prefix */ true),
                 module: struct_.module.to_string(),
                 type_: struct_.name.to_string(),
@@ -242,7 +242,7 @@ impl fmt::Display for OpenMoveTypeSignatureBody {
             B::U256 => write!(f, "u256"),
             B::Vector(sig) => write!(f, "vector<{sig}>"),
 
-            B::Struct {
+            B::Datatype {
                 package,
                 module,
                 type_,
@@ -278,17 +278,17 @@ mod tests {
 
     use expect_test::expect;
     use move_core_types::language_storage::StructTag;
-    use sui_package_resolver::{StructKey, StructRef};
+    use sui_package_resolver::{DatatypeKey, DatatypeRef};
 
     use OpenSignatureBody as S;
 
-    fn struct_key(s: &str) -> StructKey {
-        StructRef::from(&StructTag::from_str(s).unwrap()).as_key()
+    fn struct_key(s: &str) -> DatatypeKey {
+        DatatypeRef::from(&StructTag::from_str(s).unwrap()).as_key()
     }
 
     #[test]
     fn generic_signature() {
-        let signature = OpenMoveTypeSignature::from(S::Struct(
+        let signature = OpenMoveTypeSignature::from(S::Datatype(
             struct_key("0x2::table::Table"),
             vec![S::TypeParameter(0), S::TypeParameter(1)],
         ));
@@ -296,7 +296,7 @@ mod tests {
         let expect = expect![[r#"
             OpenMoveTypeSignature {
                 ref_: None,
-                body: Struct {
+                body: Datatype {
                     package: "0x0000000000000000000000000000000000000000000000000000000000000002",
                     module: "table",
                     type_: "Table",
@@ -315,20 +315,20 @@ mod tests {
 
     #[test]
     fn instance_signature() {
-        let signature = OpenMoveTypeSignature::from(S::Struct(
+        let signature = OpenMoveTypeSignature::from(S::Datatype(
             struct_key("0x2::coin::Coin"),
-            vec![S::Struct(struct_key("0x2::sui::SUI"), vec![])],
+            vec![S::Datatype(struct_key("0x2::sui::SUI"), vec![])],
         ));
 
         let expect = expect![[r#"
             OpenMoveTypeSignature {
                 ref_: None,
-                body: Struct {
+                body: Datatype {
                     package: "0x0000000000000000000000000000000000000000000000000000000000000002",
                     module: "coin",
                     type_: "Coin",
                     type_parameters: [
-                        Struct {
+                        Datatype {
                             package: "0x0000000000000000000000000000000000000000000000000000000000000002",
                             module: "sui",
                             type_: "SUI",
@@ -342,7 +342,7 @@ mod tests {
 
     #[test]
     fn generic_signature_repr() {
-        let signature = OpenMoveTypeSignature::from(S::Struct(
+        let signature = OpenMoveTypeSignature::from(S::Datatype(
             struct_key("0x2::table::Table"),
             vec![S::TypeParameter(0), S::TypeParameter(1)],
         ));
@@ -353,9 +353,9 @@ mod tests {
 
     #[test]
     fn instance_signature_repr() {
-        let signature = OpenMoveTypeSignature::from(S::Struct(
+        let signature = OpenMoveTypeSignature::from(S::Datatype(
             struct_key("0x2::coin::Coin"),
-            vec![S::Struct(struct_key("0x2::sui::SUI"), vec![])],
+            vec![S::Datatype(struct_key("0x2::sui::SUI"), vec![])],
         ));
 
         let expect = expect!["0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"];
