@@ -283,7 +283,6 @@ fn module(
         structs: tstructs,
         functions: tfunctions,
         constants: tconstants,
-        spec_dependencies: _,
     } = mdef;
     context.current_package = package_name;
     context.env.add_warning_filter_scope(warning_filter.clone());
@@ -1206,18 +1205,6 @@ fn value(
         // -----------------------------------------------------------------------------------------
         E::Use(_) => panic!("ICE unexpanded use"),
 
-        E::Spec(u, tused_locals) => {
-            let used_locals = tused_locals
-                .into_iter()
-                .map(|(var, ty)| {
-                    let v = translate_var(var);
-                    let st = single_type(context, ty);
-                    (v, st)
-                })
-                .collect();
-            make_exp(HE::Spec(u, used_locals))
-        }
-
         E::UnresolvedError => {
             assert!(context.env.has_errors());
             make_exp(HE::UnresolvedError)
@@ -1520,7 +1507,6 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         | E::Constant(_, _)
         | E::Move { .. }
         | E::Copy { .. }
-        | E::Spec(..)
         | E::UnresolvedError
         | E::NamedBlock(_, _)) => value_statement(context, block, make_exp(e_)),
 

@@ -88,7 +88,6 @@ fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
         E::Unit { .. }
         | E::Value(_)
         | E::UnresolvedError
-        | E::Spec(_, _)
         | E::BorrowLocal(_, _)
         | E::Move { .. }
         | E::Copy { .. }

@@ -6,7 +6,7 @@ use crate::{
     diagnostics::WarningFilters,
     expansion::ast::{
         ability_constraints_ast_debug, ability_modifiers_ast_debug, AbilitySet, Attributes,
-        DottedUsage, Fields, Friend, ImplicitUseFunCandidate, ModuleIdent, SpecId, Value, Value_,
+        DottedUsage, Fields, Friend, ImplicitUseFunCandidate, ModuleIdent, Value, Value_,
         Visibility,
     },
     parser::ast::{
@@ -91,8 +91,6 @@ pub struct ModuleDefinition {
     pub structs: UniqueMap<StructName, StructDefinition>,
     pub constants: UniqueMap<ConstantName, Constant>,
     pub functions: UniqueMap<FunctionName, Function>,
-    // module dependencies referenced in specs
-    pub spec_dependencies: BTreeSet<(ModuleIdent, Neighbor)>,
 }
 
 //**************************************************************************************************
@@ -323,8 +321,6 @@ pub enum Exp_ {
 
     Cast(Box<Exp>, Type),
     Annotate(Box<Exp>, Type),
-
-    Spec(SpecId, BTreeSet<Var>),
 
     UnresolvedError,
 }
@@ -831,7 +827,6 @@ impl AstDebug for ModuleDefinition {
             structs,
             constants,
             functions,
-            spec_dependencies,
         } = self;
         warning_filter.ast_debug(w);
         if let Some(n) = package_name {
@@ -844,11 +839,6 @@ impl AstDebug for ModuleDefinition {
             w.writeln("source module")
         }
         use_funs.ast_debug(w);
-        for (m, neighbor) in spec_dependencies {
-            w.write(&format!("spec_dep {m} is"));
-            neighbor.ast_debug(w);
-            w.writeln(";");
-        }
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(&format!("friend {};", mident));
             w.new_line();
@@ -1333,14 +1323,6 @@ impl AstDebug for Exp_ {
                 w.write(": ");
                 ty.ast_debug(w);
                 w.write(")");
-            }
-            E::Spec(u, used_locals) => {
-                w.write(&format!("spec #{}", u));
-                if !used_locals.is_empty() {
-                    w.write("uses [");
-                    w.comma(used_locals, |w, n| n.ast_debug(w));
-                    w.write("]");
-                }
             }
             E::UnresolvedError => w.write("_|_"),
         }

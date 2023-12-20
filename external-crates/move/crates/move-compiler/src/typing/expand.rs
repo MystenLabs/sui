@@ -216,8 +216,6 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
             e.exp.value = new_exp;
         }
 
-        E::Spec(_, used_locals) => used_locals.values_mut().for_each(|ty| type_(context, ty)),
-
         E::Unit { .. }
         | E::Value(_)
         | E::Constant(_, _)

@@ -126,7 +126,6 @@ pub(crate) struct FunEntry {
     pub type_params: Vec<(Symbol, Type)>,
     pub params: Vec<(Symbol, Type)>,
     pub result_type: Type,
-    pub is_pure: bool,
     pub attributes: Vec<Attribute>,
 }
 
@@ -286,7 +285,6 @@ impl<'env> ModelBuilder<'env> {
             type_params,
             params,
             result_type,
-            is_pure: false,
         };
         // Duplicate declarations have been checked by the Move compiler.
         assert!(self.fun_table.insert(name, entry).is_none());
@@ -378,25 +376,6 @@ impl<'env> ModelBuilder<'env> {
     /// Returns the name for the pseudo builtin module.
     pub fn builtin_module(&self) -> ModuleName {
         ModuleName::new(BigUint::default(), self.env.symbol_pool().make("$$"))
-    }
-
-    /// Adds a spec function to used_spec_funs set.
-    pub fn add_used_spec_fun(&mut self, qid: QualifiedId<SpecFunId>) {
-        self.env.used_spec_funs.insert(qid);
-        self.propagate_move_fun_usage(qid);
-    }
-
-    /// Adds an edge from the caller to the callee to the Move fun call graph. The callee is
-    /// is instantiated in dependency of the type parameters of the caller.
-    pub fn add_edge_to_move_fun_call_graph(
-        &mut self,
-        caller: QualifiedId<SpecFunId>,
-        callee: QualifiedId<SpecFunId>,
-    ) {
-        self.move_fun_call_graph
-            .entry(caller)
-            .or_default()
-            .insert(callee);
     }
 
     /// Runs DFS to propagate the usage of Move functions from callers
