@@ -35,10 +35,6 @@ pub enum BridgeError {
     MismatchedAuthoritySigner,
     // Signature is over a mismatched action
     MismatchedAction,
-    // Sui transaction failure due to insufficient gas
-    SuiTxFailureInsufficientGas(String),
-    // Sui transaction failure due to stale gas data
-    SuiTxFailureStaleGasData(String),
     // Sui transaction failure due to generic error
     SuiTxFailureGeneric(String),
     // Storage Error

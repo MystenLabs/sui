@@ -321,6 +321,7 @@ pub struct EthLog {
     pub block_number: u64,
     pub tx_hash: H256,
     pub log_index_in_tx: u16,
+    // TODO: pull necessary fields from `Log`.
     pub log: Log,
 }
 

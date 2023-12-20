@@ -20,6 +20,7 @@ use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
 use sui_types::base_types::ObjectRef;
 use sui_types::error::UserInputError;
 use sui_types::event;
+use sui_types::gas_coin::GasCoin;
 use sui_types::object::Owner;
 use sui_types::transaction::Transaction;
 use sui_types::{
@@ -184,11 +185,13 @@ where
         self.inner.execute_transaction_block_with_effects(tx).await
     }
 
-    pub async fn get_gas_object_ref_and_owner(
+    pub async fn get_gas_data_panic_if_not_gas(
         &self,
         gas_object_id: ObjectID,
-    ) -> (ObjectRef, Owner) {
-        self.inner.get_gas_object_ref_and_owner(gas_object_id).await
+    ) -> (GasCoin, ObjectRef, Owner) {
+        self.inner
+            .get_gas_data_panic_if_not_gas(gas_object_id)
+            .await
     }
 }
 
@@ -218,7 +221,10 @@ pub trait SuiClientInner: Send + Sync {
         tx: Transaction,
     ) -> Result<SuiTransactionBlockResponse, BridgeError>;
 
-    async fn get_gas_object_ref_and_owner(&self, gas_object_id: ObjectID) -> (ObjectRef, Owner);
+    async fn get_gas_data_panic_if_not_gas(
+        &self,
+        gas_object_id: ObjectID,
+    ) -> (GasCoin, ObjectRef, Owner);
 }
 
 #[async_trait]
@@ -266,20 +272,14 @@ impl SuiClientInner for SuiSdkClient {
             Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
         ).await {
             Ok(response) => Ok(response),
-            Err(sui_sdk::error::Error::UserInputError(err)) => {
-                if matches!(err, UserInputError::ObjectVersionUnavailableForConsumption{..}) {
-                    return Err(BridgeError::SuiTxFailureStaleGasData(err.to_string()));
-                } else if matches!(err, UserInputError::GasBalanceTooLow{..}) {
-                    return Err(BridgeError::SuiTxFailureInsufficientGas(err.to_string()));
-                } else {
-                    return Err(BridgeError::SuiTxFailureGeneric(err.to_string()));
-                }
-            }
             Err(e) => return Err(BridgeError::SuiTxFailureGeneric(e.to_string())),
         }
     }
 
-    async fn get_gas_object_ref_and_owner(&self, gas_object_id: ObjectID) -> (ObjectRef, Owner) {
+    async fn get_gas_data_panic_if_not_gas(
+        &self,
+        gas_object_id: ObjectID,
+    ) -> (GasCoin, ObjectRef, Owner) {
         loop {
             match self
                 .read_api()
@@ -292,7 +292,8 @@ impl SuiClientInner for SuiSdkClient {
             {
                 Ok(Some(gas_obj)) => {
                     let owner = gas_obj.owner.expect("Owner is requested");
-                    return (gas_obj.object_ref(), owner);
+                    let gas_coin = GasCoin::try_from(&gas_obj).expect("Not a gas coin");
+                    return (gas_coin, gas_obj.object_ref(), owner);
                 }
                 other => {
                     warn!("Can't get gas object: {:?}: {:?}", gas_object_id, other);

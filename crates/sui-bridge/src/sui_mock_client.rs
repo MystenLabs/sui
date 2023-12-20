@@ -13,6 +13,7 @@ use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
+use sui_types::gas_coin::GasCoin;
 use sui_types::object::Owner;
 use sui_types::transaction::Transaction;
 use sui_types::Identifier;
@@ -32,7 +33,7 @@ pub struct SuiMockClient {
     events_by_tx_digest: Arc<Mutex<HashMap<TransactionDigest, Vec<SuiEvent>>>>,
     transaction_responses:
         Arc<Mutex<HashMap<TransactionDigest, BridgeResult<SuiTransactionBlockResponse>>>>,
-    get_object_info: Arc<Mutex<HashMap<ObjectID, (ObjectRef, Owner)>>>,
+    get_object_info: Arc<Mutex<HashMap<ObjectID, (GasCoin, ObjectRef, Owner)>>>,
 
     requested_transactions_tx: tokio::sync::broadcast::Sender<TransactionDigest>,
 }
@@ -86,11 +87,11 @@ impl SuiMockClient {
             .insert(tx_digest, response);
     }
 
-    pub fn add_gas_object_info(&self, object_ref: ObjectRef, owner: Owner) {
+    pub fn add_gas_object_info(&self, gas_coin: GasCoin, object_ref: ObjectRef, owner: Owner) {
         self.get_object_info
             .lock()
             .unwrap()
-            .insert(object_ref.0, (object_ref, owner));
+            .insert(object_ref.0, (gas_coin, object_ref, owner));
     }
 
     pub fn subscribe_to_requested_transactions(
@@ -172,7 +173,10 @@ impl SuiClientInner for SuiMockClient {
             .unwrap_or_else(|| panic!("No preset transaction response found for tx: {:?}", tx))?)
     }
 
-    async fn get_gas_object_ref_and_owner(&self, gas_object_id: ObjectID) -> (ObjectRef, Owner) {
+    async fn get_gas_data_panic_if_not_gas(
+        &self,
+        gas_object_id: ObjectID,
+    ) -> (GasCoin, ObjectRef, Owner) {
         self.get_object_info
             .lock()
             .unwrap()

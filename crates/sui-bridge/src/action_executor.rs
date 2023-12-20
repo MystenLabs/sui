@@ -14,6 +14,7 @@ use sui_types::{
     committee::VALIDITY_THRESHOLD,
     crypto::{Signature, SuiKeyPair},
     digests::TransactionDigest,
+    gas_coin::GasCoin,
     object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{Transaction, TransactionData},
@@ -31,8 +32,21 @@ use tracing::{error, info, warn};
 
 pub const CHANNEL_SIZE: usize = 1000;
 
+// delay schedule: at most 16 times including the initial attempt
+// 0.1s, 0.2s, 0.4s, 0.8s, 1.6s, 3.2s, 6.4s, 12.8s, 25.6s, 51.2s, 102.4s, 204.8s, 409.6s, 819.2s, 1638.4s
+pub const MAX_SIGNING_ATTEMPTS: u64 = 16;
+pub const MAX_EXECUTION_ATTEMPTS: u64 = 16;
+
+async fn delay(attempt_times: u64) {
+    let delay_ms = 100 * (2 ^ attempt_times);
+    tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+}
+
 #[derive(Debug)]
 pub struct BridgeActionExecutionWrapper(pub BridgeAction, pub u64);
+
+#[derive(Debug)]
+pub struct CertifiedBridgeActionExecutionWrapper(pub VerifiedCertifiedBridgeAction, pub u64);
 
 pub trait BridgeActionExecutorTrait {
     fn run(
@@ -46,9 +60,9 @@ pub trait BridgeActionExecutorTrait {
 pub struct BridgeActionExecutor<C> {
     sui_client: Arc<SuiClient<C>>,
     bridge_auth_agg: Arc<BridgeAuthorityAggregator>,
-    key: Option<SuiKeyPair>,
+    key: SuiKeyPair,
     sui_address: SuiAddress,
-    gas_object_ref: ObjectRef,
+    gas_object_id: ObjectID,
     store: Arc<BridgeOrchestratorTables>,
 }
 
@@ -57,13 +71,12 @@ where
     C: SuiClientInner + 'static,
 {
     fn run(
-        mut self,
+        self,
     ) -> (
         Vec<tokio::task::JoinHandle<()>>,
         mysten_metrics::metered_channel::Sender<BridgeActionExecutionWrapper>,
     ) {
-        // unwrap: key must be Some at this point
-        let key = self.key.take().unwrap();
+        let key = self.key;
 
         let (sender, receiver) = mysten_metrics::metered_channel::channel(
             CHANNEL_SIZE,
@@ -97,7 +110,7 @@ where
                 self.sui_client.clone(),
                 key,
                 self.sui_address,
-                self.gas_object_ref,
+                self.gas_object_id,
                 self.store.clone(),
                 execution_tx,
                 execution_rx,
@@ -117,14 +130,14 @@ where
         store: Arc<BridgeOrchestratorTables>,
         key: SuiKeyPair,
         sui_address: SuiAddress,
-        gas_object_ref: ObjectRef,
+        gas_object_id: ObjectID,
     ) -> Self {
         Self {
             sui_client,
             bridge_auth_agg,
             store,
-            key: Some(key),
-            gas_object_ref,
+            key,
+            gas_object_id,
             sui_address,
         }
     }
@@ -136,7 +149,7 @@ where
             BridgeActionExecutionWrapper,
         >,
         execution_queue_sender: mysten_metrics::metered_channel::Sender<
-            VerifiedCertifiedBridgeAction,
+            CertifiedBridgeActionExecutionWrapper,
         >,
     ) {
         info!("Starting run_signature_aggregation_loop");
@@ -159,7 +172,7 @@ where
         action: BridgeActionExecutionWrapper,
         signing_queue_sender: mysten_metrics::metered_channel::Sender<BridgeActionExecutionWrapper>,
         execution_queue_sender: mysten_metrics::metered_channel::Sender<
-            VerifiedCertifiedBridgeAction,
+            CertifiedBridgeActionExecutionWrapper,
         >,
     ) {
         let BridgeActionExecutionWrapper(action, attempt_times) = action;
@@ -170,21 +183,18 @@ where
         {
             Ok(certificate) => {
                 execution_queue_sender
-                    .send(certificate)
+                    .send(CertifiedBridgeActionExecutionWrapper(certificate, 0))
                     .await
                     .expect("Sending to execution queue should not fail");
             }
             Err(e) => {
                 warn!("Failed to collect sigs for bridge action: {:?}", e);
 
-                // delay schedule: at most 16 times including the initial attempt
-                // 0.1s, 0.2s, 0.4s, 0.8s, 1.6s, 3.2s, 6.4s, 12.8s, 25.6s, 51.2s, 102.4s, 204.8s, 409.6s, 819.2s, 1638.4s
-                if attempt_times >= 15 {
-                    error!("Manual intervention is required. Failed to collect sigs for bridge action after 16 attempts: {:?}", e);
+                if attempt_times >= MAX_SIGNING_ATTEMPTS {
+                    error!("Manual intervention is required. Failed to collect sigs for bridge action after {MAX_SIGNING_ATTEMPTS} attempts: {:?}", e);
                     return;
                 }
-                let delay_ms = 100 * (2 ^ attempt_times);
-                tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+                delay(attempt_times).await;
                 signing_queue_sender
                     .send(BridgeActionExecutionWrapper(action, attempt_times + 1))
                     .await
@@ -199,18 +209,24 @@ where
         sui_client: Arc<SuiClient<C>>,
         sui_key: SuiKeyPair,
         sui_address: SuiAddress,
-        mut gas_object_ref: ObjectRef,
+        gas_object_id: ObjectID,
         store: Arc<BridgeOrchestratorTables>,
         execution_queue_sender: mysten_metrics::metered_channel::Sender<
-            VerifiedCertifiedBridgeAction,
+            CertifiedBridgeActionExecutionWrapper,
         >,
         mut execution_queue_receiver: mysten_metrics::metered_channel::Receiver<
-            VerifiedCertifiedBridgeAction,
+            CertifiedBridgeActionExecutionWrapper,
         >,
     ) {
         info!("Starting run_onchain_execution_loop");
         while let Some(certificate) = execution_queue_receiver.recv().await {
             info!("Received certified action for execution: {:?}", certificate);
+            let CertifiedBridgeActionExecutionWrapper(certificate, attempt_times) = certificate;
+
+            // TODO check gas coin balance here. If gas balance too low, do not proceed.
+            let (_gas_coin, gas_object_ref) =
+                Self::get_gas_data_assert_ownership(sui_address, gas_object_id, &sui_client).await;
+
             let tx_data = build_transaction(&gas_object_ref);
             let sig = Signature::new_secure(
                 &IntentMessage::new(Intent::sui_transaction(), &tx_data),
@@ -226,62 +242,28 @@ where
             {
                 Ok(effects) => {
                     let effects = effects.effects.expect("We requested effects but got None.");
-                    Self::handle_execution_effects(
-                        tx_digest,
-                        effects,
-                        &mut gas_object_ref,
-                        sui_address,
-                        &store,
-                        certificate,
-                    )
-                    .await
+                    Self::handle_execution_effects(tx_digest, effects, &store, certificate).await
                 }
 
-                // If the transaction did not go through because of stale gas object,
-                // it can be easily fixed by refreshing the gas object and retry.
-                Err(BridgeError::SuiTxFailureStaleGasData(err)) => {
-                    error!("Sui transaction was not executed due to stale gas data: {err:?}");
-
-                    gas_object_ref = Self::refresh_gas_data_with_gas_object_id(
-                        sui_address,
-                        gas_object_ref.0,
-                        &sui_client,
-                    )
-                    .await;
-                    // Do this in a separate task so we won't deadlock here
-                    let sender_clone = execution_queue_sender.clone();
-                    spawn_logged_monitored_task!(async move {
-                        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                        sender_clone
-                            .send(certificate)
-                            .await
-                            .expect("Sending to execution queue should not fail");
-                        info!("Re-enqueued certificate for execution");
-                    });
-                }
-
-                Err(BridgeError::SuiTxFailureInsufficientGas(err)) => {
-                    // This means manual intervention is needed to top up the gas. We do not push
-                    // them back to the execution queue because retries are mostly likely going
-                    // to fail anyway. After human examination, the node should be restarted and
-                    // these actions will be picked up again.
-
-                    // TODO: when we have multiple gas objects, we could throw this one away and
-                    // re-enqueue the certificate.
-
-                    // TODO: metrics + alerts
-                    error!("Manual intervention is needed. Sui transaction was not executed due to insufficient gas: {err:?}");
-                }
-
+                // If the transaction did not go through, retry up to a certain times.
                 Err(err) => {
-                    // TODO: it's not clear what we should do here. Re-enqueueing the certificate for now.
-                    // TODO: metrics + alerts
-                    error!("Sui transaction was not executed due to error: {err:?}");
+                    error!("Sui transaction failed at signing: {err:?}");
+
                     // Do this in a separate task so we won't deadlock here
                     let sender_clone = execution_queue_sender.clone();
                     spawn_logged_monitored_task!(async move {
+                        // TODO: metrics + alerts
+                        // If it fails for too many times, log and ask for manual intervention.
+                        if attempt_times >= MAX_EXECUTION_ATTEMPTS {
+                            error!("Manual intervention is required. Failed to collect execute transaction for bridge action after {MAX_EXECUTION_ATTEMPTS} attempts: {:?}", err);
+                            return;
+                        }
+                        delay(attempt_times).await;
                         sender_clone
-                            .send(certificate)
+                            .send(CertifiedBridgeActionExecutionWrapper(
+                                certificate,
+                                attempt_times + 1,
+                            ))
                             .await
                             .expect("Sending to execution queue should not fail");
                         info!("Re-enqueued certificate for execution");
@@ -294,8 +276,6 @@ where
     async fn handle_execution_effects(
         tx_digest: TransactionDigest,
         effects: SuiTransactionBlockEffects,
-        gas_object_ref: &mut ObjectRef,
-        sui_address: SuiAddress,
         store: &Arc<BridgeOrchestratorTables>,
         certificate: VerifiedCertifiedBridgeAction,
     ) {
@@ -320,33 +300,17 @@ where
                 error!(?tx_digest, "Manual intervention is needed. Sui transaction executed and failed with error: {error:?}");
             }
         }
-        *gas_object_ref = Self::refresh_gas_data_with_effects(sui_address, effects);
     }
 
-    fn refresh_gas_data_with_effects(
-        sui_address: SuiAddress,
-        effects: SuiTransactionBlockEffects,
-    ) -> ObjectRef {
-        let updated_gas_object = effects.gas_object();
-        let obj_ref = updated_gas_object.reference.clone().to_object_ref();
-        // TODO: when we add multiple gas support in the future we could discard
-        // transferred gas object instead.
-        assert_eq!(
-            updated_gas_object.owner,
-            Owner::AddressOwner(sui_address),
-            "Gas object {:?} is no longer owned by address {}",
-            obj_ref.0,
-            sui_address
-        );
-        obj_ref
-    }
-
-    async fn refresh_gas_data_with_gas_object_id(
+    /// Panics if the gas object is not owned by the address.
+    async fn get_gas_data_assert_ownership(
         sui_address: SuiAddress,
         gas_object_id: ObjectID,
         sui_client: &SuiClient<C>,
-    ) -> ObjectRef {
-        let (gas_obj_ref, owner) = sui_client.get_gas_object_ref_and_owner(gas_object_id).await;
+    ) -> (GasCoin, ObjectRef) {
+        let (gas_coin, gas_obj_ref, owner) = sui_client
+            .get_gas_data_panic_if_not_gas(gas_object_id)
+            .await;
 
         // TODO: when we add multiple gas support in the future we could discard
         // transferred gas object instead.
@@ -357,7 +321,7 @@ where
             gas_object_id,
             sui_address
         );
-        gas_obj_ref
+        (gas_coin, gas_obj_ref)
     }
 }
 
@@ -383,7 +347,8 @@ mod tests {
     use prometheus::Registry;
     use sui_json_rpc_types::SuiTransactionBlockResponse;
     use sui_types::base_types::random_object_ref;
-    use sui_types::{base_types::update_object_ref_for_testing, crypto::get_key_pair};
+    use sui_types::crypto::get_key_pair;
+    use sui_types::gas_coin::GasCoin;
 
     use crate::{
         crypto::BridgeAuthorityKeyPair,
@@ -412,7 +377,7 @@ mod tests {
             mock2,
             mock3,
             _handles,
-            mut gas_object_ref,
+            gas_object_ref,
             sui_address,
         ) = setup();
 
@@ -424,14 +389,15 @@ mod tests {
         let tx_data = build_transaction(&gas_object_ref);
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
 
-        // Mock the transaction to be successfully executed
-        mock_transaction_response(
-            &sui_client_mock,
-            tx_digest,
-            sui_address,
-            &mut gas_object_ref,
-            SuiExecutionStatus::Success,
+        let gas_coin = GasCoin::new_for_testing(1_000_000_000_000); // dummy gas coin
+        sui_client_mock.add_gas_object_info(
+            gas_coin.clone(),
+            gas_object_ref,
+            Owner::AddressOwner(sui_address),
         );
+
+        // Mock the transaction to be successfully executed
+        mock_transaction_response(&sui_client_mock, tx_digest, SuiExecutionStatus::Success);
 
         store.insert_pending_actions(&[action.clone()]).unwrap();
         assert_eq!(
@@ -447,26 +413,21 @@ mod tests {
         assert!(store.get_all_pending_actions().unwrap().is_empty());
 
         /////////////////////////////////////////////////////////////////////////////////////////////////
-        ///////////////// Test gas object ref is updated when tx is executed successfully ///////////////
+        ////////////////////////////////////// Test execution failure ///////////////////////////////////
         /////////////////////////////////////////////////////////////////////////////////////////////////
 
         let (action, _, _) = get_bridge_authority_approved_action(
             vec![&mock0, &mock1, &mock2, &mock3],
             vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
         );
-        let action_digest_failure = action.digest();
 
-        // This is key - only when the gas object is updated correctly in previous test case (execution success)
-        // the tx_digest will match
         let tx_data = build_transaction(&gas_object_ref);
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
 
-        // Mock the transaction to fail, so we can do the next test case below
+        // Mock the transaction to fail
         mock_transaction_response(
             &sui_client_mock,
             tx_digest,
-            sui_address,
-            &mut gas_object_ref,
             SuiExecutionStatus::Failure {
                 error: "failure is mother of success".to_string(),
             },
@@ -490,7 +451,7 @@ mod tests {
         );
 
         /////////////////////////////////////////////////////////////////////////////////////////////////
-        //////////////////// Test gas object ref is updated when tx execution failed ////////////////////
+        //////////////////////////// Test transaction failed at signing stage ///////////////////////////
         /////////////////////////////////////////////////////////////////////////////////////////////////
 
         let (action, _, _) = get_bridge_authority_approved_action(
@@ -498,60 +459,13 @@ mod tests {
             vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
         );
 
-        // This is key - only when the gas object is updated correctly in previous test case (execution fail)
-        // the tx_digest will match
-        let tx_data = build_transaction(&gas_object_ref);
-        let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
-
-        // Mock the transaction to fail, so we can do the next test case below
-        mock_transaction_response(
-            &sui_client_mock,
-            tx_digest,
-            sui_address,
-            &mut gas_object_ref,
-            SuiExecutionStatus::Success,
-        );
-
-        store.insert_pending_actions(&[action.clone()]).unwrap();
-        assert_eq!(
-            store.get_all_pending_actions().unwrap()[&action.digest()],
-            action.clone()
-        );
-
-        // Kick it
-        submit_to_executor(&tx, action.clone()).await.unwrap();
-
-        // Expect to see the transaction to be requested and successfully executed hence removed from WAL
-        assert_eq!(tx_subscription.recv().await.unwrap(), tx_digest);
-        // The action is removed from WAL, the previous failed one is still there
-        assert!(store
-            .get_all_pending_actions()
-            .unwrap()
-            .contains_key(&action_digest_failure));
-        assert!(!store
-            .get_all_pending_actions()
-            .unwrap()
-            .contains_key(&action.digest()));
-
-        /////////////////////////////////////////////////////////////////////////////////////////////////
-        //////////////////////////// Test gas object stale then gets refreshed //////////////////////////
-        /////////////////////////////////////////////////////////////////////////////////////////////////
-
-        let (action, _, _) = get_bridge_authority_approved_action(
-            vec![&mock0, &mock1, &mock2, &mock3],
-            vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
-        );
-
-        let current_gas_object_ref = update_object_ref_for_testing(gas_object_ref);
         let tx_data = build_transaction(&gas_object_ref);
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
         mock_transaction_error(
             &sui_client_mock,
             tx_digest,
-            BridgeError::SuiTxFailureStaleGasData("stale gas data".to_string()),
+            BridgeError::Generic("some random error".to_string()),
         );
-        // First, mock the scenario where fullnode still returns stale object ref
-        sui_client_mock.add_gas_object_info(gas_object_ref, Owner::AddressOwner(sui_address));
 
         store.insert_pending_actions(&[action.clone()]).unwrap();
         assert_eq!(
@@ -562,80 +476,25 @@ mod tests {
         // Kick it
         submit_to_executor(&tx, action.clone()).await.unwrap();
 
-        // Failure due to stale gas object will retry, we wait for 2 requests before checking
-        // WAL log
+        // Failure will trigger retry, we wait for 2 requests before checking WAL log
         assert_eq!(tx_subscription.recv().await.unwrap(), tx_digest);
         assert_eq!(tx_subscription.recv().await.unwrap(), tx_digest);
-        // The retry is still going on because it only gets the stale error
+        // The retry is still going on, action still in WAL
         assert!(store
             .get_all_pending_actions()
             .unwrap()
             .contains_key(&action.digest()));
 
-        // Second, mock the secnario where fullnode finaly returns the current gas object ref
-        let tx_data = build_transaction(&current_gas_object_ref);
-        let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
-        gas_object_ref = current_gas_object_ref;
-        mock_transaction_response(
-            &sui_client_mock,
-            tx_digest,
-            sui_address,
-            &mut gas_object_ref,
-            SuiExecutionStatus::Success,
-        );
+        // Now let it succeed
+        mock_transaction_response(&sui_client_mock, tx_digest, SuiExecutionStatus::Success);
 
-        sui_client_mock
-            .add_gas_object_info(current_gas_object_ref, Owner::AddressOwner(sui_address));
-        loop {
-            let requested_tx_digest = tx_subscription.recv().await.unwrap();
-            if requested_tx_digest == tx_digest {
-                // retry with the correct gas object ref happened
-                break;
-            }
-        }
-        // TODO: this check could be flaky. Because there is a small window where the tx is requested
-        // but the action has not been removed from WAL yet. For now we sleep 200ms here to account
-        // for it.
-        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+        // Give it 1 second to retry and succeed
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         // The action is successful and should be removed from WAL now
         assert!(!store
             .get_all_pending_actions()
             .unwrap()
             .contains_key(&action.digest()));
-
-        /////////////////////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////////////// Test insufficient gas handling ////////////////////////////////
-        /////////////////////////////////////////////////////////////////////////////////////////////////
-
-        let (action, _, _) = get_bridge_authority_approved_action(
-            vec![&mock0, &mock1, &mock2, &mock3],
-            vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
-        );
-
-        let tx_data = build_transaction(&gas_object_ref);
-        let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
-        mock_transaction_error(
-            &sui_client_mock,
-            tx_digest,
-            BridgeError::SuiTxFailureInsufficientGas("insufficent gas".to_string()),
-        );
-
-        store.insert_pending_actions(&[action.clone()]).unwrap();
-        assert_eq!(
-            store.get_all_pending_actions().unwrap()[&action.digest()],
-            action.clone()
-        );
-
-        // Kick it
-        submit_to_executor(&tx, action.clone()).await.unwrap();
-
-        // Expect to see the transaction to be requested and failed
-        assert_eq!(tx_subscription.recv().await.unwrap(), tx_digest);
-        // The action is not removed from WAL because the transaction failed
-        assert_eq!(
-            store.get_all_pending_actions().unwrap()[&action.digest()],
-            action.clone()
-        );
     }
 
     #[tokio::test]
@@ -652,7 +511,7 @@ mod tests {
             mock2,
             mock3,
             _handles,
-            mut gas_object_ref,
+            gas_object_ref,
             sui_address,
         ) = setup();
 
@@ -671,6 +530,13 @@ mod tests {
             vec![&secrets[3]],
             sui_tx_digest,
             sui_tx_event_index,
+        );
+
+        let gas_coin = GasCoin::new_for_testing(1_000_000_000_000); // dummy gas coin
+        sui_client_mock.add_gas_object_info(
+            gas_coin,
+            gas_object_ref,
+            Owner::AddressOwner(sui_address),
         );
 
         store.insert_pending_actions(&[action.clone()]).unwrap();
@@ -714,13 +580,7 @@ mod tests {
         let tx_data = build_transaction(&gas_object_ref);
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
 
-        mock_transaction_response(
-            &sui_client_mock,
-            tx_digest,
-            sui_address,
-            &mut gas_object_ref,
-            SuiExecutionStatus::Success,
-        );
+        mock_transaction_response(&sui_client_mock, tx_digest, SuiExecutionStatus::Success);
 
         // Expect to see the transaction to be requested and succeed
         assert_eq!(tx_subscription.recv().await.unwrap(), tx_digest);
@@ -792,18 +652,10 @@ mod tests {
     fn mock_transaction_response(
         sui_client_mock: &SuiMockClient,
         tx_digest: TransactionDigest,
-        sui_address: SuiAddress,
-        gas_object_ref: &mut ObjectRef,
         status: SuiExecutionStatus,
     ) {
         let mut response = SuiTransactionBlockResponse::new(tx_digest);
-        *gas_object_ref = update_object_ref_for_testing(*gas_object_ref);
-        let effects = SuiTransactionBlockEffects::new_for_testing(
-            tx_digest,
-            *gas_object_ref,
-            Owner::AddressOwner(sui_address),
-            status,
-        );
+        let effects = SuiTransactionBlockEffects::new_for_testing(tx_digest, status);
         response.effects = Some(effects);
         sui_client_mock.add_transaction_response(tx_digest, Ok(response));
     }
@@ -870,7 +722,7 @@ mod tests {
             store.clone(),
             sui_key,
             sui_address,
-            gas_object_ref,
+            gas_object_ref.0,
         );
 
         let (executor_handle, tx) = executor.run();

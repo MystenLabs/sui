@@ -761,16 +761,14 @@ impl SuiTransactionBlockEffects {
     #[cfg(any(feature = "test-utils", test))]
     pub fn new_for_testing(
         transaction_digest: TransactionDigest,
-        updated_gas_obj_ref: ObjectRef,
-        updated_gas_owner: Owner,
         status: SuiExecutionStatus,
     ) -> Self {
         Self::V1(SuiTransactionBlockEffectsV1 {
             transaction_digest,
             status,
             gas_object: OwnedObjectRef {
-                owner: updated_gas_owner,
-                reference: updated_gas_obj_ref.into(),
+                owner: Owner::AddressOwner(SuiAddress::random_for_testing_only()),
+                reference: sui_types::base_types::random_object_ref().into(),
             },
             executed_epoch: 0,
             modified_at_versions: vec![],
