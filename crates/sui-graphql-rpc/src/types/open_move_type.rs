@@ -44,7 +44,7 @@ type OpenMoveTypeSignatureBody =
   | \"u8\" | \"u16\" | ... | \"u256\"
   | { vector: OpenMoveTypeSignatureBody }
   | {
-      struct {
+      datatype {
         package: string,
         module: string,
         type: string,

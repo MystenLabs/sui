@@ -29,7 +29,7 @@ type MoveTypeSignature =
   | \"u8\" | \"u16\" | ... | \"u256\"
   | { vector: MoveTypeSignature }
   | {
-      struct: {
+      datatype: {
         package: string,
         module: string,
         type: string,
@@ -69,7 +69,7 @@ pub(crate) enum MoveTypeSignature {
     U128,
     U256,
     Vector(Box<MoveTypeSignature>),
-    Struct {
+    Datatype {
         package: String,
         module: String,
         #[serde(rename = "type")]
@@ -205,7 +205,7 @@ impl TryFrom<TypeTag> for MoveTypeSignature {
 
             T::Vector(v) => Self::Vector(Box::new(Self::try_from(*v)?)),
 
-            T::Struct(s) => Self::Struct {
+            T::Struct(s) => Self::Datatype {
                 package: s.address.to_canonical_string(/* with_prefix */ true),
                 module: s.module.to_string(),
                 type_: s.name.to_string(),
@@ -293,7 +293,7 @@ mod tests {
         let sig = signature("vector<0x42::foo::Bar<address, u32, bool, u256>>").unwrap();
         let expect = expect![[r#"
             Vector(
-                Struct {
+                Datatype {
                     package: "0x0000000000000000000000000000000000000000000000000000000000000042",
                     module: "foo",
                     type_: "Bar",
