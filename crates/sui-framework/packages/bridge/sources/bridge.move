@@ -32,7 +32,7 @@ module bridge::bridge {
         chain_id: u8,
         // nonce for replay protection
         sequence_nums: VecMap<u8, u64>,
-        // committee pub keys
+        // committee
         committee: BridgeCommittee,
         // Bridge treasury for mint/burn bridged tokens
         treasury: BridgeTreasury,
@@ -80,7 +80,7 @@ module bridge::bridge {
             bridge_records: linked_table::new<BridgeMessageKey, BridgeRecord>(ctx),
             frozen: false,
         };
-        let bridge = Bridge{
+        let bridge = Bridge {
             id,
             inner : versioned::create(CURRENT_VERSION, bridge_inner, ctx)
         };
@@ -92,7 +92,7 @@ module bridge::bridge {
     ): &mut BridgeInner {
         let version = versioned::version(&self.inner);
 
-        // Replace this with a lazy update function when we add a new version of the inner object.
+        // TODO: Replace this with a lazy update function when we add a new version of the inner object.
         assert!(version == CURRENT_VERSION, EWrongInnerVersion);
         let inner: &mut BridgeInner = versioned::load_value_mut(&mut self.inner);
         assert!(inner.version == version, EWrongInnerVersion);
@@ -105,7 +105,7 @@ module bridge::bridge {
     ): &BridgeInner {
         let version = versioned::version(&self.inner);
 
-        // Replace this with a lazy update function when we add a new version of the inner object.
+        // TODO: Replace this with a lazy update function when we add a new version of the inner object.
         assert!(version == CURRENT_VERSION, EWrongInnerVersion);
         let inner: &BridgeInner = versioned::load_value(&self.inner);
         assert!(inner.version == version, EWrongInnerVersion);
@@ -152,7 +152,7 @@ module bridge::bridge {
         emit(BridgeEvent { message });
     }
 
-    // Record bridge message approvels in Sui, call by the bridge client
+    // Record bridge message approvals in Sui, called by the bridge client
     public fun approve_bridge_message(
         self: &mut Bridge,
         message: BridgeMessage,
@@ -165,7 +165,7 @@ module bridge::bridge {
         // ensure bridge massage not exist
         assert!(!linked_table::contains(&inner.bridge_records, key), ERecordAlreadyExists);
 
-        // retrieve pending message if source chain is Sui, the initial message must exists on chain.
+        // retrieve pending message if source chain is Sui, the initial message must exist on chain.
         if (message::source_chain(&message) == inner.chain_id) {
             let record = linked_table::remove(&mut inner.bridge_records, key);
             assert!(record.message == message, EMalformedMessageError);
@@ -189,7 +189,7 @@ module bridge::bridge {
         ctx: &mut TxContext
     ): (Coin<T>, address) {
         let inner = load_inner_mut(self);
-        let key = message::create_key(source_chain,  message_types::token(), bridge_seq_num);
+        let key = message::create_key(source_chain, message_types::token(), bridge_seq_num);
         // retrieve approved bridge message
         let BridgeRecord {
             message,
@@ -206,7 +206,7 @@ module bridge::bridge {
         // TODO: check approved_epoch and reject old approvals?
         // extract token message
         let token_payload = message::extract_token_bridge_payload(&message);
-        // ensure target chain is Sui
+        // ensure target chain is matches self.chain_id
         assert!(message::token_target_chain(&token_payload) == inner.chain_id, EUnexpectedChainID);
         // get owner address
         let owner = address::from_bytes(message::token_target_address(&token_payload));
@@ -258,9 +258,9 @@ module bridge::bridge {
 
         if (message::emergency_op_type(&payload) == FREEZE) {
             inner.frozen == true;
-        }else if (message::emergency_op_type(&payload) == UNFREEZE) {
+        } else if (message::emergency_op_type(&payload) == UNFREEZE) {
             inner.frozen == false;
-        }else {
+        } else {
             abort 0
         };
     }
