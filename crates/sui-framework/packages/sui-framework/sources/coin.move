@@ -5,6 +5,7 @@
 /// tokens and coins. `Coin` can be described as a secure wrapper around
 /// `Balance` type.
 module sui::coin {
+    use sui::dynamic_field as df;
     use std::string;
     use std::ascii;
     use std::option::{Self, Option};
@@ -53,6 +54,9 @@ module sui::coin {
         id: UID,
         total_supply: Supply<T>
     }
+
+    /// Key for dynamic field of a coin for its inscription/message
+    struct InscriptionKey has copy, drop, store {}
 
     // === Supply <-> TreasuryCap morphing and accessors  ===
 
@@ -106,7 +110,7 @@ module sui::coin {
     /// Destruct a Coin wrapper and keep the balance.
     public fun into_balance<T>(coin: Coin<T>): Balance<T> {
         let Coin { id, balance } = coin;
-        object::delete(id);
+        delete_coin_uid(id);
         balance
     }
 
@@ -149,7 +153,7 @@ module sui::coin {
     /// Aborts if `c.value + self.value > U64_MAX`
     public entry fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
         let Coin { id, balance } = c;
-        object::delete(id);
+        delete_coin_uid(id);
         balance::join(&mut self.balance, balance);
     }
 
@@ -223,7 +227,7 @@ module sui::coin {
     /// Destroy a coin with value zero
     public fun destroy_zero<T>(c: Coin<T>) {
         let Coin { id, balance } = c;
-        object::delete(id);
+        delete_coin_uid(id);
         balance::destroy_zero(balance)
     }
 
@@ -304,7 +308,7 @@ module sui::coin {
     /// accordingly.
     public entry fun burn<T>(cap: &mut TreasuryCap<T>, c: Coin<T>): u64 {
         let Coin { id, balance } = c;
-        object::delete(id);
+        delete_coin_uid(id);
         balance::decrease_supply(&mut cap.total_supply, balance)
     }
 
@@ -321,6 +325,24 @@ module sui::coin {
 
     spec burn {
         include Burn<T>;
+    }
+
+    /// Attach a string message to a coin
+    public fun inscribe<T>(coin: &mut Coin<T>, message: string::String) {
+        df::add(&mut coin.id, InscriptionKey {}, message)
+    }
+
+    public fun inscription<T>(coin: &Coin<T>): Option<string::String> {
+        if (df::exists_<InscriptionKey>(&coin.id, InscriptionKey {})) {
+            option::some(*df::borrow(&coin.id, InscriptionKey {}))
+        } else {
+            option::none()
+        }
+    }
+
+    fun delete_coin_uid(id: UID) {
+        df::remove_if_exists<InscriptionKey, string::String>(&mut id, InscriptionKey {});
+        object::delete(id)
     }
 
     // === Entrypoints ===
@@ -396,7 +418,7 @@ module sui::coin {
     /// Burn coins of any type for testing purposes only
     public fun burn_for_testing<T>(coin: Coin<T>): u64 {
         let Coin { id, balance } = coin;
-        object::delete(id);
+        delete_coin_uid(id);
         balance::destroy_for_testing(balance)
     }
 
