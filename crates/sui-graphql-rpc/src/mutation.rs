@@ -1,14 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{error::Error, types::execution_result::ExecutionResult};
+use crate::{
+    error::Error, types::execution_result::ExecutionResult,
+    types::transaction_block_effects::TransactionBlockEffects,
+};
 use async_graphql::*;
+use either::Either;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::{encoding::Base64, traits::ToFromBytes};
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_sdk::SuiClient;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
-use sui_types::{signature::GenericSignature, transaction::Transaction};
+use sui_types::{
+    signature::GenericSignature, transaction::Transaction, transaction::TransactionData,
+};
 
 pub struct Mutation;
 
@@ -38,7 +44,7 @@ impl Mutation {
             .as_ref()
             .ok_or_else(|| Error::Internal("Sui SDK client not initialized".to_string()))
             .extend()?;
-        let tx_data = bcs::from_bytes(
+        let tx_data: TransactionData = bcs::from_bytes(
             &Base64::decode(&tx_bytes)
                 .map_err(|e| {
                     Error::Client(format!(
@@ -70,7 +76,7 @@ impl Mutation {
                 .extend()?,
             );
         }
-        let transaction = Transaction::from_generic_sig_data(tx_data, sigs);
+        let transaction = Transaction::from_generic_sig_data(tx_data.clone(), sigs);
 
         let result = sui_sdk_client
             .quorum_driver_api()
@@ -85,6 +91,9 @@ impl Mutation {
             .map_err(|e| Error::Internal(format!("Unable to execute transaction: {e}")))
             .extend()?;
 
+        let effects = result.effects.ok_or(Error::Internal(
+            "Transaction effects not returned after execution".to_string(),
+        ))?;
         Ok(ExecutionResult {
             errors: if result.errors.is_empty() {
                 None
@@ -92,6 +101,10 @@ impl Mutation {
                 Some(result.errors)
             },
             digest: result.digest.to_string(),
+            effects: TransactionBlockEffects {
+                tx_data: Either::Right(tx_data),
+                effects: Either::Right(effects),
+            },
         })
     }
 }

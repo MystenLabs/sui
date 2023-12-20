@@ -6,6 +6,9 @@ use crate::types::object::Object;
 use async_graphql::connection::Connection;
 use async_graphql::*;
 use sui_json_rpc_types::SuiGasData;
+use sui_json_rpc_types::{
+    SuiTransactionBlockEffects as JsonRpcTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
+};
 use sui_types::{
     base_types::{ObjectID, SuiAddress as NativeSuiAddress},
     effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
@@ -126,6 +129,16 @@ impl GasEffects {
 impl GasEffects {
     pub(crate) fn from(effects: &NativeTransactionEffects) -> Self {
         let ((id, version, _digest), _owner) = effects.gas_object();
+        Self {
+            summary: GasCostSummary::from(effects.gas_cost_summary()),
+            object_id: SuiAddress::from(id),
+            object_version: version.value(),
+        }
+    }
+
+    pub(crate) fn from_json_rpc_effects(effects: &JsonRpcTransactionBlockEffects) -> Self {
+        let gas = effects.gas_object();
+        let (id, version) = (gas.object_id(), gas.version());
         Self {
             summary: GasCostSummary::from(effects.gas_cost_summary()),
             object_id: SuiAddress::from(id),
