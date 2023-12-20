@@ -11,8 +11,7 @@ use crate::error::BridgeResult;
 use crate::events::SuiBridgeEvent;
 use crate::storage::BridgeOrchestratorTables;
 use crate::sui_client::{SuiClient, SuiClientInner};
-use crate::types::BridgeCommittee;
-use arc_swap::ArcSwap;
+use crate::types::EthLog;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::sync::Arc;
 use sui_json_rpc_types::SuiEvent;
@@ -21,12 +20,9 @@ use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
 pub struct BridgeOrchestrator<C> {
-    sui_client: Arc<SuiClient<C>>,
+    _sui_client: Arc<SuiClient<C>>,
     sui_events_rx: mysten_metrics::metered_channel::Receiver<(Identifier, Vec<SuiEvent>)>,
-    eth_events_rx: mysten_metrics::metered_channel::Receiver<(
-        ethers::types::Address,
-        Vec<ethers::types::Log>,
-    )>,
+    eth_events_rx: mysten_metrics::metered_channel::Receiver<(ethers::types::Address, Vec<EthLog>)>,
     store: Arc<BridgeOrchestratorTables>,
 }
 
@@ -34,51 +30,44 @@ impl<C> BridgeOrchestrator<C>
 where
     C: SuiClientInner + 'static,
 {
-    pub async fn new(
+    pub fn new(
         sui_client: Arc<SuiClient<C>>,
         sui_events_rx: mysten_metrics::metered_channel::Receiver<(Identifier, Vec<SuiEvent>)>,
         eth_events_rx: mysten_metrics::metered_channel::Receiver<(
             ethers::types::Address,
-            Vec<ethers::types::Log>,
+            Vec<EthLog>,
         )>,
         store: Arc<BridgeOrchestratorTables>,
-    ) -> BridgeResult<Self> {
-        Ok(Self {
-            sui_client,
+    ) -> Self {
+        Self {
+            _sui_client: sui_client,
             sui_events_rx,
             eth_events_rx,
             store,
-        })
+        }
     }
 
-    pub async fn run(self) -> BridgeResult<Vec<JoinHandle<()>>> {
-        let bridge_committee = self.sui_client.get_bridge_committee().await?;
-        tracing::info!("Bridge committee: {:?}", bridge_committee);
-        let bridge_committee = Arc::new(ArcSwap::from_pointee(bridge_committee));
+    pub fn run(self) -> Vec<JoinHandle<()>> {
+        tracing::info!("Starting BridgeOrchestrator");
         let mut task_handles = vec![];
-        let bridge_committee_clone = bridge_committee.clone();
         let store_clone = self.store.clone();
         task_handles.push(spawn_logged_monitored_task!(Self::run_sui_watcher(
             store_clone,
             self.sui_events_rx,
-            bridge_committee_clone,
         )));
-        let bridge_committee_clone = bridge_committee.clone();
         let store_clone = self.store.clone();
         task_handles.push(spawn_logged_monitored_task!(Self::run_eth_watcher(
             store_clone,
             self.eth_events_rx,
-            bridge_committee_clone,
         )));
 
         // TODO: spawn bridge committee change watcher task
-        Ok(task_handles)
+        task_handles
     }
 
     async fn run_sui_watcher(
         store: Arc<BridgeOrchestratorTables>,
         mut sui_events_rx: mysten_metrics::metered_channel::Receiver<(Identifier, Vec<SuiEvent>)>,
-        _bridge_committee: Arc<ArcSwap<BridgeCommittee>>,
     ) {
         info!("Starting sui watcher task");
         while let Some((identifier, events)) = sui_events_rx.recv().await {
@@ -99,7 +88,9 @@ where
                 if opt_bridge_event.is_none() {
                     // TODO: we probably should not miss any events, warn for now.
                     warn!("Sui event not recognized: {:?}", sui_event);
+                    continue;
                 }
+                // Unwrap safe: checked above
                 let bridge_event: SuiBridgeEvent = opt_bridge_event.unwrap();
 
                 if let Some(action) = bridge_event
@@ -120,7 +111,6 @@ where
                 // confirming the action is done.
             }
 
-            // TODO: add tests for storage
             // Unwrap safe: in the beginning of the loop we checked that events is not empty
             let cursor = events.last().unwrap().id.tx_digest;
             store
@@ -131,31 +121,209 @@ where
     }
 
     async fn run_eth_watcher(
-        _store: Arc<BridgeOrchestratorTables>,
+        store: Arc<BridgeOrchestratorTables>,
         mut eth_events_rx: mysten_metrics::metered_channel::Receiver<(
             ethers::types::Address,
-            Vec<ethers::types::Log>,
+            Vec<EthLog>,
         )>,
-        _bridge_committee: Arc<ArcSwap<BridgeCommittee>>,
     ) {
         info!("Starting eth watcher task");
-        while let Some((_contract, logs)) = eth_events_rx.recv().await {
-            // TODO: skip events that are not already processed (in DB and on chain)
+        while let Some((contract, logs)) = eth_events_rx.recv().await {
+            if logs.is_empty() {
+                continue;
+            }
 
+            // TODO: skip events that are not already processed (in DB and on chain)
             let bridge_events = logs
                 .iter()
                 .map(EthBridgeEvent::try_from_eth_log)
                 .collect::<Vec<_>>();
 
+            let mut actions = vec![];
             for (log, opt_bridge_event) in logs.iter().zip(bridge_events) {
                 if opt_bridge_event.is_none() {
                     // TODO: we probably should not miss any events, warn for now.
                     warn!("Eth event not recognized: {:?}", log);
+                    continue;
                 }
-                let _bridge_event = opt_bridge_event.unwrap();
-                // TODO: handle all bridge events
+                // Unwrap safe: checked above
+                let bridge_event = opt_bridge_event.unwrap();
+
+                if let Some(action) =
+                    bridge_event.try_into_bridge_action(log.tx_hash, log.log_index_in_tx)
+                {
+                    actions.push(action);
+                }
+                // TODO: handle non Action events
             }
+            if !actions.is_empty() {
+                // Write action to pending WAL
+                store
+                    .insert_pending_actions(&actions)
+                    .expect("Store operation should not fail");
+
+                // TODO: ask executor to execute, who calls `remove_pending_actions` after
+                // confirming the action is done.
+            }
+
+            // Unwrap safe: in the beginning of the loop we checked that events is not empty
+            let cursor = logs.last().unwrap().block_number;
+            store
+                .update_eth_event_cursor(contract, cursor)
+                .expect("Store operation should not fail");
         }
         panic!("Eth event channel was closed");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::abi::tests::get_test_log_and_action;
+    use ethers::types::Address as EthAddress;
+    use prometheus::Registry;
+    use std::str::FromStr;
+
+    use super::*;
+    use crate::{events::tests::get_test_sui_event_and_action, sui_mock_client::SuiMockClient};
+
+    #[tokio::test]
+    async fn test_sui_watcher_task() {
+        // Note: this test may fail beacuse of the following reasons:
+        // the SuiEvent's struct tag does not match the ones in events.rs
+
+        let (sui_events_tx, sui_events_rx, _eth_events_tx, eth_events_rx, sui_client, store) =
+            setup();
+        // start orchestrator
+        let _handles = BridgeOrchestrator::new(
+            Arc::new(sui_client),
+            sui_events_rx,
+            eth_events_rx,
+            store.clone(),
+        )
+        .run();
+
+        let identifier = Identifier::from_str("test_sui_watcher_task").unwrap();
+        let (sui_event, bridge_action) = get_test_sui_event_and_action(identifier.clone());
+        sui_events_tx
+            .send((identifier.clone(), vec![sui_event.clone()]))
+            .await
+            .unwrap();
+
+        let start = std::time::Instant::now();
+        loop {
+            let actions = store.get_all_pending_actions().unwrap();
+            if actions.is_empty() {
+                if start.elapsed().as_secs() > 5 {
+                    panic!("Timed out waiting for action to be written to WAL");
+                }
+                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                continue;
+            }
+            assert_eq!(actions.len(), 1);
+            let action = actions.get(&bridge_action.digest()).unwrap();
+            assert_eq!(action, &bridge_action);
+            assert_eq!(
+                store.get_sui_event_cursor(&identifier).unwrap().unwrap(),
+                sui_event.id.tx_digest,
+            );
+            break;
+        }
+    }
+
+    #[tokio::test]
+    async fn test_eth_watcher_task() {
+        // Note: this test may fail beacuse of the following reasons:
+        // 1. Log and BridgeAction returned from `get_test_log_and_action` are not in sync
+        // 2. Log returned from `get_test_log_and_action` is not parseable log (not abigen!, check abi.rs)
+
+        let (_sui_events_tx, sui_events_rx, eth_events_tx, eth_events_rx, sui_client, store) =
+            setup();
+        // start orchestrator
+        let _handles = BridgeOrchestrator::new(
+            Arc::new(sui_client),
+            sui_events_rx,
+            eth_events_rx,
+            store.clone(),
+        )
+        .run();
+        let address = EthAddress::random();
+        let (log, bridge_action) = get_test_log_and_action(address);
+        let log_index_in_tx = 10;
+        let eth_log = EthLog {
+            log: log.clone(),
+            tx_hash: log.transaction_hash.unwrap(),
+            block_number: log.block_number.unwrap().as_u64(),
+            log_index_in_tx,
+        };
+
+        eth_events_tx
+            .send((address, vec![eth_log.clone()]))
+            .await
+            .unwrap();
+
+        let start = std::time::Instant::now();
+        loop {
+            let actions = store.get_all_pending_actions().unwrap();
+            if actions.is_empty() {
+                if start.elapsed().as_secs() > 5 {
+                    panic!("Timed out waiting for action to be written to WAL");
+                }
+                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                continue;
+            }
+            assert_eq!(actions.len(), 1);
+            let action = actions.get(&bridge_action.digest()).unwrap();
+            assert_eq!(action, &bridge_action);
+            assert_eq!(
+                store.get_eth_event_cursor(&address).unwrap().unwrap(),
+                log.block_number.unwrap().as_u64()
+            );
+            break;
+        }
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn setup() -> (
+        mysten_metrics::metered_channel::Sender<(Identifier, Vec<SuiEvent>)>,
+        mysten_metrics::metered_channel::Receiver<(Identifier, Vec<SuiEvent>)>,
+        mysten_metrics::metered_channel::Sender<(ethers::types::Address, Vec<EthLog>)>,
+        mysten_metrics::metered_channel::Receiver<(ethers::types::Address, Vec<EthLog>)>,
+        SuiClient<SuiMockClient>,
+        Arc<BridgeOrchestratorTables>,
+    ) {
+        telemetry_subscribers::init_for_testing();
+        let registry = Registry::new();
+        mysten_metrics::init_metrics(&registry);
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let store = BridgeOrchestratorTables::new(temp_dir.path());
+
+        let mock_client = SuiMockClient::default();
+        let sui_client = SuiClient::new_for_testing(mock_client.clone());
+
+        let (eth_events_tx, eth_events_rx) = mysten_metrics::metered_channel::channel(
+            100,
+            &mysten_metrics::get_metrics()
+                .unwrap()
+                .channels
+                .with_label_values(&["unit_test_eth_events_queue"]),
+        );
+
+        let (sui_events_tx, sui_events_rx) = mysten_metrics::metered_channel::channel(
+            100,
+            &mysten_metrics::get_metrics()
+                .unwrap()
+                .channels
+                .with_label_values(&["unit_test_sui_events_queue"]),
+        );
+
+        (
+            sui_events_tx,
+            sui_events_rx,
+            eth_events_tx,
+            eth_events_rx,
+            sui_client,
+            store,
+        )
     }
 }
