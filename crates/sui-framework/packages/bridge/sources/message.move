@@ -9,8 +9,6 @@ module bridge::message {
     use bridge::message_types;
 
     #[test_only]
-    use std::debug::print;
-    #[test_only]
     use bridge::chain_ids;
     #[test_only]
     use bridge::treasury::token_id;
@@ -33,7 +31,6 @@ module bridge::message {
         message_type: u8,
         message_version: u8,
         seq_num: u64,
-        source_chain: u8,
         payload: vector<u8>
     }
 
@@ -44,6 +41,7 @@ module bridge::message {
     }
 
     struct TokenPayload has drop {
+        source_chain: u8,
         sender_address: vector<u8>,
         target_chain: u8,
         target_address: vector<u8>,
@@ -57,12 +55,14 @@ module bridge::message {
 
     public fun extract_token_bridge_payload(message: &BridgeMessage): TokenPayload {
         let bcs = bcs::new(message.payload);
+        let source_chain = bcs::peel_u8(&mut bcs);
         let sender_address = bcs::peel_vec_u8(&mut bcs);
         let target_chain = bcs::peel_u8(&mut bcs);
         let target_address = bcs::peel_vec_u8(&mut bcs);
         let token_type = bcs::peel_u8(&mut bcs);
         let amount = bcs::peel_u64(&mut bcs);
         TokenPayload {
+            source_chain,
             sender_address,
             target_chain,
             target_address,
@@ -83,7 +83,6 @@ module bridge::message {
             message_type,
             message_version: version,
             seq_num: bridge_seq_num,
-            source_chain,
             payload
         } = message;
 
@@ -91,7 +90,6 @@ module bridge::message {
         vector::push_back(&mut message, message_type);
         vector::push_back(&mut message, version);
         vector::append(&mut message, bcs::to_bytes(&bridge_seq_num));
-        vector::push_back(&mut message, source_chain);
         vector::append(&mut message, payload);
         message
     }
@@ -109,8 +107,8 @@ module bridge::message {
             message_type: message_types::token(),
             message_version: CURRENT_MESSAGE_VERSION,
             seq_num,
-            source_chain,
             payload: bcs::to_bytes(&TokenPayload {
+                source_chain,
                 sender_address,
                 target_chain,
                 target_address,
@@ -121,7 +119,6 @@ module bridge::message {
     }
 
     public fun create_emergency_op_message(
-        source_chain: u8,
         seq_num: u64,
         op_type: u8,
     ): BridgeMessage {
@@ -129,7 +126,6 @@ module bridge::message {
             message_type: message_types::emergency_op(),
             message_version: CURRENT_MESSAGE_VERSION,
             seq_num,
-            source_chain,
             payload: bcs::to_bytes(&EmergencyOp { op_type })
         }
     }
@@ -139,7 +135,13 @@ module bridge::message {
     }
 
     public fun key(self: &BridgeMessage): BridgeMessageKey {
-        create_key(self.source_chain, self.message_type, self.seq_num)
+        let source_chain = if (self.message_type == message_types::token()) {
+            let bcs = bcs::new(self.payload);
+            bcs::peel_u8(&mut bcs)
+        }else {
+            0
+        };
+        create_key(source_chain, self.message_type, self.seq_num)
     }
 
     // BridgeMessage getters
@@ -151,11 +153,11 @@ module bridge::message {
         self.seq_num
     }
 
-    public fun source_chain(self: &BridgeMessage): u8 {
+    // TokenBridgePayload getters
+    public fun token_source_chain(self: &TokenPayload): u8 {
         self.source_chain
     }
 
-    // TokenBridgePayload getters
     public fun token_target_chain(self: &TokenPayload): u8 {
         self.target_chain
     }
@@ -184,7 +186,6 @@ module bridge::message {
             message_type: bcs::peel_u8(&mut bcs),
             message_version: bcs::peel_u8(&mut bcs),
             seq_num: bcs::peel_u64(&mut bcs),
-            source_chain: bcs::peel_u8(&mut bcs),
             payload: bcs::into_remainder_bytes(bcs)
         }
     }
@@ -200,9 +201,9 @@ module bridge::message {
         let token_bridge_message = BridgeMessage {
             message_type: message_types::token(),
             message_version: 1,
-            source_chain: chain_ids::sui_testnet(),
             seq_num: 10,
             payload: bcs::to_bytes(&TokenPayload {
+                source_chain: chain_ids::sui_testnet(),
                 sender_address: address::to_bytes(sender_address),
                 target_chain: chain_ids::eth_sepolia(),
                 target_address: address::to_bytes(address::from_u256(200)),
@@ -222,12 +223,5 @@ module bridge::message {
 
         coin::burn_for_testing(coin);
         test_scenario::end(scenario);
-
-        let msg = hex::decode(
-            b"00010a000000000000000120a0c1a7fd8d5d6bd4fab51a11707db78dd33ef18512538306560a2a6b23bfb36e0b20c448d0b65cc4a8efbf589bbae91c47a7ea47256d9acbf5a8f60b817b1924375e013930000000000000"
-        );
-        let msg = deserialise_message(msg);
-        print(&msg);
-        print(&extract_token_bridge_payload(&msg));
     }
 }

@@ -6,7 +6,6 @@ module bridge::treasury {
 
     use sui::coin::{Self, Coin};
     use sui::object_bag::{Self, ObjectBag};
-    use sui::sui::SUI;
     use sui::tx_context::{Self, TxContext};
 
     use bridge::btc;
@@ -18,6 +17,8 @@ module bridge::treasury {
     use bridge::usdt;
     use bridge::usdt::USDT;
 
+    friend bridge::bridge;
+
     const EUnsupportedTokenType: u64 = 0;
     const ENotSystemAddress: u64 = 1;
 
@@ -25,20 +26,20 @@ module bridge::treasury {
         treasuries: ObjectBag
     }
 
-    public fun create(ctx: &mut TxContext): BridgeTreasury {
+    public(friend) fun create(ctx: &mut TxContext): BridgeTreasury {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         BridgeTreasury {
             treasuries: object_bag::new(ctx)
         }
     }
 
-    public fun burn<T>(self: &mut BridgeTreasury, token: Coin<T>, ctx: &mut TxContext) {
+    public(friend) fun burn<T>(self: &mut BridgeTreasury, token: Coin<T>, ctx: &mut TxContext) {
         create_treasury_if_not_exist<T>(self, ctx);
         let treasury = object_bag::borrow_mut(&mut self.treasuries, type_name::get<T>());
         coin::burn(treasury, token);
     }
 
-    public fun mint<T>(self: &mut BridgeTreasury, amount: u64, ctx: &mut TxContext): Coin<T> {
+    public(friend) fun mint<T>(self: &mut BridgeTreasury, amount: u64, ctx: &mut TxContext): Coin<T> {
         create_treasury_if_not_exist<T>(self, ctx);
         let treasury = object_bag::borrow_mut(&mut self.treasuries, type_name::get<T>());
         coin::mint(treasury, amount, ctx)
@@ -64,9 +65,7 @@ module bridge::treasury {
 
     public fun token_id<T>(): u8 {
         let coin_type = type_name::get<T>();
-        if (coin_type == type_name::get<SUI>()) {
-            0
-        }else if (coin_type == type_name::get<BTC>()) {
+        if (coin_type == type_name::get<BTC>()) {
             1
         }else if (coin_type == type_name::get<ETH>()) {
             2
