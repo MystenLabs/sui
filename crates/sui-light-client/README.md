@@ -4,7 +4,7 @@ This crate contains a Command Line Interface light client for Sui.
 
 A light client allows checking the authenticity and validity of on-chain state, such as transactions, their effects including events and object contents, without the cost of running a full node. 
 
-Running a *full node* requires downloading the full sequence of all transaction and re-executing them. Any reads against the full node are guaranteed to be correct since the full state of the blockchain was recreated an in the process checked. It is however an expensive process in terms of network bandwidth needed to download the full sequence of transactions, as well as CPU to re-execute it, and storage to store the full state of the blockchain.
+Running a *full node* requires downloading the full sequence of all transaction and re-executing them. Then the full state of the blockchain is available locally to serve reads. This is however an expensive process in terms of network bandwidth needed to download the full sequence of transactions, as well as CPU to re-execute it, and storage to store the full state of the blockchain.
 
 Alternatively, a *light client* only needs to download minimal information to authenticate blockchain state. Specifically in Sui, the light client needs to *sync* all end-of-epoch checkpoints that contain information about the committee in the next epoch. Sync involves downloading the checkpoints and checking their validity by checking their certificate. 
 
@@ -23,7 +23,7 @@ The light client requires a config file and a directory to cache checkpoints, an
 The config file for the light client takes a URL for a full node, a directory (that must exist) and within the directory to name of the genesis blob for the Sui network. 
 
 ```
-full_node_url: "http://ord-mnt-rpcbig-06.mainnet.sui.io:9000/rest"
+full_node_url: "http://ord-mnt-rpcbig-06.mainnet.sui.io:9000"
 checkpoint_summary_dir: "checkpoints_dir"
 genesis_filename: "genesis.blob"
 ```

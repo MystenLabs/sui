@@ -69,14 +69,15 @@ impl PackageStore for RemotePackageStore {
         let object = self.client.get_object(id.into()).await.unwrap();
 
         // Need to authenticate this object
-        let (effects, _) = check_transaction_tid(&self.config, object.previous_transaction)
-            .await
-            .unwrap();
+        let (effects, _) =
+            get_verified_effects_and_events(&self.config, object.previous_transaction)
+                .await
+                .unwrap();
         // check that this object ID, version and hash is in the effects
         effects
             .all_changed_objects()
             .iter()
-            .find(|oref| oref.0 == object.compute_object_reference())
+            .find(|object_ref| object_ref.0 == object.compute_object_reference())
             .unwrap();
 
         let package = Package::read(&object).unwrap();
@@ -104,7 +105,7 @@ enum SCommands {
     },
 }
 
-// The config file for the light client inclding the root of trust genesis digest
+// The config file for the light client including the root of trust genesis digest
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 struct Config {
     /// Full node url
@@ -115,6 +116,12 @@ struct Config {
 
     //  Genesis file name
     genesis_filename: PathBuf,
+}
+
+impl Config {
+    pub fn rest_url(&self) -> String {
+        format!("{}/rest", self.full_node_url)
+    }
 }
 
 // The list of checkpoints at the end of each epoch
@@ -201,13 +208,13 @@ async fn download_checkpoint_summary(
     seq: u64,
 ) -> anyhow::Result<CertifiedCheckpointSummary> {
     // Download the checkpoint from the server
-    let client = Client::new(config.full_node_url.as_str());
+    let client = Client::new(config.rest_url());
     client.get_checkpoint_summary(seq).await
 }
 
 /// Run binary search to for each end of epoch checkpoint that is missing
 /// between the latest on the list and the latest checkpoint.
-async fn pre_sync_checkpoints_to_latest(config: &Config) -> anyhow::Result<()> {
+async fn sync_checkpoint_list_to_latest(config: &Config) -> anyhow::Result<()> {
     // Get the local checkpoint list
     let mut checkpoints_list: CheckpointsList = read_checkpoint_list(config)?;
     let latest_in_list = checkpoints_list
@@ -221,7 +228,7 @@ async fn pre_sync_checkpoints_to_latest(config: &Config) -> anyhow::Result<()> {
     let mut last_checkpoint_seq = summary.sequence_number;
 
     // Download the very latest checkpoint
-    let client = Client::new(config.full_node_url.as_str());
+    let client = Client::new(config.rest_url());
     let latest = client.get_latest_checkpoint().await?;
 
     // Binary search to find missing checkpoints
@@ -276,7 +283,7 @@ async fn pre_sync_checkpoints_to_latest(config: &Config) -> anyhow::Result<()> {
 }
 
 async fn check_and_sync_checkpoints(config: &Config) -> anyhow::Result<()> {
-    pre_sync_checkpoints_to_latest(config).await?;
+    sync_checkpoint_list_to_latest(config).await?;
 
     // Get the local checkpoint list
     let checkpoints_list: CheckpointsList = read_checkpoint_list(config)?;
@@ -300,36 +307,33 @@ async fn check_and_sync_checkpoints(config: &Config) -> anyhow::Result<()> {
             read_checkpoint(config, *ckp_id)?
         } else {
             // Download the checkpoint from the server
-            download_checkpoint_summary(config, *ckp_id).await?
+            let summary = download_checkpoint_summary(config, *ckp_id).await?;
+            summary.clone().verify(&prev_committee)?;
+            // Write the checkpoint summary to a file
+            write_checkpoint(config, &summary)?;
+            summary
         };
 
-        summary.clone().verify(&prev_committee)?;
-
-        // Pirnt the id of the checkpoint and the epoch number
+        // Print the id of the checkpoint and the epoch number
         println!(
             "Epoch: {} Checkpoint ID: {}",
             summary.epoch(),
             summary.digest()
         );
 
-        // Exract the new committee information
+        // Extract the new committee information
         if let Some(EndOfEpochData {
             next_epoch_committee,
             ..
         }) = &summary.end_of_epoch_data
         {
             let next_committee = next_epoch_committee.iter().cloned().collect();
-            let committee = Committee::new(summary.epoch().saturating_add(1), next_committee);
-            bcs::to_bytes(&committee)?;
-            prev_committee = committee;
+            prev_committee = Committee::new(summary.epoch().saturating_add(1), next_committee);
         } else {
             return Err(anyhow!(
                 "Expected all checkpoints to be end-of-epoch checkpoints"
             ));
         }
-
-        // Write the checkpoint summary to a file
-        write_checkpoint(config, &summary)?;
     }
 
     Ok(())
@@ -365,7 +369,7 @@ async fn get_full_checkpoint(config: &Config, seq: u64) -> anyhow::Result<Checkp
     }
 
     // Downloading the checkpoint from the server
-    let client: Client = Client::new(config.full_node_url.as_str());
+    let client: Client = Client::new(config.rest_url());
     let full_check_point = client.get_full_checkpoint(seq).await?;
 
     // Add to cache
@@ -374,7 +378,7 @@ async fn get_full_checkpoint(config: &Config, seq: u64) -> anyhow::Result<Checkp
     Ok(full_check_point)
 }
 
-fn assert_contains_transaction_effects(
+fn extract_verified_effects_and_events(
     checkpoint: &CheckpointData,
     committee: &Committee,
     tid: TransactionDigest,
@@ -392,15 +396,16 @@ fn assert_contains_transaction_effects(
     );
 
     // Check the validity of the transaction
-    let matching_tx = checkpoint
+    let (matching_tx, _) = checkpoint
         .transactions
         .iter()
+        .zip(contents.iter())
         // Note that we get the digest of the effects to ensure this is
         // indeed the correct effects that are authenticated in the contents.
-        .find(|tx| tx.effects.execution_digests().transaction == tid)
+        .find(|(tx, digest)| {
+            tx.effects.execution_digests() == **digest && digest.transaction == tid
+        })
         .ok_or(anyhow!("Transaction not found in checkpoint contents"))?;
-
-    // The effects are correct by the check above that creates matching_tx
 
     // Check the events are all correct.
     let events_digest = matching_tx.events.as_ref().map(|events| events.digest());
@@ -413,13 +418,13 @@ fn assert_contains_transaction_effects(
     Ok((matching_tx.effects.clone(), matching_tx.events.clone()))
 }
 
-async fn check_transaction_tid(
+async fn get_verified_effects_and_events(
     config: &Config,
     tid: TransactionDigest,
 ) -> anyhow::Result<(TransactionEffects, Option<TransactionEvents>)> {
     let sui_mainnet: Arc<sui_sdk::SuiClient> = Arc::new(
         SuiClientBuilder::default()
-            .build("http://ord-mnt-rpcbig-06.mainnet.sui.io:9000")
+            .build(config.full_node_url.as_str())
             .await
             .unwrap(),
     );
@@ -449,8 +454,14 @@ async fn check_transaction_tid(
     // Read it from the store
     let prev_ckp = read_checkpoint(config, *prev_ckp_id)?;
 
+    // Check we have the right checkpoint
+    anyhow::ensure!(
+        prev_ckp.epoch().saturating_add(1) == full_check_point.checkpoint_summary.epoch(),
+        "Checkpoint sequence number does not match. Need to Sync."
+    );
+
     // Get the committee from the previous checkpoint
-    let prev_committee = prev_ckp
+    let current_committee = prev_ckp
         .end_of_epoch_data
         .as_ref()
         .ok_or(anyhow!(
@@ -462,8 +473,8 @@ async fn check_transaction_tid(
         .collect();
 
     // Make a committee object using this
-    let committee = Committee::new(prev_ckp.epoch().saturating_add(1), prev_committee);
-    assert_contains_transaction_effects(&full_check_point, &committee, tid)
+    let committee = Committee::new(prev_ckp.epoch().saturating_add(1), current_committee);
+    extract_verified_effects_and_events(&full_check_point, &committee, tid)
 }
 
 #[tokio::main]
@@ -484,16 +495,18 @@ pub async fn main() {
         config.checkpoint_summary_dir.display()
     );
 
-    let client: Client = Client::new(config.full_node_url.as_str());
+    let client: Client = Client::new(config.rest_url());
     let remote_package_store = RemotePackageStore::new(client, config.clone());
     let resolver = Resolver::new(remote_package_store);
 
     match args.command {
         Some(SCommands::Transaction { tid }) => {
-            let (effects, events) =
-                check_transaction_tid(&config, TransactionDigest::from_str(&tid).unwrap())
-                    .await
-                    .unwrap();
+            let (effects, events) = get_verified_effects_and_events(
+                &config,
+                TransactionDigest::from_str(&tid).unwrap(),
+            )
+            .await
+            .unwrap();
 
             let exec_digests = effects.execution_digests();
             println!(
@@ -521,7 +534,7 @@ pub async fn main() {
             }
         }
         Some(SCommands::Object { oid }) => {
-            let client = Client::new(config.full_node_url.as_str());
+            let client = Client::new(config.rest_url());
             let object = client
                 .get_object(ObjectID::from_str(&oid).unwrap())
                 .await
@@ -529,9 +542,10 @@ pub async fn main() {
 
             // Authenticate the object
             // Need to authenticate this object
-            let (effects, _) = check_transaction_tid(&config, object.previous_transaction)
-                .await
-                .unwrap();
+            let (effects, _) =
+                get_verified_effects_and_events(&config, object.previous_transaction)
+                    .await
+                    .unwrap();
 
             // check that this object ID, version and hash is in the effects
             effects
@@ -622,7 +636,7 @@ mod tests {
     async fn test_checkpoint_all_good() {
         let (committee, full_checkpoint) = read_data().await;
 
-        assert_contains_transaction_effects(
+        extract_verified_effects_and_events(
             &full_checkpoint,
             &committee,
             TransactionDigest::from_str("8RiKBwuAbtu8zNCtz8SrcfHyEUzto6zi6cMVA9t4WhWk").unwrap(),
@@ -637,7 +651,7 @@ mod tests {
         // Change committee
         committee.epoch += 10;
 
-        assert!(assert_contains_transaction_effects(
+        assert!(extract_verified_effects_and_events(
             &full_checkpoint,
             &committee,
             TransactionDigest::from_str("8RiKBwuAbtu8zNCtz8SrcfHyEUzto6zi6cMVA9t4WhWk").unwrap(),
@@ -649,7 +663,7 @@ mod tests {
     async fn test_checkpoint_no_transaction() {
         let (committee, full_checkpoint) = read_data().await;
 
-        assert!(assert_contains_transaction_effects(
+        assert!(extract_verified_effects_and_events(
             &full_checkpoint,
             &committee,
             TransactionDigest::from_str("8RiKBwuAbtu8zNCtz8SrcfHyEUzto6zj6cMVA9t4WhWk").unwrap(),
@@ -665,7 +679,7 @@ mod tests {
         let random_contents = FullCheckpointContents::random_for_testing();
         full_checkpoint.checkpoint_contents = random_contents.checkpoint_contents();
 
-        assert!(assert_contains_transaction_effects(
+        assert!(extract_verified_effects_and_events(
             &full_checkpoint,
             &committee,
             TransactionDigest::from_str("8RiKBwuAbtu8zNCtz8SrcfHyEUzto6zj6cMVA9t4WhWk").unwrap(),
@@ -690,7 +704,7 @@ mod tests {
             }
         }
 
-        assert!(assert_contains_transaction_effects(
+        assert!(extract_verified_effects_and_events(
             &full_checkpoint,
             &committee,
             TransactionDigest::from_str("8RiKBwuAbtu8zNCtz8SrcfHyEUzto6zj6cMVA9t4WhWk").unwrap(),
