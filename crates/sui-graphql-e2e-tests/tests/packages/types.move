@@ -5,6 +5,7 @@
 
 //# run-graphql
 # Happy path -- valid type, get everything
+
 {
     type(type: "0x2::priority_queue::PriorityQueue<0x2::coin::Coin<0x2::sui::SUI>>") {
         repr
@@ -15,6 +16,7 @@
 
 //# run-graphql
 # Happy path -- primitive type
+
 {
     type(type: "u64") {
         repr
@@ -25,6 +27,7 @@
 
 //# run-graphql
 # Happy path -- primitive type with generic parameter
+
 {
     type(type: "vector<u64>") {
         repr
@@ -35,6 +38,7 @@
 
 //# run-graphql
 # Unhappy path -- bad type tag (failed to parse)
+
 {
     type(type: "not_a_type") {
         repr
@@ -44,7 +48,6 @@
 }
 
 //# run-graphql
-
 # Semi-happy path -- the input looks like a type, but that type
 # doesn't exist. Depending on which fields you ask for, this request
 # may still succeed.
@@ -57,7 +60,6 @@
 }
 
 //# run-graphql
-
 # Unhappy side of semi-happy path -- asking for a layout for a type
 # that doesn't exist won't work.
 #
@@ -67,8 +69,34 @@
 # MoveType to signal an error in layout calculation and the GraphQL
 # field implementations to know that it is a user error or an internal
 # error.
+
 {
     type(type: "0x42::not::Here") {
         layout
+    }
+}
+
+//# run-graphql
+# Querying abilities for concrete types
+
+{
+    token: type(type: "0x2::token::Token<0x2::sui::SUI>") {
+        abilities
+    }
+
+    coin: type(type: "0x2::coin::Coin<0x2::sui::SUI>") {
+        abilities
+    }
+
+    balance: type(type: "0x2::balance::Balance<0x2::sui::SUI>") {
+        abilities
+    }
+
+    coin_vector: type(type: "vector<0x2::coin::Coin<0x2::sui::SUI>>") {
+        abilities
+    }
+
+    prim_vector: type(type: "vector<u64>") {
+        abilities
     }
 }

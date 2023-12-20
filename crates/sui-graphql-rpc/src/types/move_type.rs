@@ -3,11 +3,14 @@
 
 use crate::context_data::package_cache::PackageCache;
 use async_graphql::*;
+use move_binary_format::file_format::AbilitySet;
 use move_core_types::{annotated_value as A, language_storage::TypeTag};
 use serde::{Deserialize, Serialize};
 use sui_package_resolver::Resolver;
 
 use crate::error::Error;
+
+use super::open_move_type::MoveAbility;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct MoveType {
@@ -114,6 +117,22 @@ impl MoveType {
 
         MoveTypeLayout::try_from(self.layout_impl(resolver).await.extend()?).extend()
     }
+
+    /// The abilities this concrete type has.
+    async fn abilities(&self, ctx: &Context<'_>) -> Result<Vec<MoveAbility>> {
+        let resolver: &Resolver<PackageCache> = ctx
+            .data()
+            .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
+            .extend()?;
+
+        Ok(self
+            .abilities_impl(resolver)
+            .await
+            .extend()?
+            .into_iter()
+            .map(MoveAbility::from)
+            .collect())
+    }
 }
 
 impl MoveType {
@@ -138,6 +157,18 @@ impl MoveType {
                     self.native.to_canonical_display(/* with_prefix */ true),
                 ))
             })
+    }
+
+    pub(crate) async fn abilities_impl(
+        &self,
+        resolver: &Resolver<PackageCache>,
+    ) -> Result<AbilitySet, Error> {
+        resolver.abilities(self.native.clone()).await.map_err(|e| {
+            Error::Internal(format!(
+                "Error calculating abilities for {}: {e}",
+                self.native.to_canonical_string(/* with_prefix */ true),
+            ))
+        })
     }
 }
 
