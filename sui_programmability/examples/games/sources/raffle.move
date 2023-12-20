@@ -12,6 +12,7 @@ module games::raffle {
     use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
     use sui::coin::{Self, Coin};
+    use sui::event;
     use sui::object::{Self, ID, UID};
     use sui::random::{Self, RandomGeneratorRequest, Random};
     use sui::sui::SUI;
@@ -44,6 +45,18 @@ module games::raffle {
         participant_index: u32,
     }
 
+    /// Event for new randomness round.
+    struct GameClosed has copy, drop {
+        game_id: ID,
+        waiting_for_round: u64,
+    }
+
+    /// Event for determined winner.
+    struct WinnerDetermined has copy, drop {
+        game_id: ID,
+        winner: u32,
+    }
+
     /// Create a shared-object Game.
     public fun create(end_time: u64, cost_in_sui: u64, ctx: &mut TxContext) {
         let game = Game {
@@ -63,7 +76,11 @@ module games::raffle {
         assert!(game.end_time <= clock::timestamp_ms(clock), EGameInProgress);
         assert!(option::is_none(&game.randomness_request), EGameAlreadyClosed);
         assert!(option::is_none(&game.winner), EGameAlreadyCompleted);
-        game.randomness_request = option::some(random::new_request(r, ctx));
+        let req = random::new_request(r, ctx);
+        // We use an event to notify the client side that the game was closed and a randomness request was created.
+        // Alternatives: (1) Return the information in a new object to the user; (2) Inspect the game object directly.
+        event::emit(GameClosed { game_id: object::id(game), waiting_for_round: random::required_round(&req) });
+        game.randomness_request = option::some(req);
     }
 
     /// Anyone can determine the winner after the randomness has been fixed.
@@ -73,6 +90,7 @@ module games::raffle {
         let randomness_request = option::extract(&mut game.randomness_request);
         let gen = random::fulfill(&randomness_request, r);
         let winner = random::generate_u32_in_range(&mut gen, 1, game.participants);
+        event::emit(WinnerDetermined { game_id: object::id(game), winner });
         game.winner = option::some(winner);
     }
 

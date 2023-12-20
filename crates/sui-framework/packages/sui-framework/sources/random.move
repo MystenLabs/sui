@@ -46,7 +46,7 @@ module sui::random {
     // 2. guarantee that the last sent partial sig is committed after EoP (but not to generate more).
     // 3. first round is 1 (though can be handled here if needed).
 
-    // TODO: do we want to store 32 bytes of randomness or 16?
+    // TODO: do we want to store 32 bytes of randomness or 16? (32 bytes per second is 2.7MB per day).
 
     ///
     /// Global randomness state.
@@ -64,14 +64,14 @@ module sui::random {
         id: UID,
         version: u64,
 
-        max_size: u64, // TODO: maybe we should work with granularity of epochs here? say that we store at least 1 epoch back
+        max_size: u64, // TODO: maybe we should work with the granularity of epochs here? say that we store at least 1 epoch back
         oldest_round: u64,
         latest_round: u64,
         // The actual randomness must never be accessed outside this module as it could be used for accessing global
         // randomness via bcs::to_bytes(). We use dynamic fields to store the randomness values.
     }
 
-    /// Event for new randomness value.
+    /// Event for new randomness round.
     struct NewRandomness has copy, drop {
         round: u64,
     }

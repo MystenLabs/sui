@@ -4,13 +4,12 @@
 /// A betting game that depends on Sui randomness:
 /// 1. Anyone can create a new game by depositing SUIs as the initial balance.
 /// 2. Anyone can play the game by betting on X SUIs. They win X with probability 49% and loss the X SUIs otherwise.
-///    A user calls spin() to play the game. The spin() function returns a spin_id that can be used to complete the
-///    spin by calling complete().
-/// 3. Anyone (including the owner) can force completion of all spins that are ready to be completed by calling
-///    complete_ready().
+///    A user calls start_spin() to play the game. The start_spin() function returns a spin_id that can be used to
+///    complete the spin by calling complete_spin().
+/// 3. Anyone (including the game owner) can force completion of all spins that are ready to be completed by calling
+///    force_complete().
 /// 4. Spins that is not completed within the maximal time window of Random can be liquidated.
 ///
-
 module games::slot_machine {
 
     use std::vector;
@@ -44,6 +43,12 @@ module games::slot_machine {
         randomness_request: RandomGeneratorRequest,
     }
 
+    struct SpinTicket has key {
+        id: UID,
+        spin_id: u64,
+        waiting_for_round: u64,
+    }
+
     /// Anyone can create a new game with an initial balance.
     public fun create(initial_balance: Coin<SUI>, ctx: &mut TxContext) {
         share_object(Game {
@@ -64,7 +69,7 @@ module games::slot_machine {
     }
 
     /// Start a new spin.
-    public fun spin(game :&mut Game, bet: Coin<SUI>, r: &Random, ctx: &mut TxContext): u64 {
+    public fun start_spin(game :&mut Game, bet: Coin<SUI>, r: &Random, ctx: &mut TxContext): SpinTicket {
         assert!(coin::value(&bet) <= balance::value(&game.balance), EBetTooLarge);
         // Lock the total amount of the spin.
         let locked_balance = balance::split(&mut game.balance, coin::value(&bet));
@@ -75,17 +80,21 @@ module games::slot_machine {
             recepient: tx_context::sender(ctx),
             locked_balance,
             randomness_request: random::new_request(r, ctx),
-
+        };
+        let ticket = SpinTicket {
+            id: object::new(ctx),
+            spin_id,
+            waiting_for_round: random::required_round(&spin.randomness_request),
         };
         // Update the data structure of ongoing spins.
         game.num_of_spins = game.num_of_spins + 1;
         vector::push_back(&mut game.incomplete_spins, spin);
         table::add(&mut game.spin_id_to_index, spin_id, vector::length(&game.incomplete_spins) - 1);
 
-        spin_id // TODO: is it better to return as an object?
+        ticket
     }
 
-    fun remove_spin(spin_id: u64, game: &mut Game): Spin {
+    fun remove(spin_id: u64, game: &mut Game): Spin {
         let i = table::remove(&mut game.spin_id_to_index, spin_id);
         let last = vector::length(&game.incomplete_spins) - 1;
         vector::swap(&mut game.incomplete_spins, i, last);
@@ -116,27 +125,29 @@ module games::slot_machine {
     fun liquidate(spin: Spin, game: &mut Game) {
         let Spin { spin_id: _, recepient: _, locked_balance, randomness_request: _ } = spin;
         balance::join(&mut game.balance, locked_balance);
-        // emit event?
+        // TODO: emit event?
     }
 
     /// Complete a spin (can be called by anyone).
-    public fun complete(spin_id: u64, game: &mut Game, r: &Random, ctx: &mut TxContext) {
-        let spin = remove_spin(spin_id, game);
+    public fun complete_spin(spin_ticket: SpinTicket, game: &mut Game, r: &Random, ctx: &mut TxContext) {
+        let SpinTicket { id, spin_id, waiting_for_round: _ } = spin_ticket;
+        object::delete(id);
+        let spin = remove(spin_id, game);
         process(spin, game, r, ctx);
     }
 
-    /// Complete *all* ongoing spins that are ready to be completed, and liquidate old ones.
-    public fun complete_ready(game: &mut Game, r: &Random, ctx: &mut TxContext) {
+    /// Complete *all* ongoing spins that are ready to be completed, and liquidate old ones if needed.
+    public fun force_complete(game: &mut Game, r: &Random, ctx: &mut TxContext) {
         let i = 0;
         while (i < vector::length(&game.incomplete_spins)) {
             let spin = vector::borrow(&game.incomplete_spins, i);
             if (random::is_available(&spin.randomness_request, r)) {
-                let spin = remove_spin(spin.spin_id, game);
+                let spin = remove(spin.spin_id, game);
                 process(spin, game, r, ctx);
                 continue // not incrementing i
             };
             if (random::is_too_old(&spin.randomness_request, r)) {
-                let spin = remove_spin(spin.spin_id, game);
+                let spin = remove(spin.spin_id, game);
                 liquidate(spin, game);
                 continue // not incrementing i
             };

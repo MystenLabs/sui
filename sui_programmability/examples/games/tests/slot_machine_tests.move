@@ -43,11 +43,11 @@ module games::slot_machine_tests {
         test_scenario::next_tx(scenario, user2);
         mint(user2, 100, scenario);
         let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-        let spin_id = slot_machine::spin(&mut game, coin, &random, test_scenario::ctx(scenario));
+        let ticket = slot_machine::start_spin(&mut game, coin, &random, test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, user0);
         advance_random(&mut random, test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, user2);
-        slot_machine::complete(spin_id, &mut game, &random, test_scenario::ctx(scenario));
+        slot_machine::complete_spin(ticket, &mut game, &random, test_scenario::ctx(scenario));
         assert!(slot_machine::get_balance(&game) == 900, 1); // won 100
         // check that received the right amount
         test_scenario::next_tx(scenario, user2);
@@ -58,27 +58,27 @@ module games::slot_machine_tests {
         test_scenario::next_tx(scenario, user2);
         mint(user2, 200, scenario);
         let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-        let spin_id = slot_machine::spin(&mut game, coin, &random, test_scenario::ctx(scenario));
+        let ticket = slot_machine::start_spin(&mut game, coin, &random, test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, user0);
         advance_random(&mut random, test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, user2);
-        slot_machine::complete(spin_id, &mut game, &random, test_scenario::ctx(scenario));
+        slot_machine::complete_spin(ticket, &mut game, &random, test_scenario::ctx(scenario));
         assert!(slot_machine::get_balance(&game) == 1100, 1); // lost 200
 
         // now in parallel
         test_scenario::next_tx(scenario, user2);
         mint(user2, 100, scenario);
         let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-        let spin_id1 = slot_machine::spin(&mut game, coin, &random, test_scenario::ctx(scenario));
+        let ticket1 = slot_machine::start_spin(&mut game, coin, &random, test_scenario::ctx(scenario));
         mint(user2, 200, scenario);
         let coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
-        let spin_id2 = slot_machine::spin(&mut game, coin, &random, test_scenario::ctx(scenario));
+        let ticket2 = slot_machine::start_spin(&mut game, coin, &random, test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, user0);
         advance_random(&mut random, test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, user2);
-        slot_machine::complete(spin_id1, &mut game, &random, test_scenario::ctx(scenario));
+        slot_machine::complete_spin(ticket1, &mut game, &random, test_scenario::ctx(scenario));
         assert!(slot_machine::get_balance(&game) == 1000, 1); // lost 100, but 200 are still locked
-        slot_machine::complete(spin_id2, &mut game, &random, test_scenario::ctx(scenario));
+        slot_machine::complete_spin(ticket2, &mut game, &random, test_scenario::ctx(scenario));
         assert!(slot_machine::get_balance(&game) == 1000, 1); // won 200
         // check that received the right amount
         test_scenario::next_tx(scenario, user2);
