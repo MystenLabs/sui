@@ -67,12 +67,12 @@ module bridge::committee {
         vector::append(&mut message_bytes, message::serialise_message(message));
 
         let threshold = 0;
-        while (vec_set::size(&seen_pub_key) < signature_counts) {
+        while (i < signature_counts) {
             let signature = vector::borrow(&signatures, i);
             let pubkey = ecdsa_k1::secp256k1_ecrecover(signature, &message_bytes, 0);
             // check duplicate
             assert!(!vec_set::contains(&seen_pub_key, &pubkey), EDuplicatedSignature);
-            // make sure pub key is part od the committee
+            // make sure pub key is part of the committee
             assert!(vec_map::contains(&self.pub_keys, &pubkey), EInvalidSignature);
             // get committee signature weight and check pubkey is part of the committee
             let weight = vec_map::get(&self.pub_keys, &pubkey);
