@@ -36,6 +36,25 @@ pub(crate) enum SuinsRegistrationDowncastError {
     Bcs(bcs::Error),
 }
 
+impl SuinsRegistration {
+    // Because the type of the SuinsRegistration object is not constant,
+    // we need to take it in as a param.
+    pub fn try_from(
+        move_object: &MoveObject,
+        tag: &StructTag,
+    ) -> Result<Self, SuinsRegistrationDowncastError> {
+        if !move_object.native.is_type(tag) {
+            return Err(SuinsRegistrationDowncastError::NotASuinsRegistration);
+        }
+
+        Ok(Self {
+            super_: move_object.clone(),
+            native: bcs::from_bytes(move_object.native.contents())
+                .map_err(SuinsRegistrationDowncastError::Bcs)?,
+        })
+    }
+}
+
 #[Object]
 impl SuinsRegistration {
     /// Domain name of the SuinsRegistration object
@@ -46,21 +65,5 @@ impl SuinsRegistration {
     /// Convert the SuinsRegistration object into a Move object
     async fn as_move_object(&self) -> &MoveObject {
         &self.super_
-    }
-}
-
-impl TryFrom<(&MoveObject, &StructTag)> for SuinsRegistration {
-    type Error = SuinsRegistrationDowncastError;
-
-    fn try_from((move_object, tag): (&MoveObject, &StructTag)) -> Result<Self, Self::Error> {
-        if !move_object.native.is_type(tag) {
-            return Err(SuinsRegistrationDowncastError::NotASuinsRegistration);
-        }
-
-        Ok(Self {
-            super_: move_object.clone(),
-            native: bcs::from_bytes(move_object.native.contents())
-                .map_err(SuinsRegistrationDowncastError::Bcs)?,
-        })
     }
 }

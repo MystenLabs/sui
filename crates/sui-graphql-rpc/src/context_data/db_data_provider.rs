@@ -1536,7 +1536,7 @@ impl PgManager {
                 ))
             })?;
 
-            let suins_registration = SuinsRegistration::try_from((&move_object, &struct_tag))
+            let suins_registration = SuinsRegistration::try_from(&move_object, &struct_tag)
                 .map_err(|_| {
                     Error::Internal(format!(
                         "Expected {} to be a suinsRegistration object, but it is not",
