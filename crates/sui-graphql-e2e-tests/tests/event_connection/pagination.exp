@@ -33,7 +33,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0xba9d8235634328c134d29355e51c81de5f36a748397cb756614091def06a0307::M1::EventA"
+              "repr": "0x98066eb7ecf6d012f6cb58b51879a46bf3d310e5db6623fc1777a14db679a0c8::M1::EventA"
             },
             "senders": [
               {
@@ -53,7 +53,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0xba9d8235634328c134d29355e51c81de5f36a748397cb756614091def06a0307::M1::EventA"
+              "repr": "0x98066eb7ecf6d012f6cb58b51879a46bf3d310e5db6623fc1777a14db679a0c8::M1::EventA"
             },
             "senders": [
               {
@@ -73,7 +73,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0xba9d8235634328c134d29355e51c81de5f36a748397cb756614091def06a0307::M1::EventA"
+              "repr": "0x98066eb7ecf6d012f6cb58b51879a46bf3d310e5db6623fc1777a14db679a0c8::M1::EventA"
             },
             "senders": [
               {
@@ -103,7 +103,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0xba9d8235634328c134d29355e51c81de5f36a748397cb756614091def06a0307::M1::EventA"
+              "repr": "0x98066eb7ecf6d012f6cb58b51879a46bf3d310e5db6623fc1777a14db679a0c8::M1::EventA"
             },
             "senders": [
               {
@@ -123,7 +123,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0xba9d8235634328c134d29355e51c81de5f36a748397cb756614091def06a0307::M1::EventA"
+              "repr": "0x98066eb7ecf6d012f6cb58b51879a46bf3d310e5db6623fc1777a14db679a0c8::M1::EventA"
             },
             "senders": [
               {
@@ -153,7 +153,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0xba9d8235634328c134d29355e51c81de5f36a748397cb756614091def06a0307::M1::EventA"
+              "repr": "0x98066eb7ecf6d012f6cb58b51879a46bf3d310e5db6623fc1777a14db679a0c8::M1::EventA"
             },
             "senders": [
               {
@@ -173,7 +173,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0xba9d8235634328c134d29355e51c81de5f36a748397cb756614091def06a0307::M1::EventA"
+              "repr": "0x98066eb7ecf6d012f6cb58b51879a46bf3d310e5db6623fc1777a14db679a0c8::M1::EventA"
             },
             "senders": [
               {
