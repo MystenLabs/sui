@@ -392,6 +392,28 @@ impl IndexerReader {
         Ok(system_state)
     }
 
+    /// Retrieve the system state data for the given epoch. If no epoch is given,
+    /// it will retrieve the last known epoch's data and return the system state.
+    pub fn get_epoch_sui_system_state(
+        &self,
+        epoch: Option<EpochId>,
+    ) -> Result<SuiSystemStateSummary, IndexerError> {
+        let stored_epoch = self.get_epoch_info_from_db(epoch)?;
+        let stored_epoch = match stored_epoch {
+            Some(stored_epoch) => stored_epoch,
+            None => return Err(IndexerError::InvalidArgumentError("Invalid epoch".into())),
+        };
+
+        let system_state: SuiSystemStateSummary = bcs::from_bytes(&stored_epoch.system_state)
+            .map_err(|_| {
+                IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "Failed to deserialize `system_state` for epoch {:?}",
+                    epoch,
+                ))
+            })?;
+        Ok(system_state)
+    }
+
     pub fn get_checkpoint_from_db(
         &self,
         checkpoint_id: CheckpointId,

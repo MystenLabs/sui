@@ -33,6 +33,39 @@ pub struct StoredEpochInfo {
     pub epoch_commitments: Option<Vec<u8>>,
 }
 
+#[derive(Queryable)]
+pub struct QueryableEpochInfo {
+    pub epoch: i64,
+    pub first_checkpoint_id: i64,
+    pub epoch_start_timestamp: i64,
+    pub reference_gas_price: i64,
+    pub protocol_version: i64,
+    pub total_stake: i64,
+    pub storage_fund_balance: i64,
+    pub epoch_total_transactions: Option<i64>,
+    pub last_checkpoint_id: Option<i64>,
+    pub epoch_end_timestamp: Option<i64>,
+    pub storage_fund_reinvestment: Option<i64>,
+    pub storage_charge: Option<i64>,
+    pub storage_rebate: Option<i64>,
+    pub stake_subsidy_amount: Option<i64>,
+    pub total_gas_fees: Option<i64>,
+    pub total_stake_rewards_distributed: Option<i64>,
+    pub leftover_storage_fund_inflow: Option<i64>,
+    pub epoch_commitments: Option<Vec<u8>>,
+}
+
+#[derive(Queryable)]
+pub struct QueryableEpochSystemState {
+    pub epoch: i64,
+    pub system_state: Vec<u8>,
+}
+
+#[derive(Queryable)]
+pub struct QueryableEpochId {
+    pub id: i64,
+}
+
 impl StoredEpochInfo {
     pub fn from_epoch_beginning_info(e: &IndexedEpochInfo) -> Self {
         Self {
@@ -125,15 +158,4 @@ impl TryFrom<StoredEpochInfo> for EpochInfo {
             reference_gas_price: Some(value.reference_gas_price as u64),
         })
     }
-}
-
-#[derive(Queryable)]
-pub struct EpochId {
-    pub id: i64,
-}
-
-#[derive(Queryable)]
-pub struct EpochSystemState {
-    pub epoch: i64,
-    pub system_state: Vec<u8>,
 }
