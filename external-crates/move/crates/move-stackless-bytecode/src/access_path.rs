@@ -25,7 +25,6 @@
 use crate::dataflow_domains::{AbstractDomain, SetDomain};
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 use move_model::{
-    ast::TempIndex,
     model::{FunctionEnv, GlobalEnv, ModuleId, QualifiedId, StructId},
     ty::{PrimitiveType, Type, TypeDisplayContext},
 };

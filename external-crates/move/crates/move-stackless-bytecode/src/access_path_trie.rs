@@ -14,7 +14,6 @@ use crate::{
 use im::ordmap::Entry;
 use move_core_types::language_storage::TypeTag;
 use move_model::{
-    ast::TempIndex,
     model::{FunctionEnv, GlobalEnv},
     ty::Type,
 };

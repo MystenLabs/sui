@@ -16,16 +16,15 @@ use itertools::Itertools;
 use log::warn;
 use num::{BigUint, Num};
 
-use builder::module_builder::ModuleBuilder;
 use move_binary_format::{
     access::ModuleAccess,
     file_format::{CompiledModule, FunctionDefinitionIndex, StructDefinitionIndex},
 };
 use move_compiler::{
     self,
-    compiled_unit::{self, AnnotatedCompiledUnit},
+    compiled_unit::{self},
     diagnostics::{Diagnostics, WarningFilters},
-    expansion::ast::{self as E, ModuleIdent, ModuleIdent_},
+    expansion::ast::{ModuleIdent, ModuleIdent_},
     parser::ast::{self as P},
     shared::{parse_named_address, unique_map::UniqueMap, NumericalAddress, PackagePaths},
     typing::ast::{self as T},
@@ -36,13 +35,11 @@ use move_symbol_pool::Symbol as MoveSymbol;
 
 use crate::{
     ast::ModuleName,
-    builder::model_builder::ModelBuilder,
     model::{FunId, FunctionData, GlobalEnv, Loc, ModuleData, ModuleId, StructId},
     options::ModelBuilderOptions,
 };
 
 pub mod ast;
-mod builder;
 pub mod code_writer;
 pub mod exp_generator;
 pub mod model;
@@ -231,16 +228,6 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     }
 
     // Step 3: selective compilation.
-    let expansion_ast = {
-        let E::Program { modules } = expansion_ast;
-        let modules = modules.filter_map(|mident, mut mdef| {
-            visited_modules.contains(&mident.value).then(|| {
-                mdef.is_source_module = true;
-                mdef
-            })
-        });
-        E::Program { modules }
-    };
     let typing_ast = {
         let T::Program { info, inner } = typing_ast;
         let T::Program_ { modules } = inner;
@@ -279,9 +266,6 @@ pub fn run_model_builder_with_options_and_compilation_flags<
         return Ok(env);
     }
 
-    // Now that it is known that the program has no errors, run the spec checker on verified units
-    // plus expanded AST. This will populate the environment including any errors.
-    run_spec_checker(&mut env, units, expansion_ast);
     Ok(env)
 }
 
@@ -364,58 +348,6 @@ fn add_move_lang_diagnostics(env: &mut GlobalEnv, diags: Diagnostics) {
             )
             .with_notes(notes);
         env.add_diag(diag);
-    }
-}
-
-#[allow(deprecated)]
-fn run_spec_checker(env: &mut GlobalEnv, units: Vec<AnnotatedCompiledUnit>, mut eprog: E::Program) {
-    let mut builder = ModelBuilder::new(env);
-    // Merge the compiled units with the expanded program, preserving the order of the compiled
-    // units which is topological w.r.t. use relation.
-    let modules = units
-        .into_iter()
-        .flat_map(|unit| {
-            let module_ident = unit.module_ident();
-            let expanded_module = match eprog.modules.remove(&module_ident) {
-                Some(m) => m,
-                None => {
-                    warn!(
-                        "[internal] cannot associate bytecode module `{}` with AST",
-                        module_ident
-                    );
-                    return None;
-                }
-            };
-            Some((
-                module_ident,
-                expanded_module,
-                unit.named_module.module,
-                unit.named_module.source_map,
-                unit.function_infos,
-            ))
-        })
-        .enumerate();
-    for (module_count, (module_id, expanded_module, compiled_module, source_map, function_infos)) in
-        modules
-    {
-        let loc = builder.to_loc(&expanded_module.loc);
-        let addr_bytes = builder.resolve_address(&loc, &module_id.value.address);
-        let module_name = ModuleName::from_address_bytes_and_name(
-            addr_bytes,
-            builder
-                .env
-                .symbol_pool()
-                .make(&module_id.value.module.0.value),
-        );
-        let module_id = ModuleId::new(module_count);
-        let mut module_translator = ModuleBuilder::new(&mut builder, module_id, module_name);
-        module_translator.translate(
-            loc,
-            expanded_module,
-            compiled_module,
-            source_map,
-            function_infos,
-        );
     }
 }
 
