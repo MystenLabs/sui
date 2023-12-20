@@ -4,7 +4,7 @@
 use crate::command_line::compiler::Visitor;
 use crate::diagnostics::WarningFilters;
 use crate::expansion::ast::ModuleIdent;
-use crate::parser::ast::FunctionName;
+use crate::parser::ast::{ConstantName, FunctionName};
 use crate::shared::{program_info::TypingProgramInfo, CompilationEnv};
 use crate::typing::ast as T;
 
@@ -69,12 +69,40 @@ pub trait TypingVisitorContext {
                 continue;
             }
 
+            for (constant_name, cdef) in mdef.constants.key_cloned_iter_mut() {
+                self.visit_constant(mident, constant_name, cdef)
+            }
             for (function_name, fdef) in mdef.functions.key_cloned_iter_mut() {
                 self.visit_function(mident, function_name, fdef)
             }
 
             self.pop_warning_filter_scope();
         }
+    }
+
+    // TODO struct and type visiting
+
+    fn visit_constant_custom(
+        &mut self,
+        _module: ModuleIdent,
+        _constant_name: ConstantName,
+        _cdef: &mut T::Constant,
+    ) -> bool {
+        false
+    }
+    fn visit_constant(
+        &mut self,
+        module: ModuleIdent,
+        constant_name: ConstantName,
+        cdef: &mut T::Constant,
+    ) {
+        self.add_warning_filter_scope(cdef.warning_filter.clone());
+        if self.visit_constant_custom(module, constant_name, cdef) {
+            self.pop_warning_filter_scope();
+            return;
+        }
+        self.visit_exp(&mut cdef.value);
+        self.pop_warning_filter_scope();
     }
 
     fn visit_function_custom(

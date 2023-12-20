@@ -13,7 +13,7 @@ import { trimStdLibPrefix } from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
 import TransactionBlocksForAddress, {
 	FILTER_VALUES,
-} from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
+} from '~/components/TransactionBlocksForAddress';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
 import { TabHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
 
@@ -116,7 +116,7 @@ function PkgView({ data }: { data: DataType }) {
 						<TransactionBlocksForAddress
 							address={viewedData.id}
 							filter={FILTER_VALUES.INPUT}
-							isObject
+							header="Transaction Blocks"
 						/>
 					</ErrorBoundary>
 				</div>

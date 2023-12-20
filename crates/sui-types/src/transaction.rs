@@ -22,8 +22,9 @@ use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
 use crate::{
-    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
+    SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID,
+    SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
     SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use enum_dispatch::enum_dispatch;
@@ -32,6 +33,7 @@ use itertools::Either;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
+use nonempty::{nonempty, NonEmpty};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
@@ -89,6 +91,11 @@ impl CallArg {
         initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
         mutable: true,
     });
+    pub const AUTHENTICATOR_MUT: Self = Self::Object(ObjectArg::SharedObject {
+        id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+        initial_shared_version: SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
+        mutable: true,
+    });
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
@@ -109,42 +116,45 @@ pub enum ObjectArg {
 fn type_tag_validity_check(
     tag: &TypeTag,
     config: &ProtocolConfig,
-    depth: u32,
-    starting_count: usize,
-) -> UserInputResult<usize> {
-    fp_ensure!(
-        depth < config.max_type_argument_depth(),
-        UserInputError::SizeLimitExceeded {
-            limit: "maximum type argument depth in a call transaction".to_string(),
-            value: config.max_type_argument_depth().to_string()
+    starting_count: &mut usize,
+) -> UserInputResult<()> {
+    let mut stack = vec![(tag, 1)];
+    while let Some((tag, depth)) = stack.pop() {
+        *starting_count += 1;
+        fp_ensure!(
+            *starting_count < config.max_type_arguments() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum type arguments in a call transaction".to_string(),
+                value: config.max_type_arguments().to_string()
+            }
+        );
+        fp_ensure!(
+            depth < config.max_type_argument_depth(),
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum type argument depth in a call transaction".to_string(),
+                value: config.max_type_argument_depth().to_string()
+            }
+        );
+        match tag {
+            TypeTag::Bool
+            | TypeTag::U8
+            | TypeTag::U64
+            | TypeTag::U128
+            | TypeTag::Address
+            | TypeTag::Signer
+            | TypeTag::U16
+            | TypeTag::U32
+            | TypeTag::U256 => (),
+            TypeTag::Vector(t) => {
+                stack.push((t, depth + 1));
+            }
+            TypeTag::Struct(s) => {
+                let next_depth = depth + 1;
+                stack.extend(s.type_params.iter().map(|t| (t, next_depth)));
+            }
         }
-    );
-    let count = 1 + match tag {
-        TypeTag::Bool
-        | TypeTag::U8
-        | TypeTag::U64
-        | TypeTag::U128
-        | TypeTag::Address
-        | TypeTag::Signer
-        | TypeTag::U16
-        | TypeTag::U32
-        | TypeTag::U256 => 0,
-        TypeTag::Vector(t) => {
-            type_tag_validity_check(t.as_ref(), config, depth + 1, starting_count + 1)?
-        }
-        TypeTag::Struct(s) => s.type_params.iter().try_fold(0, |accum, t| {
-            let count = accum + type_tag_validity_check(t, config, depth + 1, starting_count + 1)?;
-            fp_ensure!(
-                count + starting_count < config.max_type_arguments() as usize,
-                UserInputError::SizeLimitExceeded {
-                    limit: "maximum type arguments in a call transaction".to_string(),
-                    value: config.max_type_arguments().to_string()
-                }
-            );
-            Ok(count)
-        })?,
-    };
-    Ok(count)
+    }
+    Ok(())
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -714,15 +724,8 @@ impl ProgrammableMoveCall {
         ));
         fp_ensure!(!is_blocked, UserInputError::BlockedMoveFunction);
         let mut type_arguments_count = 0;
-        for tag in self.type_arguments.iter() {
-            type_arguments_count += type_tag_validity_check(tag, config, 1, type_arguments_count)?;
-            fp_ensure!(
-                type_arguments_count < config.max_type_arguments() as usize,
-                UserInputError::SizeLimitExceeded {
-                    limit: "maximum type arguments in a call transaction".to_string(),
-                    value: config.max_type_arguments().to_string()
-                }
-            );
+        for tag in &self.type_arguments {
+            type_tag_validity_check(tag, config, &mut type_arguments_count)?;
         }
         fp_ensure!(
             self.arguments.len() < config.max_arguments() as usize,
@@ -814,14 +817,8 @@ impl Command {
                     UserInputError::EmptyCommandInput
                 );
                 if let Some(ty) = ty_opt {
-                    let type_arguments_count = type_tag_validity_check(ty, config, 1, 0)?;
-                    fp_ensure!(
-                        type_arguments_count < config.max_type_arguments() as usize,
-                        UserInputError::SizeLimitExceeded {
-                            limit: "maximum type arguments in a call transaction".to_string(),
-                            value: config.max_type_arguments().to_string()
-                        }
-                    );
+                    let mut type_arguments_count = 0;
+                    type_tag_validity_check(ty, config, &mut type_arguments_count)?;
                 }
                 fp_ensure!(
                     args.len() < config.max_arguments() as usize,
@@ -832,18 +829,7 @@ impl Command {
                     }
                 );
             }
-            Command::Publish(modules, _dep_ids) => {
-                fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput);
-                fp_ensure!(
-                    modules.len() < config.max_modules_in_publish() as usize,
-                    UserInputError::SizeLimitExceeded {
-                        limit: "maximum modules in a programmable transaction publish command"
-                            .to_string(),
-                        value: config.max_modules_in_publish().to_string()
-                    }
-                );
-            }
-            Command::Upgrade(modules, _, _, _) => {
+            Command::Publish(modules, _) | Command::Upgrade(modules, _, _, _) => {
                 fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
                     modules.len() < config.max_modules_in_publish() as usize,
@@ -914,18 +900,22 @@ impl ProgrammableTransaction {
                 value: config.max_programmable_tx_commands().to_string()
             }
         );
+        let total_inputs = self.input_objects()?.len() + self.receiving_objects().len();
+        fp_ensure!(
+            total_inputs <= config.max_input_objects() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum input + receiving objects in a transaction".to_string(),
+                value: config.max_input_objects().to_string()
+            }
+        );
         for input in inputs {
             input.validity_check(config)?
         }
-        let mut publish_count = 0u64;
-        for command in commands {
-            command.validity_check(config)?;
-            match command {
-                Command::Publish(_, _) | Command::Upgrade(_, _, _, _) => publish_count += 1,
-                _ => (),
-            }
-        }
         if let Some(max_publish_commands) = config.max_publish_or_upgrade_per_ptb_as_option() {
+            let publish_count = commands
+                .iter()
+                .filter(|c| matches!(c, Command::Publish(_, _) | Command::Upgrade(_, _, _, _)))
+                .count() as u64;
             fp_ensure!(
                 publish_count <= max_publish_commands,
                 UserInputError::MaxPublishCountExceeded {
@@ -934,6 +924,10 @@ impl ProgrammableTransaction {
                 }
             );
         }
+        for command in commands {
+            command.validity_check(config)?;
+        }
+
         Ok(())
     }
 
@@ -1101,16 +1095,17 @@ impl TransactionKind {
     }
 
     pub fn is_system_tx(&self) -> bool {
-        matches!(
-            self,
+        // Keep this as an exhaustive match so that we can't forget to update it.
+        match self {
             TransactionKind::ChangeEpoch(_)
-                | TransactionKind::Genesis(_)
-                | TransactionKind::ConsensusCommitPrologue(_)
-                | TransactionKind::ConsensusCommitPrologueV2(_)
-                | TransactionKind::AuthenticatorStateUpdate(_)
-                | TransactionKind::RandomnessStateUpdate(_)
-                | TransactionKind::EndOfEpochTransaction(_)
-        )
+            | TransactionKind::Genesis(_)
+            | TransactionKind::ConsensusCommitPrologue(_)
+            | TransactionKind::ConsensusCommitPrologueV2(_)
+            | TransactionKind::AuthenticatorStateUpdate(_)
+            | TransactionKind::RandomnessStateUpdate(_)
+            | TransactionKind::EndOfEpochTransaction(_) => true,
+            TransactionKind::ProgrammableTransaction(_) => false,
+        }
     }
 
     pub fn is_end_of_epoch_tx(&self) -> bool {
@@ -1263,6 +1258,8 @@ impl TransactionKind {
     pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         match self {
             TransactionKind::ProgrammableTransaction(p) => p.validity_check(config)?,
+            // All transactiond kinds below are assumed to be system,
+            // and no validity or limit checks are performed.
             TransactionKind::ChangeEpoch(_)
             | TransactionKind::Genesis(_)
             | TransactionKind::ConsensusCommitPrologue(_)
@@ -1821,7 +1818,7 @@ pub trait TransactionDataAPI {
     fn into_kind(self) -> TransactionKind;
 
     /// Transaction signer and Gas owner
-    fn signers(&self) -> Vec<SuiAddress>;
+    fn signers(&self) -> NonEmpty<SuiAddress>;
 
     fn gas_data(&self) -> &GasData;
 
@@ -1888,8 +1885,8 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     /// Transaction signer and Gas owner
-    fn signers(&self) -> Vec<SuiAddress> {
-        let mut signers = vec![self.sender];
+    fn signers(&self) -> NonEmpty<SuiAddress> {
+        let mut signers = nonempty![self.sender];
         if self.gas_owner() != self.sender {
             signers.push(self.gas_owner());
         }
@@ -2132,6 +2129,41 @@ impl SenderSignedData {
         let hash = digest.finalize();
         SenderSignedDataDigest::new(hash.into())
     }
+
+    /// Perform cheap validity checks on the sender signed transaction, including its size,
+    /// input count, command count, etc.
+    pub fn validity_check(&self, config: &ProtocolConfig) -> SuiResult {
+        // Enforce overall transaction size limit.
+        let tx_size =
+            bcs::serialized_size(self).map_err(|e| SuiError::TransactionSerializationError {
+                error: e.to_string(),
+            })?;
+        let max_tx_size_bytes = config.max_tx_size_bytes();
+
+        fp_ensure!(
+            tx_size as u64 <= max_tx_size_bytes,
+            SuiError::UserInputError {
+                error: UserInputError::SizeLimitExceeded {
+                    limit: format!(
+                        "serialized transaction size exceeded maximum of {max_tx_size_bytes}"
+                    ),
+                    value: tx_size.to_string(),
+                }
+            }
+        );
+
+        self.verify_user_input()?;
+
+        let tx_data = self.transaction_data();
+        tx_data
+            .check_version_supported(config)
+            .map_err(Into::<SuiError>::into)?;
+        tx_data
+            .validity_check(config)
+            .map_err(Into::<SuiError>::into)?;
+
+        Ok(())
+    }
 }
 
 impl VersionedProtocolMessage for SenderSignedData {
@@ -2235,12 +2267,7 @@ impl AuthenticatedMessage for SenderSignedData {
         for (signer, signature) in
             self.get_signer_sig_mapping(verify_params.verify_legacy_zklogin_address)?
         {
-            signature.verify_uncached_checks(
-                self.intent_message(),
-                signer,
-                verify_params,
-                signature.check_author(),
-            )?;
+            signature.verify_uncached_checks(self.intent_message(), signer, verify_params)?;
         }
         Ok(())
     }
@@ -2282,12 +2309,7 @@ impl AuthenticatedMessage for SenderSignedData {
 
         // Verify all present signatures.
         for (signer, signature) in present_sigs {
-            signature.verify_claims(
-                self.intent_message(),
-                signer,
-                verify_params,
-                signature.check_author(),
-            )?;
+            signature.verify_claims(self.intent_message(), signer, verify_params)?;
         }
         Ok(())
     }
@@ -2327,24 +2349,21 @@ impl<S> Envelope<SenderSignedData, S> {
 impl Transaction {
     pub fn from_data_and_signer(
         data: TransactionData,
-        intent: Intent,
         signers: Vec<&dyn Signer<Signature>>,
     ) -> Self {
-        let intent_msg = IntentMessage::new(intent.clone(), data.clone());
-        let mut signatures = Vec::with_capacity(signers.len());
-        for signer in signers {
-            signatures.push(Signature::new_secure(&intent_msg, signer));
-        }
-        Self::from_data(data, intent, signatures)
+        let signatures = {
+            let intent_msg = IntentMessage::new(Intent::sui_transaction(), &data);
+            signers
+                .into_iter()
+                .map(|s| Signature::new_secure(&intent_msg, s))
+                .collect()
+        };
+        Self::from_data(data, signatures)
     }
 
     // TODO: Rename this function and above to make it clearer.
-    pub fn from_data(data: TransactionData, intent: Intent, signatures: Vec<Signature>) -> Self {
-        Self::from_generic_sig_data(
-            data,
-            intent,
-            signatures.into_iter().map(|s| s.into()).collect(),
-        )
+    pub fn from_data(data: TransactionData, signatures: Vec<Signature>) -> Self {
+        Self::from_generic_sig_data(data, signatures.into_iter().map(|s| s.into()).collect())
     }
 
     pub fn signature_from_signer(
@@ -2356,12 +2375,12 @@ impl Transaction {
         Signature::new_secure(&intent_msg, signer)
     }
 
-    pub fn from_generic_sig_data(
-        data: TransactionData,
-        intent: Intent,
-        signatures: Vec<GenericSignature>,
-    ) -> Self {
-        Self::new(SenderSignedData::new(data, intent, signatures))
+    pub fn from_generic_sig_data(data: TransactionData, signatures: Vec<GenericSignature>) -> Self {
+        Self::new(SenderSignedData::new(
+            data,
+            Intent::sui_transaction(),
+            signatures,
+        ))
     }
 
     /// Returns the Base64 encoded tx_bytes

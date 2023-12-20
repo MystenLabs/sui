@@ -1053,6 +1053,7 @@ module sui_system::sui_system_state_inner {
         validator_set::active_validator_addresses(validator_set)
     }
 
+    #[lint_allow(self_transfer)]
     /// Extract required Balance from vector of Coin<SUI>, transfer the remainder back to sender.
     fun extract_coin_balance(coins: vector<Coin<SUI>>, amount: option::Option<u64>, ctx: &mut TxContext): Balance<SUI> {
         let merged_coin = vector::pop_back(&mut coins);

@@ -31,14 +31,12 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/C",
                 ),
-                version: None,
                 resolver: None,
             },
             "D": Package {
                 kind: Local(
                     "deps_only/D",
                 ),
-                version: None,
                 resolver: None,
             },
         },
@@ -47,7 +45,7 @@ ResolvedGraph {
             "D",
             "test",
         },
-        manifest_digest: "2108F9760A5B783CE76062DC34B8D077F9EEC6D3422472558BE25966949EEC35",
+        manifest_digest: "16BB782949D226228DAF21045B45585AD7D7C8F6468D6ED504C0B5302C9CA861",
         deps_digest: "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600",
     },
     build_options: BuildConfig {
@@ -76,11 +74,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "C",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -110,11 +103,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "D",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -144,11 +132,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "test",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -177,7 +160,6 @@ ResolvedGraph {
                                     ),
                                 },
                             ),
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -194,7 +176,6 @@ ResolvedGraph {
                                     ),
                                 },
                             ),
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },

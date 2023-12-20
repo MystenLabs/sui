@@ -77,6 +77,7 @@ impl ExtensionFactory for QueryLimitsChecker {
     }
 }
 
+#[derive(Debug)]
 struct ComponentCost {
     pub num_nodes: u32,
     pub depth: u32,
@@ -148,14 +149,24 @@ impl Extension for QueryLimitsChecker {
         };
         let mut max_depth_seen = 0;
 
-        for (_name, oper) in doc.operations.iter() {
+        for (count, (_name, oper)) in doc.operations.iter().enumerate() {
+            let sel_set = &oper.node.selection_set;
+
+            // If the query is pure introspection, we don't need to check the limits.
+            // Pure introspection queries are queries that only have one operation with one field
+            // and that field is a `__schema` query
+            if (count == 0) && (sel_set.node.items.len() == 1) {
+                if let Some(node) = sel_set.node.items.first() {
+                    if let Selection::Field(field) = &node.node {
+                        if field.node.name.node == "__schema" {
+                            continue;
+                        }
+                    }
+                }
+            }
+
             running_costs.depth = 0;
-            self.analyze_selection_set(
-                &cfg.limits,
-                &doc.fragments,
-                &oper.node.selection_set,
-                &mut running_costs,
-            )?;
+            self.analyze_selection_set(&cfg.limits, &doc.fragments, sel_set, &mut running_costs)?;
             max_depth_seen = max_depth_seen.max(running_costs.depth);
         }
 

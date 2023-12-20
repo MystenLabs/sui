@@ -11,8 +11,8 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
 
-use sui_json_rpc::api::WriteApiServer;
 use sui_json_rpc::SuiRpcModule;
+use sui_json_rpc_api::WriteApiServer;
 use sui_json_rpc_types::{
     DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
@@ -68,6 +68,6 @@ impl SuiRpcModule for WriteApiV2 {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_json_rpc::api::WriteApiOpenRpc::module_doc()
+        sui_json_rpc_api::WriteApiOpenRpc::module_doc()
     }
 }

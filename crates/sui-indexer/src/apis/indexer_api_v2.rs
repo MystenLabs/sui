@@ -8,9 +8,9 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::types::SubscriptionEmptyError;
 use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::{RpcModule, SubscriptionSink};
-use sui_json_rpc::api::{cap_page_limit, IndexerApiServer};
 use sui_json_rpc::name_service::{Domain, NameRecord, NameServiceConfig};
 use sui_json_rpc::SuiRpcModule;
+use sui_json_rpc_api::{cap_page_limit, IndexerApiServer};
 use sui_json_rpc_types::{
     DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiObjectResponse,
     SuiObjectResponseQuery, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
@@ -363,6 +363,6 @@ impl SuiRpcModule for IndexerApiV2 {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_json_rpc::api::IndexerApiOpenRpc::module_doc()
+        sui_json_rpc_api::IndexerApiOpenRpc::module_doc()
     }
 }

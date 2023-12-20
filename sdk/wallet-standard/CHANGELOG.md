@@ -1,5 +1,17 @@
 # @mysten/wallet-standard
 
+## 0.9.0
+
+### Minor Changes
+
+- 165ad6b21d: Introduce new optional `id` property, which wallets can specify as a unique identifier, separate from the wallet name.
+
+### Patch Changes
+
+- dd362ec1d6: Update docs url to sdk.mystenlabs.com
+- Updated dependencies [dd362ec1d6]
+  - @mysten/sui.js@0.48.1
+
 ## 0.8.11
 
 ### Patch Changes

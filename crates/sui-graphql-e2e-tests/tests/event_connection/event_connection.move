@@ -124,7 +124,7 @@ module Test::M2 {
 //# run-graphql --variables A Test
 {
   eventConnection(
-    filter: {sender: $A, eventPackage: $Test}
+    filter: {sender: $A, eventType: $Test}
   ) {
     nodes {
       sendingModule {
@@ -142,10 +142,10 @@ module Test::M2 {
   }
 }
 
-//# run-graphql --variables A Test
+//# run-graphql --variables A
 {
   eventConnection(
-    filter: {sender: $A, eventPackage: $Test, eventModule: "M1"}
+    filter: {sender: $A, eventType: "@{Test}::M1"}
   ) {
     nodes {
       sendingModule {
@@ -163,10 +163,10 @@ module Test::M2 {
   }
 }
 
-//# run-graphql --variables A Test
+//# run-graphql --variables A
 {
   eventConnection(
-    filter: {sender: $A, eventPackage: $Test, eventModule: "M1", eventType: "EventA"}
+    filter: {sender: $A, eventType: "@{Test}::M1::EventA"}
   ) {
     nodes {
       sendingModule {
@@ -184,10 +184,10 @@ module Test::M2 {
   }
 }
 
-//# run-graphql --variables A Test
+//# run-graphql --variables A
 {
   eventConnection(
-    filter: {sender: $A, eventPackage: $Test, eventModule: "M1", eventType: "EventB"}
+    filter: {sender: $A, eventType: "@{Test}::M1::EventB"}
   ) {
     nodes {
       sendingModule {
@@ -205,10 +205,52 @@ module Test::M2 {
   }
 }
 
-//# run-graphql --variables A Test
+//# run-graphql --variables A
 {
   eventConnection(
-    filter: {sender: $A, eventPackage: $Test, eventModule: "M1", eventType: "EventB<"}
+    filter: {sender: $A, eventType: "@{Test}::M1::EventB<"}
+  ) {
+    nodes {
+      sendingModule {
+        name
+      }
+      type {
+        repr
+      }
+      senders {
+        address
+      }
+      json
+      bcs
+    }
+  }
+}
+
+//# run-graphql --variables A
+{
+  eventConnection(
+    filter: {sender: $A, eventType: "::M1"}
+  ) {
+    nodes {
+      sendingModule {
+        name
+      }
+      type {
+        repr
+      }
+      senders {
+        address
+      }
+      json
+      bcs
+    }
+  }
+}
+
+//# run-graphql --variables A
+{
+  eventConnection(
+    filter: {sender: $A, eventType: "@{Test}::"}
   ) {
     nodes {
       sendingModule {

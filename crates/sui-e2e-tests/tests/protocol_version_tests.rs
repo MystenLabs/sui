@@ -62,11 +62,12 @@ mod sim_only_tests {
     use std::sync::Arc;
     use sui_core::authority::framework_injection;
     use sui_framework::BuiltInFramework;
-    use sui_json_rpc::api::WriteApiClient;
+    use sui_json_rpc_api::WriteApiClient;
     use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
     use sui_macros::*;
     use sui_move_build::{BuildConfig, CompiledPackage};
     use sui_protocol_config::SupportedProtocolVersions;
+    use sui_types::base_types::ConciseableName;
     use sui_types::base_types::{ObjectID, ObjectRef};
     use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
     use sui_types::id::ID;
@@ -982,7 +983,7 @@ mod sim_only_tests {
     fn sui_system_package_object(fixture: &str) -> Object {
         Object::new_package(
             &sui_system_modules(fixture),
-            TransactionDigest::genesis(),
+            TransactionDigest::genesis_marker(),
             u64::MAX,
             &[
                 BuiltInFramework::get_package_by_id(&MOVE_STDLIB_PACKAGE_ID).genesis_move_package(),

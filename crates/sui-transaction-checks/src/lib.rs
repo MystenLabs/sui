@@ -10,14 +10,14 @@ mod checked {
     use std::collections::{BTreeMap, HashSet};
     use std::sync::Arc;
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::base_types::ObjectRef;
+    use sui_types::base_types::{ObjectID, ObjectRef};
     use sui_types::error::{UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_types::transaction::{
         CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
         ReceivingObjectReadResult, ReceivingObjects, TransactionData, TransactionDataAPI,
-        TransactionKind, VersionedProtocolMessage,
+        TransactionKind, VersionedProtocolMessage as _,
     };
     use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
@@ -74,21 +74,17 @@ mod checked {
         receiving_objects: ReceivingObjects,
         metrics: &Arc<BytecodeVerifierMetrics>,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
-        transaction.check_version_supported(protocol_config)?;
-        transaction.validity_check(protocol_config)?;
-        // Runs verifier, which could be expensive.
-        check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
-
-        check_input_objects(&input_objects, protocol_config)?;
-        let gas_status = get_gas_status(
-            &input_objects,
-            transaction.gas(),
+        let gas_status = check_transaction_input_inner(
             protocol_config,
             reference_gas_price,
             transaction,
+            &input_objects,
+            &[],
         )?;
-        check_objects(transaction, &input_objects)?;
         check_receiving_objects(&input_objects, &receiving_objects)?;
+        // Runs verifier, which could be expensive.
+        check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
+
         Ok((gas_status, input_objects.into_checked()))
     }
 
@@ -101,26 +97,27 @@ mod checked {
         gas_object: Object,
         metrics: &Arc<BytecodeVerifierMetrics>,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
-        transaction.check_version_supported(protocol_config)?;
-        transaction.validity_check_no_gas_check(protocol_config)?;
-        check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
-        check_input_objects(&input_objects, protocol_config)?;
-
         let gas_object_ref = gas_object.compute_object_reference();
         input_objects.push(ObjectReadResult::new_from_gas_object(&gas_object));
 
-        let gas_status = get_gas_status(
-            &input_objects,
-            &[gas_object_ref],
+        let gas_status = check_transaction_input_inner(
             protocol_config,
             reference_gas_price,
             transaction,
+            &input_objects,
+            &[gas_object_ref],
         )?;
-        check_objects(transaction, &input_objects)?;
         check_receiving_objects(&input_objects, &receiving_objects)?;
+        // Runs verifier, which could be expensive.
+        check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
+
         Ok((gas_status, input_objects.into_checked()))
     }
 
+    // Since the purpose of this function is to audit certified transactions,
+    // the checks here should be a strict subset of the checks in check_transaction_input().
+    // For checks not performed in this function but in check_transaction_input(),
+    // we should add a comment calling out the difference.
     #[instrument(level = "trace", skip_all)]
     pub fn check_certificate_input(
         cert: &VerifiedExecutableTransaction,
@@ -128,28 +125,17 @@ mod checked {
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
-        // This should not happen - validators should not have signed the txn in the first place.
-        assert!(
-            cert.data()
-                .transaction_data()
-                .check_version_supported(protocol_config)
-                .is_ok(),
-            "Certificate formed with unsupported message version {:?}",
-            cert.message_version(),
-        );
-
-        let tx_data = &cert.data().intent_message().value;
-
-        check_input_objects(&input_objects, protocol_config)?;
-        let gas_status = get_gas_status(
-            &input_objects,
-            tx_data.gas(),
+        let transaction = cert.data().transaction_data();
+        let gas_status = check_transaction_input_inner(
             protocol_config,
             reference_gas_price,
-            tx_data,
+            transaction,
+            &input_objects,
+            &[],
         )?;
-        check_objects(tx_data, &input_objects)?;
         // NB: We do not check receiving objects when executing. Only at signing time do we check.
+        // NB: move verifier is only checked at signing time, not at execution.
+
         Ok((gas_status, input_objects.into_checked()))
     }
 
@@ -172,7 +158,6 @@ mod checked {
             ))
             .into());
         }
-        check_input_objects(&input_objects, config)?;
         let mut used_objects: HashSet<SuiAddress> = HashSet::new();
         for input_object in input_objects.iter() {
             let Some(object) = input_object.as_object() else {
@@ -197,6 +182,37 @@ mod checked {
         ));
 
         Ok((gas_object_ref, input_objects.into_checked()))
+    }
+
+    // Common checks performed for transactions and certificates.
+    fn check_transaction_input_inner(
+        protocol_config: &ProtocolConfig,
+        reference_gas_price: u64,
+        transaction: &TransactionData,
+        input_objects: &InputObjects,
+        // Overrides the gas objects in the transaction.
+        gas_override: &[ObjectRef],
+    ) -> SuiResult<SuiGasStatus> {
+        // Cheap validity checks that is ok to run multiple times during processing.
+        transaction.check_version_supported(protocol_config)?;
+        let gas = if gas_override.is_empty() {
+            transaction.validity_check(protocol_config)?;
+            transaction.gas()
+        } else {
+            transaction.validity_check_no_gas_check(protocol_config)?;
+            gas_override
+        };
+
+        let gas_status = get_gas_status(
+            input_objects,
+            gas,
+            protocol_config,
+            reference_gas_price,
+            transaction,
+        )?;
+        check_objects(transaction, input_objects)?;
+
+        Ok(gas_status)
     }
 
     fn check_receiving_objects(
@@ -307,22 +323,6 @@ mod checked {
         Ok(())
     }
 
-    pub fn check_input_objects(
-        objects: &InputObjects,
-        protocol_config: &ProtocolConfig,
-    ) -> SuiResult {
-        fp_ensure!(
-            objects.len() <= protocol_config.max_input_objects() as usize,
-            UserInputError::SizeLimitExceeded {
-                limit: "maximum input objects in a transaction".to_string(),
-                value: protocol_config.max_input_objects().to_string()
-            }
-            .into()
-        );
-
-        Ok(())
-    }
-
     /// Check transaction gas data/info and gas coins consistency.
     /// Return the gas status to be used for the lifecycle of the transaction.
     #[instrument(level = "trace", skip_all)]
@@ -364,7 +364,6 @@ mod checked {
     fn check_objects(transaction: &TransactionData, objects: &InputObjects) -> UserInputResult<()> {
         // We require that mutable objects cannot show up more than once.
         let mut used_objects: HashSet<SuiAddress> = HashSet::new();
-        let mut deleted_shared_objects = Vec::new();
         for object in objects.iter() {
             if object.is_mutable() {
                 fp_ensure!(
@@ -380,18 +379,15 @@ mod checked {
             return Err(UserInputError::ObjectInputArityViolation);
         }
 
+        let gas_coins: HashSet<ObjectID> =
+            HashSet::from_iter(transaction.gas().iter().map(|obj_ref| obj_ref.0));
         for object in objects.iter() {
             let input_object_kind = object.input_object_kind;
 
             match &object.object {
                 ObjectReadResultKind::Object(object) => {
                     // For Gas Object, we check the object is owned by gas owner
-                    // TODO: this is a quadratic check and though limits are low we should do it differently
-                    let owner_address = if transaction
-                        .gas()
-                        .iter()
-                        .any(|obj_ref| *obj_ref.0 == *object.id())
-                    {
+                    let owner_address = if gas_coins.contains(&object.id()) {
                         transaction.gas_owner()
                     } else {
                         transaction.sender()
@@ -407,14 +403,7 @@ mod checked {
                     )?;
                 }
                 // We skip checking a deleted shared object because it no longer exists
-                ObjectReadResultKind::DeletedSharedObject(seq, digest) => {
-                    deleted_shared_objects.push((
-                        input_object_kind.object_id(),
-                        *seq,
-                        input_object_kind.is_mutable(),
-                        *digest,
-                    ));
-                }
+                ObjectReadResultKind::DeletedSharedObject(_, _) => (),
             }
         }
 
@@ -449,13 +438,13 @@ mod checked {
 
                 // This is an invariant - we just load the object with the given ID and version.
                 assert_eq!(
-                object.version(),
-                sequence_number,
-                "The fetched object version {} does not match the requested version {}, object id: {}",
-                object.version(),
-                sequence_number,
-                object.id(),
-            );
+                    object.version(),
+                    sequence_number,
+                    "The fetched object version {} does not match the requested version {}, object id: {}",
+                    object.version(),
+                    sequence_number,
+                    object.id(),
+                );
 
                 // Check the digest matches - user could give a mismatched ObjectDigest
                 let expected_digest = object.digest();

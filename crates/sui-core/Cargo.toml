@@ -14,6 +14,7 @@ bcs.workspace = true
 bytes.workspace = true
 chrono.workspace = true
 dashmap.workspace = true
+diffy = { version = "0.3", default-features = false }
 either.workspace = true
 enum_dispatch.workspace = true
 eyre.workspace = true
@@ -28,6 +29,7 @@ once_cell.workspace = true
 parking_lot.workspace = true
 prometheus.workspace = true
 rand.workspace = true
+roaring.workspace = true
 rocksdb.workspace = true
 scopeguard.workspace = true
 serde.workspace = true
@@ -68,6 +70,7 @@ narwhal-worker.workspace = true
 shared-crypto.workspace = true
 sui-archival.workspace = true
 sui-config.workspace = true
+sui-authority-aggregation.workspace = true
 sui-execution = { path = "../../sui-execution" }
 sui-framework.workspace = true
 sui-swarm-config.workspace = true
@@ -95,6 +98,7 @@ pretty_assertions.workspace = true
 serde-reflection.workspace = true
 serde_yaml.workspace = true
 
+test-cluster.workspace = true
 move-symbol-pool.workspace = true
 
 sui-test-transaction-builder.workspace = true

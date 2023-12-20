@@ -10,5 +10,6 @@ warning[W09001]: unused alias
 5 │     use 0x42::M as vector;
   │                    ^^^^^^ Unused 'use' of alias 'vector'. Consider removing it
   │
+  = This alias does not shadow the built-in type 'vector' in type annotations.
   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

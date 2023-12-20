@@ -1,5 +1,13 @@
 # @mysten/kiosk
 
+## 0.7.13
+
+### Patch Changes
+
+- dd362ec1d6: Update docs url to sdk.mystenlabs.com
+- Updated dependencies [dd362ec1d6]
+  - @mysten/sui.js@0.48.1
+
 ## 0.7.12
 
 ### Patch Changes
@@ -104,7 +112,7 @@
 
 ### Minor Changes
 
-- 5ee8c24f1: Introduces BREAKING CHANGES. Migration guide and explanation: https://sui-typescript-docs.vercel.app/kiosk/from-v1
+- 5ee8c24f1: Introduces BREAKING CHANGES. Migration guide and explanation: https://sdk.mystenlabs.com/kiosk/from-v1
 
 ## 0.6.0
 

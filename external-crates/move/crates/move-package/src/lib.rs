@@ -176,6 +176,7 @@ impl BuildConfig {
         let lock_string = std::fs::read_to_string(path.join(SourcePackageLayout::Lock.path())).ok();
         let _mutx = PackageLock::lock(); // held until function returns
 
+        let install_dir_set = self.install_dir.is_some();
         let install_dir = self.install_dir.as_ref().unwrap_or(&path).to_owned();
 
         let mut dep_graph_builder = DependencyGraphBuilder::new(
@@ -190,7 +191,9 @@ impl BuildConfig {
             lock_string,
         )?;
 
-        if modified {
+        if modified || install_dir_set {
+            // (1) Write the Move.lock file if the existing one is `modified`, or
+            // (2) `install_dir` is set explicitly, which may be a different directory, and where a Move.lock does not exist yet.
             let lock = dependency_graph.write_to_lock(install_dir)?;
             if let Some(lock_path) = &self.lock_file {
                 lock.commit(lock_path)?;
@@ -222,14 +225,15 @@ impl BuildConfig {
             .set_silence_warnings(self.silence_warnings)
     }
 
-    pub fn update_lock_file_toolchain_version(&self, compiler_version: String) -> Result<()> {
+    pub fn update_lock_file_toolchain_version(
+        &self,
+        path: &PathBuf,
+        compiler_version: String,
+    ) -> Result<()> {
         let Some(lock_file) = self.lock_file.as_ref() else {
             return Ok(());
         };
-        let install_dir = self
-            .install_dir
-            .clone()
-            .unwrap_or_else(|| PathBuf::from("."));
+        let install_dir = self.install_dir.as_ref().unwrap_or(path).to_owned();
         let mut lock = LockFile::from(install_dir, lock_file)?;
         lock.seek(SeekFrom::Start(0))?;
         update_compiler_toolchain(

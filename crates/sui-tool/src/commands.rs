@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    check_completed_snapshot,
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
     download_db_snapshot, download_formal_snapshot, dump_checkpoints_from_archive, get_object,
     get_transaction_block, make_clients, pkg_dump, restore_from_db_checkpoint,
@@ -590,7 +591,13 @@ impl ToolCommand {
                 let skip_checkpoints = skip_checkpoints || formal;
                 let aws_endpoint = env::var("AWS_SNAPSHOT_ENDPOINT").ok().or_else(|| {
                     if formal && no_sign_request {
-                        Some("https://formal-snapshot.testnet.sui.io".to_string())
+                        if network == Chain::Mainnet {
+                            Some("https://formal-snapshot.mainnet.sui.io".to_string())
+                        } else if network == Chain::Testnet {
+                            Some("https://formal-snapshot.testnet.sui.io".to_string())
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     }
@@ -703,6 +710,12 @@ impl ToolCommand {
                     }
                 };
 
+                if let Err(e) = check_completed_snapshot(&snapshot_store_config, epoch).await {
+                    panic!(
+                        "Aborting snapshot restore: {}, snapshot may not be uploaded yet",
+                        e
+                    );
+                }
                 if formal {
                     let verify = verify.unwrap_or(true);
                     download_formal_snapshot(

@@ -100,7 +100,7 @@ async fn test_transaction_expiration() {
         .with_async(|node| async {
             let epoch_store = node.state().epoch_store_for_testing();
             let state = node.state();
-            let expired_transaction = state.verify_transaction(expired_transaction).unwrap();
+            let expired_transaction = epoch_store.verify_transaction(expired_transaction).unwrap();
             state
                 .handle_transaction(&epoch_store, expired_transaction)
                 .await
@@ -115,7 +115,7 @@ async fn test_transaction_expiration() {
         .with_async(|node| async {
             let epoch_store = node.state().epoch_store_for_testing();
             let state = node.state();
-            let transaction = state.verify_transaction(transaction).unwrap();
+            let transaction = epoch_store.verify_transaction(transaction).unwrap();
             state.handle_transaction(&epoch_store, transaction).await
         })
         .await
@@ -179,7 +179,7 @@ async fn reconfig_with_revert_end_to_end_test() {
     let client = net
         .get_client(&authorities[reverting_authority_idx].with(|node| node.state().name))
         .unwrap();
-    client.handle_certificate(cert.clone()).await.unwrap();
+    client.handle_certificate_v2(cert.clone()).await.unwrap();
 
     authorities[reverting_authority_idx]
         .with_async(|node| async {

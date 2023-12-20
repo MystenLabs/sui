@@ -27,7 +27,7 @@ you including:
 - [Vite](https://vitejs.dev/)
 - [Radix UI](https://www.radix-ui.com/)
 - [ESLint](https://eslint.org/)
-- [`@mysten/dapp-kit`](https://sui-typescript-docs.vercel.app/dapp-kit)
+- [`@mysten/dapp-kit`](https://sdk.mystenlabs.com/dapp-kit)
 
 These templates are still new, and would love to get feedback and suggestions for improvements or
 future templates. Please open an issue on GitHub if you have any feedback.

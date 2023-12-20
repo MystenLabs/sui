@@ -32,7 +32,6 @@ impl New {
     pub fn execute_with_defaults(self, path: Option<PathBuf>) -> anyhow::Result<()> {
         self.execute(
             path,
-            "0.0.0",
             std::iter::empty::<(&str, &str)>(),
             std::iter::empty::<(&str, &str)>(),
             "",
@@ -42,7 +41,6 @@ impl New {
     pub fn execute(
         self,
         path: Option<PathBuf>,
-        version: &str,
         deps: impl IntoIterator<Item = (impl Display, impl Display)>,
         addrs: impl IntoIterator<Item = (impl Display, impl Display)>,
         custom: &str, // anything else that needs to end up being in Move.toml (or empty string)
@@ -63,7 +61,6 @@ impl New {
             &mut w,
             "[package]
 name = \"{name}\"
-version = \"{version}\"
 
 [dependencies]"
         )?;

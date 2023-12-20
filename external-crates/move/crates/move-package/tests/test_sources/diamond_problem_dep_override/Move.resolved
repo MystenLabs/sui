@@ -57,26 +57,17 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/A",
                 ),
-                version: None,
                 resolver: None,
             },
             "B": Package {
                 kind: Local(
                     "deps_only/B",
                 ),
-                version: None,
                 resolver: None,
             },
             "C": Package {
                 kind: Local(
-                    "deps_only/C",
-                ),
-                version: Some(
-                    (
-                        1,
-                        0,
-                        0,
-                    ),
+                    "deps_only/C-v1",
                 ),
                 resolver: None,
             },
@@ -87,7 +78,7 @@ ResolvedGraph {
             "C",
             "Root",
         },
-        manifest_digest: "FF5591B04075491B4A3E1F8758714AD147D4C1611F9DB9F4C4D6F9FD4D521DA9",
+        manifest_digest: "F64B7E3BA42923C4AFD7490B03D34813BA434044DC83D46F869DD5BB9A6052B2",
         deps_digest: "060AD7E57DFB13104F21BE5F5C3759D03F0553FC3229247D9A7A6B45F50D03A3",
     },
     build_options: BuildConfig {
@@ -116,11 +107,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "A",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -134,16 +120,9 @@ ResolvedGraph {
                     "C": Internal(
                         InternalDependency {
                             kind: Local(
-                                "../C",
+                                "../C-v2",
                             ),
                             subst: None,
-                            version: Some(
-                                (
-                                    2,
-                                    0,
-                                    0,
-                                ),
-                            ),
                             digest: None,
                             dep_override: false,
                         },
@@ -160,11 +139,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "B",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -178,16 +152,9 @@ ResolvedGraph {
                     "C": Internal(
                         InternalDependency {
                             kind: Local(
-                                "../C",
+                                "../C-v1",
                             ),
                             subst: None,
-                            version: Some(
-                                (
-                                    1,
-                                    0,
-                                    0,
-                                ),
-                            ),
                             digest: None,
                             dep_override: false,
                         },
@@ -204,11 +171,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "C",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -230,11 +192,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "Root",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -251,7 +208,6 @@ ResolvedGraph {
                                 "deps_only/A",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -262,7 +218,6 @@ ResolvedGraph {
                                 "deps_only/B",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -270,16 +225,9 @@ ResolvedGraph {
                     "C": Internal(
                         InternalDependency {
                             kind: Local(
-                                "deps_only/C",
+                                "deps_only/C-v1",
                             ),
                             subst: None,
-                            version: Some(
-                                (
-                                    1,
-                                    0,
-                                    0,
-                                ),
-                            ),
                             digest: None,
                             dep_override: true,
                         },

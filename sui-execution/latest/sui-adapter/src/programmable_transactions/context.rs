@@ -132,7 +132,10 @@ mod checked {
             tx_context: &'a mut TxContext,
             gas_charger: &'a mut GasCharger,
             inputs: Vec<CallArg>,
-        ) -> Result<Self, ExecutionError> {
+        ) -> Result<Self, ExecutionError>
+        where
+            'a: 'state,
+        {
             let mut linkage_view = LinkageView::new(Box::new(state_view.as_sui_resolver()));
             let mut input_object_map = BTreeMap::new();
             let inputs = inputs
@@ -723,7 +726,7 @@ mod checked {
             for package in new_packages {
                 let package_obj = Object::new_from_package(package, tx_digest);
                 let id = package_obj.id();
-                created_object_ids.insert(id, ());
+                created_object_ids.insert(id);
                 written_objects.insert(id, package_obj);
             }
             for (id, additional_write) in additional_writes {
@@ -807,7 +810,7 @@ mod checked {
                 } else {
                     // If it's not in the written objects, the object must have been deleted. Otherwise
                     // it's an error.
-                    if !deleted_object_ids.contains_key(id) {
+                    if !deleted_object_ids.contains(id) {
                         return Err(ExecutionError::new(
                             ExecutionErrorKind::SharedObjectOperationNotAllowed,
                             Some(
@@ -838,8 +841,8 @@ mod checked {
                     .into_iter()
                     .filter_map(|(id, loaded)| loaded.is_modified.then_some(id))
                     .collect(),
-                created_object_ids: created_object_ids.into_iter().map(|(id, _)| id).collect(),
-                deleted_object_ids: deleted_object_ids.into_iter().map(|(id, _)| id).collect(),
+                created_object_ids: created_object_ids.into_iter().collect(),
+                deleted_object_ids: deleted_object_ids.into_iter().collect(),
                 user_events,
             }))
         }

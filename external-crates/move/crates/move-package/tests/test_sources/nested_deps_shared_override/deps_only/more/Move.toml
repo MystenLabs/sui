@@ -1,6 +1,5 @@
 [package]
 name = "More"
-version = "0.0.0"
 
 [dependencies]
 Shared = { local = "../shared", override = true }

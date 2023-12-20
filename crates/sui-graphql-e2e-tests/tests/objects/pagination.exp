@@ -1,0 +1,133 @@
+processed 13 tasks
+
+task 1 'publish'. lines 6-23:
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5175600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 25-25:
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'run'. lines 27-27:
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4 'run'. lines 29-29:
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5 'run'. lines 31-31:
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6 'run'. lines 33-33:
+created: object(6,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7 'create-checkpoint'. lines 35-35:
+Checkpoint created: 1
+
+task 8 'run-graphql'. lines 37-47:
+Response: {
+  "data": {
+    "address": {
+      "objectConnection": {
+        "edges": [
+          {
+            "cursor": "0x32e78f94ca26ec4064e727d157c9817e8d3050c11da288c34dea9ce0c705c3f6"
+          },
+          {
+            "cursor": "0x78970d41d67720e419762ff0e8a7cfd73e06dcf0ec5d530e736c96b83d69ccbe"
+          },
+          {
+            "cursor": "0x7a71f9d1e630ab379913ad5fcf470b2061db2339a005c4ffb92af6b8a6452082"
+          },
+          {
+            "cursor": "0x892552efa67a9d4f40ced8bfb35f0b0e2e1b3399c64729b11b8c00f77a539f5e"
+          },
+          {
+            "cursor": "0x8a9eeae01da257bcab470ef0ba0207ddb51bfd8f7a3b2dba01d439762d9f7b3c"
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 9 'run-graphql'. lines 49-59:
+Response: {
+  "data": {
+    "address": {
+      "objectConnection": {
+        "edges": [
+          {
+            "cursor": "0x32e78f94ca26ec4064e727d157c9817e8d3050c11da288c34dea9ce0c705c3f6"
+          },
+          {
+            "cursor": "0x78970d41d67720e419762ff0e8a7cfd73e06dcf0ec5d530e736c96b83d69ccbe"
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 10 'run-graphql'. lines 61-73:
+Response: {
+  "data": {
+    "address": {
+      "objectConnection": {
+        "edges": [
+          {
+            "cursor": "0x78970d41d67720e419762ff0e8a7cfd73e06dcf0ec5d530e736c96b83d69ccbe"
+          },
+          {
+            "cursor": "0x7a71f9d1e630ab379913ad5fcf470b2061db2339a005c4ffb92af6b8a6452082"
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 11 'run-graphql'. lines 75-85:
+Response: {
+  "data": {
+    "address": {
+      "objectConnection": {
+        "edges": [
+          {
+            "cursor": "0x892552efa67a9d4f40ced8bfb35f0b0e2e1b3399c64729b11b8c00f77a539f5e"
+          },
+          {
+            "cursor": "0x8a9eeae01da257bcab470ef0ba0207ddb51bfd8f7a3b2dba01d439762d9f7b3c"
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 12 'run-graphql'. lines 87-97:
+Response: {
+  "data": {
+    "address": {
+      "objectConnection": {
+        "edges": [
+          {
+            "cursor": "0x78970d41d67720e419762ff0e8a7cfd73e06dcf0ec5d530e736c96b83d69ccbe"
+          },
+          {
+            "cursor": "0x7a71f9d1e630ab379913ad5fcf470b2061db2339a005c4ffb92af6b8a6452082"
+          }
+        ]
+      }
+    }
+  }
+}

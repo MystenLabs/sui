@@ -15,6 +15,7 @@ use tracing::{info, instrument};
 
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
+use sui_json_rpc_api::{GovernanceReadApiOpenRpc, GovernanceReadApiServer, JsonRpcMetrics};
 use sui_json_rpc_types::{DelegatedStake, Stake, StakeStatus};
 use sui_json_rpc_types::{SuiCommittee, ValidatorApy, ValidatorApys};
 use sui_open_rpc::Module;
@@ -31,7 +32,6 @@ use sui_types::sui_system_state::PoolTokenExchangeRate;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::{get_validator_from_table, SuiSystemState};
 
-use crate::api::{GovernanceReadApiServer, JsonRpcMetrics};
 use crate::authority_state::StateRead;
 use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
 use crate::{with_tracing, ObjectProvider, SuiRpcModule};
@@ -457,6 +457,6 @@ impl SuiRpcModule for GovernanceReadApi {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::GovernanceReadApiOpenRpc::module_doc()
+        GovernanceReadApiOpenRpc::module_doc()
     }
 }

@@ -1095,6 +1095,13 @@ impl<'backing> Storage for TemporaryStore<'backing> {
     ) {
         TemporaryStore::save_loaded_runtime_objects(self, loaded_runtime_objects)
     }
+
+    fn save_wrapped_object_containers(
+        &mut self,
+        _wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
+    ) {
+        unreachable!("Unused in next-vm")
+    }
 }
 
 impl<'backing> BackingPackageStore for TemporaryStore<'backing> {

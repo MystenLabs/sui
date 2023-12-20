@@ -27,7 +27,8 @@ use errors::IndexerError;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
 use processors::processor_orchestrator::ProcessorOrchestrator;
 use store::IndexerStore;
-use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, ServerType, CLIENT_SDK_TYPE_HEADER};
+use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, ServerType};
+use sui_json_rpc_api::CLIENT_SDK_TYPE_HEADER;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 
 use crate::apis::MoveUtilsApi;

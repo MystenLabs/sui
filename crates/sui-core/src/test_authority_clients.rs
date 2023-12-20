@@ -12,12 +12,10 @@ use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
-use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::SuiResult;
 use sui_types::messages_grpc::{
-    HandleCertificateResponse, HandleCertificateResponseV2, HandleTransactionResponse,
-    ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest,
-    TransactionInfoResponse,
+    HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
+    SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
@@ -25,6 +23,10 @@ use sui_types::{
     error::SuiError,
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
     transaction::{CertifiedTransaction, Transaction, VerifiedTransaction},
+};
+use sui_types::{
+    effects::{TransactionEffectsAPI, TransactionEvents},
+    messages_checkpoint::{CheckpointRequestV2, CheckpointResponseV2},
 };
 
 #[derive(Clone, Copy, Default)]
@@ -71,15 +73,6 @@ impl AuthorityAPI for LocalAuthorityClient {
         result
     }
 
-    async fn handle_certificate(
-        &self,
-        certificate: CertifiedTransaction,
-    ) -> Result<HandleCertificateResponse, SuiError> {
-        self.handle_certificate_v2(certificate)
-            .await
-            .map(|r| r.into())
-    }
-
     async fn handle_certificate_v2(
         &self,
         certificate: CertifiedTransaction,
@@ -115,6 +108,15 @@ impl AuthorityAPI for LocalAuthorityClient {
         let state = self.state.clone();
 
         state.handle_checkpoint_request(&request)
+    }
+
+    async fn handle_checkpoint_v2(
+        &self,
+        request: CheckpointRequestV2,
+    ) -> Result<CheckpointResponseV2, SuiError> {
+        let state = self.state.clone();
+
+        state.handle_checkpoint_request_v2(&request)
     }
 
     async fn handle_system_state_object(
@@ -231,14 +233,6 @@ impl AuthorityAPI for MockAuthorityApi {
     }
 
     /// Execute a certificate.
-    async fn handle_certificate(
-        &self,
-        _certificate: CertifiedTransaction,
-    ) -> Result<HandleCertificateResponse, SuiError> {
-        unimplemented!()
-    }
-
-    /// Execute a certificate.
     async fn handle_certificate_v2(
         &self,
         _certificate: CertifiedTransaction,
@@ -282,6 +276,13 @@ impl AuthorityAPI for MockAuthorityApi {
         unimplemented!();
     }
 
+    async fn handle_checkpoint_v2(
+        &self,
+        _request: CheckpointRequestV2,
+    ) -> Result<CheckpointResponseV2, SuiError> {
+        unimplemented!();
+    }
+
     async fn handle_system_state_object(
         &self,
         _request: SystemStateRequest,
@@ -310,13 +311,6 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         self.tx_info_resp_to_return.clone()
     }
 
-    async fn handle_certificate(
-        &self,
-        _certificate: CertifiedTransaction,
-    ) -> Result<HandleCertificateResponse, SuiError> {
-        unimplemented!()
-    }
-
     async fn handle_certificate_v2(
         &self,
         _certificate: CertifiedTransaction,
@@ -342,6 +336,13 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         &self,
         _request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
+        unimplemented!()
+    }
+
+    async fn handle_checkpoint_v2(
+        &self,
+        _request: CheckpointRequestV2,
+    ) -> Result<CheckpointResponseV2, SuiError> {
         unimplemented!()
     }
 

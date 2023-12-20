@@ -19,13 +19,15 @@ use tracing::info;
 
 pub use balance_changes::*;
 pub use object_changes::*;
+use sui_json_rpc_api::{
+    CLIENT_SDK_TYPE_HEADER, CLIENT_SDK_VERSION_HEADER, CLIENT_TARGET_API_VERSION_HEADER,
+};
 use sui_open_rpc::{Module, Project};
 
 use crate::error::Error;
 use crate::metrics::MetricsLogger;
 use crate::routing_layer::RpcRouter;
 
-pub mod api;
 pub mod authority_state;
 pub mod axum_router;
 mod balance_changes;
@@ -43,12 +45,6 @@ mod routing_layer;
 pub mod transaction_builder_api;
 pub mod transaction_execution_api;
 
-pub const CLIENT_SDK_TYPE_HEADER: &str = "client-sdk-type";
-/// The version number of the SDK itself. This can be different from the API version.
-pub const CLIENT_SDK_VERSION_HEADER: &str = "client-sdk-version";
-/// The RPC API version that the client is targeting. Different SDK versions may target the same
-/// API version.
-pub const CLIENT_TARGET_API_VERSION_HEADER: &str = "client-target-api-version";
 pub const APP_NAME_HEADER: &str = "app-name";
 
 pub const MAX_REQUEST_SIZE: u32 = 2 << 30;

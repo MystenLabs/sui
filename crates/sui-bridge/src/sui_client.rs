@@ -228,7 +228,11 @@ impl SuiClientInner for SuiSdkClient {
 
 #[cfg(test)]
 mod tests {
-    use crate::sui_mock_client::SuiMockClient;
+    use crate::{
+        events::EmittedSuiToEthTokenBridgeV1,
+        sui_mock_client::SuiMockClient,
+        types::{BridgeChainId, TokenId},
+    };
     use ethers::types::{
         Address, Block, BlockNumber, Filter, FilterBlockOption, Log, ValueOrArray, U64,
     };
@@ -236,7 +240,7 @@ mod tests {
     use std::{collections::HashSet, str::FromStr};
 
     use super::*;
-    use crate::events::{init_all_struct_tags, SuiToEthBridgeEventV1, SuiToEthTokenBridgeV1};
+    use crate::events::{init_all_struct_tags, SuiToEthTokenBridgeV1};
 
     #[tokio::test]
     async fn test_query_events_by_module() {
@@ -507,12 +511,14 @@ mod tests {
 
         // Ensure all struct tags are inited
         init_all_struct_tags();
-        let event_1 = SuiToEthBridgeEventV1 {
+        let event_1 = EmittedSuiToEthTokenBridgeV1 {
             nonce: 1,
-            source_address: SuiAddress::random_for_testing_only(),
-            destination_address: Address::random(),
-            coin_name: "SUI".to_string(),
-            amount: U256::from(100),
+            sui_chain_id: BridgeChainId::SuiTestnet,
+            sui_address: SuiAddress::random_for_testing_only(),
+            eth_chain_id: BridgeChainId::EthSepolia,
+            eth_address: Address::random(),
+            token_id: TokenId::Sui,
+            amount: 100,
         };
         let mut sui_event_1 = SuiEvent::random_for_testing();
         sui_event_1.type_ = SuiToEthTokenBridgeV1.get().unwrap().clone();

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::MoveUtilsServer;
 use crate::authority_state::StateRead;
 use crate::error::{Error, SuiRpcInputError};
 use crate::{with_tracing, SuiRpcModule};
@@ -18,6 +17,7 @@ use move_core_types::identifier::Identifier;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
+use sui_json_rpc_api::{MoveUtilsOpenRpc, MoveUtilsServer};
 use sui_json_rpc_types::{
     MoveFunctionArgType, ObjectValueKind, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
     SuiMoveNormalizedStruct,
@@ -140,7 +140,7 @@ impl SuiRpcModule for MoveUtils {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::MoveUtilsOpenRpc::module_doc()
+        MoveUtilsOpenRpc::module_doc()
     }
 }
 

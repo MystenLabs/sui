@@ -37,124 +37,19 @@ const PACKAGE_CACHE_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(10
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Interface to abstract over access to a store of live packages.  Used to override the default
-/// store during testing.
-#[async_trait]
-pub trait PackageStore: Send + Sync + 'static {
-    /// Latest version of the object at `id`.
-    async fn version(&self, id: AccountAddress) -> Result<SequenceNumber>;
-    /// Read package contents. Fails if `id` is not an object, not a package, or is malformed in
-    /// some way.
-    async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>>;
+/// The Resolver is responsible for providing information about types. It relies on its internal
+/// `package_store` to load packages and then type definitions from those packages.
+#[derive(Debug)]
+pub struct Resolver<S> {
+    package_store: S,
 }
-
-macro_rules! as_ref_impl {
-    ($type:ty) => {
-        #[async_trait]
-        impl PackageStore for $type {
-            async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
-                self.as_ref().version(id).await
-            }
-            async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
-                self.as_ref().fetch(id).await
-            }
-        }
-    };
-}
-
-as_ref_impl!(Arc<dyn PackageStore>);
-as_ref_impl!(Box<dyn PackageStore>);
 
 /// Store which fetches package for the given address from the backend db and caches it
 /// locally in an lru cache. On every call to `fetch` it checks backend db and if package
 /// version is stale locally, it updates the local state before returning to the user
-
 pub struct PackageStoreWithLruCache<T> {
     pub(crate) packages: Mutex<LruCache<AccountAddress, Arc<Package>>>,
     pub(crate) inner: T,
-}
-
-impl<T: PackageStore> PackageStoreWithLruCache<T> {
-    pub fn new(inner: T) -> Self {
-        let packages = Mutex::new(LruCache::new(PACKAGE_CACHE_SIZE));
-        Self { packages, inner }
-    }
-}
-
-#[async_trait]
-impl<T: PackageStore> PackageStore for PackageStoreWithLruCache<T> {
-    async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
-        self.inner.version(id).await
-    }
-    async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
-        let candidate = {
-            // Release the lock after getting the package
-            let mut packages = self.packages.lock().unwrap();
-            packages.get(&id).map(Arc::clone)
-        };
-
-        // System packages can be invalidated in the cache if a newer version exists.
-        match candidate {
-            Some(package) if !is_system_package(id) => return Ok(package),
-            Some(package) if self.version(id).await? <= package.version => return Ok(package),
-            Some(_) | None => { /* nop */ }
-        }
-
-        let package = self.inner.fetch(id).await?;
-        // Try and insert the package into the cache, accounting for races.  In most cases the
-        // racing fetches will produce the same package, but for system packages, they may not, so
-        // favour the package that has the newer version, or if they are the same, the package that
-        // is already in the cache.
-
-        let mut packages = self.packages.lock().unwrap();
-        Ok(match packages.peek(&id) {
-            Some(prev) if package.version <= prev.version => {
-                let package = prev.clone();
-                packages.promote(&id);
-                package
-            }
-
-            Some(_) | None => {
-                packages.push(id, package.clone());
-                package
-            }
-        })
-    }
-}
-
-#[derive(Debug)]
-pub struct Resolver<T> {
-    package_store: T,
-}
-
-impl<T> Resolver<T> {
-    pub fn new(package_store: T) -> Self {
-        Self { package_store }
-    }
-
-    pub fn package_store(&self) -> &T {
-        &self.package_store
-    }
-
-    pub fn package_store_mut(&mut self) -> &mut T {
-        &mut self.package_store
-    }
-}
-
-impl<T: PackageStore> Resolver<T> {
-    /// Return the type layout corresponding to the given type tag.  The layout always refers to
-    /// structs in terms of their defining ID (i.e. their package ID always points to the first
-    /// package that introduced them).
-    pub async fn type_layout(&self, mut tag: TypeTag) -> Result<MoveTypeLayout> {
-        let mut context = ResolutionContext::default();
-
-        // (1). Fetch all the information from this cache that is necessary to resolve types
-        // referenced by this tag.
-        context.add_type_tag(&mut tag, &self.package_store).await?;
-
-        // (2). Use that information to resolve the tag into a layout.
-        context.resolve_type_tag(&tag)
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -247,7 +142,6 @@ pub enum Reference {
     Mutable,
 }
 
-#[allow(dead_code)] // TODO: Remove when integrated
 #[derive(Clone, Debug)]
 pub struct OpenSignature {
     pub ref_: Option<Reference>,
@@ -277,6 +171,112 @@ pub enum OpenSignatureBody {
 struct ResolutionContext {
     /// Definitions (field information) for structs referred to by types added to this context.
     structs: BTreeMap<StructKey, StructDef>,
+}
+
+/// Interface to abstract over access to a store of live packages.  Used to override the default
+/// store during testing.
+#[async_trait]
+pub trait PackageStore: Send + Sync + 'static {
+    /// Latest version of the object at `id`.
+    async fn version(&self, id: AccountAddress) -> Result<SequenceNumber>;
+    /// Read package contents. Fails if `id` is not an object, not a package, or is malformed in
+    /// some way.
+    async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>>;
+}
+
+macro_rules! as_ref_impl {
+    ($type:ty) => {
+        #[async_trait]
+        impl PackageStore for $type {
+            async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
+                self.as_ref().version(id).await
+            }
+            async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
+                self.as_ref().fetch(id).await
+            }
+        }
+    };
+}
+
+as_ref_impl!(Arc<dyn PackageStore>);
+as_ref_impl!(Box<dyn PackageStore>);
+
+impl<S> Resolver<S> {
+    pub fn new(package_store: S) -> Self {
+        Self { package_store }
+    }
+
+    pub fn package_store(&self) -> &S {
+        &self.package_store
+    }
+
+    pub fn package_store_mut(&mut self) -> &mut S {
+        &mut self.package_store
+    }
+}
+
+impl<S: PackageStore> Resolver<S> {
+    /// Return the type layout corresponding to the given type tag.  The layout always refers to
+    /// structs in terms of their defining ID (i.e. their package ID always points to the first
+    /// package that introduced them).
+    pub async fn type_layout(&self, mut tag: TypeTag) -> Result<MoveTypeLayout> {
+        let mut context = ResolutionContext::default();
+
+        // (1). Fetch all the information from this cache that is necessary to resolve types
+        // referenced by this tag.
+        context.add_type_tag(&mut tag, &self.package_store).await?;
+
+        // (2). Use that information to resolve the tag into a layout.
+        context.resolve_type_tag(&tag)
+    }
+}
+
+impl<T> PackageStoreWithLruCache<T> {
+    pub fn new(inner: T) -> Self {
+        let packages = Mutex::new(LruCache::new(PACKAGE_CACHE_SIZE));
+        Self { packages, inner }
+    }
+}
+
+#[async_trait]
+impl<T: PackageStore> PackageStore for PackageStoreWithLruCache<T> {
+    async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
+        self.inner.version(id).await
+    }
+    async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
+        let candidate = {
+            // Release the lock after getting the package
+            let mut packages = self.packages.lock().unwrap();
+            packages.get(&id).map(Arc::clone)
+        };
+
+        // System packages can be invalidated in the cache if a newer version exists.
+        match candidate {
+            Some(package) if !is_system_package(id) => return Ok(package),
+            Some(package) if self.version(id).await? <= package.version => return Ok(package),
+            Some(_) | None => { /* nop */ }
+        }
+
+        let package = self.inner.fetch(id).await?;
+        // Try and insert the package into the cache, accounting for races.  In most cases the
+        // racing fetches will produce the same package, but for system packages, they may not, so
+        // favour the package that has the newer version, or if they are the same, the package that
+        // is already in the cache.
+
+        let mut packages = self.packages.lock().unwrap();
+        Ok(match packages.peek(&id) {
+            Some(prev) if package.version <= prev.version => {
+                let package = prev.clone();
+                packages.promote(&id);
+                package
+            }
+
+            Some(_) | None => {
+                packages.push(id, package.clone());
+                package
+            }
+        })
+    }
 }
 
 impl Package {

@@ -19,6 +19,7 @@ use move_core_types::{
 };
 use prometheus::Registry;
 use serde::{Deserialize, Serialize};
+use shared_crypto::intent::Intent;
 use similar::{ChangeTag, TextDiff};
 use std::{
     collections::{BTreeMap, HashSet},
@@ -689,7 +690,7 @@ impl LocalExec {
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         let tx_digest = &tx_info.tx_digest;
         // A lot of the logic here isnt designed for genesis
-        if *tx_digest == TransactionDigest::genesis() || tx_info.sender == SuiAddress::ZERO {
+        if *tx_digest == TransactionDigest::genesis_marker() || tx_info.sender == SuiAddress::ZERO {
             // Genesis.
             warn!(
                 "Genesis/system TX replay not supported: {}, skipping transaction",
@@ -828,12 +829,14 @@ impl LocalExec {
         let required_objects = pre_run_sandbox.required_objects.clone();
         let shared_object_refs = pre_run_sandbox.transaction_info.shared_object_refs.clone();
 
-        let transaction_intent = pre_run_sandbox
-            .transaction_info
-            .sender_signed_data
-            .intent_message()
-            .intent
-            .clone();
+        assert_eq!(
+            pre_run_sandbox
+                .transaction_info
+                .sender_signed_data
+                .intent_message()
+                .intent,
+            Intent::sui_transaction()
+        );
         let transaction_signatures = pre_run_sandbox
             .transaction_info
             .sender_signed_data
@@ -859,11 +862,8 @@ impl LocalExec {
         )
         .await;
 
-        let sender_signed_tx = Transaction::from_generic_sig_data(
-            transaction_data,
-            transaction_intent,
-            transaction_signatures,
-        );
+        let sender_signed_tx =
+            Transaction::from_generic_sig_data(transaction_data, transaction_signatures);
         let sender_signed_tx = VerifiedTransaction::new_unchecked(
             VerifiedTransaction::new_unchecked(sender_signed_tx).into(),
         );
@@ -2036,7 +2036,7 @@ impl GetModule for LocalExec {
 pub fn get_executor(
     executor_version_override: Option<i64>,
     protocol_config: &ProtocolConfig,
-    expensive_safety_check_config: ExpensiveSafetyCheckConfig,
+    _expensive_safety_check_config: ExpensiveSafetyCheckConfig,
 ) -> Arc<dyn Executor + Send + Sync> {
     let protocol_config = executor_version_override
         .map(|q| {
@@ -2053,12 +2053,8 @@ pub fn get_executor(
         .unwrap_or(protocol_config.clone());
 
     let silent = true;
-    sui_execution::executor(
-        &protocol_config,
-        expensive_safety_check_config.enable_move_vm_paranoid_checks(),
-        silent,
-    )
-    .expect("Creating an executor should not fail here")
+    sui_execution::executor(&protocol_config, silent)
+        .expect("Creating an executor should not fail here")
 }
 
 async fn prep_network(

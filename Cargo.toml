@@ -86,10 +86,12 @@ members = [
     "crates/sui-analytics-indexer",
     "crates/sui-analytics-indexer-derive",
     "crates/sui-archival",
+    "crates/sui-authority-aggregation",
     "crates/sui-aws-orchestrator",
     "crates/sui-benchmark",
     "crates/sui-bridge",
     "crates/sui-cluster-test",
+    "crates/sui-common",
     "crates/sui-config",
     "crates/sui-core",
     "crates/sui-cost",
@@ -106,6 +108,7 @@ members = [
     "crates/sui-indexer",
     "crates/sui-json",
     "crates/sui-json-rpc",
+    "crates/sui-json-rpc-api",
     "crates/sui-json-rpc-tests",
     "crates/sui-json-rpc-types",
     "crates/sui-keys",
@@ -184,7 +187,7 @@ members = [
 ]
 
 [workspace.package]
-# This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates.
+# This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
 version = "1.16.0"
 
 [profile.release]
@@ -334,7 +337,7 @@ hyper = "0.14.20"
 hyper-rustls = { version = "0.24", features = ["rustls-native-certs", "http2"] }
 im = "15"
 impl-trait-for-tuples = "0.2.0"
-indexmap = { version = "1.9.2", features = ["serde"] }
+indexmap = { version = "2.1.0", features = ["serde"] }
 indicatif = "0.17.2"
 inquire = "0.6.0"
 insta = { version = "1.21.1", features = ["redactions", "yaml", "json"] }
@@ -350,7 +353,6 @@ jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b3007847
 ] }
 json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4" }
 leb128 = "0.2.5"
-linked-hash-map = "0.5.6"
 lru = "0.10"
 markdown-gen = "1.2.1"
 match_opt = "0.1.2"
@@ -362,9 +364,10 @@ msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "1a5
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
+nonempty = "0.9.0"
 notify = "6.1.1"
 ntest = "0.9.0"
-num-bigint = "0.4.3"
+num-bigint = "0.4.4"
 num_cpus = "1.15.0"
 num_enum = "0.6.1"
 object_store = { version = "0.7", features = [
@@ -535,9 +538,9 @@ move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-b
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "643831ec3b67bdd2b5f998c0bec1b7c91823351f" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "643831ec3b67bdd2b5f998c0bec1b7c91823351f"}
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "643831ec3b67bdd2b5f998c0bec1b7c91823351f", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9579a60fbffe15c0f65626ae55998bf8ef42e193" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9579a60fbffe15c0f65626ae55998bf8ef42e193"}
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9579a60fbffe15c0f65626ae55998bf8ef42e193", package = "fastcrypto-zkp" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
@@ -560,8 +563,10 @@ sui-adapter-transactional-tests = { path = "crates/sui-adapter-transactional-tes
 sui-analytics-indexer = { path = "crates/sui-analytics-indexer" }
 sui-analytics-indexer-derive = { path = "crates/sui-analytics-indexer-derive" }
 sui-archival = { path = "crates/sui-archival" }
+sui-authority-aggregation= { path = "crates/sui-authority-aggregation" }
 sui-benchmark = { path = "crates/sui-benchmark" }
 sui-cluster-test = { path = "crates/sui-cluster-test" }
+sui-common = { path = "crates/sui-common" }
 sui-config = { path = "crates/sui-config" }
 sui-core = { path = "crates/sui-core" }
 sui-cost = { path = "crates/sui-cost" }
@@ -577,6 +582,7 @@ sui-genesis-builder = { path = "crates/sui-genesis-builder" }
 sui-indexer = { path = "crates/sui-indexer" }
 sui-json = { path = "crates/sui-json" }
 sui-json-rpc = { path = "crates/sui-json-rpc" }
+sui-json-rpc-api = { path = "crates/sui-json-rpc-api" }
 sui-json-rpc-types = { path = "crates/sui-json-rpc-types" }
 sui-keys = { path = "crates/sui-keys" }
 sui-kvstore = { path = "crates/sui-kvstore" }

@@ -29,6 +29,7 @@ sui-protocol-config.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 tokio = { workspace = true, features = ["full"] }
 workspace-hack.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

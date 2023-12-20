@@ -118,6 +118,14 @@ pub struct UserData(pub Option<[u8; 32]>);
 
 pub type AuthorityName = AuthorityPublicKeyBytes;
 
+pub trait ConciseableName<'a> {
+    type ConciseTypeRef: std::fmt::Debug;
+    type ConciseType: std::fmt::Debug;
+
+    fn concise(&'a self) -> Self::ConciseTypeRef;
+    fn concise_owned(&self) -> Self::ConciseType;
+}
+
 #[serde_as]
 #[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct ObjectID(

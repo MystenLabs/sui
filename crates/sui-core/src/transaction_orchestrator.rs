@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 /*
 Transaction Orchestrator is a Node component that utilizes Quorum Driver to
 submit transactions to validators for finality, and proactively executes
@@ -159,9 +160,9 @@ where
         // TODO check if tx is already executed on this node.
         // Note: since EffectsCert is not stored today, we need to gather that from validators
         // (and maybe store it for caching purposes)
+        let epoch_store = self.validator_state.load_epoch_store_one_call_per_task();
 
-        let transaction = self
-            .validator_state
+        let transaction = epoch_store
             .verify_transaction(request.transaction)
             .map_err(QuorumDriverError::InvalidUserSignature)?;
         let (_in_flight_metrics_guards, good_response_metrics) = self.update_metrics(&transaction);
@@ -235,6 +236,7 @@ where
 
                 match Self::execute_finalized_tx_locally_with_timeout(
                     &self.validator_state,
+                    &epoch_store,
                     &executable_tx,
                     &effects_cert,
                     &self.metrics,
@@ -301,12 +303,11 @@ where
     #[instrument(name = "tx_orchestrator_execute_finalized_tx_locally_with_timeout", level = "debug", skip_all, fields(tx_digest = ?transaction.digest()), err)]
     async fn execute_finalized_tx_locally_with_timeout(
         validator_state: &Arc<AuthorityState>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: &VerifiedExecutableTransaction,
         effects_cert: &VerifiedCertifiedTransactionEffects,
         metrics: &TransactionOrchestratorMetrics,
     ) -> SuiResult {
-        let epoch_store = validator_state.load_epoch_store_one_call_per_task();
-
         // TODO: attempt a finalized tx at most once per request.
         // Every WaitForLocalExecution request will be attempted to execute twice,
         // one from the subscriber queue, one from the proactive execution before
@@ -337,7 +338,7 @@ where
             validator_state.fullnode_execute_certificate_with_effects(
                 transaction,
                 effects_cert,
-                &epoch_store,
+                epoch_store,
             ),
         )
         .instrument(error_span!(
@@ -394,9 +395,11 @@ where
                         continue;
                     }
 
+                    let epoch_store = validator_state.load_epoch_store_one_call_per_task();
+
                     // This is a redundant verification, but SignatureVerifier will cache the
                     // previous result.
-                    let transaction = match validator_state.verify_transaction(transaction) {
+                    let transaction = match epoch_store.verify_transaction(transaction) {
                         Ok(transaction) => transaction,
                         Err(err) => {
                             // This should be impossible, since we verified the transaction
@@ -416,6 +419,7 @@ where
 
                     let _ = Self::execute_finalized_tx_locally_with_timeout(
                         &validator_state,
+                        &epoch_store,
                         &executable_tx,
                         &effects_cert,
                         &metrics,

@@ -35,6 +35,7 @@ env:
 
 jobs:
   release-build:
+    name: Build & Publish Binaries
     timeout-minutes: 80
     strategy:
       matrix:
@@ -42,6 +43,13 @@ jobs:
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Clean up and validate tag name ${{ env.TAG_NAME }}
+        shell: bash
+        run: |
+          export sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)
+          [[ "${sui_tag}" == "main" ]] && echo "tag cannot be equals to 'main'" && exit 1
+          echo "sui_tag=${sui_tag}" >> $GITHUB_ENV
+
       - name: Configure AWS credentials
         if: ${{ env.TAG_NAME != 'main' }}
         uses: aws-actions/configure-aws-credentials@67fbcbb121271f7775d2e7715933280b06314838 # pin@v1
@@ -50,34 +58,53 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
 
-      - name: Clean up tag name ${{ env.TAG_NAME }}
+      - name: Set os/arch variables (Windows)
+        if: ${{ matrix.os == 'windows-ghcloud' }}
         shell: bash
-        run: | 
-          echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
+        run: |
+          export arch=$(uname -m)
+          export os_type="windows-${arch}"
+          echo "os_type=${os_type}" >> $GITHUB_ENV
 
-      - name: Checking out ${{ env.sui_tag }}
-        if: ${{ env.sui_tag != 'main' }}
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ env.sui_tag }}
+      - name: Set os/arch variables
+        if: ${{ matrix.os != 'windows-ghcloud' }}
+        shell: bash
+        run: |
+          export arch=$(uname -m)
+          export system_os=$(echo ${{ matrix.os }} | cut -d- -f1)
+          export os_type="${system_os}-${arch}"
+          echo "os_type=${system_os}-${arch}" >> $GITHUB_ENV     
+
+      - name: Check if archives of binaries have already been built
+        continue-on-error: true
+        shell: bash
+        run: |
+          echo "s3_archive_exist=$(curl -Is https://sui-releases.s3.us-east-1.amazonaws.com/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz | head -n 1 | grep '200 OK')" >> $GITHUB_ENV
+
+      - name: Download archive, if it exists
+        if: ${{ env.s3_archive_exist != '' }}
+        shell: bash
+        run: |
+          mkdir -p ./target/release
+          aws s3 cp s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz
 
       - name: Setup caching
-        if: ${{ env.sui_tag != 'main' }}
+        if: ${{ env.s3_archive_exist == '' }}
         uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths          
       
       - name: Install nexttest (Windows)
-        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
+        if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' }}
         uses: taiki-e/install-action@nextest
 
       - name: Setup protoc (Windows)
-        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
+        if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' }}
         uses: arduino/setup-protoc@v1
         # this avoids rate-limiting
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install postgres (Windows)
-        if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
+        if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' }}
         shell: bash
         run: |
           choco install postgresql12 --force --params '/Password:root'
@@ -85,54 +112,51 @@ jobs:
           echo "C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_PATH
           echo "PQ_LIB_DIR=C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_ENV
           echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
-          echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV          
+          echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
+
+      - name: Checking out ${{ env.sui_tag }}
+        if: ${{ env.s3_archive_exist == '' }}
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ env.sui_tag }}        
 
       - name: cargo build (release) for ${{ matrix.os }} platform
-        if: ${{ env.sui_tag != 'main' }}
+        if: ${{ env.s3_archive_exist == '' }}
         shell: bash
         run: |
           [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release
           cd external-crates/move && cargo build -p move-analyzer --release
 
       - name: Rename binaries for ${{ matrix.os }}
-        if: ${{ env.sui_tag != 'main' && matrix.os != 'windows-ghcloud' }}
+        if: ${{ matrix.os != 'windows-ghcloud' && env.s3_archive_exist == '' }}
         shell: bash
         run: |
-          export arch=$(uname -m)
-          export system_os=$(echo ${{ matrix.os }} | cut -d- -f1)
-          export os_type="${system_os}-${arch}"
-          echo "os_type=${system_os}-${arch}" >> $GITHUB_ENV
-          mv ./target/release/sui ./target/release/sui-${os_type}
-          mv ./target/release/sui-node ./target/release/sui-node-${os_type}
-          mv ./target/release/sui-tool ./target/release/sui-tool-${os_type}
-          mv ./target/release/sui-faucet ./target/release/sui-faucet-${os_type}
-          mv ./target/release/sui-test-validator ./target/release/sui-test-validator-${os_type}
-          mv ./target/release/sui-indexer ./target/release/sui-indexer-${os_type}
-          mv ./target/release/sui-data-ingestion ./target/release/sui-data-ingestion-${os_type}
-          mv ./external-crates/move/target/release/move-analyzer ./external-crates/move/target/release/move-analyzer-${os_type}
+          [ -f ./target/release/sui ] && mv ./target/release/sui ./target/release/sui-${os_type}
+          [ -f ./target/release/sui-node ] && mv ./target/release/sui-node ./target/release/sui-node-${os_type}
+          [ -f ./target/release/sui-tool ] && mv ./target/release/sui-tool ./target/release/sui-tool-${os_type}
+          [ -f ./target/release/sui-faucet ] && mv ./target/release/sui-faucet ./target/release/sui-faucet-${os_type}
+          [ -f ./target/release/sui-test-validator ] && mv ./target/release/sui-test-validator ./target/release/sui-test-validator-${os_type}
+          [ -f ./target/release/sui-data-ingestion ] && mv ./target/release/sui-data-ingestion ./target/release/sui-data-ingestion-${os_type}
+          [ -f ./external-crates/move/target/release/move-analyzer ] && mv ./external-crates/move/target/release/move-analyzer ./external-crates/move/target/release/move-analyzer-${os_type}
           tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}* ./external-crates/move/target/release/move-analyzer-${os_type}
           [[ ${{ env.sui_tag }} == *"mainnet"* ]] && aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz || true
 
       - name: Rename binaries for Windows
-        if: ${{ env.sui_tag != 'main' && matrix.os == 'windows-ghcloud' }}
+        if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' }}
         shell: bash
         run: |
-          export arch=$(uname -m)
-          export os_type="windows-${arch}"
-          echo "os_type=${os_type}" >> $GITHUB_ENV
-          mv ./target/release/sui.exe ./target/release/sui-${os_type}.exe
-          mv ./target/release/sui-node.exe ./target/release/sui-node-${os_type}.exe
-          mv ./target/release/sui-tool.exe ./target/release/sui-tool-${os_type}.exe
-          mv ./target/release/sui-faucet.exe ./target/release/sui-faucet-${os_type}.exe
-          mv ./target/release/sui-test-validator.exe ./target/release/sui-test-validator-${os_type}.exe
-          mv ./target/release/sui-indexer.exe ./target/release/sui-indexer-${os_type}.exe
-          mv ./target/release/sui-data-ingestion.exe ./target/release/sui-data-ingestion-${os_type}.exe
-          mv ./external-crates/move/target/release/move-analyzer.exe ./external-crates/move/target/release/move-analyzer-${os_type}.exe
+          [ -f ./target/release/sui.exe ] && mv ./target/release/sui.exe ./target/release/sui-${os_type}.exe
+          [ -f ./target/release/sui-node.exe ] && mv ./target/release/sui-node.exe ./target/release/sui-node-${os_type}.exe
+          [ -f ./target/release/sui-tool.exe ] && mv ./target/release/sui-tool.exe ./target/release/sui-tool-${os_type}.exe
+          [ -f ./target/release/sui-faucet.exe ] && mv ./target/release/sui-faucet.exe ./target/release/sui-faucet-${os_type}.exe
+          [ -f ./target/release/sui-test-validator.exe ] && mv ./target/release/sui-test-validator.exe ./target/release/sui-test-validator-${os_type}.exe
+          [ -f ./target/release/sui-indexer.exe ] && mv ./target/release/sui-indexer.exe ./target/release/sui-indexer-${os_type}.exe
+          [ -f ./target/release/sui-data-ingestion.exe ] &&  mv ./target/release/sui-data-ingestion.exe ./target/release/sui-data-ingestion-${os_type}.exe
+          [ -f ./external-crates/move/target/release/move-analyzer.exe ] && mv ./external-crates/move/target/release/move-analyzer.exe ./external-crates/move/target/release/move-analyzer-${os_type}.exe
           tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}* ./external-crates/move/target/release/move-analyzer-${os_type}.exe
           [[ ${{ env.sui_tag }} == *"mainnet"* ]] && aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz || true
 
       - name: Upload release artifacts for ${{ matrix.os }} platform
-        if: ${{ env.sui_tag != 'main' }}
         uses: actions/upload-artifact@v3
         with:
           name: sui-binaries-${{ matrix.os }}
@@ -141,7 +165,6 @@ jobs:
             ./target/release/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
 
       - name: Publish binaries for ${{ env.sui_tag }} release
-        if: ${{ env.sui_tag != 'main' }}
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.sui_tag }}
@@ -149,10 +172,16 @@ jobs:
             ./target/release/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
 
   update-homebrew-formula:
+    name: Push binaries to homebrew
     needs: release-build
     runs-on: ubuntu-latest
-    if: ${{ contains(github.ref, 'mainnet') }}
+    if: ${{ contains( inputs.sui_tag, 'mainnet') || contains( github.ref, 'mainnet') }}
     steps:
+      - name: Clean up tag name ${{ env.TAG_NAME }}
+        shell: bash
+        run: | 
+          echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
+
       # Checkout MystenLabs/homebrew-tap
       - name: Checkout Target Repository
         uses: actions/checkout@v3
@@ -163,11 +192,6 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Clean up tag name ${{ env.TAG_NAME }}
-        shell: bash
-        run: | 
-          echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
-
       # Download all artifacts from the previous job
       - name: Download all artifacts
         uses: actions/download-artifact@v2
@@ -175,11 +199,11 @@ jobs:
       - name: Fetch Ubuntu x86_64 Binary and Compute SHA256
         shell: bash
         run: |
-          echo "sha256_ubuntu_release=$(sha256sum sui-binaries-ubuntu-ghcloud/sui-${sui_tag}-ubuntu-x86_64.tgz | awk '{print $1}')" >> $GITHUB_ENV
-          echo "sha256_macos_x86_release=$(sha256sum sui-binaries-macos-latest-xl/sui-${sui_tag}-macos-x86_64.tgz  | awk '{print $1}')" >> $GITHUB_ENV
-          echo "sha256_macos_arm_release$(sha256sum sui-binaries-macos-arm64-self-hosted/sui-${sui_tag}-macos-arm64.tgz | awk '{print $1}' )" >> $GITHUB_ENV
+          echo "sha256_ubuntu_release=$(sha256sum sui-binaries-ubuntu-ghcloud/sui-${{ env.sui_tag }}-ubuntu-x86_64.tgz | awk '{print $1}')" >> $GITHUB_ENV
+          echo "sha256_macos_x86_release=$(sha256sum sui-binaries-macos-latest-xl/sui-${{ env.sui_tag }}-macos-x86_64.tgz  | awk '{print $1}')" >> $GITHUB_ENV
+          echo "sha256_macos_arm_release=$(sha256sum sui-binaries-macos-arm64-self-hosted/sui-${{ env.sui_tag }}-macos-arm64.tgz | awk '{print $1}' )" >> $GITHUB_ENV
           
-    # Install Jinja2 for templating
+      # Install Jinja2 for templating
       - name: Install Jinja2
         run: pip install jinja2
 

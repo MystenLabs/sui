@@ -8,9 +8,9 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
 
-use sui_json_rpc::api::MoveUtilsClient;
-use sui_json_rpc::api::MoveUtilsServer;
 use sui_json_rpc::SuiRpcModule;
+use sui_json_rpc_api::MoveUtilsClient;
+use sui_json_rpc_api::MoveUtilsServer;
 use sui_json_rpc_types::{
     MoveFunctionArgType, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
     SuiMoveNormalizedStruct,
@@ -36,7 +36,7 @@ impl SuiRpcModule for MoveUtilsApi {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_json_rpc::api::MoveUtilsOpenRpc::module_doc()
+        sui_json_rpc_api::MoveUtilsOpenRpc::module_doc()
     }
 }
 

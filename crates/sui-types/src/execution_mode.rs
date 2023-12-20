@@ -155,6 +155,7 @@ impl ExecutionMode for System {
     type ExecutionResults = ();
 
     fn allow_arbitrary_function_calls() -> bool {
+        // allows bypassing visibility for system calls
         true
     }
 

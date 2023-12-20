@@ -8,8 +8,8 @@ use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
 
 use sui_json::SuiJsonValue;
-use sui_json_rpc::api::{TransactionBuilderClient, TransactionBuilderServer};
 use sui_json_rpc::SuiRpcModule;
+use sui_json_rpc_api::{TransactionBuilderClient, TransactionBuilderServer};
 use sui_json_rpc_types::{
     RPCTransactionRequestParams, SuiTransactionBlockBuilderMode, SuiTypeTag, TransactionBlockBytes,
 };
@@ -221,6 +221,6 @@ impl SuiRpcModule for TransactionBuilderApi {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_json_rpc::api::TransactionBuilderOpenRpc::module_doc()
+        sui_json_rpc_api::TransactionBuilderOpenRpc::module_doc()
     }
 }

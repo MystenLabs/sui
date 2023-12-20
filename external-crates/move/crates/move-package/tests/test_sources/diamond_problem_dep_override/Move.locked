@@ -2,7 +2,7 @@
 
 [move]
 version = 0
-manifest_digest = "FF5591B04075491B4A3E1F8758714AD147D4C1611F9DB9F4C4D6F9FD4D521DA9"
+manifest_digest = "F64B7E3BA42923C4AFD7490B03D34813BA434044DC83D46F869DD5BB9A6052B2"
 deps_digest = "060AD7E57DFB13104F21BE5F5C3759D03F0553FC3229247D9A7A6B45F50D03A3"
 
 dependencies = [
@@ -29,4 +29,4 @@ dependencies = [
 
 [[move.package]]
 name = "C"
-source = { local = "deps_only/C", version = "1.0.0" }
+source = { local = "deps_only/C-v1" }

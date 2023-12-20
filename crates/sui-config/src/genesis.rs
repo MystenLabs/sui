@@ -20,11 +20,13 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
 };
 use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
+use sui_types::storage::ObjectStore;
 use sui_types::sui_system_state::{
     get_sui_system_state, get_sui_system_state_wrapper, SuiSystemState, SuiSystemStateTrait,
     SuiSystemStateWrapper, SuiValidatorGenesis,
 };
 use sui_types::transaction::Transaction;
+use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use sui_types::{
     committee::{Committee, EpochId, ProtocolVersion},
     error::SuiResult,
@@ -335,6 +337,13 @@ impl UnsignedGenesis {
 
     pub fn authenticator_state_object(&self) -> Option<AuthenticatorStateInner> {
         get_authenticator_state(&self.objects()).expect("read from genesis cannot fail")
+    }
+
+    pub fn has_randomness_state_object(&self) -> bool {
+        self.objects()
+            .get_object(&SUI_RANDOMNESS_STATE_OBJECT_ID)
+            .expect("read from genesis cannot fail")
+            .is_some()
     }
 }
 

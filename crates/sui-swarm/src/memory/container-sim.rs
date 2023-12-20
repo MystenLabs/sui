@@ -6,6 +6,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Weak};
 use sui_config::NodeConfig;
 use sui_node::{SuiNode, SuiNodeHandle};
+use sui_types::base_types::ConciseableName;
 use tokio::sync::watch;
 use tracing::{info, trace};
 

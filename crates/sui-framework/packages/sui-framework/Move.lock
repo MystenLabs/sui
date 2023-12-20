@@ -2,6 +2,8 @@
 
 [move]
 version = 0
+manifest_digest = "20751505E200B1A5E766A503B01DF098239F2D7596998DA04016D9A34FC3E203"
+deps_digest = "F8BBB0CCB2491CA29A3DF03D6F92277A4F3574266507ACD77214D37ECA3F3082"
 
 dependencies = [
   { name = "MoveStdlib" },
@@ -10,3 +12,8 @@ dependencies = [
 [[move.package]]
 name = "MoveStdlib"
 source = { local = "../move-stdlib" }
+
+[move.toolchain-version]
+compiler-version = "1.16.0"
+edition = "legacy"
+flavor = "sui"

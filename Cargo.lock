@@ -406,7 +406,7 @@ dependencies = [
  "derivative",
  "digest 0.10.6",
  "itertools",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "num-traits",
  "paste",
  "rustc_version",
@@ -429,7 +429,7 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7abe79b0e4288889c4574159ab790824d0033b9fdcb2a112a3182fac2e514565"
 dependencies = [
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "num-traits",
  "proc-macro2 1.0.66",
  "quote 1.0.33",
@@ -495,7 +495,7 @@ dependencies = [
  "ark-serialize-derive",
  "ark-std",
  "digest 0.10.6",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
 ]
 
 [[package]]
@@ -725,6 +725,7 @@ dependencies = [
  "async-trait",
  "base64 0.13.1",
  "bytes",
+ "chrono",
  "fast_chemail",
  "fnv",
  "futures-channel",
@@ -732,12 +733,13 @@ dependencies = [
  "futures-util",
  "handlebars",
  "http",
- "indexmap 2.0.2",
+ "indexmap 2.1.0",
  "lru 0.7.8",
  "mime",
  "multer",
  "num-traits",
  "once_cell",
+ "opentelemetry 0.19.0",
  "pin-project-lite",
  "regex",
  "serde",
@@ -746,6 +748,8 @@ dependencies = [
  "static_assertions",
  "tempfile",
  "thiserror",
+ "tracing",
+ "tracing-futures",
 ]
 
 [[package]]
@@ -802,7 +806,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7d74240f9daa8c1e8f73e9cfcc338d20a88d00bbeb83ded49ce8e5b4dcec0f5"
 dependencies = [
  "bytes",
- "indexmap 2.0.2",
+ "indexmap 2.1.0",
  "serde",
  "serde_json",
 ]
@@ -3158,7 +3162,7 @@ dependencies = [
  "asn1-rs",
  "displaydoc",
  "nom",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "num-traits",
  "rusticata-macros",
 ]
@@ -4116,7 +4120,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.7"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=643831ec3b67bdd2b5f998c0bec1b7c91823351f#643831ec3b67bdd2b5f998c0bec1b7c91823351f"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=9579a60fbffe15c0f65626ae55998bf8ef42e193#9579a60fbffe15c0f65626ae55998bf8ef42e193"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -4147,6 +4151,7 @@ dependencies = [
  "hkdf",
  "lazy_static",
  "merlin",
+ "num-bigint 0.4.4",
  "once_cell",
  "p256",
  "rand 0.8.5",
@@ -4172,7 +4177,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=643831ec3b67bdd2b5f998c0bec1b7c91823351f#643831ec3b67bdd2b5f998c0bec1b7c91823351f"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=9579a60fbffe15c0f65626ae55998bf8ef42e193#9579a60fbffe15c0f65626ae55998bf8ef42e193"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2 1.0.66",
@@ -4183,7 +4188,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=643831ec3b67bdd2b5f998c0bec1b7c91823351f#643831ec3b67bdd2b5f998c0bec1b7c91823351f"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=9579a60fbffe15c0f65626ae55998bf8ef42e193#9579a60fbffe15c0f65626ae55998bf8ef42e193"
 dependencies = [
  "bcs",
  "bincode",
@@ -4204,7 +4209,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=643831ec3b67bdd2b5f998c0bec1b7c91823351f#643831ec3b67bdd2b5f998c0bec1b7c91823351f"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=9579a60fbffe15c0f65626ae55998bf8ef42e193#9579a60fbffe15c0f65626ae55998bf8ef42e193"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -4223,7 +4228,7 @@ dependencies = [
  "im",
  "lazy_static",
  "neptune",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "once_cell",
  "regex",
  "reqwest",
@@ -5328,9 +5333,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.0.2"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8adf3ddd720272c6ea8bf59463c04e0f93d0bbf7c5439b691bca2987e0270897"
+checksum = "d530e1a18b1cb4c484e6e34556a0d948706958449fca0cab753d649f2bce3d1f"
 dependencies = [
  "equivalent",
  "hashbrown 0.14.1",
@@ -6382,7 +6387,7 @@ dependencies = [
  "dirs-next",
  "hex",
  "move-core-types",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "once_cell",
  "serde",
  "sha2 0.9.9",
@@ -7168,7 +7173,7 @@ dependencies = [
  "fastcrypto-tbls",
  "hashbrown 0.12.3",
  "impl-trait-for-tuples",
- "indexmap 1.9.3",
+ "indexmap 2.1.0",
  "mysten-util-mem-derive",
  "once_cell",
  "parking_lot 0.12.1",
@@ -7291,7 +7296,7 @@ dependencies = [
  "bytes",
  "fastcrypto",
  "futures",
- "indexmap 1.9.3",
+ "indexmap 2.1.0",
  "mockall",
  "mysten-metrics",
  "narwhal-config",
@@ -7410,7 +7415,7 @@ dependencies = [
  "fastcrypto-tbls",
  "futures",
  "governor",
- "indexmap 1.9.3",
+ "indexmap 2.1.0",
  "itertools",
  "mockall",
  "mysten-common",
@@ -7450,6 +7455,7 @@ name = "narwhal-storage"
 version = "0.1.0"
 dependencies = [
  "fastcrypto",
+ "fastcrypto-tbls",
  "futures",
  "lru 0.10.0",
  "mysten-common",
@@ -7474,7 +7480,7 @@ dependencies = [
  "anemo",
  "fastcrypto",
  "fdlimit",
- "indexmap 1.9.3",
+ "indexmap 2.1.0",
  "itertools",
  "mysten-metrics",
  "mysten-network",
@@ -7516,7 +7522,7 @@ dependencies = [
  "fastcrypto",
  "fastcrypto-tbls",
  "futures",
- "indexmap 1.9.3",
+ "indexmap 2.1.0",
  "mockall",
  "mysten-common",
  "mysten-metrics",
@@ -7705,6 +7711,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "nonempty"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "995defdca0a589acfdd1bd2e8e3b896b4d4f7675a31fd14c32611440c7f608e6"
+
+[[package]]
 name = "nonzero_ext"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7802,7 +7814,7 @@ version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b05180d69e3da0e530ba2a1dae5110317e49e3b7f3d41be227dc5f92e49ee7af"
 dependencies = [
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "num-complex",
  "num-integer",
  "num-iter",
@@ -7823,9 +7835,9 @@ dependencies = [
 
 [[package]]
 name = "num-bigint"
-version = "0.4.3"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f93ab6289c7b344a8a9f60f88d80aa20032336fe78da341afc91c8a2341fc75f"
+checksum = "608e7659b5c3d7cba262d894801b9ec9d00de989e8a82bd4bef91d08da45cdc0"
 dependencies = [
  "autocfg",
  "num-integer",
@@ -7887,7 +7899,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0638a1c9d0a3c0914158145bc76cff373a75a627e6ecbfb71cbe6f453a5a19b0"
 dependencies = [
  "autocfg",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "num-integer",
  "num-traits",
 ]
@@ -8059,12 +8071,22 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "opentelemetry"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f4b8347cc26099d3aeee044065ecc3ae11469796b4d65d065a23a584ed92a6f"
+dependencies = [
+ "opentelemetry_api 0.19.0",
+ "opentelemetry_sdk 0.19.0",
+]
+
+[[package]]
+name = "opentelemetry"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9591d937bc0e6d2feb6f71a559540ab300ea49955229c347a517a28d27784c54"
 dependencies = [
- "opentelemetry_api",
- "opentelemetry_sdk",
+ "opentelemetry_api 0.20.0",
+ "opentelemetry_sdk 0.20.0",
 ]
 
 [[package]]
@@ -8078,8 +8100,8 @@ dependencies = [
  "http",
  "opentelemetry-proto",
  "opentelemetry-semantic-conventions",
- "opentelemetry_api",
- "opentelemetry_sdk",
+ "opentelemetry_api 0.20.0",
+ "opentelemetry_sdk 0.20.0",
  "prost 0.11.9",
  "thiserror",
  "tokio",
@@ -8092,8 +8114,8 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1e3f814aa9f8c905d0ee4bde026afd3b2577a97c10e1699912e3e44f0c4cbeb"
 dependencies = [
- "opentelemetry_api",
- "opentelemetry_sdk",
+ "opentelemetry_api 0.20.0",
+ "opentelemetry_sdk 0.20.0",
  "prost 0.11.9",
  "tonic 0.9.2",
 ]
@@ -8104,7 +8126,22 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73c9f9340ad135068800e7f1b24e9e09ed9e7143f5bf8518ded3d3ec69789269"
 dependencies = [
- "opentelemetry",
+ "opentelemetry 0.20.0",
+]
+
+[[package]]
+name = "opentelemetry_api"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed41783a5bf567688eb38372f2b7a8530f5a607a4b49d38dd7573236c23ca7e2"
+dependencies = [
+ "futures-channel",
+ "futures-util",
+ "indexmap 1.9.3",
+ "once_cell",
+ "pin-project-lite",
+ "thiserror",
+ "urlencoding",
 ]
 
 [[package]]
@@ -8125,6 +8162,24 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry_sdk"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b3a2a91fdbfdd4d212c0dcc2ab540de2c2bcbbd90be17de7a7daf8822d010c1"
+dependencies = [
+ "async-trait",
+ "crossbeam-channel",
+ "futures-channel",
+ "futures-executor",
+ "futures-util",
+ "once_cell",
+ "opentelemetry_api 0.19.0",
+ "percent-encoding",
+ "rand 0.8.5",
+ "thiserror",
+]
+
+[[package]]
+name = "opentelemetry_sdk"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa8e705a0612d48139799fcbaba0d4a90f06277153e43dd2bdc16c6f0edd8026"
@@ -8135,7 +8190,7 @@ dependencies = [
  "futures-executor",
  "futures-util",
  "once_cell",
- "opentelemetry_api",
+ "opentelemetry_api 0.20.0",
  "ordered-float 3.9.1",
  "percent-encoding",
  "rand 0.8.5",
@@ -8381,7 +8436,7 @@ dependencies = [
  "hashbrown 0.14.1",
  "lz4",
  "num",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "paste",
  "seq-macro",
  "snap",
@@ -9830,7 +9885,7 @@ dependencies = [
  "hex-literal 0.4.1",
  "hmac 0.12.1",
  "log",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "once_cell",
  "poly1305",
  "rand 0.8.5",
@@ -9876,7 +9931,7 @@ dependencies = [
  "inout",
  "log",
  "md5",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "num-integer",
  "pbkdf2 0.11.0",
  "rand 0.7.3",
@@ -11019,7 +11074,7 @@ dependencies = [
  "json_to_table",
  "move-core-types",
  "move-package",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "prometheus",
  "rand 0.8.5",
  "regex",
@@ -11273,6 +11328,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-authority-aggregation"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "mysten-metrics",
+ "sui-types",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-aws-orchestrator"
 version = "0.0.1"
 dependencies = [
@@ -11367,14 +11434,19 @@ dependencies = [
  "ethers",
  "eyre",
  "fastcrypto",
+ "futures",
  "move-core-types",
  "mysten-metrics",
  "once_cell",
  "prometheus",
+ "rand 0.8.5",
  "reqwest",
  "rocksdb",
  "serde",
  "serde_json",
+ "shared-crypto",
+ "sui-common",
+ "sui-config",
  "sui-json-rpc-types",
  "sui-sdk",
  "sui-types",
@@ -11386,6 +11458,7 @@ dependencies = [
  "tracing",
  "typed-store",
  "typed-store-derive",
+ "url",
  "workspace-hack",
 ]
 
@@ -11430,6 +11503,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-common"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "mysten-metrics",
+ "sui-types",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-config"
 version = "0.0.0"
 dependencies = [
@@ -11470,6 +11555,7 @@ dependencies = [
  "clap",
  "criterion",
  "dashmap",
+ "diffy",
  "either",
  "enum_dispatch",
  "expect-test",
@@ -11479,7 +11565,7 @@ dependencies = [
  "fs_extra",
  "futures",
  "im",
- "indexmap 1.9.3",
+ "indexmap 2.1.0",
  "itertools",
  "lru 0.10.0",
  "more-asserts",
@@ -11508,6 +11594,7 @@ dependencies = [
  "pretty_assertions",
  "prometheus",
  "rand 0.8.5",
+ "roaring",
  "rocksdb",
  "scopeguard",
  "serde",
@@ -11519,6 +11606,7 @@ dependencies = [
  "signature 1.6.4",
  "static_assertions",
  "sui-archival",
+ "sui-authority-aggregation",
  "sui-config",
  "sui-execution",
  "sui-framework",
@@ -11537,6 +11625,7 @@ dependencies = [
  "tap",
  "telemetry-subscribers",
  "tempfile",
+ "test-cluster",
  "test-fuzz",
  "thiserror",
  "tokio",
@@ -11614,7 +11703,7 @@ dependencies = [
  "fastcrypto-zkp",
  "fs_extra",
  "futures",
- "indexmap 1.9.3",
+ "indexmap 2.1.0",
  "insta",
  "jsonrpsee",
  "move-binary-format",
@@ -11630,6 +11719,7 @@ dependencies = [
  "sui-core",
  "sui-framework",
  "sui-json-rpc",
+ "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-keys",
  "sui-macros",
@@ -11854,6 +11944,7 @@ dependencies = [
  "chrono",
  "clap",
  "diesel",
+ "either",
  "expect-test",
  "fastcrypto",
  "futures",
@@ -11891,6 +11982,7 @@ dependencies = [
  "sui-sdk",
  "sui-swarm-config",
  "sui-types",
+ "tap",
  "telemetry-subscribers",
  "test-cluster",
  "thiserror",
@@ -11936,6 +12028,7 @@ dependencies = [
  "simulacrum",
  "sui-json",
  "sui-json-rpc",
+ "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-keys",
  "sui-move-build",
@@ -11991,9 +12084,9 @@ dependencies = [
  "fastcrypto",
  "futures",
  "hyper",
+ "indexmap 2.1.0",
  "itertools",
  "jsonrpsee",
- "linked-hash-map",
  "mockall",
  "move-binary-format",
  "move-bytecode-utils",
@@ -12008,6 +12101,7 @@ dependencies = [
  "signature 1.6.4",
  "sui-core",
  "sui-json",
+ "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-open-rpc",
  "sui-open-rpc-macros",
@@ -12023,6 +12117,26 @@ dependencies = [
  "tower-http",
  "tracing",
  "typed-store-error",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-json-rpc-api"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "fastcrypto",
+ "jsonrpsee",
+ "mysten-metrics",
+ "once_cell",
+ "prometheus",
+ "sui-json",
+ "sui-json-rpc-types",
+ "sui-open-rpc",
+ "sui-open-rpc-macros",
+ "sui-types",
+ "tap",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -12043,6 +12157,7 @@ dependencies = [
  "sui-core",
  "sui-json",
  "sui-json-rpc",
+ "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-keys",
  "sui-macros",
@@ -12099,6 +12214,7 @@ dependencies = [
  "bip32",
  "fastcrypto",
  "rand 0.8.5",
+ "regex",
  "serde",
  "serde_json",
  "shared-crypto",
@@ -12212,7 +12328,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-build"
-version = "0.0.0"
+version = "1.16.0"
 dependencies = [
  "anyhow",
  "datatest-stable",
@@ -12241,7 +12357,7 @@ dependencies = [
  "better_any",
  "fastcrypto",
  "fastcrypto-zkp",
- "linked-hash-map",
+ "indexmap 2.1.0",
  "move-binary-format",
  "move-core-types",
  "move-stdlib",
@@ -12379,6 +12495,7 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-json-rpc",
+ "sui-json-rpc-api",
  "sui-kvstore",
  "sui-macros",
  "sui-network",
@@ -12414,9 +12531,9 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
- "sui-core",
  "sui-json",
  "sui-json-rpc",
+ "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-protocol-config",
  "sui-types",
@@ -12590,6 +12707,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "serde_yaml 0.8.26",
+ "shared-crypto",
  "shellexpand",
  "similar",
  "sui-config",
@@ -12597,6 +12715,7 @@ dependencies = [
  "sui-execution",
  "sui-framework",
  "sui-json-rpc",
+ "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-protocol-config",
  "sui-sdk",
@@ -12723,7 +12842,7 @@ dependencies = [
  "shared-crypto",
  "sui-config",
  "sui-json",
- "sui-json-rpc",
+ "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-keys",
  "sui-transaction-builder",
@@ -12804,6 +12923,7 @@ dependencies = [
  "object_store",
  "prometheus",
  "serde",
+ "serde_json",
  "sui-core",
  "sui-protocol-config",
  "sui-storage",
@@ -12918,6 +13038,7 @@ dependencies = [
  "reqwest",
  "rocksdb",
  "serde",
+ "serde_json",
  "sui-json-rpc-types",
  "sui-macros",
  "sui-protocol-config",
@@ -12944,7 +13065,7 @@ dependencies = [
  "bcs",
  "clap",
  "futures",
- "indexmap 1.9.3",
+ "indexmap 2.1.0",
  "move-binary-format",
  "move-core-types",
  "move-package",
@@ -13188,6 +13309,7 @@ dependencies = [
  "msim",
  "once_cell",
  "rand 0.8.5",
+ "regex",
  "rocksdb",
  "serde_json",
  "simulacrum",
@@ -13197,6 +13319,7 @@ dependencies = [
  "sui-framework-snapshot",
  "sui-graphql-rpc",
  "sui-json-rpc",
+ "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-protocol-config",
  "sui-rest-api",
@@ -13229,7 +13352,7 @@ dependencies = [
  "fastcrypto",
  "fastcrypto-zkp",
  "im",
- "indexmap 1.9.3",
+ "indexmap 2.1.0",
  "itertools",
  "move-binary-format",
  "move-bytecode-utils",
@@ -13244,6 +13367,7 @@ dependencies = [
  "mysten-network",
  "narwhal-config",
  "narwhal-crypto",
+ "nonempty",
  "once_cell",
  "prometheus",
  "proptest",
@@ -13513,10 +13637,10 @@ dependencies = [
  "crossterm 0.25.0",
  "futures",
  "once_cell",
- "opentelemetry",
+ "opentelemetry 0.20.0",
  "opentelemetry-otlp",
  "opentelemetry-proto",
- "opentelemetry_api",
+ "opentelemetry_api 0.20.0",
  "prometheus",
  "prost 0.11.9",
  "tokio",
@@ -13614,6 +13738,7 @@ dependencies = [
  "sui-core",
  "sui-framework",
  "sui-json-rpc",
+ "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-keys",
  "sui-macros",
@@ -14250,6 +14375,8 @@ version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
 dependencies = [
+ "futures",
+ "futures-task",
  "pin-project",
  "tracing",
 ]
@@ -14272,8 +14399,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75327c6b667828ddc28f5e3f169036cb793c3f588d83bf0f262a7f062ffed3c8"
 dependencies = [
  "once_cell",
- "opentelemetry",
- "opentelemetry_sdk",
+ "opentelemetry 0.20.0",
+ "opentelemetry_sdk 0.20.0",
  "smallvec",
  "tracing",
  "tracing-core",
@@ -15603,7 +15730,7 @@ dependencies = [
  "include_dir_macros",
  "indenter",
  "indexmap 1.9.3",
- "indexmap 2.0.2",
+ "indexmap 2.1.0",
  "indicatif",
  "inotify",
  "inotify-sys",
@@ -15750,6 +15877,7 @@ dependencies = [
  "nix 0.24.3",
  "no-std-compat",
  "nom",
+ "nonempty",
  "nonzero_ext",
  "normalize-line-endings",
  "notify",
@@ -15760,7 +15888,7 @@ dependencies = [
  "nu-ansi-term",
  "num",
  "num-bigint 0.3.3",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "num-bigint-dig",
  "num-complex",
  "num-integer",
@@ -15781,12 +15909,15 @@ dependencies = [
  "open-fastrlp",
  "open-fastrlp-derive",
  "openssl-probe",
- "opentelemetry",
+ "opentelemetry 0.19.0",
+ "opentelemetry 0.20.0",
  "opentelemetry-otlp",
  "opentelemetry-proto",
  "opentelemetry-semantic-conventions",
- "opentelemetry_api",
- "opentelemetry_sdk",
+ "opentelemetry_api 0.19.0",
+ "opentelemetry_api 0.20.0",
+ "opentelemetry_sdk 0.19.0",
+ "opentelemetry_sdk 0.20.0",
  "option-ext",
  "ordered-float 2.10.1",
  "ordered-float 3.9.1",
@@ -16287,7 +16418,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aed2e7a52e3744ab4d0c05c20aa065258e84c49fd4226f5191b2ed29712710b4"
 dependencies = [
  "bit-vec",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.4",
  "time",
 ]
 

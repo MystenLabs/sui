@@ -135,10 +135,8 @@ pub async fn start_graphql_server_with_fn_rpc(
     let mut server_config = ServerConfig {
         connection: graphql_connection_config,
         service: ServiceConfig {
-            limits: Limits {
-                max_query_nodes: 500,
-                ..Limits::default()
-            },
+            // Use special limits for testing
+            limits: Limits::default_for_simulator_testing(),
             ..ServiceConfig::default()
         },
         ..ServerConfig::default()

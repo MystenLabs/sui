@@ -86,9 +86,6 @@ impl Hash for ZkLoginAuthenticator {
 }
 
 impl AuthenticatorTrait for ZkLoginAuthenticator {
-    fn check_author(&self) -> bool {
-        true
-    }
     fn verify_user_authenticator_epoch(&self, epoch: EpochId) -> SuiResult {
         // Verify the max epoch in aux inputs is <= the current epoch of authority.
         if epoch > self.get_max_epoch() {
@@ -106,17 +103,15 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         intent_msg: &IntentMessage<T>,
         author: SuiAddress,
         aux_verify_data: &VerifyParams,
-        check_author: bool,
     ) -> SuiResult
     where
         T: Serialize,
     {
-        // if check_author is true, author must be consistent with the zklogin address derived.
-        if check_author && aux_verify_data.verify_legacy_zklogin_address {
+        if aux_verify_data.verify_legacy_zklogin_address {
             if author != self.try_into()? && author != SuiAddress::legacy_try_from(self)? {
                 return Err(SuiError::InvalidAddress);
             }
-        } else if check_author && author != self.try_into()? {
+        } else if author != self.try_into()? {
             return Err(SuiError::InvalidAddress);
         }
 
@@ -153,12 +148,11 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         intent_msg: &IntentMessage<T>,
         author: SuiAddress,
         aux_verify_data: &VerifyParams,
-        check_author: bool,
     ) -> SuiResult
     where
         T: Serialize,
     {
-        self.verify_uncached_checks(intent_msg, author, aux_verify_data, check_author)?;
+        self.verify_uncached_checks(intent_msg, author, aux_verify_data)?;
 
         // Use flag || pk_bytes.
         let mut extended_pk_bytes = vec![self.user_signature.scheme().flag()];

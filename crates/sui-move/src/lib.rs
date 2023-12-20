@@ -5,8 +5,6 @@ use clap::Parser;
 #[cfg(feature = "unit_test")]
 use move_cli::base::test::UnitTestResult;
 use move_package::BuildConfig;
-#[cfg(feature = "unit_test")]
-use move_unit_test::UnitTestingConfig;
 use std::path::PathBuf;
 use sui_move_build::set_sui_flavor;
 
@@ -64,17 +62,7 @@ pub fn execute_move_command(
         Command::Prove(c) => c.execute(package_path, build_config),
         #[cfg(feature = "unit_test")]
         Command::Test(c) => {
-            let unit_test_config = UnitTestingConfig {
-                gas_limit: c.test.gas_limit,
-                filter: c.test.filter.clone(),
-                list: c.test.list,
-                num_threads: c.test.num_threads,
-                report_statistics: c.test.report_statistics.clone(),
-                check_stackless_vm: c.test.check_stackless_vm,
-                verbose: c.test.verbose_mode,
-                ..UnitTestingConfig::default_with_bound(None)
-            };
-            let result = c.execute(package_path, build_config, unit_test_config)?;
+            let result = c.execute(package_path, build_config)?;
 
             // Return a non-zero exit code if any test failed
             if let UnitTestResult::Failure = result {

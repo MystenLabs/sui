@@ -9,7 +9,7 @@ ResolvedGraph {
         always_deps: {
             "name",
         },
-        manifest_digest: "AC62FD89ADEA9C9E6795CE0CF0A809754CC517DA8C9E3D1A1A602636393187D6",
+        manifest_digest: "843626B76619D0C508D11EB76988677F42BF33AC853A0F44DA77BEAAF22AB355",
         deps_digest: "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
     },
     build_options: BuildConfig {
@@ -38,11 +38,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "name",
-                    version: (
-                        0,
-                        1,
-                        2,
-                    ),
                     authors: [
                         "some author",
                     ],

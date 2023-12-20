@@ -7,6 +7,7 @@ use std::sync::Mutex;
 use sui_config::NodeConfig;
 use sui_node::SuiNodeHandle;
 use sui_types::base_types::AuthorityName;
+use sui_types::base_types::ConciseableName;
 use tap::TapFallible;
 use tracing::{error, info};
 

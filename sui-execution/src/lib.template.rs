@@ -22,7 +22,6 @@ mod tests;
 // $FEATURE_CONSTS
 pub fn executor(
     protocol_config: &ProtocolConfig,
-    paranoid_type_checks: bool,
     silent: bool,
 ) -> SuiResult<Arc<dyn Executor + Send + Sync>> {
     let version = protocol_config.execution_version_as_option().unwrap_or(0);

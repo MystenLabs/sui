@@ -250,8 +250,8 @@ module deepbook::clob_v2 {
 
     /// Capability granting permission to access an entry in `Pool.quote_asset_trading_fees`.
     /// The pool objects created for older pools do not have a PoolOwnerCap because they were created
-    /// prior to the addition of this feature. Here is a list of 11 pools on mainnet that 
-    /// do not have this capability: 
+    /// prior to the addition of this feature. Here is a list of 11 pools on mainnet that
+    /// do not have this capability:
     /// 0x31d1790e617eef7f516555124155b28d663e5c600317c769a75ee6336a54c07f
     /// 0x6e417ee1c12ad5f2600a66bc80c7bd52ff3cb7c072d508700d17cf1325324527
     /// 0x17625f1a241d34d2da0dc113086f67a2b832e3e8cd8006887c195cd24d3598a3
@@ -272,21 +272,21 @@ module deepbook::clob_v2 {
 
     /// Accessor functions
     public fun usr_open_orders_exist<BaseAsset, QuoteAsset>(
-        pool: &Pool<BaseAsset, QuoteAsset>, 
+        pool: &Pool<BaseAsset, QuoteAsset>,
         owner: address
     ): bool {
         table::contains(&pool.usr_open_orders, owner)
     }
 
     public fun usr_open_orders_for_address<BaseAsset, QuoteAsset>(
-        pool: &Pool<BaseAsset, QuoteAsset>, 
+        pool: &Pool<BaseAsset, QuoteAsset>,
         owner: address
     ): &LinkedTable<u64, u64> {
         table::borrow(&pool.usr_open_orders, owner)
     }
 
     public fun usr_open_orders<BaseAsset, QuoteAsset>(
-        pool: &Pool<BaseAsset, QuoteAsset>, 
+        pool: &Pool<BaseAsset, QuoteAsset>,
     ): &Table<address, LinkedTable<u64, u64>> {
         &pool.usr_open_orders
     }
@@ -321,6 +321,7 @@ module deepbook::clob_v2 {
         mint_account_cap(ctx)
     }
 
+    #[lint_allow(self_transfer, share_owned)]
     fun create_pool_<BaseAsset, QuoteAsset>(
         taker_fee_rate: u64,
         maker_rebate_rate: u64,
@@ -403,8 +404,8 @@ module deepbook::clob_v2 {
         // Creates the capability to mark a pool owner.
         let id = object::new(ctx);
         let owner = object::uid_to_address(&id);
-        let pool_owner_cap = PoolOwnerCap { 
-            id, 
+        let pool_owner_cap = PoolOwnerCap {
+            id,
             owner
         };
 
@@ -453,6 +454,7 @@ module deepbook::clob_v2 {
         )
     }
 
+    #[lint_allow(self_transfer)]
     /// Function for creating pool with customized taker fee rate and maker rebate rate.
     /// The taker_fee_rate should be greater than or equal to the maker_rebate_rate, and both should have a scaling of 10^9.
     /// Taker_fee_rate of 0.25% should be 2_500_000 for example
@@ -476,8 +478,8 @@ module deepbook::clob_v2 {
         pool
     }
 
-    /// A V2 function for creating customized pools for better PTB friendliness/compostability. 
-    /// If a user wants to create a pool and then destroy/lock the pool_owner_cap one can do 
+    /// A V2 function for creating customized pools for better PTB friendliness/compostability.
+    /// If a user wants to create a pool and then destroy/lock the pool_owner_cap one can do
     /// so with this function.
     public fun create_customized_pool_v2<BaseAsset, QuoteAsset>(
         tick_size: u64,
@@ -1005,7 +1007,7 @@ module deepbook::clob_v2 {
                             &mut pool.quote_custodian,
                             maker_order.owner,
                             1
-                        );                            
+                        );
                         balance::join(&mut pool.quote_asset_trading_fees, rounded_down_quantity);
                     };
 

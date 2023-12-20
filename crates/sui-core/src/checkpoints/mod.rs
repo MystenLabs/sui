@@ -7,40 +7,54 @@ mod checkpoint_output;
 mod metrics;
 
 use crate::authority::{AuthorityState, EffectsNotifyRead};
+use crate::authority_client::{make_network_authority_clients_with_network_config, AuthorityAPI};
 use crate::checkpoints::causal_order::CausalOrder;
 use crate::checkpoints::checkpoint_output::{CertifiedCheckpointOutput, CheckpointOutput};
 pub use crate::checkpoints::checkpoint_output::{
     LogCheckpointOutput, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
-use crate::stake_aggregator::{InsertResult, StakeAggregator};
+use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use crate::state_accumulator::StateAccumulator;
+use diffy::create_patch;
 use futures::future::{select, Either};
 use futures::FutureExt;
+use itertools::Itertools;
 use mysten_metrics::{monitored_scope, spawn_monitored_task, MonitoredFutureExt};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use sui_macros::fail_point;
+use sui_network::default_mysten_network_config;
+use sui_types::base_types::ConciseableName;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::SequencedConsensusTransactionKey;
-use std::collections::HashSet;
+use chrono::Utc;
+use rand::rngs::OsRng;
+use rand::seq::SliceRandom;
+use std::collections::BTreeMap;
+use std::collections::{HashMap, HashSet};
+use std::fs::File;
+use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_protocol_config::ProtocolVersion;
-use sui_types::base_types::{EpochId, TransactionDigest};
-use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
+use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
+use sui_types::committee::StakeUnit;
+use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
-use sui_types::messages_checkpoint::SignedCheckpointSummary;
 use sui_types::messages_checkpoint::{
-    CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
-    CheckpointSignatureMessage, CheckpointSummary, CheckpointTimestamp, EndOfEpochData,
-    FullCheckpointContents, TrustedCheckpoint, VerifiedCheckpoint, VerifiedCheckpointContents,
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointResponseV2, CheckpointSequenceNumber,
+    CheckpointSignatureMessage, CheckpointSummary, CheckpointSummaryResponse, CheckpointTimestamp,
+    EndOfEpochData, FullCheckpointContents, TrustedCheckpoint, VerifiedCheckpoint,
+    VerifiedCheckpointContents,
 };
+use sui_types::messages_checkpoint::{CheckpointRequestV2, SignedCheckpointSummary};
 use sui_types::messages_consensus::ConsensusTransactionKey;
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
@@ -196,6 +210,13 @@ impl CheckpointStore {
             .map(|maybe_checkpoint| maybe_checkpoint.map(|c| c.into()))
     }
 
+    pub fn get_locally_computed_checkpoint(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Result<Option<CheckpointSummary>, TypedStoreError> {
+        self.locally_computed_checkpoints.get(&sequence_number)
+    }
+
     pub fn get_sequence_number_by_contents_digest(
         &self,
         digest: &CheckpointContentsDigest,
@@ -216,6 +237,14 @@ impl CheckpointStore {
             .skip_to_last()
             .next()
             .map(|(_, v)| v.into())
+    }
+
+    pub fn get_latest_locally_computed_checkpoint(&self) -> Option<CheckpointSummary> {
+        self.locally_computed_checkpoints
+            .unbounded_iter()
+            .skip_to_last()
+            .next()
+            .map(|(_, v)| v)
     }
 
     pub fn multi_get_checkpoint_by_sequence_number(
@@ -655,6 +684,7 @@ pub struct CheckpointAggregator {
     exit: watch::Receiver<()>,
     current: Option<CheckpointSignatureAggregator>,
     output: Box<dyn CertifiedCheckpointOutput>,
+    state: Arc<AuthorityState>,
     metrics: Arc<CheckpointMetrics>,
 }
 
@@ -663,7 +693,10 @@ pub struct CheckpointSignatureAggregator {
     next_index: u64,
     summary: CheckpointSummary,
     digest: CheckpointDigest,
-    signatures: StakeAggregator<AuthoritySignInfo, true>,
+    /// Aggregates voting stake for each signed checkpoint proposal by authority
+    signatures_by_digest: MultiStakeAggregator<CheckpointDigest, CheckpointSummary, true>,
+    tables: Arc<CheckpointStore>,
+    state: Arc<AuthorityState>,
     metrics: Arc<CheckpointMetrics>,
 }
 
@@ -709,8 +742,15 @@ impl CheckpointBuilder {
                 }
                 Ok(false) => (),
             };
-            let mut last = self.epoch_store.last_built_checkpoint_commit_height();
-            for (height, pending) in self.epoch_store.get_pending_checkpoints(last) {
+            let mut last = self
+                .epoch_store
+                .last_built_checkpoint_commit_height()
+                .expect("epoch should not have ended");
+            for (height, pending) in self
+                .epoch_store
+                .get_pending_checkpoints(last)
+                .expect("unexpected epoch store error")
+            {
                 last = Some(height);
                 debug!(
                     checkpoint_commit_height = height,
@@ -1206,6 +1246,7 @@ impl CheckpointAggregator {
         notify: Arc<Notify>,
         exit: watch::Receiver<()>,
         output: Box<dyn CertifiedCheckpointOutput>,
+        state: Arc<AuthorityState>,
         metrics: Arc<CheckpointMetrics>,
     ) -> Self {
         let current = None;
@@ -1216,6 +1257,7 @@ impl CheckpointAggregator {
             exit,
             current,
             output,
+            state,
             metrics,
         }
     }
@@ -1284,13 +1326,21 @@ impl CheckpointAggregator {
                     next_index: 0,
                     digest: summary.digest(),
                     summary,
-                    signatures: StakeAggregator::new(self.epoch_store.committee().clone()),
+                    signatures_by_digest: MultiStakeAggregator::new(
+                        self.epoch_store.committee().clone(),
+                    ),
+                    tables: self.tables.clone(),
+                    state: self.state.clone(),
                     metrics: self.metrics.clone(),
                 });
                 self.current.as_mut().unwrap()
             };
 
-            let iter = self.epoch_store.get_pending_checkpoint_signatures_iter(
+            let epoch_tables = self
+                .epoch_store
+                .tables()
+                .expect("should not run past end of epoch");
+            let iter = epoch_tables.get_pending_checkpoint_signatures_iter(
                 current.summary.sequence_number,
                 current.next_index,
             )?;
@@ -1363,23 +1413,9 @@ impl CheckpointSignatureAggregator {
         let their_digest = *data.summary.digest();
         let (_, signature) = data.summary.into_data_and_sig();
         let author = signature.authority;
-        // It is not guaranteed that signature.authority == narwhal_cert.author, but we do verify
-        // the signature so we know that the author signed the message at some point.
-        if their_digest != self.digest {
-            self.metrics.remote_checkpoint_forks.inc();
-            warn!(
-                checkpoint_seq = self.summary.sequence_number,
-                "Validator {:?} has mismatching checkpoint digest {}, we have digest {}",
-                author.concise(),
-                their_digest,
-                self.digest
-            );
-            return Err(());
-        }
-
         let envelope =
             SignedCheckpointSummary::new_from_data_and_sig(self.summary.clone(), signature);
-        match self.signatures.insert(envelope) {
+        match self.signatures_by_digest.insert(their_digest, envelope) {
             InsertResult::Failed { error } => {
                 warn!(
                     checkpoint_seq = self.summary.sequence_number,
@@ -1387,15 +1423,264 @@ impl CheckpointSignatureAggregator {
                     author.concise(),
                     error
                 );
+                self.check_for_split_brain();
                 Err(())
             }
-            InsertResult::QuorumReached(cert) => Ok(cert),
+            InsertResult::QuorumReached(cert) => {
+                // It is not guaranteed that signature.authority == narwhal_cert.author, but we do verify
+                // the signature so we know that the author signed the message at some point.
+                if their_digest != self.digest {
+                    self.metrics.remote_checkpoint_forks.inc();
+                    warn!(
+                        checkpoint_seq = self.summary.sequence_number,
+                        "Validator {:?} has mismatching checkpoint digest {}, we have digest {}",
+                        author.concise(),
+                        their_digest,
+                        self.digest
+                    );
+                    return Err(());
+                }
+                Ok(cert)
+            }
             InsertResult::NotEnoughVotes {
                 bad_votes: _,
                 bad_authorities: _,
-            } => Err(()),
+            } => {
+                self.check_for_split_brain();
+                Err(())
+            }
         }
     }
+
+    /// Check if there is a split brain condition in checkpoint signature aggregation, defined
+    /// as any state wherein it is no longer possible to achieve quorum on a checkpoint proposal,
+    /// irrespective of the outcome of any outstanding votes.
+    fn check_for_split_brain(&self) {
+        debug!(
+            checkpoint_seq = self.summary.sequence_number,
+            "Checking for split brain condition"
+        );
+        if self.signatures_by_digest.quorum_unreachable() {
+            // TODO: at this point we should immediately halt processing
+            // of new transaction certificates to avoid building on top of
+            // forked output
+            // self.halt_all_execution();
+
+            let digests_by_stake_messages = self
+                .signatures_by_digest
+                .get_all_unique_values()
+                .into_iter()
+                .sorted_by_key(|(_, (_, stake))| -(*stake as i64))
+                .map(|(digest, (_authorities, total_stake))| {
+                    format!("{:?} (total stake: {})", digest, total_stake)
+                })
+                .collect::<Vec<String>>();
+            error!(
+                checkpoint_seq = self.summary.sequence_number,
+                "Split brain detected in checkpoint signature aggregation! Remaining stake: {:?}, Digests by stake: {:?}",
+                self.signatures_by_digest.uncommitted_stake(),
+                digests_by_stake_messages,
+            );
+            self.metrics.split_brain_checkpoint_forks.inc();
+
+            let all_unique_values = self.signatures_by_digest.get_all_unique_values();
+            let local_summary = self.summary.clone();
+            let state = self.state.clone();
+            let tables = self.tables.clone();
+
+            tokio::spawn(async move {
+                diagnose_split_brain(all_unique_values, local_summary, state, tables).await;
+            });
+        }
+    }
+}
+
+/// Create data dump containing relevant data for diagnosing cause of the
+/// split brain by querying one disagreeing validator for full checkpoint contents.
+/// To minimize peer chatter, we only query one validator at random from each
+/// disagreeing faction, as all honest validators that participated in this round may
+/// inevitably run the same process.
+async fn diagnose_split_brain(
+    all_unique_values: BTreeMap<CheckpointDigest, (Vec<AuthorityName>, StakeUnit)>,
+    local_summary: CheckpointSummary,
+    state: Arc<AuthorityState>,
+    tables: Arc<CheckpointStore>,
+) {
+    debug!(
+        checkpoint_seq = local_summary.sequence_number,
+        "Running split brain diagnostics..."
+    );
+    let time = Utc::now();
+    // collect one random disagreeing validator per differing digest
+    let digest_to_validator = all_unique_values
+        .iter()
+        .filter_map(|(digest, (validators, _))| {
+            if *digest != local_summary.digest() {
+                let random_validator = validators.choose(&mut OsRng).unwrap();
+                Some((*digest, *random_validator))
+            } else {
+                None
+            }
+        })
+        .collect::<HashMap<_, _>>();
+    if digest_to_validator.is_empty() {
+        panic!(
+            "Given split brain condition, there should be at \
+                least one validator that disagrees with local signature"
+        );
+    }
+
+    let sui_system_state = state
+        .database
+        .get_sui_system_state_object()
+        .expect("Failed to get system state object");
+    let committee = sui_system_state.get_current_epoch_committee();
+    let network_config = default_mysten_network_config();
+    let network_clients =
+        make_network_authority_clients_with_network_config(&committee, &network_config)
+            .expect("Failed to make authority clients from committee {committee}");
+
+    // Query all disagreeing validators
+    let response_futures = digest_to_validator
+        .values()
+        .cloned()
+        .map(|validator| {
+            let client = network_clients
+                .get(&validator)
+                .expect("Failed to get network client");
+            let request = CheckpointRequestV2 {
+                sequence_number: Some(local_summary.sequence_number),
+                request_content: true,
+                certified: false,
+            };
+            client.handle_checkpoint_v2(request)
+        })
+        .collect::<Vec<_>>();
+
+    let digest_name_pair = digest_to_validator.iter();
+    let response_data = futures::future::join_all(response_futures)
+        .await
+        .into_iter()
+        .zip(digest_name_pair)
+        .filter_map(|(response, (digest, name))| match response {
+            Ok(response) => match response {
+                CheckpointResponseV2 {
+                    checkpoint: Some(CheckpointSummaryResponse::Pending(summary)),
+                    contents: Some(contents),
+                } => Some((*name, *digest, summary, contents)),
+                CheckpointResponseV2 {
+                    checkpoint: Some(CheckpointSummaryResponse::Certified(_)),
+                    contents: _,
+                } => {
+                    panic!("Expected pending checkpoint, but got certified checkpoint");
+                }
+                CheckpointResponseV2 {
+                    checkpoint: None,
+                    contents: _,
+                } => {
+                    error!(
+                        "Summary for checkpoint {:?} not found on validator {:?}",
+                        local_summary.sequence_number, name
+                    );
+                    None
+                }
+                CheckpointResponseV2 {
+                    checkpoint: _,
+                    contents: None,
+                } => {
+                    error!(
+                        "Contents for checkpoint {:?} not found on validator {:?}",
+                        local_summary.sequence_number, name
+                    );
+                    None
+                }
+            },
+            Err(e) => {
+                error!(
+                    "Failed to get checkpoint contents from validator for fork diagnostics: {:?}",
+                    e
+                );
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let local_checkpoint_contents = tables
+        .get_checkpoint_contents(&local_summary.content_digest)
+        .unwrap_or_else(|_| {
+            panic!(
+                "Could not find checkpoint contents for digest {:?}",
+                local_summary.digest()
+            )
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "Could not find local full checkpoint contents for checkpoint {:?}, digest {:?}",
+                local_summary.sequence_number,
+                local_summary.digest()
+            )
+        });
+    let local_contents_text = format!("{local_checkpoint_contents:?}");
+
+    let local_summary_text = format!("{local_summary:?}");
+    let local_validator = state.name.concise();
+    let diff_patches = response_data
+        .iter()
+        .map(|(name, other_digest, other_summary, contents)| {
+            let other_contents_text = format!("{contents:?}");
+            let other_summary_text = format!("{other_summary:?}");
+            let (local_transactions, local_effects): (Vec<_>, Vec<_>) = local_checkpoint_contents
+                .enumerate_transactions(&local_summary)
+                .map(|(_, exec_digest)| (exec_digest.transaction, exec_digest.effects))
+                .unzip();
+            let (other_transactions, other_effects): (Vec<_>, Vec<_>) = contents
+                .enumerate_transactions(other_summary)
+                .map(|(_, exec_digest)| (exec_digest.transaction, exec_digest.effects))
+                .unzip();
+            let summary_patch = create_patch(&local_summary_text, &other_summary_text);
+            let contents_patch = create_patch(&local_contents_text, &other_contents_text);
+            let local_transcations_text = format!("{local_transactions:#?}");
+            let other_transactions_text = format!("{other_transactions:#?}");
+            let transactions_patch =
+                create_patch(&local_transcations_text, &other_transactions_text);
+            let local_effects_text = format!("{local_effects:#?}");
+            let other_effects_text = format!("{other_effects:#?}");
+            let effects_patch = create_patch(&local_effects_text, &other_effects_text);
+            let seq_number = local_summary.sequence_number;
+            let local_digest = local_summary.digest();
+            let other_validator = name.concise();
+            format!(
+                "Checkpoint: {seq_number:?}\n\
+                Local validator (original): {local_validator:?}, digest: {local_digest:?}\n\
+                Other validator (modified): {other_validator:?}, digest: {other_digest:?}\n\n\
+                Summary Diff: \n{summary_patch}\n\n\
+                Contents Diff: \n{contents_patch}\n\n\
+                Transactions Diff: \n{transactions_patch}\n\n\
+                Effects Diff: \n{effects_patch}",
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n\n");
+
+    let header = format!(
+        "Checkpoint Fork Dump - Authority {local_validator:?}: \n\
+        Datetime: {time}",
+    );
+    let fork_logs_text = format!("{header}\n\n{diff_patches}\n\n");
+    let path = tempfile::tempdir()
+        .expect("Failed to create tempdir")
+        .into_path()
+        .join(Path::new("checkpoint_fork_dump.txt"));
+    let mut file = File::create(path).unwrap();
+    write!(file, "{}", fork_logs_text).unwrap();
+    debug!("{}", fork_logs_text);
+
+    fail_point!("split_brain_reached");
+
+    // There is no option to never restart the node, so choosing longer than should
+    // be needed for any testcase
+    // #[cfg(msim)]
+    // sui_simulator::task::kill_current_node(Some(Duration::from_secs(100)));
 }
 
 pub trait CheckpointServiceNotify {
@@ -1439,7 +1724,7 @@ impl CheckpointService {
         let (exit_snd, exit_rcv) = watch::channel(());
 
         let builder = CheckpointBuilder::new(
-            state,
+            state.clone(),
             checkpoint_store.clone(),
             epoch_store.clone(),
             notify_builder.clone(),
@@ -1461,12 +1746,15 @@ impl CheckpointService {
             notify_aggregator.clone(),
             exit_rcv,
             certified_checkpoint_output,
+            state.clone(),
             metrics.clone(),
         );
 
         spawn_monitored_task!(aggregator.run());
 
-        let last_signature_index = epoch_store.get_last_checkpoint_signature_index();
+        let last_signature_index = epoch_store
+            .get_last_checkpoint_signature_index()
+            .expect("should not cross end of epoch");
         let last_signature_index = Mutex::new(last_signature_index);
 
         let service = Arc::new(Self {
@@ -1572,14 +1860,13 @@ impl PendingCheckpoint {
 mod tests {
     use super::*;
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
-    use crate::state_accumulator::StateAccumulator;
     use async_trait::async_trait;
     use shared_crypto::intent::{Intent, IntentScope};
     use std::collections::{BTreeMap, HashMap};
     use std::ops::Deref;
     use sui_macros::sim_test;
     use sui_types::base_types::{ObjectID, SequenceNumber, TransactionEffectsDigest};
-    use sui_types::crypto::Signature;
+    use sui_types::crypto::{AuthoritySignInfo, Signature};
     use sui_types::effects::TransactionEffects;
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
     use sui_types::move_package::MovePackage;

@@ -80,30 +80,11 @@ impl Test {
         cost_table: Option<CostTable>,
     ) -> anyhow::Result<()> {
         let rerooted_path = reroot_path(path)?;
-        let Self {
-            gas_limit,
-            filter,
-            list,
-            num_threads,
-            report_statistics,
-            check_stackless_vm,
-            verbose_mode,
-            compute_coverage,
-        } = self;
-        let unit_test_config = UnitTestingConfig {
-            gas_limit,
-            filter,
-            list,
-            num_threads,
-            report_statistics,
-            check_stackless_vm,
-            verbose: verbose_mode,
-            ..UnitTestingConfig::default_with_bound(None)
-        };
+        let compute_coverage = self.compute_coverage;
         let result = run_move_unit_tests(
             &rerooted_path,
             config,
-            unit_test_config,
+            self.unit_test_config(),
             natives,
             cost_table,
             compute_coverage,
@@ -115,6 +96,29 @@ impl Test {
             std::process::exit(1)
         }
         Ok(())
+    }
+
+    pub fn unit_test_config(self) -> UnitTestingConfig {
+        let Self {
+            gas_limit,
+            filter,
+            list,
+            num_threads,
+            report_statistics,
+            check_stackless_vm,
+            verbose_mode,
+            compute_coverage: _,
+        } = self;
+        UnitTestingConfig {
+            gas_limit,
+            filter,
+            list,
+            num_threads,
+            report_statistics,
+            check_stackless_vm,
+            verbose: verbose_mode,
+            ..UnitTestingConfig::default_with_bound(None)
+        }
     }
 }
 

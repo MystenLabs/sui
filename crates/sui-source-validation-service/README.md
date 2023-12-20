@@ -1,6 +1,6 @@
 # Sui Source Validation Service
 
-This document describes the Sui Source Validation Service. It is engineering documentation primarily for Mysten Labs engineers who may want to build, extend, configure, or understand the service.
+This document describes the Sui Source Validation Service. It is engineering documentation primarily for engineers who may want to build, extend, configure, or understand the service.
 
 The Source Validation Service is a server that returns Move source code associated with on-chain Move bytecode. It fetches and builds Move source code for a repository, and then verifies that the built artifact matches the on-chain bytecode. 
 
@@ -65,8 +65,3 @@ For errors, or if the source code does not exist, an error encoded in JSON retur
 The URL parameters `address`, `module`, and `network` are required.
 
 Although not required, it is good practice to set the `X-Sui-Source-Validation-Version` header.
-
-## Mysten Labs documentation
-
-Refer to the [Notion doc](https://www.notion.so/mystenlabs/Move-Source-Provider-Service-91ec291be3b94c0f8133e981b76988c0) for internal details.
-

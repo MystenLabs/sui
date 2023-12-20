@@ -548,7 +548,7 @@ pub struct HeaderV1 {
     pub round: Round,
     pub epoch: Epoch,
     pub created_at: TimestampMs,
-    #[serde(with = "indexmap::serde_seq")]
+    #[serde(with = "indexmap::map::serde_seq")]
     pub payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
     pub parents: BTreeSet<CertificateDigest>,
     #[serde(skip)]
@@ -698,7 +698,7 @@ pub struct HeaderV2 {
     pub round: Round,
     pub epoch: Epoch,
     pub created_at: TimestampMs,
-    #[serde(with = "indexmap::serde_seq")]
+    #[serde(with = "indexmap::map::serde_seq")]
     pub payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
     pub system_messages: Vec<SystemMessage>,
     pub parents: BTreeSet<CertificateDigest>,
@@ -835,29 +835,6 @@ impl HeaderV2 {
                     worker_id,
                 )
                 .map_err(|_| DagError::HeaderHasBadWorkerIds(self.digest()))?;
-        }
-
-        // Ensure system messages are valid.
-        let mut has_dkg_message = false;
-        let mut has_dkg_confirmation = false;
-        for m in self.system_messages.iter() {
-            match m {
-                SystemMessage::DkgMessage(_) => {
-                    // A header must have no more than one DkgMessage.
-                    ensure!(!has_dkg_message, DagError::DuplicateSystemMessage);
-                    has_dkg_message = true;
-                }
-                SystemMessage::DkgConfirmation(_) => {
-                    // A header must have no more than one DkgConfirmation.
-                    ensure!(!has_dkg_confirmation, DagError::DuplicateSystemMessage);
-                    has_dkg_confirmation = true;
-                }
-                SystemMessage::RandomnessSignature(_round, _sig) => {
-                    // NOTE: correctness of the randomness signature is verified during header
-                    // voting. Security here relies on honest validators refusing to sign a
-                    // header with invalid randomness signature.
-                }
-            }
         }
 
         Ok(())

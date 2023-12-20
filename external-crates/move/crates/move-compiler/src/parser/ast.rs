@@ -158,6 +158,7 @@ new_name!(ModuleName);
 /// - An address numerical value
 pub enum LeadingNameAccess_ {
     AnonymousAddress(NumericalAddress),
+    GlobalAddress(Name),
     Name(Name),
 }
 pub type LeadingNameAccess = Spanned<LeadingNameAccess_>;
@@ -932,6 +933,7 @@ impl fmt::Display for LeadingNameAccess_ {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::AnonymousAddress(bytes) => write!(f, "{}", bytes),
+            Self::GlobalAddress(n) => write!(f, "::{}", n),
             Self::Name(n) => write!(f, "{}", n),
         }
     }

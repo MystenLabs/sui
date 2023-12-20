@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@amplitude/analytics-browser':
+        specifier: ^2.3.6
+        version: 2.3.6
       '@docusaurus/core':
         specifier: ^2.4.1
         version: 2.4.3(@docusaurus/types@2.4.3)(react-dom@17.0.2)(react@17.0.2)(typescript@4.9.5)
@@ -50,6 +53,9 @@ importers:
       docusaurus-plugin-includes:
         specifier: ^1.1.4
         version: 1.1.4(react-dom@17.0.2)(react@17.0.2)(typescript@4.9.5)
+      dotenv:
+        specifier: ^16.3.1
+        version: 16.3.1
       firebase:
         specifier: ^10.4.0
         version: 10.5.0
@@ -252,6 +258,58 @@ packages:
   /@alloc/quick-lru@5.2.0:
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
     engines: {node: '>=10'}
+    dev: false
+
+  /@amplitude/analytics-browser@2.3.6:
+    resolution: {integrity: sha512-P8N19qeoSDPO0crdQwa2yi+T0/UT4v9FqZrtXF3JW4kgxu++dTW/QkQ6bsv29EPg2N54xyr9IOt98q9EkZbA7A==}
+    dependencies:
+      '@amplitude/analytics-client-common': 2.0.9
+      '@amplitude/analytics-core': 2.1.2
+      '@amplitude/analytics-types': 2.3.1
+      '@amplitude/plugin-page-view-tracking-browser': 2.0.16
+      '@amplitude/plugin-web-attribution-browser': 2.0.16
+      tslib: 2.6.0
+    dev: false
+
+  /@amplitude/analytics-client-common@2.0.9:
+    resolution: {integrity: sha512-2CSUMY60Jemks/XVro8ikuHBebENzb+IxnUz4YPx5fmBPW7QW+ysmD+LgECeLhv9jWIQoDhuciscPLuRENKerA==}
+    dependencies:
+      '@amplitude/analytics-connector': 1.5.0
+      '@amplitude/analytics-core': 2.1.2
+      '@amplitude/analytics-types': 2.3.1
+      tslib: 2.6.0
+    dev: false
+
+  /@amplitude/analytics-connector@1.5.0:
+    resolution: {integrity: sha512-T8mOYzB9RRxckzhL0NTHwdge9xuFxXEOplC8B1Y3UX3NHa3BLh7DlBUZlCOwQgMc2nxDfnSweDL5S3bhC+W90g==}
+    dev: false
+
+  /@amplitude/analytics-core@2.1.2:
+    resolution: {integrity: sha512-vRkP2HHh43u7vilpUrP3Q8o/TMJ6U2B7nxPV9/aUS5V/im0Zigq4mPcn5uNY7FuTwsJM3zzRxK9J2WvfdG5bqA==}
+    dependencies:
+      '@amplitude/analytics-types': 2.3.1
+      tslib: 2.6.0
+    dev: false
+
+  /@amplitude/analytics-types@2.3.1:
+    resolution: {integrity: sha512-yojBG20qvph0rpCJKb4i/FJa+otqLINEwv//hfzvjnCOcPPyS0YscI8oiRBM0rG7kZIDgaL9a6jPwkqK4ACmcw==}
+    dev: false
+
+  /@amplitude/plugin-page-view-tracking-browser@2.0.16:
+    resolution: {integrity: sha512-o9YlpXm0BcnUEK47K5xAqEa/q7DOsKGb6F35gF5iGUFXTtBP+QVLTtNujfnfiO4V9g5JrkOhB/Wm2Sr34VNFhQ==}
+    dependencies:
+      '@amplitude/analytics-client-common': 2.0.9
+      '@amplitude/analytics-types': 2.3.1
+      tslib: 2.6.0
+    dev: false
+
+  /@amplitude/plugin-web-attribution-browser@2.0.16:
+    resolution: {integrity: sha512-IEYDrtZGJvBRhie7u9xIWNZhd0Z7heRx6A/+dNdERrW/akC1iAVmUyBZPMOR5ywVK7nwsymlVpFbPccuMoYTmg==}
+    dependencies:
+      '@amplitude/analytics-client-common': 2.0.9
+      '@amplitude/analytics-core': 2.1.2
+      '@amplitude/analytics-types': 2.3.1
+      tslib: 2.6.0
     dev: false
 
   /@ampproject/remapping@2.2.1:
@@ -5692,6 +5750,11 @@ packages:
     engines: {node: '>=8'}
     dependencies:
       is-obj: 2.0.0
+    dev: false
+
+  /dotenv@16.3.1:
+    resolution: {integrity: sha512-IPzF4w4/Rd94bA9imS68tZBaYyBWSCE47V1RGuMrB94iyTOIEwRmVL2x/4An+6mETpLrKJ5hQkB8W4kFAadeIQ==}
+    engines: {node: '>=12'}
     dev: false
 
   /duplexer3@0.1.5:

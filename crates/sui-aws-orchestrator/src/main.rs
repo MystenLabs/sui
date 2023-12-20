@@ -221,7 +221,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
     // Create a new testbed.
     let mut testbed = Testbed::new(settings.clone(), client)
         .await
-        .wrap_err("Failed to crate testbed")?;
+        .wrap_err("Failed to create testbed")?;
 
     match opts.operation {
         Operation::Testbed { action } => match action {

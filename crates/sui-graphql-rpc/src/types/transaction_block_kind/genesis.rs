@@ -82,7 +82,8 @@ impl GenesisTransaction {
 
         for (idx, object) in self.0.objects.iter().enumerate().skip(lo).take(hi - lo) {
             let GenesisObject::RawObject { data, owner } = object.clone();
-            let native = NativeObject::new_from_genesis(data, owner, TransactionDigest::genesis());
+            let native =
+                NativeObject::new_from_genesis(data, owner, TransactionDigest::genesis_marker());
 
             let storage_id = native.id();
             let object = Object::from_native(SuiAddress::from(storage_id), native);
