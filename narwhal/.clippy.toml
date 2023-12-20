@@ -3,7 +3,7 @@ cognitive-complexity-threshold = 100
 # types are used for safety encoding
 type-complexity-threshold = 10000
 # big constructors
-too-many-arguments-threshold =  15
+too-many-arguments-threshold =  20
 
 disallowed-methods = [
     {path = "anyhow", reason = "we prefer to use eyre"},

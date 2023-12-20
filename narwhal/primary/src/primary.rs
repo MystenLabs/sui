@@ -515,7 +515,7 @@ impl Primary {
             tx_headers,
             tx_narwhal_round_updates,
             rx_committed_own_headers,
-            node_metrics,
+            node_metrics.clone(),
             leader_schedule.clone(),
         );
 
@@ -544,6 +544,7 @@ impl Primary {
             leader_schedule,
             network,
             randomness_store,
+            node_metrics,
         );
         handles.push(state_handler_handle);
 

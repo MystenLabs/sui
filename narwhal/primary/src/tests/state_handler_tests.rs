@@ -8,6 +8,7 @@ use fastcrypto::{
     traits::{KeyPair, ToFromBytes},
 };
 
+use prometheus::Registry;
 use test_utils::CommitteeFixture;
 
 #[tokio::test]
@@ -30,6 +31,7 @@ async fn dkg() {
     for authority in fixture.authorities() {
         let network = test_utils::test_network(authority.network_keypair(), authority.address());
         let randomness_store = RandomnessStore::new_for_tests();
+        let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
         let vss_key_output = Arc::new(OnceLock::new());
 
         let (tx_system_messages, rx_system_messages) = test_utils::test_channel!(1);
@@ -57,6 +59,7 @@ async fn dkg() {
             vss_key_output.clone(),
             tx_system_messages,
             randomness_store,
+            metrics,
         )
         .unwrap();
 
@@ -139,6 +142,7 @@ async fn resume_from_store() {
         let randomness_store = RandomnessStore::new_for_tests();
         randomness_stores.push(randomness_store.clone());
         let vss_key_output = Arc::new(OnceLock::new());
+        let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
         let (tx_system_messages, rx_system_messages) = test_utils::test_channel!(2);
 
@@ -165,6 +169,7 @@ async fn resume_from_store() {
             vss_key_output.clone(),
             tx_system_messages,
             randomness_store,
+            metrics,
         )
         .unwrap();
 
@@ -218,6 +223,7 @@ async fn resume_from_store() {
     for (i, authority) in fixture.authorities().enumerate() {
         let network = test_utils::test_network(authority.network_keypair(), authority.address());
         let (tx_system_messages, rx_system_messages) = test_utils::test_channel!(2);
+        let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
         let randomness_private_key = RandomnessPrivateKey::from(
             fastcrypto::groups::bls12381::Scalar::from_byte_array(
@@ -242,6 +248,7 @@ async fn resume_from_store() {
             vss_key_outputs[i].clone(),
             tx_system_messages,
             randomness_stores[i].clone(),
+            metrics,
         )
         .unwrap();
         // called by StateHandler::run on restart
