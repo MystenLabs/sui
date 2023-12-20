@@ -16,6 +16,7 @@ use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, VersionNumber},
     committee::{Committee, EpochId},
+    crypto::AccountKeyPair,
     digests::{ObjectDigest, TransactionDigest, TransactionEventsDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
     error::{SuiError, SuiResult, UserInputError},
@@ -107,6 +108,7 @@ impl PersistedStore {
         chain_start_timestamp_ms: u64,
         protocol_version: ProtocolVersion,
         account_configs: Vec<AccountConfig>,
+        validator_keys: Option<Vec<AccountKeyPair>>,
         path: Option<PathBuf>,
     ) -> (Simulacrum<R, Self>, PersistedStoreInnerReadOnlyWrapper)
     where
@@ -114,13 +116,21 @@ impl PersistedStore {
     {
         let path: PathBuf = path.unwrap_or(tempdir().unwrap().into_path());
 
-        let config = ConfigBuilder::new_with_temp_dir()
+        let builder = ConfigBuilder::new_with_temp_dir()
             .rng(&mut rng)
             .with_chain_start_timestamp_ms(chain_start_timestamp_ms)
             .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
             .with_protocol_version(protocol_version)
-            .with_accounts(account_configs)
-            .build();
+            .with_accounts(account_configs);
+
+        let config = if let Some(validator_keys) = validator_keys {
+            builder
+                .deterministic_committee_validators(validator_keys)
+                .build()
+        } else {
+            builder.build()
+        };
+
         let genesis = &config.genesis;
 
         let store = PersistedStore::new(genesis, path);
@@ -146,6 +156,7 @@ impl PersistedStore {
             chain_start_timestamp_ms,
             protocol_version,
             account_configs,
+            None,
             path,
         )
         .0

@@ -52,6 +52,8 @@ pub struct SuiInitArgs {
     pub shared_object_deletion: Option<bool>,
     #[clap(long = "simulator")]
     pub simulator: bool,
+    #[clap(long = "custom-validator-account")]
+    pub custom_validator_account: bool,
 }
 
 #[derive(Debug, clap::Parser)]

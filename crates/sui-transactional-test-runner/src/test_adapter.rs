@@ -9,7 +9,9 @@ use crate::{TransactionalAdapter, ValidatorWithFullnode};
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
+use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::encoding::{Base64, Encoding};
+use fastcrypto::traits::ToFromBytes;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::{
@@ -193,44 +195,65 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         );
 
         // Unpack the init arguments
-        let (additional_mapping, account_names, protocol_config, is_simulator) =
-            match task_opt.map(|t| t.command) {
-                Some((
-                    InitCommand { named_addresses },
-                    SuiInitArgs {
-                        accounts,
-                        protocol_version,
-                        max_gas,
-                        shared_object_deletion,
-                        simulator,
-                    },
-                )) => {
-                    let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
-                    let accounts = accounts
-                        .map(|v| v.into_iter().collect::<BTreeSet<_>>())
-                        .unwrap_or_default();
+        let (
+            additional_mapping,
+            account_names,
+            protocol_config,
+            is_simulator,
+            custom_validator_account,
+        ) = match task_opt.map(|t| t.command) {
+            Some((
+                InitCommand { named_addresses },
+                SuiInitArgs {
+                    accounts,
+                    protocol_version,
+                    max_gas,
+                    shared_object_deletion,
+                    simulator,
+                    custom_validator_account,
+                },
+            )) => {
+                let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
+                let accounts = accounts
+                    .map(|v| v.into_iter().collect::<BTreeSet<_>>())
+                    .unwrap_or_default();
 
-                    let mut protocol_config = if let Some(protocol_version) = protocol_version {
-                        ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
-                    } else {
-                        ProtocolConfig::get_for_max_version_UNSAFE()
-                    };
-                    if let Some(enable) = shared_object_deletion {
-                        protocol_config.set_shared_object_deletion(enable);
-                    }
-                    if let Some(mx_tx_gas_override) = max_gas {
-                        if simulator {
-                            panic!("Cannot set max gas in simulator mode");
-                        }
-                        protocol_config.set_max_tx_gas_for_testing(mx_tx_gas_override)
-                    }
-                    (map, accounts, protocol_config, simulator)
+                let mut protocol_config = if let Some(protocol_version) = protocol_version {
+                    ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
+                } else {
+                    ProtocolConfig::get_for_max_version_UNSAFE()
+                };
+                if let Some(enable) = shared_object_deletion {
+                    protocol_config.set_shared_object_deletion(enable);
                 }
-                None => {
-                    let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-                    (BTreeMap::new(), BTreeSet::new(), protocol_config, false)
+                if let Some(mx_tx_gas_override) = max_gas {
+                    if simulator {
+                        panic!("Cannot set max gas in simulator mode");
+                    }
+                    protocol_config.set_max_tx_gas_for_testing(mx_tx_gas_override)
                 }
-            };
+                if custom_validator_account && !simulator {
+                    panic!("Can only set custom validator account in simulator mode");
+                }
+                (
+                    map,
+                    accounts,
+                    protocol_config,
+                    simulator,
+                    custom_validator_account,
+                )
+            }
+            None => {
+                let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+                (
+                    BTreeMap::new(),
+                    BTreeSet::new(),
+                    protocol_config,
+                    false,
+                    false,
+                )
+            }
+        };
 
         let (
             executor,
@@ -243,7 +266,14 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             },
             cluster,
         ) = if is_simulator {
-            init_sim_executor(rng, account_names, additional_mapping, &protocol_config).await
+            init_sim_executor(
+                rng,
+                account_names,
+                additional_mapping,
+                &protocol_config,
+                custom_validator_account,
+            )
+            .await
         } else {
             init_val_fullnode_executor(rng, account_names, additional_mapping, &protocol_config)
                 .await
@@ -1833,6 +1863,7 @@ async fn init_sim_executor(
     account_names: BTreeSet<String>,
     additional_mapping: BTreeMap<String, NumericalAddress>,
     protocol_config: &ProtocolConfig,
+    custom_validator_account: bool,
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
@@ -1854,6 +1885,19 @@ async fn init_sim_executor(
     // Make a default account keypair
     let default_account_kp = get_key_pair_from_rng(&mut rng);
 
+    let (mut validator_addr, mut validator_key, mut key_copy) = (None, None, None);
+    if custom_validator_account {
+        // Make a validator account with a gas object
+        let (a, b): (SuiAddress, Ed25519KeyPair) = get_key_pair_from_rng(&mut rng);
+
+        key_copy = Some(
+            Ed25519KeyPair::from_bytes(b.as_bytes())
+                .expect("FATAL: recovering key from bytes failed"),
+        );
+        validator_addr = Some(a);
+        validator_key = Some(b);
+    }
+
     let mut acc_cfgs = account_kps
         .values()
         .map(|acc| AccountConfig {
@@ -1866,6 +1910,13 @@ async fn init_sim_executor(
         gas_amounts: vec![GAS_FOR_TESTING],
     });
 
+    if let Some(v_addr) = validator_addr {
+        acc_cfgs.push(AccountConfig {
+            address: Some(v_addr),
+            gas_amounts: vec![GAS_FOR_TESTING],
+        });
+    }
+
     // Create the simulator with the specific account configs, which also crates objects
 
     let (sim, read_replica) = PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
@@ -1873,6 +1924,7 @@ async fn init_sim_executor(
         DEFAULT_CHAIN_START_TIMESTAMP,
         protocol_config.version,
         acc_cfgs,
+        key_copy.map(|q| vec![q]),
         None,
     );
 
@@ -1909,6 +1961,18 @@ async fn init_sim_executor(
         gas: o.id(),
     };
     objects.push(o.clone());
+
+    if let (Some(v_addr), Some(v_key)) = (validator_addr, validator_key) {
+        let o = sim.store().owned_objects(v_addr).next().unwrap();
+        let validator_account = TestAccount {
+            address: v_addr,
+            key_pair: v_key,
+            gas: o.id(),
+        };
+        objects.push(o.clone());
+        account_objects.insert("validator_0".to_string(), o.id());
+        accounts.insert("validator_0".to_string(), validator_account);
+    }
 
     let sim = Box::new(sim);
     update_named_address_mapping(
@@ -1960,8 +2024,14 @@ async fn update_named_address_mapping(
         }));
     // Extend the mappings of all named addresses with values
     for (name, addr) in additional_mapping {
-        if named_address_mapping.contains_key(&name) || name == "sui" {
-            panic!("Invalid init. The named address '{}' is reserved", name)
+        if (named_address_mapping.contains_key(&name)
+            && (named_address_mapping.get(&name) != Some(&addr)))
+            || name == "sui"
+        {
+            panic!(
+                "Invalid init. The named address '{}' is reserved or duplicated",
+                name
+            )
         }
         named_address_mapping.insert(name, addr);
     }

@@ -1,35 +1,53 @@
-processed 18 tasks
+processed 22 tasks
+
+init:
+validator_0: object(0,0)
 
 task 1 'publish'. lines 6-28:
 created: object(1,0)
-mutated: object(0,0)
+mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'run'. lines 30-30:
 created: object(2,0)
-mutated: object(0,0)
+mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'view-object'. lines 32-32:
+task 3 'run'. lines 32-32:
+created: object(3,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4 'view-object'. lines 34-34:
+Owner: Account Address ( validator_0 )
+Version: 1
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(0,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 300000000000000u64}}
+
+task 5 'view-object'. lines 36-36:
 Owner: Account Address ( A )
 Version: 3
 Contents: Test::M1::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, value: 0u64}
 
-task 4 'create-checkpoint'. lines 34-34:
+task 6 'view-object'. lines 38-38:
+Owner: Account Address ( validator_0 )
+Version: 4
+Contents: Test::M1::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, value: 0u64}
+
+task 7 'create-checkpoint'. lines 40-40:
 Checkpoint created: 4
 
-task 5 'view-checkpoint'. lines 36-36:
+task 8 'view-checkpoint'. lines 42-42:
 CheckpointSummary { epoch: 0, seq: 4, content_digest: D3oWLCcqoa1D15gxzvMaDemNNY8YYVspAkYkcmtQKWRt,
-            epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 2000000, storage_cost: 7873600, storage_rebate: 978120, non_refundable_storage_fee: 9880 }}
+            epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 3000000, storage_cost: 10176400, storage_rebate: 1956240, non_refundable_storage_fee: 19760 }}
 
-task 6 'advance-epoch'. lines 39-39:
+task 9 'advance-epoch'. lines 45-45:
 Epoch advanced: 5
 
-task 7 'view-checkpoint'. lines 41-41:
-CheckpointSummary { epoch: 5, seq: 10, content_digest: AaGWM2up1B5QdU7o9ctwmHZG6f6c4UjGBvoer9eCnkDd,
+task 10 'view-checkpoint'. lines 47-47:
+CheckpointSummary { epoch: 5, seq: 10, content_digest: 4KLqzsAnSygM18BqycTKbzQAQXn2u9qio2n5f4fR38SE,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}
 
-task 8 'run-graphql'. lines 43-49:
+task 11 'run-graphql'. lines 49-55:
 Response: {
   "data": {
     "checkpoint": {
@@ -38,14 +56,14 @@ Response: {
   }
 }
 
-task 9 'create-checkpoint'. lines 50-50:
+task 12 'create-checkpoint'. lines 56-56:
 Checkpoint created: 11
 
-task 10 'view-checkpoint'. lines 52-52:
+task 13 'view-checkpoint'. lines 58-58:
 CheckpointSummary { epoch: 6, seq: 11, content_digest: D3oWLCcqoa1D15gxzvMaDemNNY8YYVspAkYkcmtQKWRt,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}
 
-task 11 'run-graphql'. lines 54-60:
+task 14 'run-graphql'. lines 60-66:
 Response: {
   "data": {
     "checkpoint": {
@@ -54,7 +72,7 @@ Response: {
   }
 }
 
-task 12 'run-graphql'. lines 62-68:
+task 15 'run-graphql'. lines 68-74:
 Headers: {
     "content-type": "application/json",
     "content-length": "137",
@@ -78,14 +96,14 @@ Response: {
   }
 }
 
-task 13 'view-checkpoint'. lines 70-70:
+task 16 'view-checkpoint'. lines 76-76:
 CheckpointSummary { epoch: 6, seq: 11, content_digest: D3oWLCcqoa1D15gxzvMaDemNNY8YYVspAkYkcmtQKWRt,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}
 
-task 14 'advance-epoch'. lines 72-75:
+task 17 'advance-epoch'. lines 78-81:
 Epoch advanced: 6
 
-task 15 'run-graphql'. lines 77-90:
+task 18 'run-graphql'. lines 83-96:
 Response: {
   "data": {
     "address": {
@@ -93,8 +111,8 @@ Response: {
         "edges": [
           {
             "node": {
-              "address": "0x2faa8cde545cf5717ba1f316263c6b4151883c34eb63f4c7b2f8282b3eb036fe",
-              "digest": "5ESn7RatpiGbkdEpsFshBKwVZ7BREknm7NNFbCZqrSxb",
+              "address": "0x81b508e2df789fc89785590f2a3413b330e810010d25af5006f09a647a99ed9f",
+              "digest": "HL2USdjNFqEqPqpPgtefntGEw7gmgb152dmjXaBcpsoY",
               "kind": "OWNED"
             }
           }
@@ -104,7 +122,7 @@ Response: {
   }
 }
 
-task 16 'run-graphql'. lines 92-124:
+task 19 'run-graphql'. lines 98-145:
 Response: {
   "data": {
     "address": {
@@ -117,9 +135,75 @@ Response: {
         "edges": [
           {
             "node": {
-              "address": "0x2faa8cde545cf5717ba1f316263c6b4151883c34eb63f4c7b2f8282b3eb036fe",
-              "digest": "5ESn7RatpiGbkdEpsFshBKwVZ7BREknm7NNFbCZqrSxb",
+              "address": "0x81b508e2df789fc89785590f2a3413b330e810010d25af5006f09a647a99ed9f",
+              "digest": "HL2USdjNFqEqPqpPgtefntGEw7gmgb152dmjXaBcpsoY",
               "kind": "OWNED"
+            }
+          }
+        ]
+      }
+    },
+    "val_objs": {
+      "objectConnection": {
+        "edges": [
+          {
+            "node": {
+              "address": "0x0b177c8aa77c33ab2dfb1af13a52b1a2ac97c2b9c0e641dc4c7f1609735f8f3f",
+              "digest": "38bdMdyjJVRXafC56RCqC1mJcCFWRsEZPeTzXUMGEdLC",
+              "kind": "OWNED",
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            }
+          },
+          {
+            "node": {
+              "address": "0x3814cdff85d18270ce8850a2a943e7d4a8dde4c8271d693c39546a300d33a792",
+              "digest": "6RwCJHJmPu1YEYPjNDDP9PQPnY3sJdMExzJQv33LyhJH",
+              "kind": "OWNED",
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            }
+          },
+          {
+            "node": {
+              "address": "0x88808c636f5020925521565a60088f309c221b2ef4bb6b70911c2b44d4c5f965",
+              "digest": "BHKPb1Yg5pvtfVZE3ySPGy6rybxpB3XkbQxVw76CTDRh",
+              "kind": "OWNED",
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            }
+          },
+          {
+            "node": {
+              "address": "0xd0f352d0ac08c0f9b32a575bce8838057322c591c6f92eeb66b7c4170a48db52",
+              "digest": "GSFUiXTMbxmZcPnmmdGZJ1e2rqf98gwaoEHHNch1uJge",
+              "kind": "OWNED",
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            }
+          },
+          {
+            "node": {
+              "address": "0xd2367e4e4461dff0b8e67036178802a26e05bd316abefb84c06b9cf5d2b6dad6",
+              "digest": "FkQoDMyh3EWhrnfGjtwm3b9t3aXwbJWCwqRgvBjHr7Rc",
+              "kind": "OWNED",
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            }
+          },
+          {
+            "node": {
+              "address": "0xec7692305da2e93b324301e31ad3193b1119628a3e63b9d69d80fd53c9c6916c",
+              "digest": "8CCmA9XYNEYftrQ3hkPkFfyj3NFc84x89bYTJAFaTgLE",
+              "kind": "OWNED",
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
             }
           }
         ]
@@ -134,7 +218,7 @@ Response: {
   }
 }
 
-task 17 'view-graphql-variables'. lines 127-128:
+task 20 'view-graphql-variables'. lines 148-149:
 Name: A
 Type: SuiAddress!
 Value: "0x42"
@@ -145,11 +229,11 @@ Value: "0x42"
 
 Name: Test
 Type: SuiAddress!
-Value: "0x1673d5edd79bfb49b665ffabc9b2df1a2abb43a38e80c85d12a001d71d4dcfb9"
+Value: "0x7a80c1bfb4c260fec830453be1abf54a304cd46db10fa99d24bd8d2c389e03c8"
 
 Name: Test_opt
 Type: SuiAddress
-Value: "0x1673d5edd79bfb49b665ffabc9b2df1a2abb43a38e80c85d12a001d71d4dcfb9"
+Value: "0x7a80c1bfb4c260fec830453be1abf54a304cd46db10fa99d24bd8d2c389e03c8"
 
 Name: deepbook
 Type: SuiAddress!
@@ -161,27 +245,43 @@ Value: "0xdee9"
 
 Name: obj_0_0
 Type: SuiAddress!
-Value: "0x27918e2d1886f52d8d71f38a86dfa8822448b198cbd3747ca3b0b4b0b7048c55"
+Value: "0x0b177c8aa77c33ab2dfb1af13a52b1a2ac97c2b9c0e641dc4c7f1609735f8f3f"
 
 Name: obj_0_0_opt
 Type: SuiAddress
-Value: "0x27918e2d1886f52d8d71f38a86dfa8822448b198cbd3747ca3b0b4b0b7048c55"
+Value: "0x0b177c8aa77c33ab2dfb1af13a52b1a2ac97c2b9c0e641dc4c7f1609735f8f3f"
+
+Name: obj_0_1
+Type: SuiAddress!
+Value: "0x223d6640016f80ca95dfbae6d44b8faa1294ad6d1a5941a9789e11c3bb6e28ca"
+
+Name: obj_0_1_opt
+Type: SuiAddress
+Value: "0x223d6640016f80ca95dfbae6d44b8faa1294ad6d1a5941a9789e11c3bb6e28ca"
 
 Name: obj_1_0
 Type: SuiAddress!
-Value: "0x1673d5edd79bfb49b665ffabc9b2df1a2abb43a38e80c85d12a001d71d4dcfb9"
+Value: "0x7a80c1bfb4c260fec830453be1abf54a304cd46db10fa99d24bd8d2c389e03c8"
 
 Name: obj_1_0_opt
 Type: SuiAddress
-Value: "0x1673d5edd79bfb49b665ffabc9b2df1a2abb43a38e80c85d12a001d71d4dcfb9"
+Value: "0x7a80c1bfb4c260fec830453be1abf54a304cd46db10fa99d24bd8d2c389e03c8"
 
 Name: obj_2_0
 Type: SuiAddress!
-Value: "0x2faa8cde545cf5717ba1f316263c6b4151883c34eb63f4c7b2f8282b3eb036fe"
+Value: "0x81b508e2df789fc89785590f2a3413b330e810010d25af5006f09a647a99ed9f"
 
 Name: obj_2_0_opt
 Type: SuiAddress
-Value: "0x2faa8cde545cf5717ba1f316263c6b4151883c34eb63f4c7b2f8282b3eb036fe"
+Value: "0x81b508e2df789fc89785590f2a3413b330e810010d25af5006f09a647a99ed9f"
+
+Name: obj_3_0
+Type: SuiAddress!
+Value: "0x3814cdff85d18270ce8850a2a943e7d4a8dde4c8271d693c39546a300d33a792"
+
+Name: obj_3_0_opt
+Type: SuiAddress
+Value: "0x3814cdff85d18270ce8850a2a943e7d4a8dde4c8271d693c39546a300d33a792"
 
 Name: std
 Type: SuiAddress!
@@ -209,8 +309,28 @@ Value: "0x3"
 
 Name: validator_0
 Type: SuiAddress!
-Value: "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+Value: "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
 
 Name: validator_0_opt
 Type: SuiAddress
-Value: "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+Value: "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+
+task 21 'run-graphql'. lines 152-166:
+Response: {
+  "data": {
+    "latestSuiSystemState": {
+      "validatorSet": {
+        "activeValidators": [
+          {
+            "address": {
+              "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+            }
+          }
+        ]
+      }
+    },
+    "address": {
+      "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+    }
+  }
+}
