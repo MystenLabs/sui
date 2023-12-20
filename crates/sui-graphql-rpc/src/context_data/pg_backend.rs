@@ -6,7 +6,10 @@ use super::{
     db_data_provider::{DbValidationError, PageLimit, TypeFilterError},
 };
 use crate::{
-    context_data::db_data_provider::PgManager,
+    context_data::{
+        db_backend::{DYNAMIC_FIELD_TYPE, DYNAMIC_OBJECT_FIELD_WRAPPER_TYPE},
+        db_data_provider::PgManager,
+    },
     error::Error,
     types::{
         digest::Digest, dynamic_field::DynamicFieldFilter, event::EventFilter,
@@ -15,10 +18,11 @@ use crate::{
 };
 use async_trait::async_trait;
 use diesel::{
+    dsl::sql,
     pg::Pg,
     query_builder::{AstPass, QueryFragment},
-    BoolExpressionMethods, ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl,
-    TextExpressionMethods,
+    sql_types, BoolExpressionMethods, ExpressionMethods, PgConnection, QueryDsl, QueryResult,
+    RunQueryDsl, TextExpressionMethods,
 };
 use std::str::FromStr;
 use sui_indexer::{
@@ -392,9 +396,14 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         // This is due to how dynamic field object types are represented in the database
         // which is 0x2::dynamic_field::Field<K, V> where K and V are the name and value types
         if let Some(name_type) = filter.name_type {
-            // this should never fail
-            let prefix = parse_sui_struct_tag("0x2::dynamic_field::Field")
-                .map_err(|e| Error::Internal(e.to_string()))?;
+            // Joins the processed inner type to the dynamic field's prefix and postfix
+            // A regexp expression that matches on either Field<Wrapper<K>,V> or Field<K,V>
+            fn format_name_type(inner_type: String) -> String {
+                format!(
+                    "{}<({}<{}>|{}),.*?>",
+                    DYNAMIC_FIELD_TYPE, DYNAMIC_OBJECT_FIELD_WRAPPER_TYPE, inner_type, inner_type
+                )
+            }
 
             let format = "package[::module[::type[<type_params>]]]";
             let parts: Vec<_> = name_type.splitn(3, "::").collect();
@@ -411,53 +420,55 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
                 if parts[0].starts_with("0x") {
                     let package = SuiAddress::from_str(parts[0])
                         .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
-                    query = query.filter(objects::dsl::object_type.like(format!(
-                        "{}<{}::%",
-                        prefix.to_canonical_display(/* with_prefix */ true),
-                        package
-                    )));
+                    query = query.filter(
+                        sql::<sql_types::Bool>("object_type ~ ").bind::<sql_types::Text, _>(
+                            format_name_type(format!("{}::.+?", package)),
+                        ),
+                    );
                 } else {
                     // primitive type as type for 'name'
-                    query = query.filter(objects::dsl::object_type.like(format!(
-                        "{}<{},%",
-                        prefix.to_canonical_display(/* with_prefix */ true),
-                        parts[0]
-                    )));
+                    // TODO: not limited to this one - decide how to handle vector<T>
+                    query = query.filter(
+                        sql::<sql_types::Bool>("object_type ~ ")
+                            .bind::<sql_types::Text, _>(format_name_type(format!("{}", parts[0]))),
+                    );
                 }
             } else if parts.len() == 2 {
                 // Only package addresses are allowed if there are two or more parts
                 let package = SuiAddress::from_str(parts[0])
                     .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
-                query = query.filter(objects::dsl::object_type.like(format!(
-                    "{}<{}::{}::%",
-                    prefix.to_canonical_display(/* with_prefix */ true),
-                    package,
-                    parts[1]
-                )));
+                query = query.filter(
+                    sql::<sql_types::Bool>("object_type ~ ").bind::<sql_types::Text, _>(
+                        format_name_type(format!("{}::{}::.+?", package, parts[1])),
+                    ),
+                );
             } else if parts.len() == 3 {
                 let validated_type = parse_sui_struct_tag(&name_type)
                     .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
 
                 if validated_type.type_params.is_empty() {
+                    // Either a fully qualified type, or client is leaving it up to us
                     query = query.filter(
-                        objects::dsl::object_type
-                            .like(format!(
-                                "{}<{}<%",
-                                prefix.to_canonical_display(/* with_prefix */ true),
+                        sql::<sql_types::Bool>("object_type ~ ")
+                            .bind::<sql_types::Text, _>(format_name_type(format!(
+                                "{}<.+?>",
                                 validated_type.to_canonical_string(/* with_prefix */ true)
-                            ))
-                            .or(objects::dsl::object_type.like(format!(
-                                "{}<{},%",
-                                prefix.to_canonical_display(/* with_prefix */ true),
+                            )))
+                            .sql(" OR object_type ~ ")
+                            .bind::<sql_types::Text, _>(format_name_type(format!(
+                                "{}",
                                 validated_type.to_canonical_string(/* with_prefix */ true)
                             ))),
                     );
                 } else {
-                    query = query.filter(objects::dsl::object_type.like(format!(
-                        "{}<{},%",
-                        prefix.to_canonical_display(/* with_prefix */ true),
-                        validated_type.to_canonical_string(/* with_prefix */ true)
-                    )));
+                    query = query.filter(
+                        sql::<sql_types::Bool>("object_type ~ ").bind::<sql_types::Text, _>(
+                            format_name_type(format!(
+                                "{}",
+                                validated_type.to_canonical_string(/* with_prefix */ true)
+                            )),
+                        ),
+                    );
                 }
             } else {
                 return Err(DbValidationError::InvalidType(
@@ -467,7 +478,8 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
             }
         }
 
-        // match value on df_object_type
+        // There is a separate column df_object_type that captures the V of Field<K, V>
+        // We can match value_type on that column
         if let Some(value_type) = filter.value_type {
             let format = "package[::module[::type[<type_params>]]]";
             let parts: Vec<_> = value_type.splitn(3, "::").collect();

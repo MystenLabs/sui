@@ -11,6 +11,7 @@ use sui_indexer::{
     types_v2::OwnerType,
 };
 
+use super::db_data_provider::PageLimit;
 use crate::{
     error::Error,
     types::{
@@ -23,7 +24,9 @@ use diesel::{
     sql_types::Text,
 };
 
-use super::db_data_provider::PageLimit;
+pub(crate) const DYNAMIC_FIELD_TYPE: &str =
+    "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field";
+pub(crate) const DYNAMIC_OBJECT_FIELD_WRAPPER_TYPE: &str = "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_object_field::Wrapper";
 
 pub(crate) type BalanceQuery<'a, DB> = BoxedSelectStatement<
     'a,
