@@ -1469,46 +1469,64 @@ impl<'a> ParsingSymbolicator<'a> {
         match &use_decl.use_ {
             P::Use::ModuleUse(mod_ident, mod_use) => {
                 let mod_ident_str = format!("{}", mod_ident);
-                let Some(mod_name_start) = get_start_loc(
-                    &mod_ident.value.module.loc(),
-                    &self.files,
-                    &self.file_id_mapping,
+                let Some(mod_defs) = self.mod_name_symbol(
+                    &mod_ident.value.module,
+                    mod_ident_str.clone(),
+                    references,
+                    use_defs,
                 ) else {
                     debug_assert!(false);
                     return;
                 };
-                let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
-                    debug_assert!(false);
-                    return;
-                };
-                use_defs.insert(
-                    mod_name_start.line,
-                    UseDef::new(
-                        references,
-                        mod_ident.loc.file_hash(),
-                        mod_name_start,
-                        mod_defs.fhash,
-                        mod_defs.start,
-                        &mod_ident.value.module.value(),
-                        IdentOnHover::Module(mod_ident_str.clone()),
-                        None,
-                        mod_defs.doc_comment.clone(),
-                    ),
-                );
                 self.mod_use_symbols(mod_use, mod_defs, mod_ident_str, references, use_defs);
             }
             P::Use::NestedModuleUses(leading_name, uses) => {
                 for (mod_name, mod_use) in uses {
                     let mod_ident_str = format!("{leading_name}::{mod_name}");
-                    let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
+                    let Some(mod_defs) =
+                        self.mod_name_symbol(mod_name, mod_ident_str.clone(), references, use_defs)
+                    else {
                         debug_assert!(false);
-                        return;
+                        continue;
                     };
                     self.mod_use_symbols(mod_use, mod_defs, mod_ident_str, references, use_defs);
                 }
             }
             P::Use::Fun { .. } => (), // TODO: handle Move 2024 receiver syntaxx
         }
+    }
+
+    /// Get module name symbol
+    fn mod_name_symbol(
+        &self,
+        mod_name: &P::ModuleName,
+        mod_ident_str: String,
+        references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
+        use_defs: &mut UseDefMap,
+    ) -> Option<&ModuleDefs> {
+        let Some(mod_name_start) =
+            get_start_loc(&mod_name.loc(), &self.files, &self.file_id_mapping)
+        else {
+            return None;
+        };
+        let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
+            return None;
+        };
+        use_defs.insert(
+            mod_name_start.line,
+            UseDef::new(
+                references,
+                mod_name.loc().file_hash(),
+                mod_name_start,
+                mod_defs.fhash,
+                mod_defs.start,
+                &mod_name.value(),
+                IdentOnHover::Module(mod_ident_str.clone()),
+                None,
+                mod_defs.doc_comment.clone(),
+            ),
+        );
+        Some(mod_defs)
     }
 
     /// Get symbols for a module use
@@ -3105,15 +3123,21 @@ fn assert_use_def_with_doc_string(
     };
     assert!(
         use_def.col_start == use_col,
-        "for use in column {use_col} of line {use_line} in file {use_file}",
+        "'{}' != '{}' for use in column {use_col} of line {use_line} in file {use_file}",
+        use_def.col_start,
+        use_col,
     );
     assert!(
         use_def.def_loc.start.line == def_line,
-        "for use in column {use_col} of line {use_line} in file {use_file}"
+        "'{}' != '{}' for use in column {use_col} of line {use_line} in file {use_file}",
+        use_def.def_loc.start.line,
+        def_line
     );
     assert!(
         use_def.def_loc.start.character == def_col,
-        "for use in column {use_col} of line {use_line} in file {use_file}"
+        "'{}' != '{}' for use in column {use_col} of line {use_line} in file {use_file}",
+        use_def.def_loc.start.character,
+        def_col
     );
     assert!(
         file_name_mapping
@@ -3130,7 +3154,12 @@ fn assert_use_def_with_doc_string(
         format!("{}", use_def.on_hover)
     );
 
-    assert_eq!(doc_string.map(|s| s.to_string()), use_def.doc_string);
+    assert!(
+        doc_string.map(|s| s.to_string()) == use_def.doc_string,
+        "'{:?}' != '{:?}' for use in column {use_col} of line {use_line} in file {use_file}",
+        doc_string.map(|s| s.to_string()),
+        use_def.doc_string
+    );
     match use_def.type_def_loc {
         Some(type_def_loc) => {
             let tdef_line = type_def.unwrap().0;
@@ -4740,5 +4769,164 @@ fn const_test() {
         "M8.move",
         "const EQUAL: bool = 1 == 1",
         None,
+    );
+}
+
+#[test]
+/// Tests if symbolication information for imports (use statements) has been constructed correctly.
+fn imports_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/symbols");
+
+    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/M9.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+
+    // simple doc-commented mod use from different mod (same file)
+    assert_use_def_with_doc_string(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        1,
+        16,
+        "M9.move",
+        5,
+        16,
+        "M9.move",
+        "module Symbols::M9",
+        None,
+        Some("A module doc comment\n"),
+    );
+    // simple mod use from different mod (different file)
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        7,
+        17,
+        "M9.move",
+        0,
+        16,
+        "M1.move",
+        "module Symbols::M1",
+        None,
+    );
+    // aliased mod use (actual mod name)
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        8,
+        17,
+        "M9.move",
+        0,
+        16,
+        "M1.move",
+        "module Symbols::M1",
+        None,
+    );
+    // aliased mod use (alias name)
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        1,
+        8,
+        23,
+        "M9.move",
+        0,
+        16,
+        "M1.move",
+        "module Symbols::M1",
+        None,
+    );
+    // aliased mod use from mod list - first element (actual name)
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        9,
+        18,
+        "M9.move",
+        0,
+        16,
+        "M1.move",
+        "module Symbols::M1",
+        None,
+    );
+    // aliased mod use from mod list - first element (alias name)
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        1,
+        9,
+        24,
+        "M9.move",
+        0,
+        16,
+        "M1.move",
+        "module Symbols::M1",
+        None,
+    );
+    // aliased mod use from mod list - second element (actual name)
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        2,
+        9,
+        30,
+        "M9.move",
+        0,
+        16,
+        "M2.move",
+        "module Symbols::M2",
+        None,
+    );
+    // aliased mod use from mod list - second element (alias name)
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        3,
+        9,
+        36,
+        "M9.move",
+        0,
+        16,
+        "M2.move",
+        "module Symbols::M2",
+        None,
+    );
+    // aliased struct import (actual name)
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        1,
+        10,
+        22,
+        "M9.move",
+        2,
+        11,
+        "M2.move",
+        "struct Symbols::M2::SomeOtherStruct{\n	some_field: u64\n}",
+        Some((2, 11, "M2.move")),
+    );
+    // aliased mod use (alias name)
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        2,
+        10,
+        41,
+        "M9.move",
+        2,
+        11,
+        "M2.move",
+        "struct Symbols::M2::SomeOtherStruct{\n	some_field: u64\n}",
+        Some((2, 11, "M2.move")),
     );
 }
