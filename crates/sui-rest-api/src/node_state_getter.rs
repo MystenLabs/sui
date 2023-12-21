@@ -1,9 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::{HashMap, HashSet};
 use sui_core::authority::AuthorityState;
 use sui_types::committee::EpochId;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::UserInputError;
+use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::{
     base_types::{ObjectID, VersionNumber},
     digests::{TransactionDigest, TransactionEventsDigest},
@@ -66,6 +69,133 @@ pub trait NodeStateGetter: Sync + Send {
     ) -> Result<Option<Object>, SuiError>;
 
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError>;
+
+    fn get_checkpoint_data(
+        &self,
+        checkpoint: VerifiedCheckpoint,
+        checkpoint_contents: CheckpointContents,
+    ) -> anyhow::Result<CheckpointData> {
+        let transaction_digests = checkpoint_contents
+            .iter()
+            .map(|execution_digests| execution_digests.transaction)
+            .collect::<Vec<_>>();
+        let transactions = self
+            .multi_get_transaction_blocks(&transaction_digests)?
+            .into_iter()
+            .map(|maybe_transaction| {
+                maybe_transaction.ok_or_else(|| anyhow::anyhow!("missing transaction"))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+
+        let effects = self
+            .multi_get_executed_effects(&transaction_digests)?
+            .into_iter()
+            .map(|maybe_effects| maybe_effects.ok_or_else(|| anyhow::anyhow!("missing effects")))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+
+        let event_digests = effects
+            .iter()
+            .flat_map(|fx| fx.events_digest().copied())
+            .collect::<Vec<_>>();
+
+        let events = self
+            .multi_get_events(&event_digests)?
+            .into_iter()
+            .map(|maybe_event| maybe_event.ok_or_else(|| anyhow::anyhow!("missing event")))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+
+        let events = event_digests
+            .into_iter()
+            .zip(events)
+            .collect::<HashMap<_, _>>();
+        let mut full_transactions = Vec::with_capacity(transactions.len());
+        for (tx, fx) in transactions.into_iter().zip(effects) {
+            let events = fx.events_digest().map(|event_digest| {
+                events
+                    .get(event_digest)
+                    .cloned()
+                    .expect("event was already checked to be present")
+            });
+            // Note unwrapped_then_deleted contains **updated** versions.
+            let unwrapped_then_deleted_obj_ids = fx
+                .unwrapped_then_deleted()
+                .into_iter()
+                .map(|k| k.0)
+                .collect::<HashSet<_>>();
+
+            let input_object_keys = fx
+                .input_shared_objects()
+                .into_iter()
+                .map(|kind| {
+                    let (id, version) = kind.id_and_version();
+                    ObjectKey(id, version)
+                })
+                .chain(
+                    fx.modified_at_versions()
+                        .into_iter()
+                        .map(|(object_id, version)| ObjectKey(object_id, version)),
+                )
+                .collect::<HashSet<_>>()
+                .into_iter()
+                // Unwrapped-then-deleted objects are not stored in state before the tx, so we have nothing to fetch.
+                .filter(|key| !unwrapped_then_deleted_obj_ids.contains(&key.0))
+                .collect::<Vec<_>>();
+
+            let input_objects = self
+                .multi_get_object_by_key(&input_object_keys)?
+                .into_iter()
+                .enumerate()
+                .map(|(idx, maybe_object)| {
+                    maybe_object.ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "missing input object key {:?} from tx {}",
+                            input_object_keys[idx],
+                            tx.digest()
+                        )
+                    })
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?;
+
+            let output_object_keys = fx
+                .all_changed_objects()
+                .into_iter()
+                .map(|(object_ref, _owner, _kind)| ObjectKey::from(object_ref))
+                .collect::<Vec<_>>();
+
+            let output_objects = self
+                .multi_get_object_by_key(&output_object_keys)?
+                .into_iter()
+                .enumerate()
+                .map(|(idx, maybe_object)| {
+                    maybe_object.ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "missing output object key {:?} from tx {}",
+                            output_object_keys[idx],
+                            tx.digest()
+                        )
+                    })
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?;
+
+            let full_transaction = CheckpointTransaction {
+                transaction: tx.into(),
+                effects: fx,
+                events,
+                input_objects,
+                output_objects,
+            };
+
+            full_transactions.push(full_transaction);
+        }
+
+        let checkpoint_data = CheckpointData {
+            checkpoint_summary: checkpoint.clone().into(),
+            checkpoint_contents: self.get_checkpoint_contents(checkpoint.content_digest)?,
+            transactions: full_transactions,
+        };
+
+        Ok(checkpoint_data)
+    }
 }
 
 impl NodeStateGetter for AuthorityState {
