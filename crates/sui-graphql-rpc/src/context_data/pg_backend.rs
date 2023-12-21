@@ -3,7 +3,7 @@
 
 use super::{
     db_backend::{BalanceQuery, Explain, Explained, GenericQueryBuilder},
-    db_data_provider::{DbValidationError, TypeFilterError},
+    db_data_provider::{DbValidationError, PageLimit, TypeFilterError},
 };
 use crate::{
     context_data::db_data_provider::PgManager,
@@ -97,7 +97,7 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
     fn multi_get_txs(
         cursor: Option<i64>,
         descending_order: bool,
-        limit: i64,
+        limit: PageLimit,
         filter: Option<TransactionBlockFilter>,
         after_tx_seq_num: Option<i64>,
         before_tx_seq_num: Option<i64>,
@@ -129,7 +129,7 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
             query = query.order(transactions::dsl::tx_sequence_number.asc());
         }
 
-        query = query.limit(limit + 1);
+        query = query.limit(limit.value() + 1);
 
         if let Some(filter) = filter {
             // Filters for transaction table
@@ -234,12 +234,12 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
     fn multi_get_coins(
         before: Option<Vec<u8>>,
         after: Option<Vec<u8>>,
-        limit: i64,
+        limit: PageLimit,
         address: Option<Vec<u8>>,
         coin_type: String,
     ) -> objects::BoxedQuery<'static, Pg> {
-        let mut query = order_objs(before, after);
-        query = query.limit(limit + 1);
+        let mut query = order_objs(before, after, &limit);
+        query = query.limit(limit.value() + 1);
 
         if let Some(address) = address {
             query = query
@@ -254,12 +254,12 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
     fn multi_get_objs(
         before: Option<Vec<u8>>,
         after: Option<Vec<u8>>,
-        limit: i64,
+        limit: PageLimit,
         filter: Option<ObjectFilter>,
         owner_type: Option<OwnerType>,
     ) -> Result<objects::BoxedQuery<'static, Pg>, Error> {
-        let mut query = order_objs(before, after);
-        query = query.limit(limit + 1);
+        let mut query = order_objs(before, after, &limit);
+        query = query.limit(limit.value() + 1);
 
         let Some(filter) = filter else {
             return Ok(query);
@@ -380,66 +380,27 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
     fn multi_get_checkpoints(
         before: Option<i64>,
         after: Option<i64>,
-        limit: i64,
+        limit: PageLimit,
         epoch: Option<i64>,
     ) -> checkpoints::BoxedQuery<'static, Pg> {
-        let mut query = checkpoints::dsl::checkpoints.into_boxed();
-
-        // The following assumes that the data is always requested in ascending order
-        if let Some(after) = after {
-            query = query
-                .filter(checkpoints::dsl::sequence_number.gt(after))
-                .order(checkpoints::dsl::sequence_number.asc());
-        } else if let Some(before) = before {
-            query = query
-                .filter(checkpoints::dsl::sequence_number.lt(before))
-                .order(checkpoints::dsl::sequence_number.desc());
-        }
+        let mut query = order_checkpoints(before, after, &limit);
+        query = query.limit(limit.value() + 1);
 
         if let Some(epoch) = epoch {
             query = query.filter(checkpoints::dsl::epoch.eq(epoch));
         }
-
-        query = query.limit(limit + 1);
 
         query
     }
     fn multi_get_events(
         before: Option<(i64, i64)>,
         after: Option<(i64, i64)>,
-        limit: i64,
+        limit: PageLimit,
         filter: Option<EventFilter>,
     ) -> Result<events::BoxedQuery<'static, Pg>, Error> {
-        let mut query = events::dsl::events.into_boxed();
-        if let Some(after) = after {
-            query = query
-                .filter(
-                    events::dsl::tx_sequence_number
-                        .gt(after.0)
-                        .or(events::dsl::tx_sequence_number
-                            .eq(after.0)
-                            .and(events::dsl::event_sequence_number.gt(after.1))),
-                )
-                .order(events::dsl::tx_sequence_number.asc())
-                .then_order_by(events::dsl::event_sequence_number.asc());
-        } else if let Some(before) = before {
-            query = query
-                .filter(
-                    events::dsl::tx_sequence_number.lt(before.0).or(
-                        events::dsl::tx_sequence_number
-                            .eq(before.0)
-                            .and(events::dsl::event_sequence_number.lt(before.1)),
-                    ),
-                )
-                .order(events::dsl::tx_sequence_number.desc())
-                .then_order_by(events::dsl::event_sequence_number.desc());
-        } else {
-            query = query
-                .order(events::dsl::tx_sequence_number.asc())
-                .then_order_by(events::dsl::event_sequence_number.asc());
-        }
+        let mut query = order_events(before, after, &limit);
+        query = query.limit(limit.value() + 1);
 
-        query = query.limit(limit + 1);
         let Some(filter) = filter else {
             return Ok(query);
         };
@@ -698,18 +659,87 @@ pub fn extract_cost(explain_result: &str) -> Result<f64, Error> {
     }
 }
 
-fn order_objs(before: Option<Vec<u8>>, after: Option<Vec<u8>>) -> objects::BoxedQuery<'static, Pg> {
+fn order_objs(
+    before: Option<Vec<u8>>,
+    after: Option<Vec<u8>>,
+    limit: &PageLimit,
+) -> objects::BoxedQuery<'static, Pg> {
     let mut query = objects::dsl::objects.into_boxed();
-    if let Some(after) = after {
-        query = query
-            .filter(objects::dsl::object_id.gt(after))
-            .order(objects::dsl::object_id.asc());
-    } else if let Some(before) = before {
-        query = query
-            .filter(objects::dsl::object_id.lt(before))
-            .order(objects::dsl::object_id.desc());
-    } else {
-        query = query.order(objects::dsl::object_id.asc());
+    match limit {
+        PageLimit::First(_) => {
+            if let Some(after) = after {
+                query = query.filter(objects::dsl::object_id.gt(after));
+            }
+            query = query.order(objects::dsl::object_id.asc());
+        }
+        PageLimit::Last(_) => {
+            if let Some(before) = before {
+                query = query.filter(objects::dsl::object_id.lt(before));
+            }
+            query = query.order(objects::dsl::object_id.desc());
+        }
+    }
+    query
+}
+
+fn order_checkpoints(
+    before: Option<i64>,
+    after: Option<i64>,
+    limit: &PageLimit,
+) -> checkpoints::BoxedQuery<'static, Pg> {
+    let mut query = checkpoints::dsl::checkpoints.into_boxed();
+    match limit {
+        PageLimit::First(_) => {
+            if let Some(after) = after {
+                query = query.filter(checkpoints::dsl::sequence_number.gt(after));
+            }
+            query = query.order(checkpoints::dsl::sequence_number.asc());
+        }
+        PageLimit::Last(_) => {
+            if let Some(before) = before {
+                query = query.filter(checkpoints::dsl::sequence_number.lt(before));
+            }
+            query = query.order(checkpoints::dsl::sequence_number.desc());
+        }
+    }
+    query
+}
+
+fn order_events(
+    before: Option<(i64, i64)>,
+    after: Option<(i64, i64)>,
+    limit: &PageLimit,
+) -> events::BoxedQuery<'static, Pg> {
+    let mut query = events::dsl::events.into_boxed();
+    match limit {
+        PageLimit::First(_) => {
+            if let Some(after) = after {
+                query = query.filter(
+                    events::dsl::tx_sequence_number
+                        .gt(after.0)
+                        .or(events::dsl::tx_sequence_number
+                            .eq(after.0)
+                            .and(events::dsl::event_sequence_number.gt(after.1))),
+                );
+            }
+            query = query
+                .order(events::dsl::tx_sequence_number.asc())
+                .then_order_by(events::dsl::event_sequence_number.asc());
+        }
+        PageLimit::Last(_) => {
+            if let Some(before) = before {
+                query = query.filter(
+                    events::dsl::tx_sequence_number.lt(before.0).or(
+                        events::dsl::tx_sequence_number
+                            .eq(before.0)
+                            .and(events::dsl::event_sequence_number.lt(before.1)),
+                    ),
+                );
+            }
+            query = query
+                .order(events::dsl::tx_sequence_number.desc())
+                .then_order_by(events::dsl::event_sequence_number.desc());
+        }
     }
     query
 }

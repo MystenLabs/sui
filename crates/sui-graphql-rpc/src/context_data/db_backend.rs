@@ -16,6 +16,8 @@ use diesel::{
     sql_types::Text,
 };
 
+use super::db_data_provider::PageLimit;
+
 pub(crate) type BalanceQuery<'a, DB> = BoxedSelectStatement<
     'a,
     (
@@ -45,7 +47,7 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn multi_get_txs(
         cursor: Option<i64>,
         descending_order: bool,
-        limit: i64,
+        limit: PageLimit,
         filter: Option<TransactionBlockFilter>,
         after_tx_seq_num: Option<i64>,
         before_tx_seq_num: Option<i64>,
@@ -53,14 +55,14 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn multi_get_coins(
         before: Option<Vec<u8>>,
         after: Option<Vec<u8>>,
-        limit: i64,
+        limit: PageLimit,
         address: Option<Vec<u8>>,
         coin_type: String,
     ) -> objects::BoxedQuery<'static, DB>;
     fn multi_get_objs(
         before: Option<Vec<u8>>,
         after: Option<Vec<u8>>,
-        limit: i64,
+        limit: PageLimit,
         filter: Option<ObjectFilter>,
         owner_type: Option<OwnerType>,
     ) -> Result<objects::BoxedQuery<'static, DB>, Error>;
@@ -69,13 +71,13 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn multi_get_checkpoints(
         before: Option<i64>,
         after: Option<i64>,
-        limit: i64,
+        limit: PageLimit,
         epoch: Option<i64>,
     ) -> checkpoints::BoxedQuery<'static, DB>;
     fn multi_get_events(
         before: Option<(i64, i64)>,
         after: Option<(i64, i64)>,
-        limit: i64,
+        limit: PageLimit,
         filter: Option<EventFilter>,
     ) -> Result<events::BoxedQuery<'static, DB>, Error>;
 }

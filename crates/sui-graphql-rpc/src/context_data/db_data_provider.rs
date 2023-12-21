@@ -120,9 +120,25 @@ pub enum TypeFilterError {
     TooManyComponents(String, u64, &'static str),
 }
 
+// Db needs information on whether the first or last n are being selected
+#[derive(Clone, Copy)]
+pub(crate) enum PageLimit {
+    First(i64),
+    Last(i64),
+}
+
 pub(crate) struct PgManager {
     pub inner: IndexerReader,
     pub limits: Limits,
+}
+
+impl PageLimit {
+    pub(crate) fn value(&self) -> i64 {
+        match self {
+            PageLimit::First(limit) => *limit,
+            PageLimit::Last(limit) => *limit,
+        }
+    }
 }
 
 impl PgManager {
@@ -274,7 +290,7 @@ impl PgManager {
 
         result
             .map(|mut stored_objs| {
-                let has_next_page = stored_objs.len() as i64 > limit;
+                let has_next_page = stored_objs.len() as i64 > limit.value();
                 if has_next_page {
                     stored_objs.pop();
                 }
@@ -397,7 +413,7 @@ impl PgManager {
 
         result
             .map(|mut stored_txs| {
-                let has_next_page = stored_txs.len() as i64 > limit;
+                let has_next_page = stored_txs.len() as i64 > limit.value();
                 if has_next_page {
                     stored_txs.pop();
                 }
@@ -447,7 +463,7 @@ impl PgManager {
 
         result
             .map(|mut stored_checkpoints| {
-                let has_next_page = stored_checkpoints.len() as i64 > limit;
+                let has_next_page = stored_checkpoints.len() as i64 > limit.value();
                 if has_next_page {
                     stored_checkpoints.pop();
                 }
@@ -508,7 +524,7 @@ impl PgManager {
 
         result
             .map(|mut stored_events| {
-                let has_next_page = stored_events.len() as i64 > limit;
+                let has_next_page = stored_events.len() as i64 > limit.value();
                 if has_next_page {
                     stored_events.pop();
                 }
@@ -555,7 +571,7 @@ impl PgManager {
 
         result
             .map(|mut stored_objs| {
-                let has_next_page = stored_objs.len() as i64 > limit;
+                let has_next_page = stored_objs.len() as i64 > limit.value();
                 if has_next_page {
                     stored_objs.pop();
                 }
@@ -642,27 +658,24 @@ impl PgManager {
         &self,
         first: Option<u64>,
         last: Option<u64>,
-    ) -> Result<i64, Error> {
+    ) -> Result<PageLimit, Error> {
         if let Some(f) = first {
             if f > self.limits.max_page_size {
                 return Err(
                     DbValidationError::PageSizeExceeded(f, self.limits.max_page_size).into(),
                 );
             }
-        }
-
-        if let Some(l) = last {
+            Ok(PageLimit::First(f as i64))
+        } else if let Some(l) = last {
             if l > self.limits.max_page_size {
                 return Err(
                     DbValidationError::PageSizeExceeded(l, self.limits.max_page_size).into(),
                 );
             }
+            return Ok(PageLimit::Last(l as i64));
+        } else {
+            Ok(PageLimit::First(self.limits.default_page_size as i64))
         }
-
-        // TODO (wlmyng): even though we do not allow passing in both first and last,
-        // per the cursor connection specs, if both are provided, from the response,
-        // we need to take the first F from the left and then take the last L from the right.
-        Ok(first.or(last).unwrap_or(self.limits.default_page_size) as i64)
     }
 
     pub(crate) async fn fetch_tx(&self, digest: &str) -> Result<Option<TransactionBlock>, Error> {
