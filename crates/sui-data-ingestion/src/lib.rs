@@ -14,4 +14,4 @@ pub use executor::IndexerExecutor;
 pub use metrics::DataIngestionMetrics;
 pub use progress_store::{DynamoDBProgressStore, FileProgressStore};
 pub use worker_pool::WorkerPool;
-pub use workers::{S3TaskConfig, S3Worker, Worker};
+pub use workers::{KVStoreTaskConfig, KVStoreWorker, S3TaskConfig, S3Worker, Worker};

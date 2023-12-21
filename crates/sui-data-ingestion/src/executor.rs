@@ -13,16 +13,15 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use tokio::sync::mpsc;
 use tokio::sync::oneshot;
-use tokio::sync::{broadcast, mpsc};
 
 pub const MAX_CHECKPOINTS_IN_PROGRESS: usize = 1000;
 
 pub struct IndexerExecutor<P> {
     pools: Vec<Pin<Box<dyn Future<Output = ()> + Send>>>,
+    pool_senders: Vec<mpsc::Sender<CheckpointData>>,
     progress_store: ProgressStoreWrapper<P>,
-    /// used to broadcast new checkpoint to worker pools
-    pool_sender: broadcast::Sender<CheckpointData>,
     pool_progress_sender: mpsc::Sender<(String, CheckpointSequenceNumber)>,
     pool_progress_receiver: mpsc::Receiver<(String, CheckpointSequenceNumber)>,
     metrics: DataIngestionMetrics,
@@ -34,10 +33,10 @@ impl<P: ProgressStore> IndexerExecutor<P> {
             mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
         Self {
             pools: vec![],
+            pool_senders: vec![],
             progress_store: ProgressStoreWrapper::new(progress_store),
             pool_progress_sender,
             pool_progress_receiver,
-            pool_sender: broadcast::channel(MAX_CHECKPOINTS_IN_PROGRESS).0,
             metrics,
         }
     }
@@ -45,11 +44,13 @@ impl<P: ProgressStore> IndexerExecutor<P> {
     /// Registers new worker pool in executor
     pub async fn register<W: Worker + 'static>(&mut self, pool: WorkerPool<W>) -> Result<()> {
         let checkpoint_number = self.progress_store.load(pool.task_name.clone()).await?;
+        let (sender, receiver) = mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
         self.pools.push(Box::pin(pool.run(
             checkpoint_number,
-            self.pool_sender.subscribe(),
+            receiver,
             self.pool_progress_sender.clone(),
         )));
+        self.pool_senders.push(sender);
         Ok(())
     }
 
@@ -70,7 +71,9 @@ impl<P: ProgressStore> IndexerExecutor<P> {
         loop {
             tokio::select! {
                 Some(checkpoint) = checkpoint_recv.recv() => {
-                    self.pool_sender.send(checkpoint)?;
+                    for sender in &self.pool_senders {
+                        sender.send(checkpoint.clone()).await?;
+                    }
                 }
                 Some((task_name, sequence_number)) = self.pool_progress_receiver.recv() => {
                     self.progress_store.save(task_name.clone(), sequence_number).await?;
@@ -79,7 +82,7 @@ impl<P: ProgressStore> IndexerExecutor<P> {
                         gc_sender.send(seq_number).await?;
                         reader_checkpoint_number = seq_number;
                     }
-                    self.metrics.last_uploaded_checkpoint.with_label_values(&[&task_name]).set(sequence_number as i64);
+                    self.metrics.data_ingestion_checkpoint.with_label_values(&[&task_name]).set(sequence_number as i64);
                 }
                 _ = &mut exit_receiver => break,
             }

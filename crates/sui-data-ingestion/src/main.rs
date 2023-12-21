@@ -6,7 +6,10 @@ use prometheus::Registry;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::PathBuf;
-use sui_data_ingestion::{DataIngestionMetrics, DynamoDBProgressStore, S3TaskConfig, S3Worker};
+use sui_data_ingestion::{
+    DataIngestionMetrics, DynamoDBProgressStore, KVStoreTaskConfig, KVStoreWorker, S3TaskConfig,
+    S3Worker,
+};
 use sui_data_ingestion::{IndexerExecutor, WorkerPool};
 use tokio::signal;
 use tokio::sync::oneshot;
@@ -15,6 +18,7 @@ use tokio::sync::oneshot;
 #[serde(rename_all = "lowercase")]
 enum Task {
     S3(S3TaskConfig),
+    KV(KVStoreTaskConfig),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -99,11 +103,18 @@ async fn main() -> Result<()> {
     .await;
     let mut executor = IndexerExecutor::new(progress_store, metrics);
     for task_config in config.tasks {
-        let worker = match task_config.task {
-            Task::S3(s3_config) => S3Worker::new(s3_config).await,
+        match task_config.task {
+            Task::S3(s3_config) => {
+                let worker_pool =
+                    WorkerPool::new(S3Worker::new(s3_config).await, task_config.concurrency);
+                executor.register(worker_pool).await?;
+            }
+            Task::KV(kv_config) => {
+                let worker_pool =
+                    WorkerPool::new(KVStoreWorker::new(kv_config).await, task_config.concurrency);
+                executor.register(worker_pool).await?;
+            }
         };
-        let worker_pool = WorkerPool::new(worker, task_config.concurrency);
-        executor.register(worker_pool).await?;
     }
     executor.run(config.path, exit_receiver).await?;
     Ok(())
