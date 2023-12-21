@@ -165,6 +165,7 @@ codes!(
     // bucket for random one off errors. unlikely to be used
     Uncategorized: [
         DeprecatedWillBeRemoved: { msg: "DEPRECATED. will be removed", severity: Warning },
+        DeprecatedSpecItem: { msg: "DEPRECATED. unexpected spec item", severity: NonblockingError },
     ],
     // syntax errors
     Syntax: [

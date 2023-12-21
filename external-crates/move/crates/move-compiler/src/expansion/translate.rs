@@ -192,9 +192,13 @@ impl<'env, 'map> Context<'env, 'map> {
             .name_access_chain_to_module_ident(inner_context, chain)
     }
 
-    pub fn spec_deprecated(&mut self, loc: Loc) {
+    pub fn spec_deprecated(&mut self, loc: Loc, is_error: bool) {
         self.env().add_diag(diag!(
-            Uncategorized::DeprecatedWillBeRemoved,
+            if is_error {
+                Uncategorized::DeprecatedSpecItem
+            } else {
+                Uncategorized::DeprecatedWillBeRemoved
+            },
             (loc, "Specification blocks are deprecated")
         ));
     }
@@ -654,7 +658,7 @@ fn module_(
             }
             P::ModuleMember::Constant(c) => constant(context, &mut constants, c),
             P::ModuleMember::Struct(s) => struct_def(context, &mut structs, s),
-            P::ModuleMember::Spec(s) => context.spec_deprecated(s.loc),
+            P::ModuleMember::Spec(s) => context.spec_deprecated(s.loc, /* is_error */ false),
         }
     }
     let mut use_funs = use_funs(context, use_funs_builder);
@@ -2476,13 +2480,9 @@ fn type_(context: &mut Context, sp!(loc, pt_): P::Type) -> E::Type {
         }
         PT::Ref(mut_, inner) => ET::Ref(mut_, Box::new(type_(context, *inner))),
         PT::Fun(_, _) => {
-            context.spec_deprecated(loc);
+            // TODO these will be used later by macros
+            context.spec_deprecated(loc, /* is_error */ true);
             ET::UnresolvedError
-            // context.env().add_diag(diag!(
-            //     Syntax::SpecContextRestricted,
-            //     (loc, "`|_|_` function type only allowed in specifications")
-            // ));
-            // ET::UnresolvedError
         }
     };
     sp(loc, t_)
@@ -2583,19 +2583,14 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
                 EE::UnresolvedError
             }
         },
-        PE::Name(_, Some(_)) => todo!(),
-
-        // {
-        //     context.env().add_diag(diag!(
-        //         Syntax::SpecContextRestricted,
-        //         (
-        //             loc,
-        //             "Expected name to be followed by a brace-enclosed list of field expressions \
-        //              or a parenthesized list of arguments for a function call",
-        //         )
-        //     ));
-        //     EE::UnresolvedError
-        // }
+        PE::Name(_, Some(_)) => {
+            let msg = "Expected name to be followed by a brace-enclosed list of field expressions \
+                or a parenthesized list of arguments for a function call";
+            context
+                .env()
+                .add_diag(diag!(NameResolution::NamePositionMismatch, (loc, msg)));
+            EE::UnresolvedError
+        }
         PE::Name(pn, ptys_opt) => {
             let en_opt = context.name_access_chain_to_module_access(Access::Term, pn);
             let tys_opt = optional_types(context, ptys_opt);
@@ -2660,7 +2655,8 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
         PE::NamedBlock(name, seq) => EE::NamedBlock(name, sequence(context, loc, seq)),
         PE::Block(seq) => EE::Block(sequence(context, loc, seq)),
         PE::Lambda(..) | PE::Quant(..) => {
-            context.spec_deprecated(loc);
+            // TODO lambdas will be used later by macros
+            context.spec_deprecated(loc, /* is_error */ true);
             EE::UnresolvedError
         }
         PE::ExpList(pes) => {
@@ -2700,7 +2696,8 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
         PE::Dereference(pe) => EE::Dereference(exp(context, *pe)),
         PE::UnaryExp(op, pe) => EE::UnaryExp(op, exp(context, *pe)),
         PE::BinopExp(_pl, op, _pr) if op.value.is_spec_only() => {
-            todo!()
+            context.spec_deprecated(loc, /* is_error */ true);
+            EE::UnresolvedError
         }
         e_ @ PE::BinopExp(..) => {
             process_binops!(
@@ -2751,11 +2748,15 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
         },
         PE::Cast(e, ty) => EE::Cast(exp(context, *e), type_(context, ty)),
         PE::Index(..) => {
-            context.spec_deprecated(loc);
+            // TODO index syntax will be added
+            context.spec_deprecated(loc, /* is_error */ true);
             EE::UnresolvedError
         }
         PE::Annotate(e, ty) => EE::Annotate(exp(context, *e), type_(context, ty)),
-        PE::Spec(_) => todo!(),
+        PE::Spec(_) => {
+            context.spec_deprecated(loc, /* is_error */ false);
+            EE::Unit { trailing: false }
+        }
         PE::UnresolvedError => EE::UnresolvedError,
     };
     sp(loc, e_)
