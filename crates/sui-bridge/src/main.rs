@@ -4,12 +4,15 @@
 use clap::Parser;
 use mysten_metrics::start_prometheus_server;
 use std::{
+    collections::{BTreeMap, HashMap},
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    path::PathBuf,
+    path::PathBuf, time::Duration,
 };
 use sui_bridge::{
-    config::BridgeNodeConfig,
+    config::{BridgeClientConfig, BridgeNodeConfig},
+    orchestrator::BridgeOrchestrator,
     server::{handler::BridgeRequestHandler, run_server},
+    storage::BridgeOrchestratorTables, eth_syncer::EthSyncer, sui_syncer::SuiSyncer, action_executor::{self, BridgeActionExecutor},
 };
 use sui_config::Config;
 use tracing::info;
@@ -78,5 +81,101 @@ async fn main() -> anyhow::Result<()> {
         ),
     )
     .await;
+    Ok(())
+}
+
+async fn start_client_components(
+    client_config: BridgeClientConfig,
+    mut config: BridgeNodeConfig,
+    config_path: &PathBuf,
+) -> anyhow::Result<()> {
+    let store: std::sync::Arc<BridgeOrchestratorTables> =
+        BridgeOrchestratorTables::new(&client_config.db_path);
+    let stored_module_cursors = store.get_sui_event_cursors(&client_config.sui_bridge_modules).map_err(
+        |e| {
+            anyhow::anyhow!("Unable to get sui event cursors from storage: {e:?}")
+        },
+    )?;
+    let mut sui_modules_to_watch = HashMap::new();
+    for (module, cursor) in client_config
+        .sui_bridge_modules
+        .iter()
+        .zip(stored_module_cursors)
+    {
+        if client_config
+            .sui_bridge_modules_start_tx_override
+            .contains_key(module)
+        {
+            sui_modules_to_watch.insert(
+                module.clone(),
+                client_config.sui_bridge_modules_start_tx_override[module],
+            );
+            info!(
+                "Overriding cursor for sui bridge module {} to {}. Stored cursor: {}",
+                module, client_config.sui_bridge_modules_start_tx_override[module], cursor
+            );
+        } else if let Some(cursor) = cursor {
+            sui_modules_to_watch.insert(module.clone(), cursor);
+        } else {
+            return Err(anyhow::anyhow!(
+                "No cursor found for sui bridge module {} in storage or config override",
+                module
+            ));
+        }
+    }
+
+    let stored_eth_cursors = store.get_eth_event_cursors(&client_config.eth_bridge_contracts).map_err(
+        |e| {
+            anyhow::anyhow!("Unable to get eth event cursors from storage: {e:?}")
+        },
+    )?;
+    let mut eth_contracts_to_watch = HashMap::new();
+    for (contract, cursor) in client_config
+        .eth_bridge_contracts
+        .iter()
+        .zip(stored_eth_cursors)
+    {
+        if client_config
+            .eth_bridge_contracts_start_block_override
+            .contains_key(contract)
+        {
+            eth_contracts_to_watch.insert(
+                contract.clone(),
+                client_config.eth_bridge_contracts_start_block_override[contract],
+            );
+            info!(
+                "Overriding cursor for eth bridge contract {} to {}. Stored cursor: {}",
+                contract, client_config.eth_bridge_contracts_start_block_override[contract], cursor
+            );
+        } else if let Some(cursor) = cursor {
+            eth_contracts_to_watch.insert(contract.clone(), cursor);
+        } else {
+            return Err(anyhow::anyhow!(
+                "No cursor found for eth contract {} in storage or config override",
+                contract
+            ));
+        }
+    }
+    config.clean_up_overrides(config_path)?;
+
+    let mut all_handles = vec![];
+    let (task_handles, eth_events_rx, _) = EthSyncer::new(client_config.eth_client.clone(), eth_contracts_to_watch).run().await?;
+    all_handles.extend(task_handles);
+
+    let (task_handles, sui_events_rx) = SuiSyncer::new(client_config.sui_client, sui_modules_to_watch).run(Duration::from_secs(2)).await?;
+    all_handles.extend(task_handles);
+
+    let action_executor = BridgeActionExecutor::new(
+        client_config.eth_client.clone(),
+        client_config.sui_client.clone(),
+        store.clone(),
+    );
+
+    let orchestrator = BridgeOrchestrator::new(
+        client_config.sui_client.clone(),
+        sui_events_rx,
+        eth_events_rx, 
+        store.clone(),
+    );
     Ok(())
 }

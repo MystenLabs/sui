@@ -108,13 +108,23 @@ impl BridgeOrchestratorTables {
             .map_err(|e| BridgeError::StorageError(format!("Couldn't write batch: {:?}", e)))
     }
 
-    pub(crate) fn get_all_pending_actions(
+    pub fn get_all_pending_actions(
         &self,
     ) -> BridgeResult<HashMap<BridgeActionDigest, BridgeAction>> {
         Ok(self.pending_actions.unbounded_iter().collect())
     }
 
-    pub(crate) fn get_sui_event_cursor(
+    pub fn get_sui_event_cursors(
+        &self,
+        identifiers: &[Identifier],
+    ) -> BridgeResult<Vec<Option<TransactionDigest>>> {
+        self.sui_syncer_cursors.multi_get(identifiers).map_err(|e| {
+            BridgeError::StorageError(format!("Couldn't get sui_syncer_cursors: {:?}", e))
+        })
+    }
+
+    // TODO remove?
+    pub fn get_sui_event_cursor(
         &self,
         identifier: &Identifier,
     ) -> BridgeResult<Option<TransactionDigest>> {
@@ -123,7 +133,19 @@ impl BridgeOrchestratorTables {
         })
     }
 
-    pub(crate) fn get_eth_event_cursor(
+    pub fn get_eth_event_cursors(
+        &self,
+        contract_addresses: &[ethers::types::Address],
+    ) -> BridgeResult<Vec<Option<u64>>> {
+        self.eth_syncer_cursors
+            .multi_get(contract_addresses)
+            .map_err(|e| {
+                BridgeError::StorageError(format!("Couldn't get sui_syncer_cursors: {:?}", e))
+            })
+    }
+
+    // TODO remove?
+    pub fn get_eth_event_cursor(
         &self,
         contract_address: &ethers::types::Address,
     ) -> BridgeResult<Option<u64>> {

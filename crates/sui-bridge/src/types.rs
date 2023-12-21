@@ -208,6 +208,9 @@ pub enum BridgeAction {
 
 pub const TOKEN_TRANSFER_MESSAGE_VERSION: u8 = 1;
 
+
+submitMessage(signtuares, sui_tx_digest_length, sui_tx_digest, sui_tx_event_index, sui_address_length, sui_address, eth_address_length, eth_address, token_id, token_amount) {
+
 impl BridgeAction {
     /// Convert to message bytes that are verified in Move and Solidity
     pub fn to_bytes(&self) -> Vec<u8> {

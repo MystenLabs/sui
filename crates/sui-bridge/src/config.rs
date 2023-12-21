@@ -54,7 +54,7 @@ pub struct BridgeNodeConfig {
     pub sui_bridge_modules: Option<Vec<String>>,
     /// Override the start block number for each eth address. Key must be in `eth_addresses`.
     /// When set, EthSyncer will start from this block number instead of the one in storage.
-    pub eth_addresses_start_block_number_override: Option<BTreeMap<String, u64>>,
+    pub eth_bridge_contracts_start_block_override: Option<BTreeMap<String, u64>>,
     /// Override the start transaction digest for each bridge module. Key must be in `sui_bridge_modules`.
     /// When set, SuiSyncer will start from this transaction digest instead of the one in storage.
     pub sui_bridge_modules_start_tx_override: Option<BTreeMap<String, String>>,
@@ -108,7 +108,7 @@ impl BridgeNodeConfig {
                 "`eth_addresses` is required when `run_client` is true"
             ));
         }
-        let eth_addresses = match &self.eth_addresses {
+        let eth_bridge_contracts = match &self.eth_addresses {
             Some(addresses) => {
                 if addresses.is_empty() {
                     return Err(anyhow!(
@@ -127,13 +127,13 @@ impl BridgeNodeConfig {
                 ))
             }
         };
-        let mut eth_addresses_start_block_number_override = BTreeMap::new();
-        match &self.eth_addresses_start_block_number_override {
+        let mut eth_bridge_contracts_start_block_override = BTreeMap::new();
+        match &self.eth_bridge_contracts_start_block_override {
             Some(overrides) => {
                 for (addr, block_number) in overrides {
                     let address = EthAddress::from_str(addr)?;
-                    if eth_addresses.contains(&address) {
-                        eth_addresses_start_block_number_override.insert(address, *block_number);
+                    if eth_bridge_contracts.contains(&address) {
+                        eth_bridge_contracts_start_block_override.insert(address, *block_number);
                     } else {
                         return Err(anyhow!(
                             "Override start block number for address {:?} is not in `eth_addresses`",
@@ -203,13 +203,21 @@ impl BridgeNodeConfig {
             sui_client: sui_client.clone(),
             eth_client: eth_client.clone(),
             db_path,
-            eth_addresses,
+            eth_bridge_contracts,
             sui_bridge_modules,
-            eth_addresses_start_block_number_override,
+            eth_bridge_contracts_start_block_override,
             sui_bridge_modules_start_tx_override,
         };
 
         Ok((bridge_server_config, Some(bridge_client_config)))
+    }
+
+    pub fn clean_up_overrides(&mut self, path: &PathBuf) -> anyhow::Result<()> {
+        self.eth_bridge_contracts_start_block_override = None;
+        self.sui_bridge_modules_start_tx_override = None;
+        self.save(path)?;
+        info!("Cleaned up overrides in config file: {:?}", path);
+        Ok(())
     }
 }
 
@@ -230,9 +238,9 @@ pub struct BridgeClientConfig {
     pub sui_client: Arc<SuiClient<SuiSdkClient>>,
     pub eth_client: Arc<EthClient<ethers::providers::Http>>,
     pub db_path: PathBuf,
-    pub eth_addresses: Vec<EthAddress>,
+    pub eth_bridge_contracts: Vec<EthAddress>,
     pub sui_bridge_modules: Vec<Identifier>,
-    pub eth_addresses_start_block_number_override: BTreeMap<EthAddress, u64>,
+    pub eth_bridge_contracts_start_block_override: BTreeMap<EthAddress, u64>,
     pub sui_bridge_modules_start_tx_override: BTreeMap<Identifier, TransactionDigest>,
 }
 
