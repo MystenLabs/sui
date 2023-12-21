@@ -1515,13 +1515,13 @@ fn deps_equal<'a>(
 
     let mut graph1_pkgs = vec![];
     for (k, v) in graph1_edges.iter() {
-        if !graph2_edges.contains_key(&k) || graph2_edges.get(&k) != Some(&v) {
+        if !graph2_edges.contains_key(k) || graph2_edges.get(k) != Some(v) {
             graph1_pkgs.push((v.0, *k, v.1));
         }
     }
     let mut graph2_pkgs = vec![];
     for (k, v) in graph2_edges.iter() {
-        if !graph1_edges.contains_key(&k) || graph1_edges.get(&k) != Some(&v) {
+        if !graph1_edges.contains_key(k) || graph1_edges.get(k) != Some(v) {
             graph2_pkgs.push((v.0, *k, v.1));
         }
     }
