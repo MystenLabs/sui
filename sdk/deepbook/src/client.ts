@@ -731,9 +731,7 @@ export class DeepBookClient {
 			parsed.module === 'coin' &&
 			parsed.name === 'Coin' &&
 			parsed.typeParams.length > 0) {
-
 			const firstTypeParam = parsed.typeParams[0];
-
 			return firstTypeParam.address + '::' + firstTypeParam.module + '::' + firstTypeParam.name;
 		} else {
 			return null;
