@@ -91,16 +91,7 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
 
 impl ConsensusOutputAPI for mysticeti_core::consensus::linearizer::CommittedSubDag {
     fn reputation_score_sorted_desc(&self) -> Option<Vec<(AuthorityIndex, u64)>> {
-        if !self.reputation_scores.final_of_schedule {
-            return None;
-        }
-        Some(
-            self.reputation_scores
-                .authorities_by_score_desc()
-                .into_iter()
-                .map(|(id, score)| (id as u16, score))
-                .collect(),
-        )
+        None
     }
 
     fn leader_round(&self) -> u64 {
