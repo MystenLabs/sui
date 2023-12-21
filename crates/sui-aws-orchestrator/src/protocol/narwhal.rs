@@ -158,6 +158,8 @@ impl ProtocolCommands<NarwhalBenchmarkType> for NarwhalProtocol {
                     .collect();
 
                 let run = [
+                    "sudo sysctl -w net.core.wmem_max=104857600 && ",
+                    "sudo sysctl -w net.core.rmem_max=104857600 && ",
                     "ulimit -n 51200 && ", // required so we can scale the client
                     "RUST_LOG=debug cargo run --release --bin narwhal-node run ",
                     &format!(
