@@ -261,9 +261,6 @@ module sui::bcs {
         }
     }
 
-    // TODO: re-enable once bit-wise operators in peel_vec_length are supported in the prover
-    spec module { pragma verify = false; }
-
     // === Tests ===
 
     #[test_only]
