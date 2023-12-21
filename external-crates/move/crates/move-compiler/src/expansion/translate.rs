@@ -191,6 +191,13 @@ impl<'env, 'map> Context<'env, 'map> {
             .unwrap()
             .name_access_chain_to_module_ident(inner_context, chain)
     }
+
+    pub fn spec_deprecated(&mut self, loc: Loc) {
+        self.env().add_diag(diag!(
+            Uncategorized::DeprecatedWillBeRemoved,
+            (loc, "Specification blocks are deprecated")
+        ));
+    }
 }
 
 /// We mark named addresses as having a conflict if there is not a bidirectional mapping between
@@ -647,7 +654,7 @@ fn module_(
             }
             P::ModuleMember::Constant(c) => constant(context, &mut constants, c),
             P::ModuleMember::Struct(s) => struct_def(context, &mut structs, s),
-            P::ModuleMember::Spec(s) => todo!(),
+            P::ModuleMember::Spec(s) => context.spec_deprecated(s.loc),
         }
     }
     let mut use_funs = use_funs(context, use_funs_builder);
@@ -2468,8 +2475,9 @@ fn type_(context: &mut Context, sp!(loc, pt_): P::Type) -> E::Type {
             }
         }
         PT::Ref(mut_, inner) => ET::Ref(mut_, Box::new(type_(context, *inner))),
-        PT::Fun(args, result) => {
-            todo!()
+        PT::Fun(_, _) => {
+            context.spec_deprecated(loc);
+            ET::UnresolvedError
             // context.env().add_diag(diag!(
             //     Syntax::SpecContextRestricted,
             //     (loc, "`|_|_` function type only allowed in specifications")
@@ -2651,21 +2659,9 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
         }
         PE::NamedBlock(name, seq) => EE::NamedBlock(name, sequence(context, loc, seq)),
         PE::Block(seq) => EE::Block(sequence(context, loc, seq)),
-        PE::Lambda(pbs, pe) => {
-            todo!()
-            // context.env().add_diag(diag!(
-            //     Syntax::SpecContextRestricted,
-            //     (loc, "lambda expression only allowed in specifications"),
-            // ));
-            // EE::UnresolvedError
-        }
-        PE::Quant(k, prs, ptrs, pc, pe) => {
-            todo!()
-            // context.env().add_diag(diag!(
-            //     Syntax::SpecContextRestricted,
-            //     (loc, "quantifer expression only allowed in specifications")
-            // ));
-            // EE::UnresolvedError
+        PE::Lambda(..) | PE::Quant(..) => {
+            context.spec_deprecated(loc);
+            EE::UnresolvedError
         }
         PE::ExpList(pes) => {
             assert!(pes.len() > 1);
@@ -2754,13 +2750,9 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
             }
         },
         PE::Cast(e, ty) => EE::Cast(exp(context, *e), type_(context, ty)),
-        PE::Index(e, i) => {
-            todo!()
-            // let msg = "`_[_]` index operator only allowed in specifications";
-            // context
-            //     .env()
-            //     .add_diag(diag!(Syntax::SpecContextRestricted, (loc, msg)));
-            // EE::UnresolvedError
+        PE::Index(..) => {
+            context.spec_deprecated(loc);
+            EE::UnresolvedError
         }
         PE::Annotate(e, ty) => EE::Annotate(exp(context, *e), type_(context, ty)),
         PE::Spec(_) => todo!(),
@@ -2988,21 +2980,6 @@ fn named_fields<T>(
 fn bind_list(context: &mut Context, sp!(loc, pbs_): P::BindList) -> Option<E::LValueList> {
     let bs_: Option<Vec<E::LValue>> = pbs_.into_iter().map(|pb| bind(context, pb)).collect();
     Some(sp(loc, bs_?))
-}
-
-fn bind_with_range_list(
-    context: &mut Context,
-    sp!(loc, prs_): P::BindWithRangeList,
-) -> Option<E::LValueWithRangeList> {
-    let rs_: Option<Vec<E::LValueWithRange>> = prs_
-        .into_iter()
-        .map(|sp!(loc, (pb, pr))| -> Option<E::LValueWithRange> {
-            let r = exp_(context, pr);
-            let b = bind(context, pb)?;
-            Some(sp(loc, (b, r)))
-        })
-        .collect();
-    Some(sp(loc, rs_?))
 }
 
 fn bind(context: &mut Context, sp!(loc, pb_): P::Bind) -> Option<E::LValue> {
