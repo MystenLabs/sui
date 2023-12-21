@@ -113,7 +113,11 @@ pub fn resolve_variables(
     let mut var_vals: BTreeMap<String, Value> = BTreeMap::new();
 
     for (idx, GraphqlQueryVariable { name, ty, value }) in vars.iter().enumerate() {
-        // todo: check that name is valid identifier
+        if !is_valid_variable_name(name) {
+            return Err(ClientError::InvalidVariableName {
+                var_name: name.to_owned(),
+            });
+        }
         if name.trim().is_empty() {
             return Err(ClientError::InvalidEmptyItem {
                 item_type: "Variable name".to_owned(),
@@ -147,4 +151,17 @@ pub fn resolve_variables(
     }
 
     Ok((type_defs, var_vals))
+}
+
+pub fn is_valid_variable_name(s: &str) -> bool {
+    let mut cs = s.chars();
+    let Some(fst) = cs.next() else { return false };
+
+    match fst {
+        '_' => if s.len() > 1 {},
+        'a'..='z' | 'A'..='Z' => {}
+        _ => return false,
+    }
+
+    cs.all(|c| matches!(c, '_' | 'a' ..= 'z' | 'A' ..= 'Z' | '0' ..= '9'))
 }
