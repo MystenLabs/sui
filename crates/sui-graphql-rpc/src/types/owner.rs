@@ -201,7 +201,8 @@ impl Owner {
             .extend()
     }
 
-    /// The SuinsRegistration NFTs owned by the given address.
+    /// The SuinsRegistration NFTs owned by the given object. These grant the owner
+    /// the capability to manage the associated domain.
     pub async fn suins_registrations(
         &self,
         ctx: &Context<'_>,

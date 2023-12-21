@@ -80,7 +80,8 @@ type Address implements ObjectOwner {
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
 	"""
-	The SuinsRegistration NFTs owned by the given address.
+	The SuinsRegistration NFTs owned by the given object. These grant the owner
+	the capability to manage the associated domain.
 	"""
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
 	"""
@@ -1416,7 +1417,8 @@ type Object implements ObjectOwner {
 	"""
 	defaultNameServiceName: String
 	"""
-	The SuinsRegistration NFTs owned by the given object.
+	The SuinsRegistration NFTs owned by the given object. These grant the owner
+	the capability to manage the associated domain.
 	"""
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
 	"""
@@ -1631,7 +1633,8 @@ type Owner implements ObjectOwner {
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
 	"""
-	The SuinsRegistration NFTs owned by the given address.
+	The SuinsRegistration NFTs owned by the given object. These grant the owner
+	the capability to manage the associated domain.
 	"""
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
 	"""
