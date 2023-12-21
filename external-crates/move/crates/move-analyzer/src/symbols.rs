@@ -1,23 +1,29 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module is responsible for building symbolication information on top of compiler's typed
-//! AST, in particular identifier definitions to be used for implementing go-to-def and
-//! go-to-references language server commands.
+//! This module is responsible for building symbolication information on top of compiler's parsed
+//! and typed ASTs, in particular identifier definitions to be used for implementing go-to-def,
+//! go-to-references, and on-hover language server commands.
 //!
-//! There are two main structs that are used at different phases of the process, the Symbolicator
-//! struct is used when building symbolication information and the Symbols struct is summarizes the
-//! symbolication results and is used by the language server find definitions and references.
+//! There are different structs that are used at different phases of the process, the
+//! ParsingSymbolicator and Typing Symbolicator structs are used when building symbolication
+//! information and the Symbols struct is summarizes the symbolication results and is used by the
+//! language server find definitions and references.
 //!
-//! Here is a brief description of how the symbolication information is encoded. Each identifier is
-//! in the source code of a given module is represented by its location (UseLoc struct): line
-//! number, starting and ending column, and hash of the source file where this identifier is
-//! located). A definition for each identifier (if any - e.g., built-in type definitions are
-//! excluded as there is no place in source code where they are defined) is also represented by its
-//! location in the source code (DefLoc struct): line, starting column and a hash of the source
-//! file where it's located. The symbolication process maps each identifier with its definition - a
-//! per module map is keyed on the line number where the identifier is located, and the map entry
-//! contains a list of identifier/definition pairs ordered by the column where the identifier starts.
+//! Here is a brief description of how the symbolication information is encoded. Each identifier in
+//! the source code of a given module is represented by its location (UseLoc struct): line number,
+//! starting and ending column, and hash of the source file where this identifier is located). A
+//! definition for each identifier (if any - e.g., built-in type definitions are excluded as there
+//! is no place in source code where they are defined) is also represented by its location in the
+//! source code (DefLoc struct): line, starting column and a hash of the source file where it's
+//! located. The symbolication process maps each identifier with its definition, and also computes
+//! other relevant information for each identifier, such as location of its type and information
+//! that should be displayed on hover. All this information for an identifier is stored in the
+//! UseDef struct.
+
+//! All UseDefs for a given module are stored in a per module map keyed on the line number where the
+//! identifier represented by a given UseDef is located - the map entry contains a set of UseDef-s
+//! ordered by the column where the identifier starts.
 //!
 //! For example consider the following code fragment (0-based line numbers on the left and 0-based
 //! column numbers at the bottom):
@@ -29,22 +35,22 @@
 //!    0     6  9  13 15    22
 //!
 //! Symbolication information for this code fragment would look as follows assuming that this code
-//! is stored in a file with hash FHASH (note that identifier in the definition of the constant maps
-//! to itself):
+//! is stored in a file with hash FHASH (we omit on-hover, type def and doc string info here; also
+//! note that identifier in the definition of the constant maps to itself):
 //!
-//! [7] -> [UseLoc(7:6-13, FHASH), DefLoc(7:6, FHASH)]
-//! [9] -> [UseLoc(9:0-9 , FHASH), DefLoc((7:6, FHASH)], [UseLoc(9:13-22, FHASH), DefLoc((7:6, FHASH)]
+//! [7] -> [UseDef(col_start:6,  col_end:13, DefLoc(7:6, FHASH))]
+//! [9] -> [UseDef(col_start:0,  col_end: 9, DefLoc(7:6, FHASH))],
+//!        [UseDef(col_start:13, col_end:22, DefLoc(7:6, FHASH))]
 //!
-//! Including line number (and file hash) with the (use) identifier location may appear redundant,
-//! but it's needed to allow accumulating uses with each definition to support
+//! We also associate all uses of an identifier with its definition to support
 //! go-to-references. This is done in a global map from an identifier location (DefLoc) to a set of
-//! use locations (UseLoc) - we find a all references of a given identifier by first finding its
-//! definition and then using this definition as a key to the global map.
+//! use locations (UseLoc).
 //!
-//! Symbolication algorithm first analyzes all top-level definitions from all modules and then
-//! processes function bodies and struct definitions to match uses to definitions. For local
-//! definitions, the symbolicator builds a scope stack, entering encountered definitions and
-//! matching uses to a definition in the innermost scope.
+//! Symbolication algorithm over typing AST first analyzes all top-level definitions from all
+//! modules. ParsingSymbolicator then processes import statements (no longer available at the level
+//! of typed AST) and TypingSymbolicator processes function bodies, as well as constant and struct
+//! definitions. For local definitions, TypingSymbolicator builds a scope stack, entering
+//! encountered definitions and matching uses to a definition in the innermost scope.
 
 #![allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
 
@@ -318,8 +324,7 @@ pub struct TypingSymbolicator<'a> {
     current_mod: Option<ModuleIdent>,
 }
 
-/// Maps a line number to a list of use-def pairs on a given line (use-def set is sorted by
-/// col_start)
+/// Maps a line number to a list of use-def-s on a given line (use-def set is sorted by col_start)
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct UseDefMap(BTreeMap<u32, BTreeSet<UseDef>>);
 
