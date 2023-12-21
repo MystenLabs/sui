@@ -393,7 +393,9 @@ impl IndexerReader {
     }
 
     /// Retrieve the system state data for the given epoch. If no epoch is given,
-    /// it will retrieve the last known epoch's data and return the system state.
+    /// it will retrieve the latest epoch's data and return the system state.
+    /// System state of the current epoch is populated at the beginning of the epoch,
+    /// please call `get_latest_sui_system_state` instead if you need absolute latest system state.
     pub fn get_epoch_sui_system_state(
         &self,
         epoch: Option<EpochId>,

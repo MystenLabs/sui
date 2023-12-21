@@ -61,11 +61,6 @@ pub struct QueryableEpochSystemState {
     pub system_state: Vec<u8>,
 }
 
-#[derive(Queryable)]
-pub struct QueryableEpochId {
-    pub id: i64,
-}
-
 impl StoredEpochInfo {
     pub fn from_epoch_beginning_info(e: &IndexedEpochInfo) -> Self {
         Self {
