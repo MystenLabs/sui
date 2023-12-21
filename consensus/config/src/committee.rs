@@ -33,9 +33,7 @@ pub struct Committee {
 }
 
 impl Committee {
-    /// Committee should be created via the CommitteeBuilder - this is intentionally be marked as
-    /// private method.
-    fn new(epoch: Epoch, authorities: Vec<Authority>) -> Self {
+    pub fn new(epoch: Epoch, authorities: Vec<Authority>) -> Self {
         assert!(!authorities.is_empty(), "Committee cannot be empty!");
         assert!(
             authorities.len() < u32::MAX as usize,
@@ -54,6 +52,8 @@ impl Committee {
             authorities,
         }
     }
+
+    /// Public accessors for Committee data.
 
     pub fn epoch(&self) -> Epoch {
         self.epoch
@@ -86,49 +86,8 @@ impl Committee {
             .map(|(i, a)| (AuthorityIndex(i as u32), a))
     }
 
-    /// Returns the number of authorities.
     pub fn size(&self) -> usize {
         self.authorities.len()
-    }
-}
-
-/// Use builder to construct a Committee.
-pub struct CommitteeBuilder {
-    epoch: Epoch,
-    authorities: Vec<Authority>,
-}
-
-impl CommitteeBuilder {
-    /// Epoch is constant and cannot be updated later.
-    pub fn new(epoch: Epoch) -> Self {
-        Self {
-            epoch,
-            authorities: Vec::new(),
-        }
-    }
-
-    /// All authorities added to the CommitteeBuilder will be part of the Committee.
-    pub fn add_authority(
-        &mut self,
-        stake: Stake,
-        address: Multiaddr,
-        hostname: String,
-        network_key: NetworkPublicKey,
-        protocol_key: ProtocolPublicKey,
-    ) -> &mut Self {
-        self.authorities.push(Authority {
-            stake,
-            address,
-            hostname,
-            network_key,
-            protocol_key: protocol_key.clone(),
-        });
-        self
-    }
-
-    /// Consumes self and creates a Committee.
-    pub fn build(self) -> Committee {
-        Committee::new(self.epoch, self.authorities)
     }
 }
 
@@ -173,32 +132,32 @@ impl Display for AuthorityIndex {
 
 #[cfg(test)]
 mod tests {
-    use crate::{CommitteeBuilder, NetworkKeyPair, ProtocolKeyPair, Stake};
+    use crate::{Authority, Committee, NetworkKeyPair, ProtocolKeyPair, Stake};
     use fastcrypto::traits::KeyPair as _;
     use multiaddr::Multiaddr;
     use rand::{rngs::StdRng, SeedableRng};
 
     #[test]
-    fn committee_builder() {
+    fn committee_basic() {
         // GIVEN
+        let epoch = 100;
+
+        let mut authorities = vec![];
         let mut rng = StdRng::from_seed([9; 32]);
         let num_of_authorities = 9;
-
-        let mut committee_builder = CommitteeBuilder::new(100);
-
         for i in 1..=num_of_authorities {
             let network_keypair = NetworkKeyPair::generate(&mut rng);
             let protocol_keypair = ProtocolKeyPair::generate(&mut rng);
-            committee_builder.add_authority(
-                i as Stake,
-                Multiaddr::empty(),
-                "test_host".to_string(),
-                network_keypair.public().clone(),
-                protocol_keypair.public().clone(),
-            );
+            authorities.push(Authority {
+                stake: i as Stake,
+                address: Multiaddr::empty(),
+                hostname: "test_host".to_string(),
+                network_key: network_keypair.public().clone(),
+                protocol_key: protocol_keypair.public().clone(),
+            });
         }
 
-        let committee = committee_builder.build();
+        let committee = Committee::new(epoch, authorities);
 
         // THEN make sure the output Committee fields are populated correctly.
         assert_eq!(committee.size(), num_of_authorities);

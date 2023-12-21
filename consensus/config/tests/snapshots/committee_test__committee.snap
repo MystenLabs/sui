@@ -2,7 +2,7 @@
 source: consensus/config/tests/committee_test.rs
 expression: committee
 ---
-epoch: 10
+epoch: 100
 total_stake: 55
 quorum_threshold: 37
 validity_threshold: 19
