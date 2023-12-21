@@ -79,6 +79,7 @@ impl StoredEpochInfo {
     pub fn from_epoch_end_info(e: &IndexedEpochInfo) -> Self {
         Self {
             epoch: e.epoch as i64,
+            system_state: e.system_state.clone(),
             epoch_total_transactions: e.epoch_total_transactions.map(|v| v as i64),
             last_checkpoint_id: e.last_checkpoint_id.map(|v| v as i64),
             epoch_end_timestamp: e.epoch_end_timestamp.map(|v| v as i64),
@@ -104,7 +105,6 @@ impl StoredEpochInfo {
             protocol_version: 0,
             total_stake: 0,
             storage_fund_balance: 0,
-            system_state: vec![],
         }
     }
 }

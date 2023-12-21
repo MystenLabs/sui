@@ -280,6 +280,7 @@ where
 
         Ok(Some(EpochToCommit {
             last_epoch: Some(IndexedEpochInfo::from_end_of_epoch_data(
+                &system_state,
                 checkpoint_summary,
                 &event,
                 network_tx_count_prev_epoch,

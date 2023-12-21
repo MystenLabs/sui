@@ -719,9 +719,10 @@ impl PgIndexerStoreV2 {
                         .on_conflict(epochs::epoch)
                         .do_update()
                         .set((
-                            // Note: it's crucial that we don't include epoch beginning info
-                            // below as we don't want to override them. They are
-                            // validators, first_checkpoint_id, epoch_start_timestamp and so on.
+                            // Note: Exclude epoch beginning info except system_state below.
+                            // This is to ensure that epoch beginning info columns are not overridden with default values,
+                            // because these columns are default values in `last_epoch`.
+                            epochs::system_state.eq(excluded(epochs::system_state)),
                             epochs::epoch_total_transactions
                                 .eq(excluded(epochs::epoch_total_transactions)),
                             epochs::last_checkpoint_id.eq(excluded(epochs::last_checkpoint_id)),
