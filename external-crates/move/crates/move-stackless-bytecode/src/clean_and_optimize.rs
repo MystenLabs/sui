@@ -9,7 +9,6 @@ use std::collections::BTreeSet;
 use move_binary_format::file_format::CodeOffset;
 use move_model::{
     model::FunctionEnv,
-    pragmas::INTRINSIC_FUN_MAP_BORROW_MUT,
     well_known::{EVENT_EMIT_EVENT, VECTOR_BORROW_MUT},
 };
 
@@ -111,13 +110,10 @@ impl<'a> TransferFunctions for Optimizer<'a> {
                         .target
                         .global_env()
                         .get_function_qid(mid.qualified(*fid));
-                    let has_effect = if !self.options.for_interpretation
-                        && callee_env.is_native_or_intrinsic()
-                    {
+                    let has_effect = if !self.options.for_interpretation && callee_env.is_native() {
                         // Exploit knowledge about builtin functions
                         !(callee_env.is_well_known(VECTOR_BORROW_MUT)
                             || callee_env.is_well_known(EVENT_EMIT_EVENT)
-                            || callee_env.is_intrinsic_of(INTRINSIC_FUN_MAP_BORROW_MUT)
                             || is_custom_borrow(callee_env, &self.options.borrow_natives))
                     } else {
                         true

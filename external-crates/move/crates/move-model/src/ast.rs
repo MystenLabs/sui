@@ -22,6 +22,21 @@ use crate::{
 
 const MAX_ADDR_STRING: &str = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
 
+/// A type alias for temporaries. Those are locals used in bytecode.
+pub type TempIndex = usize;
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub enum TraceKind {
+    /// A user level TRACE(..) in the source.
+    User,
+    /// An automatically generated trace
+    Auto,
+    /// A trace for a sub-expression of an assert or assume. The location of a
+    /// Call(.., Trace(SubAuto)) expression identifies the context of the assume or assert.
+    /// A backend may print those traces only if the assertion failed.
+    SubAuto,
+}
+
 // =================================================================================================
 /// # Attributes
 

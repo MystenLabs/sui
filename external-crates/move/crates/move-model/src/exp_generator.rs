@@ -5,7 +5,7 @@
 use num::BigUint;
 
 use crate::{
-    ast::Value,
+    ast::{TempIndex, Value},
     model::{FunctionEnv, GlobalEnv, Loc, NodeId, QualifiedInstId, StructId},
     symbol::Symbol,
     ty::Type,
@@ -21,6 +21,12 @@ pub trait ExpGenerator<'env> {
 
     /// Set the current location
     fn set_loc(&mut self, loc: Loc);
+
+    /// Add a local variable with given type, return the local index.
+    fn add_local(&mut self, ty: Type) -> TempIndex;
+
+    /// Get the type of a local given at `temp` index
+    fn get_local_type(&self, temp: TempIndex) -> Type;
 
     /// Get the global environment
     fn global_env(&self) -> &'env GlobalEnv {
@@ -41,6 +47,11 @@ pub trait ExpGenerator<'env> {
             self.global_env().set_node_instantiation(node_id, inst);
         }
         node_id
+    }
+
+    /// Allocates a new temporary.
+    fn new_temp(&mut self, ty: Type) -> TempIndex {
+        self.add_local(ty)
     }
 
     /// Make a boolean constant expression.

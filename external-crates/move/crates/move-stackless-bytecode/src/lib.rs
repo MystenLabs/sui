@@ -14,7 +14,6 @@ pub mod annotations;
 pub mod borrow_analysis;
 pub mod clean_and_optimize;
 pub mod compositional_analysis;
-pub mod data_invariant_instrumentation;
 pub mod dataflow_analysis;
 pub mod dataflow_domains;
 pub mod debug_instrumentation;
@@ -23,9 +22,6 @@ pub mod escape_analysis;
 pub mod function_data_builder;
 pub mod function_target;
 pub mod function_target_pipeline;
-pub mod global_invariant_analysis;
-pub mod global_invariant_instrumentation;
-pub mod global_invariant_instrumentation_v2;
 pub mod graph;
 pub mod inconsistency_check;
 pub mod livevar_analysis;
@@ -40,15 +36,9 @@ pub mod options;
 pub mod packed_types_analysis;
 pub mod pipeline_factory;
 pub mod reaching_def_analysis;
-pub mod read_write_set_analysis;
-pub mod spec_instrumentation;
 pub mod stackless_bytecode;
 pub mod stackless_bytecode_generator;
 pub mod stackless_control_flow_graph;
-pub mod usage_analysis;
-pub mod verification_analysis;
-pub mod verification_analysis_v2;
-pub mod well_formed_instrumentation;
 
 /// Print function targets for testing and debugging.
 pub fn print_targets_for_test(
@@ -61,7 +51,7 @@ pub fn print_targets_for_test(
     for module_env in env.get_modules() {
         for func_env in module_env.get_functions() {
             for (variant, target) in targets.get_targets(&func_env) {
-                if !target.data.code.is_empty() || target.func_env.is_native_or_intrinsic() {
+                if !target.data.code.is_empty() || target.func_env.is_native() {
                     target.register_annotation_formatters_for_test();
                     writeln!(&mut text, "\n[variant {}]\n{}", variant, target).unwrap();
                 }
