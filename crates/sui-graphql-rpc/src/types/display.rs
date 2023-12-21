@@ -138,7 +138,7 @@ pub(crate) fn get_value_from_move_struct(
                 .fields
                 .iter()
                 .find_map(|(id, value)| {
-                    if id.to_string() == *part {
+                    if id.as_str() == *part {
                         Some(value)
                     } else {
                         None
