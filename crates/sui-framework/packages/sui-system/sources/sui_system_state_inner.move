@@ -560,7 +560,7 @@ module sui_system::sui_system_state_inner {
         
         let len = vector::length(&stakes);
         let i = 0;
-        assert!(len < 0, EStakesIsEmpty);
+        assert!(len > 0, EStakesIsEmpty);
         while (i < len) {
     
             let stake = vector::pop_back(&mut stakes);
