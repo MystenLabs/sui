@@ -1320,7 +1320,7 @@ impl<'a> ParsingSymbolicator<'a> {
         mod_use_defs: &mut BTreeMap<String, UseDefMap>,
     ) {
         if let P::Definition::Module(mod_def) = &pkg_def.def {
-            self.mod_symbols(&mod_def, references, mod_use_defs);
+            self.mod_symbols(mod_def, references, mod_use_defs);
         }
     }
 
@@ -1399,8 +1399,9 @@ impl<'a> ParsingSymbolicator<'a> {
             E::IfElse(e1, e2, oe) => {
                 self.exp_symbols(e1, references, use_defs);
                 self.exp_symbols(e2, references, use_defs);
-                oe.as_ref()
-                    .map(|e| self.exp_symbols(&*e, references, use_defs));
+                if let Some(e) = oe.as_ref() {
+                    self.exp_symbols(e, references, use_defs)
+                }
             }
             E::While(e1, e2) => {
                 self.exp_symbols(e1, references, use_defs);
@@ -1418,12 +1419,14 @@ impl<'a> ParsingSymbolicator<'a> {
             }
             E::Abort(e) => self.exp_symbols(e, references, use_defs),
             E::Return(_, oe) => {
-                oe.as_ref()
-                    .map(|e| self.exp_symbols(&*e, references, use_defs));
+                if let Some(e) = oe.as_ref() {
+                    self.exp_symbols(e, references, use_defs)
+                }
             }
             E::Break(_, oe) => {
-                oe.as_ref()
-                    .map(|e| self.exp_symbols(&*e, references, use_defs));
+                if let Some(e) = oe.as_ref() {
+                    self.exp_symbols(e, references, use_defs)
+                }
             }
             E::Dereference(e) => self.exp_symbols(e, references, use_defs),
             E::UnaryExp(_, e) => self.exp_symbols(e, references, use_defs),
@@ -1459,9 +1462,9 @@ impl<'a> ParsingSymbolicator<'a> {
         seq_items
             .iter()
             .for_each(|seq_item| self.seq_item_symbols(seq_item, references, use_defs));
-        oe.as_ref()
-            .as_ref()
-            .map(|e| self.exp_symbols(e, references, use_defs));
+        if let Some(e) = oe.as_ref().as_ref() {
+            self.exp_symbols(e, references, use_defs)
+        }
     }
 
     /// Get symbols for a use declaration
@@ -1509,8 +1512,7 @@ impl<'a> ParsingSymbolicator<'a> {
         references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
         use_defs: &mut UseDefMap,
     ) -> Option<&ModuleDefs> {
-        let Some(mod_name_start) =
-            get_start_loc(&mod_name.loc(), &self.files, &self.file_id_mapping)
+        let Some(mod_name_start) = get_start_loc(&mod_name.loc(), self.files, self.file_id_mapping)
         else {
             return None;
         };
@@ -1546,7 +1548,7 @@ impl<'a> ParsingSymbolicator<'a> {
         match mod_use {
             P::ModuleUse::Module(Some(alias_name)) => {
                 let Some(alias_name_start) =
-                    get_start_loc(&alias_name.loc(), &self.files, &self.file_id_mapping)
+                    get_start_loc(&alias_name.loc(), self.files, self.file_id_mapping)
                 else {
                     debug_assert!(false);
                     return;
@@ -1646,7 +1648,7 @@ impl<'a> TypingSymbolicator<'a> {
         let mod_ident = format!("{}", self.current_mod.unwrap());
         for (pos, name, fun) in &mod_def.functions {
             // enter self-definition for function name (unwrap safe - done when inserting def)
-            let name_start = get_start_loc(&pos, &self.files, &self.file_id_mapping).unwrap();
+            let name_start = get_start_loc(&pos, self.files, self.file_id_mapping).unwrap();
             let doc_string = extract_doc_string(
                 self.file_id_mapping,
                 self.file_id_to_lines,
@@ -1676,7 +1678,7 @@ impl<'a> TypingSymbolicator<'a> {
 
         for (pos, name, c) in &mod_def.constants {
             // enter self-definition for const name (unwrap safe - done when inserting def)
-            let name_start = get_start_loc(&pos, &self.files, &self.file_id_mapping).unwrap();
+            let name_start = get_start_loc(&pos, self.files, self.file_id_mapping).unwrap();
             let doc_string = extract_doc_string(
                 self.file_id_mapping,
                 self.file_id_to_lines,
@@ -1708,7 +1710,7 @@ impl<'a> TypingSymbolicator<'a> {
 
         for (pos, name, s) in &mod_def.structs {
             // enter self-definition for struct name (unwrap safe - done when inserting def)
-            let name_start = get_start_loc(&pos, &self.files, &self.file_id_mapping).unwrap();
+            let name_start = get_start_loc(&pos, self.files, self.file_id_mapping).unwrap();
             let doc_string = extract_doc_string(
                 self.file_id_mapping,
                 self.file_id_to_lines,
@@ -1755,7 +1757,7 @@ impl<'a> TypingSymbolicator<'a> {
             for (fpos, fname, (_, t)) in fields {
                 self.add_type_id_use_def(t, references, use_defs);
                 // enter self-definition for field name (unwrap safe - done when inserting def)
-                let start = get_start_loc(&fpos, &self.files, &self.file_id_mapping).unwrap();
+                let start = get_start_loc(&fpos, self.files, self.file_id_mapping).unwrap();
                 let on_hover = IdentOnHover::Type(t.clone());
                 let ident_type_def_loc = on_hover_to_type_def_loc(self.mod_outer_defs, &on_hover);
                 let doc_string = extract_doc_string(
@@ -2192,8 +2194,8 @@ impl<'a> TypingSymbolicator<'a> {
     ) {
         match get_start_loc(
             &tp.user_specified_name.loc,
-            &self.files,
-            &self.file_id_mapping,
+            self.files,
+            self.file_id_mapping,
         ) {
             Some(start) => {
                 let tname = tp.user_specified_name.value;
@@ -2236,7 +2238,7 @@ impl<'a> TypingSymbolicator<'a> {
         use_defs: &mut UseDefMap,
     ) {
         let mod_ident_str = format!("{}", module_ident.value);
-        let Some(name_start) = get_start_loc(use_pos, &self.files, &self.file_id_mapping) else {
+        let Some(name_start) = get_start_loc(use_pos, self.files, self.file_id_mapping) else {
             debug_assert!(false);
             return;
         };
@@ -2336,7 +2338,7 @@ impl<'a> TypingSymbolicator<'a> {
         use_defs: &mut UseDefMap,
     ) {
         let mod_ident_str = format!("{}", module_ident);
-        let Some(name_start) = get_start_loc(use_pos, &self.files, &self.file_id_mapping) else {
+        let Some(name_start) = get_start_loc(use_pos, self.files, self.file_id_mapping) else {
             debug_assert!(false);
             return;
         };
@@ -2388,7 +2390,7 @@ impl<'a> TypingSymbolicator<'a> {
             Type_::Ref(_, t) => self.add_type_id_use_def(t, references, use_defs),
             Type_::Param(tparam) => {
                 let sp!(use_pos, use_name) = tparam.user_specified_name;
-                match get_start_loc(pos, &self.files, &self.file_id_mapping) {
+                match get_start_loc(pos, self.files, self.file_id_mapping) {
                     Some(name_start) => match self.type_params.get(&use_name) {
                         Some(def_loc) => {
                             let on_hover = IdentOnHover::Type(id_type.clone());
@@ -2449,7 +2451,7 @@ impl<'a> TypingSymbolicator<'a> {
         def_type: Type,
         with_let: bool,
     ) {
-        match get_start_loc(pos, &self.files, &self.file_id_mapping) {
+        match get_start_loc(pos, self.files, self.file_id_mapping) {
             Some(name_start) => {
                 let def_loc = DefLoc {
                     fhash: pos.file_hash(),
@@ -2501,7 +2503,7 @@ impl<'a> TypingSymbolicator<'a> {
         scope: &OrdMap<Symbol, LocalDef>,
         use_defs: &mut UseDefMap,
     ) {
-        let name_start = match get_start_loc(use_pos, &self.files, &self.file_id_mapping) {
+        let name_start = match get_start_loc(use_pos, self.files, self.file_id_mapping) {
             Some(v) => v,
             None => {
                 debug_assert!(false);
