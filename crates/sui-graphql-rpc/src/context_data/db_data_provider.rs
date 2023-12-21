@@ -214,14 +214,6 @@ impl PgManager {
         .await
     }
 
-    async fn get_earliest_complete_checkpoint(&self) -> Result<Option<StoredCheckpoint>, Error> {
-        let query = move || Ok(QueryBuilder::get_earliest_complete_checkpoint());
-        self.run_query_async_with_cost(query, |query| {
-            move |conn| query.get_result::<StoredCheckpoint>(conn).optional()
-        })
-        .await
-    }
-
     async fn get_chain_identifier(&self) -> Result<ChainIdentifier, Error> {
         let result = self
             .get_checkpoint(None, Some(0))
@@ -724,15 +716,6 @@ impl PgManager {
         stored_checkpoint.map(Checkpoint::try_from).transpose()
     }
 
-    pub(crate) async fn fetch_earliest_complete_checkpoint(
-        &self,
-    ) -> Result<Option<Checkpoint>, Error> {
-        self.get_earliest_complete_checkpoint()
-            .await?
-            .map(Checkpoint::try_from)
-            .transpose()
-    }
-
     pub(crate) async fn fetch_chain_identifier(&self) -> Result<String, Error> {
         let result = self.get_chain_identifier().await?;
         Ok(result.to_string())
@@ -1138,6 +1121,14 @@ impl PgManager {
         Ok(record.target_address.map(|address| Address {
             address: SuiAddress::from_array(address.to_inner()),
         }))
+    }
+
+    pub(crate) async fn available_range(&self) -> Result<(u64, u64), Error> {
+        Ok(self
+            .inner
+            .spawn_blocking(|this| this.get_consistent_read_range())
+            .await
+            .map(|(start, end)| (start as u64, end as u64))?)
     }
 
     pub(crate) async fn default_name_service_name(
