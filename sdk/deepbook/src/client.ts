@@ -727,11 +727,17 @@ export class DeepBookClient {
 		const parsed = resp.data?.type != null ? parseStructTag(resp.data.type) : null;
 
 		// Modification handle case like 0x2::coin::Coin<0xf398b9ecb31aed96c345538fb59ca5a1a2c247c5e60087411ead6c637129f1c4::fish::FISH>
-		return parsed?.address === NORMALIZED_SUI_COIN_TYPE.split('::')[0] &&
+		if (parsed?.address === NORMALIZED_SUI_COIN_TYPE.split('::')[0] &&
 			parsed.module === 'coin' &&
-			parsed.name === 'Coin'
-			? parsed.typeParams[0] + '::' + parsed.module + '::' + parsed.name
-			: null;
+			parsed.name === 'Coin' &&
+			parsed.typeParams.length > 0) {
+
+			const firstTypeParam = parsed.typeParams[0];
+
+			return firstTypeParam.address + '::' + firstTypeParam.module + '::' + firstTypeParam.name;
+		} else {
+			return null;
+		}
 	}
 
 	#nextClientOrderId() {
