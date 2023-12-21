@@ -83,6 +83,9 @@ type Address implements ObjectOwner {
 	"""
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
+	"""
+	The SuinsRegistration NFTs owned by the given address.
+	"""
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
 	"""
 	This resolver is not supported on the Address type.
@@ -1417,6 +1420,10 @@ type Object implements ObjectOwner {
 	"""
 	defaultNameServiceName: String
 	"""
+	The SuinsRegistration NFTs owned by the given object.
+	"""
+	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
+	"""
 	Access a dynamic field on an object using its name.
 	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
 	using their type, and their BCS contents, Base64 encoded.
@@ -1539,6 +1546,7 @@ interface ObjectOwner {
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
+	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
 	dynamicField(name: DynamicFieldName!): DynamicField
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
@@ -1626,6 +1634,10 @@ type Owner implements ObjectOwner {
 	"""
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
+	"""
+	The SuinsRegistration NFTs owned by the given address.
+	"""
+	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
 	"""
 	Access a dynamic field on an object using its name.
 	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified

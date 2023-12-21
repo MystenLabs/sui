@@ -147,6 +147,7 @@ impl Address {
             .extend()
     }
 
+    /// The SuinsRegistration NFTs owned by the given address.
     pub async fn suins_registrations(
         &self,
         ctx: &Context<'_>,
