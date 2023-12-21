@@ -13,7 +13,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 
 const MAX_COINS_PER_REQUEST = 10;
-const ESTIMATE_RETRY_COUNT = 1;
+const ESTIMATE_RETRY_COUNT = 3;
 
 async function getCoinsByBalance({
 	coinType,
