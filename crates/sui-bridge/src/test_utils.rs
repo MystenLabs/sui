@@ -1,18 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::abi::{ExampleContractEvents, TransferFilter};
+use crate::eth_mock_provider::EthMockProvider;
 use crate::server::mock_handler::run_mock_server;
 use crate::{
     crypto::{BridgeAuthorityKeyPair, BridgeAuthorityPublicKey, BridgeAuthoritySignInfo},
     events::EmittedSuiToEthTokenBridgeV1,
     server::mock_handler::BridgeRequestMockHandler,
     types::{
-        BridgeAction, BridgeAuthority, BridgeChainId, SignedBridgeAction, SuiToEthBridgeAction,
-        TokenId,
+        BridgeAction, BridgeAuthority, BridgeChainId, EthToSuiBridgeAction, SignedBridgeAction,
+        SuiToEthBridgeAction, TokenId,
     },
 };
+use ethers::abi::{long_signature, ParamType};
 use ethers::types::Address as EthAddress;
+use ethers::types::{
+    Block, BlockNumber, Filter, FilterBlockOption, Log, TransactionReceipt, TxHash, ValueOrArray,
+    U64,
+};
 use fastcrypto::traits::KeyPair;
+use hex_literal::hex;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
@@ -107,4 +115,94 @@ pub fn sign_action_with_key(
 ) -> SignedBridgeAction {
     let sig = BridgeAuthoritySignInfo::new(action, secret);
     SignedBridgeAction::new_from_data_and_sig(action.clone(), sig)
+}
+
+pub fn mock_last_finalized_block(mock_provider: &EthMockProvider, block_number: u64) {
+    let block = Block::<ethers::types::TxHash> {
+        number: Some(U64::from(block_number)),
+        ..Default::default()
+    };
+    mock_provider
+        .add_response("eth_getBlockByNumber", ("finalized", false), block)
+        .unwrap();
+}
+
+// Mocks eth_getLogs and eth_getTransactionReceipt for the given address and block range.
+// The input log needs to have transaction_hash set.
+pub fn mock_get_logs(
+    mock_provider: &EthMockProvider,
+    address: EthAddress,
+    from_block: u64,
+    to_block: u64,
+    logs: Vec<Log>,
+) {
+    mock_provider.add_response::<[ethers::types::Filter; 1], Vec<ethers::types::Log>, Vec<ethers::types::Log>>(
+        "eth_getLogs",
+        [
+            Filter {
+                block_option: FilterBlockOption::Range {
+                    from_block: Some(BlockNumber::Number(U64::from(from_block))),
+                    to_block: Some(BlockNumber::Number(U64::from(to_block))),
+                },
+                address: Some(ValueOrArray::Value(address)),
+                topics: [None, None, None, None],
+            }
+        ],
+        logs.clone(),
+    ).unwrap();
+
+    for log in logs {
+        mock_provider
+            .add_response::<[TxHash; 1], TransactionReceipt, TransactionReceipt>(
+                "eth_getTransactionReceipt",
+                [log.transaction_hash.unwrap()],
+                TransactionReceipt {
+                    block_number: log.block_number,
+                    logs: vec![log],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+}
+
+/// Returns a test Log and corresponding BridgeAction
+// Refernece: https://github.com/rust-ethereum/ethabi/blob/master/ethabi/src/event.rs#L192
+pub fn get_test_log_and_action(
+    contract_address: EthAddress,
+    tx_hash: TxHash,
+    event_index: u16,
+) -> (Log, BridgeAction) {
+    let log = Log {
+        address: contract_address,
+        topics: vec![
+            long_signature(
+                "Transfer",
+                &[ParamType::Address, ParamType::Address, ParamType::Uint(256)],
+            ),
+            hex!("ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef").into(),
+            hex!("000000000000000000000000dbf5e9c5206d0db70a90108bf936da60221dc080").into(),
+        ],
+        data: hex!(
+            "
+            0000000000000000000000000000000000000000000000000000000000000003
+            "
+        )
+        .into(),
+        block_hash: Some(TxHash::random()),
+        block_number: Some(1.into()),
+        transaction_hash: Some(tx_hash),
+        log_index: Some(0.into()),
+        ..Default::default()
+    };
+    let bridge_action = BridgeAction::EthToSuiBridgeAction(EthToSuiBridgeAction {
+        eth_tx_hash: tx_hash,
+        eth_event_index: event_index,
+        eth_bridge_event: ExampleContractEvents::TransferFilter(TransferFilter {
+            from: log.topics[1].into(),
+            to: log.topics[2].into(),
+            amount: 3.into(), // matches `data` in log
+        }),
+    });
+    (log, bridge_action)
 }

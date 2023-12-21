@@ -196,8 +196,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::{abi::tests::get_test_log_and_action, types::BridgeActionDigest};
-    use ethers::types::Address as EthAddress;
+    use crate::{test_utils::get_test_log_and_action, types::BridgeActionDigest};
+    use ethers::types::{Address as EthAddress, TxHash};
     use prometheus::Registry;
     use std::str::FromStr;
 
@@ -273,7 +273,7 @@ mod tests {
         )
         .run(executor);
         let address = EthAddress::random();
-        let (log, bridge_action) = get_test_log_and_action(address);
+        let (log, bridge_action) = get_test_log_and_action(address, TxHash::random(), 10);
         let log_index_in_tx = 10;
         let eth_log = EthLog {
             log: log.clone(),
