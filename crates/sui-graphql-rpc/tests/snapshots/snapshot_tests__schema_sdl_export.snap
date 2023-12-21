@@ -84,6 +84,11 @@ type Address implements ObjectOwner {
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
 	"""
+	The SuinsRegistration NFTs owned by the given object. These grant the owner
+	the capability to manage the associated domain.
+	"""
+	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
+	"""
 	This resolver is not supported on the Address type.
 	"""
 	dynamicField(name: DynamicFieldName!): DynamicField
@@ -1428,6 +1433,11 @@ type Object implements ObjectOwner {
 	"""
 	defaultNameServiceName: String
 	"""
+	The SuinsRegistration NFTs owned by the given object. These grant the owner
+	the capability to manage the associated domain.
+	"""
+	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
+	"""
 	Access a dynamic field on an object using its name.
 	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
 	using their type, and their BCS contents, Base64 encoded.
@@ -1550,6 +1560,7 @@ interface ObjectOwner {
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
+	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
 	dynamicField(name: DynamicFieldName!): DynamicField
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
@@ -1637,6 +1648,11 @@ type Owner implements ObjectOwner {
 	"""
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
+	"""
+	The SuinsRegistration NFTs owned by the given object. These grant the owner
+	the capability to manage the associated domain.
+	"""
+	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
 	"""
 	Access a dynamic field on an object using its name.
 	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
@@ -2246,6 +2262,46 @@ type SuiSystemStateSummary {
 	protocol version upgrade).
 	"""
 	protocolConfigs: ProtocolConfigs
+}
+
+type SuinsRegistration {
+	"""
+	Domain name of the SuinsRegistration object
+	"""
+	domain: String!
+	"""
+	Convert the SuinsRegistration object into a Move object
+	"""
+	asMoveObject: MoveObject!
+}
+
+type SuinsRegistrationConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [SuinsRegistrationEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [SuinsRegistration!]!
+}
+
+"""
+An edge in a connection.
+"""
+type SuinsRegistrationEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: SuinsRegistration!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 """

@@ -483,12 +483,12 @@ interface IOwner {
   ): DynamicFieldConnection!
 
   defaultNameServiceName: String
-  nameServiceNames(
+  suinsRegistrations(
     first: Int,
     after: String,
     last: Int,
     before: String,
-  ): NameServiceNameConnection!
+  ): SuinsRegistrationConnection!
 }
 
 union ObjectOwner = Immutable | Shared | Parent | AddressOwner
@@ -1530,16 +1530,27 @@ type MoveModuleEdge {
   node: MoveModule!
 }
 
-# NameServiceNameConnection
-type NameServiceNameConnection {
-  edges: [NameServiceNameEdge!]!
-  nodes: [NameServiceName!]!
+# SuinsRegistrationConnection
+type SuinsRegistrationConnection {
+  edges: [SuinsRegistrationEdge!]!
+  nodes: [SuinsRegistration!]!
   pageInfo: PageInfo!
 }
 
-type NameServiceNameEdge {
+type SuinsRegistrationEdge {
   cursor: String
-  node: String!  # is this correct?
+  node: SuinsRegistration
+}
+
+type SuinsRegistration {
+	"""
+	Domain name of the SuinsRegistration object
+	"""
+	domain: String!
+	"""
+	Convert the SuinsRegistration object into a Move object
+	"""
+	asMoveObject: MoveObject!
 }
 
 # AddressMetricsConnection

@@ -5,6 +5,7 @@ use super::address::Address;
 use super::dynamic_field::DynamicField;
 use super::dynamic_field::DynamicFieldName;
 use super::stake::StakedSui;
+use super::suins_registration::SuinsRegistration;
 use crate::context_data::db_data_provider::PgManager;
 use crate::types::balance::*;
 use crate::types::coin::*;
@@ -59,15 +60,14 @@ use sui_types::dynamic_field::DynamicFieldType;
         arg(name = "before", ty = "Option<String>")
     ),
     field(name = "default_name_service_name", ty = "Option<String>"),
-    // TODO disabled-for-rpc-1.5
-    // field(
-    //     name = "name_service_connection",
-    //     ty = "Option<Connection<String, NameService>>",
-    //     arg(name = "first", ty = "Option<u64>"),
-    //     arg(name = "after", ty = "Option<String>"),
-    //     arg(name = "last", ty = "Option<u64>"),
-    //     arg(name = "before", ty = "Option<String>")
-    // )
+    field(
+        name = "suins_registrations",
+        ty = "Option<Connection<String, SuinsRegistration>>",
+        arg(name = "first", ty = "Option<u64>"),
+        arg(name = "after", ty = "Option<String>"),
+        arg(name = "last", ty = "Option<u64>"),
+        arg(name = "before", ty = "Option<String>")
+    ),
     field(
         name = "dynamic_field",
         ty = "Option<DynamicField>",
@@ -201,17 +201,28 @@ impl Owner {
             .extend()
     }
 
-    // TODO disabled-for-rpc-1.5
-    // pub async fn name_service_connection(
-    //     &self,
-    //     ctx: &Context<'_>,
-    //     first: Option<u64>,
-    //     after: Option<String>,
-    //     last: Option<u64>,
-    //     before: Option<String>,
-    // ) -> Result<Option<Connection<String, NameService>>> {
-    //     unimplemented!()
-    // }
+    /// The SuinsRegistration NFTs owned by the given object. These grant the owner
+    /// the capability to manage the associated domain.
+    pub async fn suins_registrations(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Option<Connection<String, SuinsRegistration>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_suins_registrations(
+                first,
+                after,
+                last,
+                before,
+                ctx.data_unchecked::<NameServiceConfig>(),
+                self.address,
+            )
+            .await
+            .extend()
+    }
 
     /// Access a dynamic field on an object using its name.
     /// Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
