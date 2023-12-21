@@ -1,0 +1,34 @@
+Move prover returns: exiting with verification errors
+error: post-condition does not hold
+   ┌─ tests/sources/functional/return_values.move:17:9
+   │
+17 │         ensures result_1 == 2;
+   │         ^^^^^^^^^^^^^^^^^^^^^^
+   │
+   =     at tests/sources/functional/return_values.move:31: one_two_wrapper_incorrect
+   =     at tests/sources/functional/return_values.move:4: one_two
+   =         result_1 = <redacted>
+   =         result_2 = <redacted>
+   =     at tests/sources/functional/return_values.move:5: one_two
+   =         result_1 = <redacted>
+   =         result_2 = <redacted>
+   =     at tests/sources/functional/return_values.move:32: one_two_wrapper_incorrect
+   =     at tests/sources/functional/return_values.move:16
+   =     at tests/sources/functional/return_values.move:34: one_two_wrapper_incorrect (spec)
+   =     at tests/sources/functional/return_values.move:17
+
+error: post-condition does not hold
+   ┌─ tests/sources/functional/return_values.move:60:9
+   │
+60 │         ensures false;
+   │         ^^^^^^^^^^^^^^
+   │
+   =     at tests/sources/functional/return_values.move:57: true_one_wrapper_incorrect
+   =     at tests/sources/functional/return_values.move:40: true_one
+   =         result_1 = <redacted>
+   =         result_2 = <redacted>
+   =     at tests/sources/functional/return_values.move:41: true_one
+   =         result_1 = <redacted>
+   =         result_2 = <redacted>
+   =     at tests/sources/functional/return_values.move:58: true_one_wrapper_incorrect
+   =     at tests/sources/functional/return_values.move:60: true_one_wrapper_incorrect (spec)

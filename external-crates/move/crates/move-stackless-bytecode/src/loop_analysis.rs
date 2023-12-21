@@ -17,9 +17,6 @@ use crate::{
     stackless_control_flow_graph::{BlockContent, BlockId, StacklessControlFlowGraph},
 };
 
-const LOOP_INVARIANT_BASE_FAILED: &str = "base case of the loop invariant does not hold";
-const LOOP_INVARIANT_INDUCTION_FAILED: &str = "induction case of the loop invariant does not hold";
-
 /// A fat-loop captures the information of one or more natural loops that share the same loop
 /// header. This shared header is called the header of the fat-loop.
 ///
@@ -215,7 +212,7 @@ impl LoopAnalysisProcessor {
             .map(|label| (*label, builder.new_label()))
             .collect();
 
-        for (label, loop_info) in &loop_annotation.fat_loops {
+        for label in loop_annotation.fat_loops.keys() {
             let checker_label = invariant_checker_labels.get(label).unwrap();
             builder.set_next_debug_comment(format!(
                 "Loop invariant checking block for the loop started with header: L{}",

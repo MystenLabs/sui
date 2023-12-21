@@ -5,20 +5,13 @@
 //! This escape analysis flags procedures that return a reference pointing inside of a struct type
 //! declared in the current module.
 
-use std::{
-    cell::RefCell,
-    cmp::Ordering,
-    collections::{BTreeMap, BTreeSet},
-};
+use std::{cell::RefCell, cmp::Ordering, collections::BTreeMap};
 
 use codespan::FileId;
 use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
 
 use move_binary_format::file_format::CodeOffset;
-use move_model::{
-    ast::TempIndex,
-    model::{FieldId, FunctionEnv, QualifiedId, StructId},
-};
+use move_model::{ast::TempIndex, model::FunctionEnv};
 
 use crate::{
     dataflow_analysis::{DataflowAnalysis, TransferFunctions},
@@ -112,15 +105,6 @@ struct WarningId {
     offset: CodeOffset,
 }
 
-struct SpecMemoryInfo {
-    /// Fields that occur in struct, module, or global specs. Leaked references to fields inside
-    /// this set will be flagged, leaked references to other fields will be allowed.
-    relevant_fields: BTreeSet<(QualifiedId<StructId>, FieldId)>,
-    /// Structs that occur in struct, module, or global specs. Leaked references to fields inside
-    /// these structs may cause a spec like `invariant forall s: S: s == S { f: 10 }` to be false
-    relevant_structs: BTreeSet<QualifiedId<StructId>>,
-}
-
 struct EscapeAnalysis<'a> {
     func_env: &'a FunctionEnv<'a>,
     /// Warnings about escaped references to surface to the programmer
@@ -163,11 +147,7 @@ impl<'a> TransferFunctions for EscapeAnalysis<'a> {
 
         match instr {
             Call(_, rets, oper, args, _) => match oper {
-                BorrowField(mid, sid, _type_params, offset) => {
-                    let struct_env = self.func_env.module_env.get_struct(*sid);
-                    let field_env = struct_env.get_field_by_offset(*offset);
-                    let field_id = field_env.get_id();
-
+                BorrowField(_, _, _type_params, _) => {
                     let to_propagate = match state.get_local_index(&args[0]) {
                         AbsValue::OkRef => AbsValue::OkRef,
                         AbsValue::InternalRef => AbsValue::InternalRef,
@@ -288,13 +268,6 @@ impl FunctionTargetProcessor for EscapeAnalysisProcessor {
             };
             initial_state.insert(param_index, param_val);
         }
-
-        // compute set of fields and vector ops used in all struct specs
-        // Note: global and module specs are not relevant here because
-        // it is not possible to leak a reference to a global outside of
-        // the module that declares it.
-        let mut has_specs = false;
-        let menv = &func_env.module_env;
 
         let cfg = StacklessControlFlowGraph::new_forward(&data.code);
         let analysis = EscapeAnalysis {

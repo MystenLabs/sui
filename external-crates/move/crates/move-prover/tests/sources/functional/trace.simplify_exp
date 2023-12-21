@@ -1,0 +1,80 @@
+Move prover returns: exiting with verification errors
+error: post-condition does not hold
+   ┌─ tests/sources/functional/trace.move:19:9
+   │
+19 │         ensures result == a + b;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^
+   │
+   = Related Bindings:
+   =         a = <redacted>
+   =         b = <redacted>
+   =         result = <redacted>
+   = Execution Trace:
+   =     at tests/sources/functional/trace.move:15: add_invalid
+   =         a = <redacted>
+   =         b = <redacted>
+   =     at tests/sources/functional/trace.move:16: add_invalid
+   =         result = <redacted>
+   =     at tests/sources/functional/trace.move:17: add_invalid
+   =     at tests/sources/functional/trace.move:19: add_invalid (spec)
+   =         `ensures result == a + b;` = <redacted>
+
+error: global memory invariant does not hold
+   ┌─ tests/sources/functional/trace.move:38:5
+   │
+38 │     invariant forall addr: address: exists<R>(addr) ==> global<R>(addr).x < 5;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │
+   =     at tests/sources/functional/trace.move:29: publish_invalid
+   =         s = <redacted>
+   =         x = <redacted>
+   =     at tests/sources/functional/trace.move:30: publish_invalid
+   =     at tests/sources/functional/trace.move:38
+
+error: post-condition does not hold
+   ┌─ tests/sources/functional/trace.move:34:9
+   │
+34 │         ensures exists<R>(addr) ==> global<R>(addr).x == x;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │
+   = Related Global Memory:
+   =         Resource name: TestTracing_R
+   =         Values:  {Address(6334): <redacted>, Default: empty}
+   = Related Bindings:
+   =         exists<R>(addr) = <redacted>
+   =         global<R>(addr) = <redacted>
+   =         x = <redacted>
+   = Execution Trace:
+   =     at tests/sources/functional/trace.move:29: publish_invalid
+   =         s = <redacted>
+   =         x = <redacted>
+   =     at tests/sources/functional/trace.move:30: publish_invalid
+   =     at tests/sources/functional/trace.move:38
+   =     at tests/sources/functional/trace.move:31: publish_invalid
+   =     at tests/sources/functional/trace.move:33: publish_invalid (spec)
+   =     at ../move-stdlib/sources/Signer.move:13: address_of
+   =     at tests/sources/functional/trace.move:34: publish_invalid (spec)
+   =     at tests/sources/functional/trace.move:33: publish_invalid (spec)
+   =     at ../move-stdlib/sources/Signer.move:13: address_of
+   =     at tests/sources/functional/trace.move:34: publish_invalid (spec)
+   =         `ensures exists<R>(addr) ==> global<R>(addr).x == x;` = <redacted>
+
+error: post-condition does not hold
+   ┌─ tests/sources/functional/trace.move:26:9
+   │
+26 │         ensures a == old(a) + b;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^
+   │
+   = Related Bindings:
+   =         a = <redacted>
+   =         b = <redacted>
+   =         old(a) = <redacted>
+   = Execution Trace:
+   =     at tests/sources/functional/trace.move:22: update_invalid
+   =         a = <redacted>
+   =         b = <redacted>
+   =     at tests/sources/functional/trace.move:23: update_invalid
+   =         a = <redacted>
+   =     at tests/sources/functional/trace.move:24: update_invalid
+   =     at tests/sources/functional/trace.move:26: update_invalid (spec)
+   =         `ensures a == old(a) + b;` = <redacted>

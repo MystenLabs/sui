@@ -137,13 +137,6 @@ impl<'a> StacklessBytecodeGenerator<'a> {
         attr
     }
 
-    /// Create a new attribute id and populate location table from node_id.
-    fn new_loc_attr_from_loc(&mut self, loc: Loc) -> AttrId {
-        let attr = AttrId::new(self.location_table.len());
-        self.location_table.insert(attr, loc);
-        attr
-    }
-
     fn get_field_info(&self, field_handle_index: FieldHandleIndex) -> (StructId, usize, Type) {
         let field_handle = self.module.field_handle_at(field_handle_index);
         let struct_id = self.func_env.module_env.get_struct_id(field_handle.owner);

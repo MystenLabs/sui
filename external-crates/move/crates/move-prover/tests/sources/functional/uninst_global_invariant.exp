@@ -1,0 +1,11 @@
+Move prover returns: exiting with verification errors
+error: global memory invariant does not hold
+   ┌─ tests/sources/functional/uninst_global_invariant.move:33:9
+   │
+33 │         invariant<T> exists<S2<T>>(@0x42) ==> exists<S1>(@0x42);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │
+   =     at tests/sources/functional/uninst_global_invariant.move:11: test2
+   =         account = <redacted>
+   =     at tests/sources/functional/uninst_global_invariant.move:12: test2
+   =     at tests/sources/functional/uninst_global_invariant.move:33

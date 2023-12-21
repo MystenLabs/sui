@@ -1,0 +1,221 @@
+\Section{Analysis}
+
+\Paragraph{Reliability and Performance}
+
+The three improvements described above resulted in a major qualitative
+change in performance and reliability. In the version of \MVP released
+in September 2020, correct examples verified fairly quickly and
+reliably.  But that is because we needed speed and reliability, so we
+disabled some properties that always timed out and others that timed
+out unpredictably when there were small changes in the framework.  We
+learned that incorrect programs or specifications would time out
+predictably enough that it was a good bet that examples that timed out
+were erroneous.  However, localizing the error to fix it was
+\emph{very} hard, because debugging is based on a counterexample that
+violates the property, and getting a counterexample requires
+termination!
+
+With each of the transformations described, we witnessed significant speedups
+and, more importantly, reductions in timeouts.  Monomorphization was the last
+feature implemented, and, with it, timeouts almost disappeared. Although this
+was the most important improvement in practice, it is difficult to quantify
+because there have been many changes in Diem framework, its specifications,
+\MVP, and even the Move language over that time.
+
+It is simpler (but less important) to quantify the changes in run time of \MVP
+on one of our more challenging modules, the |DiemAccount| module, which is the
+biggest module in the Diem framework. This module implements basic functionality
+to create and maintain multiple types of accounts on the blockchain, as well as
+manage their coin balances. It was called |LibraAccount| in release 1.0 of \MVP,
+and is called |DiemAccount| today. The comparison requires various patches as
+described in~\cite{MVP_ARTIFACT}. The table below lists the consolidated numbers
+of lines, functions, invariants, conditions (requires, ensures, and aborts-if),
+as well as the verification times:
+
+{
+\setlength{\tabcolsep}{6pt}
+\vspace{2ex}
+\begin{tabular*}{0.9\textwidth}{cccccc}
+  \hline
+  \hline
+  Module & Lines & Functions & Invariants & Conditions & Timing \\
+  \hline
+  LibraAccount & 1975 & 72 & 10 & 113 & \textbf{9.899s} \\
+  DiemAccount & 2554 & 64 & 32 & 171 & \textbf{7.340s} \\
+  \hline
+\end{tabular*}
+\vspace{2ex}
+}
+
+\noindent Notice that |DiemAccount| has significantly grown in size compared to
+the older version. Specifically, additional specifications have been
+added. Moreover, in the original |LibraAccount|, some of the most complex
+functions had to be disabled for verification because the old version of \MVP
+would time out on them. In contrast, in |DiemAccount| and with the new version,
+all functions are verified. Verification time has been improved by roughly 20\%,
+\emph{in the presence of three times more global invariants, and 50\% more function
+conditions}.
+
+We were able to observe similar improvements for the remaining of the 40 modules
+of the Diem framework. All of the roughly half-dozen timeouts resolved after
+introduction of the transformations described in this paper.
+
+%%Also, specifications which were introduced after the new
+%%transformations did not introduce new timeouts.
+
+%% A further improvement is that
+%% often, in cases where specification and program disagree, a timeout occurred
+%% which went away only after fixing the spec or the code, making debugging of such
+%% verification failures rather hard. This problem also disappeared.
+
+
+\Paragraph{Causes for the Improvements}
+
+It's difficult to pin down and measure exactly why the three transformations
+described improved performance and reliability so dramatically.  We have
+explained some reasons in the subsections above: the alias-free memory model
+reduced search through combinatorial sharing arrangments, and the fine-grained
+invariant checking results in simpler formulas for the SMT solver.
+%We believe that one reason is just that the translated SMT formulas are simpler.
+
+We found that most timeouts in specifications stemmed from our liberal use of
+quantifiers.  To disprove a property $P_0$ after assuming a list of properties,
+$P_1, \ldots p_n$, the SMT solver must show that
+$\neg P_0 \wedge P_1 \wedge \ldots \wedge P_n$ is satisfiable.  The search
+usually involves instantiating universal quantifiers in $P_1, \ldots, P_n$.  The
+SMT solver can do this endlessly, resulting in a timeout. Indeed, we often found
+that proving a post-condition false would time out, because the SMT solver was
+instantiating quantifiers to find a satisfying assignment of
+$P_1 \wedge \ldots \wedge P_n$.  Simpler formulas result in fewer intermediate
+terms during solving, resulting in fewer opportunities to instantiate quantified
+formulas.
+
+We believe that one of the biggest impacts, specifically on
+removing timeouts and improving predictability, is monomorphization. The
+reason for this is that monomorphization allows a multi-sorted representation
+of values in Boogie (and eventually the SMT solver). In contrast, before
+monomorphization, we used a universal domain for values in order to represent
+values in generic functions, roughly as follows:
+
+\begin{Move}
+  type Value = Num(int) | Address(int) | Struct(Vector<Value>) | ...
+\end{Move}
+
+\noindent This creates a large overhead for the SMT solver, as we need to
+exhaustively inject type assumptions (e.g. that a |Value| is actually an
+|Address|), and pack/unpack values. Consider a quantifier like~%
+|forall a: address: P(x)| in Move. Before monomorphization, we have to represent
+this in Boogie as~%
+|forall a: Value: is#Address(a) => P(v#Address(a))|. This quantifier is
+triggered where ever |is#Address(a)| is present, independent of the structure of
+|P|. Over-triggering or inadequate triggering of quantifiers is one of the
+suspected sources of timeouts, as also discussed in~\cite{BUTTERFLY}.
+
+Moreover, before monomorphization, global memory was indexed in Boogie by an
+address and a type instantiation. That is, for |struct R<T>| we would
+have one Boogie array |[Type, int]Value|. With monomorphization, the type index
+is eliminated, as we create different memory variables for each type
+instantiation.  Quantification over memory content works now on a one-dimensional
+instead of an n-dimensional Boogie array.
+
+\Paragraph{Discussion and Related Work}
+
+Many approaches have been applied to the verification of smart contracts; see
+e.g. the
+surveys~\cite{liu2019survey,CONTRACT_VERIFICATION}. \cite{CONTRACT_VERIFICATION}
+refers to at least two dozen systems for smart contract verification. It
+distinguishes between \emph{contract} and \emph{program} level approaches. Our
+approach has aspects of both: we address program level properties via pre/post
+conditions, and contract (``blockchain state'') level properties via global
+invariants. To the best of our knowledge, among the existing approaches, the
+Move ecosystem is the first one where contract programming and specification
+language are fully integrated, and the language is designed from first
+principles influenced by verification. Methodologically, Move and the Move
+prover are thereby closer to systems like Dafny~\cite{DAFNY}, or the older
+Spec\# system~\cite{SPECSHARP}, where instead of adding a specification approach
+posterior to an existing language, it is part from the beginning. This allows us
+not only to deliver a more consistent user experience, but also to make
+verification technically easier by curating the programming language.
+% as reflected in Move's absence of
+% dynamic dispatching and the notorious re-entrance problem~\cite{REENTRANCE}, as
+% well as the borrow semantics which enables optimizations like reference
+% elimination (Sec.~\ref{sec:RefElim}).
+
+% Other related works on the
+% \solidity smart contract verification employ the theoretical foundations
+% including the \kay framework \cite{kay} (e.g., \cite{kevm}), \fstar
+% \cite{dm4all} (e.g., \cite{DBLP:conf/ccs/BhargavanDFGGKK16,post2018}), and proof
+% assistants such as Coq \cite{coqref} (e.g., \cite{fspvme,fether}).
+
+In contrast to other approaches that only focus on specific vulnerability
+patterns~\cite{mythril,oyente,maian,securify}, \MVP offers a universal
+specification language. To the best of our knowledge, no existing specification
+approach for smart contracts based on inductive Hoare logic has similar
+expressiveness. We support universal quantification over arbitrary memory
+content, a suspension mechanism of invariants to allow non-atomic construction
+of memory content, and generic invariants.  For comparison, the SMT Checker
+build into \solidity \cite{solidity,solcverify,DBLP:conf/esop/HajduJ20}
+does not support quantifiers, because it interprets programming language
+constructs (requires and assert statements) as specifications and has no
+dedicated specification language. While in Solidity one can simulate aspects of
+global invariants using modifiers by attaching pre/post conditions, this is not
+the same as our invariants, which are guaranteed to hold independent of whether
+a user may or (accidentally) may not attach a modifier, and which are optimized
+to be only evaluated as needed.
+
+While the expressiveness of Move specifications comes with the price of
+undecidability and the dependency from heuristics in SMT solvers, \MVP deals
+with this by its elaborated translation to SMT logic, as described in this
+paper. The result is a practical verification system that is fully integrated
+into the Diem blockchain production process, running in continuous integration,
+which is (to the best of our knowledge) a first in the industry.
+
+The individual techniques we described are novel each by
+themselves. \emph{Reference elimination} relies on borrow semantics, similar as
+in the Rust~\cite{rust} language.  We expect reference elimination to apply for
+the safe subset of Rust, though some extra work would be needed to deal with
+references aggregated by structs.  However, we are not aware of that something
+similar has been attempted in existing Rust verification work
+\cite{prusti,smack,nopanic,crust}. \emph{Global invariant injection} and the
+approach to minimize the number of assumptions and assertions is not applied in
+any existing verification approach we know of; however, we co-authored a while
+ago a similar line of work for \emph{runtime checking} of invariants in
+Spec\#~\cite{StateConstraintsPatent}, yet that work never left the conceptual
+state. \emph{Monomorphization} is well known as a technique for compiling
+languages like C++ or Rust, where it is called specialization; however, we are
+not aware of it being generalized for modular verification of generic code where
+full type erasure is not possible, as it is the case in Move.
+
+
+\Paragraph{Future Work}
+
+\MVP is conceived as a tool for achieving higher assurance systems, not as a bug
+hunting tool. Having at least temporarily achieved satisfactory performance and
+reliability, we are turning our attention to the question of the goal of higher
+assurance, which raises several issues.  If we're striving for high assurance,
+it would be great to be able to measure progress towards that goal.  Since
+system requirements often stem from external business and regulatory needs,
+lightweight processes for exposing those requirements so we know what needs to
+be formally specified would be highly desirable.
+
+As with many other systems, it is too hard to write high-quality specifications.
+Our current specifications are more verbose than they need to be, and we are
+working to require less detailed specifications, especially for individual
+functions.  We could expand the usefulness of \MVP for programmers if we could
+make it possible for them to derive value from simple reusable specifications.
+Finally, software tools for assessing the consistency and completeness of formal
+specifications would reduce the risk of missing bugs because of specification
+errors.
+
+However, as more complex smart contracts are written and as more people write
+specifications, we expect that the inherent computational difficulty of solving
+logic problems will reappear, and there will be more opportunities for improving
+performance and reliability.  In addition to translation techniques, it will be
+necessary to identify opportunities to improve SMT solvers for the particular
+kinds of problems we generate.
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "main"
+%%% End:

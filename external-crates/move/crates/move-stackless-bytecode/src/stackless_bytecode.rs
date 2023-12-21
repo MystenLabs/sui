@@ -481,7 +481,7 @@ impl Bytecode {
         })
     }
 
-    fn remap_vars_internal<F>(self, func_target: &FunctionTarget<'_>, f: &mut F) -> Self
+    fn remap_vars_internal<F>(self, _func_target: &FunctionTarget<'_>, f: &mut F) -> Self
     where
         F: FnMut(bool, TempIndex) -> TempIndex,
     {
@@ -532,7 +532,7 @@ impl Bytecode {
         }
     }
 
-    pub fn instantiate(&self, env: &GlobalEnv, params: &[Type]) -> Self {
+    pub fn instantiate(&self, _env: &GlobalEnv, params: &[Type]) -> Self {
         use Operation::*;
         match self {
             Self::Call(attr_id, dsts, op, srcs, on_abort) => {

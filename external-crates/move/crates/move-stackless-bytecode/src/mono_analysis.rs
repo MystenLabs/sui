@@ -14,7 +14,7 @@ use std::{
 use itertools::Itertools;
 
 use move_model::{
-    model::{FunId, GlobalEnv, ModuleId, QualifiedId, QualifiedInstId, StructEnv, StructId},
+    model::{FunId, GlobalEnv, ModuleId, QualifiedId, StructEnv, StructId},
     ty::{Type, TypeDisplayContext},
     well_known::{TYPE_INFO_MOVE, TYPE_NAME_GET_MOVE, TYPE_NAME_MOVE},
 };
@@ -265,14 +265,6 @@ impl<'a> Analyzer<'a> {
             Type::instantiate_slice(targs, inst)
         } else {
             targs.to_owned()
-        }
-    }
-
-    fn instantiate_mem(&self, mem: QualifiedInstId<StructId>) -> QualifiedInstId<StructId> {
-        if let Some(inst) = &self.inst_opt {
-            mem.instantiate(inst)
-        } else {
-            mem
         }
     }
 

@@ -1,0 +1,581 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\Section{Program Representation}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\TODO{wrwg}{Bring this up-to-date}
+
+The Move Prover works on an extensible \emph{bytecode} representation of Move,
+which includes special operations related to verification problems. Much of the
+logic of the prover is defined as a \emph{transformation pipeline} for this
+bytecode. For example, calls to functions which are defined solely by pre/post
+conditions are replaced by assumptions and assertions in the bytecode.  Memory
+and data invariants are woven as well into assume/assert statements.  The Move
+Prover's bytecode representation is therefore a central conduit on which we
+describe and implement the Move Prover.
+
+While the original Move bytecode is stackbased, the one on which the prover works
+uses locals (``registers'') exclusively, and is therefore similar than a register
+transfer language (RTL).
+
+
+
+
+\SubSection{Notation}
+
+A few notational conventions are introduced. We use $\sseq{x}$ to denote a
+sequence of items. We write $\sseq{f(x)}$ to apply a function $f$ pointwise to
+the sequence $\sseq{x}$. Two sequences are concatenated using
+$\sseq{x} \scat \sseq{y}$. If $f$ is a function, then $\supdate{f}{x}{y}$
+denotes the function which delivers $y$ at point $x$ and is the same as $f$
+everywhere else. We heavily use exemplary declarations. For example, given
+$x \in T$, with $f(x) \in S$ we declare that $f \in T \rightarrow S$. The
+notation $e \in E ::= x \mid \ldots \mid \mathtt{op}(e, e')$ is used for
+recursive domain definitions, and denotes the smallest set $E$ s.t.~$x \in E$
+and $op(e, e') \in E$.
+
+
+
+
+\SubSection{Bytecode}
+
+\begin{figure}[t!]
+  \[
+    \begin{array}{lcclr}
+      c & \in \sconst & & \swith \tau(c) \in \stype & \mathit{constants}  \\
+      l & \in \slocal & & \swith \tau(l) \in \stype & \mathit{locals}  \\
+      f & \in \sfield & & \swith \tau(f) \in \stype & \mathit{fields} \\
+      R & \in \sresource & & & \mathit{resource~names} \\
+      m & & ::= & \smut \mid \simut & \mathit{mutability} \\
+      \tau & \in \stype & ::= & \stbool \mid
+                                \stnum \mid
+                                \staddress \mid
+                                R\sgen{\sseq{\tau}} \mid
+                                \&\tau \mid
+                                \&\smut~\tau & \mathit{types} \\
+      o & \in \sop & ::= & + \mid - \mid * \mid / \mid \ldots  & \mathit{operations} \\
+      b & \in \sbytecode & ::= & \sbload(l, c) \mid
+              \sbassign(l, l') \mid
+              \sbop_o(l, \sseq{l}) & \mathit{bytecodes} \\
+      && \mid & \sbpack_\tau(l, \sseq{l'}) \mid
+              \sbunpack_\tau(\sseq{l}, l') \\
+      && \mid & \sbmoveto_\tau(l, l') \mid
+              \sbmovefrom_\tau(l, l') \mid
+              \sbexists_\tau(l, l')  \\
+      && \mid & \sbborrowl_m(l, l') \mid
+                \sbborrowg_{m,\tau}(l, l') \\
+      && \mid & \sbborrowf_{m, f}(l, l') \\
+      && \mid & \sbwriteref(l, l') \mid
+                \sbreadref(l, l') \\
+      && \mid & \sbcall_d(\sseq{l}, \sseq{l'}) \mid
+              \sbabort(l) \mid
+              \sbreturn \\
+      && \mid & \sbif(l, \sseq{b}, \sseq{b'}) \mid
+                \sbwhile(l, \sseq{b}) \\
+      d & \in \sdef & ::= & \sdfun{\sseq{l}}{\sseq{l'}}{\sseq{b}} & \mathit{function~definitions}
+    \end{array}
+  \]
+  \caption{Structured Bytecode}
+  \label{fig:Bytecode}
+\end{figure}
+
+We use a minimized bytecode instruction set shown in Fig.~\ref{fig:Bytecode} to
+illustrate semantics and translation of Move programs. In difference to the
+actual bytcode used by the Move virtual machine, this instruction set does not
+use an operand stack but locals for storing input parameters, output parameters,
+and temporary results. Also, the type system has been simplified by merging all
+available Move integer types into $\stnum$. Moreover, instead of a general
+branch instruction, we have $\sbif$ and $\sbwhile$ instructions with embedded
+instruction sequences (therefore we call this representation \emph{structured}
+bytecode). The translation of the original bytecode into this representation is
+conceptual straightforward and left open here. We also assume the code to be
+\emph{type checked} and have passed the Move borrow
+checker~\cite{BORROW_CHECKER}. Notice that the VM runs the borrow checker at
+code loading time, so our verification of code is not dependent on any
+compilation stages (apart of those the prover introduces by itself).
+
+To illustrate the meaning we compare Move code fragments with their associated
+bytecode side-by-side. The first example shows how construction of structures
+and field selection is represented. In order to access the field of a struct, we
+construct an immutable reference for it, and then use the $\sbreadref$
+instruction to read the fields value.
+
+\vspace{1ex}
+\begin{minipage}{.35\linewidth}
+\begin{Move}
+let x = R{f:1};
+let y = x.f + 1
+\end{Move}
+\end{minipage}%
+\begin{minipage}{.65\linewidth}
+  \begin{leftgather}
+    x: R, t_1, t_4, y: \stnum, t_2: \&R, t_3: \&\stnum \\
+    \sbload(t_1, 1);
+    \sbpack_R(x, t_1) \\
+    \sbborrowl_\simut(t_2, x);
+    \sbborrowf_f(t_3, t_2) \\
+    \sbreadref(t_4, t_3);
+    \sbop_{+}(y, t_4, t_1);
+  \end{leftgather}
+\end{minipage}
+\vspace{1ex}
+
+The second example illustrates how a resource is stored in global memory using
+$\sbmoveto$, and then updated:
+
+\vspace{1ex}
+\begin{minipage}{.35\linewidth}
+\begin{Move}
+move_to(a, R{f:1});
+let r =
+  borrow_global_mut
+    <R>(a);
+r.x = 2;
+\end{Move}
+\end{minipage}%
+\begin{minipage}{.65\linewidth}
+  \begin{leftgather}
+    a: \staddress, t_1,t_5: \stnum, t_2: R \\ r: \&\smut~R, t_3: \&\smut~\stnum \\
+    \sbload(t_1, 1);
+    \sbpack_R(t_2, t_1);
+    \sbmoveto_R(a, t_2) \\
+    \sbborrowg_{\smut,R}(r, a);
+    \sbborrowf_f(t_3, r) \\
+    \sbload(t_5, 2);
+    \sbwriteref(t_3, t_5) \\
+  \end{leftgather}
+\end{minipage}
+\vspace{1ex}
+
+\begin{figure}[t!]
+  \begin{mathpar}
+    \inferrule{
+      \slocal' = \supdate{\slocal}{l}{\seval(c)}
+    }{
+      \serel{
+        (\smem, \slocal)
+      }{
+        \sbload(l, c)
+      }{
+        (\smem, \slocal')
+      }
+    }
+    \and
+    \inferrule{
+      \slocal' = \supdate{\slocal}{l}{\slocal(l')}
+    }{
+      \serel{
+        (\smem, \slocal)
+      }{
+        \sbassign(l, l')
+      }{
+        (\smem, \slocal')
+      }
+    }
+    \and
+    \inferrule{
+      v = \seval_o(\sseq{\slocal(l')})  \\
+      \slocal' = \supdate{\slocal}{l}{v}
+    }{
+      \serel{
+        (\smem, \slocal)
+      }{
+        \sbop_o(l, \sseq{l'})
+      }{
+        \seabort{(\smem, \slocal')}{v = \bot}{\svmerror}
+      }
+    }
+    \and
+    \inferrule{
+      \slocal' = \supdate{\slocal}{l}{R(\sseq{\slocal(l')})}
+    }{
+      \serel{
+        (\smem, \slocal)
+      }{
+        \sbpack_R(l, \sseq{l'})
+      }{
+        (\smem, \slocal')
+      }
+    }
+    \and
+    \inferrule{
+      R(\sseq{v'}) = \slocal(l') \\
+      \slocal' = \sseq{\supdate{\slocal}{l}{v'}}
+    }{
+      \serel{
+        (\smem, \slocal)
+      }{
+        \sbunpack_R(\sseq{l}, l')
+      }{
+        (\smem, \slocal')
+      }
+    }
+    \and
+    \inferrule{
+      \slocal' = \supdate{\slocal}{l}{\smem_R(\sseq{\tau}, l) \neq \bot}
+    }{
+      \serel{
+        (\smem, \slocal)
+      }{
+        \sbexists_{R\sgen{\sseq{\tau}}}(l, l')
+      }{
+        (\smem, \slocal')
+      }
+    }
+    \and
+    \inferrule*[width=.5\linewidth]{
+      r = (\sseq{\tau}, \slocal(l)) \\
+      \smem_R' = \supdate{\smem_R}{r}{\slocal(l')}
+    }{
+      \sereltwo{
+        (\smem, \slocal)
+      }{
+        \sbmoveto_{R\sgen{\sseq{\tau}}}(l, l')
+      }{
+        \seabort{(\smem', \slocal)}{\smem_R(r) \neq \bot}{\svmerror}
+      }
+    }
+    \and
+    \inferrule*[width=.5\linewidth]{
+      r = (\sseq{\tau}, \slocal(l')) \\
+      \smem_R' = \supdate{\smem_R}{r}{\bot} \\
+      \slocal' = \supdate{\slocal}{l}{\smem_R(r)}
+    }{
+      \sereltwo{(\smem, \slocal)}{
+        \sbmovefrom_{R\sgen{\sseq{\tau}}}(l, l')
+      }{
+        \seabort{(\smem', \slocal')}{\smem_R(r) = \bot}{\svmerror}
+      }
+    }
+    \and
+    \inferrule{
+      \slocal' = \supdate{\slocal}{l}{\sref{l'}{\epsilon}}
+    }{
+      \serel{
+        (\smem, \slocal)
+      }{
+        \sbborrowl(l, l')
+      }{
+        (\smem, \slocal')
+      }
+    }
+    \and
+    \inferrule{
+      r = (\sseq{\tau}, \slocal(l')) \\
+      \slocal' = \supdate{\slocal}{l}{\sref{\srootg{R}{r}}{\epsilon}}
+    }{
+      \sereltwo{
+        (\smem, \slocal)
+      }{
+        \sbborrowg_{R\sgen{\sseq{\tau}}}(l, l')
+      }{
+        \seabort{(\smem, \slocal')}{\smem_R(r) = \bot}{\svmerror}
+      }
+    }
+    \and
+    \inferrule*[width=.5\linewidth]{
+      \sref{r}{p} = \slocal(l') \\
+      \slocal' = \supdate{\slocal}{l}{\sref{r}{p \scat f}}
+    }{
+      \serel{
+        (\smem, \slocal)
+      }{
+        \sbborrowf_f(l, l')
+      }{
+        (\smem, \slocal')
+      }
+    }
+    \and
+    \inferrule*[width=.5\linewidth]{
+      \sref{r}{p} = \slocal(l') \\
+      v = (\smem \oplus \slocal)(r) \\
+      \slocal' = \supdate{\slocal}{l}{\sget{v}{p}}
+    }{
+      \serel{
+        (\smem, \slocal)
+      }{
+        \sbreadref(l, l')
+      }{
+        (\smem, \slocal')
+      }
+    }
+    \and
+    \inferrule*[width=.5\linewidth]{
+      \sref{r}{p} = \slocal(l) \\
+      v = (\smem \oplus \slocal)(r) \\
+      (\smem', \slocal') = \supdate{(\smem \oplus \slocal)}{r}{\sset{v}{p}{\slocal(l')}}
+    }{
+      \serel{
+        (\smem, \slocal)
+      }{
+        \sbwriteref(l, l')
+      }{
+        (\smem', \slocal')
+      }
+    }
+    \and
+    \inferrule*[width=.5\linewidth]{
+      \sseq{b} = \mathtt{rename}(d, \sseq{l}, \sseq{l'}) \\
+      \serel{\sestate}{\sseq{b}}{\sestate'}
+    }{
+      \serel{
+        \sestate
+      }{
+        \sbcall_d(\sseq{l}, \sseq{l'})
+      }{
+        \sestate'
+      }
+    }
+    \and
+    \inferrule*[width=.5\linewidth]{
+      \serel{(\smem, \slocal)}{(\sseq{b} \sif \slocal(l) \selse \sseq{b'})}{\sestate'}
+    }{
+      \serel{
+        (\smem, \slocal)
+      }{
+        \sbif(l, \sseq{b}, \sseq{b'})
+      }{
+        \sestate'
+      }
+    }
+    \and
+    \inferrule*[width=.5\linewidth]{
+      \sereltwo{
+        (\smem, \slocal)
+      }{
+        (\sseq{b} \scat \sbwhile(l, \sseq{b}) \sif \slocal(l) \selse \epsilon)
+      }{
+        \sestate'
+      }
+    }{
+      \serel{
+        (\smem, \slocal)
+      }{
+        \sbwhile(l, \sseq{b})
+      }{
+        \sestate'
+      }
+    }
+    \and
+    \inferrule*[width=.5\linewidth]{
+    }{
+      \serel{
+        \sestate
+      }{
+        \sbreturn \scat \sseq{b}
+      }{
+        \sestate
+      }
+    }
+    \and
+    \inferrule*[width=.5\linewidth]{
+    }{
+      \serel{
+        (\smem, \slocal)
+      }{
+        \sbabort(l) \scat \sseq{b}
+      }{
+        \seabort{(\smem, \slocal)}{\mathit{true}}{\slocal(l)}
+      }
+    }
+    \and
+    \inferrule*[width=.5\linewidth]{
+      \serel{\sestate}{b}{\sestate'} \\
+      \serel{\sestate'}{\sseq{b'}}{\sestate''} \\
+    }{
+      \serel{
+        \sestate
+      }{
+        b \scat \sseq{b'}
+      }{
+        \sestate''
+      }
+    }
+    \and
+    \inferrule*[width=.5\linewidth]{
+    }{
+      \serel{
+        \sestate
+      }{
+        \epsilon
+      }{
+        \sestate
+      }
+    }
+  \end{mathpar}
+  \caption{Operational Semantics of Bytecode}
+  \label{fig:Semantics}
+\end{figure}
+
+
+\SubSection{Operational Semantics}
+
+We next define the operational semantics. The domain of \emph{values} is written
+as $\sval$ (defined below).  Let $\smem_R(\sseq{\tau}, a) \in \swbot{\sval}$
+represent global memory, and $\slocal(l) \in \swbot{\sval}$ local
+memory. Let $a \in \saddr$ be an address, $n \in \mathbb{N}$ a natural number,
+and $p \in \sseq{\sfield}$ a field path.  The domain of values is recursively
+defined as follows:
+\begin{mathpar}
+  v \in \sval ::= a \mid n \mid R(\sseq{v}) \mid \sref{r}{p}
+  \and
+  r ::= l \mid \srootg{R}{(\sseq{\tau},a)}
+\end{mathpar}
+Here, $\sref{r}{p}$ denotes a \emph{reference} into a tree starting from a
+\emph{root} $r$ which can either be a local $l$ or a resource $R$ stored at
+$(\sseq{\tau},a)$. To conveniently work with references $\sref{r}{p}$, we define
+$(\smem \oplus \slocal)(r)$ to read a root value either in global or local
+memory, and similarly, $\supdate{(\smem \oplus \slocal)}{r}{v}$ to update a
+value.
+
+With $\sget{v}{p} \in \swbot{\sval}$ and $\sset{v}{p}{v'} \in \swbot{\sval}$ we
+denote getting or updating a nested resource value $v$ at field path $p$. These
+functions will deliver $\bot$ if $v$ is not a matching resource tree, where some
+underlying mapping from field names $\sfield$ to indices for accessing an
+$R(\sseq{v'})$ value is assumed.
+
+The \emph{execution state} is a pair $\sestate = (\smem, \slocal)$. The
+semantics of bytecode instructions is defined by the relation
+$\serel{\sestate}{b}{\sestate'}$, defined in Fig.~\ref{fig:Semantics}. For the
+case the instruction can abort, we write
+$\serel{\sestate}{b}{\seabort{\sestate}{p}{c}}$ with $p$ the condition under
+which the abort happens, and $c$ the abort code. For implicit aborts caused by
+instructions, we use the the well-known code $\svmerror$.
+
+In the rules in Fig.~\ref{fig:Semantics} we use the function
+$\mathtt{rename}(d, \sseq{l}, \sseq{l'}) \in \sseq{\sbytecode}$, with $d$ a
+function definition, to return a sequence of bytecodes such that all occurrences
+of parameter locals are substituted by $\sseq{l}$, and of result locals by
+$\sseq{l'}$. We assume that all other locals are renamed away so they do not
+conflict with any existing locals.
+
+\TODO{wrwg}{There is a problem with the current handling of $\sbreturn$, as it
+  only returns from the current block, but not any outer blocks}
+
+
+
+\Section{Reference Elimination}
+
+Before a Move program is translated into Boogie, it is subject to multiple
+transformations. This includes standard optimizations like copy propagation and
+dead code elimination, and most importantly, \emph{reference elimination}.
+
+Eliminating references makes it easier for the underlying tools to reason,
+because it removes the indirection over global or local memory, increasing
+referential transparency.  In effect, it makes imperative code less imperative
+and more functional, which is better amenable to formal verification.
+
+Reference elimination is based on the following property which has been
+established by the Move borrow checker~\cite{BORROW_CHECKER}:
+\begin{quote}
+  \emph{Whenever there is a live local $l$ such that $\slocal(l) = \sref{r}{p}$
+    and $\tau(l) = \&\smut~R$, there can be no other live local $l' \neq l$ such
+    that $\slocal(l') = \sref{r}{p'}$, whether mutable or immutable}.
+\end{quote}
+Hereby, the notion of \emph{liveness} is well established in program analysis,
+and carries over to our code representation.
+
+Effectively, whenever a program is working with immutable references, the
+underlying value cannot change, until all those immutable references have
+died. And once a mutable reference is alive, no other reference for the same
+root can be created. The mutable reference can only be moved, or narrowed by
+traversing down in the resource tree using $\sbborrowf$.
+
+\SubSection{Eliminating Immutable References}
+
+\begin{figure}[t!]
+  \[
+    b \in \sbytecode ::= \ldots \mid \sbreadg_{R\sgen{\sseq{\tau}}}(l, l')
+    \mid \sbselectf_f(l, l')
+  \]
+  \begin{mathpar}
+    \inferrule*[width=.33\linewidth]{}{
+      \sitrafotwo{
+        \sbborrowl_\simut(l, l')
+      }{
+        \sbassign(l, l')
+      }
+    }
+    \quad
+    \inferrule*[width=.33\linewidth]{}{
+      \sitrafotwo{
+        \sbborrowg_{\simut,\tau}(l, l')
+      }{
+        \sbreadg_{\tau}(l, l')
+      }
+    }
+    \and
+    \inferrule*[width=.33\linewidth]{
+      \tau(l') = \&\tau'
+    }{
+      \sitrafotwo{
+        \sbborrowf_f(l, l')
+      }{
+        \sbselectf_f(l, l')
+      }
+    }
+  \end{mathpar}
+  \vspace*{2ex}
+  \begin{mathpar}
+    \inferrule*[width=.5\linewidth]{
+      v = \smem_R(\sseq{\tau}, \slocal(l')) \\
+      \slocal' = \supdate{\slocal}{l}{v}
+    }{
+      \sereltwo{
+        (\smem, \slocal)
+      }{
+        \sbreadg_{R\sgen{\sseq{\tau}}}(l, l')
+      }{
+        \seabort{(\smem, \slocal')}{v = \bot}{\svmerror}
+      }
+    }
+    \and
+    \inferrule*[width=.5\linewidth]{
+      \slocal' = \supdate{\slocal}{l}{\sget{\slocal(l')}{f}}
+    }{
+      \serel{
+        (\smem, \slocal)
+      }{
+        \sbselectf_f(l, l')
+      }{
+        (\smem, \slocal')
+      }
+    }
+  \end{mathpar}
+  \caption{Eliminating Immutable References}
+  \label{fig:EliminateImmutable}
+\end{figure}
+
+During Move runtime, immutable references are useful to manage memory ownership
+and avoid unnecessary copying of data.  However, a solver uses a more abstract, term-like
+representation of values, which may already support structure sharing. It is
+more efficient to just resolve immutable references to the values they are referring to.
+This is possible because the underlying value is immutable as well, as discussed above.
+
+Fig.~\ref{fig:EliminateImmutable} describes the bytecode transformation for
+eliminating immutable references. In addition to the transformation described
+there, we also assume that the type mapping $\tau(l)$ is rewritten such that
+$\& \tau$ is replaced by $\tau$.
+
+\SubSection{Eliminating Mutable References}
+
+\TODO{all}{Introduce new instructions and describe their semantics}
+
+\Section{Compiling Specifications into Bytecode}
+
+\begin{figure}[t!]
+  \[
+    \begin{array}{lcclr}
+      e & \in \sexp & ::= & \ldots & \mathit{specification~expressions} \\
+      s & \in \sstatelabel & := & \mathrm{entry} \mid \ldots  & \mathit{state~labels} \\
+      b & \in \sbytecode & ::= & \ldots \mid
+                                 \sbassert(e) \mid \sbassume(e) \mid \sbensures_s(e)
+
+    \end{array}
+  \]
+  \caption{Specification Bytecodes}
+  \label{fig:SpecCodes}
+\end{figure}
+
+Move specifications are compiled into bytecode in form of program assertions and
+assumptions over the current execution state $\sestate$. The related new
+constructs are declared in Fig.~\ref{fig:SpecCodes}.

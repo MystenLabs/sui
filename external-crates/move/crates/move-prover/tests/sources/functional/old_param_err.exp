@@ -1,0 +1,6 @@
+Move prover returns: exiting with bytecode transformation errors
+error: `old(..)` applied to expression which does not depend on state
+   ┌─ tests/sources/functional/old_param_err.move:16:17
+   │
+16 │         ensures old(token.value) == result_1.value + result_2.value;
+   │                 ^^^^^^^^^^^^^^^^

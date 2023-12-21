@@ -1,0 +1,311 @@
+\Section{Overview of Move}
+
+Move was developed for the Diem blockchain \cite{DIEM}, but its design is not
+specific to blockchains.  A Move execution consists of a sequence of updates
+evolving a \emph{global persistent memory state}, which we just call the
+\emph{(global) memory}.  Updates are executed in a \emph{transactional} style:
+the next memory state they compute will only be committed if their computation
+has finished successfully and the result can be merged back without conflict
+into the current memory state. Semantically, a Move execution can therefore be
+interpreted as a labelled transition system (i.e. interleaved execution
+steps). Any state evolving system which is adequately modeled by this semantics,
+not just blockchains, can be programmed in Move (for example, transactions on a
+concurrent data base, or training steps in an iterative ML algorithm).
+
+The Move language allows to define memory in terms of so-called
+\emph{resources}.  Resources are data structures which are stored in memory
+indexed by \emph{account addresses}. For example, the Move expression
+|exists<Balance>(account)| determines whether the resource |Balance| exists at
+address |account|. As resource types can be generic (for example,
+|Balance<Currency>|), an index for a resource is a tuple of types and the
+account address: semantically, for each resource type $R$ there is a partial
+memory function $\smem_R \in \sseq{\stype} \scross \saddr \sinto \swbot{R}$,
+with $\sseq{\stype}$ a sequence of types use to instantiate
+$R\sgen{\sseq{\stype}}$, and $\saddr$ the domain of addresses. Notice that
+account addresses are not just arbitrary values but have a specific role in
+Move's programming methodology related to access control via the builtin type of
+\emph{signers}, as will be discussed later.
+
+A Move application consists of a set of \emph{transaction scripts}. Each of
+those script defines a Move function with input parameters but no output
+parameters.  This function updates the memory $\smem$. The execution of this
+function can fail via a well-defined abort mechanism, in which case $\smem$
+stays unmodified. An environment emits a sequence of calls to such scripts,
+thereby evolving $\smem$. To understand this execution as an LTS, consider the
+set of states to be $\smem$, the labels the names of transaction scripts
+combined with a set of concrete parameters, and the transition relation defined
+by the transaction scripts. Abortion of the transaction function creates a label
+with the script name, the parameters, and information about the abort reason,
+which cycles on the current state.
+
+A transaction script is written in Move as an imperative function which can read
+and write the global memory $\smem$. Move uses a specific style of
+imperative programming based on \emph{borrow semantics} \cite{BORROW_SEM}, as
+popularized in the programming language Rust \cite{RUST,RUST_TYPES}. For the
+verification problem borrow semantics is very important.  While allowing
+references into structured data, those are guaranteed to be safe by the
+\emph{borrow checker} \cite{BORROW_CHECKER}, which is run during bytecode
+loading time, and which verification can assume. Furthermore, the notorious hard
+verification problem of aliasing of references in the presence of mutation is
+eliminated.  Mutation always starts from a root location either in global memory
+or on the execution stack, and while a tree starting from this root is mutated,
+no other access can happen anywhere in the tree. Intuitively, borrow semantics
+allows to move a mutation 'cursor' down the tree, which follows linear typing
+discipline. Because of this property, mutable reference parameters to functions
+can be converted to input/output parameters, and verification of Move can avoid
+the traditionally hard problems caused by aliasing of mutable references.
+
+
+\SubSection{Programming in Move}
+
+In Move, one defines transactions via so-called \emph{script
+  functions} which take a set of parameters.  Those functions can call other
+functions. Script and regular functions are encapsulated in \emph{modules}. Move
+modules are also the place where resource types and other structured data is
+defined.
+
+
+We illustrate the language by example (for a more complete description of Move,
+see the online documentation~\cite{MOVE_LANG_DEF}). The example is a simple
+account which holds a balance of coins and is given in
+Fig.~\ref{fig:AccountDef}. The transaction is to transfer coins from one to
+another account~\footnote{Indeed, for a complete system, transactions like
+  creating an account and funding it would be needed, but we leave this aspect
+  out here.}.
+
+
+\begin{figure}[t!]
+\caption{\label{fig:AccountDef} Account Example Program}
+\begin{MoveBox}
+module Account {
+  struct Coin has store {
+    value: u64
+  }
+  struct Account has key {
+    balance: Coin,
+  }
+
+  public fun withdraw(account: address, amount: u64): Coin
+  acquires Account {
+    let balance = &mut borrow_global_mut<Account>(account).balance;
+    assert(balance.value >= amount, Errors::limit_exceeded());
+    balance.value = balance.value - amount;
+    Coin{value: amount}
+  }
+
+  public fun deposit(account: address, check: Coin)
+  acquires Account {
+    let Coin{value: amount} = check; // Consume coin   @\label{line:DropCoin}@
+    let balance = &mut borrow_global_mut<Account>(account).balance;
+    assert(balance.value <= Limits::max_u64() - amount,
+           Errors::limit_exceeded());
+    balance.value = balance.value + amount;
+  }
+
+  public(script) fun transfer(from: &signer, to: address, amount: u64) {
+    let coin = Account::withdraw(Signer::address_of(from), amount);
+    Account::deposit(to, move(coin)) @\label{line:CoinMove}@
+  }
+}
+\end{MoveBox}
+\end{figure}
+
+
+\begin{itemize}
+\item The struct |Account::Coin| represents units of currency. The |has store|
+  ability of the |Coin| struct indicates that it can be stored as a field in
+  another struct. Notice that by default, in Move, structs have \emph{linear}
+  semantics: a |Coin| cannot be copied and dropped without explict destruction
+  (as on line~\ref{line:DropCoin}). This is useful to prevent accidental
+  duplication or lost of coins. To indicate that the struct can be copied and
+  dropped, one would need to add the abilities |has copy, drop|.
+\item |Coin| is aggregated in the struct |Account| for representing a
+  \emph{balance}; the ability |has key| indicates that this struct can be stored
+  as a resource in global memory.
+\item The |Account::withdraw| function subtracts a value from the balance,
+  returning a new |Coin| for the withdrawn amount.  It uses the builtin function
+  |borrow_global_mut<T>(address)| which returns a mutable reference to the
+  |Account| resource.  Similarily, |Account::deposit| takes a coin which is
+  destructed and its amount added to the account.
+\item The |acquire Account| modifier on a function declaration indicates that
+  the function will borrow the |Account| global memory as a whole -- i.e. for
+  every account address. The Move borrow checker will reject a call to such
+  functions if any account resources are already borrowed, implementing memory
+  safety for Move~\cite{BORROW_CHECKER}.
+\item The |assert| statement causes a Move transaction to abort execution if the
+  condition is not met, with the specified error code. No effects on the memory
+  occur on abort. Abortion can also happen implicitly; for example, the
+  expression |borrow_global_mut<T>(addr)| will abort if no resource |T| exists
+  at |addr|.
+\item The script |Account::transfer| is a top-level entry point into this Move
+  program, calling |Account::withdraw| and |Account::deposit|. The call to the
+  builtin function |move| at line~\ref{line:CoinMove} illustrates how the linear
+  coin value travels from one call to another.
+\item Scripts get passed in so called \emph{signers} which are tokens which
+  represent an authorized account address. The caller of the script -- an
+  external program -- has ensured that the owner of the signer account address has
+  agreed to execute this transaction.
+\end{itemize}
+
+\SubSection{Specifying in Move}
+
+The specification language supports {\em Design By Contract}
+\cite{DESIGN_BY_CONTRACT}. Developers can provide pre and post conditions for
+functions, which include conditions over (mutable) parameters and global
+memory. Developers can also provide invariants over data structures, as well as
+the (state-dependent) content of the global memory. Universal and
+existential quantification both over bounded domains (like the indices of a
+vector) as well of unbounded domains (like all memory addresses, all integers,
+etc.)  are supported. The latter makes the specification language very
+expressive, but also renders the verification problem in theory undecidable (and
+in practice dependent on heuristic decision procedures).
+
+\begin{figure}[t!]
+\caption{\label{fig:AccountSpec} Account Example Specification}
+\begin{MoveBox}
+module Account {
+  spec withdraw {
+    aborts_if bal(account) < amount;
+    ensures bal(account) == old(bal(account)) - amount;
+    ensures result == Coin{value: amount};
+    modifies global<Account>(acc); @\label{line:AccountModifies}@
+  }
+
+  spec deposit {
+    aborts_if bal(account) + check.value > Limits::max_u64();
+    ensures bal(account) == old(bal(account)) + check.value;
+    modifies global<Account>(acc);
+  }
+
+  spec fun bal(acc: address): num { @\label{line:BalDef}@
+    global<Account>(acc).balance.value
+  }
+
+  invariant forall acc: address where exists<Account>(acc): @\label{line:BalanceInvariant}@
+    bal(acc) >= AccountLimits::MIN_BALANCE;
+
+  invariant update forall acc: address where exists<Account>(acc): @\label{line:DecreaseInvariant}@
+    old(bal(acc)) - bal(acc) <= AccountLimits::MAX_DECREASE;
+}
+\end{MoveBox}
+\end{figure}
+
+Fig.~\ref{fig:AccountSpec} illustrates the specification language by extending
+the account example in Fig.~\ref{fig:AccountDef} (for the definition of the
+specification language see \cite{MOVE_SPEC_LANG_DEF}).
+\begin{itemize}
+\item The function specification blocks |spec withdraw| and |spec deposit|
+  specify when those functions abort, the expected effect on the global memory,
+  and its return value (the return value is represented by the well-known name
+  |result|).
+\item As common in this style of specifications, in the |ensures| statement, by
+  default the post-state of the function is referred to, whereas the form
+  |old(..)| can be used to access the pre-state.
+\item We are using the helper function |bal(address)| defined on
+  line~\ref{line:BalDef} to access the value of the account balance. Helper
+  functions can access state and can be transparently used within |old(..)|; the
+  function is then evaluated in the pre-state.
+\item The |modifies| statement on line~\ref{line:AccountModifies} specifies that
+  this function only changes the indicated memory but no other memory.
+\item The specification contains two invariants over global memory. The first
+  invariant on line~\ref{line:BalanceInvariant} states that a balance can never
+  drop underneath a certain minimum. The second invariant on
+  line~\ref{line:DecreaseInvariant} refers to an update of global memory with
+  pre and post state: the balance on an account can never decrease in one step
+  more than a certain amount.
+\item Note that while the Move programming language has only unsigned integers,
+  the specification language uses arbitrary precision signed integers, making it
+  convenient to specify something like |x - y <= limit|, without need to worry
+  about underflow or overflow.
+\end{itemize}
+
+A discerning reader may have noted that the program in Fig.~\ref{fig:AccountDef}
+does not actually satisfy the specification in Fig.~\ref{fig:AccountSpec}. This
+will be discussed in the next section.
+
+The constructs we have seen so far are only a subset of the available features
+of the Move specification language. Notably, the language supports the following
+additional features:
+
+\begin{itemize}
+\item Function preconditions via the |requires|-clause.
+\item Data invariants for |struct| types, as a predicate over the field values.
+\item Means to abstract commonly used specification fragments in so-called
+  \emph{specification schemas} which can then be included in other specification
+  blocks.
+\end{itemize}
+
+\SubSection{Running the Prover}
+\label{sec:RunningProver}
+
+The Move prover is a tool which supports verification of specifications as shown
+above. The prover operates fully automated, quite similar as a type checker or
+linter, and is expected to conclude in reasonable execution time, so it can be
+integrated in the regular development workflow.
+
+Running the prover on the program and specification of |module Account| produces
+multiple errors, as mentioned. The first is this one:
+
+\TODO{wrwg}{make line number symbolic so they align with figures}
+
+\begin{MoveDiag}
+error: abort not covered by any of the `aborts_if` clauses
+
+    --- account.move:15:3 ---
+    |
+ 15 |  public fun withdraw(account: address, amount: u64): Coin
+    .
+ 18 |         &mut borrow_global_mut<Account>(account).balance;
+    .              ----------------- abort happened here
+    |
+    =     at account.move:15:3: withdraw
+    =         account = 0x19, amount = 15724
+    =     at account.move:18:14: withdraw (ABORTED)
+\end{MoveDiag}
+
+\noindent The prover has detected that an implicit aborts condition is missing
+in the specification of the |withdraw| function. It prints the context of the
+error, as well as an \emph{execution trace} which lead to the error. Values of
+variable assignments from the counterexample found by the prover are printed
+together with the execution trace. Logically, the counter example presents an
+instance of assignments to variables such that program and specification
+disagree. In general, the Move prover attempts to produce diagnostics readable
+for Move developers without the need of understanding any internals of the
+prover.
+
+
+The next errors produced are about the memory invariants in
+Fig.~\ref{fig:AccountSpec}. Both of them do not hold:
+
+\begin{MoveDiag}
+error: global memory invariant does not hold
+
+    --- account.move:43:5 ---
+    |
+ 43 | invariant forall acc: address where exists<Account>(acc):
+ 44 |     bal(acc) >= AccountLimits::MIN_BALANCE;
+    |
+    .
+    =     at account.move:21:35: withdraw
+
+error: global memory invariant does not hold
+
+    --- account.move:45:5 ---
+    |
+ 45 | invariant update
+ 46 |   forall acc: address where exists<Account>(acc):
+ 47 |     old(bal(acc)) - bal(acc) <= AccountLimits::MAX_DECREASE;
+    .
+    =     at account.move:21:35: withdraw
+\end{MoveDiag}
+
+\noindent This happens because in the program in Fig.~\ref{fig:AccountDef}, we
+did not made any attempt to respect the limits in |MIN_BALANCE| and
+|MAX_DECREASE|. We leave it open here how to fix this problem, which would
+require to add some more |assert| statements to the code and abort if the limits
+are not met.
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "main"
+%%% End:

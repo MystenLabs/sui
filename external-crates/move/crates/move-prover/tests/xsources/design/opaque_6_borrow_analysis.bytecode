@@ -1,0 +1,34 @@
+============ after processor `borrow_analysis` ================
+
+[variant baseline]
+pub fun Trafo::opaque_caller($t0|x: u64): u64 {
+     var $t1: u64
+     var $t2: u64
+     # live_nodes: LocalRoot($t0)
+  0: trace_local[x]($t0)
+     # live_nodes: LocalRoot($t0)
+  1: $t1 := Trafo::opaque_decr($t0)
+     # live_nodes: LocalRoot($t0)
+  2: $t2 := Trafo::opaque_decr($t1)
+     # live_nodes: LocalRoot($t0)
+  3: trace_return[0]($t2)
+     # live_nodes: LocalRoot($t0)
+  4: return $t2
+}
+
+
+[variant baseline]
+pub fun Trafo::opaque_decr($t0|x: u64): u64 {
+     var $t1: u64
+     var $t2: u64
+     # live_nodes: LocalRoot($t0)
+  0: trace_local[x]($t0)
+     # live_nodes: LocalRoot($t0)
+  1: $t1 := 1
+     # live_nodes: LocalRoot($t0)
+  2: $t2 := -($t0, $t1)
+     # live_nodes: LocalRoot($t0)
+  3: trace_return[0]($t2)
+     # live_nodes: LocalRoot($t0)
+  4: return $t2
+}

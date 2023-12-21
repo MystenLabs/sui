@@ -1,0 +1,51 @@
+Move prover returns: exiting with verification errors
+error: function does not abort under this condition
+   ┌─ tests/sources/functional/let.move:77:9
+   │
+77 │         aborts_if sum != 0;
+   │         ^^^^^^^^^^^^^^^^^^^
+   │
+   =     at tests/sources/functional/let.move:69: spec_let_with_abort_incorrect
+   =         a = <redacted>
+   =         b = <redacted>
+   =     at tests/sources/functional/let.move:70: spec_let_with_abort_incorrect
+   =         saved_a = <redacted>
+   =     at tests/sources/functional/let.move:71: spec_let_with_abort_incorrect
+   =     at tests/sources/functional/let.move:72: spec_let_with_abort_incorrect
+   =         a = <redacted>
+   =         b = <redacted>
+   =     at tests/sources/functional/let.move:73: spec_let_with_abort_incorrect
+   =     at tests/sources/functional/let.move:75: spec_let_with_abort_incorrect (spec)
+   =     at tests/sources/functional/let.move:77: spec_let_with_abort_incorrect (spec)
+   =         `aborts_if sum != 0;` = <redacted>
+   =     at tests/sources/functional/let.move:75: spec_let_with_abort_incorrect (spec)
+   =     at tests/sources/functional/let.move:77: spec_let_with_abort_incorrect (spec)
+
+error: abort not covered by any of the `aborts_if` clauses
+   ┌─ tests/sources/functional/let.move:74:5
+   │
+71 │           *a = *a / (*a + *b);
+   │                   - abort happened here with execution failure
+   ·
+74 │ ╭     spec spec_let_with_abort_incorrect {
+75 │ │         let sum = a + b;
+76 │ │         let product = a * b;
+77 │ │         aborts_if sum != 0;
+   · │
+82 │ │         ensures b == product;
+83 │ │     }
+   │ ╰─────^
+   │
+   =     at tests/sources/functional/let.move:69: spec_let_with_abort_incorrect
+   =         a = <redacted>
+   =         b = <redacted>
+   =     at tests/sources/functional/let.move:70: spec_let_with_abort_incorrect
+   =         saved_a = <redacted>
+   =     at tests/sources/functional/let.move:71: spec_let_with_abort_incorrect
+   =         ABORTED
+   =     at tests/sources/functional/let.move:77: spec_let_with_abort_incorrect (spec)
+   =         `aborts_if sum != 0;` = <redacted>
+   =     at tests/sources/functional/let.move:78: spec_let_with_abort_incorrect (spec)
+   =         `aborts_if sum >= MAX_U64;` = <redacted>
+   =     at tests/sources/functional/let.move:79: spec_let_with_abort_incorrect (spec)
+   =         `aborts_if product >= MAX_U64;` = <redacted>

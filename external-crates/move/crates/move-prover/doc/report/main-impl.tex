@@ -1,0 +1,69 @@
+\UseRawInputEncoding
+\documentclass[runningheads]{article}
+
+\sloppy
+
+\input{macros}
+
+\begin{document}
+
+\title{Towards Practical Formal Verification \\ of Smart Contracts \\
+  \small -- Technical Report -- \\
+  \textbf{DRAFT -- Implementation Only View}
+}
+
+
+\author{
+  David Dill \and Wolfgang Grieskamp \and Junkil
+  Park \and Shaz Qadeer \and Meng Xu \and Emma Zhong
+}
+
+
+\maketitle
+
+\tableofcontents
+
+
+
+
+%%% currently excluded
+%\input{intro.tex}
+%\input{move.tex}
+%%%
+
+\setcounter{section}{2}
+
+\Section{Move Prover Implementation}
+
+In this section, an overview of the Move Prover implementation will be provided.
+The formal content of the discussion is kept lightweight; a formalization of some
+aspects is given in appendices.
+
+\input{arch.tex}
+\input{references.tex}
+\input{injection.tex}
+\input{mono.tex}
+\input{translation.tex}
+
+%\Section{Application}
+%\TODO{wrwg}{\ldots}
+
+%\Section{Related Work}
+%\TODO{wrwg}{\ldots}
+
+%\Section{Conclusion}
+%\TODO{wrwg}{\ldots}
+
+
+
+
+\bibliographystyle{plain}
+\bibliography{biblio}
+
+\end{document}
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: t
+%%% End:

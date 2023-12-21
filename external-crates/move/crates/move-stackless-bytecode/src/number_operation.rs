@@ -9,12 +9,9 @@
 use move_model::{
     ast::TempIndex,
     model::{FieldId, FunId, FunctionEnv, ModuleId, NodeId, StructEnv, StructId},
-    pragmas::{BV_PARAM_PROP, BV_RET_PROP},
     ty::Type,
 };
-use std::{collections::BTreeMap, str};
-
-static PARSING_ERROR: &str = "error happened when parsing the bv pragma";
+use std::collections::BTreeMap;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
 pub enum NumOperation {
@@ -174,10 +171,6 @@ impl GlobalNumberOperationState {
     pub fn create_initial_func_oper_state(&mut self, func_env: &FunctionEnv) {
         use NumOperation::*;
 
-        // Obtain positions that are marked as Bitwise by analyzing the pragma
-        let para_sym = &func_env.module_env.env.symbol_pool().make(BV_PARAM_PROP);
-        let ret_sym = &func_env.module_env.env.symbol_pool().make(BV_RET_PROP);
-
         let mid = func_env.module_env.get_id();
         let fid = func_env.get_id();
         let mut default_map = BTreeMap::new();
@@ -231,15 +224,12 @@ impl GlobalNumberOperationState {
     pub fn create_initial_struct_oper_state(&mut self, struct_env: &StructEnv) {
         use NumOperation::*;
 
-        // Obtain positions that are marked as Bitwise by analyzing the pragma
-        let para_sym = &struct_env.module_env.env.symbol_pool().make(BV_PARAM_PROP);
-
         let mid = struct_env.module_env.get_id();
         let sid = struct_env.get_id();
         let struct_env = struct_env.module_env.env.get_module(mid).into_struct(sid);
         let mut field_oper_map = BTreeMap::new();
 
-        for (i, field) in struct_env.get_fields().enumerate() {
+        for field in struct_env.get_fields() {
             let field_ty = field.get_type();
             let arith_flag = if let Type::Reference(_, tr) = field_ty {
                 tr.is_number()

@@ -1,0 +1,33 @@
+\Section{Corrected Account Example}
+\label{sec:CorrectedAccount}
+
+To fix the verification errors from the account example in  Fig.~\ref{fig:AccountDef}
+and Fig.~\ref{fig:AccountSpec}, the following changes would need to be made:
+
+\begin{MoveBox}
+module Account {
+  ...
+
+  fun withdraw(account: address, amount: u64) acquires Account {
+    assert(amount <= AccountLimits::max_decrease(), Errors::invalid_argument()); // MISSING
+    let balance = &mut borrow_global_mut<Account>(account).balance;
+    assert(*balance >= amount, Errors::limit_exceeded());
+    assert(*balance - amount >= AccountLimits::min_balance(), Errors::invalid_argument()); // MISSING
+    *balance = *balance - amount;
+  }
+
+  spec transfer {
+    ...
+    aborts_if !exists<Account>(from_addr); // MISSING
+    aborts_if !exists<Account>(to); // MISSING
+    aborts_if amount > AccountLimits::max_decrease(); // MISSING
+    aborts_if bal(from_addr) - amount < AccountLimits::min_balance(); // MISSING
+  }
+}
+\end{MoveBox}
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "main"
+%%% End:

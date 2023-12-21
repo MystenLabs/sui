@@ -1,0 +1,257 @@
+
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{inconsolata}
+\usepackage{amsmath,amssymb,array}
+\usepackage{mathpartir}
+\usepackage{graphicx}
+
+\newcommand{\Section}[1]{\section{#1}}
+\newcommand{\SubSection}[1]{\subsection{#1}}
+\newcommand{\SubSubSection}[1]{\subsubsection{#1}}
+\newcommand{\Paragraph}[1]{\paragraph{#1}}
+
+\newcommand{\TODO}[2]{%
+  \noindent\textcolor{gray}{%
+      {\scriptsize\textbf{TODO(#1)}: #2}
+  }
+}
+
+\newenvironment{Figure}{
+  \begin{figure}[ht!b!]
+} {
+  \end{figure}
+}
+
+\newcommand{\MVP}[0]{\textsf{MVP}}
+
+
+
+
+% Source Transformation
+
+\newcommand{\transform}[0]{\Large{$\leadsto$}}
+
+
+%%%% Code
+
+%\usepackage[charter]{mathdesign}
+%\def\rmdefault{bch}
+%\def\ttdefault{blg}
+
+\lstdefinestyle{MoveStyle}{
+  basicstyle=\ttfamily,
+  keywordstyle=\bf,
+  escapechar=@, % use to embed LaTeX into code
+}
+
+
+\lstdefinelanguage{Move}{
+  morekeywords={
+    abort,
+    aborts_if,
+    acquires,
+    address,
+    as,
+    assert,
+    assume,
+    borrow_global,
+    borrow_global_mut,
+    break,
+    const,
+    continue,
+    copy,
+    copyable,
+    define,
+    drop,
+    else,
+    ensures,
+    exists,
+    false,
+    forall,
+    friend,
+    fun,
+    global,
+    has,
+    havoc,
+    if,
+    include,
+    invariant,
+    key,
+    let,
+    loop,
+    modifies,
+    module,
+    move,
+    move_from,
+    move_to,
+    mut,
+    native,
+    num,
+    old,
+    onabort,
+    pragma,
+    public,
+    requires,
+    resource,
+    return,
+    schema,
+    script,
+    signer,
+    spec,
+    store,
+    struct,
+    true,
+    update,
+    use,
+    with,
+    where,
+    while},
+  sensitive=true,
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+}
+
+% This allows us to use |<move code>| for inline code.
+\lstMakeShortInline[language=Move,style=MoveStyle]|
+
+
+% This defines a new environment for Move code.
+\lstnewenvironment{Move}{
+  \lstset{
+    language=Move,
+    style=MoveStyle,
+    basicstyle=\small\ttfamily,
+  }
+}{
+}
+
+% This defines a new environment for Move code in a box, with line numbers.
+% TODO: this is intended for figures, but there are some weird problems
+% with how lstlisting does things which are not fully understood. So figure
+% needs to be done manually around this.
+\lstnewenvironment{MoveBox}{
+  \lstset{
+    language=Move,
+    style=MoveStyle,
+    basicstyle=\small\ttfamily,
+    numbers=left,
+    numberstyle=\scriptsize\color{gray},
+    frame=single,
+  }
+}{
+}
+
+% This defines a new environment for diagnostics as produced by the prover.
+\lstnewenvironment{MoveDiag}{
+  \lstset{
+    style=MoveStyle,
+    basicstyle=\scriptsize\ttfamily,
+  }
+}{
+}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Operational Semantics
+% (older stuff, needed for formal.tex)
+
+\newcommand{\smem}{\mathcal{M}}
+\newcommand{\saddr}{\mathcal{A}}
+\newcommand{\sval}{\mathcal{V}}
+\newcommand{\sresource}{\mathcal{R}}
+\newcommand{\slocal}{\mathcal{L}}
+\newcommand{\sconst}{\mathcal{C}}
+\newcommand{\sfield}{\mathcal{F}}
+\newcommand{\sop}{\mathcal{O}}
+\newcommand{\sexp}{\mathcal{E}}
+\newcommand{\sstatelabel}{\mathcal{S}}
+
+\newcommand{\svmerror}{\kappa}
+
+\newcommand{\sestate}{\Theta}
+\newcommand{\serel}[3]{#1 \vdash #2 \Rightarrow #3}
+\newcommand{\sereltwo}[3]{\begin{array}{r}#1 \vdash #2 \\ \Rightarrow #3\end{array}}
+\newcommand{\seabort}[3]{{#1}_{\mathrm{abort}(#3)~\mathrm{if}~#2}}
+\newcommand{\seval}{\mathrm{eval}}
+\newcommand{\sref}[2]{\mathrm{ref}(#1, #2)}
+\newcommand{\srootg}[2]{#1_{#2}}
+
+
+% Types
+\newcommand{\stype}{\mathcal{T}}
+\newcommand{\stctor}[1]{\mathrm{#1}}
+\newcommand{\stbool}{\stctor{bool}}
+\newcommand{\stnum}{\stctor{num}}
+\newcommand{\stresource}{\stctor{resource}}
+\newcommand{\staddress}{\stctor{address}}
+\newcommand{\stref}{\sbctr{ref}}
+
+\newcommand{\stmut}{\mathcal{M}}
+\newcommand{\smut}{\stctor{mut}}
+\newcommand{\simut}{\stctor{imu}}
+
+% Definitions
+\newcommand{\sdef}{\mathcal{D}}
+\newcommand{\sdfun}[3]{\sbinstr{fun}(#1)#2 \{ #3 \}}
+
+% Basic Bytecodes
+\newcommand{\sbinstr}[1]{\mathtt{#1}}
+\newcommand{\sbytecode}{\mathcal{B}}
+\newcommand{\sbload}{\sbinstr{load}}
+\newcommand{\sbassign}{\sbinstr{assign}}
+\newcommand{\sbpack}{\sbinstr{pack}}
+\newcommand{\sbunpack}{\sbinstr{unpack}}
+\newcommand{\sbop}{\sbinstr{op}}
+\newcommand{\sbmoveto}{\sbinstr{move\_to}}
+\newcommand{\sbmovefrom}{\sbinstr{move\_from}}
+\newcommand{\sbexists}{\sbinstr{exists}}
+\newcommand{\sbborrowl}{\sbinstr{borrow\_local}}
+\newcommand{\sbborrowg}{\sbinstr{borrow\_global}}
+\newcommand{\sbborrowf}{\sbinstr{borrow\_field}}
+\newcommand{\sbwriteref}{\sbinstr{write\_ref}}
+\newcommand{\sbreadref}{\sbinstr{read\_ref}}
+\newcommand{\sbcall}{\sbinstr{call}}
+\newcommand{\sbabort}{\sbinstr{abort}}
+\newcommand{\sbreturn}{\sbinstr{return}}
+\newcommand{\sbrelease}{\sbinstr{release}}
+\newcommand{\sbif}{\sbinstr{if}}
+\newcommand{\sbwhile}{\sbinstr{while}}
+
+
+% Imutable References Elimination
+\newcommand{\sbreadl}{\sbinstr{read\_local}}
+\newcommand{\sbreadg}{\sbinstr{read\_global}}
+\newcommand{\sbselectf}{\sbinstr{select\_field}}
+\newcommand{\sitrafo}[2]{#1 \leadsto #2}
+\newcommand{\sitrafotwo}[2]{\begin{array}{r}#1 \\ \leadsto #2\end{array}}
+
+% Specification constructs
+\newcommand{\sbassume}{\sbinstr{assume}}
+\newcommand{\sbassert}{\sbinstr{assert}}
+\newcommand{\sbensures}{\sbinstr{ensures}}
+
+
+
+
+% General Math
+\newcommand{\sseq}[1]{\overline{#1}}
+\newcommand{\sgen}[1]{\langle#1\rangle}
+\newcommand{\scross}[0]{\times}
+\newcommand{\swbot}[1]{#1_\bot}
+\newcommand{\sinto}[0]{\rightarrow}
+\newcommand{\swith}[0]{\mathit{with~}}
+\newcommand{\supdate}[3]{#1[#2 \triangleleft #3]}
+\newcommand{\scat}{\cdot}
+\newcommand{\sif}{~\mathrm{if}~}
+\newcommand{\selse}{~\mathrm{else}~}
+\newcommand{\sget}[2]{#1_#2}
+\newcommand{\sset}[3]{#1[#2 \triangleleft #3]}
+
+
+\newenvironment{leftgather}{\begin{math}\begin{array}{l}}{\end{array}\end{math}}
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "main"
+%%% End:
