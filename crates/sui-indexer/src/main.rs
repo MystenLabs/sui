@@ -23,20 +23,6 @@ async fn main() -> Result<(), IndexerError> {
 
     let indexer_config = IndexerConfig::parse();
     info!("Parsed indexer config: {:#?}", indexer_config);
-    let (_registry_service, registry) = start_prometheus_server(
-        // NOTE: this parses the input host addr and port number for socket addr,
-        // so unwrap() is safe here.
-        format!(
-            "{}:{}",
-            indexer_config.client_metric_host, indexer_config.client_metric_port
-        )
-        .parse()
-        .unwrap(),
-        indexer_config.rpc_client_url.as_str(),
-    )?;
-    let indexer_metrics = IndexerMetrics::new(&registry);
-
-    mysten_metrics::init_metrics(&registry);
 
     let db_url = indexer_config.get_db_url().map_err(|e| {
         IndexerError::PgPoolConnectionError(format!(
@@ -51,6 +37,38 @@ async fn main() -> Result<(), IndexerError> {
         );
         e
     })?;
+    if indexer_config.reset_db {
+        let mut conn = get_pg_pool_connection(&blocking_cp).map_err(|e| {
+            error!(
+                "Failed getting Postgres connection from connection pool with error {:?}",
+                e
+            );
+            e
+        })?;
+        reset_database(&mut conn, /* drop_all */ true, indexer_config.use_v2).map_err(|e| {
+            let db_err_msg = format!(
+                "Failed resetting database with url: {:?} and error: {:?}",
+                db_url, e
+            );
+            error!("{}", db_err_msg);
+            IndexerError::PostgresResetError(db_err_msg)
+        })?;
+    }
+
+    let (_registry_service, registry) = start_prometheus_server(
+        // NOTE: this parses the input host addr and port number for socket addr,
+        // so unwrap() is safe here.
+        format!(
+            "{}:{}",
+            indexer_config.client_metric_host, indexer_config.client_metric_port
+        )
+        .parse()
+        .unwrap(),
+        indexer_config.rpc_client_url.as_str(),
+    )?;
+    let indexer_metrics = IndexerMetrics::new(&registry);
+
+    mysten_metrics::init_metrics(&registry);
 
     let report_cp = blocking_cp.clone();
     let report_metrics = indexer_metrics.clone();
@@ -71,23 +89,6 @@ async fn main() -> Result<(), IndexerError> {
         }
     });
 
-    if indexer_config.reset_db {
-        let mut conn = get_pg_pool_connection(&blocking_cp).map_err(|e| {
-            error!(
-                "Failed getting Postgres connection from connection pool with error {:?}",
-                e
-            );
-            e
-        })?;
-        reset_database(&mut conn, /* drop_all */ true, indexer_config.use_v2).map_err(|e| {
-            let db_err_msg = format!(
-                "Failed resetting database with url: {:?} and error: {:?}",
-                db_url, e
-            );
-            error!("{}", db_err_msg);
-            IndexerError::PostgresResetError(db_err_msg)
-        })?;
-    }
     if indexer_config.use_v2 {
         info!("Use v2");
         if indexer_config.fullnode_sync_worker {
