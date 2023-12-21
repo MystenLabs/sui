@@ -94,7 +94,7 @@ pub struct IndexerConfig {
     pub db_port: Option<u16>,
     #[clap(long)]
     pub db_name: Option<String>,
-    #[clap(long)]
+    #[clap(long, default_value = "http://0.0.0.0:9000", global = true)]
     pub rpc_client_url: String,
     #[clap(long, default_value = "0.0.0.0", global = true)]
     pub client_metric_host: String,
