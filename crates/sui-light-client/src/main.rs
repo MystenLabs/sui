@@ -15,7 +15,7 @@ use sui_types::{
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
     message_envelope::Envelope,
     messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSummary, EndOfEpochData},
-    object::Data,
+    object::{Data, Object},
 };
 
 use sui_config::genesis::Genesis;
@@ -26,12 +26,7 @@ use sui_package_resolver::{Package, PackageStore, Resolver};
 use sui_sdk::SuiClientBuilder;
 
 use clap::{Parser, Subcommand};
-use std::{
-    fs,
-    io::Write,
-    path::{Path, PathBuf},
-    str::FromStr,
-};
+use std::{fs, io::Write, path::PathBuf, str::FromStr};
 use std::{io::Read, sync::Arc};
 
 /// A light client for the Sui blockchain
@@ -66,20 +61,7 @@ impl PackageStore for RemotePackageStore {
     /// Read package contents. Fails if `id` is not an object, not a package, or is malformed in
     /// some way.
     async fn fetch(&self, id: AccountAddress) -> ResolverResult<Arc<Package>> {
-        let object = self.client.get_object(id.into()).await.unwrap();
-
-        // Need to authenticate this object
-        let (effects, _) =
-            get_verified_effects_and_events(&self.config, object.previous_transaction)
-                .await
-                .unwrap();
-        // check that this object ID, version and hash is in the effects
-        effects
-            .all_changed_objects()
-            .iter()
-            .find(|object_ref| object_ref.0 == object.compute_object_reference())
-            .unwrap();
-
+        let object = get_verified_object(&self.config, id.into()).await.unwrap();
         let package = Package::read(&object).unwrap();
         Ok(Arc::new(package))
     }
@@ -339,43 +321,12 @@ async fn check_and_sync_checkpoints(config: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn read_full_checkpoint(checkpoint_path: &PathBuf) -> anyhow::Result<CheckpointData> {
-    let mut reader = fs::File::open(checkpoint_path.clone())?;
-    let metadata = fs::metadata(checkpoint_path)?;
-    let mut buffer = vec![0; metadata.len() as usize];
-    reader.read_exact(&mut buffer)?;
-    bcs::from_bytes(&buffer).map_err(|_| anyhow!("Unable to parse checkpoint file"))
-}
-
-async fn write_full_checkpoint(
-    checkpoint_path: &Path,
-    checkpoint: &CheckpointData,
-) -> anyhow::Result<()> {
-    let mut writer = fs::File::create(checkpoint_path)?;
-    let bytes = bcs::to_bytes(&checkpoint)
-        .map_err(|_| anyhow!("Unable to serialize checkpoint summary"))?;
-    writer.write_all(&bytes)?;
-    Ok(())
-}
-
 async fn get_full_checkpoint(config: &Config, seq: u64) -> anyhow::Result<CheckpointData> {
-    let mut checkpoint_path = config.checkpoint_summary_dir.clone();
-    checkpoint_path.push("untrusted_cache");
-    checkpoint_path.push(format!("{}.bcs", seq));
-
-    // Try reading the cache
-    if let Ok(checkpoint) = read_full_checkpoint(&checkpoint_path).await {
-        return Ok(checkpoint);
-    }
-
     // Downloading the checkpoint from the server
     let client: Client = Client::new(config.rest_url());
-    let full_check_point = client.get_full_checkpoint(seq).await?;
+    let full_checkpoint = client.get_full_checkpoint(seq).await?;
 
-    // Add to cache
-    write_full_checkpoint(&checkpoint_path, &full_check_point).await?;
-
-    Ok(full_check_point)
+    Ok(full_checkpoint)
 }
 
 fn extract_verified_effects_and_events(
@@ -386,16 +337,10 @@ fn extract_verified_effects_and_events(
     let summary = &checkpoint.checkpoint_summary;
 
     // Verify the checkpoint summary using the committee
-    summary.clone().verify(committee)?;
-
-    // Check the validity of the checkpoint contents
-    let contents = &checkpoint.checkpoint_contents;
-    anyhow::ensure!(
-        contents.digest() == &summary.content_digest,
-        "The content digest in the checkpoint summary does not match the digest of the checkpoint contents"
-    );
+    summary.verify_with_contents(committee, Some(&checkpoint.checkpoint_contents))?;
 
     // Check the validity of the transaction
+    let contents = &checkpoint.checkpoint_contents;
     let (matching_tx, _) = checkpoint
         .transactions
         .iter()
@@ -477,6 +422,23 @@ async fn get_verified_effects_and_events(
     extract_verified_effects_and_events(&full_check_point, &committee, tid)
 }
 
+async fn get_verified_object(config: &Config, id: ObjectID) -> anyhow::Result<Object> {
+    let client: Client = Client::new(config.rest_url());
+    let object = client.get_object(id).await?;
+
+    // Need to authenticate this object
+    let (effects, _) = get_verified_effects_and_events(config, object.previous_transaction).await?;
+
+    // check that this object ID, version and hash is in the effects
+    effects
+        .all_changed_objects()
+        .iter()
+        .find(|object_ref| object_ref.0 == object.compute_object_reference())
+        .ok_or(anyhow!("Object not found"))?;
+
+    Ok(object)
+}
+
 #[tokio::main]
 pub async fn main() {
     // Command line arguments and config loading
@@ -534,25 +496,8 @@ pub async fn main() {
             }
         }
         Some(SCommands::Object { oid }) => {
-            let client = Client::new(config.rest_url());
-            let object = client
-                .get_object(ObjectID::from_str(&oid).unwrap())
-                .await
-                .unwrap();
-
-            // Authenticate the object
-            // Need to authenticate this object
-            let (effects, _) =
-                get_verified_effects_and_events(&config, object.previous_transaction)
-                    .await
-                    .unwrap();
-
-            // check that this object ID, version and hash is in the effects
-            effects
-                .all_changed_objects()
-                .iter()
-                .find(|oref| oref.0 == object.compute_object_reference())
-                .unwrap();
+            let oid = ObjectID::from_str(&oid).unwrap();
+            let object = get_verified_object(&config, oid).await.unwrap();
 
             if let Data::Move(move_object) = &object.data {
                 let object_type = move_object.type_().clone();
@@ -594,7 +539,28 @@ mod tests {
     use sui_types::messages_checkpoint::FullCheckpointContents;
 
     use super::*;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
+
+    async fn read_full_checkpoint(checkpoint_path: &PathBuf) -> anyhow::Result<CheckpointData> {
+        let mut reader = fs::File::open(checkpoint_path.clone())?;
+        let metadata = fs::metadata(checkpoint_path)?;
+        let mut buffer = vec![0; metadata.len() as usize];
+        reader.read_exact(&mut buffer)?;
+        bcs::from_bytes(&buffer).map_err(|_| anyhow!("Unable to parse checkpoint file"))
+    }
+
+    // clippy ignore dead-code
+    #[allow(dead_code)]
+    async fn write_full_checkpoint(
+        checkpoint_path: &Path,
+        checkpoint: &CheckpointData,
+    ) -> anyhow::Result<()> {
+        let mut writer = fs::File::create(checkpoint_path)?;
+        let bytes = bcs::to_bytes(&checkpoint)
+            .map_err(|_| anyhow!("Unable to serialize checkpoint summary"))?;
+        writer.write_all(&bytes)?;
+        Ok(())
+    }
 
     async fn read_data() -> (Committee, CheckpointData) {
         let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
