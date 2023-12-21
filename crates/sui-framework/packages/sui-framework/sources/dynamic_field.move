@@ -11,7 +11,6 @@
 module sui::dynamic_field {
     use std::option::{Self, Option};
     use sui::object::{Self, ID, UID};
-    use sui::prover;
 
     friend sui::dynamic_object_field;
 

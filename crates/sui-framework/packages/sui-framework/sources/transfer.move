@@ -5,7 +5,6 @@
 module sui::transfer {
 
     use sui::object::{Self, ID, UID};
-    use sui::prover;
 
     #[test_only]
     friend sui::test_scenario;
