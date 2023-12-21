@@ -34,10 +34,6 @@ module std::compare {
     /// `compare_bcs_bytes(bcs(0x01), bcs(0x10)) == LESS_THAN` (as you'd expect), but
     /// `compare_bcs_bytes(bcs(0x100), bcs(0x001)) == LESS_THAN` (as you probably wouldn't expect).
     /// Keep this in mind when using this function to compare addresses.
-    ///
-    /// > TODO: there is currently no specification for this function, which causes no problem because it is not yet
-    /// > used in the Diem framework. However, should this functionality be needed in specification, a customized
-    /// > native abstraction is needed in the prover framework.
     public fun cmp_bcs_bytes(v1: &vector<u8>, v2: &vector<u8>): u8 {
         let i1 = vector::length(v1);
         let i2 = vector::length(v2);
