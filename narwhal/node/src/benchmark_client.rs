@@ -9,7 +9,10 @@ use eyre::Context;
 use futures::future::join_all;
 use mysten_network::Multiaddr;
 use prometheus::Registry;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{
+    rngs::{SmallRng, StdRng},
+    Rng, RngCore, SeedableRng,
+};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -263,6 +266,10 @@ impl Client {
                     random += counter * task_id;
 
                     let mut transaction = vec![0u8; size];
+
+                    let mut fast_rng = SmallRng::from_entropy();
+                    fast_rng.fill_bytes(&mut transaction);
+
                     transaction[0..8].copy_from_slice(&client_id.to_le_bytes()); // 8 bytes
                     transaction[8..16].copy_from_slice(&timestamp); // 8 bytes
                     transaction[16..24].copy_from_slice(&random.to_le_bytes()); // 8 bytes
