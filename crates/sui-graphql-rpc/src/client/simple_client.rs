@@ -153,28 +153,15 @@ pub fn resolve_variables(
     Ok((type_defs, var_vals))
 }
 
-pub const fn is_valid_variable_name_char(c: char) -> bool {
-    matches!(c, '_' | 'a'..='z' | 'A'..='Z' | '0'..='9')
-}
+pub fn is_valid_variable_name(s: &str) -> bool {
+    let mut cs = s.chars();
+    let Some(fst) = cs.next() else { return false };
 
-/// Returns `true` if all bytes in `b` after the offset `start_offset` are valid
-/// ASCII variable name characters.
-const fn all_bytes_valid(b: &[u8], start_offset: usize) -> bool {
-    let mut i = start_offset;
-    while i < b.len() {
-        if !is_valid_variable_name_char(b[i] as char) {
-            return false;
-        }
-        i += 1;
+    match fst {
+        '_' => if s.len() > 1 {},
+        'a'..='z' | 'A'..='Z' => {}
+        _ => return false,
     }
-    true
-}
 
-pub const fn is_valid_variable_name(s: &str) -> bool {
-    let b = s.as_bytes();
-    match b {
-        [b'a'..=b'z', ..] | [b'A'..=b'Z', ..] => all_bytes_valid(b, 1),
-        [b'_', ..] if b.len() > 1 => all_bytes_valid(b, 1),
-        _ => false,
-    }
+    cs.all(|c| matches!(c, '_' | 'a' ..= 'z' | 'A' ..= 'Z' | '0' ..= '9'))
 }
