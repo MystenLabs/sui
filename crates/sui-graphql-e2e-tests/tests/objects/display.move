@@ -137,24 +137,6 @@ module Test::boars {
 
 //# view-checkpoint
 
-//# run-graphql
-{
-  address(address: "@{A}") {
-    objectConnection {
-      nodes {
-        asMoveObject {
-          contents {
-            json
-            type {
-              repr
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
 //# run Test::boars::create_bear --sender A
 
 //# run Test::boars::update_display_faulty --sender A --args object(1,1)
@@ -166,7 +148,7 @@ module Test::boars {
 //# run-graphql
 {
   address(address: "@{A}") {
-    objectConnection {
+    objectConnection(filter: {type: "@{Test}::boars::Boar"}) {
       nodes {
         display {
           key
@@ -187,7 +169,7 @@ module Test::boars {
 //# run-graphql
 {
   address(address: "@{A}") {
-    objectConnection {
+    objectConnection(filter: {type: "@{Test}::boars::Boar"}) {
       nodes {
         display {
           key
@@ -208,7 +190,7 @@ module Test::boars {
 //# run-graphql
 {
   address(address: "@{A}") {
-    objectConnection {
+    objectConnection(filter: {type: "@{Test}::boars::Boar"}) {
       nodes {
         display {
           key
