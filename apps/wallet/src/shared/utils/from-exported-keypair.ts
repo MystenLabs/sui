@@ -1,24 +1,42 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ExportedKeypair, type Keypair } from '@mysten/sui.js/cryptography';
+import {
+	SIGNATURE_SCHEME_TO_FLAG,
+	type ExportedKeypair,
+	type Keypair,
+} from '@mysten/sui.js/cryptography';
 import { SUI_PRIVATE_KEY_PREFIX } from '@mysten/sui.js/cryptography/keypair';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { Secp256k1Keypair } from '@mysten/sui.js/keypairs/secp256k1';
 import { Secp256r1Keypair } from '@mysten/sui.js/keypairs/secp256r1';
-import { fromB64 } from '@mysten/sui.js/utils';
-import {bech32} from 'bech32';
+import { bech32 } from 'bech32';
 
 const PRIVATE_KEY_SIZE = 32;
 const LEGACY_PRIVATE_KEY_SIZE = 64;
-export function fromExportedKeypair(keypair: ExportedKeypair): Keypair {
-	const {prefix, words} = bech32.decode(keypair.privateKey);
-	const secretKey = new Uint8Array(bech32.fromWords(words));
 
+export function validateExportedKeypair(keypair: ExportedKeypair): ExportedKeypair {
+	const { prefix, words } = bech32.decode(keypair.privateKey);
 	if (prefix != SUI_PRIVATE_KEY_PREFIX) {
 		throw new Error('invalid key');
 	}
+	const extendedSecretKey = new Uint8Array(bech32.fromWords(words));
+	if (extendedSecretKey[0] !== SIGNATURE_SCHEME_TO_FLAG[keypair.schema]) {
+		throw new Error('Invalid key scheme');
+	}
+	return keypair;
+}
 
+export function fromExportedKeypair(keypair: ExportedKeypair): Keypair {
+	const { prefix, words } = bech32.decode(keypair.privateKey);
+	if (prefix != SUI_PRIVATE_KEY_PREFIX) {
+		throw new Error('invalid key');
+	}
+	const extendedSecretKey = new Uint8Array(bech32.fromWords(words));
+	if (extendedSecretKey[0] !== SIGNATURE_SCHEME_TO_FLAG[keypair.schema]) {
+		throw new Error('Invalid key scheme');
+	}
+	let secretKey = extendedSecretKey.slice(1);
 	switch (keypair.schema) {
 		case 'ED25519':
 			let pureSecretKey = secretKey;

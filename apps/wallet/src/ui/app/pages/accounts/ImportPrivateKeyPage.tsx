@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Text } from '_app/shared/text';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { hexToBytes } from '@noble/hashes/utils';
+import { validateExportedKeypair } from '_src/shared/utils/from-exported-keypair';
+import { ExportedKeypair } from '@mysten/sui.js/cryptography';
 import { useNavigate } from 'react-router-dom';
 
 import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
@@ -29,7 +29,10 @@ export function ImportPrivateKeyPage() {
 					onSubmit={({ privateKey }) => {
 						setAccountsFormValues({
 							type: 'imported',
-							keyPair: Ed25519Keypair.fromSecretKey(hexToBytes(privateKey).slice(0, 32)).export(),
+							keyPair: validateExportedKeypair({
+								schema: 'ED25519',
+								privateKey: privateKey,
+							} as ExportedKeypair),
 						});
 						navigate('/accounts/protect-account?accountType=imported');
 					}}

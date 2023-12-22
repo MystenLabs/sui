@@ -7,8 +7,7 @@ import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
 import { HDKey } from '@scure/bip32';
 
-import type { ExportedKeypair } from '../../cryptography/keypair.js';
-import { encodeSuiKeyPair, Keypair } from '../../cryptography/keypair.js';
+import { Keypair } from '../../cryptography/keypair.js';
 import { isValidBIP32Path, mnemonicToSeed } from '../../cryptography/mnemonics.js';
 import type { PublicKey } from '../../cryptography/publickey.js';
 import type { SignatureScheme } from '../../cryptography/signature-scheme.js';
@@ -108,6 +107,12 @@ export class Secp256r1Keypair extends Keypair {
 	getPublicKey(): PublicKey {
 		return new Secp256r1PublicKey(this.keypair.publicKey);
 	}
+	/**
+	 * The secret key bytes for this keypair
+	 */
+	getSecretKeyBytes(): Uint8Array {
+		return this.keypair.secretKey;
+	}
 
 	async sign(data: Uint8Array) {
 		return this.signData(data);
@@ -141,12 +146,5 @@ export class Secp256r1Keypair extends Keypair {
 		// We use HDKey which is hardcoded to use Secp256k1 but since we only need the 32 bytes for the private key it's okay to use here as well.
 		const privateKey = HDKey.fromMasterSeed(mnemonicToSeed(mnemonics)).derive(path).privateKey;
 		return Secp256r1Keypair.fromSecretKey(privateKey!);
-	}
-
-	export(): ExportedKeypair {
-		return {
-			schema: 'Secp256r1',
-			privateKey: encodeSuiKeyPair(this.keypair.secretKey, this.getKeyScheme()),
-		};
 	}
 }

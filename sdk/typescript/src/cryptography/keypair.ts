@@ -17,18 +17,6 @@ export const PRIVATE_KEY_SIZE = 32;
 export const LEGACY_PRIVATE_KEY_SIZE = 64;
 export const SUI_PRIVATE_KEY_PREFIX = 'suiprivkey';
 
-export function encodeSuiKeyPair(bytes: Uint8Array, scheme: SignatureScheme): string {
-	if (bytes.length != PRIVATE_KEY_SIZE) {
-		throw new Error('Invalid bytes length');
-	}
-	const flag = SIGNATURE_SCHEME_TO_FLAG[scheme];
-
-	const privKeyBytes = new Uint8Array(bytes.length + 1);
-	privKeyBytes.set([flag]);
-	privKeyBytes.set(bytes, 1);
-	return bech32.encode(SUI_PRIVATE_KEY_PREFIX, bech32.toWords(privKeyBytes));
-}
-
 export type ExportedKeypair = {
 	schema: SignatureScheme;
 	privateKey: string;
@@ -98,11 +86,31 @@ export abstract class BaseSigner {
 	 * The public key for this keypair
 	 */
 	abstract getPublicKey(): PublicKey;
+
+	/**
+	 * The plain bytes for the secret key for this keypair.
+	 */
+	abstract getSecretKeyBytes(): Uint8Array;
 }
 
 /**
- * TODO: Document
+ * This returns an exported keypair object, schema is the signature
+ * scheme name, and the private key field is a Bech32 encoded string
+ * of 33-byte `flag || private_key` that starts with `suiprivkey`.
  */
 export abstract class Keypair extends BaseSigner {
-	abstract export(): ExportedKeypair;
+	export(): ExportedKeypair {
+		const plainBytes = this.getSecretKeyBytes();
+		if (plainBytes.length != PRIVATE_KEY_SIZE) {
+			throw new Error('Invwalid bytes length');
+		}
+		const flag = SIGNATURE_SCHEME_TO_FLAG[this.getKeyScheme()];
+		const privKeyBytes = new Uint8Array(plainBytes.length + 1);
+		privKeyBytes.set([flag]);
+		privKeyBytes.set(plainBytes, 1);
+		return {
+			schema: this.getKeyScheme(),
+			privateKey: bech32.encode(SUI_PRIVATE_KEY_PREFIX, bech32.toWords(privKeyBytes)),
+		};
+	}
 }

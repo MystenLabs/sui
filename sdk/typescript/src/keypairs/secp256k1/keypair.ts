@@ -7,8 +7,7 @@ import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
 import { HDKey } from '@scure/bip32';
 
-import type { ExportedKeypair } from '../../cryptography/keypair.js';
-import { encodeSuiKeyPair, Keypair } from '../../cryptography/keypair.js';
+import { Keypair } from '../../cryptography/keypair.js';
 import { isValidBIP32Path, mnemonicToSeed } from '../../cryptography/mnemonics.js';
 import type { PublicKey } from '../../cryptography/publickey.js';
 import type { SignatureScheme } from '../../cryptography/signature-scheme.js';
@@ -108,6 +107,12 @@ export class Secp256k1Keypair extends Keypair {
 	getPublicKey(): PublicKey {
 		return new Secp256k1PublicKey(this.keypair.publicKey);
 	}
+	/**
+	 * The secret key bytes for this keypair
+	 */
+	getSecretKeyBytes(): Uint8Array {
+		return this.keypair.secretKey;
+	}
 
 	async sign(data: Uint8Array) {
 		return this.signData(data);
@@ -146,12 +151,5 @@ export class Secp256k1Keypair extends Keypair {
 			publicKey: key.publicKey,
 			secretKey: key.privateKey,
 		});
-	}
-
-	export(): ExportedKeypair {
-		return {
-			schema: 'Secp256k1',
-			privateKey: encodeSuiKeyPair(this.keypair.secretKey, this.getKeyScheme()),
-		};
 	}
 }

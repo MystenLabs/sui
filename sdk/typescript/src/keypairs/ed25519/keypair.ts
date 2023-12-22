@@ -3,8 +3,7 @@
 
 import nacl from 'tweetnacl';
 
-import type { ExportedKeypair } from '../../cryptography/keypair.js';
-import { encodeSuiKeyPair, Keypair, PRIVATE_KEY_SIZE } from '../../cryptography/keypair.js';
+import { Keypair, PRIVATE_KEY_SIZE } from '../../cryptography/keypair.js';
 import { isValidHardenedPath, mnemonicToSeedHex } from '../../cryptography/mnemonics.js';
 import type { SignatureScheme } from '../../cryptography/signature-scheme.js';
 import { derivePath } from './ed25519-hd-key.js';
@@ -117,6 +116,13 @@ export class Ed25519Keypair extends Keypair {
 		return new Ed25519PublicKey(this.keypair.publicKey);
 	}
 
+	/**
+	 * The secret key bytes for this Ed25519 keypair
+	 */
+	getSecretKeyBytes(): Uint8Array {
+		return this.keypair.secretKey.slice(0, PRIVATE_KEY_SIZE);
+	}
+
 	async sign(data: Uint8Array) {
 		return this.signData(data);
 	}
@@ -163,18 +169,5 @@ export class Ed25519Keypair extends Keypair {
 		const { key } = derivePath(path, seedHex);
 
 		return Ed25519Keypair.fromSecretKey(key);
-	}
-
-	/**
-	 * This returns an exported keypair object, the private key field is Bech32 encoded pure 32-byte seed.
-	 */
-	export(): ExportedKeypair {
-		return {
-			schema: 'ED25519',
-			privateKey: encodeSuiKeyPair(
-				this.keypair.secretKey.slice(0, PRIVATE_KEY_SIZE),
-				this.getKeyScheme(),
-			),
-		};
 	}
 }

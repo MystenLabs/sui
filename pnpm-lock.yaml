@@ -619,6 +619,9 @@ importers:
       '@tanstack/react-query-persist-client':
         specifier: ^4.29.25
         version: 4.29.25(@tanstack/react-query@5.0.0)
+      bech32:
+        specifier: ^2.0.0
+        version: 2.0.0
       bignumber.js:
         specifier: ^9.1.1
         version: 9.1.1
@@ -1597,8 +1600,6 @@ importers:
       wasm-pack:
         specifier: ^0.12.1
         version: 0.12.1
-
-  sdk/move-binary-format/pkg: {}
 
   sdk/suins-toolkit:
     dependencies:
