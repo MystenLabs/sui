@@ -31,6 +31,7 @@ use mysten_metrics::{spawn_monitored_task, MonitoredFutureExt};
 use prometheus::Registry;
 use sui_config::node::CheckpointExecutorConfig;
 use sui_macros::{fail_point, fail_point_async};
+use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
@@ -68,6 +69,31 @@ type CheckpointExecutionBuffer = FuturesOrdered<JoinHandle<VerifiedCheckpoint>>;
 
 /// The interval to log checkpoint progress, in # of checkpoints processed.
 const CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL: u64 = 5000;
+
+// RunWithRange is used to specify the ending epoch/checkpoint to process.
+// this is intended for use with disaster recoery debugging and verification workflows, never in normal operations
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum RunWithRange {
+    Epoch(EpochId),
+    Checkpoint(CheckpointSequenceNumber),
+    None,
+}
+
+impl RunWithRange {
+    // checks if we have hit a condition specified by run_with_range enum type
+    fn matches_epoch(&self, epoch_id: EpochId) -> bool {
+        matches!(self, RunWithRange::Epoch(e) if *e == epoch_id)
+    }
+    fn matches_checkpoint(&self, seq_num: CheckpointSequenceNumber) -> bool {
+        matches!(self, RunWithRange::Checkpoint(seq) if *seq == seq_num)
+    }
+}
+
+#[derive(PartialEq, Eq)]
+pub enum StopReason {
+    EpochComplete,
+    RunWithRangeCondition,
+}
 
 pub struct CheckpointExecutor {
     mailbox: broadcast::Receiver<VerifiedCheckpoint>,
@@ -121,7 +147,11 @@ impl CheckpointExecutor {
     /// Ensure that all checkpoints in the current epoch will be executed.
     /// We don't technically need &mut on self, but passing it to make sure only one instance is
     /// running at one time.
-    pub async fn run_epoch(&mut self, epoch_store: Arc<AuthorityPerEpochStore>) {
+    pub async fn run_epoch(
+        &mut self,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        run_with_range: RunWithRange,
+    ) -> StopReason {
         debug!(
             "Checkpoint executor running for epoch {}",
             epoch_store.epoch(),
@@ -129,6 +159,15 @@ impl CheckpointExecutor {
         self.metrics
             .checkpoint_exec_epoch
             .set(epoch_store.epoch() as i64);
+
+        // check if we want to run this epoch based on RunWithRange condition value
+        if run_with_range.matches_epoch(epoch_store.epoch()) {
+            info!(
+                "RunWithRange condition satisfied at epoch {:?}",
+                epoch_store.epoch()
+            );
+            return StopReason::RunWithRangeCondition;
+        }
 
         // Decide the first checkpoint to schedule for execution.
         // If we haven't executed anything in the past, we schedule checkpoint 0.
@@ -170,7 +209,7 @@ impl CheckpointExecutor {
                     "Pending checkpoint execution buffer should be empty after processing last checkpoint of epoch",
                 );
                 fail_point_async!("crash");
-                return;
+                return StopReason::EpochComplete;
             }
             self.schedule_synced_checkpoints(
                 &mut pending,
@@ -190,7 +229,16 @@ impl CheckpointExecutor {
                 // guarantees that we will also ratchet the watermarks in order.
                 Some(Ok(checkpoint)) = pending.next() => {
                     self.process_executed_checkpoint(&checkpoint);
-                    highest_executed = Some(checkpoint);
+                    highest_executed = Some(checkpoint.clone());
+
+                    let (checkpoint_seq, _) = checkpoint.into_summary_and_sequence();
+                    if run_with_range.matches_checkpoint(checkpoint_seq) {
+                        info!(
+                            "RunWithRange condition satisifed at checkpoint sequence number {:?}",
+                            checkpoint_seq
+                        );
+                        return StopReason::RunWithRangeCondition;
+                    }
 
                     // Estimate TPS every 10k transactions or 30 sec
                     let elapsed = now_time.elapsed().as_millis();

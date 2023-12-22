@@ -34,13 +34,12 @@ use tap::tap::TapFallible;
 use tokio::runtime::Handle;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
-use tokio::sync::{watch, Mutex};
+use tokio::sync::{mpsc, watch, Mutex};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tracing::{debug, error, warn};
 use tracing::{error_span, info, Instrument};
 
-use checkpoint_executor::CheckpointExecutor;
 use fastcrypto_zkp::bn254::zk_login::JWK;
 pub use handle::SuiNodeHandle;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
@@ -59,6 +58,7 @@ use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_server::{ValidatorService, ValidatorServiceMetrics};
 use sui_core::checkpoints::checkpoint_executor;
+use sui_core::checkpoints::checkpoint_executor::{CheckpointExecutor, RunWithRange, StopReason};
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
     SubmitCheckpointToConsensus,
@@ -231,6 +231,9 @@ pub struct SuiNode {
 
     _state_snapshot_uploader_handle: Option<broadcast::Sender<()>>,
     _kv_store_uploader_handle: Option<oneshot::Sender<()>>,
+
+    // Channel to allow signaling upstream to shutdown sui-node
+    _shutdown_tx_channel: Option<mpsc::Sender<()>>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -248,8 +251,17 @@ impl SuiNode {
         config: &NodeConfig,
         registry_service: RegistryService,
         custom_rpc_runtime: Option<Handle>,
+        run_with_range: checkpoint_executor::RunWithRange,
+        shutdown_tx_channel: Option<mpsc::Sender<()>>,
     ) -> Result<Arc<SuiNode>> {
-        Self::start_async(config, registry_service, custom_rpc_runtime).await
+        Self::start_async(
+            config,
+            registry_service,
+            custom_rpc_runtime,
+            run_with_range,
+            shutdown_tx_channel,
+        )
+        .await
     }
 
     fn start_jwk_updater(
@@ -391,6 +403,8 @@ impl SuiNode {
         config: &NodeConfig,
         registry_service: RegistryService,
         custom_rpc_runtime: Option<Handle>,
+        run_with_range: checkpoint_executor::RunWithRange,
+        shutdown_tx_channel: Option<mpsc::Sender<()>>,
     ) -> Result<Arc<SuiNode>> {
         NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(config);
         let mut config = config.clone();
@@ -632,7 +646,7 @@ impl SuiNode {
         let (end_of_epoch_channel, end_of_epoch_receiver) =
             broadcast::channel(config.end_of_epoch_broadcast_channel_capacity);
 
-        let transaction_orchestrator = if is_full_node {
+        let transaction_orchestrator = if is_full_node && run_with_range == RunWithRange::None {
             Some(Arc::new(
                 TransactiondOrchestrator::new_with_network_clients(
                     state.clone(),
@@ -727,12 +741,15 @@ impl SuiNode {
             _state_archive_handle: state_archive_handle,
             _state_snapshot_uploader_handle: state_snapshot_handle,
             _kv_store_uploader_handle: kv_store_uploader_handle,
+            _shutdown_tx_channel: shutdown_tx_channel,
         };
 
         info!("SuiNode started!");
         let node = Arc::new(node);
         let node_copy = node.clone();
-        spawn_monitored_task!(async move { Self::monitor_reconfiguration(node_copy).await });
+        spawn_monitored_task!(async move {
+            Self::monitor_reconfiguration(node_copy, run_with_range).await
+        });
 
         Ok(node)
     }
@@ -1342,7 +1359,10 @@ impl SuiNode {
 
     /// This function awaits the completion of checkpoint execution of the current epoch,
     /// after which it iniitiates reconfiguration of the entire system.
-    pub async fn monitor_reconfiguration(self: Arc<Self>) -> Result<()> {
+    pub async fn monitor_reconfiguration(
+        self: Arc<Self>,
+        run_with_range: RunWithRange,
+    ) -> Result<()> {
         let mut checkpoint_executor = CheckpointExecutor::new(
             self.state_sync.subscribe_to_synced_checkpoints(),
             self.checkpoint_store.clone(),
@@ -1383,7 +1403,20 @@ impl SuiNode {
                     .submit(transaction, None, &cur_epoch_store)?;
             }
 
-            checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
+            let stop_conditon = checkpoint_executor
+                .run_epoch(cur_epoch_store.clone(), run_with_range)
+                .await;
+
+            if stop_conditon == StopReason::RunWithRangeCondition {
+                if let Some(shutdown_channel) = &self._shutdown_tx_channel {
+                    shutdown_channel
+                        .send(())
+                        .await
+                        .expect("RunWithRangeCondition met but failed to send shutdown message");
+                    return Ok(());
+                }
+            }
+
             let latest_system_state = self
                 .state
                 .get_sui_system_state_object_during_reconfig()
