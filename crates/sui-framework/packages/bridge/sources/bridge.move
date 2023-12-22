@@ -65,6 +65,7 @@ module bridge::bridge {
     const EAlreadyClaimed: u64 = 8;
     const ERecordAlreadyExists: u64 = 9;
     const EBridgeUnavailable: u64 = 10;
+    const EUnexpectedOperation: u64 = 11;
 
     const CURRENT_VERSION: u64 = 1;
 
@@ -268,7 +269,7 @@ module bridge::bridge {
         } else if (message::emergency_op_type(&payload) == UNFREEZE) {
             inner.frozen == false;
         } else {
-            abort 0
+            abort EUnexpectedOperation
         };
     }
 

@@ -27,7 +27,9 @@ module bridge::message {
 
     const CURRENT_MESSAGE_VERSION: u8 = 1;
 
-    struct BridgeMessage has copy, store, drop {
+    const ETrailingBytes: u64 = 0;
+
+    struct BridgeMessage has copy, drop, store {
         message_type: u8,
         message_version: u8,
         seq_num: u64,
@@ -61,6 +63,7 @@ module bridge::message {
         let target_address = bcs::peel_vec_u8(&mut bcs);
         let token_type = bcs::peel_u8(&mut bcs);
         let amount = bcs::peel_u64(&mut bcs);
+        assert!(vector::is_empty(&bcs::into_remainder_bytes(bcs)), ETrailingBytes);
         TokenPayload {
             source_chain,
             sender_address,
@@ -73,12 +76,13 @@ module bridge::message {
 
     public fun extract_emergency_op_payload(message: &BridgeMessage): EmergencyOp {
         let bcs = bcs::new(message.payload);
+        assert!(vector::is_empty(&bcs::into_remainder_bytes(bcs)), ETrailingBytes);
         EmergencyOp {
             op_type: bcs::peel_u8(&mut bcs)
         }
     }
 
-    public fun serialise_message(message: BridgeMessage): vector<u8> {
+    public fun serialize_message(message: BridgeMessage): vector<u8> {
         let BridgeMessage {
             message_type,
             message_version: version,
@@ -138,7 +142,7 @@ module bridge::message {
         let source_chain = if (self.message_type == message_types::token()) {
             let bcs = bcs::new(self.payload);
             bcs::peel_u8(&mut bcs)
-        }else {
+        } else {
             0
         };
         create_key(source_chain, self.message_type, self.seq_num)
@@ -180,7 +184,7 @@ module bridge::message {
     }
 
     #[test_only]
-    public fun deserialise_message(message: vector<u8>): BridgeMessage {
+    public fun deserialize_message(message: vector<u8>): BridgeMessage {
         let bcs = bcs::new(message);
         BridgeMessage {
             message_type: bcs::peel_u8(&mut bcs),
@@ -212,14 +216,14 @@ module bridge::message {
             })
         };
 
-        let message = serialise_message(token_bridge_message);
+        let message = serialize_message(token_bridge_message);
 
         let expected_msg = hex::decode(
             b"00010a00000000000000012000000000000000000000000000000000000000000000000000000000000000640b2000000000000000000000000000000000000000000000000000000000000000c8033930000000000000",
         );
 
         assert!(message == expected_msg, 0);
-        assert!(token_bridge_message == deserialise_message(message), 0);
+        assert!(token_bridge_message == deserialize_message(message), 0);
 
         coin::burn_for_testing(coin);
         test_scenario::end(scenario);
