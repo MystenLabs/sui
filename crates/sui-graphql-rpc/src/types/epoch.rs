@@ -40,7 +40,6 @@ impl Epoch {
                     "Can't convert system_state into SystemState. Error: {e}",
                 ))
             })?;
-
         let active_validators = convert_to_validators(system_state.active_validators, None);
         let validator_set = ValidatorSet {
             total_stake: Some(BigInt::from(self.stored.total_stake)),

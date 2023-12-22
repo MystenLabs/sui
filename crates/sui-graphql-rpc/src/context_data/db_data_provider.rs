@@ -691,6 +691,19 @@ impl PgManager {
             .transpose()
     }
 
+    /// Retrieve the validator APYs
+    pub(crate) async fn fetch_validator_apys(
+        &self,
+        address: &NativeSuiAddress,
+    ) -> Result<Option<f64>, Error> {
+        let governance_api = GovernanceReadApiV2::new(self.inner.clone());
+
+        governance_api
+            .get_validator_apy(address)
+            .await
+            .map_err(|e| Error::Internal(format!("{e}")))
+    }
+
     pub(crate) async fn fetch_latest_epoch(&self) -> Result<Epoch, Error> {
         let result = self
             .get_epoch(None)

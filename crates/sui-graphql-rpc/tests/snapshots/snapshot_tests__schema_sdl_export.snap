@@ -2736,6 +2736,11 @@ type Validator {
 	The addresses of other validators this validator has reported.
 	"""
 	reportRecords: [Address!]
+	"""
+	The APY of this validator in basis points.
+	To get the APY in percentage, divide by 100.
+	"""
+	apy: Int
 }
 
 type ValidatorCredentials {
