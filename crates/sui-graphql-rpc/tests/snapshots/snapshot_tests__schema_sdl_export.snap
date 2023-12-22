@@ -1082,7 +1082,7 @@ type MoveModule {
 	"""
 	Iterate through the structs defined in this module.
 	"""
-	structConnection(first: Int, after: String, last: Int, before: String): MoveStructConnection
+	structs(first: Int, after: String, last: Int, before: String): MoveStructConnection
 	"""
 	Look-up the signature of a function defined in this module, by its name.
 	"""
