@@ -3,6 +3,7 @@
 
 use std::str::FromStr;
 
+use crate::key_identity::KeyIdentity;
 use crate::keytool::read_authority_keypair_from_file;
 use crate::keytool::read_keypair_from_file;
 
@@ -471,6 +472,7 @@ async fn test_sign_command() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(1));
     let binding = keystore.addresses();
     let sender = binding.first().unwrap();
+    let alias = keystore.get_alias_by_address(sender).unwrap();
 
     // Create a dummy TransactionData
     let gas = (
@@ -492,7 +494,7 @@ async fn test_sign_command() -> Result<(), anyhow::Error> {
 
     // Sign an intent message for the transaction data and a passed-in intent with scope as PersonalMessage.
     KeyToolCommand::Sign {
-        address: *sender,
+        address: KeyIdentity::Address(*sender),
         data: Base64::encode(bcs::to_bytes(&tx_data)?),
         intent: Some(Intent::sui_app(IntentScope::PersonalMessage)),
     }
@@ -501,7 +503,17 @@ async fn test_sign_command() -> Result<(), anyhow::Error> {
 
     // Sign an intent message for the transaction data without intent passed in, so default is used.
     KeyToolCommand::Sign {
-        address: *sender,
+        address: KeyIdentity::Address(*sender),
+        data: Base64::encode(bcs::to_bytes(&tx_data)?),
+        intent: None,
+    }
+    .execute(&mut keystore)
+    .await?;
+
+    // Sign an intent message for the transaction data without intent passed in, so default is used.
+    // Use alias for signing instead of the address
+    KeyToolCommand::Sign {
+        address: KeyIdentity::Alias(alias),
         data: Base64::encode(bcs::to_bytes(&tx_data)?),
         intent: None,
     }

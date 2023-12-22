@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::key_identity::{get_identity_address_from_keystore, KeyIdentity};
 use crate::zklogin_commands_util::{perform_zk_login_test_tx, read_cli_line};
 use anyhow::anyhow;
 use bip32::DerivationPath;
 use clap::*;
 use fastcrypto::ed25519::Ed25519KeyPair;
-use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding, Hex};
+use fastcrypto::encoding::{Base64, Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::secp256k1::recoverable::Secp256k1Sig;
 use fastcrypto::secp256k1::Secp256k1KeyPair;
@@ -165,13 +166,13 @@ pub enum KeyToolCommand {
     /// [enum SuiKeyPair] (Base64 encoded of 33-byte `flag || privkey`) or `type AuthorityKeyPair`
     /// (Base64 encoded `privkey`). It prints its Base64 encoded public key and the key scheme flag.
     Show { file: PathBuf },
-    /// Create signature using the private key for for the given address in sui keystore.
+    /// Create signature using the private key for for the given address (or its alias) in sui keystore.
     /// Any signature commits to a [struct IntentMessage] consisting of the Base64 encoded
     /// of the BCS serialized transaction bytes itself and its intent. If intent is absent,
     /// default will be used.
     Sign {
-        #[clap(long, value_parser = decode_bytes_hex::<SuiAddress>)]
-        address: SuiAddress,
+        #[clap(long)]
+        address: KeyIdentity,
         #[clap(long)]
         data: String,
         #[clap(long)]
@@ -722,6 +723,7 @@ impl KeyToolCommand {
                 data,
                 intent,
             } => {
+                let address = get_identity_address_from_keystore(address, keystore)?;
                 let intent = intent.unwrap_or_else(Intent::sui_transaction);
                 let intent_clone = intent.clone();
                 let msg: TransactionData =

@@ -59,6 +59,7 @@ pub trait AccountKeystore: Send + Sync {
     }
     /// Get alias of address
     fn get_alias_by_address(&self, address: &SuiAddress) -> Result<String, anyhow::Error>;
+    fn get_address_by_alias(&self, alias: String) -> Result<&SuiAddress, anyhow::Error>;
     /// Check if an alias exists by its name
     fn alias_exists(&self, alias: &str) -> bool {
         self.alias_names().contains(&alias)
@@ -269,7 +270,16 @@ impl AccountKeystore for FileBasedKeystore {
         }
     }
 
-    /// Get alias of address
+    /// Get the address by its alias
+    fn get_address_by_alias(&self, alias: String) -> Result<&SuiAddress, anyhow::Error> {
+        self.addresses_with_alias()
+            .iter()
+            .find(|x| x.1.alias == alias)
+            .ok_or_else(|| anyhow!("Cannot resolve alias {alias} to an address"))
+            .map(|x| x.0)
+    }
+
+    /// Get the alias if it exists, or return an error if it does not exist.
     fn get_alias_by_address(&self, address: &SuiAddress) -> Result<String, anyhow::Error> {
         match self.aliases.get(address) {
             Some(alias) => Ok(alias.alias.clone()),
@@ -517,6 +527,15 @@ impl AccountKeystore for InMemKeystore {
             Some(alias) => Ok(alias.alias.clone()),
             None => bail!("Cannot find alias for address {address}"),
         }
+    }
+
+    /// Get the address by its alias
+    fn get_address_by_alias(&self, alias: String) -> Result<&SuiAddress, anyhow::Error> {
+        self.addresses_with_alias()
+            .iter()
+            .find(|x| x.1.alias == alias)
+            .ok_or_else(|| anyhow!("Cannot resolve alias {alias} to an address"))
+            .map(|x| x.0)
     }
 
     /// This function returns an error if the provided alias already exists. If the alias
