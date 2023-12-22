@@ -207,7 +207,7 @@ impl Validator {
             .data_unchecked::<PgManager>()
             .fetch_validator_apys(&self.validator_summary.sui_address)
             .await?
-            .map(|x| (x * 100_00.0) as u64))
+            .map(|x| (x * 10000.0) as u64))
     }
 }
 
