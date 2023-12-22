@@ -44,8 +44,9 @@ impl Query {
 
     /// Range of checkpoints that the RPC has data available for (for data
     /// that can be tied to a particular checkpoint).
-    async fn available_range(&self) -> Result<AvailableRange> {
-        Ok(AvailableRange)
+    async fn available_range(&self, ctx: &Context<'_>) -> Result<AvailableRange> {
+        let (first, last) = ctx.data_unchecked::<PgManager>().available_range().await?;
+        Ok(AvailableRange { first, last })
     }
 
     /// Configuration for this RPC service

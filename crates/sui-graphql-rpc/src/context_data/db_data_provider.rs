@@ -231,14 +231,6 @@ impl PgManager {
         .await
     }
 
-    async fn get_earliest_complete_checkpoint(&self) -> Result<Option<StoredCheckpoint>, Error> {
-        let query = move || Ok(QueryBuilder::get_earliest_complete_checkpoint());
-        self.run_query_async_with_cost(query, |query| {
-            move |conn| query.get_result::<StoredCheckpoint>(conn).optional()
-        })
-        .await
-    }
-
     async fn get_display_by_obj_type(
         &self,
         object_type: String,
@@ -749,15 +741,6 @@ impl PgManager {
         stored_checkpoint.map(Checkpoint::try_from).transpose()
     }
 
-    pub(crate) async fn fetch_earliest_complete_checkpoint(
-        &self,
-    ) -> Result<Option<Checkpoint>, Error> {
-        self.get_earliest_complete_checkpoint()
-            .await?
-            .map(Checkpoint::try_from)
-            .transpose()
-    }
-
     pub(crate) async fn fetch_display_object_by_type(
         &self,
         object_type: &StructTag,
@@ -1171,6 +1154,14 @@ impl PgManager {
         Ok(record.target_address.map(|address| Address {
             address: SuiAddress::from_array(address.to_inner()),
         }))
+    }
+
+    pub(crate) async fn available_range(&self) -> Result<(u64, u64), Error> {
+        Ok(self
+            .inner
+            .spawn_blocking(|this| this.get_consistent_read_range())
+            .await
+            .map(|(start, end)| (start as u64, end as u64))?)
     }
 
     pub(crate) async fn default_name_service_name(
