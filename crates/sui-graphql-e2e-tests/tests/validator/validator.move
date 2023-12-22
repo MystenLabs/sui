@@ -19,9 +19,13 @@
 
 //# run 0x3::sui_system::request_set_gas_price --sender validator_0 --args object(0x5) object(6,0) 99999u64
 
-//# create-checkpoint
-
-//# advance-epoch
+//# run-graphql
+# Since we set it at the init, it should be the same as 234
+{
+  latestSuiSystemState {
+    referenceGasPrice
+  }
+}
 
 //# create-checkpoint
 

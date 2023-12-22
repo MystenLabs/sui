@@ -1,4 +1,4 @@
-processed 24 tasks
+processed 23 tasks
 
 init:
 A: object(0,0), C: object(0,1), validator_0: object(0,2)
@@ -34,59 +34,82 @@ task 7 'run'. lines 20-20:
 mutated: object(_), 0x0000000000000000000000000000000000000000000000000000000000000005, object(0,2), object(6,0)
 gas summary: computation_cost: 1000000, storage_cost: 15557200,  storage_rebate: 15401628, non_refundable_storage_fee: 155572
 
-task 8 'create-checkpoint'. lines 22-22:
+task 8 'run-graphql'. lines 22-28:
+Response: {
+  "data": {
+    "latestSuiSystemState": {
+      "referenceGasPrice": "1000"
+    }
+  }
+}
+
+task 9 'create-checkpoint'. lines 30-30:
 Checkpoint created: 3
 
-task 9 'advance-epoch'. lines 24-24:
+task 10 'publish'. lines 32-60:
+created: object(10,0), object(10,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1415000000, storage_cost: 1936936000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 11 'publish'. lines 62-90:
+created: object(11,0), object(11,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1415000000, storage_cost: 1936936000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12 'publish'. lines 93-121:
+created: object(12,0), object(12,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1415000000, storage_cost: 1936936000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13 'publish'. lines 123-151:
+created: object(13,0), object(13,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1415000000, storage_cost: 1936936000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 14 'publish'. lines 153-181:
+created: object(14,0), object(14,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1415000000, storage_cost: 1936936000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 15 'publish'. lines 183-211:
+created: object(15,0), object(15,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1415000000, storage_cost: 1936936000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16 'publish'. lines 213-241:
+created: object(16,0), object(16,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1415000000, storage_cost: 1936936000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 17 'publish'. lines 243-271:
+created: object(17,0), object(17,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1415000000, storage_cost: 1936936000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 18 'publish'. lines 273-301:
+created: object(18,0), object(18,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1415000000, storage_cost: 1936936000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 19 'publish'. lines 303-333:
+created: object(19,0), object(19,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1415000000, storage_cost: 1936936000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 20 'create-checkpoint'. lines 334-334:
+Checkpoint created: 4
+
+task 21 'advance-epoch'. lines 336-338:
 Epoch advanced: 1
 
-task 10 'create-checkpoint'. lines 26-26:
-Checkpoint created: 5
-
-task 11 'publish'. lines 28-56:
-Error: Error checking transaction input objects: GasPriceUnderRGP { gas_price: 1000, reference_gas_price: 99999 }
-
-task 12 'publish'. lines 58-86:
-Error: Error checking transaction input objects: GasPriceUnderRGP { gas_price: 1000, reference_gas_price: 99999 }
-
-task 13 'publish'. lines 89-117:
-Error: Error checking transaction input objects: GasPriceUnderRGP { gas_price: 1000, reference_gas_price: 99999 }
-
-task 14 'publish'. lines 119-147:
-Error: Error checking transaction input objects: GasPriceUnderRGP { gas_price: 1000, reference_gas_price: 99999 }
-
-task 15 'publish'. lines 149-177:
-Error: Error checking transaction input objects: GasPriceUnderRGP { gas_price: 1000, reference_gas_price: 99999 }
-
-task 16 'publish'. lines 179-207:
-Error: Error checking transaction input objects: GasPriceUnderRGP { gas_price: 1000, reference_gas_price: 99999 }
-
-task 17 'publish'. lines 209-237:
-Error: Error checking transaction input objects: GasPriceUnderRGP { gas_price: 1000, reference_gas_price: 99999 }
-
-task 18 'publish'. lines 239-267:
-Error: Error checking transaction input objects: GasPriceUnderRGP { gas_price: 1000, reference_gas_price: 99999 }
-
-task 19 'publish'. lines 269-297:
-Error: Error checking transaction input objects: GasPriceUnderRGP { gas_price: 1000, reference_gas_price: 99999 }
-
-task 20 'publish'. lines 299-329:
-Error: Error checking transaction input objects: GasPriceUnderRGP { gas_price: 1000, reference_gas_price: 99999 }
-
-task 21 'create-checkpoint'. lines 330-330:
-Checkpoint created: 6
-
-task 22 'advance-epoch'. lines 332-334:
-Epoch advanced: 2
-
-task 23 'run-graphql'. lines 336-346:
+task 22 'run-graphql'. lines 340-350:
 Response: {
   "data": {
     "epoch": {
       "validatorSet": {
         "activeValidators": [
           {
-            "apy": 0,
+            "apy": 2,
             "name": "validator-0"
           }
         ]
