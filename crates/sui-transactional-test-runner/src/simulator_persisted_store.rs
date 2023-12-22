@@ -109,6 +109,7 @@ impl PersistedStore {
         protocol_version: ProtocolVersion,
         account_configs: Vec<AccountConfig>,
         validator_keys: Option<Vec<AccountKeyPair>>,
+        reference_gas_price: Option<u64>,
         path: Option<PathBuf>,
     ) -> (Simulacrum<R, Self>, PersistedStoreInnerReadOnlyWrapper)
     where
@@ -116,20 +117,21 @@ impl PersistedStore {
     {
         let path: PathBuf = path.unwrap_or(tempdir().unwrap().into_path());
 
-        let builder = ConfigBuilder::new_with_temp_dir()
+        let mut builder = ConfigBuilder::new_with_temp_dir()
             .rng(&mut rng)
             .with_chain_start_timestamp_ms(chain_start_timestamp_ms)
             .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
             .with_protocol_version(protocol_version)
             .with_accounts(account_configs);
 
-        let config = if let Some(validator_keys) = validator_keys {
-            builder
-                .deterministic_committee_validators(validator_keys)
-                .build()
-        } else {
-            builder.build()
+        if let Some(validator_keys) = validator_keys {
+            builder = builder.deterministic_committee_validators(validator_keys)
         };
+        if let Some(reference_gas_price) = reference_gas_price {
+            builder = builder.with_reference_gas_price(reference_gas_price)
+        };
+
+        let config = builder.build();
 
         let genesis = &config.genesis;
 
@@ -156,6 +158,7 @@ impl PersistedStore {
             chain_start_timestamp_ms,
             protocol_version,
             account_configs,
+            None,
             None,
             path,
         )

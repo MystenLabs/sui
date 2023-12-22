@@ -201,6 +201,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             protocol_config,
             is_simulator,
             custom_validator_account,
+            reference_gas_price,
         ) = match task_opt.map(|t| t.command) {
             Some((
                 InitCommand { named_addresses },
@@ -211,6 +212,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     shared_object_deletion,
                     simulator,
                     custom_validator_account,
+                    reference_gas_price,
                 },
             )) => {
                 let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -235,12 +237,16 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 if custom_validator_account && !simulator {
                     panic!("Can only set custom validator account in simulator mode");
                 }
+                if reference_gas_price.is_some() && !simulator {
+                    panic!("Can only set reference gas price in simulator mode");
+                }
                 (
                     map,
                     accounts,
                     protocol_config,
                     simulator,
                     custom_validator_account,
+                    reference_gas_price,
                 )
             }
             None => {
@@ -251,6 +257,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     protocol_config,
                     false,
                     false,
+                    None,
                 )
             }
         };
@@ -272,6 +279,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 additional_mapping,
                 &protocol_config,
                 custom_validator_account,
+                reference_gas_price,
             )
             .await
         } else {
@@ -1864,6 +1872,7 @@ async fn init_sim_executor(
     additional_mapping: BTreeMap<String, NumericalAddress>,
     protocol_config: &ProtocolConfig,
     custom_validator_account: bool,
+    reference_gas_price: Option<u64>,
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
@@ -1925,6 +1934,7 @@ async fn init_sim_executor(
         protocol_config.version,
         acc_cfgs,
         key_copy.map(|q| vec![q]),
+        reference_gas_price,
         None,
     );
 
