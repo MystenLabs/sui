@@ -3,7 +3,7 @@
 
 use diesel::backend::Backend;
 use sui_indexer::{
-    schema_v2::{checkpoints, epochs, events, objects, transactions},
+    schema_v2::{checkpoints, display, epochs, events, objects, transactions},
     types_v2::OwnerType,
 };
 
@@ -44,6 +44,7 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     /// related to that checkpoint.
     fn get_earliest_complete_checkpoint() -> checkpoints::BoxedQuery<'static, DB>;
     fn get_latest_checkpoint() -> checkpoints::BoxedQuery<'static, DB>;
+    fn get_display_by_obj_type(object_type: String) -> display::BoxedQuery<'static, DB>;
     fn multi_get_txs(
         cursor: Option<i64>,
         descending_order: bool,

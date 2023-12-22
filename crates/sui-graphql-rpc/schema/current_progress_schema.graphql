@@ -450,6 +450,26 @@ ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ
 """
 scalar DateTime
 
+"""
+The set of named templates defined on-chain for the type of this object,
+to be handled off-chain. The server substitutes data from the object
+into these templates to generate a display string per template.
+"""
+type DisplayEntry {
+	"""
+	The identifier for a particular template string of the Display object.
+	"""
+	key: String!
+	"""
+	The template string for the key with placeholder values substituted.
+	"""
+	value: String
+	"""
+	An error string describing why the template could not be rendered.
+	"""
+	error: String
+}
+
 type DynamicField {
 	"""
 	The string type, data, and serialized value of the DynamicField's 'name' field.
@@ -1371,6 +1391,12 @@ type Object implements ObjectOwner {
 	This number is recalculated based on the present storage gas price.
 	"""
 	storageRebate: BigInt
+	"""
+	The set of named templates defined on-chain for the type of this object,
+	to be handled off-chain. The server substitutes data from the object
+	into these templates to generate a display string per template.
+	"""
+	display: [DisplayEntry!]
 	"""
 	The Base64 encoded bcs serialization of the object's content.
 	"""

@@ -42,13 +42,14 @@ use crate::{
 };
 use async_graphql::connection::{Connection, Edge};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use move_core_types::language_storage::StructTag;
 use std::{collections::BTreeMap, str::FromStr};
 use sui_indexer::{
     apis::GovernanceReadApiV2,
     indexer_reader::IndexerReader,
     models_v2::{
-        checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, events::StoredEvent,
-        objects::StoredObject, transactions::StoredTransaction,
+        checkpoints::StoredCheckpoint, display::StoredDisplay, epoch::StoredEpochInfo,
+        events::StoredEvent, objects::StoredObject, transactions::StoredTransaction,
     },
     schema_v2::transactions,
     types_v2::OwnerType,
@@ -235,6 +236,17 @@ impl PgManager {
         self.run_query_async_with_cost(query, |query| {
             move |conn| query.get_result::<StoredCheckpoint>(conn).optional()
         })
+        .await
+    }
+
+    async fn get_display_by_obj_type(
+        &self,
+        object_type: String,
+    ) -> Result<Option<StoredDisplay>, Error> {
+        self.run_query_async_with_cost(
+            move || Ok(QueryBuilder::get_display_by_obj_type(object_type.clone())),
+            |query| move |conn| query.get_result::<StoredDisplay>(conn).optional(),
+        )
         .await
     }
 
@@ -744,6 +756,14 @@ impl PgManager {
             .await?
             .map(Checkpoint::try_from)
             .transpose()
+    }
+
+    pub(crate) async fn fetch_display_object_by_type(
+        &self,
+        object_type: &StructTag,
+    ) -> Result<Option<StoredDisplay>, Error> {
+        let object_type = object_type.to_canonical_string(/* with_prefix */ true);
+        self.get_display_by_obj_type(object_type).await
     }
 
     pub(crate) async fn fetch_chain_identifier(&self) -> Result<String, Error> {
