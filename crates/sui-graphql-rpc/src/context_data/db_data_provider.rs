@@ -1205,6 +1205,16 @@ impl PgManager {
         Ok(Some(domain.to_string()))
     }
 
+    pub(crate) async fn fetch_sui_system_state(
+        &self,
+        epoch_id: u64,
+    ) -> Result<NativeSuiSystemStateSummary, Error> {
+        Ok(self
+            .inner
+            .spawn_blocking(move |this| this.get_epoch_sui_system_state(Some(epoch_id)))
+            .await?)
+    }
+
     pub(crate) async fn fetch_latest_sui_system_state(
         &self,
     ) -> Result<SuiSystemStateSummary, Error> {

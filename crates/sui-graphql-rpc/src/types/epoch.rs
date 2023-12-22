@@ -34,12 +34,8 @@ impl Epoch {
 
     /// Validator related properties, including the active validators
     async fn validator_set(&self, ctx: &Context<'_>) -> Result<Option<ValidatorSet>> {
-        let system_state: NativeSuiSystemStateSummary =
-            bcs::from_bytes(&self.system_state_summary(ctx)).map_err(|e| {
-                Error::Internal(format!(
-                    "Can't convert system_state into SystemState. Error: {e}",
-                ))
-            })?;
+        let system_state = self.system_state(ctx).await?;
+
         let active_validators = convert_to_validators(system_state.active_validators, None);
         let validator_set = ValidatorSet {
             total_stake: Some(BigInt::from(self.stored.total_stake)),
@@ -174,6 +170,14 @@ impl Epoch {
             .fetch_txs(first, after, last, before, Some(new_filter))
             .await
             .extend()
+    }
+
+    #[graphql(skip)]
+    async fn system_state(&self, ctx: &Context<'_>) -> Result<NativeSuiSystemStateSummary, Error> {
+        Ok(ctx
+            .data_unchecked::<PgManager>()
+            .fetch_sui_system_state(self.stored.epoch as u64)
+            .await?)
     }
 }
 

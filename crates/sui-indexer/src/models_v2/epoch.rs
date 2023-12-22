@@ -33,7 +33,7 @@ pub struct StoredEpochInfo {
     pub epoch_commitments: Option<Vec<u8>>,
 }
 
-#[derive(Queryable)]
+#[derive(Queryable, Clone, Debug)]
 pub struct QueryableEpochInfo {
     pub epoch: i64,
     pub first_checkpoint_id: i64,
