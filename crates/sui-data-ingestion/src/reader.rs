@@ -16,7 +16,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
-use tracing::debug;
+use tracing::info;
 
 pub(crate) const ENV_VAR_LOCAL_READ_TIMEOUT_MS: &str = "LOCAL_READ_TIMEOUT_MS";
 
@@ -48,7 +48,7 @@ impl LocalReader {
             }
         }
         files.sort();
-        debug!(
+        info!(
             "local reader: current checkpoint number is {}. Unprocessed local files are {:?}",
             current_checkpoint_number, files
         );

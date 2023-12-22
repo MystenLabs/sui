@@ -4,15 +4,25 @@
 // TODO remove when integrated
 #![allow(unused)]
 
+use std::time::Duration;
+
 use anyhow::anyhow;
 use async_trait::async_trait;
 use axum::response::sse::Event;
 use ethers::types::{Address, U256};
 use serde::{Deserialize, Serialize};
-use sui_json_rpc_types::EventPage;
 use sui_json_rpc_types::{EventFilter, Page, SuiEvent};
+use sui_json_rpc_types::{
+    EventPage, SuiObjectDataOptions, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
+};
 use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
+use sui_types::base_types::ObjectRef;
+use sui_types::error::UserInputError;
 use sui_types::event;
+use sui_types::gas_coin::GasCoin;
+use sui_types::object::Owner;
+use sui_types::transaction::Transaction;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
@@ -20,6 +30,7 @@ use sui_types::{
     Identifier,
 };
 use tap::TapFallible;
+use tracing::warn;
 
 use crate::error::{BridgeError, BridgeResult};
 use crate::events::SuiBridgeEvent;
@@ -154,7 +165,7 @@ where
             if let Some(bridge_event) = bridge_event {
                 bridge_events.push(bridge_event);
             } else {
-                tracing::warn!("Observed non recognized Sui event: {:?}", e);
+                warn!("Observed non recognized Sui event: {:?}", e);
             }
         }
         Ok(bridge_events)
@@ -165,6 +176,22 @@ where
             .get_bridge_committee()
             .await
             .map_err(|e| BridgeError::InternalError(format!("Can't get bridge committee: {e}")))
+    }
+
+    pub async fn execute_transaction_block_with_effects(
+        &self,
+        tx: sui_types::transaction::Transaction,
+    ) -> BridgeResult<SuiTransactionBlockResponse> {
+        self.inner.execute_transaction_block_with_effects(tx).await
+    }
+
+    pub async fn get_gas_data_panic_if_not_gas(
+        &self,
+        gas_object_id: ObjectID,
+    ) -> (GasCoin, ObjectRef, Owner) {
+        self.inner
+            .get_gas_data_panic_if_not_gas(gas_object_id)
+            .await
     }
 }
 
@@ -188,6 +215,16 @@ pub trait SuiClientInner: Send + Sync {
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, Self::Error>;
 
     async fn get_bridge_committee(&self) -> Result<BridgeCommittee, Self::Error>;
+
+    async fn execute_transaction_block_with_effects(
+        &self,
+        tx: Transaction,
+    ) -> Result<SuiTransactionBlockResponse, BridgeError>;
+
+    async fn get_gas_data_panic_if_not_gas(
+        &self,
+        gas_object_id: ObjectID,
+    ) -> (GasCoin, ObjectRef, Owner);
 }
 
 #[async_trait]
@@ -223,6 +260,47 @@ impl SuiClientInner for SuiSdkClient {
 
     async fn get_bridge_committee(&self) -> Result<BridgeCommittee, Self::Error> {
         unimplemented!()
+    }
+
+    async fn execute_transaction_block_with_effects(
+        &self,
+        tx: Transaction,
+    ) -> Result<SuiTransactionBlockResponse, BridgeError> {
+        match self.quorum_driver_api().execute_transaction_block(
+            tx,
+            SuiTransactionBlockResponseOptions::new().with_effects(),
+            Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
+        ).await {
+            Ok(response) => Ok(response),
+            Err(e) => return Err(BridgeError::SuiTxFailureGeneric(e.to_string())),
+        }
+    }
+
+    async fn get_gas_data_panic_if_not_gas(
+        &self,
+        gas_object_id: ObjectID,
+    ) -> (GasCoin, ObjectRef, Owner) {
+        loop {
+            match self
+                .read_api()
+                .get_object_with_options(
+                    gas_object_id,
+                    SuiObjectDataOptions::default().with_owner(),
+                )
+                .await
+                .map(|resp| resp.data)
+            {
+                Ok(Some(gas_obj)) => {
+                    let owner = gas_obj.owner.expect("Owner is requested");
+                    let gas_coin = GasCoin::try_from(&gas_obj).expect("Not a gas coin");
+                    return (gas_coin, gas_obj.object_ref(), owner);
+                }
+                other => {
+                    warn!("Can't get gas object: {:?}: {:?}", gas_object_id, other);
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                }
+            }
+        }
     }
 }
 

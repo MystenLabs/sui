@@ -56,3 +56,12 @@ network = "testnet"
 packages = [
     { path = "kiosk" },
 ]
+
+[[packages]]
+source = "Repository"
+[packages.values]
+repository = "https://github.com/kunalabs-io/sui-smart-contracts"
+branch = "master"
+packages = [
+    { path = "kai-finance" }
+]

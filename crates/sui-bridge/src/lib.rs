@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod abi;
+pub mod action_executor;
 pub mod client;
 pub mod crypto;
 pub mod error;

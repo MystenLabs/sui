@@ -71,6 +71,8 @@ exclude = [
 ]
 
 members = [
+    "consensus/config",
+    "consensus/core",
     "crates/anemo-benchmark",
     "crates/data-transform",
     "crates/mysten-common",
@@ -631,6 +633,9 @@ typed-store-derive = { path = "crates/typed-store-derive" }
 typed-store-error = { path = "crates/typed-store-error" }
 workspace-hack = "0.1.0"
 x = { path = "crates/x" }
+
+consensus-config = { path = "consensus/config" }
+consensus-core = { path = "consensus/core" }
 
 narwhal-config = { path = "narwhal/config" }
 narwhal-crypto = { path = "narwhal/crypto" }

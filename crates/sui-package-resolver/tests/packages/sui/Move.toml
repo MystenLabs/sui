@@ -1,0 +1,7 @@
+[package]
+name = "Sui"
+version = "0.0.1"
+published-at = "0x2"
+
+[addresses]
+sui = "0x2"

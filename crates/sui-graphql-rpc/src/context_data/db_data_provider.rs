@@ -33,6 +33,7 @@ use crate::{
         storage_fund::StorageFund,
         sui_address::SuiAddress,
         sui_system_state_summary::SuiSystemStateSummary,
+        suins_registration::SuinsRegistration,
         system_parameters::SystemParameters,
         transaction_block::{TransactionBlock, TransactionBlockFilter},
         validator::Validator,
@@ -41,13 +42,14 @@ use crate::{
 };
 use async_graphql::connection::{Connection, Edge};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use move_core_types::language_storage::StructTag;
 use std::{collections::BTreeMap, str::FromStr};
 use sui_indexer::{
     apis::GovernanceReadApiV2,
     indexer_reader::IndexerReader,
     models_v2::{
-        checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, events::StoredEvent,
-        objects::StoredObject, transactions::StoredTransaction,
+        checkpoints::StoredCheckpoint, display::StoredDisplay, epoch::StoredEpochInfo,
+        events::StoredEvent, objects::StoredObject, transactions::StoredTransaction,
     },
     schema_v2::transactions,
     types_v2::OwnerType,
@@ -119,9 +121,25 @@ pub enum TypeFilterError {
     TooManyComponents(String, u64, &'static str),
 }
 
+// Db needs information on whether the first or last n are being selected
+#[derive(Clone, Copy)]
+pub(crate) enum PageLimit {
+    First(i64),
+    Last(i64),
+}
+
 pub(crate) struct PgManager {
     pub inner: IndexerReader,
     pub limits: Limits,
+}
+
+impl PageLimit {
+    pub(crate) fn value(&self) -> i64 {
+        match self {
+            PageLimit::First(limit) => *limit,
+            PageLimit::Last(limit) => *limit,
+        }
+    }
 }
 
 impl PgManager {
@@ -213,11 +231,14 @@ impl PgManager {
         .await
     }
 
-    async fn get_earliest_complete_checkpoint(&self) -> Result<Option<StoredCheckpoint>, Error> {
-        let query = move || Ok(QueryBuilder::get_earliest_complete_checkpoint());
-        self.run_query_async_with_cost(query, |query| {
-            move |conn| query.get_result::<StoredCheckpoint>(conn).optional()
-        })
+    async fn get_display_by_obj_type(
+        &self,
+        object_type: String,
+    ) -> Result<Option<StoredDisplay>, Error> {
+        self.run_query_async_with_cost(
+            move || Ok(QueryBuilder::get_display_by_obj_type(object_type.clone())),
+            |query| move |conn| query.get_result::<StoredDisplay>(conn).optional(),
+        )
         .await
     }
 
@@ -273,7 +294,7 @@ impl PgManager {
 
         result
             .map(|mut stored_objs| {
-                let has_next_page = stored_objs.len() as i64 > limit;
+                let has_next_page = stored_objs.len() as i64 > limit.value();
                 if has_next_page {
                     stored_objs.pop();
                 }
@@ -396,7 +417,7 @@ impl PgManager {
 
         result
             .map(|mut stored_txs| {
-                let has_next_page = stored_txs.len() as i64 > limit;
+                let has_next_page = stored_txs.len() as i64 > limit.value();
                 if has_next_page {
                     stored_txs.pop();
                 }
@@ -446,7 +467,7 @@ impl PgManager {
 
         result
             .map(|mut stored_checkpoints| {
-                let has_next_page = stored_checkpoints.len() as i64 > limit;
+                let has_next_page = stored_checkpoints.len() as i64 > limit.value();
                 if has_next_page {
                     stored_checkpoints.pop();
                 }
@@ -507,7 +528,7 @@ impl PgManager {
 
         result
             .map(|mut stored_events| {
-                let has_next_page = stored_events.len() as i64 > limit;
+                let has_next_page = stored_events.len() as i64 > limit.value();
                 if has_next_page {
                     stored_events.pop();
                 }
@@ -554,7 +575,7 @@ impl PgManager {
 
         result
             .map(|mut stored_objs| {
-                let has_next_page = stored_objs.len() as i64 > limit;
+                let has_next_page = stored_objs.len() as i64 > limit.value();
                 if has_next_page {
                     stored_objs.pop();
                 }
@@ -641,27 +662,24 @@ impl PgManager {
         &self,
         first: Option<u64>,
         last: Option<u64>,
-    ) -> Result<i64, Error> {
+    ) -> Result<PageLimit, Error> {
         if let Some(f) = first {
             if f > self.limits.max_page_size {
                 return Err(
                     DbValidationError::PageSizeExceeded(f, self.limits.max_page_size).into(),
                 );
             }
-        }
-
-        if let Some(l) = last {
+            Ok(PageLimit::First(f as i64))
+        } else if let Some(l) = last {
             if l > self.limits.max_page_size {
                 return Err(
                     DbValidationError::PageSizeExceeded(l, self.limits.max_page_size).into(),
                 );
             }
+            return Ok(PageLimit::Last(l as i64));
+        } else {
+            Ok(PageLimit::First(self.limits.default_page_size as i64))
         }
-
-        // TODO (wlmyng): even though we do not allow passing in both first and last,
-        // per the cursor connection specs, if both are provided, from the response,
-        // we need to take the first F from the left and then take the last L from the right.
-        Ok(first.or(last).unwrap_or(self.limits.default_page_size) as i64)
     }
 
     pub(crate) async fn fetch_tx(&self, digest: &str) -> Result<Option<TransactionBlock>, Error> {
@@ -723,13 +741,12 @@ impl PgManager {
         stored_checkpoint.map(Checkpoint::try_from).transpose()
     }
 
-    pub(crate) async fn fetch_earliest_complete_checkpoint(
+    pub(crate) async fn fetch_display_object_by_type(
         &self,
-    ) -> Result<Option<Checkpoint>, Error> {
-        self.get_earliest_complete_checkpoint()
-            .await?
-            .map(Checkpoint::try_from)
-            .transpose()
+        object_type: &StructTag,
+    ) -> Result<Option<StoredDisplay>, Error> {
+        let object_type = object_type.to_canonical_string(/* with_prefix */ true);
+        self.get_display_by_obj_type(object_type).await
     }
 
     pub(crate) async fn fetch_chain_identifier(&self) -> Result<String, Error> {
@@ -1139,6 +1156,14 @@ impl PgManager {
         }))
     }
 
+    pub(crate) async fn available_range(&self) -> Result<(u64, u64), Error> {
+        Ok(self
+            .inner
+            .spawn_blocking(|this| this.get_consistent_read_range())
+            .await
+            .map(|(start, end)| (start as u64, end as u64))?)
+    }
+
     pub(crate) async fn default_name_service_name(
         &self,
         name_service_config: &NameServiceConfig,
@@ -1484,6 +1509,74 @@ impl PgManager {
         };
 
         Ok(Some(supply))
+    }
+
+    pub(crate) async fn fetch_suins_registrations(
+        &self,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        name_service_config: &NameServiceConfig,
+        owner: SuiAddress,
+    ) -> Result<Option<Connection<String, SuinsRegistration>>, Error> {
+        let suins_registration_type = format!(
+            "{}::suins_registration::SuinsRegistration",
+            name_service_config.package_address
+        );
+        let struct_tag = parse_to_struct_tag(&suins_registration_type)
+            .map_err(|e| Error::Internal(e.to_string()))?;
+
+        let obj_filter = ObjectFilter {
+            type_: Some(suins_registration_type),
+            owner: Some(owner),
+            object_ids: None,
+            object_keys: None,
+        };
+
+        let objs = self
+            .multi_get_objs(
+                first,
+                after,
+                last,
+                before,
+                Some(obj_filter),
+                Some(OwnerType::Address),
+            )
+            .await?;
+
+        let Some((stored_objs, has_next_page)) = objs else {
+            return Ok(None);
+        };
+
+        let mut connection = Connection::new(false, has_next_page);
+        for stored_obj in stored_objs {
+            let object = Object::try_from(stored_obj)?;
+
+            let move_object = MoveObject::try_from(&object).map_err(|_| {
+                Error::Internal(format!(
+                    "Expected {} to be a suinsRegistration object, but it's not an object",
+                    object.address,
+                ))
+            })?;
+
+            let suins_registration = SuinsRegistration::try_from(&move_object, &struct_tag)
+                .map_err(|_| {
+                    Error::Internal(format!(
+                        "Expected {} to be a suinsRegistration object, but it is not",
+                        object.address,
+                    ))
+                })?;
+
+            let cursor = move_object
+                .native
+                .id()
+                .to_canonical_string(/* with_prefix */ true);
+
+            connection.edges.push(Edge::new(cursor, suins_registration));
+        }
+
+        Ok(Some(connection))
     }
 }
 

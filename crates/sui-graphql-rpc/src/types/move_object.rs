@@ -3,12 +3,15 @@
 
 use super::coin::CoinDowncastError;
 use super::coin_metadata::{CoinMetadata, CoinMetadataDowncastError};
+use super::move_type::MoveType;
 use super::move_value::MoveValue;
 use super::stake::StakedSuiDowncastError;
 use super::{coin::Coin, object::Object};
+use crate::context_data::package_cache::PackageCache;
 use crate::error::Error;
 use crate::types::stake::StakedSui;
 use async_graphql::*;
+use sui_package_resolver::Resolver;
 use sui_types::object::{Data, MoveObject as NativeMoveObject};
 use sui_types::TypeTag;
 
@@ -34,9 +37,18 @@ impl MoveObject {
         Some(MoveValue::new(type_, self.native.contents().into()))
     }
 
-    /// Determines whether a tx can transfer this object
-    async fn has_public_transfer(&self) -> Option<bool> {
-        Some(self.native.has_public_transfer())
+    /// Determines whether a transaction can transfer this object, using the TransferObjects
+    /// transaction command or `sui::transfer::public_transfer`, both of which require the object to
+    /// have the `key` and `store` abilities.
+    async fn has_public_transfer(&self, ctx: &Context<'_>) -> Result<bool> {
+        let resolver: &Resolver<PackageCache> = ctx
+            .data()
+            .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
+            .extend()?;
+
+        let type_ = MoveType::new(TypeTag::from(self.native.type_().clone()));
+        let set = type_.abilities_impl(resolver).await.extend()?;
+        Ok(set.has_key() && set.has_store())
     }
 
     /// Attempts to convert the Move object into an Object

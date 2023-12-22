@@ -196,7 +196,7 @@ export class DeepBookClient {
 
 		const [coin] = quantity ? txb.splitCoins(inputCoin, [quantity]) : [inputCoin];
 
-		const coinType = coinId ? await this.#getCoinType(coinId) : NORMALIZED_SUI_COIN_TYPE;
+		const coinType = coinId ? await this.getCoinType(coinId) : NORMALIZED_SUI_COIN_TYPE;
 		if (coinType !== baseAsset && coinType !== quoteAsset) {
 			throw new Error(
 				`coin ${coinId} of ${coinType} type is not a valid asset for pool ${poolId}, which supports ${baseAsset} and ${quoteAsset}`,
@@ -718,7 +718,7 @@ export class DeepBookClient {
 		return normalizeSuiAddress(recipientAddress);
 	}
 
-	async #getCoinType(coinId: string) {
+	public async getCoinType(coinId: string) {
 		const resp = await this.suiClient.getObject({
 			id: coinId,
 			options: { showType: true },
@@ -727,11 +727,19 @@ export class DeepBookClient {
 		const parsed = resp.data?.type != null ? parseStructTag(resp.data.type) : null;
 
 		// Modification handle case like 0x2::coin::Coin<0xf398b9ecb31aed96c345538fb59ca5a1a2c247c5e60087411ead6c637129f1c4::fish::FISH>
-		return parsed?.address === NORMALIZED_SUI_COIN_TYPE.split('::')[0] &&
+		if (
+			parsed?.address === NORMALIZED_SUI_COIN_TYPE.split('::')[0] &&
 			parsed.module === 'coin' &&
-			parsed.name === 'Coin'
-			? parsed.typeParams[0] + '::' + parsed.module + '::' + parsed.name
-			: null;
+			parsed.name === 'Coin' &&
+			parsed.typeParams.length > 0
+		) {
+			const firstTypeParam = parsed.typeParams[0];
+			return typeof firstTypeParam === 'object'
+				? firstTypeParam.address + '::' + firstTypeParam.module + '::' + firstTypeParam.name
+				: null;
+		} else {
+			return null;
+		}
 	}
 
 	#nextClientOrderId() {

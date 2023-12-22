@@ -84,6 +84,11 @@ type Address implements ObjectOwner {
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
 	"""
+	The SuinsRegistration NFTs owned by the given object. These grant the owner
+	the capability to manage the associated domain.
+	"""
+	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
+	"""
 	This resolver is not supported on the Address type.
 	"""
 	dynamicField(name: DynamicFieldName!): DynamicField
@@ -449,6 +454,26 @@ ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ
 """
 scalar DateTime
 
+"""
+The set of named templates defined on-chain for the type of this object,
+to be handled off-chain. The server substitutes data from the object
+into these templates to generate a display string per template.
+"""
+type DisplayEntry {
+	"""
+	The identifier for a particular template string of the Display object.
+	"""
+	key: String!
+	"""
+	The template string for the key with placeholder values substituted.
+	"""
+	value: String
+	"""
+	An error string describing why the template could not be rendered.
+	"""
+	error: String
+}
+
 type DynamicField {
 	"""
 	The string type, data, and serialized value of the DynamicField's 'name' field.
@@ -651,7 +676,7 @@ type Event {
 	"""
 	Representation of a Move value in JSON, where:
 	
-	- Addresses and UIDs are represented in canonical form, as JSON strings.
+	- Addresses, IDs, and UIDs are represented in canonical form, as JSON strings.
 	- Bools are represented by JSON boolean literals.
 	- u8, u16, and u32 are represented as JSON numbers.
 	- u64, u128, and u256 are represented as JSON strings.
@@ -941,6 +966,7 @@ The contents of a Move Value, corresponding to the following recursive type:
 type MoveData =
     { Address: SuiAddress }
   | { UID:     SuiAddress }
+  | { ID:      SuiAddress }
   | { Bool:    bool }
   | { Number:  BigInt }
   | { String:  string }
@@ -1112,9 +1138,11 @@ type MoveObject {
 	"""
 	contents: MoveValue
 	"""
-	Determines whether a tx can transfer this object
+	Determines whether a transaction can transfer this object, using the TransferObjects
+	transaction command or `sui::transfer::public_transfer`, both of which require the object to
+	have the `key` and `store` abilities.
 	"""
-	hasPublicTransfer: Boolean
+	hasPublicTransfer: Boolean!
 	"""
 	Attempts to convert the Move object into an Object
 	This provides additional information such as version and digest on the top-level
@@ -1268,6 +1296,10 @@ type MoveType {
 	Structured representation of the "shape" of values that match this type.
 	"""
 	layout: MoveTypeLayout!
+	"""
+	The abilities this concrete type has.
+	"""
+	abilities: [MoveAbility!]!
 }
 
 """
@@ -1278,7 +1310,12 @@ type MoveTypeLayout =
   | "bool"
   | "u8" | "u16" | ... | "u256"
   | { vector: MoveTypeLayout }
-  | { struct: [{ name: string, layout: MoveTypeLayout }] }
+  | {
+      struct: {
+        type: string,
+        fields: [{ name: string, layout: MoveTypeLayout }],
+      }
+    }
 """
 scalar MoveTypeLayout
 
@@ -1311,7 +1348,7 @@ type MoveValue {
 	"""
 	Representation of a Move value in JSON, where:
 	
-	- Addresses and UIDs are represented in canonical form, as JSON strings.
+	- Addresses, IDs, and UIDs are represented in canonical form, as JSON strings.
 	- Bools are represented by JSON boolean literals.
 	- u8, u16, and u32 are represented as JSON numbers.
 	- u64, u128, and u256 are represented as JSON strings.
@@ -1358,6 +1395,12 @@ type Object implements ObjectOwner {
 	This number is recalculated based on the present storage gas price.
 	"""
 	storageRebate: BigInt
+	"""
+	The set of named templates defined on-chain for the type of this object,
+	to be handled off-chain. The server substitutes data from the object
+	into these templates to generate a display string per template.
+	"""
+	display: [DisplayEntry!]
 	"""
 	The Base64 encoded bcs serialization of the object's content.
 	"""
@@ -1415,6 +1458,11 @@ type Object implements ObjectOwner {
 	The domain that a user address has explicitly configured as their default domain
 	"""
 	defaultNameServiceName: String
+	"""
+	The SuinsRegistration NFTs owned by the given object. These grant the owner
+	the capability to manage the associated domain.
+	"""
+	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
 	"""
 	Access a dynamic field on an object using its name.
 	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
@@ -1538,6 +1586,7 @@ interface ObjectOwner {
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
+	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
 	dynamicField(name: DynamicFieldName!): DynamicField
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
@@ -1625,6 +1674,11 @@ type Owner implements ObjectOwner {
 	"""
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
+	"""
+	The SuinsRegistration NFTs owned by the given object. These grant the owner
+	the capability to manage the associated domain.
+	"""
+	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
 	"""
 	Access a dynamic field on an object using its name.
 	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
@@ -2234,6 +2288,46 @@ type SuiSystemStateSummary {
 	protocol version upgrade).
 	"""
 	protocolConfigs: ProtocolConfigs
+}
+
+type SuinsRegistration {
+	"""
+	Domain name of the SuinsRegistration object
+	"""
+	domain: String!
+	"""
+	Convert the SuinsRegistration object into a Move object
+	"""
+	asMoveObject: MoveObject!
+}
+
+type SuinsRegistrationConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [SuinsRegistrationEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [SuinsRegistration!]!
+}
+
+"""
+An edge in a connection.
+"""
+type SuinsRegistrationEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: SuinsRegistration!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 """

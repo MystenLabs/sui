@@ -9,9 +9,7 @@ use shared_crypto::intent::{Intent, IntentMessage};
 use sui_types::{
     authenticator_state::ActiveJwk,
     base_types::dbg_addr,
-    crypto::{
-        get_key_pair, AccountKeyPair, PublicKey, Signature, SuiKeyPair, ZkLoginPublicIdentifier,
-    },
+    crypto::{get_key_pair, AccountKeyPair, PublicKey, Signature, SuiKeyPair},
     error::{SuiError, UserInputError},
     multisig::{MultiSig, MultiSigPublicKey},
     signature::GenericSignature,
@@ -494,7 +492,7 @@ async fn zklogin_test_cached_proof_wrong_key() {
     */
 
     let (ephemeral_key, zklogin) = &zklogin_key_pair_and_inputs()[0];
-    let sender: SuiAddress = zklogin.try_into().unwrap();
+    let sender = SuiAddress::try_from_padded(zklogin).unwrap();
     let recipient = dbg_addr(2);
 
     let mut transfer_transaction2 = init_zklogin_transfer(
@@ -619,7 +617,7 @@ async fn setup_zklogin_network(
 ) {
     let (ephemeral_key, zklogin) = &zklogin_key_pair_and_inputs()[0];
 
-    let sender: SuiAddress = zklogin.try_into().unwrap();
+    let sender = SuiAddress::try_from_unpadded(zklogin).unwrap();
 
     let recipient = dbg_addr(2);
     let objects: Vec<_> = (0..10).map(|_| (sender, ObjectID::random())).collect();
@@ -806,18 +804,10 @@ async fn zk_multisig_test() {
     let mut kps_and_zklogin_inputs = vec![];
     for test in test_datum {
         let kp = SuiKeyPair::decode_base64(&test.kp).unwrap();
-        let pk_zklogin = PublicKey::ZkLogin(
-            ZkLoginPublicIdentifier::new(
-                &OIDCProvider::Twitch.get_config().iss,
-                &test.address_seed,
-            )
-            .unwrap(),
-        );
+        let inputs = ZkLoginInputs::from_json(&test.zklogin_inputs, &test.address_seed).unwrap();
+        let pk_zklogin = PublicKey::from_zklogin_inputs(&inputs).unwrap();
         pks.push(pk_zklogin);
-        kps_and_zklogin_inputs.push((
-            kp,
-            ZkLoginInputs::from_json(&test.zklogin_inputs, &test.address_seed).unwrap(),
-        ));
+        kps_and_zklogin_inputs.push((kp, inputs));
     }
 
     let mut zklogin_sigs = vec![];

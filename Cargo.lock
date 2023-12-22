@@ -2470,6 +2470,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "consensus-config"
+version = "0.1.0"
+dependencies = [
+ "fastcrypto",
+ "insta",
+ "multiaddr",
+ "rand 0.8.5",
+ "serde",
+ "workspace-hack",
+]
+
+[[package]]
+name = "consensus-core"
+version = "0.1.0"
+dependencies = [
+ "consensus-config",
+ "workspace-hack",
+]
+
+[[package]]
 name = "console"
 version = "0.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10784,7 +10804,6 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
- "narwhal-config",
  "once_cell",
  "prometheus",
  "rand 0.8.5",
@@ -11435,6 +11454,7 @@ dependencies = [
  "eyre",
  "fastcrypto",
  "futures",
+ "hex-literal 0.3.4",
  "move-core-types",
  "mysten-metrics",
  "once_cell",
@@ -11671,6 +11691,7 @@ dependencies = [
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
  "backoff",
+ "base64-url",
  "bcs",
  "futures",
  "mysten-metrics",

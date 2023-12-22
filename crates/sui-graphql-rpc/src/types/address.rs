@@ -13,6 +13,7 @@ use super::{
     object::{Object, ObjectFilter},
     stake::StakedSui,
     sui_address::SuiAddress,
+    suins_registration::SuinsRegistration,
     transaction_block::{TransactionBlock, TransactionBlockFilter},
 };
 
@@ -146,16 +147,28 @@ impl Address {
             .extend()
     }
 
-    // TODO disabled-for-rpc-1.5
-    // pub async fn name_service_connection(
-    //     &self,
-    //     first: Option<u64>,
-    //     after: Option<String>,
-    //     last: Option<u64>,
-    //     before: Option<String>,
-    // ) -> Result<Option<Connection<String, NameService>>> {
-    //     unimplemented!()
-    // }
+    /// The SuinsRegistration NFTs owned by the given object. These grant the owner
+    /// the capability to manage the associated domain.
+    pub async fn suins_registrations(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Option<Connection<String, SuinsRegistration>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_suins_registrations(
+                first,
+                after,
+                last,
+                before,
+                ctx.data_unchecked::<NameServiceConfig>(),
+                self.address,
+            )
+            .await
+            .extend()
+    }
 
     /// This resolver is not supported on the Address type.
     pub async fn dynamic_field(&self, _name: DynamicFieldName) -> Result<Option<DynamicField>> {

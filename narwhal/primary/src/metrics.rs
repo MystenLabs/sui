@@ -360,6 +360,10 @@ pub struct PrimaryMetrics {
     pub fetched_certificates_verified_directly: IntCounter,
     // Total number of fetched certificates verified indirectly.
     pub fetched_certificates_verified_indirectly: IntCounter,
+    /// The number of shares held by this node after the random beacon DKG protocol completed.
+    pub state_handler_random_beacon_dkg_num_shares: IntGauge,
+    /// The randomness round that currently in progress.
+    pub state_handler_current_randomness_round: IntGauge,
 }
 
 impl PrimaryMetrics {
@@ -553,6 +557,16 @@ impl PrimaryMetrics {
             fetched_certificates_verified_indirectly: register_int_counter_with_registry!(
                 "fetched_certificates_verified_indirectly",
                 "Total number of fetched certificates verified indirectly.",
+                registry
+            ).unwrap(),
+            state_handler_random_beacon_dkg_num_shares: register_int_gauge_with_registry!(
+                "state_handler_random_beacon_dkg_num_shares",
+                "The number of shares held by this node after the random beacon DKG protocol completed.",
+                registry
+            ).unwrap(),
+            state_handler_current_randomness_round: register_int_gauge_with_registry!(
+                "state_handler_current_randomness_round",
+                "The randomness round that currently in progress.",
                 registry
             ).unwrap(),
         }

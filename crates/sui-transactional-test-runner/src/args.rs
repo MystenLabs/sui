@@ -38,6 +38,8 @@ pub struct SuiPublishArgs {
     pub upgradeable: bool,
     #[clap(long = "dependencies", num_args(1..))]
     pub dependencies: Vec<String>,
+    #[clap(long = "gas-price")]
+    pub gas_price: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -52,6 +54,12 @@ pub struct SuiInitArgs {
     pub shared_object_deletion: Option<bool>,
     #[clap(long = "simulator")]
     pub simulator: bool,
+    #[clap(long = "custom-validator-account")]
+    pub custom_validator_account: bool,
+    #[clap(long = "reference-gas-price")]
+    pub reference_gas_price: Option<u64>,
+    #[clap(long = "default-gas-price")]
+    pub default_gas_price: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -70,6 +78,8 @@ pub struct TransferObjectCommand {
     pub sender: Option<String>,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
+    #[clap(long = "gas-price")]
+    pub gas_price: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -113,6 +123,8 @@ pub struct UpgradePackageCommand {
     pub syntax: Option<SyntaxChoice>,
     #[clap(long = "policy", default_value="compatible", value_parser = parse_policy)]
     pub policy: u8,
+    #[clap(long = "gas-price")]
+    pub gas_price: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]

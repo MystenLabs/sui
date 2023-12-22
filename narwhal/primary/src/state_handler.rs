@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::consensus::LeaderSchedule;
+use crate::metrics::PrimaryMetrics;
 use config::{AuthorityIdentifier, ChainIdentifier, Committee};
 use crypto::{RandomnessPartialSignature, RandomnessPrivateKey};
 use fastcrypto::encoding::{Encoding, Hex};
@@ -82,6 +83,7 @@ pub struct StateHandler {
 //    randomness round is incremented.
 struct RandomnessState {
     store: RandomnessStore,
+    metrics: Arc<PrimaryMetrics>,
 
     // A channel to send system messages to the proposer.
     tx_system_messages: Sender<SystemMessage>,
@@ -124,6 +126,7 @@ impl RandomnessState {
         vss_key_output: Arc<OnceLock<PublicVssKey>>,
         tx_system_messages: Sender<SystemMessage>,
         store: RandomnessStore,
+        metrics: Arc<PrimaryMetrics>,
     ) -> Option<Self> {
         if !protocol_config.random_beacon() {
             info!("random beacon: disabled");
@@ -184,9 +187,20 @@ impl RandomnessState {
             "random beacon: state initialized with authority_id={authority_id}, total_weight={total_weight}, t={t}, num_nodes={num_nodes}, oracle initial_prefix={prefix_str:?}",
         );
 
+        // Load existing data from store.
         let dkg_output = store.dkg_output();
+        if let Some(dkg_output) = &dkg_output {
+            metrics
+                .state_handler_random_beacon_dkg_num_shares
+                .set(dkg_output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
+        }
+        metrics
+            .state_handler_current_randomness_round
+            .set(store.randomness_round().0 as i64);
+
         Some(Self {
             store,
+            metrics,
             tx_system_messages,
             party,
             has_sent_confirmation: false,
@@ -205,6 +219,9 @@ impl RandomnessState {
     }
 
     fn set_dkg_output(&mut self, output: dkg::Output<PkG, EncG>) {
+        self.metrics
+            .state_handler_random_beacon_dkg_num_shares
+            .set(output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
         self.store.set_dkg_output(&output);
         self.dkg_output = Some(output);
     }
@@ -320,6 +337,9 @@ impl RandomnessState {
             return;
         }
         debug!("random beacon: updating local randomness round to {round:?}");
+        self.metrics
+            .state_handler_current_randomness_round
+            .set(round.0 as i64);
         self.store.set_randomness_round(round);
         self.partial_sigs.retain(|&(r, _), _| r >= round);
         self.send_partial_signatures().await;
@@ -525,6 +545,7 @@ impl StateHandler {
         leader_schedule: LeaderSchedule,
         network: anemo::Network,
         randomness_store: RandomnessStore,
+        metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
         let state_handler = Self {
             authority_id,
@@ -544,6 +565,7 @@ impl StateHandler {
                 vss_key_output,
                 tx_system_messages,
                 randomness_store,
+                metrics,
             ),
             network,
         };

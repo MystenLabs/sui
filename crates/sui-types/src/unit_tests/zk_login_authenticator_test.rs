@@ -2,19 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::ZkLoginAuthenticator;
-use crate::crypto::{PublicKey, Signature, SuiKeyPair, ZkLoginPublicIdentifier};
+use crate::crypto::{PublicKey, Signature, SignatureScheme, SuiKeyPair, ZkLoginPublicIdentifier};
 use crate::error::SuiError;
 use crate::signature::{AuthenticatorTrait, VerifyParams};
-use crate::utils::TestData;
 use crate::utils::{
     get_legacy_zklogin_user_address, get_zklogin_user_address, make_transaction_data,
     make_zklogin_tx, sign_zklogin_personal_msg,
 };
+use crate::utils::{load_test_vectors, TestData, SHORT_ADDRESS_SEED};
 use crate::{
     base_types::SuiAddress, signature::GenericSignature, zk_login_util::DEFAULT_JWK_BYTES,
 };
 use fastcrypto::encoding::Base64;
 use fastcrypto::traits::{EncodeDecodeBase64, ToFromBytes};
+use fastcrypto_zkp::bn254::utils::big_int_str_to_bytes;
 use fastcrypto_zkp::bn254::zk_login::{parse_jwks, JwkId, OIDCProvider, ZkLoginInputs, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use im::hashmap::HashMap as ImHashMap;
@@ -50,24 +51,14 @@ fn zklogin_authenticator_jwk() {
 
     for test in test_datum {
         let kp = SuiKeyPair::decode_base64(&test.kp).unwrap();
-        let pk_zklogin = PublicKey::ZkLogin(
-            ZkLoginPublicIdentifier::new(
-                &OIDCProvider::Twitch.get_config().iss,
-                &test.address_seed,
-            )
-            .unwrap(),
-        );
+        let inputs = ZkLoginInputs::from_json(&test.zklogin_inputs, &test.address_seed).unwrap();
+        let pk_zklogin = PublicKey::from_zklogin_inputs(&inputs).unwrap();
         let addr = (&pk_zklogin).into();
         let tx_data = make_transaction_data(addr);
         let msg = IntentMessage::new(Intent::sui_transaction(), tx_data);
         let eph_sig = Signature::new_secure(&msg, &kp);
-        let zklogin_inputs =
-            ZkLoginInputs::from_json(&test.zklogin_inputs, &test.address_seed).unwrap();
-        let generic_sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
-            zklogin_inputs,
-            10,
-            eph_sig,
-        ));
+        let generic_sig =
+            GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(inputs, 10, eph_sig));
         let res = generic_sig.verify_authenticator(&msg, addr, Some(0), &aux_verify_data);
         assert!(res.is_ok());
     }
@@ -125,6 +116,52 @@ fn test_serde_zk_login_signature() {
 
     let addr: SuiAddress = (&authenticator).try_into().unwrap();
     assert_eq!(addr, user_address);
+}
+
+#[test]
+fn test_serde_zk_public_identifier() {
+    let (_, _, inputs) = &load_test_vectors()[0];
+    let modified_inputs =
+        ZkLoginInputs::from_json(&serde_json::to_string(&inputs).unwrap(), SHORT_ADDRESS_SEED)
+            .unwrap();
+
+    let mut bytes = Vec::new();
+    let binding = OIDCProvider::Twitch.get_config();
+    let iss_bytes = binding.iss.as_bytes();
+    bytes.extend([iss_bytes.len() as u8]);
+    bytes.extend(iss_bytes);
+    // length here is 31 bytes and left unpadded.
+    let address_seed_bytes = big_int_str_to_bytes(SHORT_ADDRESS_SEED).unwrap();
+    bytes.extend(address_seed_bytes);
+
+    let pk1 = PublicKey::ZkLogin(ZkLoginPublicIdentifier(bytes));
+    assert_eq!(
+        pk1.scheme().flag(),
+        SignatureScheme::ZkLoginAuthenticator.flag()
+    );
+    let serialized = bcs::to_bytes(&pk1).unwrap();
+    let deserialized: PublicKey = bcs::from_bytes(&serialized).unwrap();
+    assert_eq!(deserialized, pk1);
+    assert_eq!(
+        SuiAddress::try_from_unpadded(&modified_inputs).unwrap(),
+        SuiAddress::from(&pk1)
+    );
+
+    let pk2 =
+        PublicKey::ZkLogin(ZkLoginPublicIdentifier::new(&binding.iss, SHORT_ADDRESS_SEED).unwrap());
+    assert_eq!(
+        pk2.scheme().flag(),
+        SignatureScheme::ZkLoginAuthenticator.flag()
+    );
+    let serialized2 = bcs::to_bytes(&pk2).unwrap();
+    let deserialized2: PublicKey = bcs::from_bytes(&serialized2).unwrap();
+    assert_eq!(deserialized2, pk2);
+    assert_eq!(
+        SuiAddress::try_from_padded(&modified_inputs).unwrap(),
+        SuiAddress::from(&pk2)
+    );
+
+    assert_eq!(serialized.len() + 1, serialized2.len());
 }
 
 #[test]

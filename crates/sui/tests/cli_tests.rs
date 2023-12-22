@@ -10,6 +10,7 @@ use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 use expect_test::expect;
 use move_package::BuildConfig as MoveBuildConfig;
 use serde_json::json;
+use sui::key_identity::{get_identity_address, KeyIdentity};
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;
 use sui_types::transaction::{
@@ -149,10 +150,21 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
-
+    let alias = context
+        .config
+        .keystore
+        .get_alias_by_address(&address)
+        .unwrap();
     // Print objects owned by `address`
     SuiClientCommands::Objects {
-        address: Some(address),
+        address: Some(KeyIdentity::Address(address)),
+    }
+    .execute(context)
+    .await?
+    .print(true);
+    // Print objects owned by `address`, passing its alias
+    SuiClientCommands::Objects {
+        address: Some(KeyIdentity::Alias(alias)),
     }
     .execute(context)
     .await?
@@ -184,7 +196,7 @@ async fn test_regression_6546() -> Result<(), anyhow::Error> {
     let context = &mut test_cluster.wallet;
 
     let SuiClientCommandResult::Objects(coins) = SuiClientCommands::Objects {
-        address: Some(address),
+        address: Some(KeyIdentity::Address(address)),
     }
     .execute(context)
     .await?
@@ -235,7 +247,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
 
     // Print objects owned by `address`
     SuiClientCommands::Objects {
-        address: Some(address),
+        address: Some(KeyIdentity::Address(address)),
     }
     .execute(context)
     .await?
@@ -293,6 +305,11 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
+    let alias = context
+        .config
+        .keystore
+        .get_alias_by_address(&address)
+        .unwrap();
 
     let client = context.get_client().await?;
     let object_refs = client
@@ -317,7 +334,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     let object_to_send = object_refs.data.get(1).unwrap().object().unwrap().object_id;
 
     SuiClientCommands::Gas {
-        address: Some(address),
+        address: Some(KeyIdentity::Address(address)),
     }
     .execute(context)
     .await?
@@ -327,7 +344,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
 
     // Send an object
     SuiClientCommands::Transfer {
-        to: SuiAddress::random_for_testing_only(),
+        to: KeyIdentity::Address(SuiAddress::random_for_testing_only()),
         object_id: object_to_send,
         gas: Some(object_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
@@ -337,9 +354,9 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    // Fetch gas again
+    // Fetch gas again, and use the alias instead of the address
     SuiClientCommands::Gas {
-        address: Some(address),
+        address: Some(KeyIdentity::Alias(alias)),
     }
     .execute(context)
     .await?
@@ -414,7 +431,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     // Print objects owned by `address1`
     SuiClientCommands::Objects {
-        address: Some(address1),
+        address: Some(KeyIdentity::Address(address1)),
     }
     .execute(context)
     .await?
@@ -1597,7 +1614,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 
     let resp = SuiClientCommands::Transfer {
         gas: Some(gas_obj_id),
-        to: recipient,
+        to: KeyIdentity::Address(recipient),
         object_id: obj_id,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         serialize_unsigned_transaction: false,
@@ -1702,7 +1719,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 
     let resp = SuiClientCommands::Transfer {
         gas: None,
-        to: recipient,
+        to: KeyIdentity::Address(recipient),
         object_id: obj_id,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         serialize_unsigned_transaction: false,
@@ -1798,7 +1815,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
 
     // Switch the address
     let resp = SuiClientCommands::Switch {
-        address: Some(addr2),
+        address: Some(KeyIdentity::Address(addr2)),
         env: None,
     }
     .execute(context)
@@ -1810,7 +1827,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
         format!(
             "{}",
             SuiClientCommandResult::Switch(SwitchResponse {
-                address: Some(addr2),
+                address: Some(addr2.to_string()),
                 env: None
             })
         )
@@ -1837,7 +1854,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     // Check that we can switch to this address
     // Switch the address
     let resp = SuiClientCommands::Switch {
-        address: Some(new_addr),
+        address: Some(KeyIdentity::Address(new_addr)),
         env: None,
     }
     .execute(context)
@@ -1848,7 +1865,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
         format!(
             "{}",
             SuiClientCommandResult::Switch(SwitchResponse {
-                address: Some(new_addr),
+                address: Some(new_addr.to_string()),
                 env: None
             })
         )
@@ -1917,7 +1934,7 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
 
     let addr2 = context.config.keystore.addresses().get(1).cloned().unwrap();
     let resp = SuiClientCommands::Switch {
-        address: Some(addr2),
+        address: Some(KeyIdentity::Address(addr2)),
         env: None,
     }
     .execute(context)
@@ -1927,11 +1944,35 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
         format!(
             "{}",
             SuiClientCommandResult::Switch(SwitchResponse {
-                address: Some(addr2),
+                address: Some(addr2.to_string()),
                 env: None
             })
         )
     );
+
+    // switch back to addr1 by using its alias
+    let alias1 = context
+        .config
+        .keystore
+        .get_alias_by_address(&addr1)
+        .unwrap();
+    let resp = SuiClientCommands::Switch {
+        address: Some(KeyIdentity::Alias(alias1)),
+        env: None,
+    }
+    .execute(context)
+    .await?;
+    assert_eq!(
+        format!("{resp}"),
+        format!(
+            "{}",
+            SuiClientCommandResult::Switch(SwitchResponse {
+                address: Some(addr1.to_string()),
+                env: None
+            })
+        )
+    );
+
     Ok(())
 }
 
@@ -2337,6 +2378,11 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     let address = test_cluster.get_address_0();
     let address1 = test_cluster.get_address_1();
     let context = &mut test_cluster.wallet;
+    let alias1 = context
+        .config
+        .keystore
+        .get_alias_by_address(&address1)
+        .unwrap();
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
@@ -2356,7 +2402,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     let coin = object_refs.get(1).unwrap().object().unwrap().object_id;
 
     SuiClientCommands::TransferSui {
-        to: address1,
+        to: KeyIdentity::Address(address1),
         sui_coin_object_id: coin,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         amount: Some(1),
@@ -2367,7 +2413,19 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     .await?;
 
     SuiClientCommands::TransferSui {
-        to: address1,
+        to: KeyIdentity::Address(address1),
+        sui_coin_object_id: coin,
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        amount: Some(1),
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: true,
+    }
+    .execute(context)
+    .await?;
+
+    // use alias for transfer
+    SuiClientCommands::TransferSui {
+        to: KeyIdentity::Alias(alias1),
         sui_coin_object_id: coin,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         amount: Some(1),
@@ -2582,4 +2640,35 @@ async fn test_linter_suppression_stats() -> Result<(), anyhow::Error> {
         out_str.contains("Total number of linter warnings suppressed: 5 (filtered categories: 3)")
     );
     Ok(())
+}
+
+#[tokio::test]
+async fn key_identity_test() {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let alias = context
+        .config
+        .keystore
+        .get_alias_by_address(&address)
+        .unwrap();
+
+    // by alias
+    assert_eq!(
+        address,
+        get_identity_address(Some(KeyIdentity::Alias(alias)), context).unwrap()
+    );
+    // by address
+    assert_eq!(
+        address,
+        get_identity_address(Some(KeyIdentity::Address(address)), context).unwrap()
+    );
+    // alias does not exist
+    assert!(get_identity_address(Some(KeyIdentity::Alias("alias".to_string())), context).is_err());
+
+    // get active address instead when no alias/address is given
+    assert_eq!(
+        context.active_address().unwrap(),
+        get_identity_address(None, context).unwrap()
+    );
 }

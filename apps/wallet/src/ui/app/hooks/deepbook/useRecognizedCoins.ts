@@ -13,5 +13,5 @@ export function useAllowedSwapCoinsList() {
 	const deepBookConfigs = useDeepBookConfigs();
 	const coinsMap = deepBookConfigs.coinsMap;
 
-	return [SUI_TYPE_ARG, coinsMap.USDC];
+	return [SUI_TYPE_ARG, coinsMap.SUI, coinsMap.USDC];
 }

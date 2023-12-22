@@ -21,6 +21,8 @@ pub enum BridgeError {
     AuthoritySignatureAggregationTooManyError(String),
     // Transient Ethereum provider error
     TransientProviderError(String),
+    // Ethereum provider error
+    ProviderError(String),
     // Invalid BridgeCommittee
     InvalidBridgeCommittee(String),
     // Invalid Bridge authority signature
@@ -33,6 +35,8 @@ pub enum BridgeError {
     MismatchedAuthoritySigner,
     // Signature is over a mismatched action
     MismatchedAction,
+    // Sui transaction failure due to generic error
+    SuiTxFailureGeneric(String),
     // Storage Error
     StorageError(String),
     // Rest API Error

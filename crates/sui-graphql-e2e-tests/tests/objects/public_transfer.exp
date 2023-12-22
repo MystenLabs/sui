@@ -1,0 +1,69 @@
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 6-30:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'programmable'. lines 32-35:
+created: object(2,0), object(2,1)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 3435200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'create-checkpoint'. lines 37-37:
+Checkpoint created: 1
+
+task 4 'run-graphql'. lines 39-55:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": [
+              {
+                "outputState": {
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0xae06ab7f9cf993590eaae24cec65e0aba29cf17db9bb8df81be901000ccc5bdf::m::Bar"
+                      }
+                    },
+                    "hasPublicTransfer": false
+                  }
+                }
+              },
+              {
+                "outputState": {
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                      }
+                    },
+                    "hasPublicTransfer": true
+                  }
+                }
+              },
+              {
+                "outputState": {
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0xae06ab7f9cf993590eaae24cec65e0aba29cf17db9bb8df81be901000ccc5bdf::m::Foo"
+                      }
+                    },
+                    "hasPublicTransfer": true
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

@@ -2080,9 +2080,9 @@ impl SenderSignedData {
         let mut mapping = BTreeMap::new();
         for sig in &self.inner().tx_signatures {
             if verify_legacy_zklogin_address {
-                // Try deriving the address from the legacy way.
+                // Try deriving the address from the legacy padded way.
                 if let GenericSignature::ZkLoginAuthenticator(z) = sig {
-                    mapping.insert(SuiAddress::legacy_try_from(z)?, sig);
+                    mapping.insert(SuiAddress::try_from_padded(&z.inputs)?, sig);
                 };
             }
             let address = sig.try_into()?;
