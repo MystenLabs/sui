@@ -2733,7 +2733,7 @@ type Validator {
 	"""
 	reportRecords: [Address!]
 	"""
-	The apy of this validator in basis points.
+	The APY of this validator in basis points.
 	To get the APY in percentage, divide by 100.
 	"""
 	apy: Int
