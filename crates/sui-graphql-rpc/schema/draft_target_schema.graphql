@@ -573,7 +573,8 @@ type Object implements IOwner & IObject {
 
 type DisplayEntry {
   key: String!
-  value: String!
+  value: String
+  error: String
 }
 
 type Epoch {
