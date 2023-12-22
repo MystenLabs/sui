@@ -71,7 +71,6 @@ impl StoredEpochInfo {
             protocol_version: e.protocol_version as i64,
             total_stake: e.total_stake as i64,
             storage_fund_balance: e.storage_fund_balance as i64,
-            system_state: e.system_state.clone(),
             ..Default::default()
         }
     }
