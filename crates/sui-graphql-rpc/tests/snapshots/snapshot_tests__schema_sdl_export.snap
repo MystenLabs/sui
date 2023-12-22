@@ -263,7 +263,7 @@ type ChangeEpochTransaction {
 	epoch starts, to upgrade them on-chain. Validators write these packages out when running the
 	transaction.
 	"""
-	systemPackageConnection(first: Int, after: String, last: Int, before: String): MovePackageConnection!
+	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection!
 }
 
 type Checkpoint {
@@ -545,7 +545,7 @@ type EndOfEpochTransaction {
 	"""
 	The list of system transactions that are allowed to run at the end of the epoch.
 	"""
-	transactionConnection(first: Int, before: String, last: Int, after: String): EndOfEpochTransactionKindConnection!
+	transactions(first: Int, before: String, last: Int, after: String): EndOfEpochTransactionKindConnection!
 }
 
 union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction
