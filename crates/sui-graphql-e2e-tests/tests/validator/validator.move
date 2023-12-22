@@ -3,35 +3,21 @@
 
 // Test the change of APY with heavy transactions
 
-//# init --simulator --accounts A C --custom-validator-account --addresses P0=0x0 P1=0x0 P2=0x0 P3=0x0 P4=0x0 P5=0x0 P6=0x0 P7=0x0
+//# init --simulator --accounts A --addresses P0=0x0
 
 //# advance-epoch
 
 //# create-checkpoint
 
-//# programmable --sender C --inputs 10000000000 @C
-//> SplitCoins(Gas, [Input(0)]);
-//> TransferObjects([Result(0)], Input(1));
-
-// # run 0x3::sui_system::request_add_stake --args object(0x5) object(3,0) @validator_0 --sender C
-
 //# publish --sender A --gas-budget 9999999999
 module P0::m {
     use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::TxContext;
+    use sui::tx_context::{sender, TxContext};
     use std::vector;
 
-    struct Big has key {
+    struct Big has key, store {
         id: UID,
         weight: vector<u8>,
-    }
-
-    fun init(ctx: &mut TxContext) {
-        transfer::share_object(Big {
-          id: object::new(ctx),
-          weight: weight(),
-        });
     }
 
     fun weight(): vector<u8> {
@@ -43,7 +29,24 @@ module P0::m {
         };
         v
     }
+    
+    public entry fun new(ctx: &mut TxContext){
+        let id = object::new(ctx);
+        let w = weight();
+        sui::transfer::public_transfer(
+            Big { id, weight: w }, 
+            sender(ctx)
+        )
+    }
 }
+
+//# run P0::m::new --sender A
+
+//# run P0::m::new --sender A
+
+//# run P0::m::new --sender A
+
+//# run P0::m::new --sender A
 
 //# create-checkpoint
 
@@ -61,219 +64,35 @@ module P0::m {
   }
 }
 
-//# create-checkpoint
+//# run P0::m::new --sender A
 
-//# advance-epoch
+//# run P0::m::new --sender A
 
-//# publish --sender A --gas-budget 9999999999
-module P1::m {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::TxContext;
-    use std::vector;
+//# run P0::m::new --sender A
 
-    struct Big has key {
-        id: UID,
-        weight: vector<u8>,
-    }
+//# run P0::m::new --sender A
 
-    fun init(ctx: &mut TxContext) {
-        transfer::share_object(Big {
-          id: object::new(ctx),
-          weight: weight(),
-        });
-    }
+//# run P0::m::new --sender A
 
-    fun weight(): vector<u8> {
-        let i = 0;
-        let v = vector[];
-        while (i < 248 * 1024) {
-            vector::push_back(&mut v, 42);
-            i = i + 1;
-        };
-        v
-    }
-}
+//# run P0::m::new --sender A
 
-//# publish --sender A --gas-budget 9999999999
-module P2::m {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::TxContext;
-    use std::vector;
+//# run P0::m::new --sender A
 
-    struct Big has key {
-        id: UID,
-        weight: vector<u8>,
-    }
+//# run P0::m::new --sender A
 
-    fun init(ctx: &mut TxContext) {
-        transfer::share_object(Big {
-          id: object::new(ctx),
-          weight: weight(),
-        });
-    }
+//# run P0::m::new --sender A
 
-    fun weight(): vector<u8> {
-        let i = 0;
-        let v = vector[];
-        while (i < 248 * 1024) {
-            vector::push_back(&mut v, 42);
-            i = i + 1;
-        };
-        v
-    }
-}
+//# run P0::m::new --sender A
 
-//# publish --sender A --gas-budget 9999999999
-module P3::m {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::TxContext;
-    use std::vector;
+//# run P0::m::new --sender A
 
-    struct Big has key {
-        id: UID,
-        weight: vector<u8>,
-    }
+//# run P0::m::new --sender A
 
-    fun init(ctx: &mut TxContext) {
-        transfer::share_object(Big {
-          id: object::new(ctx),
-          weight: weight(),
-        });
-    }
+//# run P0::m::new --sender A
 
-    fun weight(): vector<u8> {
-        let i = 0;
-        let v = vector[];
-        while (i < 248 * 1024) {
-            vector::push_back(&mut v, 42);
-            i = i + 1;
-        };
-        v
-    }
-}
+//# run P0::m::new --sender A
 
-//# publish --sender A --gas-budget 9999999999
-module P4::m {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::TxContext;
-    use std::vector;
-
-    struct Big has key {
-        id: UID,
-        weight: vector<u8>,
-    }
-
-    fun init(ctx: &mut TxContext) {
-        transfer::share_object(Big {
-          id: object::new(ctx),
-          weight: weight(),
-        });
-    }
-
-    fun weight(): vector<u8> {
-        let i = 0;
-        let v = vector[];
-        while (i < 248 * 1024) {
-            vector::push_back(&mut v, 42);
-            i = i + 1;
-        };
-        v
-    }
-}
-
-//# publish --sender A --gas-budget 9999999999
-module P5::m {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::TxContext;
-    use std::vector;
-
-    struct Big has key {
-        id: UID,
-        weight: vector<u8>,
-    }
-
-    fun init(ctx: &mut TxContext) {
-        transfer::share_object(Big {
-          id: object::new(ctx),
-          weight: weight(),
-        });
-    }
-
-    fun weight(): vector<u8> {
-        let i = 0;
-        let v = vector[];
-        while (i < 248 * 1024) {
-            vector::push_back(&mut v, 42);
-            i = i + 1;
-        };
-        v
-    }
-}
-
-//# publish --sender A --gas-budget 9999999999
-module P6::m {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::TxContext;
-    use std::vector;
-
-    struct Big has key {
-        id: UID,
-        weight: vector<u8>,
-    }
-
-    fun init(ctx: &mut TxContext) {
-        transfer::share_object(Big {
-          id: object::new(ctx),
-          weight: weight(),
-        });
-    }
-
-    fun weight(): vector<u8> {
-        let i = 0;
-        let v = vector[];
-        while (i < 248 * 1024) {
-            vector::push_back(&mut v, 42);
-            i = i + 1;
-        };
-        v
-    }
-}
-
-//# publish --sender A --gas-budget 9999999999
-module P7::m {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::TxContext;
-    use std::vector;
-
-    struct Big has key {
-        id: UID,
-        weight: vector<u8>,
-    }
-
-    fun init(ctx: &mut TxContext) {
-        transfer::share_object(Big {
-          id: object::new(ctx),
-          weight: weight(),
-        });
-    }
-
-    fun weight(): vector<u8> {
-        let i = 0;
-        let v = vector[];
-        while (i < 248 * 1024) {
-            vector::push_back(&mut v, 42);
-            i = i + 1;
-        };
-        v
-    }
-}
+//# run P0::m::new --sender A
 
 //# create-checkpoint
 
