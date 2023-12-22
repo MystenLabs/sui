@@ -51,7 +51,8 @@ module games::drand_lib {
         // Compute sha256(prev_sig, round_bytes).
         let digest = sha2_256(round_bytes);
         // Verify the signature on the hash.
-        assert!(bls12381::bls12381_min_sig_verify(&sig, &DRAND_PK, &digest), EInvalidProof);
+        let drand_pk = DRAND_PK;
+        assert!(bls12381::bls12381_min_sig_verify(&sig, &drand_pk, &digest), EInvalidProof);
     }
 
     /// Derive a uniform vector from a drand signature.

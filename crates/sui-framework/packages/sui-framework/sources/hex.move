@@ -16,10 +16,11 @@ module sui::hex {
     /// Encode `bytes` in lowercase hex
     public fun encode(bytes: vector<u8>): vector<u8> {
         let (i, r, l) = (0, vector[], vector::length(&bytes));
+        let hex_vector = HEX;
         while (i < l) {
             vector::append(
-                &mut r, 
-                *vector::borrow(&HEX, (*vector::borrow(&bytes, i) as u64))
+                &mut r,
+                *vector::borrow(&hex_vector, (*vector::borrow(&bytes, i) as u64))
             );
             i = i + 1;
         };
@@ -34,16 +35,16 @@ module sui::hex {
     /// Aborts if the hex string contains non-valid hex characters (valid characters are 0 - 9, a - f, A - F)
     public fun decode(hex: vector<u8>): vector<u8> {
         let (i, r, l) = (0, vector[], vector::length(&hex));
-        assert!(l % 2 == 0, EInvalidHexLength); 
+        assert!(l % 2 == 0, EInvalidHexLength);
         while (i < l) {
-            let decimal = (decode_byte(*vector::borrow(&hex, i)) * 16) + 
+            let decimal = (decode_byte(*vector::borrow(&hex, i)) * 16) +
                           decode_byte(*vector::borrow(&hex, i + 1));
             vector::push_back(&mut r, decimal);
             i = i + 2;
         };
         r
     }
-    
+
     fun decode_byte(hex: u8): u8 {
         if (/* 0 .. 9 */ 48 <= hex && hex < 58) {
             hex - 48
@@ -61,7 +62,7 @@ module sui::hex {
     #[test]
     fun test_hex_encode_string_literal() {
         assert!(b"30" == encode(b"0"), 0);
-        assert!(b"61" == encode(b"a"), 0);       
+        assert!(b"61" == encode(b"a"), 0);
         assert!(b"666666" == encode(b"fff"), 0);
     }
 
