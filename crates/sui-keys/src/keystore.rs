@@ -275,7 +275,7 @@ impl AccountKeystore for FileBasedKeystore {
         self.addresses_with_alias()
             .iter()
             .find(|x| x.1.alias == alias)
-            .ok_or_else(|| anyhow!("Cannot find the address for given alias {alias}"))
+            .ok_or_else(|| anyhow!("Cannot resolve alias {alias} to an address"))
             .map(|x| x.0)
     }
 
@@ -534,7 +534,7 @@ impl AccountKeystore for InMemKeystore {
         self.addresses_with_alias()
             .iter()
             .find(|x| x.1.alias == alias)
-            .ok_or_else(|| anyhow!("Cannot find the address for given alias {alias}"))
+            .ok_or_else(|| anyhow!("Cannot resolve alias {alias} to an address"))
             .map(|x| x.0)
     }
 
