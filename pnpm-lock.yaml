@@ -1598,8 +1598,6 @@ importers:
         specifier: ^0.12.1
         version: 0.12.1
 
-  sdk/move-binary-format/pkg: {}
-
   sdk/suins-toolkit:
     dependencies:
       '@mysten/sui.js':

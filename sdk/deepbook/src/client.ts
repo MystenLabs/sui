@@ -196,7 +196,7 @@ export class DeepBookClient {
 
 		const [coin] = quantity ? txb.splitCoins(inputCoin, [quantity]) : [inputCoin];
 
-		const coinType = coinId ? await this.#getCoinType(coinId) : NORMALIZED_SUI_COIN_TYPE;
+		const coinType = coinId ? await this.getCoinType(coinId) : NORMALIZED_SUI_COIN_TYPE;
 		if (coinType !== baseAsset && coinType !== quoteAsset) {
 			throw new Error(
 				`coin ${coinId} of ${coinType} type is not a valid asset for pool ${poolId}, which supports ${baseAsset} and ${quoteAsset}`,
@@ -718,7 +718,7 @@ export class DeepBookClient {
 		return normalizeSuiAddress(recipientAddress);
 	}
 
-	async #getCoinType(coinId: string) {
+	public async getCoinType(coinId: string) {
 		const resp = await this.suiClient.getObject({
 			id: coinId,
 			options: { showType: true },
