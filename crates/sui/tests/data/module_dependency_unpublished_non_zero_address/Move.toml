@@ -1,6 +1,5 @@
 [package]
 name = "UnpublishedNonZeroAddress"
-version = "0.0.1"
 # No published-at address for this package.
 # published-at = "0x0"
 

@@ -1,6 +1,5 @@
 [package]
 name = "DeepBook"
-version = "0.0.1"
 published-at = "0xdee9"
 
 [dependencies]

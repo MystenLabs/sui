@@ -1,6 +1,5 @@
 [package]
 name = "GenerateMoveLockFile"
-version = "0.0.0"
 
 [dependencies]
 Examples = { local = "../object_basics" }
