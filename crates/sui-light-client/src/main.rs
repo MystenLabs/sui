@@ -388,37 +388,45 @@ async fn get_verified_effects_and_events(
 
     // Load the list of stored checkpoints
     let checkpoints_list: CheckpointsList = read_checkpoint_list(config)?;
+
     // find the stored checkpoint before the seq checkpoint
     let prev_ckp_id = checkpoints_list
         .checkpoints
         .iter()
         .filter(|ckp_id| **ckp_id < seq)
-        .last()
-        .ok_or(anyhow!("No checkpoint found before the transaction"))?;
+        .last();
 
-    // Read it from the store
-    let prev_ckp = read_checkpoint(config, *prev_ckp_id)?;
+    let committee = if let Some(prev_ckp_id) = prev_ckp_id {
+        // Read it from the store
+        let prev_ckp = read_checkpoint(config, *prev_ckp_id)?;
 
-    // Check we have the right checkpoint
-    anyhow::ensure!(
-        prev_ckp.epoch().saturating_add(1) == full_check_point.checkpoint_summary.epoch(),
-        "Checkpoint sequence number does not match. Need to Sync."
-    );
+        // Check we have the right checkpoint
+        anyhow::ensure!(
+            prev_ckp.epoch().saturating_add(1) == full_check_point.checkpoint_summary.epoch(),
+            "Checkpoint sequence number does not match. Need to Sync."
+        );
 
-    // Get the committee from the previous checkpoint
-    let current_committee = prev_ckp
-        .end_of_epoch_data
-        .as_ref()
-        .ok_or(anyhow!(
-            "Expected all checkpoints to be end-of-epoch checkpoints"
-        ))?
-        .next_epoch_committee
-        .iter()
-        .cloned()
-        .collect();
+        // Get the committee from the previous checkpoint
+        let current_committee = prev_ckp
+            .end_of_epoch_data
+            .as_ref()
+            .ok_or(anyhow!(
+                "Expected all checkpoints to be end-of-epoch checkpoints"
+            ))?
+            .next_epoch_committee
+            .iter()
+            .cloned()
+            .collect();
 
-    // Make a committee object using this
-    let committee = Committee::new(prev_ckp.epoch().saturating_add(1), current_committee);
+        // Make a committee object using this
+        Committee::new(prev_ckp.epoch().saturating_add(1), current_committee)
+    } else {
+        // Since we did not find a small committee checkpoint we use the genesis
+        let mut genesis_path = config.checkpoint_summary_dir.clone();
+        genesis_path.push(&config.genesis_filename);
+        Genesis::load(&genesis_path)?.committee()?
+    };
+
     extract_verified_effects_and_events(&full_check_point, &committee, tid)
 }
 
