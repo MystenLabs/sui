@@ -1,9 +1,9 @@
-processed 8 tasks
+processed 11 tasks
 
-task 1 'create-checkpoint'. lines 18-18:
+task 1 'create-checkpoint'. lines 21-21:
 Checkpoint created: 12
 
-task 2 'run-graphql'. lines 20-27:
+task 2 'run-graphql'. lines 23-30:
 Response: {
   "data": {
     "checkpointConnection": {
@@ -25,7 +25,7 @@ Response: {
   }
 }
 
-task 3 'run-graphql'. lines 29-36:
+task 3 'run-graphql'. lines 32-39:
 Response: {
   "data": null,
   "errors": [
@@ -47,7 +47,7 @@ Response: {
   ]
 }
 
-task 4 'run-graphql'. lines 38-45:
+task 4 'run-graphql'. lines 41-48:
 Response: {
   "data": null,
   "errors": [
@@ -69,7 +69,7 @@ Response: {
   ]
 }
 
-task 5 'run-graphql'. lines 47-54:
+task 5 'run-graphql'. lines 50-57:
 Response: {
   "data": null,
   "errors": [
@@ -91,7 +91,7 @@ Response: {
   ]
 }
 
-task 6 'run-graphql'. lines 56-63:
+task 6 'run-graphql'. lines 59-66:
 Response: {
   "data": {
     "checkpointConnection": {
@@ -113,7 +113,7 @@ Response: {
   }
 }
 
-task 7 'run-graphql'. lines 65-72:
+task 7 'run-graphql'. lines 68-75:
 Response: {
   "data": null,
   "errors": [
@@ -133,4 +133,97 @@ Response: {
       }
     }
   ]
+}
+
+task 8 'run-graphql'. lines 77-84:
+Response: {
+  "data": {
+    "checkpointConnection": {
+      "nodes": [
+        {
+          "sequenceNumber": 0
+        },
+        {
+          "sequenceNumber": 1
+        },
+        {
+          "sequenceNumber": 2
+        },
+        {
+          "sequenceNumber": 3
+        },
+        {
+          "sequenceNumber": 4
+        },
+        {
+          "sequenceNumber": 5
+        },
+        {
+          "sequenceNumber": 6
+        },
+        {
+          "sequenceNumber": 7
+        },
+        {
+          "sequenceNumber": 8
+        },
+        {
+          "sequenceNumber": 9
+        },
+        {
+          "sequenceNumber": 10
+        },
+        {
+          "sequenceNumber": 11
+        },
+        {
+          "sequenceNumber": 12
+        }
+      ]
+    }
+  }
+}
+
+task 9 'run-graphql'. lines 87-94:
+Response: {
+  "data": {
+    "checkpointConnection": {
+      "nodes": [
+        {
+          "sequenceNumber": 0
+        },
+        {
+          "sequenceNumber": 1
+        },
+        {
+          "sequenceNumber": 2
+        },
+        {
+          "sequenceNumber": 3
+        }
+      ]
+    }
+  }
+}
+
+task 10 'run-graphql'. lines 97-104:
+Response: {
+  "data": {
+    "checkpointConnection": {
+      "nodes": [
+        {
+          "sequenceNumber": 9
+        },
+        {
+          "sequenceNumber": 10
+        },
+        {
+          "sequenceNumber": 11
+        },
+        {
+          "sequenceNumber": 12
+        }
+      ]
+    }
+  }
 }

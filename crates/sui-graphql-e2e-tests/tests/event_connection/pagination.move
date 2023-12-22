@@ -27,9 +27,9 @@ module Test::M1 {
 
 //# create-checkpoint
 
-//# run-graphql --variables A
+//# run-graphql
 {
-  eventConnection(filter: {sender: $A}) {
+  eventConnection(filter: {sender: "@{A}"}) {
     edges {
       cursor
       node {
@@ -49,9 +49,9 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --variables A
+//# run-graphql
 {
-  eventConnection(first: 2 after: "2:0", filter: {sender: $A}) {
+  eventConnection(first: 2 after: "2:0", filter: {sender: "@{A}"}) {
     edges {
       cursor
       node {
@@ -71,9 +71,31 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --variables A
+//# run-graphql
 {
-  eventConnection(last: 2 before: "3:1", filter: {sender: $A}) {
+  eventConnection(last: 2 before: "3:1", filter: {sender: "@{A}"}) {
+    edges {
+      cursor
+      node {
+        sendingModule {
+          name
+        }
+        type {
+          repr
+        }
+        senders {
+          address
+        }
+        json
+        bcs
+      }
+    }
+  }
+}
+
+//# run-graphql
+{
+  eventConnection(last: 2) {
     edges {
       cursor
       node {

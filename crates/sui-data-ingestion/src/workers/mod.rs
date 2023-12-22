@@ -4,7 +4,9 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use sui_types::full_checkpoint_content::CheckpointData;
+mod kv_store;
 mod s3;
+pub use kv_store::{KVStoreTaskConfig, KVStoreWorker};
 pub use s3::{S3TaskConfig, S3Worker};
 
 #[async_trait]

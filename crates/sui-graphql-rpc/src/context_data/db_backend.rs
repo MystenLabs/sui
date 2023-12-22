@@ -3,7 +3,7 @@
 
 use diesel::backend::Backend;
 use sui_indexer::{
-    schema_v2::{checkpoints, epochs, events, objects, transactions},
+    schema_v2::{checkpoints, display, epochs, events, objects, transactions},
     types_v2::OwnerType,
 };
 
@@ -15,6 +15,8 @@ use diesel::{
     query_builder::{BoxedSelectStatement, FromClause, QueryId},
     sql_types::Text,
 };
+
+use super::db_data_provider::PageLimit;
 
 pub(crate) type BalanceQuery<'a, DB> = BoxedSelectStatement<
     'a,
@@ -42,10 +44,11 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     /// related to that checkpoint.
     fn get_earliest_complete_checkpoint() -> checkpoints::BoxedQuery<'static, DB>;
     fn get_latest_checkpoint() -> checkpoints::BoxedQuery<'static, DB>;
+    fn get_display_by_obj_type(object_type: String) -> display::BoxedQuery<'static, DB>;
     fn multi_get_txs(
         cursor: Option<i64>,
         descending_order: bool,
-        limit: i64,
+        limit: PageLimit,
         filter: Option<TransactionBlockFilter>,
         after_tx_seq_num: Option<i64>,
         before_tx_seq_num: Option<i64>,
@@ -53,14 +56,14 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn multi_get_coins(
         before: Option<Vec<u8>>,
         after: Option<Vec<u8>>,
-        limit: i64,
+        limit: PageLimit,
         address: Option<Vec<u8>>,
         coin_type: String,
     ) -> objects::BoxedQuery<'static, DB>;
     fn multi_get_objs(
         before: Option<Vec<u8>>,
         after: Option<Vec<u8>>,
-        limit: i64,
+        limit: PageLimit,
         filter: Option<ObjectFilter>,
         owner_type: Option<OwnerType>,
     ) -> Result<objects::BoxedQuery<'static, DB>, Error>;
@@ -69,13 +72,13 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn multi_get_checkpoints(
         before: Option<i64>,
         after: Option<i64>,
-        limit: i64,
+        limit: PageLimit,
         epoch: Option<i64>,
     ) -> checkpoints::BoxedQuery<'static, DB>;
     fn multi_get_events(
         before: Option<(i64, i64)>,
         after: Option<(i64, i64)>,
-        limit: i64,
+        limit: PageLimit,
         filter: Option<EventFilter>,
     ) -> Result<events::BoxedQuery<'static, DB>, Error>;
 }
