@@ -174,10 +174,9 @@ impl Epoch {
 
     #[graphql(skip)]
     async fn system_state(&self, ctx: &Context<'_>) -> Result<NativeSuiSystemStateSummary, Error> {
-        Ok(ctx
-            .data_unchecked::<PgManager>()
+        ctx.data_unchecked::<PgManager>()
             .fetch_sui_system_state(self.stored.epoch as u64)
-            .await?)
+            .await
     }
 }
 
