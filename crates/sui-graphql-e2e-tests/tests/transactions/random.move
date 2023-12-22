@@ -33,8 +33,11 @@
             kind {
                 __typename
                 ... on EndOfEpochTransaction {
-                    transactionConnection {
-                        nodes { __typename }
+                    transactions {
+                        edges {
+                            cursor
+                            node { __typename }
+                        }
                     }
                 }
             }
