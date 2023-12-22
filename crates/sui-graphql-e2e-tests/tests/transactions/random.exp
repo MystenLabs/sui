@@ -6,7 +6,7 @@ Checkpoint created: 1
 task 2 'advance-epoch'. lines 8-8:
 Epoch advanced: 0
 
-task 3 'run-graphql'. lines 10-43:
+task 3 'run-graphql'. lines 10-46:
 Response: {
   "data": {
     "epoch": {
@@ -40,13 +40,19 @@ Response: {
         {
           "kind": {
             "__typename": "EndOfEpochTransaction",
-            "transactionConnection": {
-              "nodes": [
+            "transactions": {
+              "edges": [
                 {
-                  "__typename": "RandomnessStateCreateTransaction"
+                  "cursor": "MA",
+                  "node": {
+                    "__typename": "RandomnessStateCreateTransaction"
+                  }
                 },
                 {
-                  "__typename": "ChangeEpochTransaction"
+                  "cursor": "MQ",
+                  "node": {
+                    "__typename": "ChangeEpochTransaction"
+                  }
                 }
               ]
             }
@@ -57,10 +63,10 @@ Response: {
   }
 }
 
-task 5 'create-checkpoint'. lines 49-49:
+task 5 'create-checkpoint'. lines 52-52:
 Checkpoint created: 3
 
-task 6 'run-graphql'. lines 51-66:
+task 6 'run-graphql'. lines 54-69:
 Response: {
   "data": {
     "transactionBlockConnection": {
