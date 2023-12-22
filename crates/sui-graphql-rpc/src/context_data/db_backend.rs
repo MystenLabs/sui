@@ -34,6 +34,8 @@ pub(crate) type BalanceQuery<'a, DB> = BoxedSelectStatement<
     objects::dsl::coin_type,
 >;
 
+pub type QueryableEpochInfoType<DB> = SqlTypeOf<AsSelect<QueryableEpochInfo, DB>>;
+
 pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn get_tx_by_digest(digest: Vec<u8>) -> transactions::BoxedQuery<'static, DB>;
     fn get_obj(address: Vec<u8>, version: Option<i64>) -> objects::BoxedQuery<'static, DB>;
@@ -114,5 +116,3 @@ impl<T: QueryId> QueryId for Explained<T> {
 impl<T: diesel::query_builder::Query> diesel::query_builder::Query for Explained<T> {
     type SqlType = Text;
 }
-
-pub type QueryableEpochInfoType<DB> = SqlTypeOf<AsSelect<QueryableEpochInfo, DB>>;

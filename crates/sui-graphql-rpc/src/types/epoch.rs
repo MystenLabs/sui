@@ -13,9 +13,7 @@ use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
 use async_graphql::*;
 use sui_indexer::models_v2::epoch::QueryableEpochInfo;
-use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary as NativeSuiSystemStateSummary;
 
-#[derive(Clone, Debug)]
 pub(crate) struct Epoch {
     pub stored: QueryableEpochInfo,
 }
@@ -34,7 +32,10 @@ impl Epoch {
 
     /// Validator related properties, including the active validators
     async fn validator_set(&self, ctx: &Context<'_>) -> Result<Option<ValidatorSet>> {
-        let system_state = self.system_state(ctx).await?;
+        let system_state = ctx
+            .data_unchecked::<PgManager>()
+            .fetch_sui_system_state(self.stored.epoch as u64)
+            .await?;
 
         let active_validators = convert_to_validators(system_state.active_validators, None);
         let validator_set = ValidatorSet {
@@ -170,13 +171,6 @@ impl Epoch {
             .fetch_txs(first, after, last, before, Some(new_filter))
             .await
             .extend()
-    }
-
-    #[graphql(skip)]
-    async fn system_state(&self, ctx: &Context<'_>) -> Result<NativeSuiSystemStateSummary, Error> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_sui_system_state(self.stored.epoch as u64)
-            .await
     }
 }
 
