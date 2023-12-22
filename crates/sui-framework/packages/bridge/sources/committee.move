@@ -66,7 +66,7 @@ module bridge::committee {
 
         // add prefix to the message bytes
         let message_bytes = SUI_MESSAGE_PREFIX;
-        vector::append(&mut message_bytes, message::serialise_message(message));
+        vector::append(&mut message_bytes, message::serialize_message(message));
 
         let threshold = 0;
         while (i < signature_counts) {
@@ -92,7 +92,7 @@ module bridge::committee {
     #[test]
     fun test_verify_signatures_good_path() {
         let committee = setup_test();
-        let msg = message::deserialise_message(hex::decode(TEST_MSG));
+        let msg = message::deserialize_message(hex::decode(TEST_MSG));
         // good path
         verify_signatures(
             &committee,
@@ -115,7 +115,7 @@ module bridge::committee {
     #[expected_failure(abort_code = EDuplicatedSignature)]
     fun test_verify_signatures_duplicated_sig() {
         let committee = setup_test();
-        let msg = message::deserialise_message(hex::decode(TEST_MSG));
+        let msg = message::deserialize_message(hex::decode(TEST_MSG));
         // good path
         verify_signatures(
             &committee,
@@ -133,7 +133,7 @@ module bridge::committee {
     #[expected_failure(abort_code = EInvalidSignature)]
     fun test_verify_signatures_invalid_signature() {
         let committee = setup_test();
-        let msg = message::deserialise_message(hex::decode(TEST_MSG));
+        let msg = message::deserialize_message(hex::decode(TEST_MSG));
         // good path
         verify_signatures(
             &committee,
@@ -149,7 +149,7 @@ module bridge::committee {
     #[expected_failure(abort_code = ESignatureBelowThreshold)]
     fun test_verify_signatures_below_threshold() {
         let committee = setup_test();
-        let msg = message::deserialise_message(hex::decode(TEST_MSG));
+        let msg = message::deserialize_message(hex::decode(TEST_MSG));
         // good path
         verify_signatures(
             &committee,
