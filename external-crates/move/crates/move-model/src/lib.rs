@@ -28,7 +28,7 @@ use move_compiler::{
     parser::ast::{self as P},
     shared::{parse_named_address, unique_map::UniqueMap, NumericalAddress, PackagePaths},
     typing::ast::{self as T},
-    Compiler, Flags, PASS_COMPILATION, PASS_EXPANSION, PASS_PARSER, PASS_TYPING,
+    Compiler, Flags, PASS_COMPILATION, PASS_PARSER, PASS_TYPING,
 };
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol as MoveSymbol;
@@ -196,17 +196,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
             lib_definitions: vec![],
         }
     };
-    let (compiler, expansion_ast) = match compiler.at_parser(parsed_prog).run::<PASS_EXPANSION>() {
-        Err(diags) => {
-            add_move_lang_diagnostics(&mut env, diags);
-            return Ok(env);
-        }
-        Ok(compiler) => compiler.into_ast(),
-    };
-    let (compiler, typing_ast) = match compiler
-        .at_expansion(expansion_ast.clone())
-        .run::<PASS_TYPING>()
-    {
+    let (compiler, typing_ast) = match compiler.at_parser(parsed_prog).run::<PASS_TYPING>() {
         Err(diags) => {
             add_move_lang_diagnostics(&mut env, diags);
             return Ok(env);
