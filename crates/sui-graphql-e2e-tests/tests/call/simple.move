@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses Test=0x0 A=0x42 --simulator --custom-validator-account
+//# init --addresses Test=0x0 A=0x42 --simulator --custom-validator-account --reference-gas-price 234
 
 //# publish
 module Test::M1 {
@@ -162,5 +162,13 @@ module Test::M1 {
   }
   address(address: $validator_0) {
     address
+  }
+}
+
+//# run-graphql
+# Since we set it at the init, it should be the same as 234
+{
+  latestSuiSystemState {
+    referenceGasPrice
   }
 }

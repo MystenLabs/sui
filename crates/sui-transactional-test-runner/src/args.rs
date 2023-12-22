@@ -54,6 +54,8 @@ pub struct SuiInitArgs {
     pub simulator: bool,
     #[clap(long = "custom-validator-account")]
     pub custom_validator_account: bool,
+    #[clap(long = "reference-gas-price")]
+    pub reference_gas_price: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
