@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::connection::{Connection, Edge};
+use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::binary_views::BinaryIndexedView;
@@ -13,6 +13,7 @@ use crate::context_data::db_data_provider::{validate_cursor_pagination, PgManage
 use crate::error::Error;
 use sui_package_resolver::Module as ParsedMoveModule;
 
+use super::cursor::{Cursor, Page};
 use super::move_function::MoveFunction;
 use super::move_struct::MoveStruct;
 use super::{base64::Base64, move_package::MovePackage, sui_address::SuiAddress};
@@ -23,6 +24,8 @@ pub(crate) struct MoveModule {
     pub native: Vec<u8>,
     pub parsed: ParsedMoveModule,
 }
+
+pub(crate) type CFriend = Cursor<usize>;
 
 /// Represents a module in Move, a library that defines struct types
 /// and functions that operate on these types.
@@ -56,59 +59,31 @@ impl MoveModule {
 
     /// Modules that this module considers friends (these modules can access `public(friend)`
     /// functions from this module).
-    async fn friend_connection(
+    async fn friends(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<CFriend>,
         last: Option<u64>,
-        before: Option<String>,
+        before: Option<CFriend>,
     ) -> Result<Connection<String, MoveModule>> {
-        // TODO: make cursor opaque (currently just an offset).
-        validate_cursor_pagination(&first, &after, &last, &before).extend()?;
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let bytecode = self.parsed.bytecode();
         let total = bytecode.friend_decls.len();
 
         // Add one to make [lo, hi) a half-open interval ((after, before) is an open interval).
-        let mut lo = if let Some(after) = after {
-            1 + after
-                .parse::<usize>()
-                .map_err(|_| Error::InvalidCursor("Failed to parse 'after' cursor.".to_string()))
-                .extend()?
-        } else {
-            0
-        };
-
-        let mut hi = if let Some(before) = before {
-            before
-                .parse::<usize>()
-                .map_err(|_| Error::InvalidCursor("Failed to parse 'before' cursor.".to_string()))
-                .extend()?
-        } else {
-            total
-        };
+        let mut lo = page.after().map_or(0, |a| **a + 1);
+        let mut hi = page.before().map_or(total, |b| **b);
 
         let mut connection = Connection::new(false, false);
         if hi <= lo {
             return Ok(connection);
-        }
-
-        // If there's a `first` limit, bound the upperbound to be at most `first` away from the
-        // lowerbound.
-        if let Some(first) = first {
-            let first = first as usize;
-            if hi - lo > first {
-                hi = lo + first;
-            }
-        }
-
-        // If there's a `last` limit, bound the lowerbound to be at most `last` away from the
-        // upperbound.  NB. This applies after we bounded the upperbound, using `first`.
-        if let Some(last) = last {
-            let last = last as usize;
-            if hi - lo > last {
-                lo = hi - last;
+        } else if (hi - lo) > page.limit() {
+            if page.is_from_front() {
+                hi = lo + page.limit();
+            } else {
+                lo = hi - page.limit();
             }
         }
 
@@ -131,13 +106,8 @@ impl MoveModule {
 
         // Select `friend_decls[lo..hi]` using iterators to enumerate before taking a sub-sequence
         // from it, to get pairs `(i, friend_decls[i])`.
-        for (idx, decl) in bytecode
-            .friend_decls
-            .iter()
-            .enumerate()
-            .skip(lo)
-            .take(hi - lo)
-        {
+        for idx in lo..hi {
+            let decl = &bytecode.friend_decls[idx];
             let friend_pkg = bytecode.address_identifier_at(decl.address);
             let friend_mod = bytecode.identifier_at(decl.name);
 
@@ -161,7 +131,8 @@ impl MoveModule {
                 .extend());
             };
 
-            connection.edges.push(Edge::new(idx.to_string(), friend));
+            let cursor = Cursor::new(idx).encode_cursor();
+            connection.edges.push(Edge::new(cursor, friend));
         }
 
         Ok(connection)

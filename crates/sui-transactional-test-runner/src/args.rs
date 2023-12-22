@@ -156,8 +156,10 @@ pub struct RunGraphqlCommand {
     pub show_headers: bool,
     #[clap(long = "show-service-version")]
     pub show_service_version: bool,
-    #[clap(long = "variables", num_args(1..))]
+    #[clap(long, num_args(1..))]
     pub variables: Vec<String>,
+    #[clap(long, num_args(1..))]
+    pub cursors: Vec<String>,
 }
 
 #[derive(Debug, clap::Parser)]
