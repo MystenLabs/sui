@@ -4,37 +4,47 @@ init:
 validator_0: object(0,0)
 
 task 1 'publish'. lines 6-28:
-Error: Error checking transaction input objects: GasPriceUnderRGP { gas_price: 1000, reference_gas_price: 1234 }
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'run'. lines 30-30:
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
+created: object(2,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3 'run'. lines 32-32:
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
+created: object(3,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4 'view-object'. lines 34-34:
 Owner: Account Address ( validator_0 )
 Version: 1
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(0,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 300000000000000u64}}
+Contents: sui_system::validator_cap::UnverifiedValidatorOperationCap {id: sui::object::UID {id: sui::object::ID {bytes: fake(0,0)}}, authorizer_validator_address: validator_0}
 
 task 5 'view-object'. lines 36-36:
-Error: task 5, lines 36-36. Unbound fake id 2,0
+Owner: Account Address ( A )
+Version: 3
+Contents: Test::M1::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, value: 0u64}
 
 task 6 'view-object'. lines 38-38:
-Error: task 6, lines 38-38. Unbound fake id 3,0
+Owner: Account Address ( validator_0 )
+Version: 4
+Contents: Test::M1::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, value: 0u64}
 
 task 7 'create-checkpoint'. lines 40-40:
 Checkpoint created: 4
 
 task 8 'view-checkpoint'. lines 42-42:
 CheckpointSummary { epoch: 0, seq: 4, content_digest: D3oWLCcqoa1D15gxzvMaDemNNY8YYVspAkYkcmtQKWRt,
-            epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}
+            epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 3000000, storage_cost: 10176400, storage_rebate: 1956240, non_refundable_storage_fee: 19760 }}
 
 task 9 'advance-epoch'. lines 45-45:
 Epoch advanced: 5
 
 task 10 'view-checkpoint'. lines 47-47:
-CheckpointSummary { epoch: 5, seq: 10, content_digest: FmDx5mehMdKSxhG13EFvHYU1xjCAGFSc6LdRGH5quzLk,
+CheckpointSummary { epoch: 5, seq: 10, content_digest: 33fNcAYA95FMHPAQoaAfa2myXezn3MdpE1KTehs63RpB,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}
 
 task 11 'run-graphql'. lines 49-55:
@@ -98,105 +108,114 @@ Response: {
   "data": {
     "address": {
       "objectConnection": {
-        "edges": []
+        "edges": [
+          {
+            "node": {
+              "address": "0x82fa12f390475d013f459d689691172d63ea8aa2933468b41524fdf78da66988",
+              "digest": "2KWJXyy6peqbCcJmeKD4kPtZXrrt284e46Y3brz31yMn",
+              "kind": "OWNED"
+            }
+          }
+        ]
       }
     }
   }
 }
 
 task 19 'run-graphql'. lines 98-145:
-Error: Unknown variable: obj_2_0
-Allowed variable mappings are {
-    "A": GraphqlQueryVariable {
-        name: "A",
-        ty: "SuiAddress!",
-        value: String("0x42"),
+Response: {
+  "data": {
+    "address": {
+      "objectConnection": {
+        "edges": []
+      }
     },
-    "A_opt": GraphqlQueryVariable {
-        name: "A_opt",
-        ty: "SuiAddress",
-        value: String("0x42"),
+    "second": {
+      "objectConnection": {
+        "edges": [
+          {
+            "node": {
+              "address": "0x82fa12f390475d013f459d689691172d63ea8aa2933468b41524fdf78da66988",
+              "digest": "2KWJXyy6peqbCcJmeKD4kPtZXrrt284e46Y3brz31yMn",
+              "kind": "OWNED"
+            }
+          }
+        ]
+      }
     },
-    "Test": GraphqlQueryVariable {
-        name: "Test",
-        ty: "SuiAddress!",
-        value: String("0x0"),
+    "val_objs": {
+      "objectConnection": {
+        "edges": [
+          {
+            "node": {
+              "address": "0x0b64176f2668c07c5b2582cf0f17f66cbc1390cc90a1845932b7ed938517a432",
+              "digest": "9wWuRiX6bEjVogDhngPUVXE7sQxzxowKAiwaEiR1Y7pP",
+              "kind": "OWNED",
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            }
+          },
+          {
+            "node": {
+              "address": "0x3325c725c14c2b28152d1f925b4af3532a05ccb625e6b7b4e0d3931a6fe3faa8",
+              "digest": "J1smQxi9GGRXhz2E4xoJs2iAcu1Kt18AdRUYtSSrwzBP",
+              "kind": "OWNED",
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            }
+          },
+          {
+            "node": {
+              "address": "0x4e0a828b0427d9da8bbebdfae5868104a4635781ecb3e5644377f8553bab8749",
+              "digest": "2z3xTH6i7cKv4jDWCYW9frEHv9aRqsfZm6iRqJnEn7us",
+              "kind": "OWNED",
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            }
+          },
+          {
+            "node": {
+              "address": "0xc2874ab7f570bba661378118254bf673a3928f5a8c92c9e519f7bfa6b943de13",
+              "digest": "7KKMbQniTyVJbURpu1eJc8tyasYhuRxn4Z5X1SDBuGgf",
+              "kind": "OWNED",
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            }
+          },
+          {
+            "node": {
+              "address": "0xcc6a13827ad27f334c65067031194f60f0e347b147e805947a77494079b18a4d",
+              "digest": "534YkZB4cK4yefSTtUtDQEQnyACLM8uAmPJWVpaW5cWT",
+              "kind": "OWNED",
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            }
+          },
+          {
+            "node": {
+              "address": "0xd0f352d0ac08c0f9b32a575bce8838057322c591c6f92eeb66b7c4170a48db52",
+              "digest": "5REd11v9avwduXBeLgkGt11nvdVQP7a8ighLhg9qt3wR",
+              "kind": "OWNED",
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
+            }
+          }
+        ]
+      }
     },
-    "Test_opt": GraphqlQueryVariable {
-        name: "Test_opt",
-        ty: "SuiAddress",
-        value: String("0x0"),
-    },
-    "deepbook": GraphqlQueryVariable {
-        name: "deepbook",
-        ty: "SuiAddress!",
-        value: String("0xdee9"),
-    },
-    "deepbook_opt": GraphqlQueryVariable {
-        name: "deepbook_opt",
-        ty: "SuiAddress",
-        value: String("0xdee9"),
-    },
-    "obj_0_0": GraphqlQueryVariable {
-        name: "obj_0_0",
-        ty: "SuiAddress!",
-        value: String("0x07917bfa64e7caa517f84a6bf0fa95d6c45af0b43f14e04a0e6ec1ebd379eba6"),
-    },
-    "obj_0_0_opt": GraphqlQueryVariable {
-        name: "obj_0_0_opt",
-        ty: "SuiAddress",
-        value: String("0x07917bfa64e7caa517f84a6bf0fa95d6c45af0b43f14e04a0e6ec1ebd379eba6"),
-    },
-    "obj_0_1": GraphqlQueryVariable {
-        name: "obj_0_1",
-        ty: "SuiAddress!",
-        value: String("0xa520d87009a4a269db82307d2edd14ac9dd3db28a280dec41d1bde2dc385ffb3"),
-    },
-    "obj_0_1_opt": GraphqlQueryVariable {
-        name: "obj_0_1_opt",
-        ty: "SuiAddress",
-        value: String("0xa520d87009a4a269db82307d2edd14ac9dd3db28a280dec41d1bde2dc385ffb3"),
-    },
-    "std": GraphqlQueryVariable {
-        name: "std",
-        ty: "SuiAddress!",
-        value: String("0x1"),
-    },
-    "std_opt": GraphqlQueryVariable {
-        name: "std_opt",
-        ty: "SuiAddress",
-        value: String("0x1"),
-    },
-    "sui": GraphqlQueryVariable {
-        name: "sui",
-        ty: "SuiAddress!",
-        value: String("0x2"),
-    },
-    "sui_opt": GraphqlQueryVariable {
-        name: "sui_opt",
-        ty: "SuiAddress",
-        value: String("0x2"),
-    },
-    "sui_system": GraphqlQueryVariable {
-        name: "sui_system",
-        ty: "SuiAddress!",
-        value: String("0x3"),
-    },
-    "sui_system_opt": GraphqlQueryVariable {
-        name: "sui_system_opt",
-        ty: "SuiAddress",
-        value: String("0x3"),
-    },
-    "validator_0": GraphqlQueryVariable {
-        name: "validator_0",
-        ty: "SuiAddress!",
-        value: String("0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"),
-    },
-    "validator_0_opt": GraphqlQueryVariable {
-        name: "validator_0_opt",
-        ty: "SuiAddress",
-        value: String("0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"),
-    },
+    "object": {
+      "version": 3,
+      "owner": {
+        "address": "0x0000000000000000000000000000000000000000000000000000000000000042"
+      }
+    }
+  }
 }
 
 task 20 'view-graphql-variables'. lines 148-149:
@@ -210,11 +229,11 @@ Value: "0x42"
 
 Name: Test
 Type: SuiAddress!
-Value: "0x0"
+Value: "0x3661ef0e3516ed1cb265c48259fb13da33287f346ae9df45e94dd47cfa8f0180"
 
 Name: Test_opt
 Type: SuiAddress
-Value: "0x0"
+Value: "0x3661ef0e3516ed1cb265c48259fb13da33287f346ae9df45e94dd47cfa8f0180"
 
 Name: deepbook
 Type: SuiAddress!
@@ -226,19 +245,43 @@ Value: "0xdee9"
 
 Name: obj_0_0
 Type: SuiAddress!
-Value: "0x07917bfa64e7caa517f84a6bf0fa95d6c45af0b43f14e04a0e6ec1ebd379eba6"
+Value: "0x0b64176f2668c07c5b2582cf0f17f66cbc1390cc90a1845932b7ed938517a432"
 
 Name: obj_0_0_opt
 Type: SuiAddress
-Value: "0x07917bfa64e7caa517f84a6bf0fa95d6c45af0b43f14e04a0e6ec1ebd379eba6"
+Value: "0x0b64176f2668c07c5b2582cf0f17f66cbc1390cc90a1845932b7ed938517a432"
 
 Name: obj_0_1
 Type: SuiAddress!
-Value: "0xa520d87009a4a269db82307d2edd14ac9dd3db28a280dec41d1bde2dc385ffb3"
+Value: "0x5e967d5762f4359ac1c290d14b0bc99e2b796ef227e2932bdb6e604ad6f24923"
 
 Name: obj_0_1_opt
 Type: SuiAddress
-Value: "0xa520d87009a4a269db82307d2edd14ac9dd3db28a280dec41d1bde2dc385ffb3"
+Value: "0x5e967d5762f4359ac1c290d14b0bc99e2b796ef227e2932bdb6e604ad6f24923"
+
+Name: obj_1_0
+Type: SuiAddress!
+Value: "0x3661ef0e3516ed1cb265c48259fb13da33287f346ae9df45e94dd47cfa8f0180"
+
+Name: obj_1_0_opt
+Type: SuiAddress
+Value: "0x3661ef0e3516ed1cb265c48259fb13da33287f346ae9df45e94dd47cfa8f0180"
+
+Name: obj_2_0
+Type: SuiAddress!
+Value: "0x82fa12f390475d013f459d689691172d63ea8aa2933468b41524fdf78da66988"
+
+Name: obj_2_0_opt
+Type: SuiAddress
+Value: "0x82fa12f390475d013f459d689691172d63ea8aa2933468b41524fdf78da66988"
+
+Name: obj_3_0
+Type: SuiAddress!
+Value: "0x4e0a828b0427d9da8bbebdfae5868104a4635781ecb3e5644377f8553bab8749"
+
+Name: obj_3_0_opt
+Type: SuiAddress
+Value: "0x4e0a828b0427d9da8bbebdfae5868104a4635781ecb3e5644377f8553bab8749"
 
 Name: std
 Type: SuiAddress!
@@ -296,7 +339,7 @@ task 22 'run-graphql'. lines 168-174:
 Response: {
   "data": {
     "latestSuiSystemState": {
-      "referenceGasPrice": "1234"
+      "referenceGasPrice": "234"
     }
   }
 }
