@@ -101,6 +101,8 @@ pub enum FakeID {
     Enumerated(u64, u64),
 }
 
+const DEFAULT_GAS_PRICE: u64 = 1_000;
+
 const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
     MOVE_STDLIB_PACKAGE_ID,
     DEEPBOOK_PACKAGE_ID,
@@ -202,6 +204,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             is_simulator,
             custom_validator_account,
             reference_gas_price,
+            default_gas_price,
         ) = match task_opt.map(|t| t.command) {
             Some((
                 InitCommand { named_addresses },
@@ -213,6 +216,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     simulator,
                     custom_validator_account,
                     reference_gas_price,
+                    default_gas_price,
                 },
             )) => {
                 let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -247,6 +251,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     simulator,
                     custom_validator_account,
                     reference_gas_price,
+                    default_gas_price,
                 )
             }
             None => {
@@ -257,6 +262,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     protocol_config,
                     false,
                     false,
+                    None,
                     None,
                 )
             }
@@ -309,7 +315,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             object_enumeration: BiBTreeMap::new(),
             next_fake: (0, 0),
             // TODO: make this configurable
-            gas_price: 1000,
+            gas_price: default_gas_price.unwrap_or(DEFAULT_GAS_PRICE),
             staged_modules: BTreeMap::new(),
         };
 
@@ -348,6 +354,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             sender,
             upgradeable,
             dependencies,
+            gas_price,
         } = extra;
         let named_addr_opt = modules.first().unwrap().named_address;
         let first_module_name = modules.first().unwrap().module.self_id().name().to_string();
@@ -371,7 +378,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 Ok(id)
             })
             .collect::<Result<_, _>>()?;
-        let gas_price = self.gas_price;
+        let gas_price = gas_price.unwrap_or(self.gas_price);
         // we are assuming that all packages depend on Move Stdlib and Sui Framework, so these
         // don't have to be provided explicitly as parameters
         dependencies.extend([MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID]);
@@ -658,6 +665,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 recipient,
                 sender,
                 gas_budget,
+                gas_price,
             }) => {
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let obj_arg = SuiValue::Object(fake_id, None).into_argument(&mut builder, self)?;
@@ -666,7 +674,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     None => panic!("Unbound account {}", recipient),
                 };
                 let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
-                let gas_price = self.gas_price;
+                let gas_price: u64 = gas_price.unwrap_or(self.gas_price);
                 let transaction = self.sign_txn(sender, |sender, gas| {
                     let rec_arg = builder.pure(recipient).unwrap();
                     builder.command(sui_types::transaction::Command::TransferObjects(
@@ -775,6 +783,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 gas_budget,
                 syntax,
                 policy,
+                gas_price,
             }) => {
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
                 // zero out the package name
@@ -814,6 +823,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                         );
                     original_package_addrs.push((*dep, dep_address));
                 }
+                let gas_price = gas_price.unwrap_or(self.gas_price);
 
                 let result = compile_any(
                     self,
@@ -857,6 +867,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                             sender,
                             gas_budget,
                             policy,
+                            gas_price,
                         ).await?;
                         Ok((output, modules))
                     },
@@ -1156,6 +1167,7 @@ impl<'a> SuiTestAdapter<'a> {
         sender: String,
         gas_budget: Option<u64>,
         policy: u8,
+        gas_price: u64,
     ) -> anyhow::Result<Option<String>> {
         let modules_bytes = modules
             .iter()
@@ -1204,7 +1216,6 @@ impl<'a> SuiTestAdapter<'a> {
 
         let pt = builder.finish();
 
-        let gas_price = self.gas_price;
         let data = |sender, gas| {
             TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
         };
