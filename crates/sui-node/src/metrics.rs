@@ -69,7 +69,9 @@ pub fn start_metrics_push_task(config: &sui_config::NodeConfig, registry: Regist
         _ => return,
     };
 
-    let client = MetricsPushClient::new(config.network_key_pair().copy());
+    // make a copy so we can make a new client later when we hit errors posting metrics
+    let config_copy = config.clone();
+    let mut client = MetricsPushClient::new(config_copy.network_key_pair().copy());
 
     async fn push_metrics(
         client: &MetricsPushClient,
@@ -136,7 +138,10 @@ pub fn start_metrics_push_task(config: &sui_config::NodeConfig, registry: Regist
             interval.tick().await;
 
             if let Err(error) = push_metrics(&client, &url, &registry).await {
-                tracing::warn!("unable to push metrics: {error}");
+                tracing::warn!("unable to push metrics: {error}; new client will be created");
+                // aggressively recreate our client connection if we hit an error
+                // since our tick interval is only every min, this should not be racey
+                client = MetricsPushClient::new(config_copy.network_key_pair().copy());
             }
         }
     });
