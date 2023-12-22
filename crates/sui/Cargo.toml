@@ -82,6 +82,7 @@ test-cluster.workspace = true
 sui-macros.workspace = true
 sui-simulator.workspace = true
 sui-test-transaction-builder.workspace = true
+serde_json.workspace = true
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemalloc-ctl"]

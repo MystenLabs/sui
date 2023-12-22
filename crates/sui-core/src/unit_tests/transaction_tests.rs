@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::ed25519::Ed25519KeyPair;
-use fastcrypto::traits::{EncodeDecodeBase64, KeyPair};
+use fastcrypto::traits::KeyPair;
 use fastcrypto_zkp::bn254::zk_login::{parse_jwks, OIDCProvider, ZkLoginInputs};
 use rand::{rngs::StdRng, SeedableRng};
 use shared_crypto::intent::{Intent, IntentMessage};
@@ -803,9 +803,14 @@ async fn zk_multisig_test() {
     let mut pks = vec![];
     let mut kps_and_zklogin_inputs = vec![];
     for test in test_datum {
-        let kp = SuiKeyPair::decode_base64(&test.kp).unwrap();
-        let inputs = ZkLoginInputs::from_json(&test.zklogin_inputs, &test.address_seed).unwrap();
-        let pk_zklogin = PublicKey::from_zklogin_inputs(&inputs).unwrap();
+    let kp = SuiKeyPair::decode_base64(&test.kp).unwrap();
+        let pk_zklogin = PublicKey::ZkLogin(
+            ZkLoginPublicIdentifier::new(
+                &OIDCProvider::Twitch.get_config().iss,
+                &test.address_seed,
+            )
+            .unwrap(),
+        );
         pks.push(pk_zklogin);
         kps_and_zklogin_inputs.push((kp, inputs));
     }

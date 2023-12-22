@@ -16,6 +16,8 @@ use crate::{
 use fastcrypto::encoding::Base64;
 use fastcrypto::traits::{EncodeDecodeBase64, ToFromBytes};
 use fastcrypto_zkp::bn254::utils::big_int_str_to_bytes;
+
+use fastcrypto::traits::ToFromBytes;
 use fastcrypto_zkp::bn254::zk_login::{parse_jwks, JwkId, OIDCProvider, ZkLoginInputs, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use im::hashmap::HashMap as ImHashMap;
@@ -50,9 +52,20 @@ fn zklogin_authenticator_jwk() {
     let test_datum: Vec<TestData> = serde_json::from_reader(file).unwrap();
 
     for test in test_datum {
+<<<<<<< HEAD
         let kp = SuiKeyPair::decode_base64(&test.kp).unwrap();
         let inputs = ZkLoginInputs::from_json(&test.zklogin_inputs, &test.address_seed).unwrap();
         let pk_zklogin = PublicKey::from_zklogin_inputs(&inputs).unwrap();
+=======
+        let kp = SuiKeyPair::decode(&test.kp).unwrap();
+        let pk_zklogin = PublicKey::ZkLogin(
+            ZkLoginPublicIdentifier::new(
+                &OIDCProvider::Twitch.get_config().iss,
+                &test.address_seed,
+            )
+            .unwrap(),
+        );
+>>>>>>> ddd7c26d17 (feat: unify import/export private key format)
         let addr = (&pk_zklogin).into();
         let tx_data = make_transaction_data(addr);
         let msg = IntentMessage::new(Intent::sui_transaction(), tx_data);

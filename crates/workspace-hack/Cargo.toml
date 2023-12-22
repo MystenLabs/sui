@@ -290,9 +290,9 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail = { version = "0.4", default-features = false }
 fast_chemail = { version = "0.9", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9579a60fbffe15c0f65626ae55998bf8ef42e193", features = ["beacon-dkg", "copy_key"] }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9579a60fbffe15c0f65626ae55998bf8ef42e193" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9579a60fbffe15c0f65626ae55998bf8ef42e193", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c9083bcc88b219480a6ad881988e5709252551ba", features = ["beacon-dkg", "copy_key"] }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c9083bcc88b219480a6ad881988e5709252551ba" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c9083bcc88b219480a6ad881988e5709252551ba", default-features = false }
 fastrand-dff4ba8e3ae991db = { package = "fastrand", version = "1", default-features = false }
 fastrand-f595c2ba2a3f28df = { package = "fastrand", version = "2" }
 fd-lock = { version = "3", default-features = false }
@@ -1159,10 +1159,10 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail = { version = "0.4", default-features = false }
 fast_chemail = { version = "0.9", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9579a60fbffe15c0f65626ae55998bf8ef42e193", features = ["beacon-dkg", "copy_key"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9579a60fbffe15c0f65626ae55998bf8ef42e193", default-features = false }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9579a60fbffe15c0f65626ae55998bf8ef42e193" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9579a60fbffe15c0f65626ae55998bf8ef42e193", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c9083bcc88b219480a6ad881988e5709252551ba", features = ["beacon-dkg", "copy_key"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c9083bcc88b219480a6ad881988e5709252551ba", default-features = false }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c9083bcc88b219480a6ad881988e5709252551ba" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c9083bcc88b219480a6ad881988e5709252551ba", default-features = false }
 fastrand-dff4ba8e3ae991db = { package = "fastrand", version = "1", default-features = false }
 fastrand-f595c2ba2a3f28df = { package = "fastrand", version = "2" }
 fd-lock = { version = "3", default-features = false }

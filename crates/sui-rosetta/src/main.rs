@@ -22,7 +22,7 @@ use sui_rosetta::types::{CurveType, PrefundedAccount, SuiEnv};
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer, SUI};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{EncodeDecodeBase64, KeypairTraits, SuiKeyPair, ToFromBytes};
+use sui_types::crypto::{KeypairTraits, SuiKeyPair, ToFromBytes};
 
 #[derive(Parser)]
 #[clap(name = "sui-rosetta", rename_all = "kebab-case", author, version)]
@@ -210,7 +210,7 @@ fn read_prefunded_account(path: &Path) -> Result<Vec<PrefundedAccount>, anyhow::
         .iter()
         .map(|kpstr| {
             let key = SuiKeyPair::decode_base64(kpstr);
-            key.map(|k| (Into::<SuiAddress>::into(&k.public()), k))
+            key.map(|k| (SuiAddress::from(&k.public()), k))
         })
         .collect::<Result<BTreeMap<_, _>, _>>()
         .unwrap();

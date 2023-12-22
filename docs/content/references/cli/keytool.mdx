@@ -13,8 +13,7 @@ The Sui CLI `keytool` command provides several command-level access for the mana
 Usage: sui keytool [OPTIONS] <COMMAND>
 
 Commands:
-  convert                           	Convert private key from wallet format (hex of 32 byte private key) to sui.keystore format (base64 of 33 byte flag || private key) or
-                                        	vice versa
+  convert                           	Convert private key from legacy formats e.g. hex or base64 to Bech32 encoded 33 byte `flag || private key` begins with `suiprivkey`
   decode-tx-bytes                   	Given a Base64 encoded transaction bytes, decode its components
   decode-multi-sig                  	Given a Base64 encoded MultiSig signature, decode its components. If tx_bytes is passed in, verify the multisig
   generate                          	Generate a new keypair with key scheme flag {ed25519 | secp256k1 | secp256r1} with optional derivation path, default to

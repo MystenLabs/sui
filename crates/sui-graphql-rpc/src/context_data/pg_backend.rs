@@ -632,10 +632,7 @@ impl PgQueryExecutor for PgManager {
                                 exceeds = true
                             );
                         } else {
-                            info!(
-                                target: EXPLAIN_COSTING_LOG_TARGET,
-                                cost,
-                            );
+                            info!(target: EXPLAIN_COSTING_LOG_TARGET, cost,);
                         }
                     }
                 }

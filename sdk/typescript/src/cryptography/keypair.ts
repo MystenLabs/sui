@@ -3,16 +3,31 @@
 
 import { toB64 } from '@mysten/bcs';
 import { blake2b } from '@noble/hashes/blake2b';
+import { bech32 } from 'bech32';
 
 import { bcs } from '../bcs/index.js';
 import { IntentScope, messageWithIntent } from './intent.js';
 import type { PublicKey } from './publickey.js';
+import { SIGNATURE_SCHEME_TO_FLAG } from './signature-scheme.js';
 import type { SignatureScheme } from './signature-scheme.js';
 import type { SerializedSignature } from './signature.js';
 import { toSerializedSignature } from './signature.js';
 
 export const PRIVATE_KEY_SIZE = 32;
 export const LEGACY_PRIVATE_KEY_SIZE = 64;
+export const SUI_PRIVATE_KEY_PREFIX = 'suiprivkey';
+
+export function encodeSuiKeyPair(bytes: Uint8Array, scheme: SignatureScheme): string {
+	if (bytes.length != PRIVATE_KEY_SIZE) {
+		throw new Error('Invalid bytes length');
+	}
+	const flag = SIGNATURE_SCHEME_TO_FLAG[scheme];
+
+	const privKeyBytes = new Uint8Array(bytes.length + 1);
+	privKeyBytes.set([flag]);
+	privKeyBytes.set(bytes, 1);
+	return bech32.encode(SUI_PRIVATE_KEY_PREFIX, bech32.toWords(privKeyBytes));
+}
 
 export type ExportedKeypair = {
 	schema: SignatureScheme;

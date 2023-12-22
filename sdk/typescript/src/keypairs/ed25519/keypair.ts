@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toB64 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
 
 import type { ExportedKeypair } from '../../cryptography/keypair.js';
-import { Keypair, PRIVATE_KEY_SIZE } from '../../cryptography/keypair.js';
+import { encodeSuiKeyPair, Keypair, PRIVATE_KEY_SIZE } from '../../cryptography/keypair.js';
 import { isValidHardenedPath, mnemonicToSeedHex } from '../../cryptography/mnemonics.js';
 import type { SignatureScheme } from '../../cryptography/signature-scheme.js';
 import { derivePath } from './ed25519-hd-key.js';
@@ -63,17 +62,26 @@ export class Ed25519Keypair extends Keypair {
 	 * This is NOT the private scalar which is result of hashing and bit clamping of
 	 * the raw secret key.
 	 *
-	 * The sui.keystore key is a list of Base64 encoded `flag || privkey`. To import
-	 * a key from sui.keystore to typescript, decode from base64 and remove the first
-	 * flag byte after checking it is indeed the Ed25519 scheme flag 0x00 (See more
-	 * on flag for signature scheme: https://github.com/MystenLabs/sui/blob/818406c5abdf7de1b80915a0519071eec3a5b1c7/crates/sui-types/src/crypto.rs#L1650):
+	 * The sui.keystore key is a list of Bech32 encoded `flag || privkey`. To import
+	 * a key from sui.keystore to typescript, decode from bech32 and parse to the
+	 * corresponding keypair based on scheme.
 	 * ```
-	 * import { Ed25519Keypair, fromB64 } from '@mysten/sui.js';
-	 * const raw = fromB64(t[1]);
-	 * if (raw[0] !== 0 || raw.length !== PRIVATE_KEY_SIZE + 1) {
-	 *   throw new Error('invalid key');
+	 * 	const {prefix, words} = bech32.decode(keypair.privateKey);
+	 * 	if (prefix != SUI_PRIVATE_KEY_PREFIX) {
+	 *		throw new Error('invalid key');
 	 * }
-	 * const imported = Ed25519Keypair.fromSecretKey(raw.slice(1))
+	 * const flaggedPrivateKey = new Uint8Array(bech32.fromWords(words));
+	 * const secretKey = flaggedPrivateKey.slice(1);
+	 * switch (SIGNATURE_FLAG_TO_SCHEME[flaggedPrivateKey[0]]) {
+	 *	 case 'ED25519':
+	 *		 return Ed25519Keypair.fromSecretKey(secretKey);
+	 *	 case 'Secp256k1':
+	 *		 return Secp256k1Keypair.fromSecretKey(secretKey);
+	 *	 case 'Secp256r1':
+	 *		 return Secp256r1Keypair.fromSecretKey(secretKey);
+	 *	 default:
+	 *		 throw new Error(`Invalid keypair scheme`);
+	 * }
 	 * ```
 	 * @throws error if the provided secret key is invalid and validation is not skipped.
 	 *
@@ -158,12 +166,15 @@ export class Ed25519Keypair extends Keypair {
 	}
 
 	/**
-	 * This returns an exported keypair object, the private key field is the pure 32-byte seed.
+	 * This returns an exported keypair object, the private key field is Bech32 encoded pure 32-byte seed.
 	 */
 	export(): ExportedKeypair {
 		return {
 			schema: 'ED25519',
-			privateKey: toB64(this.keypair.secretKey.slice(0, PRIVATE_KEY_SIZE)),
+			privateKey: encodeSuiKeyPair(
+				this.keypair.secretKey.slice(0, PRIVATE_KEY_SIZE),
+				this.getKeyScheme(),
+			),
 		};
 	}
 }
