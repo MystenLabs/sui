@@ -553,7 +553,7 @@ impl Module {
         &self,
         after: Option<&str>,
         before: Option<&str>,
-    ) -> impl Iterator<Item = &str> + Clone {
+    ) -> impl DoubleEndedIterator<Item = &str> + Clone {
         use std::ops::Bound as B;
         self.function_index
             .range::<str, _>((
