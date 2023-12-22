@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    db_backend::{BalanceQuery, Explain, Explained, GenericQueryBuilder},
+    db_backend::{BalanceQuery, Explain, Explained, GenericQueryBuilder, QueryableEpochInfoType},
     db_data_provider::{DbValidationError, PageLimit, TypeFilterError},
 };
 use crate::{
@@ -22,6 +22,7 @@ use diesel::{
 };
 use std::str::FromStr;
 use sui_indexer::{
+    models_v2::epoch::QueryableEpochInfo,
     schema_v2::{
         checkpoints, display, epochs, events, objects, transactions, tx_calls, tx_changed_objects,
         tx_input_objects, tx_recipients, tx_senders,
@@ -31,6 +32,8 @@ use sui_indexer::{
 use sui_types::parse_sui_struct_tag;
 use tap::TapFallible;
 use tracing::{info, warn};
+
+use diesel::SelectableHelper;
 
 pub(crate) const EXPLAIN_COSTING_LOG_TARGET: &str = "gql-explain-costing";
 
@@ -57,55 +60,20 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
             .limit(1) // Fetches for a single object and as such has a limit of 1
             .into_boxed()
     }
-    fn get_epoch(epoch_id: i64) -> epochs::BoxedQuery<'static, Pg> {
+    fn get_epoch_info(
+        epoch_id: i64,
+    ) -> epochs::BoxedQuery<'static, Pg, QueryableEpochInfoType<Pg>> {
         epochs::dsl::epochs
             .filter(epochs::dsl::epoch.eq(epoch_id))
-            .select((
-                epochs::dsl::epoch,
-                epochs::dsl::first_checkpoint_id,
-                epochs::dsl::epoch_start_timestamp,
-                epochs::dsl::reference_gas_price,
-                epochs::dsl::protocol_version,
-                epochs::dsl::total_stake,
-                epochs::dsl::storage_fund_balance,
-                epochs::dsl::epoch_total_transactions,
-                epochs::dsl::last_checkpoint_id,
-                epochs::dsl::epoch_end_timestamp,
-                epochs::dsl::storage_fund_reinvestment,
-                epochs::dsl::storage_charge,
-                epochs::dsl::storage_rebate,
-                epochs::dsl::stake_subsidy_amount,
-                epochs::dsl::total_gas_fees,
-                epochs::dsl::total_stake_rewards_distributed,
-                epochs::dsl::leftover_storage_fund_inflow,
-                epochs::dsl::epoch_commitments,
-            ))
+            .select(QueryableEpochInfo::as_select())
             .into_boxed()
     }
-    fn get_latest_epoch() -> epochs::BoxedQuery<'static, Pg> {
+
+    fn get_latest_epoch_info() -> epochs::BoxedQuery<'static, Pg, QueryableEpochInfoType<Pg>> {
         epochs::dsl::epochs
             .order_by(epochs::dsl::epoch.desc())
             .limit(1)
-            .select((
-                epochs::dsl::epoch,
-                epochs::dsl::first_checkpoint_id,
-                epochs::dsl::epoch_start_timestamp,
-                epochs::dsl::reference_gas_price,
-                epochs::dsl::protocol_version,
-                epochs::dsl::total_stake,
-                epochs::dsl::storage_fund_balance,
-                epochs::dsl::epoch_total_transactions,
-                epochs::dsl::last_checkpoint_id,
-                epochs::dsl::epoch_end_timestamp,
-                epochs::dsl::storage_fund_reinvestment,
-                epochs::dsl::storage_charge,
-                epochs::dsl::storage_rebate,
-                epochs::dsl::stake_subsidy_amount,
-                epochs::dsl::total_gas_fees,
-                epochs::dsl::total_stake_rewards_distributed,
-                epochs::dsl::leftover_storage_fund_inflow,
-                epochs::dsl::epoch_commitments,
-            ))
+            .select(QueryableEpochInfo::as_select())
             .into_boxed()
     }
     fn get_checkpoint_by_digest(digest: Vec<u8>) -> checkpoints::BoxedQuery<'static, Pg> {

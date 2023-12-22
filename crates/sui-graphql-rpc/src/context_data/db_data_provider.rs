@@ -199,8 +199,8 @@ impl PgManager {
     ) -> Result<Option<QueryableEpochInfo>, Error> {
         let query_fn = move || {
             Ok(match epoch_id {
-                Some(epoch_id) => QueryBuilder::get_epoch(epoch_id),
-                None => QueryBuilder::get_latest_epoch(),
+                Some(epoch_id) => QueryBuilder::get_epoch_info(epoch_id),
+                None => QueryBuilder::get_latest_epoch_info(),
             })
         };
 
