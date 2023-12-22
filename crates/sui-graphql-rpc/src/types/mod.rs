@@ -11,6 +11,7 @@ pub(crate) mod checkpoint;
 pub(crate) mod coin;
 pub(crate) mod coin_metadata;
 pub(crate) mod committee_member;
+pub(crate) mod cursor;
 pub(crate) mod date_time;
 pub(crate) mod digest;
 pub(crate) mod display;

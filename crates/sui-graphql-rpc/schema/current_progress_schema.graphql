@@ -1070,7 +1070,7 @@ type MoveModule {
 	Modules that this module considers friends (these modules can access `public(friend)`
 	functions from this module).
 	"""
-	friendConnection(first: Int, after: String, last: Int, before: String): MoveModuleConnection!
+	friends(first: Int, after: String, last: Int, before: String): MoveModuleConnection!
 	"""
 	Look-up the definition of a struct defined in this module, by its name.
 	"""
