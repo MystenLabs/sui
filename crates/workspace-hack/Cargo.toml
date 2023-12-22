@@ -150,7 +150,6 @@ bs58-d8f496e17d97b5cb = { package = "bs58", version = "0.5", features = ["check"
 bstr = { version = "1" }
 bulletproofs = { version = "4" }
 byte-slice-cast = { version = "1" }
-bytecode-interpreter-crypto = { path = "../../external-crates/move/crates/bytecode-interpreter-crypto", default-features = false }
 bytecount = { version = "0.6", default-features = false }
 bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128"] }

@@ -32,7 +32,3 @@ move-prover-test-utils.workspace = true
 shell-words.workspace = true
 walkdir.workspace = true
 tempfile.workspace = true
-
-[[test]]
-name = "testsuite"
-harness = false

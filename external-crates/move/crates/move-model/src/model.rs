@@ -900,8 +900,8 @@ impl GlobalEnv {
         let name = ModuleName::from_str(&module.self_id().address().to_string(), effective_name);
         let struct_idx_to_id: BTreeMap<StructDefinitionIndex, StructId> = struct_data
             .iter()
-            .filter_map(|(id, data)| match &data.info {
-                StructInfo::Declared { def_idx, .. } => Some((*def_idx, *id)),
+            .map(|(id, data)| match &data.info {
+                StructInfo::Declared { def_idx, .. } => (*def_idx, *id),
             })
             .collect();
         let function_idx_to_id: BTreeMap<FunctionDefinitionIndex, FunId> = function_data
