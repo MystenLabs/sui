@@ -1732,11 +1732,11 @@ type ProgrammableTransactionBlock {
 	"""
 	Input objects or primitive values.
 	"""
-	inputConnection(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
 	"""
 	The transaction commands, executed sequentially.
 	"""
-	transactionConnection(first: Int, after: String, last: Int, before: String): ProgrammableTransactionConnection!
+	transactions(first: Int, after: String, last: Int, before: String): ProgrammableTransactionConnection!
 }
 
 type ProgrammableTransactionConnection {
