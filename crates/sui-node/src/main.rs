@@ -192,7 +192,7 @@ fn main() {
 }
 
 #[cfg(not(unix))]
-async fn wait_termination(shutdown_rx: tokio::sync::mpsc::Receiver<()>) {
+async fn wait_termination(mut shutdown_rx: tokio::sync::mpsc::Receiver<()>) {
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {},
         _ = shutdown_rx.recv() => {},
