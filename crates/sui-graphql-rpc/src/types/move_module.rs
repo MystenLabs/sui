@@ -160,7 +160,7 @@ impl MoveModule {
         let struct_range = self.parsed.structs(after, before);
 
         let mut connection = Connection::new(false, false);
-        let struct_names = if page.is_from_start() {
+        let struct_names = if page.is_from_front() {
             struct_range.take(page.limit()).collect()
         } else {
             let mut names: Vec<_> = struct_range.rev().take(page.limit()).collect();
