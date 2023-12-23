@@ -44,7 +44,7 @@ impl GenesisTransaction {
         if hi <= lo {
             return Ok(connection);
         } else if (hi - lo) > page.limit() {
-            if page.is_from_start() {
+            if page.is_from_front() {
                 hi = lo + page.limit();
             } else {
                 lo = hi - page.limit();
