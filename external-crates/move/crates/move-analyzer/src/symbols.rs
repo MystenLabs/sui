@@ -1336,9 +1336,9 @@ impl<'a> ParsingSymbolicator<'a> {
         // we optimistically assume that modules are declared using the PkgName::ModName pattern
         // (which seems to be the standard practice) and while Move allows other ways of defining
         // modules (e.g., with address preceding a sequence of modules) we will handle those only
-        // when deemed necessary (worse case scenario for now is that imports will not feature
-        // advanced funtionality, sich as go-to-def for moduled defined this way)
-        // TODO: handle retreiving address specified in a non-standard way if needed
+        // when deemed necessary (worst-case scenario for now is that imports will not feature
+        // advanced functionality, such as go-to-def for modules defined this way)
+        // TODO: handle retrieving address specified in a non-standard way if needed
         let mod_ident_str = match mod_def.address {
             Some(a) => format!("{}::{}", a, mod_def.name),
             None => return,
@@ -1500,7 +1500,7 @@ impl<'a> ParsingSymbolicator<'a> {
                     self.mod_use_symbols(mod_use, mod_defs, mod_ident_str, references, use_defs);
                 }
             }
-            P::Use::Fun { .. } => (), // TODO: handle Move 2024 receiver syntaxx
+            P::Use::Fun { .. } => (), // TODO: handle Move 2024 receiver syntax
         }
     }
 
