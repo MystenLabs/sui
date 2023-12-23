@@ -36,32 +36,21 @@ impl GenesisTransaction {
     ) -> Result<Connection<String, Object>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
-        let total = self.0.objects.len();
-        let mut lo = page.after().map_or(0, |a| *a + 1);
-        let mut hi = page.before().map_or(total, |b| *b);
-
         let mut connection = Connection::new(false, false);
-        if hi <= lo {
+        let Some((prev, next, cs)) = page.select(self.0.objects.len()) else {
             return Ok(connection);
-        } else if (hi - lo) > page.limit() {
-            if page.is_from_front() {
-                hi = lo + page.limit();
-            } else {
-                lo = hi - page.limit();
-            }
-        }
+        };
 
-        connection.has_previous_page = 0 < lo;
-        connection.has_next_page = hi < total;
+        connection.has_previous_page = prev;
+        connection.has_next_page = next;
 
-        for idx in lo..hi {
-            let GenesisObject::RawObject { data, owner } = self.0.objects[idx].clone();
+        for c in cs {
+            let GenesisObject::RawObject { data, owner } = self.0.objects[*c].clone();
             let native =
                 NativeObject::new_from_genesis(data, owner, TransactionDigest::genesis_marker());
 
-            let cursor = Cursor::new(idx).encode_cursor();
             let object = Object::from_native(SuiAddress::from(native.id()), native);
-            connection.edges.push(Edge::new(cursor, object));
+            connection.edges.push(Edge::new(c.encode_cursor(), object));
         }
 
         Ok(connection)
