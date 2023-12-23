@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Result, ensure};
 use move_core_types::ident_str;
 use std::{
     collections::{BTreeMap, HashSet},
@@ -163,6 +163,16 @@ pub enum SuiValidatorCommand {
         #[clap(name = "gas-budget", long)]
         gas_budget: Option<u64>,
     },
+
+    /// Batch withdrawn Stake SUIs from the validator's account to the specified address.
+    BatchWithdrawStake {
+        /// Object ID of a validator's OperationCap, used for setting gas price and reportng validators.
+        #[clap(name = "staked-sui-object-ids", long)]
+        staked_object_ids: Vec<ObjectID>,
+        /// Gas budget for this transaction.
+        #[clap(name = "gas-budget", long)]
+        gas_budget: Option<u64>,
+    },
 }
 
 #[derive(Serialize)]
@@ -181,6 +191,8 @@ pub enum SuiValidatorCommandResponse {
         data: TransactionData,
         serialized_data: String,
     },
+    /// Batch withdrawn Stake SUIs from the validator's account to the specified address.
+    BatchWithdrawStake(SuiTransactionBlockResponse),
 }
 
 fn make_key_files(
@@ -454,6 +466,30 @@ impl SuiValidatorCommand {
                     serialized_data,
                 }
             }
+            //TODO: Solve below questions???
+            // 1. Should the staked_object_ids be a vector of ObjectIds or a string of ObjectIds?
+            // Batch withdrawn Stake SUIs from the validator's account to the specified address.
+            // Should the command receives stakingPool Id and validator Id as input?
+            SuiValidatorCommand::BatchWithdrawStake {staked_object_ids, gas_budget }    => {
+                ensure!(
+                    !staked_object_ids.is_empty(),
+                    "Batch withdraw transaction requires a non-empty list of staked objects"
+                );
+                let mut args = Vec::new();
+            
+                // Iterate over each staked_object_id and serialize them
+                    for object_id in staked_object_ids {
+                        let serialized_object_id = CallArg::Pure(
+                            bcs::to_bytes(&object_id).unwrap(),
+                        );
+                        args.push(serialized_object_id);
+                    }
+                // args.push(CallArg::Pure(bcs::to_bytes(&sender_address).unwrap()));
+                let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+                let response =
+                    call_0x5(context, "request_withdraw_stake_batch", args, gas_budget).await?;
+                SuiValidatorCommandResponse::BatchWithdrawStake(response)
+            }
         });
         ret
     }
@@ -688,6 +724,10 @@ impl Display for SuiValidatorCommandResponse {
                     "Transaction: {:?}, \nSerialized transaction: {:?}",
                     data, serialized_data
                 )?;
+            },
+            //TODO: Request batch staked SUI withdrawal response - Gree
+            SuiValidatorCommandResponse::BatchWithdrawStake(response) => {
+                write!(writer, "Serialized payload: {}", response)?;
             }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))

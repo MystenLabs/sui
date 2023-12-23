@@ -1031,6 +1031,7 @@ module sui_system::sui_system_tests {
         set_up_sui_system_state(vector[@0x1, @0x2]);
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
+        
         sui_system::governance_test_utils::stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 60, scenario);
         sui_system::governance_test_utils::stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 20, scenario);
         sui_system::governance_test_utils::stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 30, scenario);
@@ -1039,21 +1040,22 @@ module sui_system::sui_system_tests {
             let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
           
             let staked_sui_ids = test_scenario::ids_for_sender<StakedSui>(scenario);
-         
+            
             assert!(vector::length(&staked_sui_ids) == 3, 101); 
             // debug::print(&staked_sui_ids);
-            let part1 = test_scenario::take_from_sender_by_id<StakedSui>(scenario, *vector::borrow(&staked_sui_ids, 0));
-            let amount1 = sui_system::staking_pool::staked_sui_amount(&part1);
-            let part2 = test_scenario::take_from_sender_by_id<StakedSui>(scenario, *vector::borrow(&staked_sui_ids, 1));
-            let amount2 = sui_system::staking_pool::staked_sui_amount(&part2);
-            let part3 = test_scenario::take_from_sender_by_id<StakedSui>(scenario, *vector::borrow(&staked_sui_ids, 2));
-            let amount3 = sui_system::staking_pool::staked_sui_amount(&part3);
+            let stake1 = test_scenario::take_from_sender_by_id<StakedSui>(scenario, *vector::borrow(&staked_sui_ids, 0));
+            let amount1 = sui_system::staking_pool::staked_sui_amount(&stake1);
+            let stake2 = test_scenario::take_from_sender_by_id<StakedSui>(scenario, *vector::borrow(&staked_sui_ids, 1));
+            let amount2 = sui_system::staking_pool::staked_sui_amount(&stake2);
+            let stake3 = test_scenario::take_from_sender_by_id<StakedSui>(scenario, *vector::borrow(&staked_sui_ids, 2));
+            let amount3 = sui_system::staking_pool::staked_sui_amount(&stake3);
             assert!(amount1 == 60 * MIST_PER_SUI, 102);
             assert!(amount2 == 20 * MIST_PER_SUI, 103);
             assert!(amount3 == 30 * MIST_PER_SUI, 104);
-            let stakes = vector[part1,part2,part3];
+            let stakes = vector[stake1, stake2, stake3];
             debug::print(&stakes);
-            sui_system::request_withdraw_stake_batch(&mut system_state, stakes, test_scenario::ctx(scenario));
+            let ctx = test_scenario::ctx(scenario);
+            sui_system::request_withdraw_stake_batch(&mut system_state, stakes, ctx);
             assert_eq(total_sui_balance(STAKER_ADDR_1, scenario), (60 + 20 + 30) * MIST_PER_SUI);
             test_scenario::return_shared(system_state);
             test_scenario::end(scenario_val);
