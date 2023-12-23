@@ -217,7 +217,7 @@ impl MoveModule {
         let function_range = self.parsed.functions(after, before);
 
         let mut connection = Connection::new(false, false);
-        let function_names = if page.is_from_start() {
+        let function_names = if page.is_from_front() {
             function_range.take(page.limit()).collect()
         } else {
             let mut names: Vec<_> = function_range.rev().take(page.limit()).collect();
