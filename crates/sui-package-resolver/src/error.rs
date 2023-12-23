@@ -52,6 +52,9 @@ pub enum Error {
     #[error("Expected {0} type parameters, but got {1}")]
     TypeArityMismatch(usize, usize),
 
+    #[error("Type parameter nesting exceeded limit of {0}")]
+    TypeParamNesting(usize, usize),
+
     #[error("Type Parameter {0} out of bounds ({1})")]
     TypeParamOOB(u16, usize),
 
