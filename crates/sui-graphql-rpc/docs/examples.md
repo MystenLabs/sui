@@ -518,42 +518,6 @@
 >    referenceGasPrice
 >    startTimestamp
 >    endTimestamp
->    validatorSet {
->      totalStake
->      pendingActiveValidatorsSize
->      stakePoolMappingsSize
->      inactivePoolsSize
->      validatorCandidatesSize
->      activeValidators {
->        name
->        description
->        imageUrl
->        projectUrl
->        exchangeRates {
->          asObject {
->            storageRebate
->            bcs
->            kind
->          }
->          hasPublicTransfer
->        }
->        exchangeRatesSize
->        stakingPoolActivationEpoch
->        stakingPoolSuiBalance
->        rewardsPool
->        poolTokenBalance
->        pendingStake
->        pendingTotalSuiWithdraw
->        pendingPoolTokenWithdraw
->        votingPower
->        gasPrice
->        commissionRate
->        nextEpochStake
->        nextEpochGasPrice
->        nextEpochCommissionRate
->        atRisk
->      }
->    }
 >  }
 >}</pre>
 
