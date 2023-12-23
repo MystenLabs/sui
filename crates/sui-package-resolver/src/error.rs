@@ -43,6 +43,9 @@ pub enum Error {
     #[error("Struct not found: {0}::{1}::{2}")]
     StructNotFound(AccountAddress, String, String),
 
+    #[error("Expected at most {0} type parameters, got {1}")]
+    TooManyTypeParams(usize, usize),
+
     #[error("Expected {0} type parameters, but got {1}")]
     TypeArityMismatch(usize, usize),
 
