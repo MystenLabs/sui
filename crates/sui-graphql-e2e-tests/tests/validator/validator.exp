@@ -43,17 +43,23 @@ Epoch advanced: 1
 task 10 'run-graphql'. lines 55-65:
 Response: {
   "data": {
-    "epoch": {
-      "validatorSet": {
-        "activeValidators": [
-          {
-            "apy": 1,
-            "name": "validator-0"
-          }
-        ]
-      }
+    "epoch": null
+  },
+  "errors": [
+    {
+      "message": "Internal error occurred while processing request: Can't convert system_state into SystemState. Error: unexpected end of input",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "epoch",
+        "validatorSet"
+      ]
     }
-  }
+  ]
 }
 
 task 11 'run'. lines 67-67:
@@ -140,15 +146,21 @@ Epoch advanced: 2
 task 28 'run-graphql'. lines 103-113:
 Response: {
   "data": {
-    "epoch": {
-      "validatorSet": {
-        "activeValidators": [
-          {
-            "apy": 2,
-            "name": "validator-0"
-          }
-        ]
-      }
+    "epoch": null
+  },
+  "errors": [
+    {
+      "message": "Internal error occurred while processing request: Can't convert system_state into SystemState. Error: unexpected end of input",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "epoch",
+        "validatorSet"
+      ]
     }
-  }
+  ]
 }
