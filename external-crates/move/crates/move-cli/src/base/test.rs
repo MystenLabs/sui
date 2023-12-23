@@ -194,6 +194,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
         let (units, warnings) =
             diagnostics::unwrap_or_report_diagnostics(&files, compilation_result);
         diagnostics::report_warnings(&files, warnings.clone());
+        println!("[~] compiled units done");
         test_plan = Some((built_test_plan, files.clone(), units.clone()));
         warning_diags = Some(warnings);
         Ok((files, units))
@@ -203,6 +204,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
     files.extend(dep_file_map);
     let test_plan = test_plan.unwrap();
     let no_tests = test_plan.is_empty();
+    println!("[~] test plan construction");
     let test_plan = TestPlan::new(test_plan, files, units);
 
     let trace_path = pkg_path.join(".trace");

@@ -29,6 +29,7 @@ impl<'a> Modules<'a> {
     pub fn new(modules: impl IntoIterator<Item = &'a CompiledModule>) -> Self {
         let mut map = BTreeMap::new();
         for m in modules {
+            println!("module {}", m.self_id());
             assert!(
                 map.insert(m.self_id(), m).is_none(),
                 "Duplicate module found"

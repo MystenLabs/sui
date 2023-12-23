@@ -2127,7 +2127,7 @@ dependencies = [
 
 [[package]]
 name = "move-package"
-version = "0.1.0"
+version = "1.16.0"
 dependencies = [
  "anyhow",
  "clap 4.4.1",
@@ -2372,6 +2372,7 @@ dependencies = [
  "move-core-types",
  "move-ir-types",
  "move-model",
+ "move-package",
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
  "move-symbol-pool",
@@ -2380,6 +2381,7 @@ dependencies = [
  "move-vm-test-utils",
  "move-vm-types",
  "once_cell",
+ "petgraph",
  "rayon",
  "regex",
 ]

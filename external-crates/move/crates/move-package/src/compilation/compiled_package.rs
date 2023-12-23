@@ -4,6 +4,7 @@
 
 use crate::{
     compilation::package_layout::CompiledPackageLayout,
+    lock_file::{self, schema::ToolchainVersion},
     resolution::resolution_graph::{Package, Renaming, ResolvedGraph, ResolvedTable},
     source_package::{
         layout::{SourcePackageLayout, REFERENCE_TEMPLATE_FILENAME},
@@ -38,8 +39,12 @@ use move_symbol_pool::Symbol;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
+    ffi::OsStr,
+    fs::{self, File},
     io::Write,
+    os::unix::prelude::PermissionsExt,
     path::{Path, PathBuf},
+    process::Command,
 };
 
 #[derive(Debug, Clone)]
@@ -452,6 +457,7 @@ impl CompiledPackage {
             &resolved_package,
             transitive_dependencies,
         )?;
+
         let flags = resolution_graph.build_options.compiler_flags();
         // Partition deps_package according whether src is available
         let (src_deps, bytecode_deps): (Vec<_>, Vec<_>) = deps_package_paths
@@ -472,8 +478,10 @@ impl CompiledPackage {
             }
         }
 
-        // invoke the compiler
-        let mut paths = src_deps;
+        let (deps_for_current_compiler, deps_for_prior_compiler) =
+            partition_deps_by_toolchain(src_deps.clone())?;
+
+        let mut paths = deps_for_current_compiler;
         paths.push(sources_package_paths.clone());
 
         let lint = !resolution_graph.build_options.no_lint;
@@ -482,9 +490,14 @@ impl CompiledPackage {
             .default_flavor
             .map_or(false, |f| f == Flavor::Sui);
 
-        let mut compiler = Compiler::from_package_paths(paths, bytecode_deps)
+        let mut built_deps = vec![];
+        built_deps.extend(deps_for_prior_compiler);
+        built_deps.extend(bytecode_deps);
+        // invoke the compiler
+        let mut compiler = Compiler::from_package_paths(paths, built_deps)
             .unwrap()
             .set_flags(flags);
+
         if lint && sui_mode {
             let (filter_attr_name, filters) = known_filters();
             compiler = compiler
@@ -785,4 +798,129 @@ pub(crate) fn make_source_and_deps_for_compiler(
         named_address_map: root_named_addrs,
     };
     Ok((source_package_paths, deps_package_paths))
+}
+
+/// partitions `deps` by whether we need to compile dependent packages with a
+/// prior toolchain (which we find by looking at Move.lock contents) or
+/// whether we can compile them with the current binary.
+pub fn partition_deps_by_toolchain(
+    deps: Vec<PackagePaths>,
+) -> Result<(Vec<PackagePaths>, Vec<PackagePaths>)> {
+    let mut deps_for_current_compiler = vec![];
+    let mut deps_for_prior_compiler = vec![];
+    for dep in deps {
+        let a_source_path = dep.paths[0].as_str();
+        let root = SourcePackageLayout::try_find_root(Path::new(a_source_path))?;
+        let lock_file = root.join("Move.lock");
+        if !lock_file.exists() {
+            // Q: Behavior to pick when package has no lock file. Right now we choose the current compiler (we could use the "legacy" one instead).
+            deps_for_current_compiler.push(dep);
+            continue;
+        }
+
+        let mut lock_file = File::open(lock_file)?;
+        let toolchain_version = lock_file::schema::ToolchainVersion::read(&mut lock_file)?;
+        match toolchain_version {
+            None => {
+                // Q: Behavior to pick when package has no [move.toolchain-version] info. Right now we choose the current compiler (we could use the "legacy" one instead).
+                deps_for_current_compiler.push(dep)
+            }
+            Some(ToolchainVersion {
+                compiler_version, ..
+            }) if compiler_version == env!("CARGO_PKG_VERSION") => {
+                // This dependency requires the same compiler version we're on.
+                deps_for_current_compiler.push(dep)
+            }
+            Some(toolchain_version) => {
+                println!(
+                    "compiler_version {} does not match env version {}",
+                    toolchain_version.compiler_version,
+                    env!("CARGO_PKG_VERSION")
+                );
+                // Compile and mark that we compiled this dep with a prior compiler.
+                download_and_compile(root, toolchain_version)?;
+                deps_for_prior_compiler.push(dep)
+            }
+        }
+    }
+    Ok((deps_for_current_compiler, deps_for_prior_compiler))
+}
+
+fn download_and_compile(
+    root: PathBuf,
+    ToolchainVersion {
+        compiler_version,
+        edition,
+        flavor,
+    }: ToolchainVersion,
+) -> Result<()> {
+    let binaries_path = std::env::var("TOOLCHAIN_BINARIES")?; // E.g., ~/.move/binaries
+    let dest_dir = Path::new(binaries_path.as_str());
+    let dest_version = dest_dir.join(compiler_version.clone());
+    let platform = "macos-arm64"; // Hardcoded platform: reviewer please ignore this for now.
+    let dest_binary = dest_version.join(format!("target/release/sui-{}", platform));
+    let dest_binary_os = OsStr::new(dest_binary.as_path());
+
+    if !dest_binary.exists() {
+        // Download if binary does not exist.
+        let url = format!("https://github.com/MystenLabs/sui/releases/download/mainnet-v{}/sui-mainnet-v{}-{}.tgz", compiler_version, compiler_version, platform);
+        let release_url = OsStr::new(url.as_str());
+        let dest_tarball = dest_version.join(format!("{}.tgz", compiler_version));
+
+        println!(
+            "[+] curl -L --create-dirs -o {} {}",
+            dest_tarball.display(),
+            url,
+        );
+        let _result = Command::new("curl")
+            .args([
+                OsStr::new("-L"),
+                OsStr::new("--create-dirs"),
+                OsStr::new("-o"),
+                OsStr::new(dest_tarball.as_path()),
+                OsStr::new(release_url),
+            ])
+            .output()
+            .expect("failed to download");
+
+        println!(
+            "[+] tar -xzf {} -C {}",
+            dest_tarball.display(),
+            dest_version.display()
+        );
+        let _result = Command::new("tar")
+            .args([
+                OsStr::new("-xzf"),
+                OsStr::new(dest_tarball.as_path()),
+                OsStr::new("-C"),
+                OsStr::new(dest_version.as_path()),
+            ])
+            .output()
+            .expect("failed to untar");
+
+        let mut perms = fs::metadata(dest_binary_os)?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(dest_binary_os, perms)?;
+    }
+
+    println!(
+        "[+] sui move build --default-move-edition {} --default-move-flavor {} -p {}",
+        edition.to_string().as_str(),
+        flavor.to_string().as_str(),
+        root.display()
+    );
+    let _result = Command::new(dest_binary_os)
+        .args([
+            OsStr::new("move"),
+            OsStr::new("build"),
+            OsStr::new("--default-move-edition"),
+            OsStr::new(edition.to_string().as_str()),
+            OsStr::new("--default-move-flavor"),
+            OsStr::new(flavor.to_string().as_str()),
+            OsStr::new("-p"),
+            OsStr::new(root.as_path()),
+        ])
+        .output()
+        .expect("failed to build package");
+    Ok(())
 }
