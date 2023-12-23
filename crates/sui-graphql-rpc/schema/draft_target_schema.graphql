@@ -979,7 +979,7 @@ type TransactionBlockEffects {
     before: String,
   ): BalanceChangeConnection!
 
-  timestamp: DateTime
+  timestamp: DateTime!
   epoch: Epoch
   checkpoint: Checkpoint
 
@@ -1064,7 +1064,7 @@ type Event {
   sendingModule: MoveModule
 
   sender: Address
-  timestamp: DateTime
+  timestamp: DateTime!
 
   type: MoveType!
   bcs: Base64!

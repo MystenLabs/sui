@@ -31,7 +31,7 @@ pub(crate) struct Checkpoint {
     pub sequence_number: u64,
     /// The timestamp at which the checkpoint is agreed to have happened according to consensus.
     /// Transactions that access time in this checkpoint will observe this timestamp.
-    pub timestamp: Option<DateTime>,
+    pub timestamp: DateTime,
     /// This is an aggregation of signatures from a quorum of validators for the checkpoint proposal.
     pub validator_signature: Option<Base64>,
     /// The digest of the checkpoint at the previous sequence number.
