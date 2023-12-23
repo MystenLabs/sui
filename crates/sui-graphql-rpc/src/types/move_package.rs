@@ -81,7 +81,7 @@ impl MovePackage {
         ));
 
         let mut connection = Connection::new(false, false);
-        let modules = if page.is_from_start() {
+        let modules = if page.is_from_front() {
             module_range.take(page.limit()).collect()
         } else {
             let mut ms: Vec<_> = module_range.rev().take(page.limit()).collect();
