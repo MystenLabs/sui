@@ -43,6 +43,9 @@ pub enum Error {
     #[error("Struct not found: {0}::{1}::{2}")]
     StructNotFound(AccountAddress, String, String),
 
+    #[error("More than {0} struct definitions required to resolve type")]
+    TooManyTypeNodes(usize, usize),
+
     #[error("Expected at most {0} type parameters, got {1}")]
     TooManyTypeParams(usize, usize),
 
