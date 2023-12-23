@@ -803,14 +803,9 @@ async fn zk_multisig_test() {
     let mut pks = vec![];
     let mut kps_and_zklogin_inputs = vec![];
     for test in test_datum {
-    let kp = SuiKeyPair::decode_base64(&test.kp).unwrap();
-        let pk_zklogin = PublicKey::ZkLogin(
-            ZkLoginPublicIdentifier::new(
-                &OIDCProvider::Twitch.get_config().iss,
-                &test.address_seed,
-            )
-            .unwrap(),
-        );
+        let kp = SuiKeyPair::decode(&test.kp).unwrap();
+        let inputs = ZkLoginInputs::from_json(&test.zklogin_inputs, &test.address_seed).unwrap();
+        let pk_zklogin = PublicKey::from_zklogin_inputs(&inputs).unwrap();
         pks.push(pk_zklogin);
         kps_and_zklogin_inputs.push((kp, inputs));
     }
