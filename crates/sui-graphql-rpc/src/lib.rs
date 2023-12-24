@@ -16,7 +16,6 @@ mod metrics;
 mod mutation;
 pub mod test_infra;
 mod types;
-pub mod utils;
 
 use async_graphql::*;
 use mutation::Mutation;
