@@ -11,7 +11,7 @@ gas summary: computation_cost: 1000000, storage_cost: 6315600,  storage_rebate: 
 task 2 'create-checkpoint'. lines 21-21:
 Checkpoint created: 1
 
-task 3 'run-graphql'. lines 23-186:
+task 3 'run-graphql'. lines 23-196:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -40,38 +40,47 @@ Response: {
           },
           "kind": {
             "__typename": "ProgrammableTransactionBlock",
-            "inputConnection": {
-              "nodes": [
+            "inputs": {
+              "edges": [
                 {
-                  "__typename": "Pure",
-                  "bytes": "/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4="
+                  "cursor": "MA",
+                  "node": {
+                    "__typename": "Pure",
+                    "bytes": "/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4="
+                  }
                 }
               ]
             },
-            "transactionConnection": {
-              "nodes": [
+            "transactions": {
+              "edges": [
                 {
-                  "__typename": "PublishTransaction",
-                  "modules": [
-                    "oRzrCwYAAAAIAQAGAgYMAxIKBRwRBy0wCF1ACp0BCQymAQ8ABAEGAQcAAAwAAQIEAAIBAgAABQABAAEFAwQAAgoDBwgCAQgAAAEHCAIBCAEDRm9vCVR4Q29udGV4dANVSUQCaWQBbQNuZXcGb2JqZWN0CnR4X2NvbnRleHQCeHMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAICAwgBCAoDAAEAAAIFCwERAQsAEgACAA=="
-                  ],
-                  "dependencies": [
-                    "0x0000000000000000000000000000000000000000000000000000000000000001",
-                    "0x0000000000000000000000000000000000000000000000000000000000000002"
-                  ]
+                  "cursor": "MA",
+                  "node": {
+                    "__typename": "PublishTransaction",
+                    "modules": [
+                      "oRzrCwYAAAAIAQAGAgYMAxIKBRwRBy0wCF1ACp0BCQymAQ8ABAEGAQcAAAwAAQIEAAIBAgAABQABAAEFAwQAAgoDBwgCAQgAAAEHCAIBCAEDRm9vCVR4Q29udGV4dANVSUQCaWQBbQNuZXcGb2JqZWN0CnR4X2NvbnRleHQCeHMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAICAwgBCAoDAAEAAAIFCwERAQsAEgACAA=="
+                    ],
+                    "dependencies": [
+                      "0x0000000000000000000000000000000000000000000000000000000000000001",
+                      "0x0000000000000000000000000000000000000000000000000000000000000002"
+                    ]
+                  }
                 },
                 {
-                  "__typename": "TransferObjectsTransaction",
-                  "inputs": [
-                    {
-                      "__typename": "Result",
-                      "cmd": 0,
-                      "ix": null
+                  "cursor": "MQ",
+                  "node": {
+                    "__typename": "TransferObjectsTransaction",
+                    "inputs": [
+                      {
+                        "__typename": "Result",
+                        "cmd": 0,
+                        "ix": null
+                      }
+                    ],
+                    "address": {
+                      "__typename": "Input",
+                      "ix": 0
                     }
-                  ],
-                  "address": {
-                    "__typename": "Input",
-                    "ix": 0
                   }
                 }
               ]
@@ -155,15 +164,15 @@ Response: {
   }
 }
 
-task 4 'upgrade'. lines 188-206:
+task 4 'upgrade'. lines 198-216:
 created: object(4,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 6589200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 5 'create-checkpoint'. lines 208-208:
+task 5 'create-checkpoint'. lines 218-218:
 Checkpoint created: 2
 
-task 6 'run-graphql'. lines 210-373:
+task 6 'run-graphql'. lines 220-393:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -192,113 +201,131 @@ Response: {
           },
           "kind": {
             "__typename": "ProgrammableTransactionBlock",
-            "inputConnection": {
-              "nodes": [
+            "inputs": {
+              "edges": [
                 {
-                  "__typename": "OwnedOrImmutable",
-                  "address": "0xf828e6de58892cf4b7d01515dad7be809be7dedef5f9910bf560d5a06ee8b99f",
-                  "version": 2,
-                  "digest": "J4U9NbbJDppz8Dz8LKYQAnL3DgZcRDWxtyiA2QJZ6T5N",
-                  "object": null
+                  "cursor": "MA",
+                  "node": {
+                    "__typename": "OwnedOrImmutable",
+                    "address": "0xf828e6de58892cf4b7d01515dad7be809be7dedef5f9910bf560d5a06ee8b99f",
+                    "version": 2,
+                    "digest": "J4U9NbbJDppz8Dz8LKYQAnL3DgZcRDWxtyiA2QJZ6T5N",
+                    "object": null
+                  }
                 },
                 {
-                  "__typename": "Pure",
-                  "bytes": "AA=="
+                  "cursor": "MQ",
+                  "node": {
+                    "__typename": "Pure",
+                    "bytes": "AA=="
+                  }
                 },
                 {
-                  "__typename": "Pure",
-                  "bytes": "IKtSxFg0BLyRn8vrtIRqeqpsihVPvPFxPFBg5s0K+UqS"
+                  "cursor": "Mg",
+                  "node": {
+                    "__typename": "Pure",
+                    "bytes": "IKtSxFg0BLyRn8vrtIRqeqpsihVPvPFxPFBg5s0K+UqS"
+                  }
                 }
               ]
             },
-            "transactionConnection": {
-              "nodes": [
+            "transactions": {
+              "edges": [
                 {
-                  "__typename": "MoveCallTransaction",
-                  "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
-                  "module": "package",
-                  "functionName": "authorize_upgrade",
-                  "typeArguments": [],
-                  "arguments": [
-                    {
-                      "__typename": "Input",
-                      "ix": 0
-                    },
-                    {
-                      "__typename": "Input",
-                      "ix": 1
-                    },
-                    {
-                      "__typename": "Input",
-                      "ix": 2
-                    }
-                  ],
-                  "function": {
-                    "isEntry": false,
-                    "typeParameters": [],
-                    "parameters": [
+                  "cursor": "MA",
+                  "node": {
+                    "__typename": "MoveCallTransaction",
+                    "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                    "module": "package",
+                    "functionName": "authorize_upgrade",
+                    "typeArguments": [],
+                    "arguments": [
                       {
-                        "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeCap"
+                        "__typename": "Input",
+                        "ix": 0
                       },
                       {
-                        "repr": "u8"
+                        "__typename": "Input",
+                        "ix": 1
                       },
                       {
-                        "repr": "vector<u8>"
+                        "__typename": "Input",
+                        "ix": 2
                       }
                     ],
-                    "return": [
-                      {
-                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeTicket"
-                      }
-                    ]
+                    "function": {
+                      "isEntry": false,
+                      "typeParameters": [],
+                      "parameters": [
+                        {
+                          "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeCap"
+                        },
+                        {
+                          "repr": "u8"
+                        },
+                        {
+                          "repr": "vector<u8>"
+                        }
+                      ],
+                      "return": [
+                        {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeTicket"
+                        }
+                      ]
+                    }
                   }
                 },
                 {
-                  "__typename": "UpgradeTransaction",
-                  "modules": [
-                    "oRzrCwYAAAAIAQAGAgYMAxIUBSYRBzc8CHNACrMBCQy8AR0ABgEIAQkAAAwAAQIEAAIBAgAABwABAAADAQIAAQQEAgABBwMEAAIKAwcIAgEIAAABBwgCAQgBA0ZvbwlUeENvbnRleHQDVUlEBGJ1cm4GZGVsZXRlAmlkAW0DbmV3Bm9iamVjdAp0eF9jb250ZXh0AnhzAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgACAgUIAQoKAwABAAACBQsBEQMLABIAAgEBAAACBQsAEwABEQICAA=="
-                  ],
-                  "dependencies": [
-                    "0x0000000000000000000000000000000000000000000000000000000000000001",
-                    "0x0000000000000000000000000000000000000000000000000000000000000002"
-                  ],
-                  "currentPackage": "0xd7af1cd4112fcd54f410553133edae9b3ef79ba8927749da5418fd79341609f9",
-                  "upgradeTicket": {
-                    "__typename": "Result",
-                    "cmd": 0,
-                    "ix": null
-                  }
-                },
-                {
-                  "__typename": "MoveCallTransaction",
-                  "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
-                  "module": "package",
-                  "functionName": "commit_upgrade",
-                  "typeArguments": [],
-                  "arguments": [
-                    {
-                      "__typename": "Input",
-                      "ix": 0
-                    },
-                    {
+                  "cursor": "MQ",
+                  "node": {
+                    "__typename": "UpgradeTransaction",
+                    "modules": [
+                      "oRzrCwYAAAAIAQAGAgYMAxIUBSYRBzc8CHNACrMBCQy8AR0ABgEIAQkAAAwAAQIEAAIBAgAABwABAAADAQIAAQQEAgABBwMEAAIKAwcIAgEIAAABBwgCAQgBA0ZvbwlUeENvbnRleHQDVUlEBGJ1cm4GZGVsZXRlAmlkAW0DbmV3Bm9iamVjdAp0eF9jb250ZXh0AnhzAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgACAgUIAQoKAwABAAACBQsBEQMLABIAAgEBAAACBQsAEwABEQICAA=="
+                    ],
+                    "dependencies": [
+                      "0x0000000000000000000000000000000000000000000000000000000000000001",
+                      "0x0000000000000000000000000000000000000000000000000000000000000002"
+                    ],
+                    "currentPackage": "0xd7af1cd4112fcd54f410553133edae9b3ef79ba8927749da5418fd79341609f9",
+                    "upgradeTicket": {
                       "__typename": "Result",
-                      "cmd": 1,
+                      "cmd": 0,
                       "ix": null
                     }
-                  ],
-                  "function": {
-                    "isEntry": false,
-                    "typeParameters": [],
-                    "parameters": [
+                  }
+                },
+                {
+                  "cursor": "Mg",
+                  "node": {
+                    "__typename": "MoveCallTransaction",
+                    "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                    "module": "package",
+                    "functionName": "commit_upgrade",
+                    "typeArguments": [],
+                    "arguments": [
                       {
-                        "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeCap"
+                        "__typename": "Input",
+                        "ix": 0
                       },
                       {
-                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeReceipt"
+                        "__typename": "Result",
+                        "cmd": 1,
+                        "ix": null
                       }
                     ],
-                    "return": []
+                    "function": {
+                      "isEntry": false,
+                      "typeParameters": [],
+                      "parameters": [
+                        {
+                          "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeCap"
+                        },
+                        {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeReceipt"
+                        }
+                      ],
+                      "return": []
+                    }
                   }
                 }
               ]
@@ -385,15 +412,15 @@ Response: {
   }
 }
 
-task 7 'programmable'. lines 375-384:
+task 7 'programmable'. lines 395-404:
 created: object(7,0), object(7,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3328800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 8 'create-checkpoint'. lines 386-386:
+task 8 'create-checkpoint'. lines 406-406:
 Checkpoint created: 3
 
-task 9 'run-graphql'. lines 388-560:
+task 9 'run-graphql'. lines 408-590:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -422,194 +449,233 @@ Response: {
           },
           "kind": {
             "__typename": "ProgrammableTransactionBlock",
-            "inputConnection": {
-              "nodes": [
+            "inputs": {
+              "edges": [
                 {
-                  "__typename": "Pure",
-                  "bytes": "KgAAAAAAAAA="
+                  "cursor": "MA",
+                  "node": {
+                    "__typename": "Pure",
+                    "bytes": "KgAAAAAAAAA="
+                  }
                 },
                 {
-                  "__typename": "Pure",
-                  "bytes": "KwAAAAAAAAA="
+                  "cursor": "MQ",
+                  "node": {
+                    "__typename": "Pure",
+                    "bytes": "KwAAAAAAAAA="
+                  }
                 },
                 {
-                  "__typename": "Pure",
-                  "bytes": "6AMAAAAAAAA="
+                  "cursor": "Mg",
+                  "node": {
+                    "__typename": "Pure",
+                    "bytes": "6AMAAAAAAAA="
+                  }
                 },
                 {
-                  "__typename": "Pure",
-                  "bytes": "/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4="
+                  "cursor": "Mw",
+                  "node": {
+                    "__typename": "Pure",
+                    "bytes": "/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4="
+                  }
                 }
               ]
             },
-            "transactionConnection": {
-              "nodes": [
+            "transactions": {
+              "edges": [
                 {
-                  "__typename": "MakeMoveVecTransaction",
-                  "type": {
-                    "repr": "u64"
-                  },
-                  "elements": [
-                    {
-                      "__typename": "Input",
-                      "ix": 0
+                  "cursor": "MA",
+                  "node": {
+                    "__typename": "MakeMoveVecTransaction",
+                    "type": {
+                      "repr": "u64"
                     },
-                    {
-                      "__typename": "Input",
-                      "ix": 1
-                    }
-                  ]
-                },
-                {
-                  "__typename": "MakeMoveVecTransaction",
-                  "type": {
-                    "repr": "u64"
-                  },
-                  "elements": []
-                },
-                {
-                  "__typename": "SplitCoinsTransaction",
-                  "coin": {
-                    "__typename": "GasCoin"
-                  },
-                  "amounts": [
-                    {
-                      "__typename": "Input",
-                      "ix": 2
-                    },
-                    {
-                      "__typename": "Input",
-                      "ix": 2
-                    }
-                  ]
-                },
-                {
-                  "__typename": "MoveCallTransaction",
-                  "package": "0xf396946ce5c87a5fc6441ecd6a1c9be6a7b645018b9a4d58ce5958aff62a7eed",
-                  "module": "m",
-                  "functionName": "new",
-                  "typeArguments": [],
-                  "arguments": [
-                    {
-                      "__typename": "Result",
-                      "cmd": 0,
-                      "ix": null
-                    }
-                  ],
-                  "function": {
-                    "isEntry": false,
-                    "typeParameters": [],
-                    "parameters": [
+                    "elements": [
                       {
-                        "repr": "vector<u64>"
+                        "__typename": "Input",
+                        "ix": 0
                       },
                       {
-                        "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
-                      }
-                    ],
-                    "return": [
-                      {
-                        "repr": "0xd7af1cd4112fcd54f410553133edae9b3ef79ba8927749da5418fd79341609f9::m::Foo"
+                        "__typename": "Input",
+                        "ix": 1
                       }
                     ]
                   }
                 },
                 {
-                  "__typename": "TransferObjectsTransaction",
-                  "inputs": [
-                    {
-                      "__typename": "Result",
-                      "cmd": 3,
-                      "ix": null
-                    }
-                  ],
-                  "address": {
-                    "__typename": "Input",
-                    "ix": 3
+                  "cursor": "MQ",
+                  "node": {
+                    "__typename": "MakeMoveVecTransaction",
+                    "type": {
+                      "repr": "u64"
+                    },
+                    "elements": []
                   }
                 },
                 {
-                  "__typename": "MoveCallTransaction",
-                  "package": "0xf396946ce5c87a5fc6441ecd6a1c9be6a7b645018b9a4d58ce5958aff62a7eed",
-                  "module": "m",
-                  "functionName": "new",
-                  "typeArguments": [],
-                  "arguments": [
-                    {
-                      "__typename": "Result",
-                      "cmd": 1,
-                      "ix": null
-                    }
-                  ],
-                  "function": {
-                    "isEntry": false,
-                    "typeParameters": [],
-                    "parameters": [
+                  "cursor": "Mg",
+                  "node": {
+                    "__typename": "SplitCoinsTransaction",
+                    "coin": {
+                      "__typename": "GasCoin"
+                    },
+                    "amounts": [
                       {
-                        "repr": "vector<u64>"
+                        "__typename": "Input",
+                        "ix": 2
                       },
                       {
-                        "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
-                      }
-                    ],
-                    "return": [
-                      {
-                        "repr": "0xd7af1cd4112fcd54f410553133edae9b3ef79ba8927749da5418fd79341609f9::m::Foo"
+                        "__typename": "Input",
+                        "ix": 2
                       }
                     ]
                   }
                 },
                 {
-                  "__typename": "MoveCallTransaction",
-                  "package": "0xf396946ce5c87a5fc6441ecd6a1c9be6a7b645018b9a4d58ce5958aff62a7eed",
-                  "module": "m",
-                  "functionName": "burn",
-                  "typeArguments": [],
-                  "arguments": [
-                    {
-                      "__typename": "Result",
-                      "cmd": 5,
-                      "ix": null
-                    }
-                  ],
-                  "function": {
-                    "isEntry": false,
-                    "typeParameters": [],
-                    "parameters": [
+                  "cursor": "Mw",
+                  "node": {
+                    "__typename": "MoveCallTransaction",
+                    "package": "0xf396946ce5c87a5fc6441ecd6a1c9be6a7b645018b9a4d58ce5958aff62a7eed",
+                    "module": "m",
+                    "functionName": "new",
+                    "typeArguments": [],
+                    "arguments": [
                       {
-                        "repr": "0xd7af1cd4112fcd54f410553133edae9b3ef79ba8927749da5418fd79341609f9::m::Foo"
+                        "__typename": "Result",
+                        "cmd": 0,
+                        "ix": null
                       }
                     ],
-                    "return": []
+                    "function": {
+                      "isEntry": false,
+                      "typeParameters": [],
+                      "parameters": [
+                        {
+                          "repr": "vector<u64>"
+                        },
+                        {
+                          "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                        }
+                      ],
+                      "return": [
+                        {
+                          "repr": "0xd7af1cd4112fcd54f410553133edae9b3ef79ba8927749da5418fd79341609f9::m::Foo"
+                        }
+                      ]
+                    }
                   }
                 },
                 {
-                  "__typename": "MergeCoinsTransaction",
-                  "coin": {
-                    "__typename": "Result",
-                    "cmd": 2,
-                    "ix": 0
-                  },
-                  "coins": [
-                    {
-                      "__typename": "Result",
-                      "cmd": 2,
-                      "ix": 1
+                  "cursor": "NA",
+                  "node": {
+                    "__typename": "TransferObjectsTransaction",
+                    "inputs": [
+                      {
+                        "__typename": "Result",
+                        "cmd": 3,
+                        "ix": null
+                      }
+                    ],
+                    "address": {
+                      "__typename": "Input",
+                      "ix": 3
                     }
-                  ]
+                  }
                 },
                 {
-                  "__typename": "TransferObjectsTransaction",
-                  "inputs": [
-                    {
+                  "cursor": "NQ",
+                  "node": {
+                    "__typename": "MoveCallTransaction",
+                    "package": "0xf396946ce5c87a5fc6441ecd6a1c9be6a7b645018b9a4d58ce5958aff62a7eed",
+                    "module": "m",
+                    "functionName": "new",
+                    "typeArguments": [],
+                    "arguments": [
+                      {
+                        "__typename": "Result",
+                        "cmd": 1,
+                        "ix": null
+                      }
+                    ],
+                    "function": {
+                      "isEntry": false,
+                      "typeParameters": [],
+                      "parameters": [
+                        {
+                          "repr": "vector<u64>"
+                        },
+                        {
+                          "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                        }
+                      ],
+                      "return": [
+                        {
+                          "repr": "0xd7af1cd4112fcd54f410553133edae9b3ef79ba8927749da5418fd79341609f9::m::Foo"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "cursor": "Ng",
+                  "node": {
+                    "__typename": "MoveCallTransaction",
+                    "package": "0xf396946ce5c87a5fc6441ecd6a1c9be6a7b645018b9a4d58ce5958aff62a7eed",
+                    "module": "m",
+                    "functionName": "burn",
+                    "typeArguments": [],
+                    "arguments": [
+                      {
+                        "__typename": "Result",
+                        "cmd": 5,
+                        "ix": null
+                      }
+                    ],
+                    "function": {
+                      "isEntry": false,
+                      "typeParameters": [],
+                      "parameters": [
+                        {
+                          "repr": "0xd7af1cd4112fcd54f410553133edae9b3ef79ba8927749da5418fd79341609f9::m::Foo"
+                        }
+                      ],
+                      "return": []
+                    }
+                  }
+                },
+                {
+                  "cursor": "Nw",
+                  "node": {
+                    "__typename": "MergeCoinsTransaction",
+                    "coin": {
                       "__typename": "Result",
                       "cmd": 2,
                       "ix": 0
+                    },
+                    "coins": [
+                      {
+                        "__typename": "Result",
+                        "cmd": 2,
+                        "ix": 1
+                      }
+                    ]
+                  }
+                },
+                {
+                  "cursor": "OA",
+                  "node": {
+                    "__typename": "TransferObjectsTransaction",
+                    "inputs": [
+                      {
+                        "__typename": "Result",
+                        "cmd": 2,
+                        "ix": 0
+                      }
+                    ],
+                    "address": {
+                      "__typename": "Input",
+                      "ix": 3
                     }
-                  ],
-                  "address": {
-                    "__typename": "Input",
-                    "ix": 3
                   }
                 }
               ]
@@ -733,14 +799,14 @@ Response: {
   }
 }
 
-task 10 'programmable'. lines 562-563:
+task 10 'programmable'. lines 592-593:
 Error: Transaction Effects Status: Unused result without the drop ability. Command result 0, return value 0
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: UnusedValueWithoutDrop { result_idx: 0, secondary_idx: 0 }, source: None, command: None } }
 
-task 11 'create-checkpoint'. lines 565-565:
+task 11 'create-checkpoint'. lines 595-595:
 Checkpoint created: 4
 
-task 12 'run-graphql'. lines 567-730:
+task 12 'run-graphql'. lines 597-770:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -769,27 +835,33 @@ Response: {
           },
           "kind": {
             "__typename": "ProgrammableTransactionBlock",
-            "inputConnection": {
-              "nodes": [
+            "inputs": {
+              "edges": [
                 {
-                  "__typename": "Pure",
-                  "bytes": "6AMAAAAAAAA="
+                  "cursor": "MA",
+                  "node": {
+                    "__typename": "Pure",
+                    "bytes": "6AMAAAAAAAA="
+                  }
                 }
               ]
             },
-            "transactionConnection": {
-              "nodes": [
+            "transactions": {
+              "edges": [
                 {
-                  "__typename": "SplitCoinsTransaction",
-                  "coin": {
-                    "__typename": "GasCoin"
-                  },
-                  "amounts": [
-                    {
-                      "__typename": "Input",
-                      "ix": 0
-                    }
-                  ]
+                  "cursor": "MA",
+                  "node": {
+                    "__typename": "SplitCoinsTransaction",
+                    "coin": {
+                      "__typename": "GasCoin"
+                    },
+                    "amounts": [
+                      {
+                        "__typename": "Input",
+                        "ix": 0
+                      }
+                    ]
+                  }
                 }
               ]
             }
