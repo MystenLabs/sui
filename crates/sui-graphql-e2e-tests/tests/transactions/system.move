@@ -36,8 +36,11 @@
                             }
 
                             asMovePackage {
-                                moduleConnection {
-                                    nodes { name }
+                                modules {
+                                    edges {
+                                        cursor
+                                        node { name }
+                                    }
                                 }
                             }
                         }
