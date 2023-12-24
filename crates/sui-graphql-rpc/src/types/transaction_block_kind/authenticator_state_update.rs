@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{
-    connection::{Connection, Edge},
+    connection::{Connection, CursorType, Edge},
     *,
 };
 
@@ -12,15 +12,19 @@ use sui_types::{
 };
 
 use crate::{
-    context_data::db_data_provider::{validate_cursor_pagination, PgManager},
-    error::Error,
-    types::epoch::Epoch,
+    context_data::db_data_provider::PgManager,
+    types::{
+        cursor::{Cursor, Page},
+        epoch::Epoch,
+    },
 };
 
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct AuthenticatorStateUpdateTransaction(
     pub NativeAuthenticatorStateUpdateTransaction,
 );
+
+pub(crate) type CActiveJwk = Cursor<usize>;
 
 struct ActiveJwk(NativeActiveJwk);
 
@@ -41,73 +45,38 @@ impl AuthenticatorStateUpdateTransaction {
     }
 
     /// Newly active JWKs (JSON Web Keys).
-    async fn new_active_jwk_connection(
+    async fn new_active_jwks(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<CActiveJwk>,
         last: Option<u64>,
-        before: Option<String>,
+        before: Option<CActiveJwk>,
     ) -> Result<Connection<String, ActiveJwk>> {
-        // TODO: make cursor opaque (currently just an offset).
-        validate_cursor_pagination(&first, &after, &last, &before).extend()?;
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let total = self.0.new_active_jwks.len();
-
-        let mut lo = if let Some(after) = after {
-            1 + after
-                .parse::<usize>()
-                .map_err(|_| Error::InvalidCursor("Failed to parse 'after' cursor.".to_string()))
-                .extend()?
-        } else {
-            0
-        };
-
-        let mut hi = if let Some(before) = before {
-            before
-                .parse::<usize>()
-                .map_err(|_| Error::InvalidCursor("Failed to parse 'before' cursor.".to_string()))
-                .extend()?
-        } else {
-            total
-        };
+        let mut lo = page.after().map_or(0, |a| *a + 1);
+        let mut hi = page.before().map_or(total, |b| *b);
 
         let mut connection = Connection::new(false, false);
         if hi <= lo {
             return Ok(connection);
-        }
-
-        // If there's a `first` limit, bound the upperbound to be at most `first` away from the
-        // lowerbound.
-        if let Some(first) = first {
-            let first = first as usize;
-            if hi - lo > first {
-                hi = lo + first;
-            }
-        }
-
-        // If there's a `last` limit, bound the lowerbound to be at most `last` away from the
-        // upperbound.  NB. This applies after we bounded the upperbound, using `first`.
-        if let Some(last) = last {
-            let last = last as usize;
-            if hi - lo > last {
-                lo = hi - last;
+        } else if (hi - lo) > page.limit() {
+            if page.is_from_front() {
+                hi = lo + page.limit();
+            } else {
+                lo = hi - page.limit();
             }
         }
 
         connection.has_previous_page = 0 < lo;
         connection.has_next_page = hi < total;
 
-        for (idx, active_jwk) in self
-            .0
-            .new_active_jwks
-            .iter()
-            .enumerate()
-            .skip(lo)
-            .take(hi - lo)
-        {
-            connection
-                .edges
-                .push(Edge::new(idx.to_string(), ActiveJwk(active_jwk.clone())));
+        for idx in lo..hi {
+            let active_jwk = ActiveJwk(self.0.new_active_jwks[idx].clone());
+            let cursor = Cursor::new(idx).encode_cursor();
+            connection.edges.push(Edge::new(cursor, active_jwk));
         }
 
         Ok(connection)

@@ -139,7 +139,7 @@ type AuthenticatorStateUpdateTransaction {
 	"""
 	Newly active JWKs (JSON Web Keys).
 	"""
-	newActiveJwkConnection(first: Int, after: String, last: Int, before: String): ActiveJwkConnection!
+	newActiveJwks(first: Int, after: String, last: Int, before: String): ActiveJwkConnection!
 	"""
 	The initial version of the authenticator object that it was shared at.
 	"""
