@@ -1171,7 +1171,7 @@ type MovePackage {
 	"""
 	Paginate through the MoveModules defined in this package.
 	"""
-	moduleConnection(first: Int, after: String, last: Int, before: String): MoveModuleConnection
+	modules(first: Int, after: String, last: Int, before: String): MoveModuleConnection
 	"""
 	The transitive dependencies of this package.
 	"""

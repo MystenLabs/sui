@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base64::Base64;
+use super::cursor::{Cursor, Page};
 use super::move_module::MoveModule;
 use super::object::Object;
 use super::sui_address::SuiAddress;
-use crate::config::ServiceConfig;
-use crate::context_data::db_data_provider::validate_cursor_pagination;
 use crate::error::Error;
-use async_graphql::connection::{Connection, Edge};
+use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use sui_package_resolver::{error::Error as PackageCacheError, Package as ParsedMovePackage};
 use sui_types::{move_package::MovePackage as NativeMovePackage, object::Data};
@@ -52,6 +51,8 @@ struct TypeOrigin {
 
 pub(crate) struct MovePackageDowncastError;
 
+pub(crate) type CModule = Cursor<String>;
+
 #[Object]
 impl MovePackage {
     /// A representation of the module called `name` in this package, including the
@@ -61,43 +62,50 @@ impl MovePackage {
     }
 
     /// Paginate through the MoveModules defined in this package.
-    pub async fn module_connection(
+    pub async fn modules(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<CModule>,
         last: Option<u64>,
-        before: Option<String>,
+        before: Option<CModule>,
     ) -> Result<Option<Connection<String, MoveModule>>> {
         use std::ops::Bound as B;
 
-        let default_page_size = ctx
-            .data::<ServiceConfig>()
-            .map_err(|_| Error::Internal("Unable to fetch service configuration.".to_string()))
-            .extend()?
-            .limits
-            .default_page_size;
-
-        // TODO: make cursor opaque.
-        // for now it same as module name
-        validate_cursor_pagination(&first, &after, &last, &before).extend()?;
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let parsed = self.parsed_package()?;
-        let module_range = parsed.modules().range((
-            after.map_or(B::Unbounded, B::Excluded),
-            before.map_or(B::Unbounded, B::Excluded),
+        let module_range = parsed.modules().range::<String, _>((
+            page.after().map_or(B::Unbounded, B::Excluded),
+            page.before().map_or(B::Unbounded, B::Excluded),
         ));
 
-        let total = module_range.clone().count() as u64;
-        let (skip, take) = match (first, last) {
-            (Some(first), Some(last)) if last < first => (first - last, last),
-            (Some(first), _) => (0, first),
-            (None, Some(last)) if last < total => (total - last, last),
-            (None, _) => (0, default_page_size),
+        let mut connection = Connection::new(false, false);
+        let modules = if page.is_from_front() {
+            module_range.take(page.limit()).collect()
+        } else {
+            let mut ms: Vec<_> = module_range.rev().take(page.limit()).collect();
+            ms.reverse();
+            ms
         };
 
-        let mut connection = Connection::new(false, false);
-        for (name, parsed) in module_range.skip(skip as usize).take(take as usize) {
+        connection.has_previous_page = modules.first().is_some_and(|(fst, _)| {
+            parsed
+                .modules()
+                .range::<String, _>((B::Unbounded, B::Excluded(*fst)))
+                .next()
+                .is_some()
+        });
+
+        connection.has_next_page = modules.last().is_some_and(|(lst, _)| {
+            parsed
+                .modules()
+                .range::<String, _>((B::Excluded(*lst), B::Unbounded))
+                .next()
+                .is_some()
+        });
+
+        for (name, parsed) in modules {
             let Some(native) = self.native.serialized_module_map().get(name) else {
                 return Err(Error::Internal(format!(
                     "Module '{name}' exists in PackageCache but not in serialized map.",
@@ -105,8 +113,9 @@ impl MovePackage {
                 .extend());
             };
 
+            let cursor = Cursor::new(name.clone()).encode_cursor();
             connection.edges.push(Edge::new(
-                name.clone(),
+                cursor,
                 MoveModule {
                     storage_id: self.super_.address,
                     native: native.clone(),
@@ -114,22 +123,6 @@ impl MovePackage {
                 },
             ))
         }
-
-        connection.has_previous_page = connection.edges.first().is_some_and(|fst| {
-            parsed
-                .modules()
-                .range::<String, _>((B::Unbounded, B::Excluded(&fst.cursor)))
-                .next()
-                .is_some()
-        });
-
-        connection.has_next_page = connection.edges.last().is_some_and(|lst| {
-            parsed
-                .modules()
-                .range::<String, _>((B::Excluded(&lst.cursor), B::Unbounded))
-                .next()
-                .is_some()
-        });
 
         if connection.edges.is_empty() {
             Ok(None)

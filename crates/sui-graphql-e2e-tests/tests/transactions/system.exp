@@ -1,6 +1,6 @@
 processed 8 tasks
 
-task 1 'run-graphql'. lines 8-90:
+task 1 'run-graphql'. lines 8-93:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -29,40 +29,73 @@ Response: {
                   "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
                   "asMoveObject": null,
                   "asMovePackage": {
-                    "moduleConnection": {
-                      "nodes": [
+                    "modules": {
+                      "edges": [
                         {
-                          "name": "address"
+                          "cursor": "ImFkZHJlc3Mi",
+                          "node": {
+                            "name": "address"
+                          }
                         },
                         {
-                          "name": "ascii"
+                          "cursor": "ImFzY2lpIg",
+                          "node": {
+                            "name": "ascii"
+                          }
                         },
                         {
-                          "name": "bcs"
+                          "cursor": "ImJjcyI",
+                          "node": {
+                            "name": "bcs"
+                          }
                         },
                         {
-                          "name": "bit_vector"
+                          "cursor": "ImJpdF92ZWN0b3Ii",
+                          "node": {
+                            "name": "bit_vector"
+                          }
                         },
                         {
-                          "name": "debug"
+                          "cursor": "ImRlYnVnIg",
+                          "node": {
+                            "name": "debug"
+                          }
                         },
                         {
-                          "name": "fixed_point32"
+                          "cursor": "ImZpeGVkX3BvaW50MzIi",
+                          "node": {
+                            "name": "fixed_point32"
+                          }
                         },
                         {
-                          "name": "hash"
+                          "cursor": "Imhhc2gi",
+                          "node": {
+                            "name": "hash"
+                          }
                         },
                         {
-                          "name": "option"
+                          "cursor": "Im9wdGlvbiI",
+                          "node": {
+                            "name": "option"
+                          }
                         },
                         {
-                          "name": "string"
+                          "cursor": "InN0cmluZyI",
+                          "node": {
+                            "name": "string"
+                          }
                         },
                         {
-                          "name": "type_name"
+                          "cursor": "InR5cGVfbmFtZSI",
+                          "node": {
+                            "name": "type_name"
+                          }
                         },
                         {
-                          "name": "vector"
+                          "cursor": "InZlY3RvciI",
+                          "node": {
+                            "name": "vector"
+                          }
                         }
                       ]
                     }
@@ -72,67 +105,127 @@ Response: {
                   "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
                   "asMoveObject": null,
                   "asMovePackage": {
-                    "moduleConnection": {
-                      "nodes": [
+                    "modules": {
+                      "edges": [
                         {
-                          "name": "address"
+                          "cursor": "ImFkZHJlc3Mi",
+                          "node": {
+                            "name": "address"
+                          }
                         },
                         {
-                          "name": "authenticator_state"
+                          "cursor": "ImF1dGhlbnRpY2F0b3Jfc3RhdGUi",
+                          "node": {
+                            "name": "authenticator_state"
+                          }
                         },
                         {
-                          "name": "bag"
+                          "cursor": "ImJhZyI",
+                          "node": {
+                            "name": "bag"
+                          }
                         },
                         {
-                          "name": "balance"
+                          "cursor": "ImJhbGFuY2Ui",
+                          "node": {
+                            "name": "balance"
+                          }
                         },
                         {
-                          "name": "bcs"
+                          "cursor": "ImJjcyI",
+                          "node": {
+                            "name": "bcs"
+                          }
                         },
                         {
-                          "name": "bls12381"
+                          "cursor": "ImJsczEyMzgxIg",
+                          "node": {
+                            "name": "bls12381"
+                          }
                         },
                         {
-                          "name": "borrow"
+                          "cursor": "ImJvcnJvdyI",
+                          "node": {
+                            "name": "borrow"
+                          }
                         },
                         {
-                          "name": "clock"
+                          "cursor": "ImNsb2NrIg",
+                          "node": {
+                            "name": "clock"
+                          }
                         },
                         {
-                          "name": "coin"
+                          "cursor": "ImNvaW4i",
+                          "node": {
+                            "name": "coin"
+                          }
                         },
                         {
-                          "name": "display"
+                          "cursor": "ImRpc3BsYXki",
+                          "node": {
+                            "name": "display"
+                          }
                         },
                         {
-                          "name": "dynamic_field"
+                          "cursor": "ImR5bmFtaWNfZmllbGQi",
+                          "node": {
+                            "name": "dynamic_field"
+                          }
                         },
                         {
-                          "name": "dynamic_object_field"
+                          "cursor": "ImR5bmFtaWNfb2JqZWN0X2ZpZWxkIg",
+                          "node": {
+                            "name": "dynamic_object_field"
+                          }
                         },
                         {
-                          "name": "ecdsa_k1"
+                          "cursor": "ImVjZHNhX2sxIg",
+                          "node": {
+                            "name": "ecdsa_k1"
+                          }
                         },
                         {
-                          "name": "ecdsa_r1"
+                          "cursor": "ImVjZHNhX3IxIg",
+                          "node": {
+                            "name": "ecdsa_r1"
+                          }
                         },
                         {
-                          "name": "ecvrf"
+                          "cursor": "ImVjdnJmIg",
+                          "node": {
+                            "name": "ecvrf"
+                          }
                         },
                         {
-                          "name": "ed25519"
+                          "cursor": "ImVkMjU1MTki",
+                          "node": {
+                            "name": "ed25519"
+                          }
                         },
                         {
-                          "name": "event"
+                          "cursor": "ImV2ZW50Ig",
+                          "node": {
+                            "name": "event"
+                          }
                         },
                         {
-                          "name": "groth16"
+                          "cursor": "Imdyb3RoMTYi",
+                          "node": {
+                            "name": "groth16"
+                          }
                         },
                         {
-                          "name": "hash"
+                          "cursor": "Imhhc2gi",
+                          "node": {
+                            "name": "hash"
+                          }
                         },
                         {
-                          "name": "hex"
+                          "cursor": "ImhleCI",
+                          "node": {
+                            "name": "hex"
+                          }
                         }
                       ]
                     }
@@ -142,40 +235,73 @@ Response: {
                   "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
                   "asMoveObject": null,
                   "asMovePackage": {
-                    "moduleConnection": {
-                      "nodes": [
+                    "modules": {
+                      "edges": [
                         {
-                          "name": "genesis"
+                          "cursor": "ImdlbmVzaXMi",
+                          "node": {
+                            "name": "genesis"
+                          }
                         },
                         {
-                          "name": "stake_subsidy"
+                          "cursor": "InN0YWtlX3N1YnNpZHki",
+                          "node": {
+                            "name": "stake_subsidy"
+                          }
                         },
                         {
-                          "name": "staking_pool"
+                          "cursor": "InN0YWtpbmdfcG9vbCI",
+                          "node": {
+                            "name": "staking_pool"
+                          }
                         },
                         {
-                          "name": "storage_fund"
+                          "cursor": "InN0b3JhZ2VfZnVuZCI",
+                          "node": {
+                            "name": "storage_fund"
+                          }
                         },
                         {
-                          "name": "sui_system"
+                          "cursor": "InN1aV9zeXN0ZW0i",
+                          "node": {
+                            "name": "sui_system"
+                          }
                         },
                         {
-                          "name": "sui_system_state_inner"
+                          "cursor": "InN1aV9zeXN0ZW1fc3RhdGVfaW5uZXIi",
+                          "node": {
+                            "name": "sui_system_state_inner"
+                          }
                         },
                         {
-                          "name": "validator"
+                          "cursor": "InZhbGlkYXRvciI",
+                          "node": {
+                            "name": "validator"
+                          }
                         },
                         {
-                          "name": "validator_cap"
+                          "cursor": "InZhbGlkYXRvcl9jYXAi",
+                          "node": {
+                            "name": "validator_cap"
+                          }
                         },
                         {
-                          "name": "validator_set"
+                          "cursor": "InZhbGlkYXRvcl9zZXQi",
+                          "node": {
+                            "name": "validator_set"
+                          }
                         },
                         {
-                          "name": "validator_wrapper"
+                          "cursor": "InZhbGlkYXRvcl93cmFwcGVyIg",
+                          "node": {
+                            "name": "validator_wrapper"
+                          }
                         },
                         {
-                          "name": "voting_power"
+                          "cursor": "InZvdGluZ19wb3dlciI",
+                          "node": {
+                            "name": "voting_power"
+                          }
                         }
                       ]
                     }
@@ -248,28 +374,49 @@ Response: {
                   "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
                   "asMoveObject": null,
                   "asMovePackage": {
-                    "moduleConnection": {
-                      "nodes": [
+                    "modules": {
+                      "edges": [
                         {
-                          "name": "clob"
+                          "cursor": "ImNsb2Ii",
+                          "node": {
+                            "name": "clob"
+                          }
                         },
                         {
-                          "name": "clob_v2"
+                          "cursor": "ImNsb2JfdjIi",
+                          "node": {
+                            "name": "clob_v2"
+                          }
                         },
                         {
-                          "name": "critbit"
+                          "cursor": "ImNyaXRiaXQi",
+                          "node": {
+                            "name": "critbit"
+                          }
                         },
                         {
-                          "name": "custodian"
+                          "cursor": "ImN1c3RvZGlhbiI",
+                          "node": {
+                            "name": "custodian"
+                          }
                         },
                         {
-                          "name": "custodian_v2"
+                          "cursor": "ImN1c3RvZGlhbl92MiI",
+                          "node": {
+                            "name": "custodian_v2"
+                          }
                         },
                         {
-                          "name": "math"
+                          "cursor": "Im1hdGgi",
+                          "node": {
+                            "name": "math"
+                          }
                         },
                         {
-                          "name": "order_query"
+                          "cursor": "Im9yZGVyX3F1ZXJ5Ig",
+                          "node": {
+                            "name": "order_query"
+                          }
                         }
                       ]
                     }
@@ -1036,10 +1183,10 @@ Response: {
   }
 }
 
-task 3 'create-checkpoint'. lines 94-94:
+task 3 'create-checkpoint'. lines 97-97:
 Checkpoint created: 1
 
-task 4 'run-graphql'. lines 96-165:
+task 4 'run-graphql'. lines 99-168:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -1117,10 +1264,10 @@ Response: {
   }
 }
 
-task 6 'advance-epoch'. lines 169-169:
+task 6 'advance-epoch'. lines 172-172:
 Epoch advanced: 0
 
-task 7 'run-graphql'. lines 171-249:
+task 7 'run-graphql'. lines 174-252:
 Response: {
   "data": {
     "transactionBlockConnection": {
