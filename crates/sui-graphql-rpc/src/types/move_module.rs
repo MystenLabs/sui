@@ -26,6 +26,7 @@ pub(crate) struct MoveModule {
 }
 
 pub(crate) type CFriend = Cursor<usize>;
+pub(crate) type CStruct = Cursor<String>;
 
 /// Represents a module in Move, a library that defines struct types
 /// and functions that operate on these types.
@@ -73,8 +74,8 @@ impl MoveModule {
         let total = bytecode.friend_decls.len();
 
         // Add one to make [lo, hi) a half-open interval ((after, before) is an open interval).
-        let mut lo = page.after().map_or(0, |a| **a + 1);
-        let mut hi = page.before().map_or(total, |b| **b);
+        let mut lo = page.after().map_or(0, |a| *a + 1);
+        let mut hi = page.before().map_or(total, |b| *b);
 
         let mut connection = Connection::new(false, false);
         if hi <= lo {
@@ -145,37 +146,37 @@ impl MoveModule {
     }
 
     /// Iterate through the structs defined in this module.
-    async fn struct_connection(
+    async fn structs(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<CStruct>,
         last: Option<u64>,
-        before: Option<String>,
+        before: Option<CStruct>,
     ) -> Result<Option<Connection<String, MoveStruct>>> {
-        let default_page_size = ctx
-            .data::<ServiceConfig>()
-            .map_err(|_| Error::Internal("Unable to fetch service configuration.".to_string()))
-            .extend()?
-            .limits
-            .max_page_size;
-
-        // TODO: make cursor opaque.
-        // for now it same as struct name
-        validate_cursor_pagination(&first, &after, &last, &before).extend()?;
-
-        let struct_range = self.parsed.structs(after.as_deref(), before.as_deref());
-
-        let total = struct_range.clone().count() as u64;
-        let (skip, take) = match (first, last) {
-            (Some(first), Some(last)) if last < first => (first - last, last),
-            (Some(first), _) => (0, first),
-            (None, Some(last)) if last < total => (total - last, last),
-            (None, _) => (0, default_page_size),
-        };
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        let after = page.after().map(String::as_str);
+        let before = page.before().map(String::as_str);
+        let struct_range = self.parsed.structs(after, before);
 
         let mut connection = Connection::new(false, false);
-        for name in struct_range.skip(skip as usize).take(take as usize) {
+        let struct_names = if page.is_from_front() {
+            struct_range.take(page.limit()).collect()
+        } else {
+            let mut names: Vec<_> = struct_range.rev().take(page.limit()).collect();
+            names.reverse();
+            names
+        };
+
+        connection.has_previous_page = struct_names
+            .first()
+            .is_some_and(|fst| self.parsed.structs(None, Some(fst)).next().is_some());
+
+        connection.has_next_page = struct_names
+            .last()
+            .is_some_and(|lst| self.parsed.structs(Some(lst), None).next().is_some());
+
+        for name in struct_names {
             let Some(struct_) = self.struct_impl(name.to_string()).extend()? else {
                 return Err(Error::Internal(format!(
                     "Cannot deserialize struct {name} in module {}::{}",
@@ -185,22 +186,9 @@ impl MoveModule {
                 .extend();
             };
 
-            connection.edges.push(Edge::new(name.to_string(), struct_));
+            let cursor = Cursor::new(name.to_string()).encode_cursor();
+            connection.edges.push(Edge::new(cursor, struct_));
         }
-
-        connection.has_previous_page = connection.edges.first().is_some_and(|fst| {
-            self.parsed
-                .structs(None, Some(&fst.cursor))
-                .next()
-                .is_some()
-        });
-
-        connection.has_next_page = connection.edges.last().is_some_and(|lst| {
-            self.parsed
-                .structs(Some(&lst.cursor), None)
-                .next()
-                .is_some()
-        });
 
         if connection.edges.is_empty() {
             Ok(None)

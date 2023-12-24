@@ -202,13 +202,13 @@ fragment Structs on Object {
 }
 
 
-//# run-graphql
+//# run-graphql --cursors "Coin" "TreasuryCap"
 {
     object(address: "0x2") {
         asMovePackage {
             module(name: "coin") {
                 # Get all the types defined in coin
-                all: structConnection {
+                all: structs {
                     nodes {
                         name
                         fields {
@@ -223,14 +223,20 @@ fragment Structs on Object {
                 # exclusive lower bound, so this query should indicate
                 # there is a previous page, and not include `Coin` in
                 # the output.
-                after: structConnection(after: "Coin") {
-                    nodes { name }
+                after: structs(after: "@{cursor_0}") {
+                    edges {
+                        cursor
+                        node { name }
+                    }
                     pageInfo { hasNextPage hasPreviousPage }
                 }
 
                 # Before: Similar to `after` but at the end of the range.
-                before: structConnection(before: "TreasuryCap") {
-                    nodes { name }
+                before: structs(before: "@{cursor_1}") {
+                    edges {
+                        cursor
+                        node { name }
+                    }
                     pageInfo { hasNextPage hasPreviousPage }
                 }
             }
@@ -238,9 +244,12 @@ fragment Structs on Object {
     }
 }
 
-//# run-graphql
+//# run-graphql --cursors "Coin" "TreasuryCap"
 fragment NodeNames on MoveStructConnection {
-    nodes { name }
+    edges {
+        cursor
+        node { name }
+    }
     pageInfo { hasNextPage hasPreviousPage }
 }
 
@@ -250,33 +259,33 @@ fragment NodeNames on MoveStructConnection {
             module(name: "coin") {
                 # Limit the number of elements in the page using
                 # `first` and skip elements using `after`.
-                prefix: structConnection(after: "Coin", first: 2) {
+                prefix: structs(after: "@{cursor_0}", first: 2) {
                     ...NodeNames
                 }
 
                 # Limit has no effect because it matches the total
                 # number of entries in the page.
-                prefixAll: structConnection(after: "Coin", first: 3) {
+                prefixAll: structs(after: "@{cursor_0}", first: 3) {
                     ...NodeNames
                 }
 
                 # Limit also has no effect, because it exceeds the
                 # total number of entries in the page.
-                prefixExcess: structConnection(after: "Coin", first: 100) {
+                prefixExcess: structs(after: "@{cursor_0}", first: 20) {
                     ...NodeNames
                 }
 
                 # Remaining tests are similar to after/first but with
                 # before/last.
-                suffix: structConnection(before: "TreasuryCap", last: 2) {
+                suffix: structs(before: "@{cursor_1}", last: 2) {
                     ...NodeNames
                 }
 
-                suffixAll: structConnection(before: "TreasuryCap", last: 3) {
+                suffixAll: structs(before: "@{cursor_1}", last: 3) {
                     ...NodeNames
                 }
 
-                suffixExcess: structConnection(before: "TreasuryCap", last: 100) {
+                suffixExcess: structs(before: "@{cursor_1}", last: 20) {
                     ...NodeNames
                 }
             }

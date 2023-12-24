@@ -385,7 +385,7 @@ Response: {
   }
 }
 
-task 9 'run-graphql'. lines 205-239:
+task 9 'run-graphql'. lines 205-245:
 Response: {
   "data": {
     "object": {
@@ -486,15 +486,24 @@ Response: {
             }
           },
           "after": {
-            "nodes": [
+            "edges": [
               {
-                "name": "CoinMetadata"
+                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "CoinMetadata"
+                }
               },
               {
-                "name": "CurrencyCreated"
+                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
               },
               {
-                "name": "TreasuryCap"
+                "cursor": "IlRyZWFzdXJ5Q2FwIg",
+                "node": {
+                  "name": "TreasuryCap"
+                }
               }
             ],
             "pageInfo": {
@@ -503,15 +512,24 @@ Response: {
             }
           },
           "before": {
-            "nodes": [
+            "edges": [
               {
-                "name": "Coin"
+                "cursor": "IkNvaW4i",
+                "node": {
+                  "name": "Coin"
+                }
               },
               {
-                "name": "CoinMetadata"
+                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "CoinMetadata"
+                }
               },
               {
-                "name": "CurrencyCreated"
+                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
               }
             ],
             "pageInfo": {
@@ -525,19 +543,25 @@ Response: {
   }
 }
 
-task 10 'run-graphql'. lines 241-285:
+task 10 'run-graphql'. lines 247-294:
 Response: {
   "data": {
     "object": {
       "asMovePackage": {
         "module": {
           "prefix": {
-            "nodes": [
+            "edges": [
               {
-                "name": "CoinMetadata"
+                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "CoinMetadata"
+                }
               },
               {
-                "name": "CurrencyCreated"
+                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
               }
             ],
             "pageInfo": {
@@ -546,15 +570,24 @@ Response: {
             }
           },
           "prefixAll": {
-            "nodes": [
+            "edges": [
               {
-                "name": "CoinMetadata"
+                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "CoinMetadata"
+                }
               },
               {
-                "name": "CurrencyCreated"
+                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
               },
               {
-                "name": "TreasuryCap"
+                "cursor": "IlRyZWFzdXJ5Q2FwIg",
+                "node": {
+                  "name": "TreasuryCap"
+                }
               }
             ],
             "pageInfo": {
@@ -563,15 +596,24 @@ Response: {
             }
           },
           "prefixExcess": {
-            "nodes": [
+            "edges": [
               {
-                "name": "CoinMetadata"
+                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "CoinMetadata"
+                }
               },
               {
-                "name": "CurrencyCreated"
+                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
               },
               {
-                "name": "TreasuryCap"
+                "cursor": "IlRyZWFzdXJ5Q2FwIg",
+                "node": {
+                  "name": "TreasuryCap"
+                }
               }
             ],
             "pageInfo": {
@@ -580,12 +622,18 @@ Response: {
             }
           },
           "suffix": {
-            "nodes": [
+            "edges": [
               {
-                "name": "CoinMetadata"
+                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "CoinMetadata"
+                }
               },
               {
-                "name": "CurrencyCreated"
+                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
               }
             ],
             "pageInfo": {
@@ -594,15 +642,24 @@ Response: {
             }
           },
           "suffixAll": {
-            "nodes": [
+            "edges": [
               {
-                "name": "Coin"
+                "cursor": "IkNvaW4i",
+                "node": {
+                  "name": "Coin"
+                }
               },
               {
-                "name": "CoinMetadata"
+                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "CoinMetadata"
+                }
               },
               {
-                "name": "CurrencyCreated"
+                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
               }
             ],
             "pageInfo": {
@@ -611,15 +668,24 @@ Response: {
             }
           },
           "suffixExcess": {
-            "nodes": [
+            "edges": [
               {
-                "name": "Coin"
+                "cursor": "IkNvaW4i",
+                "node": {
+                  "name": "Coin"
+                }
               },
               {
-                "name": "CoinMetadata"
+                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "CoinMetadata"
+                }
               },
               {
-                "name": "CurrencyCreated"
+                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
               }
             ],
             "pageInfo": {

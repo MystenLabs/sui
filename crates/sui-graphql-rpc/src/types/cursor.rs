@@ -93,12 +93,12 @@ impl<C> Page<C> {
         Ok(page)
     }
 
-    pub(crate) fn after(&self) -> Option<&Cursor<C>> {
-        self.after.as_ref()
+    pub(crate) fn after(&self) -> Option<&C> {
+        self.after.as_deref()
     }
 
-    pub(crate) fn before(&self) -> Option<&Cursor<C>> {
-        self.before.as_ref()
+    pub(crate) fn before(&self) -> Option<&C> {
+        self.before.as_deref()
     }
 
     pub(crate) fn limit(&self) -> usize {
