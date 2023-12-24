@@ -47,9 +47,6 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn get_checkpoint_by_sequence_number(
         sequence_number: i64,
     ) -> checkpoints::BoxedQuery<'static, DB>;
-    /// This gets the earliest checkpoint for which we can satisfy all queries
-    /// related to that checkpoint.
-    fn get_earliest_complete_checkpoint() -> checkpoints::BoxedQuery<'static, DB>;
     fn get_latest_checkpoint() -> checkpoints::BoxedQuery<'static, DB>;
     fn get_display_by_obj_type(object_type: String) -> display::BoxedQuery<'static, DB>;
     fn multi_get_txs(
