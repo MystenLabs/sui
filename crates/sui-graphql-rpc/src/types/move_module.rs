@@ -8,8 +8,7 @@ use move_binary_format::binary_views::BinaryIndexedView;
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Loc;
 
-use crate::config::ServiceConfig;
-use crate::context_data::db_data_provider::{validate_cursor_pagination, PgManager};
+use crate::context_data::db_data_provider::PgManager;
 use crate::error::Error;
 use sui_package_resolver::Module as ParsedMoveModule;
 
@@ -27,6 +26,7 @@ pub(crate) struct MoveModule {
 
 pub(crate) type CFriend = Cursor<usize>;
 pub(crate) type CStruct = Cursor<String>;
+pub(crate) type CFunction = Cursor<String>;
 
 /// Represents a module in Move, a library that defines struct types
 /// and functions that operate on these types.
@@ -203,37 +203,37 @@ impl MoveModule {
     }
 
     /// Iterate through the signatures of functions defined in this module.
-    async fn function_connection(
+    async fn functions(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<CFunction>,
         last: Option<u64>,
-        before: Option<String>,
+        before: Option<CFunction>,
     ) -> Result<Option<Connection<String, MoveFunction>>> {
-        let default_page_size = ctx
-            .data::<ServiceConfig>()
-            .map_err(|_| Error::Internal("Unable to fetch service configuration.".to_string()))
-            .extend()?
-            .limits
-            .max_page_size;
-
-        // TODO: make cursor opaque.
-        // for now it same as function name
-        validate_cursor_pagination(&first, &after, &last, &before).extend()?;
-
-        let function_range = self.parsed.functions(after.as_deref(), before.as_deref());
-
-        let total = function_range.clone().count() as u64;
-        let (skip, take) = match (first, last) {
-            (Some(first), Some(last)) if last < first => (first - last, last),
-            (Some(first), _) => (0, first),
-            (None, Some(last)) if last < total => (total - last, last),
-            (None, _) => (0, default_page_size),
-        };
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        let after = page.after().map(String::as_str);
+        let before = page.before().map(String::as_str);
+        let function_range = self.parsed.functions(after, before);
 
         let mut connection = Connection::new(false, false);
-        for name in function_range.skip(skip as usize).take(take as usize) {
+        let function_names = if page.is_from_front() {
+            function_range.take(page.limit()).collect()
+        } else {
+            let mut names: Vec<_> = function_range.rev().take(page.limit()).collect();
+            names.reverse();
+            names
+        };
+
+        connection.has_previous_page = function_names
+            .first()
+            .is_some_and(|fst| self.parsed.functions(None, Some(fst)).next().is_some());
+
+        connection.has_next_page = function_names
+            .last()
+            .is_some_and(|lst| self.parsed.functions(Some(lst), None).next().is_some());
+
+        for name in function_names {
             let Some(function) = self.function_impl(name.to_string()).extend()? else {
                 return Err(Error::Internal(format!(
                     "Cannot deserialize function {name} in module {}::{}",
@@ -243,22 +243,9 @@ impl MoveModule {
                 .extend();
             };
 
-            connection.edges.push(Edge::new(name.to_string(), function));
+            let cursor = Cursor::new(name.to_string()).encode_cursor();
+            connection.edges.push(Edge::new(cursor, function));
         }
-
-        connection.has_previous_page = connection.edges.first().is_some_and(|fst| {
-            self.parsed
-                .functions(None, Some(&fst.cursor))
-                .next()
-                .is_some()
-        });
-
-        connection.has_next_page = connection.edges.last().is_some_and(|lst| {
-            self.parsed
-                .functions(Some(&lst.cursor), None)
-                .next()
-                .is_some()
-        });
 
         if connection.edges.is_empty() {
             Ok(None)

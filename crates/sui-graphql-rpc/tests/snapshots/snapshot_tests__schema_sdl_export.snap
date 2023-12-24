@@ -1090,7 +1090,7 @@ type MoveModule {
 	"""
 	Iterate through the signatures of functions defined in this module.
 	"""
-	functionConnection(first: Int, after: String, last: Int, before: String): MoveFunctionConnection
+	functions(first: Int, after: String, last: Int, before: String): MoveFunctionConnection
 	"""
 	The Base64 encoded bcs serialization of the module.
 	"""
