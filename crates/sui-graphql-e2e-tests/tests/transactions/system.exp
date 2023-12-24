@@ -1,6 +1,6 @@
 processed 8 tasks
 
-task 1 'run-graphql'. lines 8-93:
+task 1 'run-graphql'. lines 8-96:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -23,946 +23,1000 @@ Response: {
           },
           "kind": {
             "__typename": "GenesisTransaction",
-            "objectConnection": {
-              "nodes": [
+            "objects": {
+              "edges": [
                 {
-                  "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
-                  "asMoveObject": null,
-                  "asMovePackage": {
-                    "modules": {
-                      "edges": [
-                        {
-                          "cursor": "ImFkZHJlc3Mi",
-                          "node": {
-                            "name": "address"
+                  "cursor": "MA",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                    "asMoveObject": null,
+                    "asMovePackage": {
+                      "modules": {
+                        "edges": [
+                          {
+                            "cursor": "ImFkZHJlc3Mi",
+                            "node": {
+                              "name": "address"
+                            }
+                          },
+                          {
+                            "cursor": "ImFzY2lpIg",
+                            "node": {
+                              "name": "ascii"
+                            }
+                          },
+                          {
+                            "cursor": "ImJjcyI",
+                            "node": {
+                              "name": "bcs"
+                            }
+                          },
+                          {
+                            "cursor": "ImJpdF92ZWN0b3Ii",
+                            "node": {
+                              "name": "bit_vector"
+                            }
+                          },
+                          {
+                            "cursor": "ImRlYnVnIg",
+                            "node": {
+                              "name": "debug"
+                            }
+                          },
+                          {
+                            "cursor": "ImZpeGVkX3BvaW50MzIi",
+                            "node": {
+                              "name": "fixed_point32"
+                            }
+                          },
+                          {
+                            "cursor": "Imhhc2gi",
+                            "node": {
+                              "name": "hash"
+                            }
+                          },
+                          {
+                            "cursor": "Im9wdGlvbiI",
+                            "node": {
+                              "name": "option"
+                            }
+                          },
+                          {
+                            "cursor": "InN0cmluZyI",
+                            "node": {
+                              "name": "string"
+                            }
+                          },
+                          {
+                            "cursor": "InR5cGVfbmFtZSI",
+                            "node": {
+                              "name": "type_name"
+                            }
+                          },
+                          {
+                            "cursor": "InZlY3RvciI",
+                            "node": {
+                              "name": "vector"
+                            }
                           }
-                        },
-                        {
-                          "cursor": "ImFzY2lpIg",
-                          "node": {
-                            "name": "ascii"
-                          }
-                        },
-                        {
-                          "cursor": "ImJjcyI",
-                          "node": {
-                            "name": "bcs"
-                          }
-                        },
-                        {
-                          "cursor": "ImJpdF92ZWN0b3Ii",
-                          "node": {
-                            "name": "bit_vector"
-                          }
-                        },
-                        {
-                          "cursor": "ImRlYnVnIg",
-                          "node": {
-                            "name": "debug"
-                          }
-                        },
-                        {
-                          "cursor": "ImZpeGVkX3BvaW50MzIi",
-                          "node": {
-                            "name": "fixed_point32"
-                          }
-                        },
-                        {
-                          "cursor": "Imhhc2gi",
-                          "node": {
-                            "name": "hash"
-                          }
-                        },
-                        {
-                          "cursor": "Im9wdGlvbiI",
-                          "node": {
-                            "name": "option"
-                          }
-                        },
-                        {
-                          "cursor": "InN0cmluZyI",
-                          "node": {
-                            "name": "string"
-                          }
-                        },
-                        {
-                          "cursor": "InR5cGVfbmFtZSI",
-                          "node": {
-                            "name": "type_name"
-                          }
-                        },
-                        {
-                          "cursor": "InZlY3RvciI",
-                          "node": {
-                            "name": "vector"
-                          }
-                        }
-                      ]
+                        ]
+                      }
                     }
                   }
                 },
                 {
-                  "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
-                  "asMoveObject": null,
-                  "asMovePackage": {
-                    "modules": {
-                      "edges": [
-                        {
-                          "cursor": "ImFkZHJlc3Mi",
-                          "node": {
-                            "name": "address"
+                  "cursor": "MQ",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                    "asMoveObject": null,
+                    "asMovePackage": {
+                      "modules": {
+                        "edges": [
+                          {
+                            "cursor": "ImFkZHJlc3Mi",
+                            "node": {
+                              "name": "address"
+                            }
+                          },
+                          {
+                            "cursor": "ImF1dGhlbnRpY2F0b3Jfc3RhdGUi",
+                            "node": {
+                              "name": "authenticator_state"
+                            }
+                          },
+                          {
+                            "cursor": "ImJhZyI",
+                            "node": {
+                              "name": "bag"
+                            }
+                          },
+                          {
+                            "cursor": "ImJhbGFuY2Ui",
+                            "node": {
+                              "name": "balance"
+                            }
+                          },
+                          {
+                            "cursor": "ImJjcyI",
+                            "node": {
+                              "name": "bcs"
+                            }
+                          },
+                          {
+                            "cursor": "ImJsczEyMzgxIg",
+                            "node": {
+                              "name": "bls12381"
+                            }
+                          },
+                          {
+                            "cursor": "ImJvcnJvdyI",
+                            "node": {
+                              "name": "borrow"
+                            }
+                          },
+                          {
+                            "cursor": "ImNsb2NrIg",
+                            "node": {
+                              "name": "clock"
+                            }
+                          },
+                          {
+                            "cursor": "ImNvaW4i",
+                            "node": {
+                              "name": "coin"
+                            }
+                          },
+                          {
+                            "cursor": "ImRpc3BsYXki",
+                            "node": {
+                              "name": "display"
+                            }
+                          },
+                          {
+                            "cursor": "ImR5bmFtaWNfZmllbGQi",
+                            "node": {
+                              "name": "dynamic_field"
+                            }
+                          },
+                          {
+                            "cursor": "ImR5bmFtaWNfb2JqZWN0X2ZpZWxkIg",
+                            "node": {
+                              "name": "dynamic_object_field"
+                            }
+                          },
+                          {
+                            "cursor": "ImVjZHNhX2sxIg",
+                            "node": {
+                              "name": "ecdsa_k1"
+                            }
+                          },
+                          {
+                            "cursor": "ImVjZHNhX3IxIg",
+                            "node": {
+                              "name": "ecdsa_r1"
+                            }
+                          },
+                          {
+                            "cursor": "ImVjdnJmIg",
+                            "node": {
+                              "name": "ecvrf"
+                            }
+                          },
+                          {
+                            "cursor": "ImVkMjU1MTki",
+                            "node": {
+                              "name": "ed25519"
+                            }
+                          },
+                          {
+                            "cursor": "ImV2ZW50Ig",
+                            "node": {
+                              "name": "event"
+                            }
+                          },
+                          {
+                            "cursor": "Imdyb3RoMTYi",
+                            "node": {
+                              "name": "groth16"
+                            }
+                          },
+                          {
+                            "cursor": "Imhhc2gi",
+                            "node": {
+                              "name": "hash"
+                            }
+                          },
+                          {
+                            "cursor": "ImhleCI",
+                            "node": {
+                              "name": "hex"
+                            }
                           }
-                        },
-                        {
-                          "cursor": "ImF1dGhlbnRpY2F0b3Jfc3RhdGUi",
-                          "node": {
-                            "name": "authenticator_state"
-                          }
-                        },
-                        {
-                          "cursor": "ImJhZyI",
-                          "node": {
-                            "name": "bag"
-                          }
-                        },
-                        {
-                          "cursor": "ImJhbGFuY2Ui",
-                          "node": {
-                            "name": "balance"
-                          }
-                        },
-                        {
-                          "cursor": "ImJjcyI",
-                          "node": {
-                            "name": "bcs"
-                          }
-                        },
-                        {
-                          "cursor": "ImJsczEyMzgxIg",
-                          "node": {
-                            "name": "bls12381"
-                          }
-                        },
-                        {
-                          "cursor": "ImJvcnJvdyI",
-                          "node": {
-                            "name": "borrow"
-                          }
-                        },
-                        {
-                          "cursor": "ImNsb2NrIg",
-                          "node": {
-                            "name": "clock"
-                          }
-                        },
-                        {
-                          "cursor": "ImNvaW4i",
-                          "node": {
-                            "name": "coin"
-                          }
-                        },
-                        {
-                          "cursor": "ImRpc3BsYXki",
-                          "node": {
-                            "name": "display"
-                          }
-                        },
-                        {
-                          "cursor": "ImR5bmFtaWNfZmllbGQi",
-                          "node": {
-                            "name": "dynamic_field"
-                          }
-                        },
-                        {
-                          "cursor": "ImR5bmFtaWNfb2JqZWN0X2ZpZWxkIg",
-                          "node": {
-                            "name": "dynamic_object_field"
-                          }
-                        },
-                        {
-                          "cursor": "ImVjZHNhX2sxIg",
-                          "node": {
-                            "name": "ecdsa_k1"
-                          }
-                        },
-                        {
-                          "cursor": "ImVjZHNhX3IxIg",
-                          "node": {
-                            "name": "ecdsa_r1"
-                          }
-                        },
-                        {
-                          "cursor": "ImVjdnJmIg",
-                          "node": {
-                            "name": "ecvrf"
-                          }
-                        },
-                        {
-                          "cursor": "ImVkMjU1MTki",
-                          "node": {
-                            "name": "ed25519"
-                          }
-                        },
-                        {
-                          "cursor": "ImV2ZW50Ig",
-                          "node": {
-                            "name": "event"
-                          }
-                        },
-                        {
-                          "cursor": "Imdyb3RoMTYi",
-                          "node": {
-                            "name": "groth16"
-                          }
-                        },
-                        {
-                          "cursor": "Imhhc2gi",
-                          "node": {
-                            "name": "hash"
-                          }
-                        },
-                        {
-                          "cursor": "ImhleCI",
-                          "node": {
-                            "name": "hex"
-                          }
-                        }
-                      ]
+                        ]
+                      }
                     }
                   }
                 },
                 {
-                  "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
-                  "asMoveObject": null,
-                  "asMovePackage": {
-                    "modules": {
-                      "edges": [
-                        {
-                          "cursor": "ImdlbmVzaXMi",
-                          "node": {
-                            "name": "genesis"
+                  "cursor": "Mg",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
+                    "asMoveObject": null,
+                    "asMovePackage": {
+                      "modules": {
+                        "edges": [
+                          {
+                            "cursor": "ImdlbmVzaXMi",
+                            "node": {
+                              "name": "genesis"
+                            }
+                          },
+                          {
+                            "cursor": "InN0YWtlX3N1YnNpZHki",
+                            "node": {
+                              "name": "stake_subsidy"
+                            }
+                          },
+                          {
+                            "cursor": "InN0YWtpbmdfcG9vbCI",
+                            "node": {
+                              "name": "staking_pool"
+                            }
+                          },
+                          {
+                            "cursor": "InN0b3JhZ2VfZnVuZCI",
+                            "node": {
+                              "name": "storage_fund"
+                            }
+                          },
+                          {
+                            "cursor": "InN1aV9zeXN0ZW0i",
+                            "node": {
+                              "name": "sui_system"
+                            }
+                          },
+                          {
+                            "cursor": "InN1aV9zeXN0ZW1fc3RhdGVfaW5uZXIi",
+                            "node": {
+                              "name": "sui_system_state_inner"
+                            }
+                          },
+                          {
+                            "cursor": "InZhbGlkYXRvciI",
+                            "node": {
+                              "name": "validator"
+                            }
+                          },
+                          {
+                            "cursor": "InZhbGlkYXRvcl9jYXAi",
+                            "node": {
+                              "name": "validator_cap"
+                            }
+                          },
+                          {
+                            "cursor": "InZhbGlkYXRvcl9zZXQi",
+                            "node": {
+                              "name": "validator_set"
+                            }
+                          },
+                          {
+                            "cursor": "InZhbGlkYXRvcl93cmFwcGVyIg",
+                            "node": {
+                              "name": "validator_wrapper"
+                            }
+                          },
+                          {
+                            "cursor": "InZvdGluZ19wb3dlciI",
+                            "node": {
+                              "name": "voting_power"
+                            }
                           }
-                        },
-                        {
-                          "cursor": "InN0YWtlX3N1YnNpZHki",
-                          "node": {
-                            "name": "stake_subsidy"
-                          }
-                        },
-                        {
-                          "cursor": "InN0YWtpbmdfcG9vbCI",
-                          "node": {
-                            "name": "staking_pool"
-                          }
-                        },
-                        {
-                          "cursor": "InN0b3JhZ2VfZnVuZCI",
-                          "node": {
-                            "name": "storage_fund"
-                          }
-                        },
-                        {
-                          "cursor": "InN1aV9zeXN0ZW0i",
-                          "node": {
-                            "name": "sui_system"
-                          }
-                        },
-                        {
-                          "cursor": "InN1aV9zeXN0ZW1fc3RhdGVfaW5uZXIi",
-                          "node": {
-                            "name": "sui_system_state_inner"
-                          }
-                        },
-                        {
-                          "cursor": "InZhbGlkYXRvciI",
-                          "node": {
-                            "name": "validator"
-                          }
-                        },
-                        {
-                          "cursor": "InZhbGlkYXRvcl9jYXAi",
-                          "node": {
-                            "name": "validator_cap"
-                          }
-                        },
-                        {
-                          "cursor": "InZhbGlkYXRvcl9zZXQi",
-                          "node": {
-                            "name": "validator_set"
-                          }
-                        },
-                        {
-                          "cursor": "InZhbGlkYXRvcl93cmFwcGVyIg",
-                          "node": {
-                            "name": "validator_wrapper"
-                          }
-                        },
-                        {
-                          "cursor": "InZvdGluZ19wb3dlciI",
-                          "node": {
-                            "name": "voting_power"
-                          }
-                        }
-                      ]
+                        ]
+                      }
                     }
                   }
                 },
                 {
-                  "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
-                  "asMoveObject": {
-                    "contents": {
-                      "type": {
-                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::sui_system::SuiSystemState"
-                      },
-                      "json": {
-                        "id": "0x0000000000000000000000000000000000000000000000000000000000000005",
-                        "version": "1"
-                      }
-                    }
-                  },
-                  "asMovePackage": null
-                },
-                {
-                  "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
-                  "asMoveObject": {
-                    "contents": {
-                      "type": {
-                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
-                      },
-                      "json": {
-                        "id": "0x0000000000000000000000000000000000000000000000000000000000000006",
-                        "timestamp_ms": "0"
-                      }
-                    }
-                  },
-                  "asMovePackage": null
-                },
-                {
-                  "address": "0x0000000000000000000000000000000000000000000000000000000000000007",
-                  "asMoveObject": {
-                    "contents": {
-                      "type": {
-                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::authenticator_state::AuthenticatorState"
-                      },
-                      "json": {
-                        "id": "0x0000000000000000000000000000000000000000000000000000000000000007",
-                        "version": "1"
-                      }
-                    }
-                  },
-                  "asMovePackage": null
-                },
-                {
-                  "address": "0x0000000000000000000000000000000000000000000000000000000000000008",
-                  "asMoveObject": {
-                    "contents": {
-                      "type": {
-                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::random::Random"
-                      },
-                      "json": {
-                        "id": "0x0000000000000000000000000000000000000000000000000000000000000008",
-                        "inner": {
-                          "id": "0x422ac8fb34c58821362d0b4c9ac1cff1a6d40251e02a61c368fecc62bde73a3f",
+                  "cursor": "Mw",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::sui_system::SuiSystemState"
+                        },
+                        "json": {
+                          "id": "0x0000000000000000000000000000000000000000000000000000000000000005",
                           "version": "1"
                         }
                       }
-                    }
-                  },
-                  "asMovePackage": null
+                    },
+                    "asMovePackage": null
+                  }
                 },
                 {
-                  "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
-                  "asMoveObject": null,
-                  "asMovePackage": {
-                    "modules": {
-                      "edges": [
-                        {
-                          "cursor": "ImNsb2Ii",
-                          "node": {
-                            "name": "clob"
-                          }
+                  "cursor": "NA",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
                         },
-                        {
-                          "cursor": "ImNsb2JfdjIi",
-                          "node": {
-                            "name": "clob_v2"
-                          }
+                        "json": {
+                          "id": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                          "timestamp_ms": "0"
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "NQ",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000007",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::authenticator_state::AuthenticatorState"
                         },
-                        {
-                          "cursor": "ImNyaXRiaXQi",
-                          "node": {
-                            "name": "critbit"
-                          }
+                        "json": {
+                          "id": "0x0000000000000000000000000000000000000000000000000000000000000007",
+                          "version": "1"
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "Ng",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000008",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::random::Random"
                         },
-                        {
-                          "cursor": "ImN1c3RvZGlhbiI",
-                          "node": {
-                            "name": "custodian"
-                          }
-                        },
-                        {
-                          "cursor": "ImN1c3RvZGlhbl92MiI",
-                          "node": {
-                            "name": "custodian_v2"
-                          }
-                        },
-                        {
-                          "cursor": "Im1hdGgi",
-                          "node": {
-                            "name": "math"
-                          }
-                        },
-                        {
-                          "cursor": "Im9yZGVyX3F1ZXJ5Ig",
-                          "node": {
-                            "name": "order_query"
+                        "json": {
+                          "id": "0x0000000000000000000000000000000000000000000000000000000000000008",
+                          "inner": {
+                            "id": "0x422ac8fb34c58821362d0b4c9ac1cff1a6d40251e02a61c368fecc62bde73a3f",
+                            "version": "1"
                           }
                         }
-                      ]
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "Nw",
+                  "node": {
+                    "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
+                    "asMoveObject": null,
+                    "asMovePackage": {
+                      "modules": {
+                        "edges": [
+                          {
+                            "cursor": "ImNsb2Ii",
+                            "node": {
+                              "name": "clob"
+                            }
+                          },
+                          {
+                            "cursor": "ImNsb2JfdjIi",
+                            "node": {
+                              "name": "clob_v2"
+                            }
+                          },
+                          {
+                            "cursor": "ImNyaXRiaXQi",
+                            "node": {
+                              "name": "critbit"
+                            }
+                          },
+                          {
+                            "cursor": "ImN1c3RvZGlhbiI",
+                            "node": {
+                              "name": "custodian"
+                            }
+                          },
+                          {
+                            "cursor": "ImN1c3RvZGlhbl92MiI",
+                            "node": {
+                              "name": "custodian_v2"
+                            }
+                          },
+                          {
+                            "cursor": "Im1hdGgi",
+                            "node": {
+                              "name": "math"
+                            }
+                          },
+                          {
+                            "cursor": "Im9yZGVyX3F1ZXJ5Ig",
+                            "node": {
+                              "name": "order_query"
+                            }
+                          }
+                        ]
+                      }
                     }
                   }
                 },
                 {
-                  "address": "0x02e8b9ef09559c54e4afb77adca7679575e42b20b3a8ff6fb8daf0e009d7cb52",
-                  "asMoveObject": {
-                    "contents": {
-                      "type": {
-                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::PoolTokenExchangeRate>"
-                      },
-                      "json": {
-                        "id": "0x02e8b9ef09559c54e4afb77adca7679575e42b20b3a8ff6fb8daf0e009d7cb52",
-                        "name": "0",
-                        "value": {
-                          "sui_amount": "0",
-                          "pool_token_amount": "0"
-                        }
-                      }
-                    }
-                  },
-                  "asMovePackage": null
-                },
-                {
-                  "address": "0x1f5de3c4c73a79df873afad8928d4db2f7b92dfb2a98ab117fd2b06bcb1c06ef",
-                  "asMoveObject": {
-                    "contents": {
-                      "type": {
-                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui"
-                      },
-                      "json": {
-                        "id": "0x1f5de3c4c73a79df873afad8928d4db2f7b92dfb2a98ab117fd2b06bcb1c06ef",
-                        "pool_id": "0x385908baa1a0de1492dd64ddbda1d7e1e5e359519a103afc6a6eca1735d6bcfa",
-                        "stake_activation_epoch": "0",
-                        "principal": {
-                          "value": "20000000000000000"
-                        }
-                      }
-                    }
-                  },
-                  "asMovePackage": null
-                },
-                {
-                  "address": "0x52cf80120b0345307c0f09300dd5b27ae4f2ff46b8f11e6bee7f5bb9269eb32a",
-                  "asMoveObject": {
-                    "contents": {
-                      "type": {
-                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
-                      },
-                      "json": {
-                        "id": "0x52cf80120b0345307c0f09300dd5b27ae4f2ff46b8f11e6bee7f5bb9269eb32a",
-                        "balance": {
-                          "value": "300000000000000"
-                        }
-                      }
-                    }
-                  },
-                  "asMovePackage": null
-                },
-                {
-                  "address": "0x541a3c3a405c83f1d8339976fccf17c16d687c9cf521dfeafea6044973a4bfc7",
-                  "asMoveObject": {
-                    "contents": {
-                      "type": {
-                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CoinMetadata<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
-                      },
-                      "json": {
-                        "id": "0x541a3c3a405c83f1d8339976fccf17c16d687c9cf521dfeafea6044973a4bfc7",
-                        "decimals": 9,
-                        "name": "Sui",
-                        "symbol": "SUI",
-                        "description": "",
-                        "icon_url": null
-                      }
-                    }
-                  },
-                  "asMovePackage": null
-                },
-                {
-                  "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
-                  "asMoveObject": {
-                    "contents": {
-                      "type": {
-                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000003::sui_system_state_inner::SuiSystemStateInner>"
-                      },
-                      "json": {
-                        "id": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
-                        "name": "1",
-                        "value": {
-                          "epoch": "0",
-                          "protocol_version": "32",
-                          "system_state_version": "1",
-                          "validators": {
-                            "total_stake": "20000000000000000",
-                            "active_validators": [
-                              {
-                                "metadata": {
-                                  "sui_address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a",
-                                  "protocol_pubkey_bytes": [
-                                    168,
-                                    10,
-                                    113,
-                                    148,
-                                    146,
-                                    18,
-                                    4,
-                                    206,
-                                    160,
-                                    17,
-                                    65,
-                                    3,
-                                    192,
-                                    72,
-                                    69,
-                                    3,
-                                    34,
-                                    62,
-                                    177,
-                                    119,
-                                    149,
-                                    119,
-                                    28,
-                                    226,
-                                    120,
-                                    84,
-                                    208,
-                                    34,
-                                    33,
-                                    221,
-                                    215,
-                                    26,
-                                    19,
-                                    43,
-                                    135,
-                                    198,
-                                    111,
-                                    189,
-                                    25,
-                                    213,
-                                    111,
-                                    170,
-                                    66,
-                                    24,
-                                    110,
-                                    12,
-                                    78,
-                                    20,
-                                    10,
-                                    27,
-                                    128,
-                                    57,
-                                    246,
-                                    144,
-                                    114,
-                                    82,
-                                    79,
-                                    96,
-                                    215,
-                                    59,
-                                    240,
-                                    247,
-                                    211,
-                                    18,
-                                    143,
-                                    1,
-                                    109,
-                                    137,
-                                    179,
-                                    82,
-                                    215,
-                                    118,
-                                    63,
-                                    135,
-                                    18,
-                                    31,
-                                    123,
-                                    40,
-                                    235,
-                                    25,
-                                    153,
-                                    189,
-                                    81,
-                                    129,
-                                    128,
-                                    219,
-                                    99,
-                                    215,
-                                    146,
-                                    145,
-                                    113,
-                                    132,
-                                    99,
-                                    76,
-                                    126,
-                                    246
-                                  ],
-                                  "network_pubkey_bytes": [
-                                    222,
-                                    193,
-                                    56,
-                                    253,
-                                    223,
-                                    140,
-                                    108,
-                                    228,
-                                    161,
-                                    246,
-                                    151,
-                                    172,
-                                    42,
-                                    190,
-                                    219,
-                                    243,
-                                    212,
-                                    210,
-                                    59,
-                                    152,
-                                    5,
-                                    6,
-                                    236,
-                                    134,
-                                    82,
-                                    53,
-                                    90,
-                                    224,
-                                    105,
-                                    93,
-                                    152,
-                                    85
-                                  ],
-                                  "worker_pubkey_bytes": [
-                                    172,
-                                    116,
-                                    152,
-                                    220,
-                                    228,
-                                    127,
-                                    173,
-                                    148,
-                                    84,
-                                    44,
-                                    112,
-                                    162,
-                                    74,
-                                    125,
-                                    50,
-                                    95,
-                                    124,
-                                    147,
-                                    55,
-                                    36,
-                                    241,
-                                    143,
-                                    223,
-                                    60,
-                                    129,
-                                    224,
-                                    221,
-                                    102,
-                                    15,
-                                    35,
-                                    217,
-                                    101
-                                  ],
-                                  "proof_of_possession": [
-                                    128,
-                                    156,
-                                    67,
-                                    33,
-                                    58,
-                                    1,
-                                    39,
-                                    117,
-                                    201,
-                                    238,
-                                    255,
-                                    186,
-                                    75,
-                                    160,
-                                    126,
-                                    112,
-                                    202,
-                                    232,
-                                    153,
-                                    37,
-                                    253,
-                                    202,
-                                    71,
-                                    140,
-                                    94,
-                                    117,
-                                    125,
-                                    17,
-                                    181,
-                                    101,
-                                    235,
-                                    149,
-                                    12,
-                                    103,
-                                    135,
-                                    36,
-                                    124,
-                                    64,
-                                    40,
-                                    191,
-                                    203,
-                                    204,
-                                    20,
-                                    212,
-                                    46,
-                                    230,
-                                    32,
-                                    74
-                                  ],
-                                  "name": "validator-0",
-                                  "description": "",
-                                  "image_url": {
-                                    "url": ""
-                                  },
-                                  "project_url": {
-                                    "url": ""
-                                  },
-                                  "net_address": "/ip4/127.0.0.1/tcp/8000/http",
-                                  "p2p_address": "/ip4/127.0.0.1/udp/8001/http",
-                                  "primary_address": "/ip4/127.0.0.1/udp/8004/http",
-                                  "worker_address": "/ip4/127.0.0.1/udp/8005/http",
-                                  "next_epoch_protocol_pubkey_bytes": null,
-                                  "next_epoch_proof_of_possession": null,
-                                  "next_epoch_network_pubkey_bytes": null,
-                                  "next_epoch_worker_pubkey_bytes": null,
-                                  "next_epoch_net_address": null,
-                                  "next_epoch_p2p_address": null,
-                                  "next_epoch_primary_address": null,
-                                  "next_epoch_worker_address": null,
-                                  "extra_fields": {
-                                    "id": "0xe2def1332d7a789fb6bc20e398f3891bb74d92ca2725efe83f369f7e244eae7f",
-                                    "size": "0"
-                                  }
-                                },
-                                "voting_power": "10000",
-                                "operation_cap_id": "0xbbd4d0d866687bc423d279e3b0b6ee7b98fb6d0c383ea35c2b7a3ac8bc1dc5cc",
-                                "gas_price": "1000",
-                                "staking_pool": {
-                                  "id": "0x385908baa1a0de1492dd64ddbda1d7e1e5e359519a103afc6a6eca1735d6bcfa",
-                                  "activation_epoch": "0",
-                                  "deactivation_epoch": null,
-                                  "sui_balance": "20000000000000000",
-                                  "rewards_pool": {
-                                    "value": "0"
-                                  },
-                                  "pool_token_balance": "20000000000000000",
-                                  "exchange_rates": {
-                                    "id": "0x53bf19496e7662e85163791ff9202b62ce6ae21a76977f3fddddc715990dead5",
-                                    "size": "1"
-                                  },
-                                  "pending_stake": "0",
-                                  "pending_total_sui_withdraw": "0",
-                                  "pending_pool_token_withdraw": "0",
-                                  "extra_fields": {
-                                    "id": "0xf640099d45f3a491db58f1d8fca00dece35438584fd754d05dd3759572335601",
-                                    "size": "0"
-                                  }
-                                },
-                                "commission_rate": "200",
-                                "next_epoch_stake": "20000000000000000",
-                                "next_epoch_gas_price": "1000",
-                                "next_epoch_commission_rate": "200",
-                                "extra_fields": {
-                                  "id": "0x6f3394bb27d4399fadba0127c48ad1d473542f6af80ded1866bdea1c91c02fbc",
-                                  "size": "0"
-                                }
-                              }
-                            ],
-                            "pending_active_validators": {
-                              "contents": {
-                                "id": "0x2154cd9b3278884d4bf6356b882b42d832713913e5322043c877079af884a9d3",
-                                "size": "0"
-                              }
-                            },
-                            "pending_removals": [],
-                            "staking_pool_mappings": {
-                              "id": "0x32bfa456c49a72ac32d4393b185d047a148637cc8c88318f77516e6b1ca6eb16",
-                              "size": "1"
-                            },
-                            "inactive_validators": {
-                              "id": "0x2332cdd36f59a568903fd91a9c27ec7f51a6901a544f686f191314f267ddc339",
-                              "size": "0"
-                            },
-                            "validator_candidates": {
-                              "id": "0x05b7e61dec1a2fe6099c59feddfcf3fc768172b4be2ef4ac0c19ef5a63fa55e1",
-                              "size": "0"
-                            },
-                            "at_risk_validators": {
-                              "contents": []
-                            },
-                            "extra_fields": {
-                              "id": "0xb6b803a9e7a235574e4d8ff664e21219f33bd784a751b2ab04e1177ac665078e",
-                              "size": "0"
-                            }
-                          },
-                          "storage_fund": {
-                            "total_object_storage_rebates": {
-                              "value": "0"
-                            },
-                            "non_refundable_balance": {
-                              "value": "0"
-                            }
-                          },
-                          "parameters": {
-                            "epoch_duration_ms": "86400000",
-                            "stake_subsidy_start_epoch": "0",
-                            "max_validator_count": "150",
-                            "min_validator_joining_stake": "30000000000000000",
-                            "validator_low_stake_threshold": "20000000000000000",
-                            "validator_very_low_stake_threshold": "15000000000000000",
-                            "validator_low_stake_grace_period": "7",
-                            "extra_fields": {
-                              "id": "0xeabe454f65add9c92b1ac5d3d33852f59b4f60ff0f44fe575ed716e7c4551b63",
-                              "size": "0"
-                            }
-                          },
-                          "reference_gas_price": "1000",
-                          "validator_report_records": {
-                            "contents": []
-                          },
-                          "stake_subsidy": {
-                            "balance": {
-                              "value": "9949700000000000000"
-                            },
-                            "distribution_counter": "0",
-                            "current_distribution_amount": "1000000000000000",
-                            "stake_subsidy_period_length": "10",
-                            "stake_subsidy_decrease_rate": 1000,
-                            "extra_fields": {
-                              "id": "0x1faf2a713e4531708d6916bb8fe6d656ed34d21ddad26110014ddacbe2c57b31",
-                              "size": "0"
-                            }
-                          },
-                          "safe_mode": false,
-                          "safe_mode_storage_rewards": {
-                            "value": "0"
-                          },
-                          "safe_mode_computation_rewards": {
-                            "value": "0"
-                          },
-                          "safe_mode_storage_rebates": "0",
-                          "safe_mode_non_refundable_storage_fee": "0",
-                          "epoch_start_timestamp_ms": "0",
-                          "extra_fields": {
-                            "id": "0x64536f2f395db503f1b43e3f7bfdbd06e0bb87d2598da522d0b5044df39f9ad2",
-                            "size": "0"
+                  "cursor": "OA",
+                  "node": {
+                    "address": "0x02e8b9ef09559c54e4afb77adca7679575e42b20b3a8ff6fb8daf0e009d7cb52",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::PoolTokenExchangeRate>"
+                        },
+                        "json": {
+                          "id": "0x02e8b9ef09559c54e4afb77adca7679575e42b20b3a8ff6fb8daf0e009d7cb52",
+                          "name": "0",
+                          "value": {
+                            "sui_amount": "0",
+                            "pool_token_amount": "0"
                           }
                         }
                       }
-                    }
-                  },
-                  "asMovePackage": null
+                    },
+                    "asMovePackage": null
+                  }
                 },
                 {
-                  "address": "0x7f55a19cb0b02c451494cc64e9f670fce8dbc646179fedbf1aa18d36c057ab04",
-                  "asMoveObject": {
-                    "contents": {
-                      "type": {
-                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<0x0000000000000000000000000000000000000000000000000000000000000002::object::ID,address>"
-                      },
-                      "json": {
-                        "id": "0x7f55a19cb0b02c451494cc64e9f670fce8dbc646179fedbf1aa18d36c057ab04",
-                        "name": "0x385908baa1a0de1492dd64ddbda1d7e1e5e359519a103afc6a6eca1735d6bcfa",
-                        "value": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
-                      }
-                    }
-                  },
-                  "asMovePackage": null
-                },
-                {
-                  "address": "0xaaf72a2f08943ad57c8850cb1b7d191b4c8ecc8ad07d64fffd19c6f3b16ca3bd",
-                  "asMoveObject": {
-                    "contents": {
-                      "type": {
-                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
-                      },
-                      "json": {
-                        "id": "0xaaf72a2f08943ad57c8850cb1b7d191b4c8ecc8ad07d64fffd19c6f3b16ca3bd",
-                        "balance": {
-                          "value": "30000000000000000"
+                  "cursor": "OQ",
+                  "node": {
+                    "address": "0x1f5de3c4c73a79df873afad8928d4db2f7b92dfb2a98ab117fd2b06bcb1c06ef",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui"
+                        },
+                        "json": {
+                          "id": "0x1f5de3c4c73a79df873afad8928d4db2f7b92dfb2a98ab117fd2b06bcb1c06ef",
+                          "pool_id": "0x385908baa1a0de1492dd64ddbda1d7e1e5e359519a103afc6a6eca1735d6bcfa",
+                          "stake_activation_epoch": "0",
+                          "principal": {
+                            "value": "20000000000000000"
+                          }
                         }
                       }
-                    }
-                  },
-                  "asMovePackage": null
+                    },
+                    "asMovePackage": null
+                  }
                 },
                 {
-                  "address": "0xbbd4d0d866687bc423d279e3b0b6ee7b98fb6d0c383ea35c2b7a3ac8bc1dc5cc",
-                  "asMoveObject": {
-                    "contents": {
-                      "type": {
-                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::validator_cap::UnverifiedValidatorOperationCap"
-                      },
-                      "json": {
-                        "id": "0xbbd4d0d866687bc423d279e3b0b6ee7b98fb6d0c383ea35c2b7a3ac8bc1dc5cc",
-                        "authorizer_validator_address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
-                      }
-                    }
-                  },
-                  "asMovePackage": null
-                },
-                {
-                  "address": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
-                  "asMoveObject": {
-                    "contents": {
-                      "type": {
-                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000002::authenticator_state::AuthenticatorStateInner>"
-                      },
-                      "json": {
-                        "id": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
-                        "name": "1",
-                        "value": {
-                          "version": "1",
-                          "active_jwks": []
+                  "cursor": "MTA",
+                  "node": {
+                    "address": "0x52cf80120b0345307c0f09300dd5b27ae4f2ff46b8f11e6bee7f5bb9269eb32a",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                        },
+                        "json": {
+                          "id": "0x52cf80120b0345307c0f09300dd5b27ae4f2ff46b8f11e6bee7f5bb9269eb32a",
+                          "balance": {
+                            "value": "300000000000000"
+                          }
                         }
                       }
-                    }
-                  },
-                  "asMovePackage": null
+                    },
+                    "asMovePackage": null
+                  }
                 },
                 {
-                  "address": "0xeeb81ea330cef64e124f04bdc1437ac7b3640471cf282318b19536f93f61ad47",
-                  "asMoveObject": {
-                    "contents": {
-                      "type": {
-                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000002::random::RandomInner>"
-                      },
-                      "json": {
-                        "id": "0xeeb81ea330cef64e124f04bdc1437ac7b3640471cf282318b19536f93f61ad47",
-                        "name": "1",
-                        "value": {
-                          "version": "1",
-                          "epoch": "0",
-                          "randomness_round": "0",
-                          "random_bytes": []
+                  "cursor": "MTE",
+                  "node": {
+                    "address": "0x541a3c3a405c83f1d8339976fccf17c16d687c9cf521dfeafea6044973a4bfc7",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CoinMetadata<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                        },
+                        "json": {
+                          "id": "0x541a3c3a405c83f1d8339976fccf17c16d687c9cf521dfeafea6044973a4bfc7",
+                          "decimals": 9,
+                          "name": "Sui",
+                          "symbol": "SUI",
+                          "description": "",
+                          "icon_url": null
                         }
                       }
-                    }
-                  },
-                  "asMovePackage": null
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "MTI",
+                  "node": {
+                    "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000003::sui_system_state_inner::SuiSystemStateInner>"
+                        },
+                        "json": {
+                          "id": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
+                          "name": "1",
+                          "value": {
+                            "epoch": "0",
+                            "protocol_version": "32",
+                            "system_state_version": "1",
+                            "validators": {
+                              "total_stake": "20000000000000000",
+                              "active_validators": [
+                                {
+                                  "metadata": {
+                                    "sui_address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a",
+                                    "protocol_pubkey_bytes": [
+                                      168,
+                                      10,
+                                      113,
+                                      148,
+                                      146,
+                                      18,
+                                      4,
+                                      206,
+                                      160,
+                                      17,
+                                      65,
+                                      3,
+                                      192,
+                                      72,
+                                      69,
+                                      3,
+                                      34,
+                                      62,
+                                      177,
+                                      119,
+                                      149,
+                                      119,
+                                      28,
+                                      226,
+                                      120,
+                                      84,
+                                      208,
+                                      34,
+                                      33,
+                                      221,
+                                      215,
+                                      26,
+                                      19,
+                                      43,
+                                      135,
+                                      198,
+                                      111,
+                                      189,
+                                      25,
+                                      213,
+                                      111,
+                                      170,
+                                      66,
+                                      24,
+                                      110,
+                                      12,
+                                      78,
+                                      20,
+                                      10,
+                                      27,
+                                      128,
+                                      57,
+                                      246,
+                                      144,
+                                      114,
+                                      82,
+                                      79,
+                                      96,
+                                      215,
+                                      59,
+                                      240,
+                                      247,
+                                      211,
+                                      18,
+                                      143,
+                                      1,
+                                      109,
+                                      137,
+                                      179,
+                                      82,
+                                      215,
+                                      118,
+                                      63,
+                                      135,
+                                      18,
+                                      31,
+                                      123,
+                                      40,
+                                      235,
+                                      25,
+                                      153,
+                                      189,
+                                      81,
+                                      129,
+                                      128,
+                                      219,
+                                      99,
+                                      215,
+                                      146,
+                                      145,
+                                      113,
+                                      132,
+                                      99,
+                                      76,
+                                      126,
+                                      246
+                                    ],
+                                    "network_pubkey_bytes": [
+                                      222,
+                                      193,
+                                      56,
+                                      253,
+                                      223,
+                                      140,
+                                      108,
+                                      228,
+                                      161,
+                                      246,
+                                      151,
+                                      172,
+                                      42,
+                                      190,
+                                      219,
+                                      243,
+                                      212,
+                                      210,
+                                      59,
+                                      152,
+                                      5,
+                                      6,
+                                      236,
+                                      134,
+                                      82,
+                                      53,
+                                      90,
+                                      224,
+                                      105,
+                                      93,
+                                      152,
+                                      85
+                                    ],
+                                    "worker_pubkey_bytes": [
+                                      172,
+                                      116,
+                                      152,
+                                      220,
+                                      228,
+                                      127,
+                                      173,
+                                      148,
+                                      84,
+                                      44,
+                                      112,
+                                      162,
+                                      74,
+                                      125,
+                                      50,
+                                      95,
+                                      124,
+                                      147,
+                                      55,
+                                      36,
+                                      241,
+                                      143,
+                                      223,
+                                      60,
+                                      129,
+                                      224,
+                                      221,
+                                      102,
+                                      15,
+                                      35,
+                                      217,
+                                      101
+                                    ],
+                                    "proof_of_possession": [
+                                      128,
+                                      156,
+                                      67,
+                                      33,
+                                      58,
+                                      1,
+                                      39,
+                                      117,
+                                      201,
+                                      238,
+                                      255,
+                                      186,
+                                      75,
+                                      160,
+                                      126,
+                                      112,
+                                      202,
+                                      232,
+                                      153,
+                                      37,
+                                      253,
+                                      202,
+                                      71,
+                                      140,
+                                      94,
+                                      117,
+                                      125,
+                                      17,
+                                      181,
+                                      101,
+                                      235,
+                                      149,
+                                      12,
+                                      103,
+                                      135,
+                                      36,
+                                      124,
+                                      64,
+                                      40,
+                                      191,
+                                      203,
+                                      204,
+                                      20,
+                                      212,
+                                      46,
+                                      230,
+                                      32,
+                                      74
+                                    ],
+                                    "name": "validator-0",
+                                    "description": "",
+                                    "image_url": {
+                                      "url": ""
+                                    },
+                                    "project_url": {
+                                      "url": ""
+                                    },
+                                    "net_address": "/ip4/127.0.0.1/tcp/8000/http",
+                                    "p2p_address": "/ip4/127.0.0.1/udp/8001/http",
+                                    "primary_address": "/ip4/127.0.0.1/udp/8004/http",
+                                    "worker_address": "/ip4/127.0.0.1/udp/8005/http",
+                                    "next_epoch_protocol_pubkey_bytes": null,
+                                    "next_epoch_proof_of_possession": null,
+                                    "next_epoch_network_pubkey_bytes": null,
+                                    "next_epoch_worker_pubkey_bytes": null,
+                                    "next_epoch_net_address": null,
+                                    "next_epoch_p2p_address": null,
+                                    "next_epoch_primary_address": null,
+                                    "next_epoch_worker_address": null,
+                                    "extra_fields": {
+                                      "id": "0xe2def1332d7a789fb6bc20e398f3891bb74d92ca2725efe83f369f7e244eae7f",
+                                      "size": "0"
+                                    }
+                                  },
+                                  "voting_power": "10000",
+                                  "operation_cap_id": "0xbbd4d0d866687bc423d279e3b0b6ee7b98fb6d0c383ea35c2b7a3ac8bc1dc5cc",
+                                  "gas_price": "1000",
+                                  "staking_pool": {
+                                    "id": "0x385908baa1a0de1492dd64ddbda1d7e1e5e359519a103afc6a6eca1735d6bcfa",
+                                    "activation_epoch": "0",
+                                    "deactivation_epoch": null,
+                                    "sui_balance": "20000000000000000",
+                                    "rewards_pool": {
+                                      "value": "0"
+                                    },
+                                    "pool_token_balance": "20000000000000000",
+                                    "exchange_rates": {
+                                      "id": "0x53bf19496e7662e85163791ff9202b62ce6ae21a76977f3fddddc715990dead5",
+                                      "size": "1"
+                                    },
+                                    "pending_stake": "0",
+                                    "pending_total_sui_withdraw": "0",
+                                    "pending_pool_token_withdraw": "0",
+                                    "extra_fields": {
+                                      "id": "0xf640099d45f3a491db58f1d8fca00dece35438584fd754d05dd3759572335601",
+                                      "size": "0"
+                                    }
+                                  },
+                                  "commission_rate": "200",
+                                  "next_epoch_stake": "20000000000000000",
+                                  "next_epoch_gas_price": "1000",
+                                  "next_epoch_commission_rate": "200",
+                                  "extra_fields": {
+                                    "id": "0x6f3394bb27d4399fadba0127c48ad1d473542f6af80ded1866bdea1c91c02fbc",
+                                    "size": "0"
+                                  }
+                                }
+                              ],
+                              "pending_active_validators": {
+                                "contents": {
+                                  "id": "0x2154cd9b3278884d4bf6356b882b42d832713913e5322043c877079af884a9d3",
+                                  "size": "0"
+                                }
+                              },
+                              "pending_removals": [],
+                              "staking_pool_mappings": {
+                                "id": "0x32bfa456c49a72ac32d4393b185d047a148637cc8c88318f77516e6b1ca6eb16",
+                                "size": "1"
+                              },
+                              "inactive_validators": {
+                                "id": "0x2332cdd36f59a568903fd91a9c27ec7f51a6901a544f686f191314f267ddc339",
+                                "size": "0"
+                              },
+                              "validator_candidates": {
+                                "id": "0x05b7e61dec1a2fe6099c59feddfcf3fc768172b4be2ef4ac0c19ef5a63fa55e1",
+                                "size": "0"
+                              },
+                              "at_risk_validators": {
+                                "contents": []
+                              },
+                              "extra_fields": {
+                                "id": "0xb6b803a9e7a235574e4d8ff664e21219f33bd784a751b2ab04e1177ac665078e",
+                                "size": "0"
+                              }
+                            },
+                            "storage_fund": {
+                              "total_object_storage_rebates": {
+                                "value": "0"
+                              },
+                              "non_refundable_balance": {
+                                "value": "0"
+                              }
+                            },
+                            "parameters": {
+                              "epoch_duration_ms": "86400000",
+                              "stake_subsidy_start_epoch": "0",
+                              "max_validator_count": "150",
+                              "min_validator_joining_stake": "30000000000000000",
+                              "validator_low_stake_threshold": "20000000000000000",
+                              "validator_very_low_stake_threshold": "15000000000000000",
+                              "validator_low_stake_grace_period": "7",
+                              "extra_fields": {
+                                "id": "0xeabe454f65add9c92b1ac5d3d33852f59b4f60ff0f44fe575ed716e7c4551b63",
+                                "size": "0"
+                              }
+                            },
+                            "reference_gas_price": "1000",
+                            "validator_report_records": {
+                              "contents": []
+                            },
+                            "stake_subsidy": {
+                              "balance": {
+                                "value": "9949700000000000000"
+                              },
+                              "distribution_counter": "0",
+                              "current_distribution_amount": "1000000000000000",
+                              "stake_subsidy_period_length": "10",
+                              "stake_subsidy_decrease_rate": 1000,
+                              "extra_fields": {
+                                "id": "0x1faf2a713e4531708d6916bb8fe6d656ed34d21ddad26110014ddacbe2c57b31",
+                                "size": "0"
+                              }
+                            },
+                            "safe_mode": false,
+                            "safe_mode_storage_rewards": {
+                              "value": "0"
+                            },
+                            "safe_mode_computation_rewards": {
+                              "value": "0"
+                            },
+                            "safe_mode_storage_rebates": "0",
+                            "safe_mode_non_refundable_storage_fee": "0",
+                            "epoch_start_timestamp_ms": "0",
+                            "extra_fields": {
+                              "id": "0x64536f2f395db503f1b43e3f7bfdbd06e0bb87d2598da522d0b5044df39f9ad2",
+                              "size": "0"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "MTM",
+                  "node": {
+                    "address": "0x7f55a19cb0b02c451494cc64e9f670fce8dbc646179fedbf1aa18d36c057ab04",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<0x0000000000000000000000000000000000000000000000000000000000000002::object::ID,address>"
+                        },
+                        "json": {
+                          "id": "0x7f55a19cb0b02c451494cc64e9f670fce8dbc646179fedbf1aa18d36c057ab04",
+                          "name": "0x385908baa1a0de1492dd64ddbda1d7e1e5e359519a103afc6a6eca1735d6bcfa",
+                          "value": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "MTQ",
+                  "node": {
+                    "address": "0xaaf72a2f08943ad57c8850cb1b7d191b4c8ecc8ad07d64fffd19c6f3b16ca3bd",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                        },
+                        "json": {
+                          "id": "0xaaf72a2f08943ad57c8850cb1b7d191b4c8ecc8ad07d64fffd19c6f3b16ca3bd",
+                          "balance": {
+                            "value": "30000000000000000"
+                          }
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "MTU",
+                  "node": {
+                    "address": "0xbbd4d0d866687bc423d279e3b0b6ee7b98fb6d0c383ea35c2b7a3ac8bc1dc5cc",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::validator_cap::UnverifiedValidatorOperationCap"
+                        },
+                        "json": {
+                          "id": "0xbbd4d0d866687bc423d279e3b0b6ee7b98fb6d0c383ea35c2b7a3ac8bc1dc5cc",
+                          "authorizer_validator_address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "MTY",
+                  "node": {
+                    "address": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000002::authenticator_state::AuthenticatorStateInner>"
+                        },
+                        "json": {
+                          "id": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
+                          "name": "1",
+                          "value": {
+                            "version": "1",
+                            "active_jwks": []
+                          }
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "MTc",
+                  "node": {
+                    "address": "0xeeb81ea330cef64e124f04bdc1437ac7b3640471cf282318b19536f93f61ad47",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000002::random::RandomInner>"
+                        },
+                        "json": {
+                          "id": "0xeeb81ea330cef64e124f04bdc1437ac7b3640471cf282318b19536f93f61ad47",
+                          "name": "1",
+                          "value": {
+                            "version": "1",
+                            "epoch": "0",
+                            "randomness_round": "0",
+                            "random_bytes": []
+                          }
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
                 }
               ]
             }
@@ -1183,10 +1237,10 @@ Response: {
   }
 }
 
-task 3 'create-checkpoint'. lines 97-97:
+task 3 'create-checkpoint'. lines 100-100:
 Checkpoint created: 1
 
-task 4 'run-graphql'. lines 99-168:
+task 4 'run-graphql'. lines 102-171:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -1264,10 +1318,10 @@ Response: {
   }
 }
 
-task 6 'advance-epoch'. lines 172-172:
+task 6 'advance-epoch'. lines 175-175:
 Epoch advanced: 0
 
-task 7 'run-graphql'. lines 174-252:
+task 7 'run-graphql'. lines 177-255:
 Response: {
   "data": {
     "transactionBlockConnection": {

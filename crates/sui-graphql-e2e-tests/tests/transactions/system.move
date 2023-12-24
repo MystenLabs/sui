@@ -24,22 +24,25 @@
             kind {
                 __typename
                 ... on GenesisTransaction {
-                    objectConnection {
-                        nodes {
-                            address
+                    objects {
+                        edges {
+                            cursor
+                            node {
+                                address
 
-                            asMoveObject {
-                                contents {
-                                    type { repr }
-                                    json
+                                asMoveObject {
+                                    contents {
+                                        type { repr }
+                                        json
+                                    }
                                 }
-                            }
 
-                            asMovePackage {
-                                modules {
-                                    edges {
-                                        cursor
-                                        node { name }
+                                asMovePackage {
+                                    modules {
+                                        edges {
+                                            cursor
+                                            node { name }
+                                        }
                                     }
                                 }
                             }

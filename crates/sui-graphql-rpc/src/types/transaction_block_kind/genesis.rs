@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{
-    connection::{Connection, Edge},
+    connection::{Connection, CursorType, Edge},
     *,
 };
 use sui_types::{
@@ -11,83 +11,57 @@ use sui_types::{
     transaction::{GenesisObject, GenesisTransaction as NativeGenesisTransaction},
 };
 
-use crate::{
-    context_data::db_data_provider::validate_cursor_pagination,
-    error::Error,
-    types::{object::Object, sui_address::SuiAddress},
+use crate::types::{
+    cursor::{Cursor, Page},
+    object::Object,
+    sui_address::SuiAddress,
 };
 
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct GenesisTransaction(pub NativeGenesisTransaction);
 
+pub(crate) type CObject = Cursor<usize>;
+
 /// System transaction that initializes the network and writes the initial set of objects on-chain.
 #[Object]
 impl GenesisTransaction {
     /// Objects to be created during genesis.
-    async fn object_connection(
+    async fn objects(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<CObject>,
         last: Option<u64>,
-        before: Option<String>,
+        before: Option<CObject>,
     ) -> Result<Connection<String, Object>> {
-        // TODO: make cursor opaque (currently just an offset).
-        validate_cursor_pagination(&first, &after, &last, &before).extend()?;
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let total = self.0.objects.len();
-
-        let mut lo = if let Some(after) = after {
-            1 + after
-                .parse::<usize>()
-                .map_err(|_| Error::InvalidCursor("Failed to parse 'after' cursor.".to_string()))
-                .extend()?
-        } else {
-            0
-        };
-
-        let mut hi = if let Some(before) = before {
-            before
-                .parse::<usize>()
-                .map_err(|_| Error::InvalidCursor("Failed to parse 'before' cursor.".to_string()))
-                .extend()?
-        } else {
-            total
-        };
+        let mut lo = page.after().map_or(0, |a| *a + 1);
+        let mut hi = page.before().map_or(total, |b| *b);
 
         let mut connection = Connection::new(false, false);
         if hi <= lo {
             return Ok(connection);
-        }
-
-        // If there's a `first` limit, bound the upperbound to be at most `first` away from the
-        // lowerbound.
-        if let Some(first) = first {
-            let first = first as usize;
-            if hi - lo > first {
-                hi = lo + first;
-            }
-        }
-
-        // If there's a `last` limit, bound the lowerbound to be at most `last` away from the
-        // upperbound.  NB. This applies after we bounded the upperbound, using `first`.
-        if let Some(last) = last {
-            let last = last as usize;
-            if hi - lo > last {
-                lo = hi - last;
+        } else if (hi - lo) > page.limit() {
+            if page.is_from_front() {
+                hi = lo + page.limit();
+            } else {
+                lo = hi - page.limit();
             }
         }
 
         connection.has_previous_page = 0 < lo;
         connection.has_next_page = hi < total;
 
-        for (idx, object) in self.0.objects.iter().enumerate().skip(lo).take(hi - lo) {
-            let GenesisObject::RawObject { data, owner } = object.clone();
+        for idx in lo..hi {
+            let GenesisObject::RawObject { data, owner } = self.0.objects[idx].clone();
             let native =
                 NativeObject::new_from_genesis(data, owner, TransactionDigest::genesis_marker());
 
-            let storage_id = native.id();
-            let object = Object::from_native(SuiAddress::from(storage_id), native);
-            connection.edges.push(Edge::new(idx.to_string(), object));
+            let cursor = Cursor::new(idx).encode_cursor();
+            let object = Object::from_native(SuiAddress::from(native.id()), native);
+            connection.edges.push(Edge::new(cursor, object));
         }
 
         Ok(connection)
