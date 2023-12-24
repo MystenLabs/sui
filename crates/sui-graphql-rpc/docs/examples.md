@@ -1330,7 +1330,7 @@
 >          storageRebate
 >        }
 >        ... on GenesisTransaction {
->          objectConnection {
+>          objects {
 >            nodes { address }
 >          }
 >        }
