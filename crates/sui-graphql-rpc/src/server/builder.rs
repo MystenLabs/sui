@@ -3,6 +3,7 @@
 
 use crate::config::{MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD};
 use crate::context_data::package_cache::DbPackageStore;
+use crate::data::Db;
 use crate::mutation::Mutation;
 use crate::{
     config::ServerConfig,
@@ -164,6 +165,7 @@ impl ServerBuilder {
             config.connection.db_pool_size,
         )
         .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
+        let db = Db::new(reader.clone(), config.service.limits);
         let pg_conn_pool = PgManager::new(reader.clone(), config.service.limits);
         let package_store = DbPackageStore(reader);
         let package_cache = PackageStoreWithLruCache::new(package_store);
@@ -203,6 +205,7 @@ impl ServerBuilder {
 
         builder = builder
             .context_data(config.service.clone())
+            .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(Resolver::new_with_limits(
                 package_cache,
