@@ -192,7 +192,8 @@ pub enum SuiValidatorCommandResponse {
         serialized_data: String,
     },
     /// Batch withdrawn Stake SUIs from the validator's account to the specified address.
-    BatchWithdrawStake(SuiTransactionBlockResponse),
+     BatchWithdrawStake(SuiTransactionBlockResponse),
+    //BatchWithdrawStake(String),
 }
 
 fn make_key_files(
@@ -470,21 +471,23 @@ impl SuiValidatorCommand {
             // 1. Should the staked_object_ids be a vector of ObjectIds or a string of ObjectIds?
             // Batch withdrawn Stake SUIs from the validator's account to the specified address.
             // Should the command receives stakingPool Id and validator Id as input?
+            // TODO: Try to query the staked Objects with the objectIds using the RPC endpoint.
             SuiValidatorCommand::BatchWithdrawStake {staked_object_ids, gas_budget }    => {
                 ensure!(
                     !staked_object_ids.is_empty(),
                     "Batch withdraw transaction requires a non-empty list of staked objects"
                 );
-                let mut args = Vec::new();
-            
+              
+                
+                let mut args = vec![];
+             
                 // Iterate over each staked_object_id and serialize them
                     for object_id in staked_object_ids {
-                        let serialized_object_id = CallArg::Pure(
-                            bcs::to_bytes(&object_id).unwrap(),
-                        );
-                        args.push(serialized_object_id);
+                        let (_status, _summary, cap_obj_ref) =
+                        get_cap_object_ref(context, Some(object_id)).await?;
+                        args.push(CallArg::Object(ObjectArg::ImmOrOwnedObject(cap_obj_ref)));
                     }
-                // args.push(CallArg::Pure(bcs::to_bytes(&sender_address).unwrap()));
+            
                 let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                 let response =
                     call_0x5(context, "request_withdraw_stake_batch", args, gas_budget).await?;
@@ -1077,3 +1080,4 @@ async fn check_status(
     }
     bail!("Validator {validator_address} is {:?}, this operation is not supported in this tool or prohibited.", status)
 }
+
