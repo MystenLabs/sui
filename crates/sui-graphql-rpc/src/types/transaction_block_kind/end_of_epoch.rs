@@ -172,7 +172,7 @@ impl ChangeEpochTransaction {
 
     /// Time at which the next epoch will start.
     async fn start_timestamp(&self) -> Result<DateTime, Error> {
-        Ok(DateTime::from_ms(self.0.epoch_start_timestamp_ms as i64)?)
+        DateTime::from_ms(self.0.epoch_start_timestamp_ms as i64)?
     }
 
     /// System packages (specifically framework and move stdlib) that are written before the new
