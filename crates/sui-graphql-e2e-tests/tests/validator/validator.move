@@ -54,7 +54,7 @@ module P0::m {
 
 //# run-graphql
 {
-  epoch{
+  epoch(id: 1) {
     validatorSet {
       activeValidators {
         apy
@@ -102,7 +102,7 @@ module P0::m {
 
 //# run-graphql
 {
-  epoch{
+  epoch(id: 2) {
     validatorSet {
       activeValidators {
         apy
