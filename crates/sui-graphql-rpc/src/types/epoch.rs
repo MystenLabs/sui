@@ -51,7 +51,7 @@ impl Epoch {
 
     /// The epoch's starting timestamp
     async fn start_timestamp(&self) -> Result<DateTime, Error> {
-        DateTime::from_ms(self.stored.epoch_start_timestamp)?
+        DateTime::from_ms(self.stored.epoch_start_timestamp)
     }
 
     /// The epoch's ending timestamp
