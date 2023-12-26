@@ -195,7 +195,7 @@ module bridge::message {
     }
 
     #[test]
-    fun test_message_serialisation() {
+    fun test_message_serialization() {
         let sender_address = address::from_u256(100);
         let scenario = test_scenario::begin(sender_address);
         let ctx = test_scenario::ctx(&mut scenario);
