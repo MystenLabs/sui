@@ -7,6 +7,9 @@
 //! 2. hands actions to `BridgeExecutor` for execution
 
 use crate::abi::EthBridgeEvent;
+use crate::action_executor::{
+    submit_to_executor, BridgeActionExecutionWrapper, BridgeActionExecutorTrait,
+};
 use crate::error::BridgeResult;
 use crate::events::SuiBridgeEvent;
 use crate::storage::BridgeOrchestratorTables;
@@ -47,26 +50,36 @@ where
         }
     }
 
-    pub fn run(self) -> Vec<JoinHandle<()>> {
+    pub fn run(
+        self,
+        bridge_action_executor: impl BridgeActionExecutorTrait,
+    ) -> Vec<JoinHandle<()>> {
         tracing::info!("Starting BridgeOrchestrator");
         let mut task_handles = vec![];
         let store_clone = self.store.clone();
+
+        // Spawn BridgeActionExecutor
+        let (handles, executor_sender) = bridge_action_executor.run();
+        task_handles.extend(handles);
+        let executor_sender_clone = executor_sender.clone();
         task_handles.push(spawn_logged_monitored_task!(Self::run_sui_watcher(
             store_clone,
+            executor_sender_clone,
             self.sui_events_rx,
         )));
         let store_clone = self.store.clone();
         task_handles.push(spawn_logged_monitored_task!(Self::run_eth_watcher(
             store_clone,
+            executor_sender,
             self.eth_events_rx,
         )));
-
         // TODO: spawn bridge committee change watcher task
         task_handles
     }
 
     async fn run_sui_watcher(
         store: Arc<BridgeOrchestratorTables>,
+        executor_tx: mysten_metrics::metered_channel::Sender<BridgeActionExecutionWrapper>,
         mut sui_events_rx: mysten_metrics::metered_channel::Receiver<(Identifier, Vec<SuiEvent>)>,
     ) {
         info!("Starting sui watcher task");
@@ -106,9 +119,11 @@ where
                 store
                     .insert_pending_actions(&actions)
                     .expect("Store operation should not fail");
-
-                // TODO: ask executor to execute, who calls `remove_pending_actions` after
-                // confirming the action is done.
+                for action in actions {
+                    submit_to_executor(&executor_tx, action)
+                        .await
+                        .expect("Submit to executor should not fail");
+                }
             }
 
             // Unwrap safe: in the beginning of the loop we checked that events is not empty
@@ -122,6 +137,7 @@ where
 
     async fn run_eth_watcher(
         store: Arc<BridgeOrchestratorTables>,
+        executor_tx: mysten_metrics::metered_channel::Sender<BridgeActionExecutionWrapper>,
         mut eth_events_rx: mysten_metrics::metered_channel::Receiver<(
             ethers::types::Address,
             Vec<EthLog>,
@@ -161,9 +177,12 @@ where
                 store
                     .insert_pending_actions(&actions)
                     .expect("Store operation should not fail");
-
-                // TODO: ask executor to execute, who calls `remove_pending_actions` after
-                // confirming the action is done.
+                // Execution will remove the pending actions from DB when the action is completed.
+                for action in actions {
+                    submit_to_executor(&executor_tx, action)
+                        .await
+                        .expect("Submit to executor should not fail");
+                }
             }
 
             // Unwrap safe: in the beginning of the loop we checked that events is not empty
@@ -178,7 +197,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::abi::tests::get_test_log_and_action;
+    use crate::{abi::tests::get_test_log_and_action, types::BridgeActionDigest};
     use ethers::types::Address as EthAddress;
     use prometheus::Registry;
     use std::str::FromStr;
@@ -193,6 +212,8 @@ mod tests {
 
         let (sui_events_tx, sui_events_rx, _eth_events_tx, eth_events_rx, sui_client, store) =
             setup();
+
+        let (executor, mut executor_requested_action_rx) = MockExecutor::new();
         // start orchestrator
         let _handles = BridgeOrchestrator::new(
             Arc::new(sui_client),
@@ -200,7 +221,7 @@ mod tests {
             eth_events_rx,
             store.clone(),
         )
-        .run();
+        .run(executor);
 
         let identifier = Identifier::from_str("test_sui_watcher_task").unwrap();
         let (sui_event, bridge_action) = get_test_sui_event_and_action(identifier.clone());
@@ -210,6 +231,11 @@ mod tests {
             .unwrap();
 
         let start = std::time::Instant::now();
+        // Executor should have received the action
+        assert_eq!(
+            executor_requested_action_rx.recv().await.unwrap(),
+            bridge_action.digest()
+        );
         loop {
             let actions = store.get_all_pending_actions().unwrap();
             if actions.is_empty() {
@@ -238,6 +264,7 @@ mod tests {
 
         let (_sui_events_tx, sui_events_rx, eth_events_tx, eth_events_rx, sui_client, store) =
             setup();
+        let (executor, mut executor_requested_action_rx) = MockExecutor::new();
         // start orchestrator
         let _handles = BridgeOrchestrator::new(
             Arc::new(sui_client),
@@ -245,7 +272,7 @@ mod tests {
             eth_events_rx,
             store.clone(),
         )
-        .run();
+        .run(executor);
         let address = EthAddress::random();
         let (log, bridge_action) = get_test_log_and_action(address);
         let log_index_in_tx = 10;
@@ -261,6 +288,11 @@ mod tests {
             .await
             .unwrap();
 
+        // Executor should have received the action
+        assert_eq!(
+            executor_requested_action_rx.recv().await.unwrap(),
+            bridge_action.digest()
+        );
         let start = std::time::Instant::now();
         loop {
             let actions = store.get_all_pending_actions().unwrap();
@@ -325,5 +357,49 @@ mod tests {
             sui_client,
             store,
         )
+    }
+
+    /// A `BridgeActionExecutorTrait` implementation that only tracks the submitted actions.
+    struct MockExecutor {
+        requested_transactions_tx: tokio::sync::broadcast::Sender<BridgeActionDigest>,
+    }
+
+    impl MockExecutor {
+        fn new() -> (Self, tokio::sync::broadcast::Receiver<BridgeActionDigest>) {
+            let (tx, rx) = tokio::sync::broadcast::channel(100);
+            (
+                Self {
+                    requested_transactions_tx: tx,
+                },
+                rx,
+            )
+        }
+    }
+
+    impl BridgeActionExecutorTrait for MockExecutor {
+        fn run(
+            self,
+        ) -> (
+            Vec<tokio::task::JoinHandle<()>>,
+            mysten_metrics::metered_channel::Sender<BridgeActionExecutionWrapper>,
+        ) {
+            let (tx, mut rx) =
+                mysten_metrics::metered_channel::channel::<BridgeActionExecutionWrapper>(
+                    100,
+                    &mysten_metrics::get_metrics()
+                        .unwrap()
+                        .channels
+                        .with_label_values(&["unit_test_mock_executor"]),
+                );
+
+            let handles = tokio::spawn(async move {
+                while let Some(action) = rx.recv().await {
+                    self.requested_transactions_tx
+                        .send(action.0.digest())
+                        .unwrap();
+                }
+            });
+            (vec![handles], tx)
+        }
     }
 }
