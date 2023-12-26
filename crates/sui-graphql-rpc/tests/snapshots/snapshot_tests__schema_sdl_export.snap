@@ -257,7 +257,7 @@ type ChangeEpochTransaction {
 	"""
 	Time at which the next epoch will start.
 	"""
-	startTimestamp: DateTime
+	startTimestamp: DateTime!
 	"""
 	System packages (specifically framework and move stdlib) that are written before the new
 	epoch starts, to upgrade them on-chain. Validators write these packages out when running the
@@ -281,7 +281,7 @@ type Checkpoint {
 	The timestamp at which the checkpoint is agreed to have happened according to consensus.
 	Transactions that access time in this checkpoint will observe this timestamp.
 	"""
-	timestamp: DateTime
+	timestamp: DateTime!
 	"""
 	This is an aggregation of signatures from a quorum of validators for the checkpoint proposal.
 	"""
@@ -441,7 +441,7 @@ type ConsensusCommitPrologueTransaction {
 	"""
 	Unix timestamp from consensus.
 	"""
-	commitTimestamp: DateTime
+	commitTimestamp: DateTime!
 	"""
 	Digest of consensus output, encoded as a Base58 string (only available from V2 of the
 	transaction).
@@ -595,7 +595,7 @@ type Epoch {
 	"""
 	The epoch's starting timestamp
 	"""
-	startTimestamp: DateTime
+	startTimestamp: DateTime!
 	"""
 	The epoch's ending timestamp
 	"""

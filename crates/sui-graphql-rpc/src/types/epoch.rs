@@ -47,13 +47,16 @@ impl Epoch {
     }
 
     /// The epoch's starting timestamp
-    async fn start_timestamp(&self) -> Option<DateTime> {
+    async fn start_timestamp(&self) -> Result<DateTime, Error> {
         DateTime::from_ms(self.stored.epoch_start_timestamp)
     }
 
     /// The epoch's ending timestamp
-    async fn end_timestamp(&self) -> Option<DateTime> {
-        DateTime::from_ms(self.stored.epoch_end_timestamp?)
+    async fn end_timestamp(&self) -> Result<Option<DateTime>, Error> {
+        self.stored
+            .epoch_end_timestamp
+            .map(DateTime::from_ms)
+            .transpose()
     }
 
     /// The total number of checkpoints in this epoch.

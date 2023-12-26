@@ -171,7 +171,7 @@ impl ChangeEpochTransaction {
     }
 
     /// Time at which the next epoch will start.
-    async fn start_timestamp(&self) -> Option<DateTime> {
+    async fn start_timestamp(&self) -> Result<DateTime, Error> {
         DateTime::from_ms(self.0.epoch_start_timestamp_ms as i64)
     }
 

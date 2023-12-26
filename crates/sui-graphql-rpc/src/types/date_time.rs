@@ -9,17 +9,17 @@ use chrono::{
     ParseError as ChronoParseError,
 };
 
+use crate::error::Error;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct DateTime(ChronoDateTime<ChronoUtc>);
 
 impl DateTime {
-    pub fn from_ms(timestamp_ms: i64) -> Option<Self> {
-        // TODO: `timestamp_millis_opt` returns an optional to handle ambiguous time conversions
-        // which UTC does not have, so this should be converted to return a Result, with an
-        // `InternalError`.
+    pub fn from_ms(timestamp_ms: i64) -> Result<Self, Error> {
         ChronoUtc
             .timestamp_millis_opt(timestamp_ms)
             .single()
+            .ok_or_else(|| Error::Internal("Cannot convert timestamp into DateTime".to_string()))
             .map(Self)
     }
 }

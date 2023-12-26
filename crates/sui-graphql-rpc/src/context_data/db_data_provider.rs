@@ -1677,7 +1677,7 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
         Ok(Self {
             digest: Digest::try_from(c.checkpoint_digest)?.to_string(),
             sequence_number: c.sequence_number as u64,
-            timestamp: DateTime::from_ms(c.timestamp_ms),
+            timestamp: DateTime::from_ms(c.timestamp_ms)?,
             validator_signature: Some(c.validator_signature.into()),
             previous_checkpoint_digest: c
                 .previous_checkpoint_digest
@@ -1712,13 +1712,7 @@ impl TryFrom<NativeSuiSystemStateSummary> for SuiSystemStateSummary {
             ))
         })?;
 
-        let start_timestamp = DateTime::from_ms(start_timestamp).ok_or_else(|| {
-            Error::Internal(format!(
-                "Cannot convert start timestamp ({}) of system state into a DateTime",
-                start_timestamp
-            ))
-        })?;
-
+        let start_timestamp = DateTime::from_ms(start_timestamp)?;
         Ok(SuiSystemStateSummary {
             epoch_id: system_state.epoch,
             system_state_version: Some(BigInt::from(system_state.system_state_version)),

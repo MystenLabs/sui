@@ -137,8 +137,12 @@ impl TransactionBlockEffects {
     }
 
     /// Timestamp corresponding to the checkpoint this transaction was finalized in.
-    async fn timestamp(&self) -> Option<DateTime> {
-        DateTime::from_ms(self.tx_data.as_ref().left()?.timestamp_ms)
+    async fn timestamp(&self) -> Result<Option<DateTime>, Error> {
+        self.tx_data
+            .as_ref()
+            .left()
+            .map(|ts| DateTime::from_ms(ts.timestamp_ms))
+            .transpose()
     }
 
     /// The epoch this transaction was finalized in.
