@@ -4,13 +4,13 @@
 // TODO remove when integrated
 #![allow(unused)]
 
-use std::time::Duration;
-
 use anyhow::anyhow;
 use async_trait::async_trait;
 use axum::response::sse::Event;
 use ethers::types::{Address, U256};
+use fastcrypto::traits::KeyPair;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use sui_json_rpc_types::{EventFilter, Page, SuiEvent};
 use sui_json_rpc_types::{
     EventPage, SuiObjectDataOptions, SuiTransactionBlockResponse,
@@ -18,6 +18,7 @@ use sui_json_rpc_types::{
 };
 use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
 use sui_types::base_types::ObjectRef;
+use sui_types::crypto::get_key_pair;
 use sui_types::error::UserInputError;
 use sui_types::event;
 use sui_types::gas_coin::GasCoin;
@@ -34,7 +35,7 @@ use tracing::warn;
 
 use crate::error::{BridgeError, BridgeResult};
 use crate::events::SuiBridgeEvent;
-use crate::types::{BridgeAction, BridgeCommittee};
+use crate::types::{BridgeAction, BridgeAuthority, BridgeCommittee};
 
 pub struct SuiClient<P> {
     inner: P,
@@ -193,6 +194,10 @@ where
             .get_gas_data_panic_if_not_gas(gas_object_id)
             .await
     }
+
+    pub async fn get_committee(&self) -> BridgeResult<BridgeCommittee> {
+        self.get_bridge_committee().await
+    }
 }
 
 /// Use a trait to abstract over the SuiSDKClient and SuiMockClient for testing.
@@ -258,8 +263,19 @@ impl SuiClientInner for SuiSdkClient {
             .await
     }
 
+    // TODO placeholder
     async fn get_bridge_committee(&self) -> Result<BridgeCommittee, Self::Error> {
-        unimplemented!()
+        let (_, kp): (_, fastcrypto::secp256k1::Secp256k1KeyPair) = get_key_pair();
+        let pubkey = kp.public().clone();
+        let authority = BridgeAuthority {
+            pubkey: pubkey.clone(),
+            voting_power: 10000,
+            base_url: format!("http://127.0.0.1:{}", 9191),
+            is_blocklisted: false,
+        };
+
+        Ok(BridgeCommittee::new(vec![authority.clone()]).unwrap())
+        // unimplemented!()
     }
 
     async fn execute_transaction_block_with_effects(
@@ -285,14 +301,15 @@ impl SuiClientInner for SuiSdkClient {
                 .read_api()
                 .get_object_with_options(
                     gas_object_id,
-                    SuiObjectDataOptions::default().with_owner(),
+                    SuiObjectDataOptions::default().with_owner().with_content(),
                 )
                 .await
                 .map(|resp| resp.data)
             {
                 Ok(Some(gas_obj)) => {
                     let owner = gas_obj.owner.expect("Owner is requested");
-                    let gas_coin = GasCoin::try_from(&gas_obj).expect("Not a gas coin");
+                    let gas_coin = GasCoin::try_from(&gas_obj)
+                        .unwrap_or_else(|err| panic!("{} is not a gas coin: {err}", gas_object_id));
                     return (gas_coin, gas_obj.object_ref(), owner);
                 }
                 other => {
