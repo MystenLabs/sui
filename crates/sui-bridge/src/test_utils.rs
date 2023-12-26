@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::abi::{ExampleContractEvents, TransferFilter};
+use crate::abi::{TestBridgeContractEvents, TransferFilter};
 use crate::eth_mock_provider::EthMockProvider;
 use crate::server::mock_handler::run_mock_server;
 use crate::{
@@ -182,13 +182,9 @@ pub fn get_test_log_and_action(
             ),
             hex!("ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef").into(),
             hex!("000000000000000000000000dbf5e9c5206d0db70a90108bf936da60221dc080").into(),
+            hex!("0000000000000000000000000000000000000000000000000000000000000001").into(),
         ],
-        data: hex!(
-            "
-            0000000000000000000000000000000000000000000000000000000000000003
-            "
-        )
-        .into(),
+        data: hex!("").into(),
         block_hash: Some(TxHash::random()),
         block_number: Some(1.into()),
         transaction_hash: Some(tx_hash),
@@ -198,10 +194,10 @@ pub fn get_test_log_and_action(
     let bridge_action = BridgeAction::EthToSuiBridgeAction(EthToSuiBridgeAction {
         eth_tx_hash: tx_hash,
         eth_event_index: event_index,
-        eth_bridge_event: ExampleContractEvents::TransferFilter(TransferFilter {
+        eth_bridge_event: TestBridgeContractEvents::TransferFilter(TransferFilter {
             from: log.topics[1].into(),
             to: log.topics[2].into(),
-            amount: 3.into(), // matches `data` in log
+            token_id: ethers::types::U256::from_big_endian(&log.topics[3].to_fixed_bytes()),
         }),
     });
     (log, bridge_action)

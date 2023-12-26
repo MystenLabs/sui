@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::abi::ExampleContractEvents;
+use crate::abi::TestBridgeContractEvents;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::crypto::{BridgeAuthorityPublicKey, BridgeAuthoritySignInfo, BridgeAuthoritySignature};
 use crate::error::{BridgeError, BridgeResult};
@@ -192,7 +192,7 @@ pub struct EthToSuiBridgeAction {
     // The index of the event in the transaction
     pub eth_event_index: u16,
     // TODO placeholder
-    pub eth_bridge_event: ExampleContractEvents,
+    pub eth_bridge_event: TestBridgeContractEvents,
 }
 
 /// The type of actions Bridge Committee verify and sign off to execution.

@@ -6,7 +6,6 @@
 
 use std::sync::Arc;
 
-use crate::abi::example_contract::ExampleContractEvents;
 use crate::abi::EthBridgeEvent;
 use crate::error::{BridgeError, BridgeResult};
 use crate::types::{BridgeAction, EthLog};

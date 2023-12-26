@@ -15,11 +15,11 @@ use crate::types::{BridgeAction, EthToSuiBridgeAction};
 // TODO: Dummy placeholder, will be replaced by actual abis
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EthBridgeEvent {
-    ExampleContract(ExampleContractEvents),
+    TestBridgeContract(TestBridgeContractEvents),
 }
 
 abigen!(
-    ExampleContract,
+    TestBridgeContract,
     "abi/example.json",
     event_derives(serde::Deserialize, serde::Serialize)
 );
@@ -30,8 +30,9 @@ impl EthBridgeEvent {
             topics: log.log.topics.clone(),
             data: log.log.data.to_vec(),
         };
-        if let Ok(decoded) = ExampleContractEvents::decode_log(&raw_log) {
-            return Some(EthBridgeEvent::ExampleContract(decoded));
+
+        if let Ok(decoded) = TestBridgeContractEvents::decode_log(&raw_log) {
+            return Some(EthBridgeEvent::TestBridgeContract(decoded));
         }
 
         // TODO: try other variants
@@ -46,7 +47,7 @@ impl EthBridgeEvent {
         eth_event_index: u16,
     ) -> Option<BridgeAction> {
         match self {
-            EthBridgeEvent::ExampleContract(event) => {
+            EthBridgeEvent::TestBridgeContract(event) => {
                 Some(BridgeAction::EthToSuiBridgeAction(EthToSuiBridgeAction {
                     eth_tx_hash,
                     eth_event_index,
