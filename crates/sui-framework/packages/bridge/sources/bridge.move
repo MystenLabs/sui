@@ -4,7 +4,6 @@
 module bridge::bridge {
     use std::option;
     use std::option::{none, Option, some};
-    use bridge::chain_ids;
 
     use sui::address;
     use sui::balance;
@@ -17,6 +16,7 @@ module bridge::bridge {
     use sui::vec_map::{Self, VecMap};
     use sui::versioned::{Self, Versioned};
 
+    use bridge::chain_ids;
     use bridge::committee::{Self, BridgeCommittee};
     use bridge::message::{Self, BridgeMessage, BridgeMessageKey, extract_token_bridge_payload};
     use bridge::message_types;
@@ -50,7 +50,6 @@ module bridge::bridge {
 
     struct BridgeRecord has store, drop {
         message: BridgeMessage,
-        approved_epoch: Option<u64>,
         verified_signatures: Option<vector<vector<u8>>>,
         claimed: bool
     }
@@ -147,7 +146,6 @@ module bridge::bridge {
         let key = message::key(&message);
         linked_table::push_back(&mut inner.bridge_records, key, BridgeRecord {
             message,
-            approved_epoch: none(),
             verified_signatures: none(),
             claimed: false,
         });
@@ -161,7 +159,6 @@ module bridge::bridge {
         self: &mut Bridge,
         message: BridgeMessage,
         signatures: vector<vector<u8>>,
-        ctx: &TxContext
     ) {
         let inner = load_inner_mut(self);
         let key = message::key(&message);
@@ -173,7 +170,7 @@ module bridge::bridge {
                 let record = linked_table::remove(&mut inner.bridge_records, key);
                 assert!(record.message == message, EMalformedMessageError);
                 // The message should be in pending state (no approval and not claimed)
-                assert!(option::is_none(&record.approved_epoch), ERecordAlreadyExists);
+                assert!(option::is_none(&record.verified_signatures), ERecordAlreadyExists);
                 assert!(!record.claimed, EAlreadyClaimed)
             }
         };
@@ -186,7 +183,6 @@ module bridge::bridge {
         // Store approval
         linked_table::push_back(&mut inner.bridge_records, key, BridgeRecord {
             message,
-            approved_epoch: some(tx_context::epoch(ctx)),
             verified_signatures: some(signatures),
             claimed: false
         })
@@ -204,7 +200,6 @@ module bridge::bridge {
         // retrieve approved bridge message
         let BridgeRecord {
             message,
-            approved_epoch,
             verified_signatures: signatures,
             claimed
         } = linked_table::remove(&mut inner.bridge_records, key);
@@ -231,7 +226,6 @@ module bridge::bridge {
         // Record changes
         linked_table::push_back(&mut inner.bridge_records, key, BridgeRecord {
             message,
-            approved_epoch,
             verified_signatures: signatures,
             claimed: true
         });
