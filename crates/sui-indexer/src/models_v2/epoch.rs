@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use diesel::{Insertable, Queryable};
+use diesel::{Insertable, Queryable, Selectable};
 
 use crate::errors::IndexerError;
 use crate::schema_v2::epochs;
@@ -33,7 +33,8 @@ pub struct StoredEpochInfo {
     pub epoch_commitments: Option<Vec<u8>>,
 }
 
-#[derive(Queryable)]
+#[derive(Queryable, Selectable)]
+#[diesel(table_name = epochs)]
 pub struct QueryableEpochInfo {
     pub epoch: i64,
     pub first_checkpoint_id: i64,

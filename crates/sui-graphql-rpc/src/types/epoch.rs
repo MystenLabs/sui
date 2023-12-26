@@ -12,12 +12,10 @@ use super::transaction_block::{TransactionBlock, TransactionBlockFilter};
 use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
 use async_graphql::*;
-use sui_indexer::models_v2::epoch::StoredEpochInfo;
-use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary as NativeSuiSystemStateSummary;
+use sui_indexer::models_v2::epoch::QueryableEpochInfo;
 
-#[derive(Clone, Debug)]
 pub(crate) struct Epoch {
-    pub stored: StoredEpochInfo,
+    pub stored: QueryableEpochInfo,
 }
 
 #[Object]
@@ -33,13 +31,12 @@ impl Epoch {
     }
 
     /// Validator related properties, including the active validators
-    async fn validator_set(&self) -> Result<Option<ValidatorSet>> {
-        let system_state: NativeSuiSystemStateSummary = bcs::from_bytes(&self.stored.system_state)
-            .map_err(|e| {
-                Error::Internal(format!(
-                    "Can't convert system_state into SystemState. Error: {e}",
-                ))
-            })?;
+    async fn validator_set(&self, ctx: &Context<'_>) -> Result<Option<ValidatorSet>> {
+        let system_state = ctx
+            .data_unchecked::<PgManager>()
+            .fetch_sui_system_state(Some(self.stored.epoch as u64))
+            .await?;
+
         let active_validators = convert_to_validators(system_state.active_validators, None);
         let validator_set = ValidatorSet {
             total_stake: Some(BigInt::from(self.stored.total_stake)),
@@ -184,8 +181,8 @@ impl Epoch {
     }
 }
 
-impl From<StoredEpochInfo> for Epoch {
-    fn from(e: StoredEpochInfo) -> Self {
+impl From<QueryableEpochInfo> for Epoch {
+    fn from(e: QueryableEpochInfo) -> Self {
         Epoch { stored: e }
     }
 }
