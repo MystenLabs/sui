@@ -275,7 +275,8 @@ module bridge::bridge {
 
     fun next_seq_num(self: &mut BridgeInner, msg_type: u8): u64 {
         if (!vec_map::contains(&self.sequence_nums, &msg_type)) {
-            vec_map::insert(&mut self.sequence_nums, msg_type, 0);
+            vec_map::insert(&mut self.sequence_nums, msg_type, 1);
+            return 0
         };
         let (key, seq_num) = vec_map::remove(&mut self.sequence_nums, &msg_type);
         vec_map::insert(&mut self.sequence_nums, key, seq_num + 1);

@@ -51,13 +51,13 @@ module bridge::treasury {
             // Lazily create currency if not exists
             if (type == type_name::get<BTC>()) {
                 object_bag::add(&mut self.treasuries, type, btc::create(ctx));
-            }else if (type == type_name::get<ETH>()) {
+            } else if (type == type_name::get<ETH>()) {
                 object_bag::add(&mut self.treasuries, type, eth::create(ctx));
-            }else if (type == type_name::get<USDC>()) {
+            } else if (type == type_name::get<USDC>()) {
                 object_bag::add(&mut self.treasuries, type, usdc::create(ctx));
-            }else if (type == type_name::get<USDT>()) {
+            } else if (type == type_name::get<USDT>()) {
                 object_bag::add(&mut self.treasuries, type, usdt::create(ctx));
-            }else {
+            } else {
                 abort EUnsupportedTokenType
             };
         };
@@ -67,13 +67,13 @@ module bridge::treasury {
         let coin_type = type_name::get<T>();
         if (coin_type == type_name::get<BTC>()) {
             1
-        }else if (coin_type == type_name::get<ETH>()) {
+        } else if (coin_type == type_name::get<ETH>()) {
             2
-        }else if (coin_type == type_name::get<USDC>()) {
+        } else if (coin_type == type_name::get<USDC>()) {
             3
-        }else if (coin_type == type_name::get<USDT>()) {
+        } else if (coin_type == type_name::get<USDT>()) {
             4
-        }else {
+        } else {
             abort EUnsupportedTokenType
         }
     }
