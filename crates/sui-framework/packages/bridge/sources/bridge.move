@@ -209,7 +209,6 @@ module bridge::bridge {
         assert!(option::is_some(&signatures), EUnauthorisedClaim);
         // Ensure it is not claimed already
         assert!(!claimed, EAlreadyClaimed);
-        // TODO: check approved_epoch and reject old approvals?
         // extract token message
         let token_payload = message::extract_token_bridge_payload(&message);
         let target_chain = message::token_target_chain(&token_payload);
