@@ -33,6 +33,7 @@ module bridge::message {
         message_type: u8,
         message_version: u8,
         seq_num: u64,
+        source_chain: u8,
         payload: vector<u8>
     }
 
@@ -43,7 +44,6 @@ module bridge::message {
     }
 
     struct TokenPayload has drop {
-        source_chain: u8,
         sender_address: vector<u8>,
         target_chain: u8,
         target_address: vector<u8>,
@@ -57,7 +57,6 @@ module bridge::message {
 
     public fun extract_token_bridge_payload(message: &BridgeMessage): TokenPayload {
         let bcs = bcs::new(message.payload);
-        let source_chain = bcs::peel_u8(&mut bcs);
         let sender_address = bcs::peel_vec_u8(&mut bcs);
         let target_chain = bcs::peel_u8(&mut bcs);
         let target_address = bcs::peel_vec_u8(&mut bcs);
@@ -65,7 +64,6 @@ module bridge::message {
         let amount = bcs::peel_u64(&mut bcs);
         assert!(vector::is_empty(&bcs::into_remainder_bytes(bcs)), ETrailingBytes);
         TokenPayload {
-            source_chain,
             sender_address,
             target_chain,
             target_address,
@@ -87,6 +85,7 @@ module bridge::message {
             message_type,
             message_version,
             seq_num,
+            source_chain,
             payload
         } = message;
 
@@ -94,6 +93,7 @@ module bridge::message {
         vector::push_back(&mut message, message_type);
         vector::push_back(&mut message, message_version);
         vector::append(&mut message, bcs::to_bytes(&seq_num));
+        vector::push_back(&mut message, source_chain);
         vector::append(&mut message, payload);
         message
     }
@@ -111,8 +111,8 @@ module bridge::message {
             message_type: message_types::token(),
             message_version: CURRENT_MESSAGE_VERSION,
             seq_num,
+            source_chain,
             payload: bcs::to_bytes(&TokenPayload {
-                source_chain,
                 sender_address,
                 target_chain,
                 target_address,
@@ -123,6 +123,7 @@ module bridge::message {
     }
 
     public fun create_emergency_op_message(
+        source_chain: u8,
         seq_num: u64,
         op_type: u8,
     ): BridgeMessage {
@@ -130,6 +131,7 @@ module bridge::message {
             message_type: message_types::emergency_op(),
             message_version: CURRENT_MESSAGE_VERSION,
             seq_num,
+            source_chain,
             payload: bcs::to_bytes(&EmergencyOp { op_type })
         }
     }
@@ -158,7 +160,7 @@ module bridge::message {
     }
 
     // TokenBridgePayload getters
-    public fun token_source_chain(self: &TokenPayload): u8 {
+    public fun source_chain(self: &BridgeMessage): u8 {
         self.source_chain
     }
 
@@ -190,6 +192,7 @@ module bridge::message {
             message_type: bcs::peel_u8(&mut bcs),
             message_version: bcs::peel_u8(&mut bcs),
             seq_num: bcs::peel_u64(&mut bcs),
+            source_chain: bcs::peel_u8(&mut bcs),
             payload: bcs::into_remainder_bytes(bcs)
         }
     }
@@ -206,8 +209,8 @@ module bridge::message {
             message_type: message_types::token(),
             message_version: 1,
             seq_num: 10,
+            source_chain: chain_ids::sui_testnet(),
             payload: bcs::to_bytes(&TokenPayload {
-                source_chain: chain_ids::sui_testnet(),
                 sender_address: address::to_bytes(sender_address),
                 target_chain: chain_ids::eth_sepolia(),
                 target_address: address::to_bytes(address::from_u256(200)),
