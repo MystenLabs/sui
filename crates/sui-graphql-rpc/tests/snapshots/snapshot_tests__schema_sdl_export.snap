@@ -666,7 +666,7 @@ type Event {
 	"""
 	UTC timestamp in milliseconds since epoch (1/1/1970)
 	"""
-	timestamp: DateTime!
+	timestamp: DateTime
 	type: MoveType!
 	bcs: Base64!
 	"""
@@ -2510,7 +2510,7 @@ type TransactionBlockEffects {
 	"""
 	Timestamp corresponding to the checkpoint this transaction was finalized in.
 	"""
-	timestamp: DateTime!
+	timestamp: DateTime
 	"""
 	The epoch this transaction was finalized in.
 	"""

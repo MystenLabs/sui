@@ -137,9 +137,12 @@ impl TransactionBlockEffects {
     }
 
     /// Timestamp corresponding to the checkpoint this transaction was finalized in.
-    async fn timestamp(&self) -> Result<DateTime, Error> {
-        let ts = self.tx_data.as_ref().left().ok_or_else(|| Error::Internal("Cannot get the timestamp corresponding to this checkpoint {self.sequence_number}".to_string()))?.timestamp_ms;
-        Ok(DateTime::from_ms(ts)?)
+    async fn timestamp(&self) -> Result<Option<DateTime>, Error> {
+        self.tx_data
+            .as_ref()
+            .left()
+            .map(|ts| DateTime::from_ms(ts.timestamp_ms))
+            .transpose()
     }
 
     /// The epoch this transaction was finalized in.
