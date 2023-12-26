@@ -8,6 +8,7 @@ use super::big_int::BigInt;
 use super::checkpoint::Checkpoint;
 use super::date_time::DateTime;
 use super::protocol_config::ProtocolConfigs;
+use super::system_state_summary::SystemStateSummary;
 use super::transaction_block::{TransactionBlock, TransactionBlockFilter};
 use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
@@ -130,6 +131,15 @@ impl Epoch {
                 .await
                 .extend()?,
         ))
+    }
+
+    #[graphql(flatten)]
+    async fn system_state_summary(&self, ctx: &Context<'_>) -> Result<SystemStateSummary> {
+        let state = ctx
+            .data_unchecked::<PgManager>()
+            .fetch_sui_system_state(Some(self.stored.epoch as u64))
+            .await?;
+        Ok(SystemStateSummary { native: state })
     }
 
     /// The epoch's corresponding checkpoints

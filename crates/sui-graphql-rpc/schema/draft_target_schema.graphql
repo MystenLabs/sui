@@ -581,6 +581,7 @@ type Epoch {
   epochId: Int!
   protocolConfigs: ProtocolConfigs
   referenceGasPrice: BigInt
+  validatorSet: ValidatorSet
 
   startTimestamp: DateTime!
   endTimestamp: DateTime
@@ -595,6 +596,7 @@ type Epoch {
   fundOutflow: BigInt
 
   # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
+  # Note that SystemState's fields are flattened
   systemState: SystemState
 
   checkpoints(
@@ -619,7 +621,6 @@ type SystemState {
 
   systemParameters: SystemParameters
   stakeSubsidy: StakeSubsidy
-  validatorSet: ValidatorSet
   storageFund: StorageFund
   safeMode: SafeMode
 }
