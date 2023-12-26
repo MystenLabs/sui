@@ -18,7 +18,7 @@ module bridge::bridge {
 
     use bridge::chain_ids;
     use bridge::committee::{Self, BridgeCommittee};
-    use bridge::message::{Self, BridgeMessage, BridgeMessageKey, extract_token_bridge_payload};
+    use bridge::message::{Self, BridgeMessage, BridgeMessageKey};
     use bridge::message_types;
     use bridge::treasury::{Self, BridgeTreasury, token_id};
 
@@ -165,8 +165,7 @@ module bridge::bridge {
 
         // retrieve pending message if source chain is Sui, the initial message must exist on chain.
         if (message::message_type(&message) == message_types::token()) {
-            let payload = extract_token_bridge_payload(&message);
-            if (message::token_source_chain(&payload) == inner.chain_id) {
+            if (message::source_chain(&message) == inner.chain_id) {
                 let record = linked_table::remove(&mut inner.bridge_records, key);
                 assert!(record.message == message, EMalformedMessageError);
                 // The message should be in pending state (no approval and not claimed)
