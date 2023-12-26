@@ -2544,15 +2544,42 @@ async fn test_batch_withdraw_stakes_with_u64_amount() -> Result<(), anyhow::Erro
     }
 
     let stake = client.governance_api().get_stakes(address).await?;
-
-    //TODO: This assert is not working... Need to fix it.
-    assert_eq!(1, stake.len(), "Lengths are not identical");
+    let length_of_stakes = stake[0].stakes.len();
+    let total_principal: u64 = stake.iter().flat_map(|s| &s.stakes).map(|s| s.principal).sum();
+    let mut total_balance = 0;
+    for i in 0..2 {
+        if let Some(coin) = coins.get(i) {
+            total_balance += coin.balance;
+        }
+    }
+    assert_eq!(2, length_of_stakes, "Why failed?");
     assert_eq!(
-        coins.first().unwrap().balance,
-        stake.first().unwrap().stakes.first().unwrap().principal
+        total_balance,
+        total_principal
     );
 
     // TODO: To add the batch withdraw stake test case here.
+    test_with_sui_binary(&[
+        "client",
+        "--client.config",
+        config_path.to_str().unwrap(),
+        "call",
+        "--package",
+        "0x3",
+        "--module",
+        "sui_system",
+        "--function",
+        "request_withdraw_stake_batch",
+        "--args",
+        "0x5",
+        &format!("[{}]", coin.coin_object_id),
+        "[]",
+        &validator_addr.to_string(),
+        "--gas-budget",
+        "1000000000",
+    ])
+    .await?;
+
     Ok(())
 }
 
