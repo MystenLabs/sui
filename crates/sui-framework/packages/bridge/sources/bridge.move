@@ -4,6 +4,7 @@
 module bridge::bridge {
     use std::option;
     use std::option::{none, Option, some};
+    use bridge::chain_ids;
 
     use sui::address;
     use sui::balance;
@@ -66,6 +67,7 @@ module bridge::bridge {
     const ERecordAlreadyExists: u64 = 9;
     const EBridgeUnavailable: u64 = 10;
     const EUnexpectedOperation: u64 = 11;
+    const EInvalidBridgeRoute: u64 = 12;
 
     const CURRENT_VERSION: u64 = 1;
 
@@ -123,6 +125,7 @@ module bridge::bridge {
         ctx: &mut TxContext
     ) {
         let inner = load_inner_mut(self);
+        assert!(chain_ids::is_valid_route(inner.chain_id, target_chain), EInvalidBridgeRoute);
         assert!(!inner.frozen, EBridgeUnavailable);
         let bridge_seq_num = next_seq_num(inner, message_types::token());
         // create bridge message
@@ -214,8 +217,11 @@ module bridge::bridge {
         // TODO: check approved_epoch and reject old approvals?
         // extract token message
         let token_payload = message::extract_token_bridge_payload(&message);
+        let target_chain = message::token_target_chain(&token_payload);
         // ensure target chain is matches self.chain_id
-        assert!(message::token_target_chain(&token_payload) == inner.chain_id, EUnexpectedChainID);
+        assert!(target_chain == inner.chain_id, EUnexpectedChainID);
+        // Ensure route is valid
+        assert!(chain_ids::is_valid_route(source_chain, target_chain), EInvalidBridgeRoute);
         // get owner address
         let owner = address::from_bytes(message::token_target_address(&token_payload));
         // check token type
