@@ -16,11 +16,18 @@ use crate::types::{BridgeAction, EthToSuiBridgeAction};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EthBridgeEvent {
     ExampleContract(ExampleContractEvents),
+    TestBridgeContract(TestBridgeContractEvents),
 }
 
 abigen!(
     ExampleContract,
     "abi/example.json",
+    event_derives(serde::Deserialize, serde::Serialize)
+);
+
+abigen!(
+    TestBridgeContract,
+    "abi/example2.json",
     event_derives(serde::Deserialize, serde::Serialize)
 );
 
@@ -52,6 +59,9 @@ impl EthBridgeEvent {
                     eth_event_index,
                     eth_bridge_event: event.clone(),
                 }))
+            }
+            EthBridgeEvent::TestBridgeContract(event) => {
+                unimplemented!()
             }
         }
     }

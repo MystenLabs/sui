@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::abi::{ExampleContractEvents, TransferFilter};
+use crate::abi::{ExampleContractEvents, example_contract::TransferFilter};
 use crate::eth_mock_provider::EthMockProvider;
 use crate::server::mock_handler::run_mock_server;
 use crate::{
