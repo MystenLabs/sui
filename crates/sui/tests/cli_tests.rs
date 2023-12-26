@@ -2494,6 +2494,68 @@ async fn test_stake_with_u64_amount() -> Result<(), anyhow::Error> {
     );
     Ok(())
 }
+//  TODO: Add test for batch withdraw stakes.
+// To create a test scenario where stake first then withdraw.
+/// Need a sender wallet address and Validator address
+/// Unit test case of the request feature of Gree.
+/// Need to simulate and mock the required components for testing
+#[tokio::test]
+async fn test_batch_withdraw_stakes_with_u64_amount() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let coins = client
+        .coin_read_api()
+        .get_coins(address, None, None, None)
+        .await?
+        .data;
+
+    let config_path = test_cluster.swarm.dir().join(SUI_CLIENT_CONFIG);
+    let validator_addr = client
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await?
+        .active_validators[0]
+        .sui_address;
+
+    for i in 0..2 {
+        let coin = &coins[i];
+        test_with_sui_binary(&[
+            "client",
+            "--client.config",
+            config_path.to_str().unwrap(),
+            "call",
+            "--package",
+            "0x3",
+            "--module",
+            "sui_system",
+            "--function",
+            "request_add_stake_mul_coin",
+            "--args",
+            "0x5",
+            &format!("[{}]", coin.coin_object_id),
+            "[]",
+            &validator_addr.to_string(),
+            "--gas-budget",
+            "1000000000",
+        ])
+        .await?;
+    }
+
+    let stake = client.governance_api().get_stakes(address).await?;
+
+    //TODO: This assert is not working... Need to fix it.
+    assert_eq!(1, stake.len(), "Lengths are not identical");
+    assert_eq!(
+        coins.first().unwrap().balance,
+        stake.first().unwrap().stakes.first().unwrap().principal
+    );
+
+    // TODO: To add the batch withdraw stake test case here.
+    Ok(())
+}
+
 
 async fn test_with_sui_binary(args: &[&str]) -> Result<(), anyhow::Error> {
     let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
