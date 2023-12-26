@@ -85,15 +85,15 @@ module bridge::message {
     public fun serialize_message(message: BridgeMessage): vector<u8> {
         let BridgeMessage {
             message_type,
-            message_version: version,
-            seq_num: bridge_seq_num,
+            message_version,
+            seq_num,
             payload
         } = message;
 
         let message = vector[];
         vector::push_back(&mut message, message_type);
-        vector::push_back(&mut message, version);
-        vector::append(&mut message, bcs::to_bytes(&bridge_seq_num));
+        vector::push_back(&mut message, message_version);
+        vector::append(&mut message, bcs::to_bytes(&seq_num));
         vector::append(&mut message, payload);
         message
     }
