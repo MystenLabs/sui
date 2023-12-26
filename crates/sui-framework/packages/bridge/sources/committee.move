@@ -5,6 +5,7 @@
 module bridge::committee {
     use std::vector;
 
+    use sui::address;
     use sui::ecdsa_k1;
     use sui::hex;
     use sui::tx_context::{Self, TxContext};
@@ -25,34 +26,47 @@ module bridge::committee {
 
     struct BridgeCommittee has store {
         // commitee pub key and weight
-        pub_keys: VecMap<vector<u8>, u64>,
+        members: VecMap<vector<u8>, CommitteeMember>,
         // threshold for each message type
         thresholds: VecMap<u8, u64>
     }
 
+    struct CommitteeMember has drop, store {
+        /// The Sui Address of the validator
+        sui_address: address,
+        /// The public key bytes of the bridge key
+        bridge_pubkey_bytes: vector<u8>,
+        /// Voting power
+        voting_power: u64,
+        /// If this member is blocklisted
+        blocklisted: bool,
+    }
+
     public(friend) fun create(ctx: &TxContext): BridgeCommittee {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
-
         // Hardcoded genesis committee
-        let pub_keys = vec_map::empty();
-        vec_map::insert(
-            &mut pub_keys,
-            hex::decode(b"029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964"),
-            10
-        );
-        vec_map::insert(
-            &mut pub_keys,
-            hex::decode(b"033e99a541db69bd32040dfe5037fbf5210dafa8151a71e21c5204b05d95ce0a62"),
-            10
-        );
+        // TODO: change this to real committe members
+        let members = vec_map::empty<vector<u8>, CommitteeMember>();
+
+        let bridge_pubkey_bytes = hex::decode(b"029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964");
+        vec_map::insert(&mut members, bridge_pubkey_bytes, CommitteeMember {
+            sui_address: address::from_u256(1),
+            bridge_pubkey_bytes,
+            voting_power: 10,
+            blocklisted: false
+        });
+
+        let bridge_pubkey_bytes = hex::decode(b"033e99a541db69bd32040dfe5037fbf5210dafa8151a71e21c5204b05d95ce0a62");
+        vec_map::insert(&mut members, bridge_pubkey_bytes, CommitteeMember {
+            sui_address: address::from_u256(2),
+            bridge_pubkey_bytes,
+            voting_power: 10,
+            blocklisted: false
+        });
 
         let thresholds = vec_map::empty();
         vec_map::insert(&mut thresholds, message_types::token(), 10);
-
-        BridgeCommittee {
-            pub_keys,
-            thresholds
-        }
+        BridgeCommittee { members, thresholds }
     }
 
     public fun verify_signatures(
@@ -75,10 +89,12 @@ module bridge::committee {
             // check duplicate
             assert!(!vec_set::contains(&seen_pub_key, &pubkey), EDuplicatedSignature);
             // make sure pub key is part of the committee
-            assert!(vec_map::contains(&self.pub_keys, &pubkey), EInvalidSignature);
+            assert!(vec_map::contains(&self.members, &pubkey), EInvalidSignature);
             // get committee signature weight and check pubkey is part of the committee
-            let weight = vec_map::get(&self.pub_keys, &pubkey);
-            threshold = threshold + *weight;
+            let member = vec_map::get(&self.members, &pubkey);
+            if (!member.blocklisted) {
+                threshold = threshold + member.voting_power;
+            };
             i = i + 1;
             vec_set::insert(&mut seen_pub_key, pubkey);
         };
@@ -106,7 +122,7 @@ module bridge::committee {
 
         // Clean up
         let BridgeCommittee {
-            pub_keys: _,
+            members: _,
             thresholds: _
         } = committee;
     }
@@ -163,23 +179,29 @@ module bridge::committee {
 
     #[test_only]
     fun setup_test(): BridgeCommittee {
-        let pub_keys = vec_map::empty<vector<u8>, u64>();
-        vec_map::insert(
-            &mut pub_keys,
-            hex::decode(b"029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964"),
-            100
-        );
-        vec_map::insert(
-            &mut pub_keys,
-            hex::decode(b"033e99a541db69bd32040dfe5037fbf5210dafa8151a71e21c5204b05d95ce0a62"),
-            100
-        );
+        let members = vec_map::empty<vector<u8>, CommitteeMember>();
+
+        let bridge_pubkey_bytes = hex::decode(b"029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964");
+        vec_map::insert(&mut members, bridge_pubkey_bytes, CommitteeMember {
+            sui_address: address::from_u256(1),
+            bridge_pubkey_bytes,
+            voting_power: 100,
+            blocklisted: false
+        });
+
+        let bridge_pubkey_bytes = hex::decode(b"033e99a541db69bd32040dfe5037fbf5210dafa8151a71e21c5204b05d95ce0a62");
+        vec_map::insert(&mut members, bridge_pubkey_bytes, CommitteeMember {
+            sui_address: address::from_u256(2),
+            bridge_pubkey_bytes,
+            voting_power: 100,
+            blocklisted: false
+        });
 
         let thresholds = vec_map::empty<u8, u64>();
         vec_map::insert(&mut thresholds, message_types::token(), 200);
 
         let committee = BridgeCommittee {
-            pub_keys,
+            members,
             thresholds
         };
         committee
