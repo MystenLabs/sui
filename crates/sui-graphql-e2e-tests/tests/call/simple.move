@@ -151,7 +151,7 @@ module Test::M1 {
 
 //# run-graphql --variables validator_0
 {
-  latestSuiSystemState {
+  epoch {
     validatorSet {
       activeValidators {
         address {

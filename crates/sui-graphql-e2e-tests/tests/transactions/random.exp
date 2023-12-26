@@ -9,7 +9,7 @@ Epoch advanced: 0
 task 3 'run-graphql'. lines 10-43:
 Response: {
   "data": {
-    "latestSuiSystemState": {
+    "epoch": {
       "protocolConfigs": {
         "protocolVersion": 32,
         "randomBeacon": {
