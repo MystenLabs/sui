@@ -1205,14 +1205,25 @@ impl PgManager {
         Ok(Some(domain.to_string()))
     }
 
+    /// If no epoch was requested or if the epoch requested is in progress,
+    /// returns the latest sui system state.
     pub(crate) async fn fetch_sui_system_state(
         &self,
-        epoch_id: u64,
+        epoch_id: Option<u64>,
     ) -> Result<NativeSuiSystemStateSummary, Error> {
-        Ok(self
+        let latest_sui_system_state = self
             .inner
-            .spawn_blocking(move |this| this.get_epoch_sui_system_state(Some(epoch_id)))
-            .await?)
+            .spawn_blocking(move |this| this.get_latest_sui_system_state())
+            .await?;
+
+        if epoch_id.is_some_and(|id| id == latest_sui_system_state.epoch) {
+            Ok(latest_sui_system_state)
+        } else {
+            Ok(self
+                .inner
+                .spawn_blocking(move |this| this.get_epoch_sui_system_state(epoch_id))
+                .await?)
+        }
     }
 
     pub(crate) async fn fetch_latest_sui_system_state(

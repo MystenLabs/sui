@@ -34,7 +34,7 @@ impl Epoch {
     async fn validator_set(&self, ctx: &Context<'_>) -> Result<Option<ValidatorSet>> {
         let system_state = ctx
             .data_unchecked::<PgManager>()
-            .fetch_sui_system_state(self.stored.epoch as u64)
+            .fetch_sui_system_state(Some(self.stored.epoch as u64))
             .await?;
 
         let active_validators = convert_to_validators(system_state.active_validators, None);
