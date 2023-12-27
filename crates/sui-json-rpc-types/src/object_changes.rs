@@ -179,7 +179,7 @@ impl Display for ObjectChange {
             } => {
                 write!(
                     f,
-                    " ┌──\n │ PackageID: {} \n │ Version: {} \n │ Digest: {}\n | Modules: {}\n └──",
+                    " ┌──\n │ PackageID: {} \n │ Version: {} \n │ Digest: {}\n │ Modules: {}\n └──",
                     package_id,
                     u64::from(*version),
                     digest,
