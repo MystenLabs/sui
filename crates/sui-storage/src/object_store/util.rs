@@ -338,11 +338,11 @@ pub fn get_path(prefix: &str) -> Path {
 // this simplicty enables easy parsing for scripts to download snapshots
 pub async fn write_snapshot_manifest<S: ObjectStoreListExt + ObjectStorePutExt>(
     dir: &Path,
-    local_disk: &S,
+    store: &S,
     epoch_prefix: String,
 ) -> Result<()> {
     let mut file_names = vec![];
-    let mut paths = local_disk.list_objects(Some(dir)).await?;
+    let mut paths = store.list_objects(Some(dir)).await?;
     while let Some(res) = paths.next().await {
         if let Ok(object_metadata) = res {
             // trim the "epoch_XX/" dir prefix here
@@ -360,7 +360,7 @@ pub async fn write_snapshot_manifest<S: ObjectStoreListExt + ObjectStorePutExt>(
 
     let bytes = Bytes::from(file_names.join("\n"));
     put(
-        local_disk,
+        store,
         &Path::from(format!("{}/{}", dir, MANIFEST_FILENAME)),
         bytes,
     )
