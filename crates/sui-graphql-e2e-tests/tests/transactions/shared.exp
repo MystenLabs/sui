@@ -28,7 +28,7 @@ Response: {
         {
           "kind": {
             "__typename": "ProgrammableTransactionBlock",
-            "transactionConnection": {
+            "transactions": {
               "nodes": [
                 {
                   "package": "0xb148cf5b859a3d87eaad4fe708bf5660e4e14e08b45592a5c14266be2c2f2e66",
@@ -51,7 +51,7 @@ Response: {
         {
           "kind": {
             "__typename": "ProgrammableTransactionBlock",
-            "transactionConnection": {
+            "transactions": {
               "nodes": [
                 {
                   "package": "0xb148cf5b859a3d87eaad4fe708bf5660e4e14e08b45592a5c14266be2c2f2e66",
@@ -69,7 +69,7 @@ Response: {
         {
           "kind": {
             "__typename": "ProgrammableTransactionBlock",
-            "transactionConnection": {
+            "transactions": {
               "nodes": [
                 {
                   "package": "0xb148cf5b859a3d87eaad4fe708bf5660e4e14e08b45592a5c14266be2c2f2e66",

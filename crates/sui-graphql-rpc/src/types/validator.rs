@@ -9,8 +9,8 @@ use super::sui_address::SuiAddress;
 use super::validator_credentials::ValidatorCredentials;
 use super::{address::Address, base64::Base64};
 use async_graphql::*;
-
 use sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSummary as NativeSuiValidatorSummary;
+
 #[derive(Clone, Debug)]
 pub(crate) struct Validator {
     pub validator_summary: NativeSuiValidatorSummary,
@@ -200,7 +200,15 @@ impl Validator {
         &self.report_records
     }
 
-    // TODO async fn apy(&self) -> Option<u64>{}
+    /// The APY of this validator in basis points.
+    /// To get the APY in percentage, divide by 100.
+    async fn apy(&self, ctx: &Context<'_>) -> Result<Option<u64>, Error> {
+        Ok(ctx
+            .data_unchecked::<PgManager>()
+            .fetch_validator_apys(&self.validator_summary.sui_address)
+            .await?
+            .map(|x| (x * 10000.0) as u64))
+    }
 }
 
 impl Validator {

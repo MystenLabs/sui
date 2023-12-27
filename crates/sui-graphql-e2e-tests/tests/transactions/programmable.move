@@ -121,8 +121,18 @@ fragment Tx on ProgrammableTransaction {
 }
 
 fragment ComprehensivePTB on ProgrammableTransactionBlock {
-    inputConnection { nodes { __typename ...TxInput } }
-    transactionConnection { nodes { __typename ...Tx } }
+    inputs {
+        edges {
+            cursor
+            node { __typename ...TxInput }
+        }
+    }
+    transactions {
+        edges {
+            cursor
+            node { __typename ...Tx }
+        }
+    }
 }
 
 {
@@ -308,8 +318,18 @@ fragment Tx on ProgrammableTransaction {
 }
 
 fragment ComprehensivePTB on ProgrammableTransactionBlock {
-    inputConnection { nodes { __typename ...TxInput } }
-    transactionConnection { nodes { __typename ...Tx } }
+    inputs {
+        edges {
+            cursor
+            node { __typename ...TxInput }
+        }
+    }
+    transactions {
+        edges {
+            cursor
+            node { __typename ...Tx }
+        }
+    }
 }
 
 {
@@ -486,8 +506,18 @@ fragment Tx on ProgrammableTransaction {
 }
 
 fragment ComprehensivePTB on ProgrammableTransactionBlock {
-    inputConnection { nodes { __typename ...TxInput } }
-    transactionConnection { nodes { __typename ...Tx } }
+    inputs {
+        edges {
+            cursor
+            node { __typename ...TxInput }
+        }
+    }
+    transactions {
+        edges {
+            cursor
+            node { __typename ...Tx }
+        }
+    }
 }
 
 {
@@ -665,8 +695,18 @@ fragment Tx on ProgrammableTransaction {
 }
 
 fragment ComprehensivePTB on ProgrammableTransactionBlock {
-    inputConnection { nodes { __typename ...TxInput } }
-    transactionConnection { nodes { __typename ...Tx } }
+    inputs {
+        edges {
+            cursor
+            node { __typename ...TxInput }
+        }
+    }
+    transactions {
+        edges {
+            cursor
+            node { __typename ...Tx }
+        }
+    }
 }
 
 {

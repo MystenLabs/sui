@@ -126,22 +126,22 @@ mod tests {
         // Check that our examples can run with our usage limits
         let default_config = Limits::default();
         assert!(
-            max_nodes <= default_config.max_query_nodes() as u64,
+            max_nodes <= default_config.max_query_nodes as u64,
             "Max nodes {} exceeds default limit {}",
             max_nodes,
-            default_config.max_query_nodes()
+            default_config.max_query_nodes
         );
         assert!(
-            max_depth <= default_config.max_query_depth() as u64,
+            max_depth <= default_config.max_query_depth as u64,
             "Max depth {} exceeds default limit {}",
             max_depth,
-            default_config.max_query_depth()
+            default_config.max_query_depth
         );
         assert!(
-            max_payload <= default_config.max_query_payload_size() as u64,
+            max_payload <= default_config.max_query_payload_size as u64,
             "Max payload {} exceeds default limit {}",
             max_payload,
-            default_config.max_query_payload_size()
+            default_config.max_query_payload_size
         );
 
         assert!(errors.is_empty(), "\n{}", errors.join("\n\n"));

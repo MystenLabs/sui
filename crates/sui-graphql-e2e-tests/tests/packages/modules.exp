@@ -48,7 +48,7 @@ Response: {
   }
 }
 
-task 4 'run-graphql'. lines 65-97:
+task 4 'run-graphql'. lines 65-100:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -61,15 +61,24 @@ Response: {
                   "address": "0x29e7dabd7530efac037941e87dcb3ad7f3ed264e773b07f33065a85e663b96ea",
                   "asMovePackage": {
                     "all": {
-                      "nodes": [
+                      "edges": [
                         {
-                          "name": "m"
+                          "cursor": "Im0i",
+                          "node": {
+                            "name": "m"
+                          }
                         },
                         {
-                          "name": "n"
+                          "cursor": "Im4i",
+                          "node": {
+                            "name": "n"
+                          }
                         },
                         {
-                          "name": "o"
+                          "cursor": "Im8i",
+                          "node": {
+                            "name": "o"
+                          }
                         }
                       ],
                       "pageInfo": {
@@ -78,12 +87,18 @@ Response: {
                       }
                     },
                     "after": {
-                      "nodes": [
+                      "edges": [
                         {
-                          "name": "n"
+                          "cursor": "Im4i",
+                          "node": {
+                            "name": "n"
+                          }
                         },
                         {
-                          "name": "o"
+                          "cursor": "Im8i",
+                          "node": {
+                            "name": "o"
+                          }
                         }
                       ],
                       "pageInfo": {
@@ -92,12 +107,18 @@ Response: {
                       }
                     },
                     "before": {
-                      "nodes": [
+                      "edges": [
                         {
-                          "name": "m"
+                          "cursor": "Im0i",
+                          "node": {
+                            "name": "m"
+                          }
                         },
                         {
-                          "name": "n"
+                          "cursor": "Im4i",
+                          "node": {
+                            "name": "n"
+                          }
                         }
                       ],
                       "pageInfo": {
@@ -122,7 +143,7 @@ Response: {
   }
 }
 
-task 5 'run-graphql'. lines 99-134:
+task 5 'run-graphql'. lines 102-140:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -135,9 +156,12 @@ Response: {
                   "address": "0x29e7dabd7530efac037941e87dcb3ad7f3ed264e773b07f33065a85e663b96ea",
                   "asMovePackage": {
                     "prefix": {
-                      "nodes": [
+                      "edges": [
                         {
-                          "name": "n"
+                          "cursor": "Im4i",
+                          "node": {
+                            "name": "n"
+                          }
                         }
                       ],
                       "pageInfo": {
@@ -146,12 +170,18 @@ Response: {
                       }
                     },
                     "prefixAll": {
-                      "nodes": [
+                      "edges": [
                         {
-                          "name": "n"
+                          "cursor": "Im4i",
+                          "node": {
+                            "name": "n"
+                          }
                         },
                         {
-                          "name": "o"
+                          "cursor": "Im8i",
+                          "node": {
+                            "name": "o"
+                          }
                         }
                       ],
                       "pageInfo": {
@@ -160,12 +190,18 @@ Response: {
                       }
                     },
                     "prefixExcess": {
-                      "nodes": [
+                      "edges": [
                         {
-                          "name": "n"
+                          "cursor": "Im4i",
+                          "node": {
+                            "name": "n"
+                          }
                         },
                         {
-                          "name": "o"
+                          "cursor": "Im8i",
+                          "node": {
+                            "name": "o"
+                          }
                         }
                       ],
                       "pageInfo": {
@@ -174,9 +210,12 @@ Response: {
                       }
                     },
                     "suffix": {
-                      "nodes": [
+                      "edges": [
                         {
-                          "name": "n"
+                          "cursor": "Im4i",
+                          "node": {
+                            "name": "n"
+                          }
                         }
                       ],
                       "pageInfo": {
@@ -185,12 +224,18 @@ Response: {
                       }
                     },
                     "suffixAll": {
-                      "nodes": [
+                      "edges": [
                         {
-                          "name": "m"
+                          "cursor": "Im0i",
+                          "node": {
+                            "name": "m"
+                          }
                         },
                         {
-                          "name": "n"
+                          "cursor": "Im4i",
+                          "node": {
+                            "name": "n"
+                          }
                         }
                       ],
                       "pageInfo": {
@@ -199,12 +244,18 @@ Response: {
                       }
                     },
                     "suffixExcess": {
-                      "nodes": [
+                      "edges": [
                         {
-                          "name": "m"
+                          "cursor": "Im0i",
+                          "node": {
+                            "name": "m"
+                          }
                         },
                         {
-                          "name": "n"
+                          "cursor": "Im4i",
+                          "node": {
+                            "name": "n"
+                          }
                         }
                       ],
                       "pageInfo": {

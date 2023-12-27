@@ -245,53 +245,62 @@ Response: {
   }
 }
 
-task 8 'run-graphql'. lines 134-166:
+task 8 'run-graphql'. lines 134-169:
 Response: {
   "data": {
     "object": {
       "asMovePackage": {
         "module": {
           "all": {
-            "nodes": [
+            "edges": [
               {
-                "name": "consensus_commit_prologue",
-                "typeParameters": [],
-                "parameters": [
-                  {
-                    "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
-                  },
-                  {
-                    "repr": "u64"
-                  },
-                  {
-                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
-                  }
-                ],
-                "return": []
+                "cursor": "ImNvbnNlbnN1c19jb21taXRfcHJvbG9ndWUi",
+                "node": {
+                  "name": "consensus_commit_prologue",
+                  "typeParameters": [],
+                  "parameters": [
+                    {
+                      "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                    },
+                    {
+                      "repr": "u64"
+                    },
+                    {
+                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                    }
+                  ],
+                  "return": []
+                }
               },
               {
-                "name": "create",
-                "typeParameters": [],
-                "parameters": [
-                  {
-                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
-                  }
-                ],
-                "return": []
+                "cursor": "ImNyZWF0ZSI",
+                "node": {
+                  "name": "create",
+                  "typeParameters": [],
+                  "parameters": [
+                    {
+                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                    }
+                  ],
+                  "return": []
+                }
               },
               {
-                "name": "timestamp_ms",
-                "typeParameters": [],
-                "parameters": [
-                  {
-                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
-                  }
-                ],
-                "return": [
-                  {
-                    "repr": "u64"
-                  }
-                ]
+                "cursor": "InRpbWVzdGFtcF9tcyI",
+                "node": {
+                  "name": "timestamp_ms",
+                  "typeParameters": [],
+                  "parameters": [
+                    {
+                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                    }
+                  ],
+                  "return": [
+                    {
+                      "repr": "u64"
+                    }
+                  ]
+                }
               }
             ],
             "pageInfo": {
@@ -300,30 +309,36 @@ Response: {
             }
           },
           "after": {
-            "nodes": [
+            "edges": [
               {
-                "name": "create",
-                "typeParameters": [],
-                "parameters": [
-                  {
-                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
-                  }
-                ],
-                "return": []
+                "cursor": "ImNyZWF0ZSI",
+                "node": {
+                  "name": "create",
+                  "typeParameters": [],
+                  "parameters": [
+                    {
+                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                    }
+                  ],
+                  "return": []
+                }
               },
               {
-                "name": "timestamp_ms",
-                "typeParameters": [],
-                "parameters": [
-                  {
-                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
-                  }
-                ],
-                "return": [
-                  {
-                    "repr": "u64"
-                  }
-                ]
+                "cursor": "InRpbWVzdGFtcF9tcyI",
+                "node": {
+                  "name": "timestamp_ms",
+                  "typeParameters": [],
+                  "parameters": [
+                    {
+                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                    }
+                  ],
+                  "return": [
+                    {
+                      "repr": "u64"
+                    }
+                  ]
+                }
               }
             ],
             "pageInfo": {
@@ -332,32 +347,38 @@ Response: {
             }
           },
           "before": {
-            "nodes": [
+            "edges": [
               {
-                "name": "consensus_commit_prologue",
-                "typeParameters": [],
-                "parameters": [
-                  {
-                    "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
-                  },
-                  {
-                    "repr": "u64"
-                  },
-                  {
-                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
-                  }
-                ],
-                "return": []
+                "cursor": "ImNvbnNlbnN1c19jb21taXRfcHJvbG9ndWUi",
+                "node": {
+                  "name": "consensus_commit_prologue",
+                  "typeParameters": [],
+                  "parameters": [
+                    {
+                      "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                    },
+                    {
+                      "repr": "u64"
+                    },
+                    {
+                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                    }
+                  ],
+                  "return": []
+                }
               },
               {
-                "name": "create",
-                "typeParameters": [],
-                "parameters": [
-                  {
-                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
-                  }
-                ],
-                "return": []
+                "cursor": "ImNyZWF0ZSI",
+                "node": {
+                  "name": "create",
+                  "typeParameters": [],
+                  "parameters": [
+                    {
+                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                    }
+                  ],
+                  "return": []
+                }
               }
             ],
             "pageInfo": {
@@ -371,23 +392,26 @@ Response: {
   }
 }
 
-task 9 'run-graphql'. lines 168-236:
+task 9 'run-graphql'. lines 171-242:
 Response: {
   "data": {
     "object": {
       "asMovePackage": {
         "module": {
           "prefix": {
-            "nodes": [
+            "edges": [
               {
-                "name": "create",
-                "typeParameters": [],
-                "parameters": [
-                  {
-                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
-                  }
-                ],
-                "return": []
+                "cursor": "ImNyZWF0ZSI",
+                "node": {
+                  "name": "create",
+                  "typeParameters": [],
+                  "parameters": [
+                    {
+                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                    }
+                  ],
+                  "return": []
+                }
               }
             ],
             "pageInfo": {
@@ -396,30 +420,36 @@ Response: {
             }
           },
           "prefixAll": {
-            "nodes": [
+            "edges": [
               {
-                "name": "create",
-                "typeParameters": [],
-                "parameters": [
-                  {
-                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
-                  }
-                ],
-                "return": []
+                "cursor": "ImNyZWF0ZSI",
+                "node": {
+                  "name": "create",
+                  "typeParameters": [],
+                  "parameters": [
+                    {
+                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                    }
+                  ],
+                  "return": []
+                }
               },
               {
-                "name": "timestamp_ms",
-                "typeParameters": [],
-                "parameters": [
-                  {
-                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
-                  }
-                ],
-                "return": [
-                  {
-                    "repr": "u64"
-                  }
-                ]
+                "cursor": "InRpbWVzdGFtcF9tcyI",
+                "node": {
+                  "name": "timestamp_ms",
+                  "typeParameters": [],
+                  "parameters": [
+                    {
+                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                    }
+                  ],
+                  "return": [
+                    {
+                      "repr": "u64"
+                    }
+                  ]
+                }
               }
             ],
             "pageInfo": {
@@ -428,30 +458,36 @@ Response: {
             }
           },
           "prefixExcess": {
-            "nodes": [
+            "edges": [
               {
-                "name": "create",
-                "typeParameters": [],
-                "parameters": [
-                  {
-                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
-                  }
-                ],
-                "return": []
+                "cursor": "ImNyZWF0ZSI",
+                "node": {
+                  "name": "create",
+                  "typeParameters": [],
+                  "parameters": [
+                    {
+                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                    }
+                  ],
+                  "return": []
+                }
               },
               {
-                "name": "timestamp_ms",
-                "typeParameters": [],
-                "parameters": [
-                  {
-                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
-                  }
-                ],
-                "return": [
-                  {
-                    "repr": "u64"
-                  }
-                ]
+                "cursor": "InRpbWVzdGFtcF9tcyI",
+                "node": {
+                  "name": "timestamp_ms",
+                  "typeParameters": [],
+                  "parameters": [
+                    {
+                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                    }
+                  ],
+                  "return": [
+                    {
+                      "repr": "u64"
+                    }
+                  ]
+                }
               }
             ],
             "pageInfo": {
@@ -460,16 +496,19 @@ Response: {
             }
           },
           "suffix": {
-            "nodes": [
+            "edges": [
               {
-                "name": "create",
-                "typeParameters": [],
-                "parameters": [
-                  {
-                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
-                  }
-                ],
-                "return": []
+                "cursor": "ImNyZWF0ZSI",
+                "node": {
+                  "name": "create",
+                  "typeParameters": [],
+                  "parameters": [
+                    {
+                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                    }
+                  ],
+                  "return": []
+                }
               }
             ],
             "pageInfo": {
@@ -478,32 +517,38 @@ Response: {
             }
           },
           "suffixAll": {
-            "nodes": [
+            "edges": [
               {
-                "name": "consensus_commit_prologue",
-                "typeParameters": [],
-                "parameters": [
-                  {
-                    "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
-                  },
-                  {
-                    "repr": "u64"
-                  },
-                  {
-                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
-                  }
-                ],
-                "return": []
+                "cursor": "ImNvbnNlbnN1c19jb21taXRfcHJvbG9ndWUi",
+                "node": {
+                  "name": "consensus_commit_prologue",
+                  "typeParameters": [],
+                  "parameters": [
+                    {
+                      "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                    },
+                    {
+                      "repr": "u64"
+                    },
+                    {
+                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                    }
+                  ],
+                  "return": []
+                }
               },
               {
-                "name": "create",
-                "typeParameters": [],
-                "parameters": [
-                  {
-                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
-                  }
-                ],
-                "return": []
+                "cursor": "ImNyZWF0ZSI",
+                "node": {
+                  "name": "create",
+                  "typeParameters": [],
+                  "parameters": [
+                    {
+                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                    }
+                  ],
+                  "return": []
+                }
               }
             ],
             "pageInfo": {
@@ -512,32 +557,38 @@ Response: {
             }
           },
           "suffixExcess": {
-            "nodes": [
+            "edges": [
               {
-                "name": "consensus_commit_prologue",
-                "typeParameters": [],
-                "parameters": [
-                  {
-                    "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
-                  },
-                  {
-                    "repr": "u64"
-                  },
-                  {
-                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
-                  }
-                ],
-                "return": []
+                "cursor": "ImNvbnNlbnN1c19jb21taXRfcHJvbG9ndWUi",
+                "node": {
+                  "name": "consensus_commit_prologue",
+                  "typeParameters": [],
+                  "parameters": [
+                    {
+                      "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                    },
+                    {
+                      "repr": "u64"
+                    },
+                    {
+                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                    }
+                  ],
+                  "return": []
+                }
               },
               {
-                "name": "create",
-                "typeParameters": [],
-                "parameters": [
-                  {
-                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
-                  }
-                ],
-                "return": []
+                "cursor": "ImNyZWF0ZSI",
+                "node": {
+                  "name": "create",
+                  "typeParameters": [],
+                  "parameters": [
+                    {
+                      "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                    }
+                  ],
+                  "return": []
+                }
               }
             ],
             "pageInfo": {

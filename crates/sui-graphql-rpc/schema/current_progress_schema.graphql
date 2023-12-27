@@ -135,7 +135,7 @@ type AuthenticatorStateUpdateTransaction {
 	"""
 	Newly active JWKs (JSON Web Keys).
 	"""
-	newActiveJwkConnection(first: Int, after: String, last: Int, before: String): ActiveJwkConnection!
+	newActiveJwks(first: Int, after: String, last: Int, before: String): ActiveJwkConnection!
 	"""
 	The initial version of the authenticator object that it was shared at.
 	"""
@@ -253,7 +253,7 @@ type ChangeEpochTransaction {
 	"""
 	Time at which the next epoch will start.
 	"""
-	startTimestamp: DateTime
+	startTimestamp: DateTime!
 	"""
 	System packages (specifically framework and move stdlib) that are written before the new
 	epoch starts, to upgrade them on-chain. Validators write these packages out when running the
@@ -277,7 +277,7 @@ type Checkpoint {
 	The timestamp at which the checkpoint is agreed to have happened according to consensus.
 	Transactions that access time in this checkpoint will observe this timestamp.
 	"""
-	timestamp: DateTime
+	timestamp: DateTime!
 	"""
 	This is an aggregation of signatures from a quorum of validators for the checkpoint proposal.
 	"""
@@ -437,7 +437,7 @@ type ConsensusCommitPrologueTransaction {
 	"""
 	Unix timestamp from consensus.
 	"""
-	commitTimestamp: DateTime
+	commitTimestamp: DateTime!
 	"""
 	Digest of consensus output, encoded as a Base58 string (only available from V2 of the
 	transaction).
@@ -591,7 +591,7 @@ type Epoch {
 	"""
 	The epoch's starting timestamp
 	"""
-	startTimestamp: DateTime
+	startTimestamp: DateTime!
 	"""
 	The epoch's ending timestamp
 	"""
@@ -853,7 +853,7 @@ type GenesisTransaction {
 	"""
 	Objects to be created during genesis.
 	"""
-	objectConnection(first: Int, after: String, last: Int, before: String): ObjectConnection!
+	objects(first: Int, after: String, last: Int, before: String): ObjectConnection!
 }
 
 
@@ -1070,7 +1070,7 @@ type MoveModule {
 	Modules that this module considers friends (these modules can access `public(friend)`
 	functions from this module).
 	"""
-	friendConnection(first: Int, after: String, last: Int, before: String): MoveModuleConnection!
+	friends(first: Int, after: String, last: Int, before: String): MoveModuleConnection!
 	"""
 	Look-up the definition of a struct defined in this module, by its name.
 	"""
@@ -1078,7 +1078,7 @@ type MoveModule {
 	"""
 	Iterate through the structs defined in this module.
 	"""
-	structConnection(first: Int, after: String, last: Int, before: String): MoveStructConnection
+	structs(first: Int, after: String, last: Int, before: String): MoveStructConnection
 	"""
 	Look-up the signature of a function defined in this module, by its name.
 	"""
@@ -1086,7 +1086,7 @@ type MoveModule {
 	"""
 	Iterate through the signatures of functions defined in this module.
 	"""
-	functionConnection(first: Int, after: String, last: Int, before: String): MoveFunctionConnection
+	functions(first: Int, after: String, last: Int, before: String): MoveFunctionConnection
 	"""
 	The Base64 encoded bcs serialization of the module.
 	"""
@@ -1167,7 +1167,7 @@ type MovePackage {
 	"""
 	Paginate through the MoveModules defined in this package.
 	"""
-	moduleConnection(first: Int, after: String, last: Int, before: String): MoveModuleConnection
+	modules(first: Int, after: String, last: Int, before: String): MoveModuleConnection
 	"""
 	The transitive dependencies of this package.
 	"""
@@ -1732,11 +1732,11 @@ type ProgrammableTransactionBlock {
 	"""
 	Input objects or primitive values.
 	"""
-	inputConnection(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
 	"""
 	The transaction commands, executed sequentially.
 	"""
-	transactionConnection(first: Int, after: String, last: Int, before: String): ProgrammableTransactionConnection!
+	transactions(first: Int, after: String, last: Int, before: String): ProgrammableTransactionConnection!
 }
 
 type ProgrammableTransactionConnection {
@@ -2021,6 +2021,24 @@ type ServiceConfig {
 	Maximum length of a query payload string.
 	"""
 	maxQueryPayloadSize: Int!
+	"""
+	Maximum nesting allowed in type arguments in Move Types resolved by this service.
+	"""
+	maxTypeArgumentDepth: Int!
+	"""
+	Maximum number of type arguments passed into a generic instantiation of a Move Type resolved
+	by this service.
+	"""
+	maxTypeArgumentWidth: Int!
+	"""
+	Maximum number of structs that need to be processed when calculating the layout of a single
+	Move Type.
+	"""
+	maxTypeNodes: Int!
+	"""
+	Maximum nesting allowed in struct fields when calculating the layout of a single Move Type.
+	"""
+	maxMoveValueDepth: Int!
 }
 
 """
@@ -2732,6 +2750,11 @@ type Validator {
 	The addresses of other validators this validator has reported.
 	"""
 	reportRecords: [Address!]
+	"""
+	The APY of this validator in basis points.
+	To get the APY in percentage, divide by 100.
+	"""
+	apy: Int
 }
 
 type ValidatorCredentials {

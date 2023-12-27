@@ -1,8 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use diesel::backend::Backend;
+use diesel::{
+    backend::Backend,
+    helper_types::{AsSelect, SqlTypeOf},
+};
 use sui_indexer::{
+    models_v2::epoch::QueryableEpochInfo,
     schema_v2::{checkpoints, display, epochs, events, objects, transactions},
     types_v2::OwnerType,
 };
@@ -30,12 +34,15 @@ pub(crate) type BalanceQuery<'a, DB> = BoxedSelectStatement<
     objects::dsl::coin_type,
 >;
 
+pub type QueryableEpochInfoType<DB> = SqlTypeOf<AsSelect<QueryableEpochInfo, DB>>;
+
 pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn get_tx_by_digest(digest: Vec<u8>) -> transactions::BoxedQuery<'static, DB>;
     fn get_obj(address: Vec<u8>, version: Option<i64>) -> objects::BoxedQuery<'static, DB>;
     fn get_obj_by_type(object_type: String) -> objects::BoxedQuery<'static, DB>;
-    fn get_epoch(epoch_id: i64) -> epochs::BoxedQuery<'static, DB>;
-    fn get_latest_epoch() -> epochs::BoxedQuery<'static, DB>;
+    fn get_epoch_info(epoch_id: i64)
+        -> epochs::BoxedQuery<'static, DB, QueryableEpochInfoType<DB>>;
+    fn get_latest_epoch_info() -> epochs::BoxedQuery<'static, DB, QueryableEpochInfoType<DB>>;
     fn get_checkpoint_by_digest(digest: Vec<u8>) -> checkpoints::BoxedQuery<'static, DB>;
     fn get_checkpoint_by_sequence_number(
         sequence_number: i64,

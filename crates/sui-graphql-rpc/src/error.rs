@@ -88,6 +88,8 @@ pub enum Error {
     CursorNoFirstLast,
     #[error("reverse pagination is not supported")]
     _CursorNoReversePagination,
+    #[error("Connection's page size of {0} exceeds max of {1}")]
+    PageTooLarge(u64, u64),
     #[error("Invalid cursor: {0}")]
     InvalidCursor(String),
     #[error("Data has changed since cursor was generated: {0}")]
@@ -114,6 +116,7 @@ impl ErrorExtensions for Error {
             | Error::CursorNoBeforeAfter
             | Error::CursorNoFirstLast
             | Error::_CursorNoReversePagination
+            | Error::PageTooLarge(_, _)
             | Error::InvalidCursor(_)
             | Error::_CursorConnectionFetchFailed(_)
             | Error::MultiGet(_)

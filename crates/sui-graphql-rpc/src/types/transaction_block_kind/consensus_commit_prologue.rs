@@ -47,8 +47,8 @@ impl ConsensusCommitPrologueTransaction {
     }
 
     /// Unix timestamp from consensus.
-    async fn commit_timestamp(&self) -> Option<DateTime> {
-        DateTime::from_ms(self.commit_timestamp_ms as i64)
+    async fn commit_timestamp(&self) -> Result<DateTime, Error> {
+        Ok(DateTime::from_ms(self.commit_timestamp_ms as i64)?)
     }
 
     /// Digest of consensus output, encoded as a Base58 string (only available from V2 of the
