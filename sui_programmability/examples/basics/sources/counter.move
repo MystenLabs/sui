@@ -6,6 +6,7 @@
 /// - anyone can create and share a counter
 /// - everyone can increment a counter by 1
 /// - the owner of the counter can reset it to any value
+/// - the owner of the counter can delete it 
 module basics::counter {
     use sui::transfer;
     use sui::object::{Self, UID};
