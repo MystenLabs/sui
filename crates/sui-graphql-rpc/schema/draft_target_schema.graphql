@@ -420,6 +420,7 @@ type ServiceConfig {
 
   maxQueryDepth: Int!
   maxQueryNodes: Int!
+  maxOutputNodes: Int!
   defaultPageSize: Int!
   maxPageSize: Int!
   requestTimeoutMs: Int!

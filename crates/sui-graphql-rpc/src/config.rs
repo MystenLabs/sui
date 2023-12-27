@@ -12,6 +12,7 @@ use crate::functional_group::FunctionalGroup;
 // TODO: calculate proper cost limits
 const MAX_QUERY_DEPTH: u32 = 15;
 const MAX_QUERY_NODES: u32 = 50;
+const MAX_OUTPUT_NODES: u64 = 100_000; // Maximum number of output nodes allowed in the response
 const MAX_QUERY_PAYLOAD_SIZE: u32 = 2_000;
 const MAX_DB_QUERY_COST: u64 = 20_000; // Max DB query cost (normally f64) truncated
 const DEFAULT_PAGE_SIZE: u64 = 20; // Default number of elements allowed on a page of a connection
@@ -69,6 +70,8 @@ pub struct Limits {
     pub max_query_depth: u32,
     #[serde(default)]
     pub max_query_nodes: u32,
+    #[serde(default)]
+    pub max_output_nodes: u64,
     #[serde(default)]
     pub max_query_payload_size: u32,
     #[serde(default)]
@@ -214,6 +217,19 @@ impl ServiceConfig {
         self.limits.max_query_nodes
     }
 
+    /// The maximum number of output nodes in a GraphQL response.
+    ///
+    /// If a node is a connection, it is counted as the specified 'first' or 'last' number of items,
+    /// or the default_page_size as set by the server. Non-connection nodes and fields are not included
+    /// in this count.
+    ///
+    /// The count of output nodes is multiplicative. For example, if the current node is a connection
+    /// with first: 10 and has a field to a connection with last: 20, the total estimated output nodes
+    /// would be 10 * 20 = 200.
+    pub async fn max_output_nodes(&self) -> u64 {
+        self.limits.max_output_nodes
+    }
+
     /// Maximum estimated cost of a database query used to serve a GraphQL request.  This is
     /// measured in the same units that the database uses in EXPLAIN queries.
     async fn max_db_query_cost(&self) -> BigInt {
@@ -281,6 +297,7 @@ impl Default for Limits {
         Self {
             max_query_depth: MAX_QUERY_DEPTH,
             max_query_nodes: MAX_QUERY_NODES,
+            max_output_nodes: MAX_OUTPUT_NODES,
             max_query_payload_size: MAX_QUERY_PAYLOAD_SIZE,
             max_db_query_cost: MAX_DB_QUERY_COST,
             default_page_size: DEFAULT_PAGE_SIZE,
@@ -404,6 +421,7 @@ mod tests {
             r#" [limits]
                 max-query-depth = 100
                 max-query-nodes = 300
+                max-output-nodes = 200000
                 max-query-payload-size = 2000
                 max-db-query-cost = 50
                 default-page-size = 20
@@ -421,6 +439,7 @@ mod tests {
             limits: Limits {
                 max_query_depth: 100,
                 max_query_nodes: 300,
+                max_output_nodes: 200000,
                 max_query_payload_size: 2000,
                 max_db_query_cost: 50,
                 default_page_size: 20,
@@ -483,6 +502,7 @@ mod tests {
                 [limits]
                 max-query-depth = 42
                 max-query-nodes = 320
+                max-output-nodes = 200000
                 max-query-payload-size = 200
                 max-db-query-cost = 20
                 default-page-size = 10
@@ -503,6 +523,7 @@ mod tests {
             limits: Limits {
                 max_query_depth: 42,
                 max_query_nodes: 320,
+                max_output_nodes: 200000,
                 max_query_payload_size: 200,
                 max_db_query_cost: 20,
                 default_page_size: 10,
