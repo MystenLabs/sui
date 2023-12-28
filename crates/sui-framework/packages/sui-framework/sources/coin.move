@@ -14,6 +14,7 @@ module sui::coin {
     use sui::transfer;
     use sui::url::{Self, Url};
     use std::vector;
+    use sui::tx_context;
     use sui::table::{Self, Table};
     use sui::vec_set::{Self,VecSet};
 
@@ -23,6 +24,8 @@ module sui::coin {
     const EInvalidArg: u64 = 1;
     /// Trying to split a coin more times than its balance allows.
     const ENotEnough: u64 = 2;
+    /// Trying to create a deny list object when not called by the system address.
+    const ENotSystemAddress: u64 = 3;
 
     /// A coin of type `T` worth `value`. Transferable and storable
     struct Coin<phantom T> has key, store {
@@ -66,7 +69,7 @@ module sui::coin {
         // how many coins have been frozen for this address
         frozen_count: Table<address, u64>,
         // what addresses are banned for an address?
-        frozen_addressess: Table<ID, VecSet<address>>,
+        frozen_addresses: Table<ID, VecSet<address>>,
     }
 
     // === Supply <-> TreasuryCap morphing and accessors  ===
@@ -372,6 +375,18 @@ module sui::coin {
         include Burn<T>;
     }
 
+    #[allow(unused_function)]
+    fun create_deny_list_object(ctx: &mut TxContext) {
+        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+
+        let deny_list_object = Freezer {
+            id: object::sui_deny_list_object_id(),
+            frozen_count: table::new(ctx),
+            frozen_addresses: table::new(ctx),
+        };
+        transfer::share_object(deny_list_object);
+    }
+
     public fun freeze_address<T>(
        freezer: &mut Freezer,
        freeze_cap: &mut FreezeCap<T>,
@@ -379,10 +394,10 @@ module sui::coin {
        _ctx: &mut TxContext
     ) {
         let coin_package = freeze_cap.package;
-        if (!table::contains(&freezer.frozen_addressess, coin_package)) {
-            table::add(&mut freezer.frozen_addressess, coin_package, vec_set::empty());
+        if (!table::contains(&freezer.frozen_addresses, coin_package)) {
+            table::add(&mut freezer.frozen_addresses, coin_package, vec_set::empty());
         };
-        let frozen_addresses = table::borrow_mut(&mut freezer.frozen_addressess, coin_package);
+        let frozen_addresses = table::borrow_mut(&mut freezer.frozen_addresses, coin_package);
         let already_frozen = vec_set::contains(frozen_addresses, &addr);
         if (already_frozen) return;
 
@@ -401,9 +416,9 @@ module sui::coin {
        _ctx: &mut TxContext
     ) {
         let coin_package = freeze_cap.package;
-        let frozen_addresses = table::borrow_mut(&mut freezer.frozen_addressess, coin_package);
+        let frozen_addresses = table::borrow_mut(&mut freezer.frozen_addresses, coin_package);
         assert!(vec_set::contains(frozen_addresses, &addr), /* TODO */ 0);
-        let frozen_addresses = table::borrow_mut(&mut freezer.frozen_addressess, coin_package);
+        let frozen_addresses = table::borrow_mut(&mut freezer.frozen_addresses, coin_package);
         vec_set::remove(frozen_addresses, &addr);
         let frozen_count = table::borrow_mut(&mut freezer.frozen_count, addr);
         *frozen_count = *frozen_count - 1;

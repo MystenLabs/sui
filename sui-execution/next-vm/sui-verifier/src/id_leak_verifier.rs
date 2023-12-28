@@ -32,6 +32,7 @@ use std::{collections::BTreeMap, error::Error, num::NonZeroU64};
 use sui_types::{
     authenticator_state::AUTHENTICATOR_STATE_MODULE_NAME,
     clock::CLOCK_MODULE_NAME,
+    coin::COIN_MODULE_NAME,
     error::{ExecutionError, VMMVerifierErrorSubStatusCode},
     id::OBJECT_MODULE_NAME,
     randomness_state::RANDOMNESS_MODULE_NAME,
@@ -89,12 +90,18 @@ const SUI_RANDOMNESS_STATE_CREATE: FunctionIdent = (
     RANDOMNESS_MODULE_NAME,
     ident_str!("create"),
 );
+const SUI_DENY_LIST_OBJECT_CREATE: FunctionIdent = (
+    &SUI_FRAMEWORK_ADDRESS,
+    COIN_MODULE_NAME,
+    ident_str!("create_deny_list_object"),
+);
 const FRESH_ID_FUNCTIONS: &[FunctionIdent] = &[OBJECT_NEW, OBJECT_NEW_UID_FROM_HASH, TS_NEW_OBJECT];
 const FUNCTIONS_TO_SKIP: &[FunctionIdent] = &[
     SUI_SYSTEM_CREATE,
     SUI_CLOCK_CREATE,
     SUI_AUTHENTICATOR_STATE_CREATE,
     SUI_RANDOMNESS_STATE_CREATE,
+    SUI_DENY_LIST_OBJECT_CREATE,
 ];
 
 impl AbstractValue {
