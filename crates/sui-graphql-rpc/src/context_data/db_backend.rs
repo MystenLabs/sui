@@ -83,7 +83,7 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn multi_get_dyn_fields(
         before: Option<Vec<u8>>,
         after: Option<Vec<u8>>,
-        limit: i64,
+        limit: PageLimit,
         owner_id: Vec<u8>,
         filter: Option<DynamicFieldFilter>,
     ) -> Result<objects::BoxedQuery<'static, DB>, Error>;

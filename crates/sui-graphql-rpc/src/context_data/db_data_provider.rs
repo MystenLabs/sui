@@ -625,7 +625,7 @@ impl PgManager {
 
         result
             .map(|mut stored_objs| {
-                let has_next_page = stored_objs.len() as i64 > limit;
+                let has_next_page = stored_objs.len() as i64 > limit.value();
                 if has_next_page {
                     stored_objs.pop();
                 }

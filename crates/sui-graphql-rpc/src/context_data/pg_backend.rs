@@ -377,12 +377,12 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
     fn multi_get_dyn_fields(
         before: Option<Vec<u8>>,
         after: Option<Vec<u8>>,
-        limit: i64,
+        limit: PageLimit,
         owner_id: Vec<u8>,
         filter: Option<DynamicFieldFilter>,
     ) -> Result<objects::BoxedQuery<'static, Pg>, Error> {
-        let mut query = order_objs(before, after);
-        query = query.limit(limit + 1);
+        let mut query = order_objs(before, after, &limit);
+        query = query.limit(limit.value() + 1);
 
         query = query
             .filter(objects::dsl::owner_id.eq(owner_id))
