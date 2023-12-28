@@ -37,7 +37,7 @@ impl GenesisTransaction {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let mut connection = Connection::new(false, false);
-        let Some((prev, next, cs)) = page.select(self.0.objects.len()) else {
+        let Some((prev, next, cs)) = page.paginate_indices(self.0.objects.len()) else {
             return Ok(connection);
         };
 
