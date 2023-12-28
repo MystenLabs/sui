@@ -2005,6 +2005,18 @@ type ServiceConfig {
 	"""
 	maxQueryNodes: Int!
 	"""
+	The maximum number of output nodes in a GraphQL response.
+	
+	If a node is a connection, it is counted as the specified 'first' or 'last' number of items,
+	or the default_page_size as set by the server. Non-connection nodes and fields are not included
+	in this count.
+	
+	The count of output nodes is multiplicative. For example, if the current node is a connection
+	with first: 10 and has a field to a connection with last: 20, the total estimated output nodes
+	would be 10 * 20 = 200.
+	"""
+	maxOutputNodes: Int!
+	"""
 	Maximum estimated cost of a database query used to serve a GraphQL request.  This is
 	measured in the same units that the database uses in EXPLAIN queries.
 	"""
