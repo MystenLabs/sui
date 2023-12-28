@@ -500,6 +500,9 @@ impl SuiTransactionBlockKind {
                             EndOfEpochTransactionKind::RandomnessStateCreate => {
                                 SuiEndOfEpochTransactionKind::RandomnessStateCreate
                             }
+                            EndOfEpochTransactionKind::DenyListStateCreate => {
+                                SuiEndOfEpochTransactionKind::CoinDenyListStateCreate
+                            }
                         })
                         .collect(),
                 })
@@ -1410,6 +1413,7 @@ pub enum SuiEndOfEpochTransactionKind {
     AuthenticatorStateCreate,
     AuthenticatorStateExpire(SuiAuthenticatorStateExpire),
     RandomnessStateCreate,
+    CoinDenyListStateCreate,
 }
 
 #[serde_as]

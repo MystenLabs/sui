@@ -104,6 +104,7 @@ const MAX_PROTOCOL_VERSION: u64 = 35;
 //             Enable effects v2 in mainnet.
 // Version 34: Framework changes for random beacon.
 // Version 35: Add poseidon hash function.
+//             Enable coin deny list.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -371,6 +372,10 @@ struct FeatureFlags {
     // Enable the poseidon hash function
     #[serde(skip_serializing_if = "is_false")]
     enable_poseidon: bool,
+
+    // If true, enable the coin deny list.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_coin_deny_list: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1093,6 +1098,10 @@ impl ProtocolConfig {
     pub fn enable_poseidon(&self) -> bool {
         self.feature_flags.enable_poseidon
     }
+
+    pub fn enable_coin_deny_list(&self) -> bool {
+        self.feature_flags.enable_coin_deny_list
+    }
 }
 
 #[cfg(not(msim))]
@@ -1748,6 +1757,8 @@ impl ProtocolConfig {
                         cfg.poseidon_bn254_cost_base = Some(260);
                         cfg.poseidon_bn254_cost_per_block = Some(10);
                     }
+
+                    cfg.feature_flags.enable_coin_deny_list = true;
                 }
                 // Use this template when making changes:
                 //

@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
 use sui_types::base_types::SequenceNumber;
+use sui_types::deny_list::get_deny_list_obj_initial_shared_version;
 use sui_types::epoch_data::EpochData;
 use sui_types::error::SuiResult;
 use sui_types::messages_checkpoint::{CheckpointDigest, CheckpointTimestamp};
@@ -23,6 +24,7 @@ pub trait EpochStartConfigTrait {
     fn flags(&self) -> &[EpochFlag];
     fn authenticator_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
     fn randomness_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
+    fn coin_deny_list_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -39,6 +41,7 @@ pub enum EpochStartConfiguration {
     V2(EpochStartConfigurationV2),
     V3(EpochStartConfigurationV3),
     V4(EpochStartConfigurationV4),
+    V5(EpochStartConfigurationV5),
 }
 
 impl EpochStartConfiguration {
@@ -51,12 +54,15 @@ impl EpochStartConfiguration {
             get_authenticator_state_obj_initial_shared_version(object_store)?;
         let randomness_obj_initial_shared_version =
             get_randomness_state_obj_initial_shared_version(object_store)?;
-        Ok(Self::V4(EpochStartConfigurationV4 {
+        let coin_deny_list_obj_initial_shared_version =
+            get_deny_list_obj_initial_shared_version(object_store);
+        Ok(Self::V5(EpochStartConfigurationV5 {
             system_state,
             epoch_digest,
             flags: EpochFlag::default_flags_for_new_epoch(),
             authenticator_obj_initial_shared_version,
             randomness_obj_initial_shared_version,
+            coin_deny_list_obj_initial_shared_version,
         }))
     }
 
@@ -107,7 +113,17 @@ pub struct EpochStartConfigurationV4 {
     /// Do the state objects exist at the beginning of the epoch?
     authenticator_obj_initial_shared_version: Option<SequenceNumber>,
     randomness_obj_initial_shared_version: Option<SequenceNumber>,
-    // TODO: In a new version, make these initial shared versions a vector.
+}
+
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub struct EpochStartConfigurationV5 {
+    system_state: EpochStartSystemState,
+    epoch_digest: CheckpointDigest,
+    flags: Vec<EpochFlag>,
+    /// Do the state objects exist at the beginning of the epoch?
+    authenticator_obj_initial_shared_version: Option<SequenceNumber>,
+    randomness_obj_initial_shared_version: Option<SequenceNumber>,
+    coin_deny_list_obj_initial_shared_version: Option<SequenceNumber>,
 }
 
 impl EpochStartConfigurationV1 {
@@ -139,6 +155,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV1 {
     fn randomness_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
+
+    fn coin_deny_list_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
 }
 
 impl EpochStartConfigTrait for EpochStartConfigurationV2 {
@@ -159,6 +179,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV2 {
     }
 
     fn randomness_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
+
+    fn coin_deny_list_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
 }
@@ -183,6 +207,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV3 {
     fn randomness_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         None
     }
+
+    fn coin_deny_list_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
 }
 
 impl EpochStartConfigTrait for EpochStartConfigurationV4 {
@@ -204,6 +232,36 @@ impl EpochStartConfigTrait for EpochStartConfigurationV4 {
 
     fn randomness_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         self.randomness_obj_initial_shared_version
+    }
+
+    fn coin_deny_list_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
+    }
+}
+
+impl EpochStartConfigTrait for EpochStartConfigurationV5 {
+    fn epoch_digest(&self) -> CheckpointDigest {
+        self.epoch_digest
+    }
+
+    fn epoch_start_state(&self) -> &EpochStartSystemState {
+        &self.system_state
+    }
+
+    fn flags(&self) -> &[EpochFlag] {
+        &self.flags
+    }
+
+    fn authenticator_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.authenticator_obj_initial_shared_version
+    }
+
+    fn randomness_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.randomness_obj_initial_shared_version
+    }
+
+    fn coin_deny_list_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.coin_deny_list_obj_initial_shared_version
     }
 }
 

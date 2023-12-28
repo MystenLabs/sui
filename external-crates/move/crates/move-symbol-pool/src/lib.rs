@@ -84,6 +84,7 @@ static_symbols!(
     "receive",
     "loop",
     "deny_list",
+    "DenyList",
 );
 
 /// The global, unique cache of strings.
