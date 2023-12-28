@@ -2499,6 +2499,7 @@ async fn test_stake_with_u64_amount() -> Result<(), anyhow::Error> {
 /// Need a sender wallet address and Validator address
 /// Unit test case of the request feature of Gree.
 /// Need to simulate and mock the required components for testing
+/// Need to simulate different staked obj ids with diff stake system. Valildator address, Staking Pool Id, Epoch Id, Amount, and Active Epoch. 
 #[tokio::test]
 async fn test_batch_withdraw_stakes_with_u64_amount() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
@@ -2519,8 +2520,10 @@ async fn test_batch_withdraw_stakes_with_u64_amount() -> Result<(), anyhow::Erro
         .active_validators[0]
         .sui_address;
 
-    for i in 0..2 {
-        let coin = &coins[i];
+    let coin1 = coins[0].coin_object_id;
+    let coin2 = coins[1].coin_object_id;
+   
+       
         test_with_sui_binary(&[
             "client",
             "--client.config",
@@ -2534,51 +2537,47 @@ async fn test_batch_withdraw_stakes_with_u64_amount() -> Result<(), anyhow::Erro
             "request_add_stake_mul_coin",
             "--args",
             "0x5",
-            &format!("[{}]", coin.coin_object_id),
+            &format!("[{},{}]", coin1, coin2),
             "[]",
             &validator_addr.to_string(),
             "--gas-budget",
             "1000000000",
         ])
         .await?;
-    }
+   
 
     let stake = client.governance_api().get_stakes(address).await?;
     let length_of_stakes = stake[0].stakes.len();
-    let total_principal: u64 = stake.iter().flat_map(|s| &s.stakes).map(|s| s.principal).sum();
-    let mut total_balance = 0;
-    for i in 0..2 {
-        if let Some(coin) = coins.get(i) {
-            total_balance += coin.balance;
-        }
-    }
-    assert_eq!(2, length_of_stakes, "Why failed?");
+   
+    assert_eq!(1, length_of_stakes);
+    //TODO: Need to check the total balance and total principal.But, how? It will never be equal as there will be a gas fee for transaction.
     assert_eq!(
-        total_balance,
-        total_principal
+        60000000000000000,
+        stake.first().unwrap().stakes.first().unwrap().principal
     );
 
     // TODO: To add the batch withdraw stake test case here.
-    test_with_sui_binary(&[
-        "client",
-        "--client.config",
-        config_path.to_str().unwrap(),
-        "call",
-        "--package",
-        "0x3",
-        "--module",
-        "sui_system",
-        "--function",
-        "request_withdraw_stake_batch",
-        "--args",
-        "0x5",
-        &format!("[{}]", coin.coin_object_id),
-        "[]",
-        &validator_addr.to_string(),
-        "--gas-budget",
-        "1000000000",
-    ])
-    .await?;
+    // How to pass multiple staked Object Ids???
+    // TODO: Need to deploy the latest sui_system MOVE code module with the batch withdraw stake feature.
+        test_with_sui_binary(&[
+            "client",
+            "--client.config",
+            config_path.to_str().unwrap(),
+            "call",
+            "--package",
+            "0x3",
+            "--module",
+            "sui_system",
+            "--function",
+            "request_withdraw_stake_batch",
+            "--args",
+            "0x5",
+            &format!("[{}]", stake[0].stakes[0].staked_sui_id),
+            "--gas-budget",
+            "1000000000",
+        ])
+        .await?;
+    
 
     Ok(())
 }

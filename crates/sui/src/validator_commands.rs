@@ -166,7 +166,7 @@ pub enum SuiValidatorCommand {
 
     /// Batch withdrawn Stake SUIs from the validator's account to the specified address.
     BatchWithdrawStake {
-        /// Object ID of a validator's OperationCap, used for setting gas price and reportng validators.
+        /// Validator's active Staked Objects.
         #[clap(name = "staked-sui-object-ids", long)]
         staked_object_ids: Vec<ObjectID>,
         /// Gas budget for this transaction.
@@ -730,7 +730,7 @@ impl Display for SuiValidatorCommandResponse {
             },
             //TODO: Request batch staked SUI withdrawal response - Gree
             SuiValidatorCommandResponse::BatchWithdrawStake(response) => {
-                write!(writer, "Serialized payload: {}", response)?;
+                write!(writer, "{}", write_transaction_response(response)?)?;
             }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
