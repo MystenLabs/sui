@@ -1,4 +1,4 @@
-processed 8 tasks
+processed 9 tasks
 
 init:
 A: object(0,0)
@@ -11,7 +11,7 @@ gas summary: computation_cost: 1000000, storage_cost: 7379600,  storage_rebate: 
 task 2 'create-checkpoint'. lines 19-19:
 Checkpoint created: 1
 
-task 3 'run-graphql'. lines 21-62:
+task 3 'run-graphql'. lines 21-77:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -29,15 +29,24 @@ Response: {
                   "asMovePackage": {
                     "module": {
                       "all": {
-                        "nodes": [
+                        "edges": [
                           {
-                            "name": "m0"
+                            "cursor": "MA",
+                            "node": {
+                              "name": "m0"
+                            }
                           },
                           {
-                            "name": "m1"
+                            "cursor": "MQ",
+                            "node": {
+                              "name": "m1"
+                            }
                           },
                           {
-                            "name": "m2"
+                            "cursor": "Mg",
+                            "node": {
+                              "name": "m2"
+                            }
                           }
                         ],
                         "pageInfo": {
@@ -46,12 +55,18 @@ Response: {
                         }
                       },
                       "after": {
-                        "nodes": [
+                        "edges": [
                           {
-                            "name": "m1"
+                            "cursor": "MQ",
+                            "node": {
+                              "name": "m1"
+                            }
                           },
                           {
-                            "name": "m2"
+                            "cursor": "Mg",
+                            "node": {
+                              "name": "m2"
+                            }
                           }
                         ],
                         "pageInfo": {
@@ -60,12 +75,18 @@ Response: {
                         }
                       },
                       "before": {
-                        "nodes": [
+                        "edges": [
                           {
-                            "name": "m0"
+                            "cursor": "MA",
+                            "node": {
+                              "name": "m0"
+                            }
                           },
                           {
-                            "name": "m1"
+                            "cursor": "MQ",
+                            "node": {
+                              "name": "m1"
+                            }
                           }
                         ],
                         "pageInfo": {
@@ -90,7 +111,66 @@ Response: {
   }
 }
 
-task 4 'run-graphql'. lines 65-113:
+task 4 'run-graphql'. lines 80-107:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": [
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": {
+                    "module": null
+                  }
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "errors": [
+    {
+      "message": "Connection's page size of 1000 exceeds max of 50",
+      "locations": [
+        {
+          "line": 5,
+          "column": 13
+        }
+      ],
+      "path": [
+        "transactionBlockConnection",
+        "nodes",
+        0,
+        "effects",
+        "objectChanges",
+        1,
+        "outputState",
+        "asMovePackage",
+        "module",
+        "friends"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 5 'run-graphql'. lines 109-169:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -108,9 +188,12 @@ Response: {
                   "asMovePackage": {
                     "module": {
                       "prefix": {
-                        "nodes": [
+                        "edges": [
                           {
-                            "name": "m1"
+                            "cursor": "MQ",
+                            "node": {
+                              "name": "m1"
+                            }
                           }
                         ],
                         "pageInfo": {
@@ -119,12 +202,18 @@ Response: {
                         }
                       },
                       "prefixAll": {
-                        "nodes": [
+                        "edges": [
                           {
-                            "name": "m1"
+                            "cursor": "MQ",
+                            "node": {
+                              "name": "m1"
+                            }
                           },
                           {
-                            "name": "m2"
+                            "cursor": "Mg",
+                            "node": {
+                              "name": "m2"
+                            }
                           }
                         ],
                         "pageInfo": {
@@ -133,9 +222,12 @@ Response: {
                         }
                       },
                       "suffix": {
-                        "nodes": [
+                        "edges": [
                           {
-                            "name": "m1"
+                            "cursor": "MQ",
+                            "node": {
+                              "name": "m1"
+                            }
                           }
                         ],
                         "pageInfo": {
@@ -144,12 +236,18 @@ Response: {
                         }
                       },
                       "suffixAll": {
-                        "nodes": [
+                        "edges": [
                           {
-                            "name": "m0"
+                            "cursor": "MA",
+                            "node": {
+                              "name": "m0"
+                            }
                           },
                           {
-                            "name": "m1"
+                            "cursor": "MQ",
+                            "node": {
+                              "name": "m1"
+                            }
                           }
                         ],
                         "pageInfo": {
@@ -174,15 +272,15 @@ Response: {
   }
 }
 
-task 5 'upgrade'. lines 115-129:
-created: object(5,0)
+task 6 'upgrade'. lines 171-185:
+created: object(6,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 8139600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 6 'create-checkpoint'. lines 131-131:
+task 7 'create-checkpoint'. lines 187-187:
 Checkpoint created: 2
 
-task 7 'run-graphql'. lines 133-161:
+task 8 'run-graphql'. lines 189-220:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -194,19 +292,31 @@ Response: {
                 "outputState": {
                   "asMovePackage": {
                     "module": {
-                      "friendConnection": {
-                        "nodes": [
+                      "friends": {
+                        "edges": [
                           {
-                            "name": "m0"
+                            "cursor": "MA",
+                            "node": {
+                              "name": "m0"
+                            }
                           },
                           {
-                            "name": "m1"
+                            "cursor": "MQ",
+                            "node": {
+                              "name": "m1"
+                            }
                           },
                           {
-                            "name": "m2"
+                            "cursor": "Mg",
+                            "node": {
+                              "name": "m2"
+                            }
                           },
                           {
-                            "name": "m3"
+                            "cursor": "Mw",
+                            "node": {
+                              "name": "m3"
+                            }
                           }
                         ]
                       }

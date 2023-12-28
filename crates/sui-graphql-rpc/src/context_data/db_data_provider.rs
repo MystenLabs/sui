@@ -48,7 +48,7 @@ use sui_indexer::{
     apis::GovernanceReadApiV2,
     indexer_reader::IndexerReader,
     models_v2::{
-        checkpoints::StoredCheckpoint, display::StoredDisplay, epoch::StoredEpochInfo,
+        checkpoints::StoredCheckpoint, display::StoredDisplay, epoch::QueryableEpochInfo,
         events::StoredEvent, objects::StoredObject, transactions::StoredTransaction,
     },
     schema_v2::transactions,
@@ -193,16 +193,19 @@ impl PgManager {
         .await
     }
 
-    pub async fn get_epoch(&self, epoch_id: Option<i64>) -> Result<Option<StoredEpochInfo>, Error> {
+    pub async fn get_epoch(
+        &self,
+        epoch_id: Option<i64>,
+    ) -> Result<Option<QueryableEpochInfo>, Error> {
         let query_fn = move || {
             Ok(match epoch_id {
-                Some(epoch_id) => QueryBuilder::get_epoch(epoch_id),
-                None => QueryBuilder::get_latest_epoch(),
+                Some(epoch_id) => QueryBuilder::get_epoch_info(epoch_id),
+                None => QueryBuilder::get_latest_epoch_info(),
             })
         };
 
         self.run_query_async_with_cost(query_fn, |query| {
-            move |conn| query.get_result::<StoredEpochInfo>(conn).optional()
+            move |conn| query.get_result::<QueryableEpochInfo>(conn).optional()
         })
         .await
     }
@@ -689,6 +692,19 @@ impl PgManager {
             .await?
             .map(TransactionBlock::try_from)
             .transpose()
+    }
+
+    /// Retrieve the validator APYs
+    pub(crate) async fn fetch_validator_apys(
+        &self,
+        address: &NativeSuiAddress,
+    ) -> Result<Option<f64>, Error> {
+        let governance_api = GovernanceReadApiV2::new(self.inner.clone());
+
+        governance_api
+            .get_validator_apy(address)
+            .await
+            .map_err(|e| Error::Internal(format!("{e}")))
     }
 
     pub(crate) async fn fetch_latest_epoch(&self) -> Result<Epoch, Error> {
@@ -1189,6 +1205,27 @@ impl PgManager {
         Ok(Some(domain.to_string()))
     }
 
+    /// If no epoch was requested or if the epoch requested is in progress,
+    /// returns the latest sui system state.
+    pub(crate) async fn fetch_sui_system_state(
+        &self,
+        epoch_id: Option<u64>,
+    ) -> Result<NativeSuiSystemStateSummary, Error> {
+        let latest_sui_system_state = self
+            .inner
+            .spawn_blocking(move |this| this.get_latest_sui_system_state())
+            .await?;
+
+        if epoch_id.is_some_and(|id| id == latest_sui_system_state.epoch) {
+            Ok(latest_sui_system_state)
+        } else {
+            Ok(self
+                .inner
+                .spawn_blocking(move |this| this.get_epoch_sui_system_state(epoch_id))
+                .await?)
+        }
+    }
+
     pub(crate) async fn fetch_latest_sui_system_state(
         &self,
     ) -> Result<SuiSystemStateSummary, Error> {
@@ -1640,7 +1677,7 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
         Ok(Self {
             digest: Digest::try_from(c.checkpoint_digest)?.to_string(),
             sequence_number: c.sequence_number as u64,
-            timestamp: DateTime::from_ms(c.timestamp_ms),
+            timestamp: DateTime::from_ms(c.timestamp_ms)?,
             validator_signature: Some(c.validator_signature.into()),
             previous_checkpoint_digest: c
                 .previous_checkpoint_digest
@@ -1675,13 +1712,7 @@ impl TryFrom<NativeSuiSystemStateSummary> for SuiSystemStateSummary {
             ))
         })?;
 
-        let start_timestamp = DateTime::from_ms(start_timestamp).ok_or_else(|| {
-            Error::Internal(format!(
-                "Cannot convert start timestamp ({}) of system state into a DateTime",
-                start_timestamp
-            ))
-        })?;
-
+        let start_timestamp = DateTime::from_ms(start_timestamp)?;
         Ok(SuiSystemStateSummary {
             epoch_id: system_state.epoch,
             system_state_version: Some(BigInt::from(system_state.system_state_version)),

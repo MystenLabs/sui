@@ -300,14 +300,6 @@ impl DBCheckpointHandler {
                     self.prune_and_compact(local_db_path, *epoch).await?;
                 }
 
-                // This writes a single "MANIFEST" file which contains a list of all files that make up a db snapshot
-                write_snapshot_manifest(
-                    db_path,
-                    &self.input_object_store,
-                    format!("epoch_{}/", epoch),
-                )
-                .await?;
-
                 info!("Copying db checkpoint for epoch: {epoch} to remote storage");
                 copy_recursively(
                     db_path,
@@ -316,6 +308,10 @@ impl DBCheckpointHandler {
                     NonZeroUsize::new(20).unwrap(),
                 )
                 .await?;
+
+                // This writes a single "MANIFEST" file which contains a list of all files that make up a db snapshot
+                write_snapshot_manifest(db_path, &object_store, format!("epoch_{}/", epoch))
+                    .await?;
                 // Drop marker in the output directory that upload completed successfully
                 let bytes = Bytes::from_static(b"success");
                 let success_marker = db_path.child(SUCCESS_MARKER);

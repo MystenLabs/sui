@@ -546,6 +546,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 show_headers,
                 show_service_version,
                 variables,
+                cursors,
             }) => {
                 let file = data.ok_or_else(|| anyhow::anyhow!("Missing GraphQL query"))?;
                 let contents = std::fs::read_to_string(file.path())?;
@@ -555,7 +556,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(30))
                     .await;
 
-                let interpolated = self.interpolate_query(&contents)?;
+                let interpolated = self.interpolate_query(&contents, &cursors)?;
 
                 let used_variables = self.resolve_graphql_variables(&variables)?;
                 let resp = cluster
@@ -1099,7 +1100,7 @@ impl<'a> SuiTestAdapter<'a> {
         Ok(res)
     }
 
-    fn named_variables(&self) -> BTreeMap<String, String> {
+    fn named_variables(&self, cursors: &[String]) -> BTreeMap<String, String> {
         let mut variables = BTreeMap::new();
         let named_addrs = self
             .compiled_state
@@ -1115,7 +1116,12 @@ impl<'a> SuiTestAdapter<'a> {
                 FakeID::Enumerated(x, y) => Some((format!("obj_{x}_{y}"), oid.to_string())),
             });
 
-        for (name, addr) in named_addrs.chain(objects) {
+        let cursors = cursors
+            .iter()
+            .enumerate()
+            .map(|(idx, c)| (format!("cursor_{idx}"), Base64::encode(c)));
+
+        for (name, addr) in named_addrs.chain(objects).chain(cursors) {
             let addr = addr.to_string();
 
             // Required variant
@@ -1127,8 +1133,8 @@ impl<'a> SuiTestAdapter<'a> {
         variables
     }
 
-    fn interpolate_query(&self, contents: &str) -> anyhow::Result<String> {
-        let variables = self.named_variables();
+    fn interpolate_query(&self, contents: &str, cursors: &[String]) -> anyhow::Result<String> {
+        let variables = self.named_variables(cursors);
         let mut interpolated_query = contents.to_string();
 
         let re = regex::Regex::new(r"@\{([^\}]+)\}").unwrap();

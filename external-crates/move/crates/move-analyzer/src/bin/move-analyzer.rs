@@ -49,7 +49,7 @@ fn main() {
     );
 
     let (connection, io_threads) = Connection::stdio();
-    let symbols = Arc::new(Mutex::new(symbols::Symbolicator::empty_symbols()));
+    let symbols = Arc::new(Mutex::new(symbols::empty_symbols()));
     let mut context = Context {
         connection,
         files: VirtualFileSystem::default(),
@@ -121,9 +121,11 @@ fn main() {
         // determine if linting is on or off based on what the editor requested
         let mut lint = false;
         if let Some(init_options) = initialize_params.initialization_options {
-            lint = init_options.get("lintOpt").and_then(serde_json::Value::as_bool).unwrap_or(false);
+            lint = init_options
+                .get("lintOpt")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false);
         }
-
 
         symbolicator_runner = symbols::SymbolicatorRunner::new(symbols.clone(), diag_sender, lint);
 
@@ -139,8 +141,7 @@ fn main() {
                 thread::Builder::new()
                     .stack_size(symbols::STACK_SIZE_BYTES)
                     .spawn(move || {
-                        if let Ok((Some(new_symbols), _)) =
-                            symbols::Symbolicator::get_symbols(p.as_path(), lint)
+                        if let Ok((Some(new_symbols), _)) = symbols::get_symbols(p.as_path(), lint)
                         {
                             let mut old_symbols = symbols.lock().unwrap();
                             (*old_symbols).merge(new_symbols);

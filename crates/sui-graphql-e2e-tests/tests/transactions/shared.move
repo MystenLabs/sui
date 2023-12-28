@@ -44,7 +44,7 @@ module P0::m {
             kind {
                 __typename
                 ... on ProgrammableTransactionBlock {
-                    transactionConnection {
+                    transactions {
                         nodes {
                             ... on MoveCallTransaction {
                                 package

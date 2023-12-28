@@ -82,8 +82,8 @@ impl Event {
     }
 
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
-    async fn timestamp(&self) -> Option<DateTime> {
-        DateTime::from_ms(self.stored.timestamp_ms)
+    async fn timestamp(&self) -> Result<Option<DateTime>, Error> {
+        Ok(DateTime::from_ms(self.stored.timestamp_ms).ok())
     }
 
     #[graphql(flatten)]
