@@ -22,6 +22,7 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::{
     ExecutionDigests, ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxContext,
 };
+use sui_types::coin_deny_list::{SUI_COIN_DENY_LIST_CREATE_FUNC, SUI_COIN_DENY_LIST_MODULE};
 use sui_types::committee::Committee;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignInfoTrait,
@@ -1058,6 +1059,15 @@ pub fn generate_genesis_system_object(
                 SUI_FRAMEWORK_ADDRESS.into(),
                 ident_str!("random").to_owned(),
                 ident_str!("create").to_owned(),
+                vec![],
+                vec![],
+            )?;
+        }
+        if protocol_config.enable_coin_deny_list() {
+            builder.move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                SUI_COIN_DENY_LIST_MODULE.to_owned(),
+                SUI_COIN_DENY_LIST_CREATE_FUNC.to_owned(),
                 vec![],
                 vec![],
             )?;

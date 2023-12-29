@@ -1062,6 +1062,10 @@ impl ProtocolConfig {
     pub fn include_consensus_digest_in_prologue(&self) -> bool {
         self.feature_flags.include_consensus_digest_in_prologue
     }
+
+    pub fn enable_coin_deny_list(&self) -> bool {
+        self.feature_flags.enable_coin_deny_list
+    }
 }
 
 #[cfg(not(msim))]
