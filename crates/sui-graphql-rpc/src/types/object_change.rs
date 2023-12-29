@@ -28,6 +28,7 @@ impl ObjectChange {
             ctx.data_unchecked(),
             self.native.id.into(),
             Some(version.value()),
+            None,
         )
         .await
         .extend()
@@ -43,6 +44,7 @@ impl ObjectChange {
             ctx.data_unchecked(),
             self.native.id.into(),
             Some(version.value()),
+            None,
         )
         .await
         .extend()

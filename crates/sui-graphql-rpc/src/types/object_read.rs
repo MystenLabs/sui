@@ -35,6 +35,7 @@ impl ObjectRead {
             ctx.data_unchecked(),
             self.address_impl(),
             Some(self.version_impl()),
+            None,
         )
         .await
         .extend()

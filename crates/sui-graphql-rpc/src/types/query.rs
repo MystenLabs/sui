@@ -77,7 +77,7 @@ impl Query {
         address: SuiAddress,
         version: Option<u64>,
     ) -> Result<Option<Object>> {
-        Object::query(ctx.data_unchecked(), address, version)
+        Object::query(ctx.data_unchecked(), address, version, None)
             .await
             .extend()
     }

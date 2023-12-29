@@ -3,17 +3,20 @@
 
 use std::collections::BTreeMap;
 
+use crate::types::intersect;
 use async_graphql::connection::{CursorType, Edge};
 use async_graphql::{connection::Connection, *};
 use diesel::{
-    BoolExpressionMethods, ExpressionMethods, NullableExpressionMethods, OptionalExtension,
-    QueryDsl,
+    BoolExpressionMethods, CombineDsl, ExpressionMethods, NullableExpressionMethods,
+    OptionalExtension, QueryDsl,
 };
-use fastcrypto::encoding::{Base58, Encoding};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
-use sui_indexer::models_v2::objects::StoredObject;
-use sui_indexer::schema_v2::objects;
+use sui_indexer::models_v2::objects::{
+    StoredDeletedHistoryObject, StoredHistoryObject, StoredObject,
+};
+use sui_indexer::schema_v2::{checkpoints, objects, objects_history, objects_snapshot};
+use sui_indexer::types_v2::ObjectStatus as NativeObjectStatus;
 use sui_indexer::types_v2::OwnerType;
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_package_resolver::Resolver;
@@ -36,10 +39,10 @@ use super::{
 };
 use crate::context_data::db_data_provider::PgManager;
 use crate::context_data::package_cache::PackageCache;
+use crate::data::pg::coalesce;
 use crate::data::{self, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
 use crate::types::base64::Base64;
-use crate::types::intersect;
 use sui_types::object::{
     MoveObject as NativeMoveObject, Object as NativeObject, Owner as NativeOwner,
 };
@@ -47,12 +50,44 @@ use sui_types::object::{
 #[derive(Clone, Debug)]
 pub(crate) struct Object {
     pub address: SuiAddress,
+    pub kind: ObjectKind,
+}
 
-    /// Representation of an Object in the Indexer's Store.
-    pub stored: Option<StoredObject>,
+#[derive(Clone, Debug)]
+pub(crate) enum ObjectKind {
+    /// An object loaded from serialized data, such as the contents of a transaction.
+    NotIndexed(NativeObject),
+    /// An object fetched from the live objects table.
+    Live(NativeObject, StoredObject),
+    /// An object fetched from the snapshot or historical objects table.
+    Historical(NativeObject, StoredHistoryObject),
+    /// The object is wrapped or deleted and only partial information can be loaded from the
+    /// indexer.
+    WrappedOrDeleted(StoredDeletedHistoryObject),
+    /// The requested object falls outside of the consistent read range supported by the indexer.
+    /// The requested object may or may not actually exist on-chain, but the data is not yet or no
+    /// longer indexed.
+    OutsideAvailableRange,
+}
 
-    /// Deserialized representation of `stored_object.serialized_object`.
-    pub native: NativeObject,
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
+#[graphql(name = "ObjectKind")]
+pub enum ObjectStatus {
+    /// - NOT_INDEXED: the object is loaded from serialized data, such as the contents of a
+    ///   transaction.
+    NotIndexed,
+    /// - LIVE: the object is currently live and is not deleted or wrapped.
+    Live,
+    /// - HISTORICAL: the object is referenced at some version, and thus is fetched from the
+    ///   snapshot or historical objects table.
+    Historical,
+    /// - WRAPPED_OR_DELETED: The object is deleted or wrapped and only partial information can be
+    /// loaded from the indexer.
+    WrappedOrDeleted,
+    /// - OUTSIDE_AVAILABLE_RANGE: The requested object falls outside of the consistent read range
+    /// supported by the indexer. The requested object may or may not actually exist on-chain, but
+    /// the data is not yet or no longer indexed.
+    OutsideAvailableRange,
 }
 
 /// Constrains the set of objects returned. All filters are optional, and the resulting set of
@@ -137,35 +172,51 @@ type Query<ST, GB> = data::Query<ST, objects::table, GB>;
 /// field indicating how this object can be accessed.
 #[Object]
 impl Object {
-    async fn version(&self) -> u64 {
-        self.native.version().value()
+    async fn version(&self) -> Option<u64> {
+        self.version_impl()
+    }
+
+    /// The current status of the object as read from the off-chain store. The possible states are:
+    /// - NOT_INDEXED: the object is loaded from serialized data, such as the contents of a
+    ///   transaction.
+    /// - LIVE: the object is currently live and is not deleted or wrapped.
+    /// - HISTORICAL: the object is referenced at some version, and thus is fetched from the
+    ///   snapshot or historical objects table.
+    /// - WRAPPED_OR_DELETED: The object is deleted or wrapped and only partial information can be
+    ///   loaded from the indexer.
+    /// - OUTSIDE_AVAILABLE_RANGE: The requested object falls outside of the consistent read range
+    /// supported by the indexer. The requested object may or may not actually exist on-chain, but
+    /// the data is not yet or no longer indexed.
+    async fn status(&self) -> ObjectStatus {
+        ObjectStatus::from(&self.kind)
     }
 
     /// 32-byte hash that identifies the object's current contents, encoded as a Base58 string.
-    async fn digest(&self) -> String {
-        if let Some(stored) = &self.stored {
-            Base58::encode(&stored.object_digest)
-        } else {
-            self.native.digest().base58_encode()
-        }
+    async fn digest(&self) -> Option<String> {
+        self.native_impl()
+            .map(|native| native.digest().base58_encode())
     }
 
     /// The amount of SUI we would rebate if this object gets deleted or mutated.
     /// This number is recalculated based on the present storage gas price.
     async fn storage_rebate(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.native.storage_rebate))
+        self.native_impl()
+            .map(|native| BigInt::from(native.storage_rebate))
     }
 
     /// The set of named templates defined on-chain for the type of this object,
     /// to be handled off-chain. The server substitutes data from the object
     /// into these templates to generate a display string per template.
     async fn display(&self, ctx: &Context<'_>) -> Result<Option<Vec<DisplayEntry>>> {
+        let Some(native) = self.native_impl() else {
+            return Ok(None);
+        };
+
         let resolver: &Resolver<PackageCache> = ctx
             .data()
             .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
             .extend()?;
-        let move_object = self
-            .native
+        let move_object = native
             .data
             .try_as_move()
             .ok_or_else(|| Error::Internal("Failed to convert object into MoveObject".to_string()))
@@ -197,20 +248,24 @@ impl Object {
 
     /// The Base64 encoded bcs serialization of the object's content.
     async fn bcs(&self) -> Result<Option<Base64>> {
-        if let Some(stored) = &self.stored {
-            Ok(Some(Base64::from(&stored.serialized_object)))
-        } else {
-            let bytes = bcs::to_bytes(&self.native)
-                .map_err(|e| {
-                    Error::Internal(format!(
-                        "Failed to serialize object at {}: {e}",
-                        self.address,
-                    ))
-                })
-                .extend()?;
-
-            Ok(Some(Base64::from(&bytes)))
-        }
+        use ObjectKind as K;
+        Ok(match &self.kind {
+            K::WrappedOrDeleted(_) => None,
+            K::OutsideAvailableRange => None,
+            K::Live(_, stored) => Some(Base64::from(&stored.serialized_object)),
+            K::Historical(_, stored) => stored.serialized_object.as_ref().map(Base64::from),
+            K::NotIndexed(native) => {
+                let bytes = bcs::to_bytes(native)
+                    .map_err(|e| {
+                        Error::Internal(format!(
+                            "Failed to serialize object at {}: {e}",
+                            self.address
+                        ))
+                    })
+                    .extend()?;
+                Some(Base64::from(&bytes))
+            }
+        })
     }
 
     /// The transaction block that created this version of the object.
@@ -218,7 +273,11 @@ impl Object {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<TransactionBlock>> {
-        let digest = self.native.previous_transaction;
+        let Some(native) = self.native_impl() else {
+            return Ok(None);
+        };
+        let digest = native.previous_transaction;
+
         TransactionBlock::query(ctx.data_unchecked(), digest.into())
             .await
             .extend()
@@ -229,7 +288,11 @@ impl Object {
     async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwner> {
         use NativeOwner as O;
 
-        match self.native.owner {
+        let Some(native) = self.native_impl() else {
+            return None;
+        };
+
+        match native.owner {
             O::AddressOwner(address) => {
                 let address = SuiAddress::from(address);
                 Some(ObjectOwner::Address(AddressOwner {
@@ -238,7 +301,7 @@ impl Object {
             }
             O::Immutable => Some(ObjectOwner::Immutable(Immutable { dummy: None })),
             O::ObjectOwner(address) => {
-                let parent = Object::query(ctx.data_unchecked(), address.into(), None)
+                let parent = Object::query(ctx.data_unchecked(), address.into(), None, None)
                     .await
                     .ok()
                     .flatten();
@@ -443,41 +506,29 @@ impl Object {
     pub(crate) fn from_native(address: SuiAddress, native: NativeObject) -> Object {
         Object {
             address,
-            stored: None,
-            native,
+            kind: ObjectKind::NotIndexed(native),
         }
     }
 
-    pub(crate) async fn query(
-        db: &Db,
-        address: SuiAddress,
-        version: Option<u64>,
-    ) -> Result<Option<Self>, Error> {
-        use objects::dsl;
+    pub(crate) fn native_impl(&self) -> Option<&NativeObject> {
+        use ObjectKind as K;
 
-        let address = address.into_vec();
-        let version = version.map(|v| v as i64);
+        match &self.kind {
+            K::Live(native, _) | K::NotIndexed(native) | K::Historical(native, _) => Some(native),
+            K::WrappedOrDeleted(_) | K::OutsideAvailableRange => None,
+        }
+    }
 
-        let stored_obj: Option<StoredObject> = db
-            .execute(move |conn| {
-                conn.first(move || {
-                    let mut query = dsl::objects
-                        .filter(dsl::object_id.eq(address.clone()))
-                        .into_boxed();
+    pub(crate) fn version_impl(&self) -> Option<u64> {
+        use ObjectKind as K;
 
-                    // TODO: leverage objects_history
-                    if let Some(version) = version {
-                        query = query.filter(dsl::object_version.eq(version));
-                    }
-
-                    query
-                })
-                .optional()
-            })
-            .await
-            .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))?;
-
-        stored_obj.map(Self::try_from).transpose()
+        match &self.kind {
+            K::Live(native, _) | K::NotIndexed(native) | K::Historical(native, _) => {
+                Some(native.version().value())
+            }
+            K::WrappedOrDeleted(stored) => Some(stored.object_version as u64),
+            K::OutsideAvailableRange => None,
+        }
     }
 
     /// Query the database for a `page` of objects, optionally `filter`-ed.
@@ -547,6 +598,155 @@ impl Object {
         }
 
         Ok(conn)
+    }
+
+    async fn query_live(db: &Db, address: SuiAddress) -> Result<Option<Self>, Error> {
+        let vec_address = address.into_vec();
+        use objects::dsl as objects;
+
+        let stored_obj: Option<StoredObject> = db
+            .execute(move |conn| {
+                conn.result(move || {
+                    objects::objects
+                        .filter(objects::object_id.eq(vec_address.clone()))
+                        .limit(1)
+                        .into_boxed()
+                })
+                .optional()
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))?;
+
+        stored_obj.map(Self::try_from).transpose()
+    }
+
+    async fn query_historical(
+        db: &Db,
+        address: SuiAddress,
+        version: Option<u64>,
+        checkpoint_sequence_number: Option<u64>,
+    ) -> Result<Option<Self>, Error> {
+        let vec_address = address.into_vec();
+        let version = version.map(|n| n as i64);
+        let checkpoint_sequence_number = checkpoint_sequence_number.map(|n| n as i64);
+
+        use checkpoints::dsl as checkpoints;
+        use objects_history::dsl as history;
+        use objects_snapshot::dsl as snapshot;
+
+        let results: Option<Vec<StoredHistoryObject>> = db
+            .execute(move |conn| {
+                conn.results(move || {
+                    // If an object was created or mutated in a checkpoint outside the current
+                    // available range, and never touched again, it will not show up in the
+                    // objects_history table. Thus, we always need to check the objects_snapshot
+                    // table as well.
+                    let mut snapshot_query = snapshot::objects_snapshot
+                        .filter(snapshot::object_id.eq(vec_address.clone()))
+                        .into_boxed();
+
+                    let mut historical_query = history::objects_history
+                        .filter(history::object_id.eq(vec_address.clone()))
+                        .order_by(history::object_version.desc())
+                        .limit(1)
+                        .into_boxed();
+
+                    if let Some(version) = version {
+                        snapshot_query =
+                            snapshot_query.filter(snapshot::object_version.eq(version));
+                        historical_query =
+                            historical_query.filter(history::object_version.eq(version));
+                    }
+
+                    let left = snapshot::objects_snapshot
+                        .select(snapshot::checkpoint_sequence_number)
+                        .order(snapshot::checkpoint_sequence_number.desc())
+                        .limit(1);
+
+                    historical_query = historical_query.filter(
+                        history::checkpoint_sequence_number.ge(coalesce(left.single_value(), 0)),
+                    );
+
+                    // if some checkpoint_sequence_number is provided, use it as the upper bound.
+                    // This is because an object can be extant at some target, but be indexed with
+                    // at a checkpoint_sequence_number <= target.
+                    if let Some(checkpoint_sequence_number) = checkpoint_sequence_number {
+                        // A validation check is not needed as we coalesce both sides to 0 for null
+                        // values, and if left > right, the db will return 0 rows. This also saves
+                        // us a roundtrip.
+                        historical_query = historical_query.filter(
+                            history::checkpoint_sequence_number.le(checkpoint_sequence_number),
+                        );
+
+                        snapshot_query = snapshot_query.filter(
+                            snapshot::checkpoint_sequence_number.le(checkpoint_sequence_number),
+                        );
+                    } else {
+                        let right = checkpoints::checkpoints
+                            .select(checkpoints::sequence_number)
+                            .order(checkpoints::sequence_number.desc())
+                            .limit(1);
+
+                        historical_query = historical_query.filter(
+                            history::checkpoint_sequence_number
+                                .le(coalesce(right.single_value(), 0)),
+                        );
+                    }
+
+                    snapshot_query.union(historical_query)
+                })
+                .optional()
+            })
+            .await?;
+
+        // For the moment, if the object existed at some point, it will have eventually be written to objects_snapshot.
+        // Therefore, if both results are None, the object has never existed.
+        let Some(stored_objs) = results else {
+            return Ok(None);
+        };
+
+        match stored_objs
+            .iter()
+            // First, filter the objects based on an exact match on version and
+            // checkpoint_sequence_number if provided
+            .filter(|stored_obj| {
+                version.map_or(true, |version| stored_obj.object_version == version)
+                    && checkpoint_sequence_number.map_or(true, |checkpoint| {
+                        stored_obj.checkpoint_sequence_number <= checkpoint
+                    })
+            })
+            // Then, find the object with the largest checkpoint_sequence_number among those
+            // filtered - it should still be within the available range as the db query was bounded
+            .max_by_key(|stored_obj| stored_obj.object_version)
+        {
+            Some(stored_obj) => {
+                Ok(Some(Self::try_from(stored_obj.clone()).map_err(|e| {
+                    Error::Internal(format!("Failed to convert object: {e}"))
+                })?))
+            }
+            // We were able to retrieve results, but do not match with the given parameters. The
+            // most likely scenario is when we look up an object on object_id and
+            // checkpoint_sequence_number, no object_version. The object exists in objects_snapshot,
+            // and the data's checkpoint_sequence_number exceeds the given parameter.
+            None => Ok(Some(Object {
+                address,
+                kind: ObjectKind::OutsideAvailableRange,
+            })),
+        }
+    }
+
+    pub(crate) async fn query(
+        db: &Db,
+        address: SuiAddress,
+        version: Option<u64>,
+        checkpoint_sequence_number: Option<u64>,
+    ) -> Result<Option<Self>, Error> {
+        if version.is_none() && checkpoint_sequence_number.is_none() {
+            Object::query_live(db, address).await
+        } else {
+            Object::query_historical(db, address, version, checkpoint_sequence_number).await
+        }
+        .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))
     }
 }
 
@@ -671,9 +871,65 @@ impl TryFrom<StoredObject> for Object {
 
         Ok(Self {
             address,
-            stored: Some(stored_object),
-            native: native_object,
+            kind: ObjectKind::Live(native_object, stored_object),
         })
+    }
+}
+
+impl TryFrom<StoredHistoryObject> for Object {
+    type Error = Error;
+
+    fn try_from(history_object: StoredHistoryObject) -> Result<Self, Error> {
+        let address = addr(&history_object.object_id)?;
+
+        let object_status =
+            NativeObjectStatus::try_from(history_object.object_status).map_err(|_| {
+                Error::Internal(format!(
+                    "Unknown object status {} for object {} at version {}",
+                    history_object.object_status, address, history_object.object_version
+                ))
+            })?;
+
+        match object_status {
+            NativeObjectStatus::Active => {
+                let Some(serialized_object) = &history_object.serialized_object else {
+                    return Err(Error::Internal(format!(
+                        "Live object {} at version {} cannot have missing serialized_object field",
+                        address, history_object.object_version
+                    )));
+                };
+
+                let native_object = bcs::from_bytes(serialized_object).map_err(|_| {
+                    Error::Internal(format!("Failed to deserialize object {address}"))
+                })?;
+
+                Ok(Self {
+                    address,
+                    kind: ObjectKind::Historical(native_object, history_object),
+                })
+            }
+            NativeObjectStatus::WrappedOrDeleted => Ok(Self {
+                address,
+                kind: ObjectKind::WrappedOrDeleted(StoredDeletedHistoryObject {
+                    object_id: history_object.object_id,
+                    object_version: history_object.object_version,
+                    object_status: history_object.object_status,
+                    checkpoint_sequence_number: history_object.checkpoint_sequence_number,
+                }),
+            }),
+        }
+    }
+}
+
+impl From<&ObjectKind> for ObjectStatus {
+    fn from(kind: &ObjectKind) -> Self {
+        match kind {
+            ObjectKind::NotIndexed(_) => ObjectStatus::NotIndexed,
+            ObjectKind::Live(_, _) => ObjectStatus::Live,
+            ObjectKind::Historical(_, _) => ObjectStatus::Historical,
+            ObjectKind::WrappedOrDeleted(_) => ObjectStatus::WrappedOrDeleted,
+            ObjectKind::OutsideAvailableRange => ObjectStatus::OutsideAvailableRange,
+        }
     }
 }
 

@@ -106,7 +106,7 @@ impl DynamicField {
     /// in which case it is also accessible off-chain via its address.
     async fn value(&self, ctx: &Context<'_>) -> Result<Option<DynamicFieldValue>> {
         if self.df_kind == DynamicFieldType::DynamicObject {
-            let obj = MoveObject::query(ctx.data_unchecked(), self.df_object_id, None)
+            let obj = MoveObject::query(ctx.data_unchecked(), self.df_object_id, None, None)
                 .await
                 .extend()?;
             Ok(obj.map(DynamicFieldValue::MoveObject))

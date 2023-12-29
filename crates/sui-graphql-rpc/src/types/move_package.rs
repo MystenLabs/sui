@@ -187,7 +187,13 @@ impl MovePackage {
     fn parsed_package(&self) -> Result<ParsedMovePackage, Error> {
         // TODO: Leverage the package cache (attempt to read from it, and if that doesn't succeed,
         // write back the parsed Package to the cache as well.)
-        ParsedMovePackage::read(&self.super_.native)
+        let Some(native) = self.super_.native_impl() else {
+            return Err(Error::Internal(
+                "This should be unreachable as we cannot downcast if native is None".to_string(),
+            ));
+        };
+
+        ParsedMovePackage::read(native)
             .map_err(|e| Error::Internal(format!("Error reading package: {e}")))
     }
 
@@ -215,7 +221,8 @@ impl MovePackage {
         address: SuiAddress,
         version: Option<u64>,
     ) -> Result<Option<Self>, Error> {
-        let Some(object) = Object::query(db, address, version).await? else {
+        // MovePackages are immutable objects, and thus we can always pass None for checkpoint_sequence_number
+        let Some(object) = Object::query(db, address, version, None).await? else {
             return Ok(None);
         };
 
@@ -229,7 +236,11 @@ impl TryFrom<&Object> for MovePackage {
     type Error = MovePackageDowncastError;
 
     fn try_from(object: &Object) -> Result<Self, Self::Error> {
-        if let Data::Package(move_package) = &object.native.data {
+        let Some(native) = object.native_impl() else {
+            return Err(MovePackageDowncastError);
+        };
+
+        if let Data::Package(move_package) = &native.data {
             Ok(Self {
                 super_: object.clone(),
                 native: move_package.clone(),
