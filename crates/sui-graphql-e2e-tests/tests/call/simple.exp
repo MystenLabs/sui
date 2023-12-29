@@ -337,18 +337,11 @@ Response: {
 
 task 22 'run-graphql'. lines 168-174:
 Response: {
-  "data": null,
-  "errors": [
-    {
-      "message": "Unknown field \"latestSuiSystemState\" on type \"Query\".",
-      "locations": [
-        {
-          "line": 3,
-          "column": 3
-        }
-      ]
+  "data": {
+    "epoch": {
+      "referenceGasPrice": "234"
     }
-  ]
+  }
 }
 
 task 23 'run'. lines 176-176:
