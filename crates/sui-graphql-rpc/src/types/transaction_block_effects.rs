@@ -12,9 +12,15 @@ use sui_types::{
 };
 
 use super::{
-    balance_change::BalanceChange, base64::Base64, checkpoint::Checkpoint, date_time::DateTime,
-    epoch::Epoch, gas::GasEffects, object_change::ObjectChange,
-    transaction_block::TransactionBlock, unchanged_shared_object::UnchangedSharedObject,
+    balance_change::BalanceChange,
+    base64::Base64,
+    checkpoint::{Checkpoint, CheckpointId},
+    date_time::DateTime,
+    epoch::Epoch,
+    gas::GasEffects,
+    object_change::ObjectChange,
+    transaction_block::TransactionBlock,
+    unchanged_shared_object::UnchangedSharedObject,
 };
 
 #[derive(Clone)]
@@ -147,12 +153,9 @@ impl TransactionBlockEffects {
 
     /// The epoch this transaction was finalized in.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Ok(Some(
-            ctx.data_unchecked::<PgManager>()
-                .fetch_epoch_strict(self.native.executed_epoch())
-                .await
-                .extend()?,
-        ))
+        Epoch::query(ctx.data_unchecked(), Some(self.native.executed_epoch()))
+            .await
+            .extend()
     }
 
     /// The checkpoint this transaction was finalized in.
@@ -160,10 +163,13 @@ impl TransactionBlockEffects {
         let Some(stored_tx) = self.tx_data.as_ref().left() else {
             return Ok(None);
         };
-        ctx.data_unchecked::<PgManager>()
-            .fetch_checkpoint(None, Some(stored_tx.checkpoint_sequence_number as u64))
-            .await
-            .extend()
+
+        Checkpoint::query(
+            ctx.data_unchecked(),
+            CheckpointId::by_seq_num(stored_tx.checkpoint_sequence_number as u64),
+        )
+        .await
+        .extend()
     }
 
     // TODO: event_connection: EventConnection

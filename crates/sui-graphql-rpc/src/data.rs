@@ -15,6 +15,10 @@ use crate::error::Error;
 /// Database Backend in use -- abstracting a specific implementation.
 pub(crate) type Db = pg::PgManager_;
 
+/// Helper types to access associated types on `Db`.
+pub(crate) type DbConnection = <Db as QueryExecutor>::Connection;
+pub(crate) type DbBackend = <DbConnection as Connection>::Backend;
+
 /// A generic boxed query (compatible with the return type of `into_boxed` on diesel's table DSL).
 ///
 /// - ST is the SqlType of the rows selected.

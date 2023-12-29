@@ -553,11 +553,11 @@ pub mod tests {
             .build_schema();
 
         let resp = schema
-            .execute("{ checkpointConnection { nodes { sequenceNumber } } }")
+            .execute("{ checkpoints { nodes { sequenceNumber } } }")
             .await;
         let data = resp.data.clone().into_json().unwrap();
         let checkpoints = data
-            .get("checkpointConnection")
+            .get("checkpoints")
             .unwrap()
             .get("nodes")
             .unwrap()
@@ -570,11 +570,11 @@ pub mod tests {
         );
 
         let resp = schema
-            .execute("{ checkpointConnection(first: 2) { nodes { sequenceNumber } } }")
+            .execute("{ checkpoints(first: 2) { nodes { sequenceNumber } } }")
             .await;
         let data = resp.data.clone().into_json().unwrap();
         let checkpoints = data
-            .get("checkpointConnection")
+            .get("checkpoints")
             .unwrap()
             .get("nodes")
             .unwrap()
