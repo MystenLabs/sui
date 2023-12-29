@@ -900,7 +900,6 @@ impl PgManager {
     ) -> Result<Option<Object>, Error> {
         let address = address.into_vec();
         let version = version.map(|v| v as i64);
-        println!("fetch_obj: address: {:?}, version: {:?}", address, version);
 
         match version {
             Some(version) => self
