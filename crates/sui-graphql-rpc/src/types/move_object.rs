@@ -95,7 +95,11 @@ impl TryFrom<&Object> for MoveObject {
     type Error = MoveObjectDowncastError;
 
     fn try_from(object: &Object) -> Result<Self, Self::Error> {
-        if let Data::Move(move_object) = &object.native.data {
+        let Some(native) = object.state.native() else {
+            return Err(MoveObjectDowncastError);
+        };
+
+        if let Data::Move(move_object) = &native.data {
             Ok(Self {
                 super_: object.clone(),
                 native: move_object.clone(),

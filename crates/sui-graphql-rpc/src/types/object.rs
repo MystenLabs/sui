@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{connection::Connection, *};
-use fastcrypto::encoding::{Base58, Encoding};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
-use sui_indexer::models_v2::objects::StoredObject;
+use sui_indexer::models_v2::objects::{StoredHistoryObject, StoredObject};
+use sui_indexer::types_v2::ObjectStatus as NativeObjectStatus;
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_package_resolver::Resolver;
 use sui_types::dynamic_field::DynamicFieldType;
@@ -32,12 +32,24 @@ use sui_types::object::{
 #[derive(Clone, Debug)]
 pub(crate) struct Object {
     pub address: SuiAddress,
+    pub state: ObjectState,
 
     /// Representation of an Object in the Indexer's Store.
     pub stored: Option<StoredObject>,
+}
 
-    /// Deserialized representation of `stored_object.serialized_object`.
-    pub native: NativeObject,
+#[derive(Clone, Debug)]
+pub(crate) enum ObjectState {
+    /// The object is not deleted, wrapped, or outside the consistent read range, and the
+    /// object's contents can be loaded from the live objects or historical objects table.
+    Active(NativeObject),
+    /// The object's contents are available but not indexed yet. This is typically read from
+    /// the serialized contents of a transaction.
+    NotIndexed(NativeObject),
+    /// The object is wrapped or deleted and only partial information can be loaded from the indexer.
+    WrappedOrDeleted,
+    /// The requested object falls outside of the consistent read range supported by the indexer.
+    OutsideConsistentReadRange,
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
@@ -76,37 +88,62 @@ pub(crate) struct ObjectKey {
     version: u64,
 }
 
+impl ObjectState {
+    pub(crate) fn native(&self) -> Option<&NativeObject> {
+        match self {
+            ObjectState::Active(native) | ObjectState::NotIndexed(native) => Some(native),
+            ObjectState::WrappedOrDeleted | ObjectState::OutsideConsistentReadRange => None,
+        }
+    }
+
+    pub(crate) fn status(&self) -> &str {
+        match self {
+            ObjectState::Active(_) => "Active",
+            ObjectState::NotIndexed(_) => "NotIndexed",
+            ObjectState::WrappedOrDeleted => "WrappedOrDeleted",
+            ObjectState::OutsideConsistentReadRange => "OutsideConsistentReadRange",
+        }
+    }
+}
+
 #[Object]
 impl Object {
-    async fn version(&self) -> u64 {
-        self.native.version().value()
+    async fn version(&self) -> Option<u64> {
+        self.state.native().map(|native| native.version().value())
+    }
+
+    async fn status(&self) -> &str {
+        self.state.status()
     }
 
     /// 32-byte hash that identifies the object's current contents, encoded as a Base58 string.
-    async fn digest(&self) -> String {
-        if let Some(stored) = &self.stored {
-            Base58::encode(&stored.object_digest)
-        } else {
-            self.native.digest().base58_encode()
-        }
+    async fn digest(&self) -> Option<String> {
+        self.state
+            .native()
+            .map(|native| native.digest().base58_encode())
     }
 
     /// The amount of SUI we would rebate if this object gets deleted or mutated.
     /// This number is recalculated based on the present storage gas price.
     async fn storage_rebate(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.native.storage_rebate))
+        self.state
+            .native()
+            .map(|native| BigInt::from(native.storage_rebate))
     }
 
     /// The set of named templates defined on-chain for the type of this object,
     /// to be handled off-chain. The server substitutes data from the object
     /// into these templates to generate a display string per template.
     async fn display(&self, ctx: &Context<'_>) -> Result<Option<Vec<DisplayEntry>>> {
+        let Some(native) = self.state.native() else {
+            return Ok(None);
+        };
+
         let resolver: &Resolver<PackageCache> = ctx
             .data()
             .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
             .extend()?;
-        let move_object = self
-            .native
+        let move_object = native
             .data
             .try_as_move()
             .ok_or_else(|| Error::Internal("Failed to convert object into MoveObject".to_string()))
@@ -138,20 +175,20 @@ impl Object {
 
     /// The Base64 encoded bcs serialization of the object's content.
     async fn bcs(&self) -> Result<Option<Base64>> {
-        if let Some(stored) = &self.stored {
-            Ok(Some(Base64::from(&stored.serialized_object)))
-        } else {
-            let bytes = bcs::to_bytes(&self.native)
-                .map_err(|e| {
-                    Error::Internal(format!(
-                        "Failed to serialize object at {}: {e}",
-                        self.address,
-                    ))
-                })
-                .extend()?;
+        let Some(native) = self.state.native() else {
+            return Ok(None);
+        };
 
-            Ok(Some(Base64::from(&bytes)))
-        }
+        let bytes = bcs::to_bytes(native)
+            .map_err(|e| {
+                Error::Internal(format!(
+                    "Failed to serialize object at {}: {e}",
+                    self.address,
+                ))
+            })
+            .extend()?;
+
+        Ok(Some(Base64::from(&bytes)))
     }
 
     /// The transaction block that created this version of the object.
@@ -159,7 +196,11 @@ impl Object {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<TransactionBlock>> {
-        let digest = self.native.previous_transaction.to_string();
+        let Some(native) = self.state.native() else {
+            return Ok(None);
+        };
+
+        let digest = native.previous_transaction.to_string();
         ctx.data_unchecked::<PgManager>()
             .fetch_tx(digest.as_str())
             .await
@@ -169,9 +210,13 @@ impl Object {
     /// Objects can either be immutable, shared, owned by an address,
     /// or are child objects (part of a dynamic field)
     async fn kind(&self) -> Option<ObjectKind> {
+        let Some(native) = self.state.native() else {
+            return None;
+        };
+
         use NativeOwner as O;
         use ObjectKind as K;
-        Some(match self.native.owner {
+        Some(match native.owner {
             O::AddressOwner(_) => K::Owned,
             O::ObjectOwner(_) => K::Child,
             O::Shared { .. } => K::Shared,
@@ -182,8 +227,12 @@ impl Object {
     /// The Address or Object that owns this Object.  Immutable and Shared Objects do not have
     /// owners.
     async fn owner(&self) -> Option<Owner> {
+        let Some(native) = self.state.native() else {
+            return None;
+        };
+
         use NativeOwner as O;
-        let (O::AddressOwner(address) | O::ObjectOwner(address)) = self.native.owner else {
+        let (O::AddressOwner(address) | O::ObjectOwner(address)) = native.owner else {
             return None;
         };
 
@@ -369,8 +418,8 @@ impl Object {
     pub(crate) fn from_native(address: SuiAddress, native: NativeObject) -> Object {
         Object {
             address,
+            state: ObjectState::NotIndexed(native),
             stored: None,
-            native,
         }
     }
 }
@@ -385,9 +434,46 @@ impl TryFrom<StoredObject> for Object {
 
         Ok(Self {
             address,
+            state: ObjectState::Active(native_object),
             stored: Some(stored_object),
-            native: native_object,
         })
+    }
+}
+
+impl TryFrom<StoredHistoryObject> for Object {
+    type Error = Error;
+
+    fn try_from(history_object: StoredHistoryObject) -> Result<Self, Error> {
+        let address = addr(&history_object.object_id)?;
+
+        if history_object.object_status == NativeObjectStatus::Active as i16 {
+            let Some(serialized_object) = history_object.serialized_object else {
+                return Err(Error::Internal(format!(
+                    "Live object {} at version {} cannot have missing serialized_object field",
+                    address, history_object.object_version
+                )));
+            };
+
+            let native_object = bcs::from_bytes(&serialized_object)
+                .map_err(|_| Error::Internal(format!("Failed to deserialize object {address}")))?;
+
+            Ok(Self {
+                address,
+                state: ObjectState::Active(native_object),
+                stored: None,
+            })
+        } else if history_object.object_status == NativeObjectStatus::WrappedOrDeleted as i16 {
+            Ok(Self {
+                address,
+                state: ObjectState::WrappedOrDeleted,
+                stored: None,
+            })
+        } else {
+            Err(Error::Internal(format!(
+                "Unknown object status {} for object {} at version {}",
+                history_object.object_status, address, history_object.object_version
+            )))
+        }
     }
 }
 

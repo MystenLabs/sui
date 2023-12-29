@@ -184,7 +184,13 @@ impl MovePackage {
     fn parsed_package(&self) -> Result<ParsedMovePackage, Error> {
         // TODO: Leverage the package cache (attempt to read from it, and if that doesn't succeed,
         // write back the parsed Package to the cache as well.)
-        ParsedMovePackage::read(&self.super_.native)
+        let Some(native) = self.super_.state.native() else {
+            return Err(Error::Internal(format!(
+                "This should be unreachable as we cannot downcast if native is None"
+            )));
+        };
+
+        ParsedMovePackage::read(native)
             .map_err(|e| Error::Internal(format!("Error reading package: {e}")))
     }
 
@@ -212,7 +218,11 @@ impl TryFrom<&Object> for MovePackage {
     type Error = MovePackageDowncastError;
 
     fn try_from(object: &Object) -> Result<Self, Self::Error> {
-        if let Data::Package(move_package) = &object.native.data {
+        let Some(native) = object.state.native() else {
+            return Err(MovePackageDowncastError);
+        };
+
+        if let Data::Package(move_package) = &native.data {
             Ok(Self {
                 super_: object.clone(),
                 native: move_package.clone(),
