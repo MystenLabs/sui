@@ -804,6 +804,32 @@ impl UseDef {
         // name - we need to retrieve the correct source-level length
         // from the map, otherwise on-hover may not work correctly
         // if AST-level and source-level lengths are different.
+        //
+        // To illustrate it with an example, in the source we may have:
+        //
+        // module Symbols::M9 {
+        //     use Symbols::M1 as ALIAS_M1;
+        //
+        //    struct SomeStruct  {
+        //        some_field: ALIAS_M1::AnotherStruct,
+        //    }
+        // }
+        //
+        // In the (typed) AST we will however have:
+        //
+        // module Symbols::M9 {
+        //     use Symbols::M1 as ALIAS_M1;
+        //
+        //    struct SomeStruct  {
+        //        some_field: M1::AnotherStruct,
+        //    }
+        // }
+        //
+        // As a result, when trying to connect the "use" of module alias with
+        // the module definition, at the level of (typed) AST we will have
+        // identifier of the wrong length which may mess up on-hover and go-to-default
+        // (hovering over a portion of a longer alias may not trigger either).
+
         let use_name_len = match mod_name_lengths.get(&use_start) {
             Some(l) => *l,
             None => use_name.len(),
