@@ -5,7 +5,8 @@ use async_graphql::{connection::Connection, *};
 use fastcrypto::encoding::{Base58, Encoding};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
-use sui_indexer::models_v2::objects::StoredObject;
+use sui_indexer::models_v2::objects::{StoredHistoryObject, StoredObject};
+use sui_indexer::types_v2::ObjectStatus;
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_package_resolver::Resolver;
 use sui_types::dynamic_field::DynamicFieldType;
@@ -386,6 +387,36 @@ impl TryFrom<StoredObject> for Object {
         Ok(Self {
             address,
             stored: Some(stored_object),
+            native: native_object,
+        })
+    }
+}
+
+impl TryFrom<StoredHistoryObject> for Object {
+    type Error = Error;
+
+    fn try_from(history_object: StoredHistoryObject) -> Result<Self, Error> {
+        let address = addr(&history_object.object_id)?;
+        if history_object.object_status != ObjectStatus::Active as i16 {
+            return Err(Error::Internal(format!(
+                "Object {} at version {} is wrapped or deleted",
+                address, history_object.object_version
+            )));
+        }
+
+        let Some(serialized_object) = history_object.serialized_object else {
+            return Err(Error::Internal(format!(
+                "Active object {} at version {} cannot have missing serialized_object field",
+                address, history_object.object_version
+            )));
+        };
+
+        let native_object = bcs::from_bytes(&serialized_object)
+            .map_err(|_| Error::Internal(format!("Failed to deserialize object {address}")))?;
+
+        Ok(Self {
+            address,
+            stored: None,
             native: native_object,
         })
     }
