@@ -12,6 +12,7 @@ use async_trait::async_trait;
 use axum::Json;
 use ethers::types::TxHash;
 use sui_sdk::SuiClient as SuiSdkClient;
+use sui_types::digests::TransactionDigest;
 
 #[async_trait]
 pub trait BridgeRequestHandlerTrait {
@@ -33,11 +34,10 @@ pub trait BridgeRequestHandlerTrait {
     ) -> Result<Json<SignedBridgeAction>, BridgeError>;
 }
 
-// TODO: reconfig?
 pub struct BridgeRequestHandler {
     signer: BridgeAuthorityKeyPair,
     eth_client: EthClient<ethers::providers::Http>,
-    _sui_client: SuiClient<SuiSdkClient>,
+    sui_client: SuiClient<SuiSdkClient>,
 }
 
 #[allow(clippy::new_without_default)]
@@ -69,9 +69,20 @@ impl BridgeRequestHandlerTrait for BridgeRequestHandler {
 
     async fn handle_sui_tx_digest(
         &self,
-        _tx_digest_base58: String,
-        _event_idx: u16,
+        tx_digest_base58: String,
+        event_idx: u16,
     ) -> Result<Json<SignedBridgeAction>, BridgeError> {
-        unimplemented!()
+        // TODO add caching and avoid simultaneous requests
+        let tx_digest = TransactionDigest::from_str(&tx_digest_base58)
+            .map_err(|_e| BridgeError::InvalidTxHash)?;
+        let bridge_action = self
+            .sui_client
+            .get_bridge_action_by_tx_digest_and_event_idx(&tx_digest, event_idx)
+            .await?;
+        let sig = BridgeAuthoritySignInfo::new(&bridge_action, &self.signer);
+        Ok(Json(SignedBridgeAction::new_from_data_and_sig(
+            bridge_action,
+            sig,
+        )))
     }
 }
