@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{string_input::impl_string_input, sui_address::SuiAddress};
-use crate::data::{DieselBackend, Query};
+use crate::data::{DieselBackend, Query, RawSqlQuery};
 use async_graphql::*;
 use diesel::{
     expression::{is_aggregate::No, ValidGrouping},
@@ -100,6 +100,37 @@ impl TypeFilter {
             TypeFilter::ByType(tag) => {
                 let exact = tag.to_canonical_string(/* with_prefix */ true);
                 query.filter(field.eq(exact))
+            }
+        }
+    }
+
+    /// Modify `query` to apply this filter to `field`, returning the new query.
+    pub(crate) fn apply_raw(&self, query: &mut RawSqlQuery, field: &str) {
+        match self {
+            TypeFilter::ByModule(ModuleFilter::ByPackage(p)) => {
+                query.and_filter(format!("{} LIKE '{}::%'", field, p));
+            }
+
+            TypeFilter::ByModule(ModuleFilter::ByModule(p, m)) => {
+                query.and_filter(format!("{} LIKE '{}::{}::%'", field, p, m));
+            }
+
+            // A type filter without type parameters is interpreted as either an exact match, or a
+            // match for all generic instantiations of the type.
+            TypeFilter::ByType(TypeTag::Struct(tag)) if tag.type_params.is_empty() => {
+                query.and_filter(format!(
+                    "({field} = '{type_}' OR {field} LIKE '{type_}<%')",
+                    field = field,
+                    type_ = tag.to_canonical_display(/* with_prefix */ true)
+                ));
+            }
+
+            TypeFilter::ByType(tag) => {
+                query.and_filter(format!(
+                    "{field} = '{type_}'",
+                    field = field,
+                    type_ = tag.to_canonical_string(/* with_prefix */ true)
+                ));
             }
         }
     }

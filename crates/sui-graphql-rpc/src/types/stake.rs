@@ -113,7 +113,7 @@ impl StakedSui {
             ..Default::default()
         };
 
-        Object::paginate_subtype(db, page, filter, |object| {
+        Object::paginate_subtype(db, page, None, filter, |object| {
             let address = object.address;
             let move_object = MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(
