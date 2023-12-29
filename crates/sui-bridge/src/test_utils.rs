@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::abi::{ExampleContractEvents, TransferFilter};
+use crate::abi::EthToSuiTokenBridgeV1;
 use crate::eth_mock_provider::EthMockProvider;
 use crate::server::mock_handler::run_mock_server;
 use crate::{
@@ -19,6 +19,7 @@ use ethers::types::{
     Block, BlockNumber, Filter, FilterBlockOption, Log, TransactionReceipt, TxHash, ValueOrArray,
     U64,
 };
+use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::KeyPair;
 use hex_literal::hex;
 use std::net::IpAddr;
@@ -52,7 +53,7 @@ pub fn get_test_sui_to_eth_bridge_action(
     sui_tx_digest: Option<TransactionDigest>,
     sui_tx_event_index: Option<u16>,
     nonce: Option<u64>,
-    amount: Option<u128>,
+    amount: Option<u64>,
 ) -> BridgeAction {
     BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
         sui_tx_digest: sui_tx_digest.unwrap_or_else(TransactionDigest::random),
@@ -173,36 +174,60 @@ pub fn get_test_log_and_action(
     tx_hash: TxHash,
     event_index: u16,
 ) -> (Log, BridgeAction) {
+    let token_code = 3u8;
+    let amount = 10000000u64;
+    let source_address = EthAddress::random();
+    let sui_address: SuiAddress = SuiAddress::random_for_testing_only();
+    let target_address = Hex::decode(&sui_address.to_string()).unwrap();
+    // Note: must use `encode` rather than `encode_packged`
+    let encoded = ethers::abi::encode(&[
+        // u8 is encoded as u256 in abi standard
+        ethers::abi::Token::Uint(ethers::types::U256::from(token_code)),
+        ethers::abi::Token::Uint(ethers::types::U256::from(amount)),
+        ethers::abi::Token::Address(source_address),
+        ethers::abi::Token::Bytes(target_address.clone()),
+    ]);
     let log = Log {
         address: contract_address,
         topics: vec![
             long_signature(
-                "Transfer",
-                &[ParamType::Address, ParamType::Address, ParamType::Uint(256)],
+                "TokensBridgedToSui",
+                &[
+                    ParamType::Uint(8),
+                    ParamType::Uint(64),
+                    ParamType::Uint(8),
+                    ParamType::Uint(8),
+                    ParamType::Uint(64),
+                    ParamType::Address,
+                    ParamType::Bytes,
+                ],
             ),
-            hex!("ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef").into(),
-            hex!("000000000000000000000000dbf5e9c5206d0db70a90108bf936da60221dc080").into(),
+            hex!("0000000000000000000000000000000000000000000000000000000000000001").into(), // chain id: sui testnet
+            hex!("0000000000000000000000000000000000000000000000000000000000000010").into(), // nonce: 16
+            hex!("000000000000000000000000000000000000000000000000000000000000000b").into(), // chain id: sepolia
         ],
-        data: hex!(
-            "
-            0000000000000000000000000000000000000000000000000000000000000003
-            "
-        )
-        .into(),
+        data: encoded.into(),
         block_hash: Some(TxHash::random()),
         block_number: Some(1.into()),
         transaction_hash: Some(tx_hash),
         log_index: Some(0.into()),
         ..Default::default()
     };
+    let topic_1: [u8; 32] = log.topics[1].into();
+    let topic_3: [u8; 32] = log.topics[3].into();
+
     let bridge_action = BridgeAction::EthToSuiBridgeAction(EthToSuiBridgeAction {
         eth_tx_hash: tx_hash,
         eth_event_index: event_index,
-        eth_bridge_event: ExampleContractEvents::TransferFilter(TransferFilter {
-            from: log.topics[1].into(),
-            to: log.topics[2].into(),
-            amount: 3.into(), // matches `data` in log
-        }),
+        eth_bridge_event: EthToSuiTokenBridgeV1 {
+            eth_chain_id: BridgeChainId::try_from(topic_1[topic_1.len() - 1]).unwrap(),
+            nonce: u64::from_be_bytes(log.topics[2].as_ref()[24..32].try_into().unwrap()),
+            sui_chain_id: BridgeChainId::try_from(topic_3[topic_3.len() - 1]).unwrap(),
+            token_id: TokenId::try_from(token_code).unwrap(),
+            amount,
+            sui_address,
+            eth_address: source_address,
+        },
     });
     (log, bridge_action)
 }

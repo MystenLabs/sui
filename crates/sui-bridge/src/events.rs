@@ -22,7 +22,7 @@ use sui_json_rpc_types::SuiEvent;
 use sui_types::base_types::SuiAddress;
 use sui_types::digests::TransactionDigest;
 
-// TODO: Placeholder, this will need to match the actual event types defined in Move
+// This is the event structure defined and emitted in Move
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct EmittedSuiToEthTokenBridgeV1 {
     pub nonce: u64,
@@ -31,7 +31,7 @@ pub struct EmittedSuiToEthTokenBridgeV1 {
     pub sui_address: SuiAddress,
     pub eth_address: EthAddress,
     pub token_id: TokenId,
-    pub amount: u128,
+    pub amount: u64,
 }
 
 const EMITTED_SUI_TO_ETH_TOKEN_BRIDGE_V1_STUCT_TAG: &str =
