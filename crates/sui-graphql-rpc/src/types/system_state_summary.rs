@@ -6,11 +6,11 @@ use super::{
     storage_fund::StorageFund, system_parameters::SystemParameters,
 };
 use async_graphql::*;
-use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary as NativeSuiSystemStateSummary;
+use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary as NativeSystemStateSummary;
 
 #[derive(Clone, Debug)]
 pub(crate) struct SystemStateSummary {
-    pub native: NativeSuiSystemStateSummary,
+    pub native: NativeSystemStateSummary,
 }
 
 /// Aspects that affect the running of the system that are managed by the validators either
@@ -18,6 +18,7 @@ pub(crate) struct SystemStateSummary {
 #[Object]
 impl SystemStateSummary {
     /// SUI set aside to account for objects stored on-chain, at the start of the epoch.
+    /// This is also used for object rebates.
     async fn storage_fund(&self) -> Option<StorageFund> {
         Some(StorageFund {
             total_object_storage_rebates: Some(BigInt::from(
@@ -29,7 +30,7 @@ impl SystemStateSummary {
         })
     }
 
-    /// Information about whether the start of this epoch was in safe mode, which happens if the full epoch
+    /// Information about whether this epoch was started in safe mode, which happens if the full epoch
     /// change logic fails for some reason.
     async fn safe_mode(&self) -> Option<SafeMode> {
         Some(SafeMode {
@@ -55,7 +56,7 @@ impl SystemStateSummary {
         Some(SystemParameters {
             duration_ms: Some(BigInt::from(self.native.epoch_duration_ms)),
             stake_subsidy_start_epoch: Some(self.native.stake_subsidy_start_epoch),
-            // min validator count can be extracted, but it requires some JSON RPC changes,
+            // TODO min validator count can be extracted, but it requires some JSON RPC changes,
             // so we decided to wait on it for now.
             min_validator_count: None,
             max_validator_count: Some(self.native.max_validator_count),

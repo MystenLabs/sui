@@ -29,7 +29,9 @@ pub(crate) enum FunctionalGroup {
     /// Transaction and Event subscriptions.
     Subscriptions,
 
-    /// Information about the system that changes from epoch to epoch.
+    /// Information about the system that changes from epoch to epoch, such as
+    /// aspects that affect the running of the system that are managed by the validators either
+    /// directly, or through system transactions.
     SystemState,
 }
 
