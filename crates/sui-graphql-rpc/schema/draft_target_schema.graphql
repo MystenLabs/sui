@@ -596,8 +596,12 @@ type Epoch {
   fundOutflow: BigInt
 
   # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
-  # Note that SystemState's fields are flattened
-  systemState: SystemState
+  # SystemState fields
+  storageFund: StorageFund
+  safeMode: SafeMode
+  systemStateVersion: BigInt
+  systemParameters: SystemParameters
+  systemStakeSubsidy: StakeSubsidy
 
   checkpoints(
     first: Int,
@@ -614,15 +618,6 @@ type Epoch {
     # Enhancement (post-MVP) relies on compound filters.
     filter: TransactionBlockFilter,
   ): TransactionBlockConnection!
-}
-
-type SystemState {
-  version: Int
-
-  systemParameters: SystemParameters
-  stakeSubsidy: StakeSubsidy
-  storageFund: StorageFund
-  safeMode: SafeMode
 }
 
 type ProtocolConfigs {

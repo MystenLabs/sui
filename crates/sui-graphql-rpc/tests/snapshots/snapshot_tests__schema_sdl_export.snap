@@ -642,10 +642,11 @@ type Epoch {
 	protocolConfigs: ProtocolConfigs
 	"""
 	SUI set aside to account for objects stored on-chain, at the start of the epoch.
+	This is also used for object rebates.
 	"""
 	storageFund: StorageFund
 	"""
-	Information about whether the start of this epoch was in safe mode, which happens if the full epoch
+	Information about whether this epoch was started in safe mode, which happens if the full epoch
 	change logic fails for some reason.
 	"""
 	safeMode: SafeMode
@@ -808,7 +809,9 @@ enum Feature {
 	"""
 	SUBSCRIPTIONS
 	"""
-	Information about the system that changes from epoch to epoch.
+	Information about the system that changes from epoch to epoch, such as
+	aspects that affect the running of the system that are managed by the validators either
+	directly, or through system transactions.
 	"""
 	SYSTEM_STATE
 }
