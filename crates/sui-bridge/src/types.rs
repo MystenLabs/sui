@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::abi::ExampleContractEvents;
+use crate::abi::EthToSuiTokenBridgeV1;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::crypto::{BridgeAuthorityPublicKey, BridgeAuthoritySignInfo, BridgeAuthoritySignature};
 use crate::error::{BridgeError, BridgeResult};
@@ -11,6 +11,7 @@ use ethers::types::Log;
 use ethers::types::H256;
 pub use ethers::types::H256 as EthTransactionHash;
 use fastcrypto::hash::{HashFunction, Keccak256};
+use num_enum::TryFromPrimitive;
 use rand::seq::SliceRandom;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -155,7 +156,7 @@ pub const ETH_TX_HASH_LENGTH: usize = 32;
 
 pub const BRIDGE_MESSAGE_PREFIX: &[u8] = b"SUI_BRIDGE_MESSAGE";
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, TryFromPrimitive)]
 #[repr(u8)]
 pub enum BridgeChainId {
     SuiMainnet = 0,
@@ -166,7 +167,7 @@ pub enum BridgeChainId {
     EthSepolia = 11,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TryFromPrimitive)]
 #[repr(u8)]
 pub enum TokenId {
     Sui = 0,
@@ -191,8 +192,7 @@ pub struct EthToSuiBridgeAction {
     pub eth_tx_hash: EthTransactionHash,
     // The index of the event in the transaction
     pub eth_event_index: u16,
-    // TODO placeholder
-    pub eth_bridge_event: ExampleContractEvents,
+    pub eth_bridge_event: EthToSuiTokenBridgeV1,
 }
 
 /// The type of actions Bridge Committee verify and sign off to execution.
@@ -353,7 +353,7 @@ mod tests {
         let sui_address = SuiAddress::random_for_testing_only();
         let eth_address = EthAddress::random();
         let token_id = TokenId::USDC;
-        let amount = 1_000_000u128;
+        let amount = 1_000_000;
 
         let sui_bridge_event = EmittedSuiToEthTokenBridgeV1 {
             nonce,
@@ -389,7 +389,7 @@ mod tests {
         let eth_address_bytes = eth_address.as_bytes().to_vec(); // len: 20
 
         let token_id_bytes = vec![token_id as u8]; // len: 1
-        let token_amount_bytes = amount.to_le_bytes().to_vec(); // len: 16
+        let token_amount_bytes = amount.to_le_bytes().to_vec(); // len: 8
 
         let mut combined_bytes = Vec::new();
         combined_bytes.extend_from_slice(&prefix_bytes);
@@ -414,7 +414,7 @@ mod tests {
         // TODO: for each action type add a test to assert the length
         assert_eq!(
             combined_bytes.len(),
-            18 + 1 + 1 + 8 + 1 + 1 + 32 + 2 + 1 + 32 + 1 + 20 + 1 + 1 + 16
+            18 + 1 + 1 + 8 + 1 + 1 + 32 + 2 + 1 + 32 + 1 + 20 + 1 + 1 + 8
         );
 
         Ok(())

@@ -11460,6 +11460,7 @@ dependencies = [
  "hex-literal 0.3.4",
  "move-core-types",
  "mysten-metrics",
+ "num_enum 0.6.1",
  "once_cell",
  "prometheus",
  "rand 0.8.5",
