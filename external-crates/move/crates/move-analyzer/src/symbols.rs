@@ -1609,7 +1609,7 @@ impl<'a> ParsingSymbolicator<'a> {
                     let mod_ident_str = format!("{leading_name}::{mod_name}");
                     let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
                         debug_assert!(false);
-                        return;
+                        continue;
                     };
                     self.mod_name_symbol(mod_name, mod_defs, mod_ident_str.clone());
                     self.mod_use_symbols(mod_use, mod_defs, mod_ident_str);
