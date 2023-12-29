@@ -5,6 +5,7 @@ use crate::context_data::db_data_provider::PgManager;
 
 use super::big_int::BigInt;
 use super::move_object::MoveObject;
+use super::object::ObjectVersionKey;
 use super::sui_address::SuiAddress;
 use super::validator_credentials::ValidatorCredentials;
 use super::{address::Address, base64::Base64};
@@ -86,25 +87,37 @@ impl Validator {
     /// the operation ability to another address. The address holding this `Cap` object
     /// can then update the reference gas price and tallying rule on behalf of the validator.
     async fn operation_cap(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
-        MoveObject::query(ctx.data_unchecked(), self.operation_cap_id(), None)
-            .await
-            .extend()
+        MoveObject::query(
+            ctx.data_unchecked(),
+            self.operation_cap_id(),
+            ObjectVersionKey::Latest,
+        )
+        .await
+        .extend()
     }
 
     /// The validator's current staking pool object, used to track the amount of stake
     /// and to compound staking rewards.
     async fn staking_pool(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
-        MoveObject::query(ctx.data_unchecked(), self.staking_pool_id(), None)
-            .await
-            .extend()
+        MoveObject::query(
+            ctx.data_unchecked(),
+            self.staking_pool_id(),
+            ObjectVersionKey::Latest,
+        )
+        .await
+        .extend()
     }
 
     /// The validator's current exchange object. The exchange rate is used to determine
     /// the amount of SUI tokens that each past SUI staker can withdraw in the future.
     async fn exchange_rates(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
-        MoveObject::query(ctx.data_unchecked(), self.exchange_rates_id(), None)
-            .await
-            .extend()
+        MoveObject::query(
+            ctx.data_unchecked(),
+            self.exchange_rates_id(),
+            ObjectVersionKey::Latest,
+        )
+        .await
+        .extend()
     }
 
     /// Number of exchange rates in the table.

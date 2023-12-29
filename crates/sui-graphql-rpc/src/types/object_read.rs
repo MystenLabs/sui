@@ -4,7 +4,10 @@
 use async_graphql::*;
 use sui_types::base_types::ObjectRef as NativeObjectRef;
 
-use super::{object::Object, sui_address::SuiAddress};
+use super::{
+    object::{Object, ObjectVersionKey},
+    sui_address::SuiAddress,
+};
 
 // A helper type representing the read of a specific version of an object. Intended to be
 // "flattened" into other GraphQL types.
@@ -34,7 +37,7 @@ impl ObjectRead {
         Object::query(
             ctx.data_unchecked(),
             self.address_impl(),
-            Some(self.version_impl()),
+            ObjectVersionKey::Historical(self.version_impl()),
         )
         .await
         .extend()
