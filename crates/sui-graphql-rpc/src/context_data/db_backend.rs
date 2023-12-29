@@ -7,7 +7,7 @@ use diesel::{
 };
 use sui_indexer::{
     models_v2::epoch::QueryableEpochInfo,
-    schema_v2::{checkpoints, display, epochs, events, objects, transactions},
+    schema_v2::{checkpoints, display, epochs, events, objects, objects_history, transactions},
     types_v2::OwnerType,
 };
 
@@ -38,7 +38,13 @@ pub type QueryableEpochInfoType<DB> = SqlTypeOf<AsSelect<QueryableEpochInfo, DB>
 
 pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn get_tx_by_digest(digest: Vec<u8>) -> transactions::BoxedQuery<'static, DB>;
-    fn get_obj(address: Vec<u8>, version: Option<i64>) -> objects::BoxedQuery<'static, DB>;
+    fn get_obj(address: Vec<u8>) -> objects::BoxedQuery<'static, DB>;
+    fn get_obj_at_version(
+        address: Vec<u8>,
+        version: i64,
+        range_left: i64,
+        range_right: i64,
+    ) -> objects_history::BoxedQuery<'static, DB>;
     fn get_obj_by_type(object_type: String) -> objects::BoxedQuery<'static, DB>;
     fn get_epoch_info(epoch_id: i64)
         -> epochs::BoxedQuery<'static, DB, QueryableEpochInfoType<DB>>;

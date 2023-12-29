@@ -48,8 +48,12 @@ use sui_indexer::{
     apis::GovernanceReadApiV2,
     indexer_reader::IndexerReader,
     models_v2::{
-        checkpoints::StoredCheckpoint, display::StoredDisplay, epoch::QueryableEpochInfo,
-        events::StoredEvent, objects::StoredObject, transactions::StoredTransaction,
+        checkpoints::StoredCheckpoint,
+        display::StoredDisplay,
+        epoch::QueryableEpochInfo,
+        events::StoredEvent,
+        objects::{StoredHistoryObject, StoredObject},
+        transactions::StoredTransaction,
     },
     schema_v2::transactions,
     types_v2::OwnerType,
@@ -173,14 +177,34 @@ impl PgManager {
         .await
     }
 
-    async fn get_obj(
+    async fn get_obj(&self, address: Vec<u8>) -> Result<Option<StoredObject>, Error> {
+        self.run_query_async_with_cost(
+            move || Ok(QueryBuilder::get_obj(address.clone())),
+            |query| move |conn| query.get_result::<StoredObject>(conn).optional(),
+        )
+        .await
+    }
+
+    async fn get_obj_at_version(
         &self,
         address: Vec<u8>,
-        version: Option<i64>,
-    ) -> Result<Option<StoredObject>, Error> {
+        version: i64,
+    ) -> Result<Option<StoredHistoryObject>, Error> {
+        let (start, end) = self
+            .inner
+            .spawn_blocking(|this| this.get_consistent_read_range())
+            .await?;
+
         self.run_query_async_with_cost(
-            move || Ok(QueryBuilder::get_obj(address.clone(), version)),
-            |query| move |conn| query.get_result::<StoredObject>(conn).optional(),
+            move || {
+                Ok(QueryBuilder::get_obj_at_version(
+                    address.clone(),
+                    version,
+                    start,
+                    end,
+                ))
+            },
+            |query| move |conn| query.get_result::<StoredHistoryObject>(conn).optional(),
         )
         .await
     }
@@ -876,9 +900,20 @@ impl PgManager {
     ) -> Result<Option<Object>, Error> {
         let address = address.into_vec();
         let version = version.map(|v| v as i64);
+        println!("fetch_obj: address: {:?}, version: {:?}", address, version);
 
-        let stored_obj = self.get_obj(address, version).await?;
-        stored_obj.map(Object::try_from).transpose()
+        match version {
+            Some(version) => self
+                .get_obj_at_version(address, version)
+                .await?
+                .map(Object::try_from)
+                .transpose(),
+            None => self
+                .get_obj(address)
+                .await?
+                .map(Object::try_from)
+                .transpose(),
+        }
     }
 
     pub(crate) async fn fetch_move_obj(
@@ -1474,7 +1509,7 @@ impl PgManager {
         )
         .map_err(|e| Error::Internal(format!("Deriving dynamic field id cannot fail: {e}")))?;
 
-        let stored_obj = self.get_obj(id.to_vec(), None).await?;
+        let stored_obj = self.get_obj(id.to_vec()).await?;
         if let Some(stored_object) = stored_obj {
             let df_object_id = stored_object.df_object_id.as_ref().ok_or_else(|| {
                 Error::Internal("Dynamic field does not have df_object_id".to_string())

@@ -24,8 +24,8 @@ use std::str::FromStr;
 use sui_indexer::{
     models_v2::epoch::QueryableEpochInfo,
     schema_v2::{
-        checkpoints, display, epochs, events, objects, transactions, tx_calls, tx_changed_objects,
-        tx_input_objects, tx_recipients, tx_senders,
+        checkpoints, display, epochs, events, objects, objects_history, transactions, tx_calls,
+        tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
     },
     types_v2::OwnerType,
 };
@@ -45,15 +45,32 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
             .filter(transactions::dsl::transaction_digest.eq(digest))
             .into_boxed()
     }
-    fn get_obj(address: Vec<u8>, version: Option<i64>) -> objects::BoxedQuery<'static, Pg> {
-        let mut query = objects::dsl::objects.into_boxed();
-        query = query.filter(objects::dsl::object_id.eq(address));
 
-        if let Some(version) = version {
-            query = query.filter(objects::dsl::object_version.eq(version));
-        }
-        query
+    fn get_obj(address: Vec<u8>) -> objects::BoxedQuery<'static, Pg> {
+        objects::dsl::objects
+            .filter(objects::dsl::object_id.eq(address))
+            .into_boxed()
     }
+
+    /// Builds a query to get the object at a specific version.
+    /// The indexer table is partitioned on checkpoint_sequence_number,
+    /// so we can build an efficient query if we pre-fetch the db's available range.
+    /// In comparison, determining the bounding range in the same query will cause the query planner to search all partitions.
+    fn get_obj_at_version(
+        address: Vec<u8>,
+        version: i64,
+        range_left: i64,
+        range_right: i64,
+    ) -> objects_history::BoxedQuery<'static, Pg> {
+        objects_history::dsl::objects_history
+            .filter(objects_history::dsl::object_id.eq(address))
+            .filter(objects_history::dsl::object_version.eq(version))
+            .filter(
+                objects_history::dsl::checkpoint_sequence_number.between(range_left, range_right),
+            )
+            .into_boxed()
+    }
+
     fn get_obj_by_type(object_type: String) -> objects::BoxedQuery<'static, Pg> {
         objects::dsl::objects
             .filter(objects::dsl::object_type.eq(object_type))
