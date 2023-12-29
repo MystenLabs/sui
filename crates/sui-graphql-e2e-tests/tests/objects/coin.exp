@@ -17,7 +17,7 @@ Response: {
     "suiCoins": {
       "edges": [
         {
-          "cursor": "IC/ODiKvEk37J2+SHdOXOh0tj3+kKyMTQRJIm4g7eZSB",
+          "cursor": "IC/ODiKvEk37J2+SHdOXOh0tj3+kKyMTQRJIm4g7eZSBAAAAAAAAAAA=",
           "node": {
             "coinBalance": "300000000000000",
             "contents": {
@@ -28,7 +28,7 @@ Response: {
           }
         },
         {
-          "cursor": "IIUF8I/vAPTSS4QFLI2mNoFN4DnGALfzAwuahN/pVrxb",
+          "cursor": "IIUF8I/vAPTSS4QFLI2mNoFN4DnGALfzAwuahN/pVrxbAQAAAAAAAAA=",
           "node": {
             "coinBalance": "299999983336400",
             "contents": {
@@ -39,7 +39,7 @@ Response: {
           }
         },
         {
-          "cursor": "IMuoUJrAqPQolyrJOQDQP8MtinwxMmIaikWg2Um7ZZSU",
+          "cursor": "IMuoUJrAqPQolyrJOQDQP8MtinwxMmIaikWg2Um7ZZSUAAAAAAAAAAA=",
           "node": {
             "coinBalance": "30000000000000000",
             "contents": {
@@ -54,7 +54,7 @@ Response: {
     "fakeCoins": {
       "edges": [
         {
-          "cursor": "IF1ymdLegVciBXLBI6Y6HdJ/5hQguKpAgAKnTCcgbvhv",
+          "cursor": "IF1ymdLegVciBXLBI6Y6HdJ/5hQguKpAgAKnTCcgbvhvAQAAAAAAAAA=",
           "node": {
             "coinBalance": "2",
             "contents": {
@@ -65,7 +65,7 @@ Response: {
           }
         },
         {
-          "cursor": "IIoI4sKegbEz05/HKKtUr5Jh5xsjZNdTBMhXLyAvY0x8",
+          "cursor": "IIoI4sKegbEz05/HKKtUr5Jh5xsjZNdTBMhXLyAvY0x8AQAAAAAAAAA=",
           "node": {
             "coinBalance": "1",
             "contents": {
@@ -76,7 +76,7 @@ Response: {
           }
         },
         {
-          "cursor": "IP3OtufdP1lIpko4Gdw3YAOc+hhMq2YIBWFuGKP3luxj",
+          "cursor": "IP3OtufdP1lIpko4Gdw3YAOc+hhMq2YIBWFuGKP3luxjAQAAAAAAAAA=",
           "node": {
             "coinBalance": "3",
             "contents": {
@@ -92,7 +92,7 @@ Response: {
       "coins": {
         "edges": [
           {
-            "cursor": "IIUF8I/vAPTSS4QFLI2mNoFN4DnGALfzAwuahN/pVrxb",
+            "cursor": "IIUF8I/vAPTSS4QFLI2mNoFN4DnGALfzAwuahN/pVrxbAQAAAAAAAAA=",
             "node": {
               "coinBalance": "299999983336400",
               "contents": {

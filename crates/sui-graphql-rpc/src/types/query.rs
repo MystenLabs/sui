@@ -194,9 +194,13 @@ impl Query {
             )
             .await
             .extend(),
-            None => Object::query(ctx.data_unchecked(), address, ObjectVersionKey::Latest)
-                .await
-                .extend(),
+            None => Object::query(
+                ctx.data_unchecked(),
+                address,
+                ObjectVersionKey::LatestAt(None),
+            )
+            .await
+            .extend(),
         }
     }
 
@@ -258,9 +262,15 @@ impl Query {
     ) -> Result<Connection<String, Coin>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let coin = type_.map_or_else(GAS::type_tag, |t| t.0);
-        Coin::paginate(ctx.data_unchecked(), page, coin, /* owner */ None)
-            .await
-            .extend()
+        Coin::paginate(
+            ctx.data_unchecked(),
+            page,
+            coin,
+            /* owner */ None,
+            /* checkpoint_sequence_number */ None,
+        )
+        .await
+        .extend()
     }
 
     /// The checkpoints that exist in the network.
@@ -321,9 +331,14 @@ impl Query {
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, Object>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        Object::paginate(ctx.data_unchecked(), page, filter.unwrap_or_default())
-            .await
-            .extend()
+        Object::paginate(
+            ctx.data_unchecked(),
+            page,
+            filter.unwrap_or_default(),
+            /* checkpoint_sequence_number */ None,
+        )
+        .await
+        .extend()
     }
 
     /// Fetch the protocol config by protocol version (defaults to the latest protocol

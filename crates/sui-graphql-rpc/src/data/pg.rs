@@ -3,9 +3,11 @@
 
 use std::time::Instant;
 
-use super::QueryExecutor;
+use super::{QueryExecutor, RawQueryWrapper};
 use crate::{config::Limits, error::Error, metrics::Metrics};
 use async_trait::async_trait;
+use diesel::deserialize::FromSqlRow;
+use diesel::sql_types::Untyped;
 use diesel::{
     pg::Pg,
     query_builder::{Query, QueryFragment, QueryId},
@@ -112,6 +114,22 @@ impl<'c> super::DbConnection for PgConnection<'c> {
     {
         query_cost::log(self.conn, self.max_cost, query());
         query().get_results(self.conn)
+    }
+
+    fn result_from_raw<U>(&mut self, query: impl Fn() -> RawQueryWrapper) -> QueryResult<U>
+    where
+        U: FromSqlRow<Untyped, Self::Backend> + 'static,
+    {
+        query_cost::log(self.conn, self.max_cost, query().boxed);
+        query().boxed.get_result::<U>(self.conn)
+    }
+
+    fn results_from_raw<U>(&mut self, query: impl Fn() -> RawQueryWrapper) -> QueryResult<Vec<U>>
+    where
+        U: FromSqlRow<Untyped, Self::Backend> + 'static,
+    {
+        query_cost::log(self.conn, self.max_cost, query().boxed);
+        query().boxed.load::<U>(self.conn)
     }
 }
 

@@ -223,9 +223,13 @@ impl Owner {
 
     async fn as_object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
         // TODO: Make consistent
-        Object::query(ctx.data_unchecked(), self.address, ObjectVersionKey::Latest)
-            .await
-            .extend()
+        Object::query(
+            ctx.data_unchecked(),
+            self.address,
+            ObjectVersionKey::LatestAt(None),
+        )
+        .await
+        .extend()
     }
 
     /// Access a dynamic field on an object using its name. Names are arbitrary Move values whose
@@ -297,9 +301,14 @@ impl OwnerImpl {
             return Ok(Connection::new(false, false));
         };
 
-        MoveObject::paginate(ctx.data_unchecked(), page, filter)
-            .await
-            .extend()
+        MoveObject::paginate(
+            ctx.data_unchecked(),
+            page,
+            filter,
+            /* checkpoint_sequence_number */ None,
+        )
+        .await
+        .extend()
     }
 
     pub(crate) async fn balance(
@@ -308,7 +317,7 @@ impl OwnerImpl {
         type_: Option<ExactTypeFilter>,
     ) -> Result<Option<Balance>> {
         let coin = type_.map_or_else(GAS::type_tag, |t| t.0);
-        Balance::query(ctx.data_unchecked(), self.0, coin)
+        Balance::query(ctx.data_unchecked(), self.0, None, coin)
             .await
             .extend()
     }
@@ -322,7 +331,7 @@ impl OwnerImpl {
         before: Option<balance::Cursor>,
     ) -> Result<Connection<String, Balance>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        Balance::paginate(ctx.data_unchecked(), page, self.0)
+        Balance::paginate(ctx.data_unchecked(), page, self.0, None)
             .await
             .extend()
     }
@@ -338,7 +347,7 @@ impl OwnerImpl {
     ) -> Result<Connection<String, Coin>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let coin = type_.map_or_else(GAS::type_tag, |t| t.0);
-        Coin::paginate(ctx.data_unchecked(), page, coin, Some(self.0))
+        Coin::paginate(ctx.data_unchecked(), page, coin, Some(self.0), None)
             .await
             .extend()
     }
@@ -352,9 +361,14 @@ impl OwnerImpl {
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, StakedSui>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        StakedSui::paginate(ctx.data_unchecked(), page, self.0)
-            .await
-            .extend()
+        StakedSui::paginate(
+            ctx.data_unchecked(),
+            page,
+            self.0,
+            /* checkpoint_sequence_number */ None,
+        )
+        .await
+        .extend()
     }
 
     pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
@@ -382,6 +396,7 @@ impl OwnerImpl {
             ctx.data_unchecked::<NameServiceConfig>(),
             page,
             self.0,
+            None,
         )
         .await
         .extend()
@@ -421,7 +436,7 @@ impl OwnerImpl {
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        DynamicField::paginate(ctx.data_unchecked(), page, self.0)
+        DynamicField::paginate(ctx.data_unchecked(), page, self.0, None)
             .await
             .extend()
     }

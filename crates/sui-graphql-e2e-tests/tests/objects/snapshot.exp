@@ -20,7 +20,7 @@ task 4 'run-graphql'. lines 43-56:
 Response: {
   "data": {
     "object": {
-      "status": "LIVE",
+      "status": "HISTORICAL",
       "version": 3,
       "asMoveObject": {
         "contents": {
@@ -70,14 +70,7 @@ Checkpoint created: 4
 task 13 'create-checkpoint'. lines 89-89:
 Checkpoint created: 5
 
-task 14 'run-graphql'. lines 91-105:
-Response: {
-  "data": {
-    "object": null
-  }
-}
-
-task 15 'run-graphql'. lines 108-123:
+task 14 'run-graphql'. lines 91-104:
 Response: {
   "data": {
     "object": {
@@ -88,7 +81,18 @@ Response: {
   }
 }
 
-task 16 'run-graphql'. lines 125-140:
+task 15 'run-graphql'. lines 107-122:
+Response: {
+  "data": {
+    "object": {
+      "status": "WRAPPED_OR_DELETED",
+      "version": 4,
+      "asMoveObject": null
+    }
+  }
+}
+
+task 16 'run-graphql'. lines 124-139:
 Response: {
   "data": {
     "object": null

@@ -90,7 +90,7 @@ impl Validator {
         MoveObject::query(
             ctx.data_unchecked(),
             self.operation_cap_id(),
-            ObjectVersionKey::Latest,
+            ObjectVersionKey::LatestAt(None),
         )
         .await
         .extend()
@@ -102,7 +102,7 @@ impl Validator {
         MoveObject::query(
             ctx.data_unchecked(),
             self.staking_pool_id(),
-            ObjectVersionKey::Latest,
+            ObjectVersionKey::LatestAt(None),
         )
         .await
         .extend()
@@ -114,7 +114,7 @@ impl Validator {
         MoveObject::query(
             ctx.data_unchecked(),
             self.exchange_rates_id(),
-            ObjectVersionKey::Latest,
+            ObjectVersionKey::LatestAt(None),
         )
         .await
         .extend()

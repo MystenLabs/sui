@@ -103,14 +103,75 @@ gas summary: computation_cost: 1000000, storage_cost: 2485200,  storage_rebate: 
 task 8 'create-checkpoint'. lines 91-91:
 Checkpoint created: 2
 
-task 9 'run-graphql'. lines 93-116:
+task 9 'run-graphql'. lines 93-117:
 Response: {
   "data": {
-    "object": null
+    "object": {
+      "dynamicFields": {
+        "nodes": [
+          {
+            "name": {
+              "type": {
+                "repr": "u64"
+              },
+              "data": {
+                "Number": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            },
+            "value": {
+              "__typename": "MoveObject"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "bool"
+              },
+              "data": {
+                "Bool": false
+              },
+              "bcs": "AA=="
+            },
+            "value": {
+              "__typename": "MoveValue"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "u64"
+              },
+              "data": {
+                "Number": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            },
+            "value": {
+              "__typename": "MoveValue"
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "vector<u8>"
+              },
+              "data": {
+                "Vector": []
+              },
+              "bcs": "AA=="
+            },
+            "value": {
+              "__typename": "MoveValue"
+            }
+          }
+        ]
+      }
+    }
   }
 }
 
-task 10 'run-graphql'. lines 118-143:
+task 10 'run-graphql'. lines 119-144:
 Response: {
   "data": {
     "owner": {
@@ -190,7 +251,7 @@ Response: {
   }
 }
 
-task 11 'run-graphql'. lines 145-165:
+task 11 'run-graphql'. lines 146-166:
 Response: {
   "data": {
     "owner": {
@@ -216,7 +277,7 @@ Response: {
   }
 }
 
-task 12 'run-graphql'. lines 167-178:
+task 12 'run-graphql'. lines 168-179:
 Response: {
   "data": {
     "owner": {

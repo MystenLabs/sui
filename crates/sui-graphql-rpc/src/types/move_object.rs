@@ -11,7 +11,10 @@ use super::display::DisplayEntry;
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_type::MoveType;
 use super::move_value::MoveValue;
-use super::object::{self, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus, ObjectVersionKey};
+use super::object::{
+    self, ObjectFilter, ObjectFilterWrapper, ObjectImpl, ObjectOwner, ObjectStatus,
+    ObjectVersionKey,
+};
 use super::owner::OwnerImpl;
 use super::stake::StakedSuiDowncastError;
 use super::sui_address::SuiAddress;
@@ -424,15 +427,22 @@ impl MoveObject {
         db: &Db,
         page: Page<object::Cursor>,
         filter: ObjectFilter,
+        checkpoint_sequence_number: Option<u64>,
     ) -> Result<Connection<String, MoveObject>, Error> {
-        Object::paginate_subtype(db, page, filter, |object| {
-            let address = object.address;
-            MoveObject::try_from(&object).map_err(|_| {
-                Error::Internal(format!(
-                    "Expected {address} to be a Move object, but it's not."
-                ))
-            })
-        })
+        Object::paginate_subtype(
+            db,
+            page,
+            checkpoint_sequence_number,
+            ObjectFilterWrapper::Object(filter),
+            |object| {
+                let address = object.address;
+                MoveObject::try_from(&object).map_err(|_| {
+                    Error::Internal(format!(
+                        "Expected {address} to be a Move object, but it's not."
+                    ))
+                })
+            },
+        )
         .await
     }
 }

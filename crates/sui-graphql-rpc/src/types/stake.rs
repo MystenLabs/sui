@@ -12,7 +12,9 @@ use super::display::DisplayEntry;
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::MoveObjectImpl;
 use super::move_value::MoveValue;
-use super::object::{Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus};
+use super::object::{
+    Object, ObjectFilter, ObjectFilterWrapper, ObjectImpl, ObjectOwner, ObjectStatus,
+};
 use super::owner::OwnerImpl;
 use super::suins_registration::SuinsRegistration;
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
@@ -340,6 +342,7 @@ impl StakedSui {
         db: &Db,
         page: Page<object::Cursor>,
         owner: SuiAddress,
+        checkpoint_sequence_number: Option<u64>,
     ) -> Result<Connection<String, StakedSui>, Error> {
         let type_: StructTag = MoveObjectType::staked_sui().into();
 
@@ -349,20 +352,26 @@ impl StakedSui {
             ..Default::default()
         };
 
-        Object::paginate_subtype(db, page, filter, |object| {
-            let address = object.address;
-            let move_object = MoveObject::try_from(&object).map_err(|_| {
-                Error::Internal(format!(
-                    "Expected {address} to be a StakedSui, but it's not a Move Object.",
-                ))
-            })?;
+        Object::paginate_subtype(
+            db,
+            page,
+            checkpoint_sequence_number,
+            ObjectFilterWrapper::Object(filter),
+            |object| {
+                let address = object.address;
+                let move_object = MoveObject::try_from(&object).map_err(|_| {
+                    Error::Internal(format!(
+                        "Expected {address} to be a StakedSui, but it's not a Move Object.",
+                    ))
+                })?;
 
-            StakedSui::try_from(&move_object).map_err(|_| {
-                Error::Internal(format!(
-                    "Expected {address} to be a StakedSui, but it is not."
-                ))
-            })
-        })
+                StakedSui::try_from(&move_object).map_err(|_| {
+                    Error::Internal(format!(
+                        "Expected {address} to be a StakedSui, but it is not."
+                    ))
+                })
+            },
+        )
         .await
     }
 

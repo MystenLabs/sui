@@ -89,7 +89,6 @@ module Test::M1 {
 //# create-checkpoint
 
 //# run-graphql
-# should not exist on live objects
 {
   object(
     address: "@{obj_2_0}"

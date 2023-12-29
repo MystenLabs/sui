@@ -91,6 +91,7 @@ module Test::m {
 //# create-checkpoint
 
 //# run-graphql
+# Wrapped objects can now be viewed!
 {
   object(address: "@{obj_2_0}") {
     dynamicFields {

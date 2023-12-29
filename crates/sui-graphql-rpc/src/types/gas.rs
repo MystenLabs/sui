@@ -65,9 +65,14 @@ impl GasInput {
             ..Default::default()
         };
 
-        Object::paginate(ctx.data_unchecked(), page, filter)
-            .await
-            .extend()
+        Object::paginate(
+            ctx.data_unchecked(),
+            page,
+            filter,
+            /* checkpoint_sequence_number */ None,
+        )
+        .await
+        .extend()
     }
 
     /// An unsigned integer specifying the number of native tokens per gas unit this transaction
