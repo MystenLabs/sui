@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 32;
+const MAX_PROTOCOL_VERSION: u64 = 33;
 
 // Record history of protocol version allocations here:
 //
@@ -97,6 +97,7 @@ const MAX_PROTOCOL_VERSION: u64 = 32;
 //             Enable transfer to object in testnet.
 //             Enable Narwhal CertificateV2 on mainnet
 //             Make critbit tree and order getters public in deepbook.
+// Version 33: Enable coin deny list.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -352,6 +353,10 @@ struct FeatureFlags {
     // It can be used to detect consensus output folk.
     #[serde(skip_serializing_if = "is_false")]
     include_consensus_digest_in_prologue: bool,
+
+    // If true, enable the coin deny list.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_coin_deny_list: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1685,6 +1690,9 @@ impl ProtocolConfig {
 
                     // enable nw cert v2 on mainnet
                     cfg.feature_flags.narwhal_certificate_v2 = true;
+                }
+                33 => {
+                    cfg.feature_flags.enable_coin_deny_list = true;
                 }
                 // Use this template when making changes:
                 //
