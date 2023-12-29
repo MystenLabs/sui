@@ -87,7 +87,7 @@ type Address implements IOwner {
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection!
 	"""
 	The coin objects for this address.
-	
+
 	The type field is a string of the inner type of the coin by which to filter (e.g.
 	`0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
@@ -839,7 +839,7 @@ type Event {
 	data: MoveData!
 	"""
 	Representation of a Move value in JSON, where:
-	
+
 	- Addresses, IDs, and UIDs are represented in canonical form, as JSON strings.
 	- Bools are represented by JSON boolean literals.
 	- u8, u16, and u32 are represented as JSON numbers.
@@ -847,7 +847,7 @@ type Event {
 	- Vectors are represented by JSON arrays.
 	- Structs are represented by JSON objects.
 	- Empty optional values are represented by `null`.
-	
+
 	This form is offered as a less verbose convenience in cases where the layout of the type is
 	known by the client.
 	"""
@@ -890,16 +890,16 @@ input EventFilter {
 	Events emitted by a particular module. An event is emitted by a
 	particular module if some function in the module is called by a
 	PTB and emits an event.
-	
+
 	Modules can be filtered by their package, or package::module.
 	"""
 	emittingModule: String
 	"""
 	This field is used to specify the type of event emitted.
-	
+
 	Events can be filtered by their type's package, package::module,
 	or their fully qualified type name.
-	
+
 	Generic types can be queried by either the generic type name, e.g.
 	`0x2::coin::Coin`, or by the full type name, such as
 	`0x2::coin::Coin<0x2::sui::SUI>`.
@@ -1590,7 +1590,7 @@ type MoveValue {
 	data: MoveData!
 	"""
 	Representation of a Move value in JSON, where:
-	
+
 	- Addresses, IDs, and UIDs are represented in canonical form, as JSON strings.
 	- Bools are represented by JSON boolean literals.
 	- u8, u16, and u32 are represented as JSON numbers.
@@ -1598,7 +1598,7 @@ type MoveValue {
 	- Vectors are represented by JSON arrays.
 	- Structs are represented by JSON objects.
 	- Empty optional values are represented by `null`.
-	
+
 	This form is offered as a less verbose convenience in cases where the layout of the type is
 	known by the client.
 	"""
@@ -1631,12 +1631,12 @@ Mutations are used to write to the Sui network.
 type Mutation {
 	"""
 	Execute a transaction, committing its effects on chain.
-	
+
 	`txBytes` is a `TransactionData` struct that has been BCS-encoded
 	and then Base64-encoded.
 	`signatures` are a list of `flag || signature || pubkey` bytes,
 	Base64-encoded.
-	
+
 	Waits until the transaction has been finalized on chain to return
 	its transaction digest.  If the transaction could not be
 	finalized, returns the errors that prevented it, instead.
@@ -1717,7 +1717,7 @@ type Object implements IOwner {
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection!
 	"""
 	The coin objects for this object.
-	
+
 	The type field is a string of the inner type of the coin by which to filter (e.g.
 	`0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
@@ -1853,10 +1853,10 @@ input ObjectFilter {
 	"""
 	This field is used to specify the type of objects that should be included in the query
 	results.
-	
+
 	Objects can be filtered by their type's package, package::module, or their fully qualified
 	type name.
-	
+
 	Generic types can be queried by either the generic type name, e.g. `0x2::coin::Coin`, or by
 	the full type name, such as `0x2::coin::Coin<0x2::sui::SUI>`.
 	"""
@@ -1991,7 +1991,7 @@ type Owner implements IOwner {
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection!
 	"""
 	The coin objects for the given address or object.
-	
+
 	The type field is a string of the inner type of the coin by which to filter (e.g.
 	`0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
@@ -2228,7 +2228,7 @@ type Query {
 	transactionBlock(digest: String!): TransactionBlock
 	"""
 	The coin objects that exist in the network.
-	
+
 	The type field is a string of the inner type of the coin by which to filter (e.g.
 	`0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
@@ -2369,11 +2369,11 @@ type ServiceConfig {
 	maxQueryNodes: Int!
 	"""
 	The maximum number of output nodes in a GraphQL response.
-	
+
 	Non-connection nodes have a count of 1, while connection nodes are counted as
 	the specified 'first' or 'last' number of items, or the default_page_size
 	as set by the server if those arguments are not set.
-	
+
 	Counts accumulate multiplicatively down the query tree. For example, if a query starts
 	with a connection of first: 10 and has a field to a connection with last: 20, the count
 	at the second level would be 200 nodes. This is then summed to the count of 10 nodes
@@ -2577,14 +2577,14 @@ type StakedSui {
 	principal: BigInt
 	"""
 	The estimated reward for this stake object, calculated as:
-	
+
 	principal * (initial_stake_rate / current_stake_rate - 1.0)
-	
+
 	Or 0, if this value is negative, where:
-	
+
 	- `initial_stake_rate` is the stake rate at the epoch this stake was activated at.
 	- `current_stake_rate` is the stake rate in the current epoch.
-	
+
 	This value is only available if the stake is active.
 	"""
 	estimatedReward: BigInt
@@ -2633,7 +2633,7 @@ type StorageFund {
 	totalObjectStorageRebates: BigInt
 	"""
 	The portion of the storage fund that will never be refunded through storage rebates.
-	
+
 	The system maintains an invariant that the sum of all storage fees into the storage fund is
 	equal to the sum of of all storage rebates out, the total storage rebates remaining, and the
 	non-refundable balance.
@@ -2747,7 +2747,7 @@ type TransactionBlock {
 	"""
 	The gas input field provides information on what objects were used as gas as well as the
 	owner of the gas object(s) and information on the gas price and budget.
-	
+
 	If the owner of the gas object(s) is not the same as the sender, the transaction block is a
 	sponsored transaction block.
 	"""
@@ -3189,4 +3189,3 @@ schema {
 	query: Query
 	mutation: Mutation
 }
-

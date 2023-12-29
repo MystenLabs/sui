@@ -1285,7 +1285,9 @@ Response: {
               ]
             },
             "gasEffects": {
-              "gasObject": null,
+              "gasObject": {
+                "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
+              },
               "gasSummary": {
                 "computationCost": "0",
                 "storageCost": "0",
@@ -1372,7 +1374,9 @@ Response: {
               ]
             },
             "gasEffects": {
-              "gasObject": null,
+              "gasObject": {
+                "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
+              },
               "gasSummary": {
                 "computationCost": "0",
                 "storageCost": "0",
@@ -1496,7 +1500,9 @@ Response: {
               ]
             },
             "gasEffects": {
-              "gasObject": null,
+              "gasObject": {
+                "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
+              },
               "gasSummary": {
                 "computationCost": "0",
                 "storageCost": "0",
