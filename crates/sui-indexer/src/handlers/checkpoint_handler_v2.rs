@@ -568,15 +568,19 @@ where
                             )
                         });
                         assert_eq!(oref.1, object.version());
-                        let df_info =
-                            try_create_dynamic_field_info(object, &objects, module_resolver)
-                                .unwrap_or_else(|e| {
-                                    panic!(
+                        let df_info = try_create_dynamic_field_info(
+                            object,
+                            &objects,
+                            module_resolver,
+                        )
+                        .unwrap_or_else(|e| {
+                            tracing::error!(
                                 "failed to create dynamic field info for obj: {:?}:{:?}. Err: {e}",
                                 object.id(),
                                 object.version()
-                            )
-                                });
+                            );
+                            None
+                        });
 
                         Some(IndexedObject::from_object(
                             checkpoint_seq,
