@@ -1729,7 +1729,7 @@ impl<'a> ParsingSymbolicator<'a> {
         use P::Type_ as T;
         match t {
             T::Apply(chain, v) => {
-                self.chain_symbols(&chain);
+                self.chain_symbols(chain);
                 v.iter().for_each(|t| self.type_symbols(t));
             }
             T::Ref(_, t) => self.type_symbols(t),
@@ -2301,8 +2301,7 @@ impl<'a> TypingSymbolicator<'a> {
         };
         // insert use of the const's module
         let mod_name = module_ident.value.module;
-        let Some(mod_name_start) =
-            get_start_loc(&mod_name.loc(), &self.files, &self.file_id_mapping)
+        let Some(mod_name_start) = get_start_loc(&mod_name.loc(), self.files, self.file_id_mapping)
         else {
             debug_assert!(false);
             return;
@@ -2364,8 +2363,7 @@ impl<'a> TypingSymbolicator<'a> {
         };
         // insert use of the functions's module
         let mod_name = module_ident.value.module;
-        let Some(mod_name_start) =
-            get_start_loc(&mod_name.loc(), &self.files, &self.file_id_mapping)
+        let Some(mod_name_start) = get_start_loc(&mod_name.loc(), self.files, self.file_id_mapping)
         else {
             debug_assert!(false);
             return;
@@ -2414,8 +2412,7 @@ impl<'a> TypingSymbolicator<'a> {
         };
         // insert use of the struct's module
         let mod_name = module_ident.value.module;
-        let Some(mod_name_start) =
-            get_start_loc(&mod_name.loc(), &self.files, &self.file_id_mapping)
+        let Some(mod_name_start) = get_start_loc(&mod_name.loc(), self.files, self.file_id_mapping)
         else {
             debug_assert!(false);
             return;
