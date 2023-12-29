@@ -14,12 +14,8 @@ use fastcrypto::{
 use fastcrypto::{hash::Keccak256, traits::KeyPair};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-use std::{
-    fmt::{Display, Formatter},
-    pin::Pin,
-    sync::Arc,
-};
-use sui_types::{base_types::ConciseableName, crypto::Signer, message_envelope::VerifiedEnvelope};
+use std::fmt::{Display, Formatter};
+use sui_types::{base_types::ConciseableName, message_envelope::VerifiedEnvelope};
 use tap::TapFallible;
 pub type BridgeAuthorityKeyPair = Secp256k1KeyPair;
 pub type BridgeAuthorityPublicKey = Secp256k1PublicKey;
@@ -68,10 +64,6 @@ impl<'a> ConciseableName<'a> for BridgeAuthorityPublicKeyBytes {
     }
 }
 
-/// See `StableSyncAuthoritySigner`
-pub type StableSyncBridgeAuthoritySigner =
-    Pin<Arc<dyn Signer<BridgeAuthoritySignature> + Send + Sync>>;
-
 // TODO: include epoch ID here to reduce race conditions?
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BridgeAuthoritySignInfo {
@@ -80,7 +72,7 @@ pub struct BridgeAuthoritySignInfo {
 }
 
 impl BridgeAuthoritySignInfo {
-    pub fn new(msg: &BridgeAction, secret: &fastcrypto::secp256k1::Secp256k1KeyPair) -> Self {
+    pub fn new(msg: &BridgeAction, secret: &BridgeAuthorityKeyPair) -> Self {
         let msg_bytes = msg.to_bytes();
 
         Self {
@@ -148,6 +140,7 @@ mod tests {
     use crate::types::SignedBridgeAction;
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
+    use std::sync::Arc;
     use sui_types::crypto::get_key_pair;
 
     use super::*;

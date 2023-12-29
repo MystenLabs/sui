@@ -9,9 +9,10 @@ use std::sync::Arc;
 use crate::abi::example_contract::ExampleContractEvents;
 use crate::abi::EthBridgeEvent;
 use crate::error::{BridgeError, BridgeResult};
-use crate::types::EthLog;
+use crate::types::{BridgeAction, EthLog};
 use ethers::providers::{Http, JsonRpcClient, Middleware, Provider, ProviderError};
-use ethers::types::{Block, BlockId, Filter};
+use ethers::types::TxHash;
+use ethers::types::{Block, BlockId, Filter, H256};
 use std::str::FromStr;
 use tap::{Tap, TapFallible};
 
@@ -37,10 +38,9 @@ impl EthClient<Http> {
 
 #[cfg(test)]
 impl EthClient<EthMockProvider> {
-    pub async fn new_mocked(provider: EthMockProvider) -> anyhow::Result<Self> {
+    pub fn new_mocked(provider: EthMockProvider) -> Self {
         let provider = Provider::new(provider);
-        let self_ = Self { provider };
-        Ok(self_)
+        Self { provider }
     }
 }
 
@@ -58,11 +58,39 @@ where
         Ok(())
     }
 
-    pub async fn get_bridge_events_maybe(
+    pub async fn get_finalized_bridge_action_maybe(
         &self,
-        tx_hash: &str,
-    ) -> BridgeResult<Vec<EthBridgeEvent>> {
-        unimplemented!()
+        tx_hash: TxHash,
+        event_idx: u16,
+    ) -> BridgeResult<BridgeAction> {
+        let receipt = self
+            .provider
+            .get_transaction_receipt(tx_hash)
+            .await
+            .map_err(BridgeError::from)?
+            .ok_or(BridgeError::TxNotFound)?;
+        let receipt_block_num = receipt.block_number.ok_or(BridgeError::ProviderError(
+            "Provider returns log without block_number".into(),
+        ))?;
+        let last_finalized_block_id = self.get_last_finalized_block_id().await?;
+        if receipt_block_num.as_u64() > last_finalized_block_id {
+            return Err(BridgeError::TxNotFinalized);
+        }
+        let log = receipt
+            .logs
+            .get(event_idx as usize)
+            .ok_or(BridgeError::NoBridgeEventsInTxPosition)?;
+        let eth_log = EthLog {
+            block_number: receipt_block_num.as_u64(),
+            tx_hash,
+            log_index_in_tx: event_idx,
+            log: log.clone(),
+        };
+        let bridge_event = EthBridgeEvent::try_from_eth_log(&eth_log)
+            .ok_or(BridgeError::NoBridgeEventsInTxPosition)?;
+        bridge_event
+            .try_into_bridge_action(tx_hash, event_idx)
+            .ok_or(BridgeError::BridgeEventNotActionable)
     }
 
     pub async fn get_last_finalized_block_id(&self) -> BridgeResult<u64> {
@@ -171,7 +199,7 @@ where
             }
         }
         let log_index_in_tx = log_index_in_tx.ok_or(BridgeError::ProviderError(format!(
-            "Couldn't find matches log {:?} in transaction {}",
+            "Couldn't find matching log {:?} in transaction {}",
             log, tx_hash
         )))?;
 
@@ -181,5 +209,90 @@ where
             log_index_in_tx: log_index_in_tx as u16,
             log,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ethers::types::{Address as EthAddress, Log, TransactionReceipt};
+    use prometheus::Registry;
+
+    use super::*;
+    use crate::test_utils::mock_get_logs;
+    use crate::test_utils::{
+        get_test_authority_and_key, get_test_log_and_action, get_test_sui_to_eth_bridge_action,
+        mock_last_finalized_block,
+    };
+    use crate::types::BridgeAction;
+    use crate::types::SignedBridgeAction;
+
+    #[tokio::test]
+    async fn test_get_finalized_bridge_action_maybe() {
+        telemetry_subscribers::init_for_testing();
+        let registry = Registry::new();
+        mysten_metrics::init_metrics(&registry);
+        let mock_provider = EthMockProvider::new();
+        mock_last_finalized_block(&mock_provider, 777);
+        let client = EthClient::new_mocked(mock_provider.clone());
+        let result = client.get_last_finalized_block_id().await.unwrap();
+        assert_eq!(result, 777);
+
+        let eth_tx_hash = TxHash::random();
+        let log = Log {
+            transaction_hash: Some(eth_tx_hash),
+            block_number: Some(U64::from(778)),
+            ..Default::default()
+        };
+        let (good_log, bridge_action) = get_test_log_and_action(EthAddress::zero(), eth_tx_hash, 1);
+        // Mocks `eth_getTransactionReceipt` to return `log` and `good_log` in order
+        mock_provider
+            .add_response::<[TxHash; 1], TransactionReceipt, TransactionReceipt>(
+                "eth_getTransactionReceipt",
+                [log.transaction_hash.unwrap()],
+                TransactionReceipt {
+                    block_number: log.block_number,
+                    logs: vec![log, good_log],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+        let error = client
+            .get_finalized_bridge_action_maybe(eth_tx_hash, 0)
+            .await
+            .unwrap_err();
+        match error {
+            BridgeError::TxNotFinalized => {}
+            _ => panic!("expected TxNotFinalized"),
+        };
+
+        // 778 is now finalized
+        mock_last_finalized_block(&mock_provider, 778);
+
+        let error = client
+            .get_finalized_bridge_action_maybe(eth_tx_hash, 2)
+            .await
+            .unwrap_err();
+        // Receipt only has 2 logs
+        match error {
+            BridgeError::NoBridgeEventsInTxPosition => {}
+            _ => panic!("expected NoBridgeEventsInTxPosition"),
+        };
+
+        let error = client
+            .get_finalized_bridge_action_maybe(eth_tx_hash, 0)
+            .await
+            .unwrap_err();
+        // Same, `log` is not a BridgeEvent
+        match error {
+            BridgeError::NoBridgeEventsInTxPosition => {}
+            _ => panic!("expected NoBridgeEventsInTxPosition"),
+        };
+
+        let action = client
+            .get_finalized_bridge_action_maybe(eth_tx_hash, 1)
+            .await
+            .unwrap();
+        assert_eq!(action, bridge_action);
     }
 }
