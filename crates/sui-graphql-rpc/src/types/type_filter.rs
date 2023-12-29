@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{string_input::impl_string_input, sui_address::SuiAddress};
-use crate::data::{DieselBackend, Query};
+use crate::data::{DieselBackend, Query, RawQueryWrapper};
 use async_graphql::*;
 use diesel::{
     expression::{is_aggregate::No, ValidGrouping},
@@ -100,6 +100,62 @@ impl TypeFilter {
             TypeFilter::ByType(tag) => {
                 let exact = tag.to_canonical_string(/* with_prefix */ true);
                 query.filter(field.eq(exact))
+            }
+        }
+    }
+
+    /// Modify `query` to apply this filter to `field`, returning the new query.
+    pub(crate) fn apply_raw_boxed(
+        &self,
+        mut helper: RawQueryWrapper,
+        field: &str,
+    ) -> RawQueryWrapper {
+        match self {
+            TypeFilter::ByModule(ModuleFilter::ByPackage(p)) => {
+                let bind_idx = helper.get_bind_idx();
+                let statement = helper.build_condition(format!("{} LIKE {}", field, bind_idx));
+                helper = helper.sql(statement);
+                helper = helper.bind::<diesel::sql_types::Text, _>(format!("{}::%", p));
+                helper
+            }
+
+            TypeFilter::ByModule(ModuleFilter::ByModule(p, m)) => {
+                let bind_idx = helper.get_bind_idx();
+                let statement = helper.build_condition(format!("{} LIKE {}", field, bind_idx));
+                helper = helper.sql(statement);
+                helper = helper.bind::<diesel::sql_types::Text, _>(format!("{}::{}::%", p, m));
+                helper
+            }
+
+            // A type filter without type parameters is interpreted as either an exact match, or a
+            // match for all generic instantiations of the type.
+            TypeFilter::ByType(TypeTag::Struct(tag)) if tag.type_params.is_empty() => {
+                let bind_idx1 = helper.get_bind_idx();
+                let bind_idx2 = helper.get_bind_idx();
+
+                let statement = helper.build_condition(format!(
+                    "({} = {} OR {} LIKE {})",
+                    field, bind_idx1, field, bind_idx2
+                ));
+                helper = helper.sql(statement);
+                helper = helper.bind::<diesel::sql_types::Text, _>(
+                    tag.to_canonical_string(/* with_prefix */ true),
+                );
+                helper = helper.bind::<diesel::sql_types::Text, _>(format!(
+                    "{}<%",
+                    tag.to_canonical_display(/* with_prefix */ true)
+                ));
+                helper
+            }
+
+            TypeFilter::ByType(tag) => {
+                let bind_idx = helper.get_bind_idx();
+                let statement = helper.build_condition(format!("{} = {}", field, bind_idx));
+                helper = helper.sql(statement);
+                helper = helper.bind::<diesel::sql_types::Text, _>(
+                    tag.to_canonical_string(/* with_prefix */ true),
+                );
+                helper
             }
         }
     }

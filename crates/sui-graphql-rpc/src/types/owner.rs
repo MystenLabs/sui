@@ -297,7 +297,7 @@ impl OwnerImpl {
             return Ok(Connection::new(false, false));
         };
 
-        MoveObject::paginate(ctx.data_unchecked(), page, filter)
+        MoveObject::paginate(ctx.data_unchecked(), page, None, filter)
             .await
             .extend()
     }

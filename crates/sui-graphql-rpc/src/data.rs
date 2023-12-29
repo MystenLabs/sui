@@ -5,8 +5,13 @@ pub(crate) mod pg;
 
 use async_trait::async_trait;
 use diesel::{
-    query_builder::{BoxedSelectStatement, FromClause, QueryFragment, QueryId},
+    deserialize::FromSqlRow,
+    query_builder::{
+        BoxedSelectStatement, BoxedSqlQuery, FromClause, QueryFragment, QueryId, SqlQuery,
+    },
     query_dsl::{methods::LimitDsl, LoadQuery},
+    serialize::ToSql,
+    sql_types::{HasSqlType, Untyped},
     QueryResult,
 };
 
@@ -29,6 +34,14 @@ pub(crate) type DieselBackend = <Db as QueryExecutor>::Backend;
 /// These type parameters should usually be inferred by context.
 pub(crate) type Query<ST, QS, GB> =
     BoxedSelectStatement<'static, ST, FromClause<QS>, DieselBackend, GB>;
+
+pub(crate) type RawQuery = BoxedSqlQuery<'static, DieselBackend, SqlQuery>;
+
+pub(crate) struct RawQueryWrapper {
+    pub boxed: RawQuery,
+    pub has_where_clause: bool,
+    pub num_binds: u64,
+}
 
 /// Interface for accessing relational data written by the Indexer, agnostic of the database
 /// back-end being used.
@@ -83,6 +96,10 @@ pub(crate) trait DbConnection {
         Q: LoadQuery<'static, Self::Connection, U>,
         Q: QueryId + QueryFragment<Self::Backend>;
 
+    fn boxed_results<U>(&mut self, query: impl Fn() -> RawQueryWrapper) -> QueryResult<Vec<U>>
+    where
+        U: FromSqlRow<Untyped, Self::Backend> + 'static;
+
     /// Helper to limit a query that fetches multiple values to return only its first value. `query`
     /// is a thunk that returns a query when called.
     fn first<Q: LimitDsl, U>(&mut self, query: impl Fn() -> Q) -> QueryResult<U>
@@ -92,5 +109,58 @@ pub(crate) trait DbConnection {
         <Q as LimitDsl>::Output: QueryId + QueryFragment<Self::Backend>,
     {
         self.result(move || query().limit(1i64))
+    }
+}
+
+impl RawQueryWrapper {
+    pub(crate) fn new(boxed: RawQuery) -> Self {
+        Self {
+            boxed,
+            has_where_clause: false,
+            num_binds: 0,
+        }
+    }
+
+    pub(crate) fn build_condition<T: AsRef<str>>(&mut self, condition: T) -> String {
+        let mut statement = match self.has_where_clause {
+            true => " AND (".to_string(),
+            false => {
+                self.has_where_clause = true;
+                " WHERE (".to_string()
+            }
+        };
+
+        statement += condition.as_ref();
+        statement += ")";
+
+        statement
+    }
+
+    pub(crate) fn get_bind_idx(&mut self) -> String {
+        // TODO (wlmyng): this is postgres-specific
+        self.num_binds += 1;
+        format!("${}", self.num_binds)
+    }
+
+    pub(crate) fn sql<T: AsRef<str>>(self, statement: T) -> Self {
+        let new_query = self.boxed.sql(statement);
+        Self {
+            boxed: new_query,
+            ..self
+        }
+    }
+
+    pub(crate) fn bind<BindSt, Value>(self, b: Value) -> Self
+    where
+        DieselBackend: HasSqlType<BindSt>,
+        Value: ToSql<BindSt, DieselBackend> + Send + 'static,
+        BindSt: Send + 'static,
+    {
+        let new_query = self.boxed.bind(b);
+
+        Self {
+            boxed: new_query,
+            ..self
+        }
     }
 }

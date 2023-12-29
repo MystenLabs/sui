@@ -423,9 +423,10 @@ impl MoveObject {
     pub(crate) async fn paginate(
         db: &Db,
         page: Page<object::Cursor>,
+        checkpoint_sequence_number: Option<u64>,
         filter: ObjectFilter,
     ) -> Result<Connection<String, MoveObject>, Error> {
-        Object::paginate_subtype(db, page, filter, |object| {
+        Object::paginate_subtype(db, page, checkpoint_sequence_number, filter, |object| {
             let address = object.address;
             MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(
