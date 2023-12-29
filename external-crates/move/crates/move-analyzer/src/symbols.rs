@@ -309,6 +309,9 @@ pub struct ParsingSymbolicator<'a> {
     /// A UseDefMpa for a given module (needs to be appropriately set before the module
     /// processing starts)
     use_defs: UseDefMap,
+    /// Module name lengths in access paths for a given module (needs to be appropriately
+    /// set before the module processing starts)
+    mod_name_lengths: BTreeMap<Position, usize>,
 }
 
 /// Data used during symbolication over typed AST
@@ -330,6 +333,9 @@ pub struct TypingSymbolicator<'a> {
     /// A UseDefMpa for a given module (needs to be appropriately set before the module
     /// processing starts)
     use_defs: UseDefMap,
+    /// Module name lengths in access paths for a given module (needs to be appropriately
+    /// set before the module processing starts)
+    mod_name_lengths: &'a BTreeMap<Position, usize>,
 }
 
 /// Maps a line number to a list of use-def-s on a given line (use-def set is sorted by col_start)
@@ -776,6 +782,7 @@ impl SymbolicatorRunner {
 impl UseDef {
     fn new(
         references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
+        mod_name_lengths: &BTreeMap<Position, usize>,
         use_fhash: FileHash,
         use_start: Position,
         def_fhash: FileHash,
@@ -789,7 +796,19 @@ impl UseDef {
             fhash: def_fhash,
             start: def_start,
         };
-        let col_end = use_start.character + use_name.len() as u32;
+        // Normally, we compute the length of the identifier as the length
+        // of the string that represents it as this string is the same
+        // in the source file and in the AST. However, for aliased module
+        // accesses, the string in the source represents the alias and
+        // the string in the AST represents the actual (non-aliased) module
+        // name - we need to retrieve the correct source-level length
+        // from the map, otherwise on-hover may not work correctly
+        // if AST-level and source-level lengths are different.
+        let use_name_len = match mod_name_lengths.get(&use_start) {
+            Some(l) => *l,
+            None => use_name.len(),
+        };
+        let col_end = use_start.character + use_name_len as u32;
         let use_loc = UseLoc {
             fhash: use_fhash,
             start: use_start,
@@ -1050,6 +1069,7 @@ pub fn get_symbols(
     eprintln!("get_symbols loaded file_mods length: {}", file_mods.len());
 
     let mut file_use_defs = BTreeMap::new();
+    let mut mod_to_mod_name_lengths = BTreeMap::new();
 
     let mut parsing_symbolicator = ParsingSymbolicator {
         mod_outer_defs: &mod_outer_defs,
@@ -1058,9 +1078,14 @@ pub fn get_symbols(
         file_id_to_lines: &file_id_to_lines,
         references: &mut references,
         use_defs: UseDefMap::new(),
+        mod_name_lengths: BTreeMap::new(),
     };
 
-    parsing_symbolicator.prog_symbols(&parsed_ast.unwrap(), &mut mod_use_defs);
+    parsing_symbolicator.prog_symbols(
+        &parsed_ast.unwrap(),
+        &mut mod_use_defs,
+        &mut mod_to_mod_name_lengths,
+    );
 
     let mut typing_symbolicator = TypingSymbolicator {
         mod_outer_defs: &mod_outer_defs,
@@ -1070,12 +1095,15 @@ pub fn get_symbols(
         type_params: BTreeMap::new(),
         references: &mut references,
         use_defs: UseDefMap::new(),
+        mod_name_lengths: &BTreeMap::new(),
     };
 
     let mut function_on_hover = FunctionOnHoverMap::new();
 
     for (pos, module_ident, module_def) in typed_modules {
-        typing_symbolicator.use_defs = mod_use_defs.remove(&format!("{}", module_ident)).unwrap();
+        let mod_ident_str = format!("{}", module_ident);
+        typing_symbolicator.use_defs = mod_use_defs.remove(&mod_ident_str).unwrap();
+        typing_symbolicator.mod_name_lengths = mod_to_mod_name_lengths.get(&mod_ident_str).unwrap();
         typing_symbolicator.mod_symbols(
             module_def,
             &sp(pos, *module_ident),
@@ -1304,6 +1332,7 @@ fn get_mod_outer_defs(
             mod_name_start.line,
             UseDef::new(
                 references,
+                &BTreeMap::new(),
                 mod_name.loc().file_hash(),
                 mod_name_start,
                 mod_defs.fhash,
@@ -1329,13 +1358,18 @@ fn get_start_loc(
 
 impl<'a> ParsingSymbolicator<'a> {
     /// Get symbols for the whole program
-    fn prog_symbols(&mut self, prog: &P::Program, mod_use_defs: &mut BTreeMap<String, UseDefMap>) {
+    fn prog_symbols(
+        &mut self,
+        prog: &P::Program,
+        mod_use_defs: &mut BTreeMap<String, UseDefMap>,
+        mod_to_mod_name_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
+    ) {
         prog.source_definitions
             .iter()
-            .for_each(|pkg_def| self.pkg_symbols(pkg_def, mod_use_defs));
+            .for_each(|pkg_def| self.pkg_symbols(pkg_def, mod_use_defs, mod_to_mod_name_lengths));
         prog.lib_definitions
             .iter()
-            .for_each(|pkg_def| self.pkg_symbols(pkg_def, mod_use_defs));
+            .for_each(|pkg_def| self.pkg_symbols(pkg_def, mod_use_defs, mod_to_mod_name_lengths));
     }
 
     /// Get symbols for the whole package
@@ -1343,9 +1377,10 @@ impl<'a> ParsingSymbolicator<'a> {
         &mut self,
         pkg_def: &P::PackageDefinition,
         mod_use_defs: &mut BTreeMap<String, UseDefMap>,
+        mod_to_mod_name_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
     ) {
         if let P::Definition::Module(mod_def) = &pkg_def.def {
-            self.mod_symbols(mod_def, mod_use_defs);
+            self.mod_symbols(mod_def, mod_use_defs, mod_to_mod_name_lengths);
         }
     }
 
@@ -1354,6 +1389,7 @@ impl<'a> ParsingSymbolicator<'a> {
         &mut self,
         mod_def: &P::ModuleDefinition,
         mod_use_defs: &mut BTreeMap<String, UseDefMap>,
+        mod_to_mod_name_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
     ) {
         // parsing symbolicator is currently only responsible for processing use declarations
 
@@ -1370,21 +1406,42 @@ impl<'a> ParsingSymbolicator<'a> {
 
         let use_defs = mod_use_defs.remove(&mod_ident_str).unwrap();
         let old_defs = std::mem::replace(&mut self.use_defs, use_defs);
+        let mod_name_lengths: BTreeMap<Position, usize> = BTreeMap::new();
+        let old_mod_name_lengths = std::mem::replace(&mut self.mod_name_lengths, mod_name_lengths);
 
         for m in &mod_def.members {
+            use P::ModuleMember as MM;
             match m {
-                P::ModuleMember::Function(fun) => {
+                MM::Function(fun) => {
                     if let P::FunctionBody_::Defined(seq) = &fun.body.value {
                         self.seq_symbols(seq);
                     };
+                    fun.signature
+                        .parameters
+                        .iter()
+                        .for_each(|(_, _, t)| self.type_symbols(t));
+                    self.type_symbols(&fun.signature.return_type);
                 }
-                P::ModuleMember::Use(use_decl) => self.use_decl_symbols(use_decl),
-                _ => (),
+                MM::Struct(sdef) => match &sdef.fields {
+                    P::StructFields::Defined(v) => v.iter().for_each(|(_, t)| self.type_symbols(t)),
+                    P::StructFields::Positional(v) => v.iter().for_each(|t| self.type_symbols(t)),
+                    P::StructFields::Native(_) => (),
+                },
+                MM::Use(use_decl) => self.use_decl_symbols(use_decl),
+                MM::Friend(fdecl) => self.chain_symbols(&fdecl.friend),
+                MM::Constant(c) => {
+                    self.type_symbols(&c.signature);
+                    self.exp_symbols(&c.value);
+                }
+                MM::Spec(_) => (),
             }
         }
 
         let processed_defs = std::mem::replace(&mut self.use_defs, old_defs);
-        mod_use_defs.insert(mod_ident_str, processed_defs);
+        mod_use_defs.insert(mod_ident_str.clone(), processed_defs);
+        let processed_mod_name_lengths =
+            std::mem::replace(&mut self.mod_name_lengths, old_mod_name_lengths);
+        mod_to_mod_name_lengths.insert(mod_ident_str, processed_mod_name_lengths);
     }
 
     /// Get symbols for a sequence item
@@ -1392,8 +1449,19 @@ impl<'a> ParsingSymbolicator<'a> {
         use P::SequenceItem_ as I;
         match &seq_item.value {
             I::Seq(e) => self.exp_symbols(e),
-            I::Declare(_, _) => (),
-            I::Bind(_, _, e) => self.exp_symbols(e),
+            I::Declare(v, to) => {
+                v.value.iter().for_each(|bind| self.bind_symbols(bind));
+                if let Some(t) = to {
+                    self.type_symbols(t);
+                }
+            }
+            I::Bind(v, to, e) => {
+                v.value.iter().for_each(|bind| self.bind_symbols(bind));
+                if let Some(t) = to {
+                    self.type_symbols(t);
+                }
+                self.exp_symbols(e);
+            }
         }
     }
 
@@ -1401,9 +1469,32 @@ impl<'a> ParsingSymbolicator<'a> {
     fn exp_symbols(&mut self, sp!(_, exp): &P::Exp) {
         use P::Exp_ as E;
         match exp {
-            E::Call(_, _, _, v) => v.value.iter().for_each(|e| self.exp_symbols(e)),
-            E::Pack(_, _, v) => v.iter().for_each(|(_, e)| self.exp_symbols(e)),
-            E::Vector(_, _, sv) => sv.value.iter().for_each(|e| self.exp_symbols(e)),
+            E::Name(chain, vo) => {
+                self.chain_symbols(chain);
+                if let Some(v) = vo {
+                    v.iter().for_each(|t| self.type_symbols(t));
+                }
+            }
+            E::Call(chain, _, vo, v) => {
+                self.chain_symbols(chain);
+                if let Some(v) = vo {
+                    v.iter().for_each(|t| self.type_symbols(t));
+                }
+                v.value.iter().for_each(|e| self.exp_symbols(e));
+            }
+            E::Pack(chain, vo, v) => {
+                self.chain_symbols(chain);
+                if let Some(v) = vo {
+                    v.iter().for_each(|t| self.type_symbols(t));
+                }
+                v.iter().for_each(|(_, e)| self.exp_symbols(e));
+            }
+            E::Vector(_, vo, v) => {
+                if let Some(v) = vo {
+                    v.iter().for_each(|t| self.type_symbols(t));
+                }
+                v.value.iter().for_each(|e| self.exp_symbols(e));
+            }
             E::IfElse(e1, e2, oe) => {
                 self.exp_symbols(e1);
                 self.exp_symbols(e2);
@@ -1442,12 +1533,21 @@ impl<'a> ParsingSymbolicator<'a> {
             }
             E::Borrow(_, e) => self.exp_symbols(e),
             E::Dot(e, _) => self.exp_symbols(e),
-            E::DotCall(e, _, _, v) => {
+            E::DotCall(e, _, vo, v) => {
                 self.exp_symbols(e);
+                if let Some(v) = vo {
+                    v.iter().for_each(|t| self.type_symbols(t));
+                }
                 v.value.iter().for_each(|e| self.exp_symbols(e));
             }
-            E::Cast(e, _) => self.exp_symbols(e),
-            E::Annotate(e, _) => self.exp_symbols(e),
+            E::Cast(e, t) => {
+                self.exp_symbols(e);
+                self.type_symbols(t);
+            }
+            E::Annotate(e, t) => {
+                self.exp_symbols(e);
+                self.type_symbols(t);
+            }
             _ => (),
         }
     }
@@ -1509,6 +1609,7 @@ impl<'a> ParsingSymbolicator<'a> {
             mod_name_start.line,
             UseDef::new(
                 self.references,
+                &BTreeMap::new(),
                 mod_name.loc().file_hash(),
                 mod_name_start,
                 mod_defs.fhash,
@@ -1540,6 +1641,7 @@ impl<'a> ParsingSymbolicator<'a> {
                     alias_name_start.line,
                     UseDef::new(
                         self.references,
+                        &BTreeMap::new(),
                         alias_name.loc().file_hash(),
                         alias_name_start,
                         mod_defs.fhash,
@@ -1566,6 +1668,7 @@ impl<'a> ParsingSymbolicator<'a> {
                         &name.loc,
                         self.references,
                         &mut self.use_defs,
+                        &BTreeMap::new(),
                     ) {
                         // it's a struct - add it for the alias as well
                         if let Some(alias) = alias_opt {
@@ -1596,6 +1699,7 @@ impl<'a> ParsingSymbolicator<'a> {
                         &name.loc,
                         self.references,
                         &mut self.use_defs,
+                        &BTreeMap::new(),
                     ) {
                         // it's a function - add it for the alias as well
                         if let Some(alias) = alias_opt {
@@ -1618,6 +1722,73 @@ impl<'a> ParsingSymbolicator<'a> {
                 }
             }
         }
+    }
+
+    /// Get symbols for a type
+    fn type_symbols(&mut self, sp!(_, t): &P::Type) {
+        use P::Type_ as T;
+        match t {
+            T::Apply(chain, v) => {
+                self.chain_symbols(&chain);
+                v.iter().for_each(|t| self.type_symbols(t));
+            }
+            T::Ref(_, t) => self.type_symbols(t),
+            T::Fun(v, t) => {
+                v.iter().for_each(|t| self.type_symbols(t));
+                self.type_symbols(t);
+            }
+            T::Multiple(v) => v.iter().for_each(|t| self.type_symbols(t)),
+            T::Unit => (),
+        }
+    }
+
+    /// Get symbols for a bind statement
+    fn bind_symbols(&mut self, sp!(_, bind): &P::Bind) {
+        use P::Bind_ as B;
+        match bind {
+            B::Unpack(chain, vo, bindings) => {
+                self.chain_symbols(chain);
+                if let Some(v) = vo {
+                    v.iter().for_each(|t| self.type_symbols(t));
+                }
+                match bindings {
+                    P::FieldBindings::Named(v) => {
+                        v.iter().for_each(|(_, bind)| self.bind_symbols(bind))
+                    }
+                    P::FieldBindings::Positional(v) => {
+                        v.iter().for_each(|bind| self.bind_symbols(bind))
+                    }
+                }
+            }
+            B::Var(..) => (),
+        }
+    }
+
+    /// Get symbols for a name access chain
+    fn chain_symbols(&mut self, sp!(_, chain): &P::NameAccessChain) {
+        use P::NameAccessChain_ as NA;
+        // record the length of an identifier representing a potentially
+        // aliased module name in an access chain, which must have 2 components:
+        // some_module_alias::some_type
+        let no = match chain {
+            NA::One(_) => None,
+            NA::Two(leading_name, _) => {
+                if let P::LeadingNameAccess_::Name(n) = leading_name.value {
+                    Some(n)
+                } else {
+                    None
+                }
+            }
+            NA::Three(..) => None,
+        };
+        let Some(n) = no else {
+            return;
+        };
+        let sp!(pos, name) = n;
+        let Some(loc) = get_start_loc(&pos, self.files, self.file_id_mapping) else {
+            return;
+        };
+        self.mod_name_lengths.insert(loc, name.len());
     }
 }
 
@@ -1645,6 +1816,7 @@ impl<'a> TypingSymbolicator<'a> {
             let fun_type_def = on_hover_to_type_def_loc(self.mod_outer_defs, &on_hover);
             let use_def = UseDef::new(
                 self.references,
+                self.mod_name_lengths,
                 pos.file_hash(),
                 name_start,
                 pos.file_hash(),
@@ -1677,6 +1849,7 @@ impl<'a> TypingSymbolicator<'a> {
                 name_start.line,
                 UseDef::new(
                     self.references,
+                    self.mod_name_lengths,
                     pos.file_hash(),
                     name_start,
                     pos.file_hash(),
@@ -1709,6 +1882,7 @@ impl<'a> TypingSymbolicator<'a> {
                 name_start.line,
                 UseDef::new(
                     self.references,
+                    self.mod_name_lengths,
                     pos.file_hash(),
                     name_start,
                     pos.file_hash(),
@@ -1749,6 +1923,7 @@ impl<'a> TypingSymbolicator<'a> {
                     start.line,
                     UseDef::new(
                         self.references,
+                        self.mod_name_lengths,
                         fpos.file_hash(),
                         start,
                         fpos.file_hash(),
@@ -2097,6 +2272,7 @@ impl<'a> TypingSymbolicator<'a> {
                     start.line,
                     UseDef::new(
                         self.references,
+                        self.mod_name_lengths,
                         fhash,
                         start,
                         fhash,
@@ -2135,6 +2311,7 @@ impl<'a> TypingSymbolicator<'a> {
             mod_name_start.line,
             UseDef::new(
                 self.references,
+                self.mod_name_lengths,
                 mod_name.loc().file_hash(),
                 mod_name_start,
                 mod_defs.fhash,
@@ -2164,6 +2341,7 @@ impl<'a> TypingSymbolicator<'a> {
                 name_start.line,
                 UseDef::new(
                     self.references,
+                    self.mod_name_lengths,
                     use_pos.file_hash(),
                     name_start,
                     def_fhash,
@@ -2196,6 +2374,7 @@ impl<'a> TypingSymbolicator<'a> {
             mod_name_start.line,
             UseDef::new(
                 self.references,
+                self.mod_name_lengths,
                 mod_name.loc().file_hash(),
                 mod_name_start,
                 mod_defs.fhash,
@@ -2218,6 +2397,7 @@ impl<'a> TypingSymbolicator<'a> {
             use_pos,
             self.references,
             &mut self.use_defs,
+            self.mod_name_lengths,
         )
         .is_none()
         {
@@ -2244,6 +2424,7 @@ impl<'a> TypingSymbolicator<'a> {
             mod_name_start.line,
             UseDef::new(
                 self.references,
+                self.mod_name_lengths,
                 mod_name.loc().file_hash(),
                 mod_name_start,
                 mod_defs.fhash,
@@ -2266,6 +2447,7 @@ impl<'a> TypingSymbolicator<'a> {
             use_pos,
             self.references,
             &mut self.use_defs,
+            self.mod_name_lengths,
         )
         .is_none()
         {
@@ -2307,6 +2489,7 @@ impl<'a> TypingSymbolicator<'a> {
                         name_start.line,
                         UseDef::new(
                             self.references,
+                            self.mod_name_lengths,
                             use_pos.file_hash(),
                             name_start,
                             def_fhash,
@@ -2345,6 +2528,7 @@ impl<'a> TypingSymbolicator<'a> {
                                 name_start.line,
                                 UseDef::new(
                                     self.references,
+                                    self.mod_name_lengths,
                                     use_pos.file_hash(),
                                     name_start,
                                     def_loc.fhash,
@@ -2407,6 +2591,7 @@ impl<'a> TypingSymbolicator<'a> {
                     name_start.line,
                     UseDef::new(
                         self.references,
+                        self.mod_name_lengths,
                         pos.file_hash(),
                         name_start,
                         pos.file_hash(),
@@ -2454,6 +2639,7 @@ impl<'a> TypingSymbolicator<'a> {
                 name_start.line,
                 UseDef::new(
                     self.references,
+                    self.mod_name_lengths,
                     use_pos.file_hash(),
                     name_start,
                     local_def.def_loc.fhash,
@@ -2482,6 +2668,7 @@ fn add_fun_use_def(
     use_pos: &Loc,
     references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
     use_defs: &mut UseDefMap,
+    mod_name_lengths: &BTreeMap<Position, usize>,
 ) -> Option<UseDef> {
     let Some(name_start) = get_start_loc(use_pos, files, file_id_mapping) else {
         debug_assert!(false);
@@ -2499,6 +2686,7 @@ fn add_fun_use_def(
         let ident_type_def_loc = on_hover_to_type_def_loc(mod_outer_defs, &on_hover);
         let ud = UseDef::new(
             references,
+            mod_name_lengths,
             use_pos.file_hash(),
             name_start,
             def_fhash,
@@ -2526,6 +2714,7 @@ fn add_struct_use_def(
     use_pos: &Loc,
     references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
     use_defs: &mut UseDefMap,
+    mod_name_lengths: &BTreeMap<Position, usize>,
 ) -> Option<UseDef> {
     let Some(name_start) = get_start_loc(use_pos, files, file_id_mapping) else {
         debug_assert!(false);
@@ -2543,6 +2732,7 @@ fn add_struct_use_def(
         );
         let ud = UseDef::new(
             references,
+            mod_name_lengths,
             use_pos.file_hash(),
             name_start,
             def_fhash,
@@ -4858,5 +5048,200 @@ fn imports_test() {
         "M2.move",
         "struct Symbols::M2::SomeOtherStruct{\n	some_field: u64\n}",
         Some((2, 11, "M2.move")),
+    );
+    // locally aliased mod use (actual mod name)
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        32,
+        21,
+        "M9.move",
+        0,
+        16,
+        "M1.move",
+        "module Symbols::M1",
+        None,
+    );
+    // locally aliased mod use (alias name)
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        1,
+        32,
+        27,
+        "M9.move",
+        0,
+        16,
+        "M1.move",
+        "module Symbols::M1",
+        None,
+    );
+    // aliased struct use
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        1,
+        37,
+        27,
+        "M9.move",
+        2,
+        11,
+        "M2.move",
+        "struct Symbols::M2::SomeOtherStruct{\n	some_field: u64\n}",
+        Some((2, 11, "M2.move")),
+    );
+}
+
+#[test]
+/// Tests if symbolication information for module accesses has been constructed correctly.
+fn module_access_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/symbols");
+
+    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/M9.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+
+    // fully qualified module access in return type
+    assert_use_def_with_doc_string(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        1,
+        18,
+        32,
+        "M9.move",
+        5,
+        16,
+        "M9.move",
+        "module Symbols::M9",
+        None,
+        Some("A module doc comment\n"),
+    );
+    // fully qualified module access in struct type (pack)
+    assert_use_def_with_doc_string(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        19,
+        17,
+        "M9.move",
+        5,
+        16,
+        "M9.move",
+        "module Symbols::M9",
+        None,
+        Some("A module doc comment\n"),
+    );
+    // fully qualified module access in constant access
+    assert_use_def_with_doc_string(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        3,
+        19,
+        55,
+        "M9.move",
+        5,
+        16,
+        "M9.move",
+        "module Symbols::M9",
+        None,
+        Some("A module doc comment\n"),
+    );
+    // fully qualified module access in parameter type
+    assert_use_def_with_doc_string(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        2,
+        22,
+        34,
+        "M9.move",
+        5,
+        16,
+        "M9.move",
+        "module Symbols::M9",
+        None,
+        Some("A module doc comment\n"),
+    );
+    // fully qualified module access in struct type (unpack)
+    assert_use_def_with_doc_string(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        23,
+        21,
+        "M9.move",
+        5,
+        16,
+        "M9.move",
+        "module Symbols::M9",
+        None,
+        Some("A module doc comment\n"),
+    );
+    // imported module access in parameter type
+    assert_use_def_with_doc_string(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        2,
+        27,
+        34,
+        "M9.move",
+        0,
+        16,
+        "M1.move",
+        "module Symbols::M1",
+        None,
+        None,
+    );
+    // imported aliased module access in return type
+    assert_use_def_with_doc_string(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        4,
+        27,
+        51,
+        "M9.move",
+        0,
+        16,
+        "M1.move",
+        "module Symbols::M1",
+        None,
+        None,
+    );
+    // imported locally aliased module access in local var type
+    assert_use_def_with_doc_string(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        1,
+        33,
+        17,
+        "M9.move",
+        0,
+        16,
+        "M1.move",
+        "module Symbols::M1",
+        None,
+        None,
+    );
+    // fully qualified module access in function call
+    assert_use_def_with_doc_string(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        3,
+        33,
+        57,
+        "M9.move",
+        5,
+        16,
+        "M9.move",
+        "module Symbols::M9",
+        None,
+        Some("A module doc comment\n"),
     );
 }
