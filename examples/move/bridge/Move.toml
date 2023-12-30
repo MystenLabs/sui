@@ -1,0 +1,10 @@
+[package]
+name = "Bridge"
+version = "0.0.1"
+
+[dependencies]
+MoveStdlib = { local = "../../../crates/sui-framework/packages/move-stdlib" }
+Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+bridge = "0x0"
