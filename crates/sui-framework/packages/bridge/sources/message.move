@@ -55,6 +55,10 @@ module bridge::message {
         op_type: u8
     }
 
+    // Note: `bcs::peel_vec_u8` *happens* to work here because
+    // `sender_address` and `target_address` are no longer than 255 bytes.
+    // Therefore their length can be represented by a single byte.
+    // See `create_token_bridge_message` for the actual encoding rule.
     public fun extract_token_bridge_payload(message: &BridgeMessage): TokenPayload {
         let bcs = bcs::new(message.payload);
         let sender_address = bcs::peel_vec_u8(&mut bcs);
@@ -73,10 +77,10 @@ module bridge::message {
     }
 
     public fun extract_emergency_op_payload(message: &BridgeMessage): EmergencyOp {
-        let bcs = bcs::new(message.payload);
-        assert!(vector::is_empty(&bcs::into_remainder_bytes(bcs)), ETrailingBytes);
+        // emergency op payload is just a single byte
+        assert!(vector::length(&message.payload) == 1, ETrailingBytes);
         EmergencyOp {
-            op_type: bcs::peel_u8(&mut bcs)
+            op_type: *vector::borrow(&message.payload, 0)
         }
     }
 
@@ -92,12 +96,25 @@ module bridge::message {
         let message = vector[];
         vector::push_back(&mut message, message_type);
         vector::push_back(&mut message, message_version);
+        // bcs serializes u64 as 8 bytes
         vector::append(&mut message, bcs::to_bytes(&seq_num));
         vector::push_back(&mut message, source_chain);
         vector::append(&mut message, payload);
         message
     }
 
+    /// Token Transfer Message Format:
+    /// [message_type: u8]
+    /// [version:u8]
+    /// [nonce:u64]
+    /// [source_chain: u8]
+    /// [sender_address_length:u8]
+    /// [sender_address: byte[]]
+    /// [target_chain:u8]
+    /// [target_address_length:u8]
+    /// [target_address: byte[]]
+    /// [token_type:u8]
+    /// [amount:u64]
     public fun create_token_bridge_message(
         source_chain: u8,
         seq_num: u64,
@@ -107,21 +124,33 @@ module bridge::message {
         token_type: u8,
         amount: u64
     ): BridgeMessage {
+        let payload = vector[];
+        // sender address should be less than 255 bytes so can fit into u8
+        vector::push_back(&mut payload, (vector::length(&sender_address) as u8));
+        vector::append(&mut payload, sender_address);
+        vector::push_back(&mut payload, target_chain);
+        // target address should be less than 255 bytes so can fit into u8
+        vector::push_back(&mut payload, (vector::length(&target_address) as u8));
+        vector::append(&mut payload, target_address);
+        vector::push_back(&mut payload, token_type);
+        // bcs serialzies u64 as 8 bytes
+        vector::append(&mut payload, bcs::to_bytes(&amount));
+
         BridgeMessage {
             message_type: message_types::token(),
             message_version: CURRENT_MESSAGE_VERSION,
             seq_num,
             source_chain,
-            payload: bcs::to_bytes(&TokenPayload {
-                sender_address,
-                target_chain,
-                target_address,
-                token_type,
-                amount
-            })
+            payload,
         }
     }
 
+    /// Emergency Op Message Format:
+    /// [message_type: u8]
+    /// [version:u8]
+    /// [nonce:u64]
+    /// [chain_id: u8]
+    /// [op_type: u8]
     public fun create_emergency_op_message(
         source_chain: u8,
         seq_num: u64,
@@ -132,7 +161,7 @@ module bridge::message {
             message_version: CURRENT_MESSAGE_VERSION,
             seq_num,
             source_chain,
-            payload: bcs::to_bytes(&EmergencyOp { op_type })
+            payload: vector[op_type],
         }
     }
 
@@ -198,33 +227,82 @@ module bridge::message {
     }
 
     #[test]
-    fun test_message_serialization() {
+    fun test_message_serialization_sui_to_eth() {
         let sender_address = address::from_u256(100);
         let scenario = test_scenario::begin(sender_address);
         let ctx = test_scenario::ctx(&mut scenario);
 
         let coin = coin::mint_for_testing<USDC>(12345, ctx);
 
-        let token_bridge_message = BridgeMessage {
-            message_type: message_types::token(),
-            message_version: 1,
-            seq_num: 10,
-            source_chain: chain_ids::sui_testnet(),
-            payload: bcs::to_bytes(&TokenPayload {
-                sender_address: address::to_bytes(sender_address),
-                target_chain: chain_ids::eth_sepolia(),
-                target_address: address::to_bytes(address::from_u256(200)),
-                token_type: token_id<USDC>(),
-                amount: balance::value(coin::balance(&coin))
-            })
-        };
-
-        let message = serialize_message(token_bridge_message);
-
-        let expected_msg = hex::decode(
-            b"00010a00000000000000012000000000000000000000000000000000000000000000000000000000000000640b2000000000000000000000000000000000000000000000000000000000000000c8033930000000000000",
+        let token_bridge_message = create_token_bridge_message(
+            chain_ids::sui_testnet(), // source chain
+            10, // seq_num
+            address::to_bytes(sender_address), // sender address
+            chain_ids::eth_sepolia(), // target_chain
+            // Eth address is 20 bytes long
+            hex::decode(b"00000000000000000000000000000000000000c8"), // target_address
+            3u8, // token_type
+            balance::value(coin::balance(&coin)) // amount: u64
         );
 
+        // Test payload extraction
+        let token_payload = TokenPayload {
+            sender_address: address::to_bytes(sender_address),
+            target_chain: chain_ids::eth_sepolia(),
+            target_address: hex::decode(b"00000000000000000000000000000000000000c8"),
+            token_type: 3u8,
+            amount: balance::value(coin::balance(&coin))
+        };
+        assert!(extract_token_bridge_payload(&token_bridge_message) == token_payload, 0);
+
+        // Test message serialization
+        let message = serialize_message(token_bridge_message);
+        let expected_msg = hex::decode(
+            b"00010a00000000000000012000000000000000000000000000000000000000000000000000000000000000640b1400000000000000000000000000000000000000c8033930000000000000",
+        );
+
+        assert!(message == expected_msg, 0);
+        assert!(token_bridge_message == deserialize_message(message), 0);
+
+        coin::burn_for_testing(coin);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_message_serialization_eth_to_sui() {
+        let address_1 = address::from_u256(100);
+        let scenario = test_scenario::begin(address_1);
+        let ctx = test_scenario::ctx(&mut scenario);
+
+        let coin = coin::mint_for_testing<USDC>(12345, ctx);
+
+        let token_bridge_message = create_token_bridge_message(
+            chain_ids::eth_sepolia(), // source chain
+            10, // seq_num
+            // Eth address is 20 bytes long
+            hex::decode(b"00000000000000000000000000000000000000c8"), // eth sender address
+            chain_ids::sui_testnet(), // target_chain
+            address::to_bytes(address_1), // target address
+            3u8, // token_type
+            balance::value(coin::balance(&coin)) // amount: u64
+        );
+
+        // Test payload extraction
+        let token_payload = TokenPayload {
+            sender_address: hex::decode(b"00000000000000000000000000000000000000c8"),
+            target_chain: chain_ids::sui_testnet(),
+            target_address: address::to_bytes(address_1),
+            token_type: 3u8,
+            amount: balance::value(coin::balance(&coin))
+        };
+        assert!(extract_token_bridge_payload(&token_bridge_message) == token_payload, 0);
+
+
+        // Test message serialization
+        let message = serialize_message(token_bridge_message);
+        let expected_msg = hex::decode(
+            b"00010a000000000000000b1400000000000000000000000000000000000000c801200000000000000000000000000000000000000000000000000000000000000064033930000000000000",
+        );
         assert!(message == expected_msg, 0);
         assert!(token_bridge_message == deserialize_message(message), 0);
 
