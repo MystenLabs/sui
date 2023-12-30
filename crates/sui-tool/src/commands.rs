@@ -821,35 +821,36 @@ impl ToolCommand {
                         }
                     });
 
+                let aws_endpoint = env::var("AWS_SNAPSHOT_ENDPOINT").ok();
                 let snapshot_bucket_type = if no_sign_request {
                     ObjectStoreType::S3
                 } else {
                     snapshot_bucket_type
                         .expect("--snapshot-bucket-type must be set if not using --no-sign-request")
                 };
-
-                // index staging is not yet supported for formal snapshots
-                let skip_indexes = skip_indexes || formal;
-                let aws_endpoint = env::var("AWS_SNAPSHOT_ENDPOINT").ok().or_else(|| {
-                    if formal && no_sign_request {
-                        if network == Chain::Mainnet {
-                            Some("https://formal-snapshot.mainnet.sui.io".to_string())
-                        } else if network == Chain::Testnet {
-                            Some("https://formal-snapshot.testnet.sui.io".to_string())
+                let snapshot_store_config = if no_sign_request {
+                    let aws_endpoint = env::var("AWS_SNAPSHOT_ENDPOINT").ok().or_else(|| {
+                        // TODO: remove when the --formal flag is fully removed
+                        if formal {
+                            if network == Chain::Mainnet {
+                                Some("https://formal-snapshot.mainnet.sui.io".to_string())
+                            } else if network == Chain::Testnet {
+                                Some("https://formal-snapshot.testnet.sui.io".to_string())
+                            } else {
+                                None
+                            }
                         } else {
-                            None
+                            if network == Chain::Mainnet {
+                                Some("https://db-snapshot.mainnet.sui.io".to_string())
+                            } else if network == Chain::Testnet {
+                                Some("https://db-snapshot.testnet.sui.io".to_string())
+                            } else {
+                                None
+                            }
                         }
-                    } else {
-                        None
-                    }
-                });
-                let snapshot_store_config = match snapshot_bucket_type {
-                    ObjectStoreType::S3 => ObjectStoreConfig {
+                    });
+                    ObjectStoreConfig {
                         object_store: Some(ObjectStoreType::S3),
-                        bucket: snapshot_bucket.filter(|s| !s.is_empty()),
-                        aws_access_key_id: env::var("AWS_SNAPSHOT_ACCESS_KEY_ID").ok(),
-                        aws_secret_access_key: env::var("AWS_SNAPSHOT_SECRET_ACCESS_KEY").ok(),
-                        aws_region: env::var("AWS_SNAPSHOT_REGION").ok(),
                         aws_endpoint: aws_endpoint.filter(|s| !s.is_empty()),
                         aws_virtual_hosted_style_request: env::var(
                             "AWS_SNAPSHOT_VIRTUAL_HOSTED_REQUESTS",
@@ -860,37 +861,59 @@ impl ToolCommand {
                         object_store_connection_limit: 200,
                         no_sign_request,
                         ..Default::default()
-                    },
-                    ObjectStoreType::GCS => ObjectStoreConfig {
-                        object_store: Some(ObjectStoreType::GCS),
-                        bucket: snapshot_bucket,
-                        google_service_account: env::var("GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH")
+                    }
+                } else {
+                    match snapshot_bucket_type {
+                        ObjectStoreType::S3 => ObjectStoreConfig {
+                            object_store: Some(ObjectStoreType::S3),
+                            bucket: snapshot_bucket.filter(|s| !s.is_empty()),
+                            aws_access_key_id: env::var("AWS_SNAPSHOT_ACCESS_KEY_ID").ok(),
+                            aws_secret_access_key: env::var("AWS_SNAPSHOT_SECRET_ACCESS_KEY").ok(),
+                            aws_region: env::var("AWS_SNAPSHOT_REGION").ok(),
+                            aws_endpoint: aws_endpoint.filter(|s| !s.is_empty()),
+                            aws_virtual_hosted_style_request: env::var(
+                                "AWS_SNAPSHOT_VIRTUAL_HOSTED_REQUESTS",
+                            )
+                            .ok()
+                            .and_then(|b| b.parse().ok())
+                            .unwrap_or(no_sign_request),
+                            object_store_connection_limit: 200,
+                            no_sign_request,
+                            ..Default::default()
+                        },
+                        ObjectStoreType::GCS => ObjectStoreConfig {
+                            object_store: Some(ObjectStoreType::GCS),
+                            bucket: snapshot_bucket,
+                            google_service_account: env::var(
+                                "GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH",
+                            )
                             .ok(),
-                        object_store_connection_limit: 200,
-                        no_sign_request,
-                        ..Default::default()
-                    },
-                    ObjectStoreType::Azure => ObjectStoreConfig {
-                        object_store: Some(ObjectStoreType::Azure),
-                        bucket: snapshot_bucket,
-                        azure_storage_account: env::var("AZURE_SNAPSHOT_STORAGE_ACCOUNT").ok(),
-                        azure_storage_access_key: env::var("AZURE_SNAPSHOT_STORAGE_ACCESS_KEY")
-                            .ok(),
-                        object_store_connection_limit: 200,
-                        no_sign_request,
-                        ..Default::default()
-                    },
-                    ObjectStoreType::File => {
-                        if snapshot_path.is_some() {
-                            ObjectStoreConfig {
-                                object_store: Some(ObjectStoreType::File),
-                                directory: snapshot_path,
-                                ..Default::default()
-                            }
-                        } else {
-                            panic!(
+                            object_store_connection_limit: 200,
+                            no_sign_request,
+                            ..Default::default()
+                        },
+                        ObjectStoreType::Azure => ObjectStoreConfig {
+                            object_store: Some(ObjectStoreType::Azure),
+                            bucket: snapshot_bucket,
+                            azure_storage_account: env::var("AZURE_SNAPSHOT_STORAGE_ACCOUNT").ok(),
+                            azure_storage_access_key: env::var("AZURE_SNAPSHOT_STORAGE_ACCESS_KEY")
+                                .ok(),
+                            object_store_connection_limit: 200,
+                            no_sign_request,
+                            ..Default::default()
+                        },
+                        ObjectStoreType::File => {
+                            if snapshot_path.is_some() {
+                                ObjectStoreConfig {
+                                    object_store: Some(ObjectStoreType::File),
+                                    directory: snapshot_path,
+                                    ..Default::default()
+                                }
+                            } else {
+                                panic!(
                                 "--snapshot-path must be specified for --snapshot-bucket-type=file"
                             );
+                            }
                         }
                     }
                 };

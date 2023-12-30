@@ -36,6 +36,45 @@ impl Manifest {
     pub fn new(available_epochs: Vec<u64>) -> Self {
         Manifest { available_epochs }
     }
+
+    pub fn epoch_exists(&self, epoch: u64) -> bool {
+        self.available_epochs.contains(&epoch)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PerEpochManifest {
+    pub lines: Vec<String>,
+}
+
+impl PerEpochManifest {
+    pub fn new(lines: Vec<String>) -> Self {
+        PerEpochManifest { lines }
+    }
+
+    pub fn serialize_as_newline_delimited(&self) -> String {
+        self.lines.join("\n")
+    }
+
+    pub fn deserialize_from_newline_delimited(s: &str) -> PerEpochManifest {
+        PerEpochManifest {
+            lines: s.lines().map(String::from).collect(),
+        }
+    }
+
+    // Method to filter lines by a given prefix
+    pub fn filter_by_prefix(&self, prefix: &str) -> PerEpochManifest {
+        let filtered_lines = self
+            .lines
+            .iter()
+            .filter(|line| line.starts_with(prefix))
+            .cloned()
+            .collect();
+
+        PerEpochManifest {
+            lines: filtered_lines,
+        }
+    }
 }
 
 pub async fn get<S: ObjectStoreGetExt>(store: &S, src: &Path) -> Result<Bytes> {
@@ -358,7 +397,8 @@ pub async fn write_snapshot_manifest<S: ObjectStoreListExt + ObjectStorePutExt>(
         }
     }
 
-    let bytes = Bytes::from(file_names.join("\n"));
+    let epoch_manifest = PerEpochManifest::new(file_names);
+    let bytes = Bytes::from(epoch_manifest.serialize_as_newline_delimited());
     put(
         store,
         &Path::from(format!("{}/{}", dir, MANIFEST_FILENAME)),
