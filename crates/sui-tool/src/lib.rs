@@ -22,6 +22,9 @@ use sui_network::default_mysten_network_config;
 use sui_protocol_config::Chain;
 use sui_sdk::SuiClientBuilder;
 use sui_storage::object_store::http::HttpDownloaderBuilder;
+use sui_storage::object_store::util::Manifest;
+use sui_storage::object_store::util::PerEpochManifest;
+use sui_storage::object_store::util::MANIFEST_FILENAME;
 use sui_types::accumulator::Accumulator;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_grpc::LayoutGenerationOption;
@@ -31,7 +34,6 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
-use ::object_store::ObjectMeta;
 use anyhow::anyhow;
 use eyre::ContextCompat;
 use fastcrypto::hash::MultisetHash;
@@ -810,10 +812,12 @@ pub async fn check_completed_snapshot(
     } else {
         Err(anyhow!(
             "missing success marker at {}/{}",
-            snapshot_store_config
-                .bucket
-                .as_ref()
-                .unwrap_or(&"unknown_bucket".to_string()),
+            snapshot_store_config.bucket.as_ref().unwrap_or(
+                &snapshot_store_config
+                    .clone()
+                    .aws_endpoint
+                    .unwrap_or("unknown_bucket".to_string())
+            ),
             success_marker
         ))
     }
@@ -993,108 +997,49 @@ pub async fn download_db_snapshot(
     skip_indexes: bool,
     num_parallel_downloads: usize,
 ) -> Result<(), anyhow::Error> {
-    // TODO: Enable downloading db snapshots with no sign requests
-    let remote_store = snapshot_store_config.make()?;
-    let entries = remote_store.list_with_delimiter(None).await?;
-    let epoch_path = format!("epoch_{}", epoch);
-    let epoch_dir = entries
-        .common_prefixes
-        .iter()
-        .find(|entry| {
-            entry
-                .filename()
-                .map(|filename| filename == epoch_path)
-                .unwrap_or(false)
-        })
-        .ok_or(anyhow!("Epoch dir doesn't exist on the remote store"))?;
-    let success_marker = epoch_dir.child(SUCCESS_MARKER);
-    let _get_result = remote_store.get(&success_marker).await?;
-    let store_entries = remote_store
-        .list_with_delimiter(Some(&get_path(&format!("{}/store", epoch_path))))
-        .await?;
-    let perpetual_dir = store_entries
-        .common_prefixes
-        .iter()
-        .find(|entry| {
-            entry
-                .filename()
-                .map(|filename| filename == "perpetual")
-                .unwrap_or(false)
-        })
-        .ok_or(anyhow!(
-            "Perpetual dir doesn't exist under the remote epoch dir"
-        ))?;
-    let entries = remote_store
-        .list_with_delimiter(Some(&get_path(&epoch_path)))
-        .await?;
-    let committee_dir = entries
-        .common_prefixes
-        .iter()
-        .find(|entry| {
-            entry
-                .filename()
-                .map(|filename| filename == "epochs")
-                .unwrap_or(false)
-        })
-        .ok_or(anyhow!(
-            "Epochs dir doesn't exist under the remote epoch dir"
-        ))?;
-    let mut files: Vec<ObjectMeta> = vec![];
-    files.extend(
-        remote_store
-            .list_with_delimiter(Some(committee_dir))
-            .await?
-            .objects,
-    );
-    files.extend(
-        remote_store
-            .list_with_delimiter(Some(perpetual_dir))
-            .await?
-            .objects,
-    );
-    let checkpoints_dir = entries
-        .common_prefixes
-        .iter()
-        .find(|entry| {
-            entry
-                .filename()
-                .map(|filename| filename == "checkpoints")
-                .unwrap_or(false)
-        })
-        .ok_or(anyhow!(
-            "Checkpoints dir doesn't exist under the remote epoch dir"
-        ))?;
-    files.extend(
-        remote_store
-            .list_with_delimiter(Some(checkpoints_dir))
-            .await?
-            .objects,
-    );
-    if !skip_indexes {
-        let indexes_dir = entries
-            .common_prefixes
-            .iter()
-            .find(|entry| {
-                entry
-                    .filename()
-                    .map(|filename| filename == "indexes")
-                    .unwrap_or(false)
-            })
-            .ok_or(anyhow!(
-                "Indexes dir doesn't exist under the remote epoch dir"
-            ))?;
-        files.extend(
-            remote_store
-                .list_with_delimiter(Some(indexes_dir))
-                .await?
-                .objects,
-        );
+    // anywhere that remote store lists are being called I'll need to replace with manifest file gets
+    let remote_store = if snapshot_store_config.no_sign_request {
+        snapshot_store_config.make_http()?
+    } else {
+        snapshot_store_config.make().map(Arc::new)?
+    };
+
+    // https://github.com/MystenLabs/sui/pull/15389/files
+    // ^that pr introduces a top level MANIFEST file which contains all valid epochs, we can use that instead to list the "entries"
+    let manifest_contents = remote_store.get_bytes(&get_path(MANIFEST_FILENAME)).await?;
+    let root_manifest: Manifest = serde_json::from_slice(&manifest_contents)
+        .map_err(|err| anyhow!("Error parsing MANIFEST from bytes: {}", err))?;
+
+    if !root_manifest.epoch_exists(epoch) {
+        return Err(anyhow!(
+            "Epoch dir {} doesn't exist on the remote store",
+            epoch
+        ));
     }
-    let total_bytes: usize = files.iter().map(|f| f.size).sum();
-    info!(
-        "Total bytes to download: {}MiB",
-        total_bytes as f64 / (1024 * 1024) as f64
-    );
+
+    let epoch_path = format!("epoch_{}", epoch);
+    let epoch_dir = get_path(&epoch_path);
+
+    let success_marker = epoch_dir.child(SUCCESS_MARKER);
+    let _get_result = remote_store.get_bytes(&success_marker).await?;
+    let manifest_file = epoch_dir.child(MANIFEST_FILENAME);
+    let epoch_manifest_contents =
+        String::from_utf8(remote_store.get_bytes(&manifest_file).await?.to_vec())
+            .map_err(|err| anyhow!("Error parsing {}/MANIFEST from bytes: {}", epoch_path, err))?;
+    println!("{}", epoch_manifest_contents);
+
+    let epoch_manifest =
+        PerEpochManifest::deserialize_from_newline_delimited(&epoch_manifest_contents);
+
+    let store_entries = epoch_manifest.filter_by_prefix("store");
+
+    let mut files: Vec<String> = vec![];
+    files.extend(store_entries.filter_by_prefix("store/perpetual").lines);
+    files.extend(store_entries.filter_by_prefix("store/epochs").lines);
+    files.extend(epoch_manifest.filter_by_prefix("checkpoints").lines);
+    if !skip_indexes {
+        files.extend(epoch_manifest.filter_by_prefix("indexes").lines)
+    }
     let local_store = ObjectStoreConfig {
         object_store: Some(ObjectStoreType::File),
         directory: Some(path.to_path_buf()),
@@ -1123,10 +1068,11 @@ pub async fn download_db_snapshot(
                 let counter_cloned = file_counter.clone();
                 async move {
                     counter_cloned.fetch_add(1, Ordering::Relaxed);
-                    copy_file(&file.location, &file.location, &remote_store, &local_store).await?;
+                    let file_path = get_path(format!("epoch_{}/{}", epoch, file).as_str());
+                    copy_file(&file_path, &file_path, &remote_store, &local_store).await?;
                     Ok::<(::object_store::path::Path, usize), anyhow::Error>((
-                        file.location.clone(),
-                        file.size,
+                        file_path.clone(),
+                        1234, // hack, need to decide if we want to keep the size estimate or not
                     ))
                 }
             })
