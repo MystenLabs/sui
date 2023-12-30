@@ -1,6 +1,5 @@
 [package]
 name = "ecommerce"
-version = "0.0.1"
 
 [dependencies]
 Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }

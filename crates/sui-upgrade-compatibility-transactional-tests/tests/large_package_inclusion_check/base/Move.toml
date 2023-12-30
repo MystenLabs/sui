@@ -1,6 +1,5 @@
 [package]
 name = "base"
-version = "0.0.1"
 
 [dependencies]
 MoveStdlib = { local = "../../../../sui-framework/packages/move-stdlib" }

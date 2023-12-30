@@ -1,6 +1,5 @@
 [package]
 name = "type_params_extra"
-version = "0.0.1"
 
 [dependencies]
 Sui = { local = "../../../../../sui-framework/packages/sui-framework" }

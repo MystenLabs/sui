@@ -1,6 +1,5 @@
 [package]
 name = "type_factory"
-version = "0.0.1"
 
 [addresses]
 typer =  "0x0"

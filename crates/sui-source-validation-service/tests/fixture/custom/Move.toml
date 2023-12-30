@@ -1,6 +1,5 @@
 [package]
 name = "custom"
-version = "0.0.1"
 
 [addresses]
 custom = "0x0"

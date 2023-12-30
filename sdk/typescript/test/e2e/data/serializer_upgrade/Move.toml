@@ -1,6 +1,5 @@
 [package]
 name = "serializer"
-version = "0.0.2"
 
 [dependencies]
 Sui = { local = "../../../../../../crates/sui-framework/packages/sui-framework" }

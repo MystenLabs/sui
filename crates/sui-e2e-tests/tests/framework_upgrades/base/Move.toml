@@ -1,6 +1,5 @@
 [package]
 name = "SuiExtraBase"
-version = "0.0.1"
 
 [dependencies]
 SuiSystem = { local = "../../../../sui-framework/packages/sui-system" }

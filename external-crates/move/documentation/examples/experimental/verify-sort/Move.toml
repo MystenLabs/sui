@@ -1,6 +1,5 @@
 [package]
 name = "Loop"
-version = "0.0.0"
 
 [addresses]
 Loop = "0x42"
