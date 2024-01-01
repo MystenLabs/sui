@@ -1,13 +1,13 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::metrics::NarwhalBenchMetrics;
 use arc_swap::{ArcSwap, ArcSwapOption};
 use bytes::Bytes;
 use clap::*;
 use eyre::Context;
 use futures::future::join_all;
 use mysten_network::Multiaddr;
+use narwhal_node::metrics::NarwhalBenchMetrics;
 use prometheus::Registry;
 use rand::{
     rngs::{SmallRng, StdRng},

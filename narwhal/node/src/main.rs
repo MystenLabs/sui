@@ -7,6 +7,8 @@
     rust_2018_idioms,
     rust_2021_compatibility
 )]
+mod benchmark_client;
+use benchmark_client::{parse_url, url_to_multiaddr, Client, LazyNarwhalClient};
 use clap::{Parser, Subcommand};
 use config::{
     ChainIdentifier, Committee, CommitteeBuilder, Epoch, Export, Import, Parameters,
@@ -18,7 +20,6 @@ use fastcrypto::traits::{EncodeDecodeBase64, KeyPair as _};
 use futures::join;
 use mysten_metrics::start_prometheus_server;
 use narwhal_node as node;
-use narwhal_node::benchmark_client::{parse_url, url_to_multiaddr, Client, LazyNarwhalClient};
 use narwhal_node::metrics::NarwhalBenchMetrics;
 use narwhal_node::primary_node::PrimaryNode;
 use narwhal_node::worker_node::WorkerNode;
