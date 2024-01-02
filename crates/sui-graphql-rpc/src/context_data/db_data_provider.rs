@@ -1375,21 +1375,21 @@ impl PgManager {
         before: Option<String>,
         filter: Option<EventFilter>,
     ) -> Result<Option<Connection<String, Event>>, Error> {
-        let events = self
+        let Some((events, has_next_page)) = self
             .multi_get_events(first, after, last, before, filter)
-            .await?;
+            .await?
+        else {
+            return Ok(None);
+        };
 
-        if let Some((stored_events, has_next_page)) = events {
-            let mut connection = Connection::new(false, has_next_page);
-            connection.edges.extend(stored_events.into_iter().map(|e| {
-                let cursor = self.build_event_cursor(&e);
-                let event = Event { stored: e };
-                Edge::new(cursor, event)
-            }));
-            Ok(Some(connection))
-        } else {
-            Err(Error::InvalidFilter)
+        let mut connection = Connection::new(false, has_next_page);
+        for stored_event in events {
+            let cursor = self.build_event_cursor(&stored_event);
+            let event = Event::try_from(stored_event)?;
+            connection.edges.push(Edge::new(cursor, event));
         }
+
+        Ok(Some(connection))
     }
 
     pub(crate) async fn fetch_dynamic_fields(
