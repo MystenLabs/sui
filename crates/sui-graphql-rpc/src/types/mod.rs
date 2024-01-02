@@ -39,6 +39,7 @@ pub(crate) mod safe_mode;
 pub(crate) mod stake;
 pub(crate) mod stake_subsidy;
 pub(crate) mod storage_fund;
+pub(crate) mod string_input;
 pub(crate) mod sui_address;
 pub(crate) mod suins_registration;
 pub(crate) mod system_parameters;

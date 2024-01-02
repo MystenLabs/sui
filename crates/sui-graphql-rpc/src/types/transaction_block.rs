@@ -13,8 +13,8 @@ use sui_types::{
 use crate::error::Error;
 
 use super::{
-    address::Address, base64::Base64, epoch::Epoch, gas::GasInput, sui_address::SuiAddress,
-    transaction_block_effects::TransactionBlockEffects,
+    address::Address, base64::Base64, digest::Digest, epoch::Epoch, gas::GasInput,
+    sui_address::SuiAddress, transaction_block_effects::TransactionBlockEffects,
     transaction_block_kind::TransactionBlockKind,
 };
 
@@ -53,7 +53,7 @@ pub(crate) struct TransactionBlockFilter {
     pub input_object: Option<SuiAddress>,
     pub changed_object: Option<SuiAddress>,
 
-    pub transaction_ids: Option<Vec<String>>,
+    pub transaction_ids: Option<Vec<Digest>>,
 }
 
 #[Object]
