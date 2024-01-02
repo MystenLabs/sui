@@ -114,7 +114,6 @@ members = [
     "crates/sui-json-rpc-tests",
     "crates/sui-json-rpc-types",
     "crates/sui-keys",
-    "crates/sui-kvstore",
     "crates/sui-light-client",
     "crates/sui-macros",
     "crates/sui-metric-checker",
@@ -590,7 +589,6 @@ sui-json-rpc = { path = "crates/sui-json-rpc" }
 sui-json-rpc-api = { path = "crates/sui-json-rpc-api" }
 sui-json-rpc-types = { path = "crates/sui-json-rpc-types" }
 sui-keys = { path = "crates/sui-keys" }
-sui-kvstore = { path = "crates/sui-kvstore" }
 sui-macros = { path = "crates/sui-macros" }
 sui-metric-checker = { path = "crates/sui-metric-checker" }
 sui-move = { path = "crates/sui-move" }
