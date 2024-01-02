@@ -21,7 +21,7 @@ module regulated_token::reg {
             otw, 6, b"REG", b"Regulated Token", b"Example of a regulated token",
             option::none(), ctx
         );
-        let (policy, policy_cap) = token::new(&treasury_cap, ctx);
+        let (policy, policy_cap) = token::new_policy(&treasury_cap, ctx);
 
         // Allow transfer and spend by default
         token::allow(&mut policy, &policy_cap, token::transfer_action(), ctx);
