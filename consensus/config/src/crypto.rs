@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::{bls12381, ed25519};
+use fastcrypto::{
+    bls12381, ed25519,
+    hash::{Blake2b256, HashFunction},
+};
+use shared_crypto::intent::INTENT_PREFIX_LENGTH;
 
-////////////////////////////////////////////////////////////////////////
-// Type aliases selecting the cryptography algorithms for the code base.
-////////////////////////////////////////////////////////////////////////
 // Here we select the types that are used by default in the code base.
 // The whole code base should only:
 // - refer to those aliases and not use the individual scheme implementations
@@ -26,3 +27,8 @@ pub type ProtocolPublicKey = bls12381::min_sig::BLS12381PublicKey;
 pub type ProtocolPublicKeyBytes = bls12381::min_sig::BLS12381PublicKeyAsBytes;
 pub type ProtocolPrivateKey = bls12381::min_sig::BLS12381PrivateKey;
 pub type ProtocolKeyPair = bls12381::min_sig::BLS12381KeyPair;
+
+/// For block digest.
+pub type DefaultHashFunction = Blake2b256;
+pub const DIGEST_LENGTH: usize = DefaultHashFunction::OUTPUT_SIZE;
+pub const INTENT_MESSAGE_LENGTH: usize = INTENT_PREFIX_LENGTH + DIGEST_LENGTH;
