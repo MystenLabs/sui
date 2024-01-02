@@ -69,6 +69,14 @@ impl Event {
         }
     }
 
+    fn timestamp_ms_impl(&self) -> Option<i64> {
+        if let Some(stored) = &self.stored {
+            Some(stored.timestamp_ms)
+        } else {
+            None
+        }
+    }
+
     fn type_tag_impl(&self) -> Result<TypeTag, Error> {
         let struct_tag = match &self.stored {
             Some(stored) => parse_sui_struct_tag(&stored.event_type)
@@ -118,10 +126,10 @@ impl Event {
 
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
     async fn timestamp(&self) -> Result<Option<DateTime>, Error> {
-        let Some(stored) = &self.stored else {
+        let Some(timestamp_ms) = self.timestamp_ms_impl() else {
             return Ok(None);
         };
-        Ok(DateTime::from_ms(stored.timestamp_ms).ok())
+        Ok(Some(DateTime::from_ms(timestamp_ms)?))
     }
 
     #[graphql(flatten)]
