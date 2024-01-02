@@ -8,7 +8,7 @@
     rust_2021_compatibility
 )]
 mod benchmark_client;
-use benchmark_client::{parse_url, url_to_multiaddr, Client, LazyNarwhalClient};
+use benchmark_client::{parse_url, url_to_multiaddr, Client, OperatingMode};
 use clap::{Parser, Subcommand};
 use config::{
     ChainIdentifier, Committee, CommitteeBuilder, Epoch, Export, Import, Parameters,
@@ -59,7 +59,7 @@ use url::Url;
 // #[cfg(feature = "benchmark")]
 // use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 use tracing::{info, warn};
-use worker::TrivialTransactionValidator;
+use worker::{LazyNarwhalClient, TrivialTransactionValidator};
 
 #[derive(Parser)]
 #[command(author, version, about)]
@@ -670,6 +670,7 @@ async fn run(
             let size = *size;
             let rate = *rate;
             let nodes = nodes.to_vec();
+            let operating_mode = OperatingMode::Local;
 
             let duration: Option<Duration> = match duration {
                 Some(d) => {
@@ -687,6 +688,7 @@ async fn run(
                 duration,
                 metrics,
                 local_client: Arc::new(LazyNarwhalClient::new(url_to_multiaddr(addr)?)),
+                operating_mode,
             };
 
             // Waits for all nodes to be online and synchronized and then start benchmark.

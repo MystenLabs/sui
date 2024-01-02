@@ -35,11 +35,12 @@ use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tracing::{error_span, info, Instrument};
 
-use crate::consensus_adapter::{ConnectionMonitorStatusForTests, LazyNarwhalClient};
+use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::{
     authority::AuthorityState,
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
 };
+use narwhal_worker::LazyNarwhalClient;
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]

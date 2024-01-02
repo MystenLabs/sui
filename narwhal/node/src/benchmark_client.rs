@@ -1,7 +1,6 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use arc_swap::{ArcSwap, ArcSwapOption};
 use bytes::Bytes;
 use clap::*;
 use eyre::Context;
@@ -18,13 +17,13 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::{
     net::TcpStream,
-    time::{interval, sleep, timeout, Duration, Instant},
+    time::{interval, sleep, Duration, Instant},
 };
 use tracing::{info, subscriber::set_global_default, warn};
 use tracing_subscriber::filter::EnvFilter;
 use types::{TransactionProto, TransactionsClient};
 use url::Url;
-use worker::LocalNarwhalClient;
+use worker::LazyNarwhalClient;
 
 /// Benchmark client for Narwhal and Tusk
 ///
@@ -57,48 +56,38 @@ struct App {
     client_metric_host: String,
     #[clap(long, default_value = "8081", global = true)]
     client_metric_port: u16,
+    // Local or remote client operating mode.
+    #[clap(long, default_value = "remote", value_parser)]
+    operating_mode: OperatingMode,
 }
 
-/// A Narwhal client that instantiates LocalNarwhalClient lazily. (taken from consensus adapter)
-pub struct LazyNarwhalClient {
-    /// Outer ArcSwapOption allows initialization after the first connection to Narwhal.
-    /// Inner ArcSwap allows Narwhal restarts across epoch changes
-    client: ArcSwapOption<ArcSwap<LocalNarwhalClient>>,
-    addr: Multiaddr,
+#[derive(Clone)]
+pub enum OperatingMode {
+    // Submit transactions via local channel
+    Local,
+    // Submit transactions via grpc
+    Remote,
 }
 
-impl LazyNarwhalClient {
-    /// Lazily instantiates LocalNarwhalClient keyed by the address of the Narwhal worker.
-    pub fn new(addr: Multiaddr) -> Self {
-        Self {
-            client: ArcSwapOption::empty(),
-            addr,
+impl std::str::FromStr for OperatingMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "local" => Ok(OperatingMode::Local),
+            "remote" => Ok(OperatingMode::Remote),
+            _ => Err("must be 'local' or 'remote'".to_string()),
         }
     }
+}
 
-    async fn get(&self) -> Result<Arc<ArcSwap<LocalNarwhalClient>>, eyre::Report> {
-        // Narwhal may not have started and created LocalNarwhalClient, so retry in a loop.
-        const NARWHAL_WORKER_START_TIMEOUT: Duration = Duration::from_secs(30);
-        if let Ok(client) = timeout(NARWHAL_WORKER_START_TIMEOUT, async {
-            loop {
-                match LocalNarwhalClient::get_global(&self.addr) {
-                    Some(c) => return c,
-                    None => {
-                        sleep(Duration::from_millis(100)).await;
-                    }
-                };
-            }
-        })
-        .await
-        {
-            return Ok(client);
-        }
-        Err(eyre::Report::msg(format!(
-            "Timed out after {:?} waiting for Narwhal worker ({}) to start!",
-            NARWHAL_WORKER_START_TIMEOUT, self.addr,
-        )))
-    }
+#[async_trait::async_trait]
+pub trait SubmitToConsensus: Sync + Send + 'static {
+    async fn submit_to_consensus(&self, transaction: Vec<u8>) -> Result<(), eyre::Report>;
+}
 
+#[async_trait::async_trait]
+impl SubmitToConsensus for LazyNarwhalClient {
     async fn submit_to_consensus(&self, transaction: Vec<u8>) -> Result<(), eyre::Report> {
         // The retrieved LocalNarwhalClient can be from the past epoch. Submit would fail after
         // Narwhal shuts down, so there should be no correctness issue.
@@ -107,7 +96,7 @@ impl LazyNarwhalClient {
             if c.is_some() {
                 c
             } else {
-                self.client.store(Some(self.get().await?));
+                self.client.store(Some(self.get().await));
                 self.client.load()
             }
         };
@@ -154,6 +143,7 @@ async fn main() -> Result<(), eyre::Report> {
     let size = app.size;
     let rate = app.rate;
     let nodes = app.nodes;
+    let operating_mode = app.operating_mode;
 
     let duration: Option<Duration> = match app.duration {
         Some(d) => {
@@ -179,6 +169,7 @@ async fn main() -> Result<(), eyre::Report> {
         duration,
         metrics,
         local_client: Arc::new(LazyNarwhalClient::new(url_to_multiaddr(&target)?)),
+        operating_mode,
     };
 
     // Wait for all nodes to be online and synchronized, if any.
@@ -196,6 +187,7 @@ pub struct Client {
     pub duration: Option<Duration>,
     pub metrics: NarwhalBenchMetrics,
     pub local_client: Arc<LazyNarwhalClient>,
+    pub operating_mode: OperatingMode,
 }
 
 impl Client {
@@ -246,6 +238,7 @@ impl Client {
             let task_id = i;
             let client_id = self.target.port().unwrap() as u64;
             let size = self.size;
+            let operating_mode = self.operating_mode.clone();
 
             let handle = tokio::spawn(async move {
                 let interval = interval(task_interval);
@@ -254,9 +247,9 @@ impl Client {
                 let mut random: u64 = rng.gen(); // 8 bytes
                 let mut counter = 0;
 
-                let local_client = match local_client_clone.get().await {
-                    Ok(client) => Some(client),
-                    Err(_) => None,
+                let local_client = match operating_mode {
+                    OperatingMode::Local => Some(local_client_clone.get().await),
+                    OperatingMode::Remote => None,
                 };
 
                 loop {
