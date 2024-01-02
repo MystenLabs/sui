@@ -17,6 +17,8 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::{BTreeMap, BTreeSet};
+use sui_types::base_types::SuiAddress;
+use sui_types::collection_types::{Bag, LinkedTable, VecMap};
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::StakeUnit;
 use sui_types::digests::{Digest, TransactionDigest};
@@ -340,6 +342,53 @@ pub struct EthLog {
     // TODO: pull necessary fields from `Log`.
     pub log: Log,
 }
+
+/////////////////////////// Move Types Start //////////////////////////
+
+/// Rust version of the Move bridge::BridgeInner type.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MoveTypeBridgeInner {
+    pub bridge_version: u64,
+    pub chain_id: u8,
+    pub sequence_nums: VecMap<u8, u64>,
+    pub committee: MoveTypeBridgeCommittee,
+    pub treasury: MoveTypeBridgeTreasury,
+    pub bridge_records: LinkedTable<MoveTypeBridgeMessageKey>,
+    pub frozen: bool,
+}
+
+/// Rust version of the Move treasury::BridgeTreasury type.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MoveTypeBridgeTreasury {
+    pub treasuries: Bag,
+}
+
+/// Rust version of the Move committee::BridgeCommittee type.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MoveTypeBridgeCommittee {
+    pub members: VecMap<Vec<u8>, MoveTypeCommitteeMember>,
+    pub thresholds: VecMap<u8, u64>,
+}
+
+/// Rust version of the Move committee::CommitteeMember type.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MoveTypeCommitteeMember {
+    pub sui_address: SuiAddress,
+    pub bridge_pubkey_bytes: Vec<u8>,
+    pub voting_power: u64,
+    pub http_rest_url: Vec<u8>,
+    pub blocklisted: bool,
+}
+
+/// Rust version of the Move message::BridgeMessageKey type.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MoveTypeBridgeMessageKey {
+    pub source_chain: u8,
+    pub message_type: u8,
+    pub bridge_seq_num: u64,
+}
+
+/////////////////////////// Move Types End //////////////////////////
 
 #[cfg(test)]
 mod tests {
