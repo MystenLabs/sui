@@ -12277,6 +12277,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-light-client"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bcs",
+ "bytes",
+ "clap",
+ "move-binary-format",
+ "move-core-types",
+ "serde",
+ "serde_json",
+ "serde_yaml 0.8.26",
+ "sui-config",
+ "sui-json",
+ "sui-json-rpc-types",
+ "sui-package-resolver",
+ "sui-rest-api",
+ "sui-sdk",
+ "sui-types",
+ "tokio",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-macros"
 version = "0.7.0"
 dependencies = [
