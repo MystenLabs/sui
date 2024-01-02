@@ -4,27 +4,29 @@
 //! BridgeActionExecutor receives BridgeActions (from BridgeOrchestrator),
 //! collects bridge authority signatures and submit signatures on chain.
 
+use move_core_types::ident_str;
 use mysten_metrics::spawn_logged_monitored_task;
+use once_cell::sync::OnceCell;
 use shared_crypto::intent::{Intent, IntentMessage};
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
 };
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SuiAddress},
+    base_types::{ObjectID, ObjectRef, SuiAddress, SequenceNumber},
     committee::VALIDITY_THRESHOLD,
     crypto::{Signature, SuiKeyPair},
     digests::TransactionDigest,
     gas_coin::GasCoin,
     object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{Transaction, TransactionData},
+    transaction::{Transaction, TransactionData, ObjectArg},
 };
 
 use crate::{
-    client::bridge_authority_aggregator::BridgeAuthorityAggregator,
-    error::BridgeError,
+    client::{bridge_authority_aggregator::BridgeAuthorityAggregator, bridge_client},
+    error::{BridgeError, BridgeResult},
     storage::BridgeOrchestratorTables,
-    sui_client::{SuiClient, SuiClientInner},
+    sui_client::{SuiClient, SuiClientInner, get_root_bridge_object_id},
     types::{BridgeAction, VerifiedCertifiedBridgeAction},
 };
 use std::sync::Arc;
@@ -36,6 +38,22 @@ pub const CHANNEL_SIZE: usize = 1000;
 // 0.1s, 0.2s, 0.4s, 0.8s, 1.6s, 3.2s, 6.4s, 12.8s, 25.6s, 51.2s, 102.4s, 204.8s, 409.6s, 819.2s, 1638.4s
 pub const MAX_SIGNING_ATTEMPTS: u64 = 16;
 pub const MAX_EXECUTION_ATTEMPTS: u64 = 16;
+
+// TODO: once we have bridge package on sui framework, we can hardcode the actual
+// bridge dynamic field object id (not 0x9 or dynamic field wrapper) and update
+// along with software upgrades.
+// Or do we always retrieve from 0x9? We can figure this out before the first uggrade.
+fn get_bridge_package_id() -> &'static ObjectID {
+    static BRIDGE_PACKAGE_ID: OnceCell<ObjectID> = OnceCell::new();
+    BRIDGE_PACKAGE_ID.get_or_init(|| {
+        match std::env::var("BRIDGE_PACKAGE_ID") {
+            Ok(id) => ObjectID::from_hex_literal(&id)
+                .expect("BRIDGE_PACKAGE_ID must be a valid hex string"),
+            Err(_) => ObjectID::from_hex_literal("0x9").unwrap(),
+        }
+    })
+}
+
 
 async fn delay(attempt_times: u64) {
     let delay_ms = 100 * (2 ^ attempt_times);
@@ -227,7 +245,7 @@ where
             let (_gas_coin, gas_object_ref) =
                 Self::get_gas_data_assert_ownership(sui_address, gas_object_id, &sui_client).await;
 
-            let tx_data = build_transaction(&gas_object_ref);
+            let tx_data = build_transaction(&gas_object_ref, certificate.data());
             let sig = Signature::new_secure(
                 &IntentMessage::new(Intent::sui_transaction(), &tx_data),
                 &sui_key,
@@ -334,12 +352,128 @@ pub async fn submit_to_executor(
         .map_err(|e| BridgeError::Generic(e.to_string()))
 }
 
-pub fn build_transaction(gas_object_ref: &ObjectRef) -> TransactionData {
-    let sender = SuiAddress::ZERO;
+// TODO: this should be 0x9 once we have bridge package on sui framework.
+// Have this thing here for easier testing.
+pub fn get_root_bridge_object_arg() -> &'static ObjectArg {
+    static ROOT_BRIDGE_OBJ_ID: OnceCell<ObjectArg> = OnceCell::new();
+    ROOT_BRIDGE_OBJ_ID.get_or_init(|| {
+        let bridge_object_id =
+            std::env::var("ROOT_BRIDGE_OBJECT_ID").expect("Expect ROOT_BRIDGE_OBJECT_ID env var set");
+        let object_id = ObjectID::from_hex_literal(&bridge_object_id)
+            .expect("ROOT_BRIDGE_OBJECT_ID must be a valid hex string");
+        let initial_shared_version =
+            std::env::var("ROOT_BRIDGE_OBJECT_INITIAL_SHARED_VERSION").expect("Expect ROOT_BRIDGE_OBJECT_ID env var set").parse::<u64>()
+            .expect("ROOT_BRIDGE_OBJECT_INITIAL_SHARED_VERSION must be a valid u64");
+        ObjectArg::SharedObject {
+            id: object_id,
+            initial_shared_version: SequenceNumber::from_u64(initial_shared_version),
+            mutable: true,
+        }
+    })
+}
+
+pub fn build_transaction(gas_object_ref: &ObjectRef, action: &BridgeAction) -> TransactionData {
+    unimplemented!()
+}
+
+pub fn build_token_bridge_approve_transaction(gas_object_ref: &ObjectRef, action: &BridgeAction) -> BridgeResult<TransactionData> {
+    // let sender = SuiAddress::ZERO;
+    // let mut builder = ProgrammableTransactionBuilder::new();
+    // builder.pay_sui(vec![SuiAddress::ZERO], vec![1u64]).unwrap();
+    // let pt = builder.finish();
+    // TransactionData::new_programmable(sender, vec![*gas_object_ref], pt, 15_000_000, 1500)
+
     let mut builder = ProgrammableTransactionBuilder::new();
-    builder.pay_sui(vec![SuiAddress::ZERO], vec![1u64]).unwrap();
-    let pt = builder.finish();
-    TransactionData::new_programmable(sender, vec![*gas_object_ref], pt, 15_000_000, 1500)
+
+    let (source_chain, seq_num, sender, target_chain, target, token_type, amount) = match action {
+        BridgeAction::SuiToEthBridgeAction(a) => {
+            let bridge_event = a.sui_bridge_event;
+            (
+                bridge_event.sui_chain_id,
+                bridge_event.nonce,
+                bridge_event.sui_address.to_vec(),
+                bridge_event.eth_chain_id,
+                bridge_event.eth_address.to_fixed_bytes().to_vec(),
+                bridge_event.token_id,
+                bridge_event.amount,
+            )
+
+        }
+        BridgeAction::EthToSuiBridgeAction(a) => {
+            let bridge_event = a.eth_bridge_event;
+            (
+                bridge_event.eth_chain_id,
+                bridge_event.nonce,
+                bridge_event.eth_address.to_fixed_bytes().to_vec(),
+                bridge_event.sui_chain_id,
+                bridge_event.sui_address.to_vec(),
+                bridge_event.token_id,
+                bridge_event.amount,
+            )
+        }
+    };
+
+    // 
+    let source_chain = builder.pure(source_chain as u8).map_err(
+        |e| BridgeError::BridgeEventParameterSerializationError(format!("Failed to serialize source_chain: {:?}. Err: {:?}", source_chain, e)),
+    )?;
+    let seq_num = builder.pure(seq_num).map_err(
+        |e| BridgeError::BridgeEventParameterSerializationError(format!("Failed to serialize seq_num: {:?}. Err: {:?}", seq_num, e)),
+    )?;
+    let sender = builder.pure(sender).map_err(
+        |e| BridgeError::BridgeEventParameterSerializationError(format!("Failed to serialize sender: {:?}. Err: {:?}", sender, e)),
+    )?;
+    let target_chain = builder.pure(target_chain as u8).map_err(
+        |e| BridgeError::BridgeEventParameterSerializationError(format!("Failed to serialize target_chain: {:?}. Err: {:?}", target_chain, e)),
+    )?;
+    let target = builder.pure(target).map_err(
+        |e| BridgeError::BridgeEventParameterSerializationError(format!("Failed to serialize target: {:?}. Err: {:?}", target, e)),
+    )?;
+    let token_type = builder.pure(token_type as u8).map_err(
+        |e| BridgeError::BridgeEventParameterSerializationError(format!("Failed to serialize token_type: {:?}. Err: {:?}", token_type, e)),
+    )?;
+    let amount = builder.pure(amount).map_err(
+        |e| BridgeError::BridgeEventParameterSerializationError(format!("Failed to serialize amount: {:?}. Err: {:?}", amount, e)),
+    )?;
+
+    let msg_arg = builder.programmable_move_call(
+        *get_bridge_package_id(),
+        ident_str!("message").to_owned(),
+        ident_str!("create_token_bridge_message").to_owned(),
+        vec![],
+        vec![
+            source_chain,
+            seq_num,
+            sender,
+            target_chain,
+            target,
+            token_type,
+            amount,
+        ],
+    );
+
+    // Unwrap: this should not fail
+    let bridge = builder
+        .obj(get_root_bridge_object_arg().clone())
+        .unwrap();
+    let signatures = builder.pure(vec![signature.as_bytes().to_vec()]).unwrap();
+
+    builder.programmable_move_call(
+        BRIDGE_PACKAGE_ID,
+        ident_str!("bridge").to_owned(),
+        ident_str!("approve_bridge_message").to_owned(),
+        vec![],
+        vec![bridge, msg_arg, signatures],
+    );
+
+    builder.programmable_move_call(
+        BRIDGE_PACKAGE_ID,
+        ident_str!("bridge").to_owned(),
+        ident_str!("claim_and_transfer_token").to_owned(),
+        vec![TypeTag::from_str("0xb::btc::BTC").unwrap()],
+        vec![bridge, source_chain, seq_num],
+    );
+
 }
 
 #[cfg(test)]
@@ -386,7 +520,7 @@ mod tests {
             vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
         );
 
-        let tx_data = build_transaction(&gas_object_ref);
+        let tx_data = build_transaction(&gas_object_ref, &action);
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
 
         let gas_coin = GasCoin::new_for_testing(1_000_000_000_000); // dummy gas coin
@@ -421,7 +555,7 @@ mod tests {
             vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
         );
 
-        let tx_data = build_transaction(&gas_object_ref);
+        let tx_data = build_transaction(&gas_object_ref, &action);
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
 
         // Mock the transaction to fail
@@ -459,7 +593,7 @@ mod tests {
             vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
         );
 
-        let tx_data = build_transaction(&gas_object_ref);
+        let tx_data = build_transaction(&gas_object_ref, &action);
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
         mock_transaction_error(
             &sui_client_mock,
@@ -577,7 +711,7 @@ mod tests {
             sui_tx_event_index,
         );
 
-        let tx_data = build_transaction(&gas_object_ref);
+        let tx_data = build_transaction(&gas_object_ref, &action);
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
 
         mock_transaction_response(&sui_client_mock, tx_digest, SuiExecutionStatus::Success);

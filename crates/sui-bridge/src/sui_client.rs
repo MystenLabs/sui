@@ -10,6 +10,7 @@ use std::time::Duration;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use axum::response::sse::Event;
+use ethers::abi::parse_abi;
 use ethers::types::{Address, U256};
 use fastcrypto::traits::ToFromBytes;
 use once_cell::sync::OnceCell;
@@ -52,7 +53,7 @@ fn get_bridge_object_id() -> &'static ObjectID {
     static BRIDGE_OBJ_ID: OnceCell<ObjectID> = OnceCell::new();
     BRIDGE_OBJ_ID.get_or_init(|| {
         let bridge_object_id =
-            std::env::var("BRIDGE_PACKAGE_ID").expect("Expect BRIDGE_PACKAGE_ID env var set");
+            std::env::var("BRIDGE_OBJECT_ID").expect("Expect BRIDGE_OBJECT_ID env var set");
         ObjectID::from_hex_literal(&bridge_object_id)
             .expect("BRIDGE_OBJECT_ID must be a valid hex string")
     })
