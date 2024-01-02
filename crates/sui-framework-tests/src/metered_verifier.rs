@@ -43,6 +43,7 @@ fn test_metered_move_bytecode_verifier() {
         &metered_verifier_config,
         &mut meter,
         &bytecode_verifier_metrics,
+        &ProtocolConfig::get_for_max_version_UNSAFE(),
     );
     let elapsed = timer_start.elapsed().as_micros() as f64 / (1000.0 * 1000.0);
     assert!(r.is_ok());
@@ -133,6 +134,7 @@ fn test_metered_move_bytecode_verifier() {
         &metered_verifier_config,
         &mut meter,
         &bytecode_verifier_metrics,
+        &ProtocolConfig::get_for_max_version_UNSAFE(),
     );
     let elapsed = timer_start.elapsed().as_micros() as f64 / (1000.0 * 1000.0);
 
@@ -235,6 +237,7 @@ fn test_metered_move_bytecode_verifier() {
             &metered_verifier_config,
             &mut meter,
             &bytecode_verifier_metrics,
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
         )
         .expect("Verification should not timeout");
 
@@ -260,6 +263,7 @@ fn test_meter_system_packages() {
             &metered_verifier_config,
             &mut meter,
             &bytecode_verifier_metrics,
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
         )
         .unwrap_or_else(|_| {
             panic!(
@@ -341,6 +345,7 @@ fn test_build_and_verify_programmability_examples() {
             &metered_verifier_config,
             &mut meter,
             &bytecode_verifier_metrics,
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
         )
         .unwrap_or_else(|_| {
             panic!(

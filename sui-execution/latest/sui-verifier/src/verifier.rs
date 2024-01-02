@@ -18,11 +18,12 @@ pub fn sui_verify_module_metered(
     module: &CompiledModule,
     fn_info_map: &FnInfoMap,
     meter: &mut impl Meter,
+    protocol_version: u64,
 ) -> Result<(), ExecutionError> {
     struct_with_key_verifier::verify_module(module)?;
     global_storage_access_verifier::verify_module(module)?;
     id_leak_verifier::verify_module(module, meter)?;
-    private_generics::verify_module(module)?;
+    private_generics::verify_module(module, protocol_version)?;
     entry_points_verifier::verify_module(module, fn_info_map)?;
     one_time_witness_verifier::verify_module(module, fn_info_map)
 }
@@ -34,9 +35,10 @@ pub fn sui_verify_module_metered_check_timeout_only(
     module: &CompiledModule,
     fn_info_map: &FnInfoMap,
     meter: &mut impl Meter,
+    protocol_version: u64,
 ) -> Result<(), ExecutionError> {
     // Checks if the error counts as a Sui verifier timeout
-    if let Err(error) = sui_verify_module_metered(module, fn_info_map, meter) {
+    if let Err(error) = sui_verify_module_metered(module, fn_info_map, meter, protocol_version) {
         if matches!(
             error.kind(),
             sui_types::execution_status::ExecutionFailureStatus::SuiMoveVerificationTimedout
@@ -51,16 +53,19 @@ pub fn sui_verify_module_metered_check_timeout_only(
 pub fn sui_verify_module_unmetered(
     module: &CompiledModule,
     fn_info_map: &FnInfoMap,
+    protocol_version: u64,
 ) -> Result<(), ExecutionError> {
-    sui_verify_module_metered(module, fn_info_map, &mut DummyMeter).map_err(|err| {
-        // We must never see timeout error in execution
-        debug_assert!(
-            !matches!(
+    sui_verify_module_metered(module, fn_info_map, &mut DummyMeter, protocol_version).map_err(
+        |err| {
+            // We must never see timeout error in execution
+            debug_assert!(
+                !matches!(
                 err.kind(),
                 sui_types::execution_status::ExecutionFailureStatus::SuiMoveVerificationTimedout
             ),
-            "Unexpected timeout error in execution"
-        );
-        err
-    })
+                "Unexpected timeout error in execution"
+            );
+            err
+        },
+    )
 }

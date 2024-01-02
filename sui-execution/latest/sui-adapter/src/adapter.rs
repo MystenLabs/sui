@@ -183,6 +183,7 @@ mod checked {
         verifier_config: &VerifierConfig,
         meter: &mut impl Meter,
         metrics: &Arc<BytecodeVerifierMetrics>,
+        protocol_config: &ProtocolConfig,
     ) -> Result<(), SuiError> {
         // run the Move verifier
         for module in modules.iter() {
@@ -208,9 +209,12 @@ mod checked {
                         error: format!("Verification timedout: {}", e),
                     });
                 };
-            } else if let Err(err) =
-                sui_verify_module_metered_check_timeout_only(module, &BTreeMap::new(), meter)
-            {
+            } else if let Err(err) = sui_verify_module_metered_check_timeout_only(
+                module,
+                &BTreeMap::new(),
+                meter,
+                protocol_config.version.as_u64(),
+            ) {
                 // We only checked that the failure was due to timeout
                 // Discard success timer, but record timeout/failure timer
                 metrics

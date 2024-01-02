@@ -6,7 +6,7 @@ ssfn_config_info: ~
 validator_config_info: ~
 parameters:
   chain_start_timestamp_ms: 0
-  protocol_version: 32
+  protocol_version: 33
   allow_insertion_of_extra_objects: true
   epoch_duration_ms: 86400000
   stake_subsidy_start_epoch: 0

@@ -837,7 +837,11 @@ mod checked {
         for module in modules {
             // Run Sui bytecode verifier, which runs some additional checks that assume the Move
             // bytecode verifier has passed.
-            sui_verifier::verifier::sui_verify_module_unmetered(module, &BTreeMap::new())?;
+            sui_verifier::verifier::sui_verify_module_unmetered(
+                module,
+                &BTreeMap::new(),
+                context.protocol_config.version.as_u64(),
+            )?;
         }
 
         Ok(())

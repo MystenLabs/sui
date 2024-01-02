@@ -179,16 +179,22 @@ impl executor::Executor for Executor {
 impl<'m> verifier::Verifier for Verifier<'m> {
     fn meter_compiled_modules(
         &mut self,
-        _protocol_config: &ProtocolConfig,
+        protocol_config: &ProtocolConfig,
         modules: &[CompiledModule],
     ) -> SuiResult<()> {
-        run_metered_move_bytecode_verifier(modules, &self.config, &mut self.meter, self.metrics)
+        run_metered_move_bytecode_verifier(
+            modules,
+            &self.config,
+            &mut self.meter,
+            self.metrics,
+            protocol_config,
+        )
     }
 
     fn meter_compiled_modules_with_overrides(
         &mut self,
         modules: &[CompiledModule],
-        _protocol_config: &ProtocolConfig,
+        protocol_config: &ProtocolConfig,
         config_overrides: &VerifierOverrides,
     ) -> SuiResult<VerifierMeteredValues> {
         let mut config = self.config.clone();
@@ -196,7 +202,13 @@ impl<'m> verifier::Verifier for Verifier<'m> {
         let max_per_mod_meter_current = config.max_per_mod_meter_units;
         config.max_per_fun_meter_units = config_overrides.max_per_fun_meter_units;
         config.max_per_mod_meter_units = config_overrides.max_per_mod_meter_units;
-        run_metered_move_bytecode_verifier(modules, &config, &mut self.meter, self.metrics)?;
+        run_metered_move_bytecode_verifier(
+            modules,
+            &config,
+            &mut self.meter,
+            self.metrics,
+            protocol_config,
+        )?;
         let fun_meter_units_result = self.meter.get_usage(Scope::Function);
         let mod_meter_units_result = self.meter.get_usage(Scope::Function);
         Ok(VerifierMeteredValues::new(

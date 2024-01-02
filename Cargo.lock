@@ -12399,6 +12399,7 @@ dependencies = [
  "move-package",
  "move-symbol-pool",
  "serde-reflection",
+ "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
  "tempfile",
