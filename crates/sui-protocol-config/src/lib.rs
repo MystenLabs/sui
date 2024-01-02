@@ -99,6 +99,7 @@ const MAX_PROTOCOL_VERSION: u64 = 33;
 //             Make critbit tree and order getters public in deepbook.
 // Version 33: Add support for `receiving_object_id` function in framework
 //             Hardened OTW check.
+//             Enable transfer-to-object in mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1707,6 +1708,10 @@ impl ProtocolConfig {
                 33 => {
                     cfg.feature_flags.hardened_otw_check = true;
                     cfg.feature_flags.allow_receiving_object_id = true;
+
+                    // Enable transfer-to-object in mainnet
+                    cfg.transfer_receive_object_cost_base = Some(52);
+                    cfg.feature_flags.receive_objects = true;
                 }
                 // Use this template when making changes:
                 //
