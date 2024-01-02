@@ -58,11 +58,18 @@ impl<P: ProgressStore> IndexerExecutor<P> {
     pub async fn run(
         mut self,
         path: PathBuf,
+        remote_store_url: Option<String>,
+        remote_store_options: Vec<(String, String)>,
         mut exit_receiver: oneshot::Receiver<()>,
     ) -> Result<ExecutorProgress> {
         let mut reader_checkpoint_number = self.progress_store.min_watermark()?;
         let (checkpoint_reader, mut checkpoint_recv, gc_sender, _exit_sender) =
-            CheckpointReader::initialize(path, reader_checkpoint_number);
+            CheckpointReader::initialize(
+                path,
+                reader_checkpoint_number,
+                remote_store_url,
+                remote_store_options,
+            );
         spawn_monitored_task!(checkpoint_reader.run());
 
         for pool in std::mem::take(&mut self.pools) {

@@ -11604,6 +11604,7 @@ dependencies = [
  "futures",
  "mysten-metrics",
  "notify",
+ "object_store",
  "prometheus",
  "rand 0.8.5",
  "serde",
@@ -11615,6 +11616,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "url",
  "workspace-hack",
 ]
 

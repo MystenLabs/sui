@@ -4,8 +4,11 @@
 use crate::executor::MAX_CHECKPOINTS_IN_PROGRESS;
 use anyhow::anyhow;
 use anyhow::Result;
+use futures::future::try_join_all;
 use notify::RecursiveMode;
 use notify::Watcher;
+use object_store::path::Path;
+use object_store::{parse_url_opts, ObjectStore};
 use std::ffi::OsString;
 use std::fs;
 use std::path::PathBuf;
@@ -17,14 +20,17 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 use tracing::info;
+use url::Url;
 
 pub(crate) const ENV_VAR_LOCAL_READ_TIMEOUT_MS: &str = "LOCAL_READ_TIMEOUT_MS";
+const REMOTE_READ_BATCH_SIZE: usize = 100;
 
 /// Implements a checkpoint reader that monitors a local directory.
 /// Designed for setups where the indexer daemon is colocated with FN.
 /// This implementation is push-based and utilizes the inotify API.
 pub struct CheckpointReader {
     path: PathBuf,
+    remote_store: Option<Box<dyn ObjectStore>>,
     current_checkpoint_number: CheckpointSequenceNumber,
     last_pruned_watermark: CheckpointSequenceNumber,
     checkpoint_sender: mpsc::Sender<CheckpointData>,
@@ -62,14 +68,39 @@ impl CheckpointReader {
         Ok(checkpoints)
     }
 
+    async fn remote_fetch(&self) -> Result<Vec<CheckpointData>> {
+        let mut checkpoints = vec![];
+        if let Some(ref store) = self.remote_store {
+            let futures = (self.current_checkpoint_number
+                ..(REMOTE_READ_BATCH_SIZE as u64 + self.last_pruned_watermark))
+                .map(|checkpoint_number| async move {
+                    let path = Path::from(format!("{}.chk", checkpoint_number));
+                    match store.get(&path).await {
+                        Ok(resp) => resp.bytes().await,
+                        Err(err) => Err(err),
+                    }
+                });
+            for bytes in try_join_all(futures).await? {
+                let checkpoint = Blob::from_bytes::<CheckpointData>(&bytes)?;
+                checkpoints.push(checkpoint);
+            }
+        }
+        Ok(checkpoints)
+    }
+
     async fn sync(&mut self) -> Result<()> {
         let backoff = backoff::ExponentialBackoff::default();
-        let checkpoints = backoff::future::retry(backoff, || async {
+        let mut checkpoints = backoff::future::retry(backoff, || async {
             self.read_local_files()
                 .await
                 .map_err(backoff::Error::transient)
         })
         .await?;
+
+        if checkpoints.is_empty() {
+            checkpoints = self.remote_fetch().await?;
+        }
+
         for checkpoint in checkpoints {
             if (MAX_CHECKPOINTS_IN_PROGRESS as u64 + self.last_pruned_watermark)
                 <= checkpoint.checkpoint_summary.sequence_number
@@ -108,6 +139,8 @@ impl CheckpointReader {
     pub fn initialize(
         path: PathBuf,
         starting_checkpoint_number: CheckpointSequenceNumber,
+        remote_store_url: Option<String>,
+        remote_store_options: Vec<(String, String)>,
     ) -> (
         Self,
         mpsc::Receiver<CheckpointData>,
@@ -117,8 +150,17 @@ impl CheckpointReader {
         let (checkpoint_sender, checkpoint_recv) = mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
         let (processed_sender, processed_receiver) = mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
         let (exit_sender, exit_receiver) = oneshot::channel();
+        let remote_store = remote_store_url.map(|url| {
+            parse_url_opts(
+                &Url::parse(&url).expect("failed to parse remote store url"),
+                remote_store_options,
+            )
+            .expect("failed to parse remote store config")
+            .0
+        });
         let reader = Self {
             path,
+            remote_store,
             current_checkpoint_number: starting_checkpoint_number,
             last_pruned_watermark: starting_checkpoint_number,
             checkpoint_sender,
