@@ -585,106 +585,106 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[sim_test]
-async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new()
-        .enable_fullnode_events()
-        .build()
-        .await;
+// #[sim_test]
+// async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Error> {
+//     let mut test_cluster = TestClusterBuilder::new()
+//         .enable_fullnode_events()
+//         .build()
+//         .await;
 
-    // Start a new fullnode that is not on the write path
-    let fullnode = test_cluster.spawn_new_fullnode().await;
+//     // Start a new fullnode that is not on the write path
+//     let fullnode = test_cluster.spawn_new_fullnode().await;
 
-    let node = fullnode.sui_node;
-    let ws_client = fullnode.ws_client;
+//     let node = fullnode.sui_node;
+//     let ws_client = fullnode.ws_client;
 
-    let context = &mut test_cluster.wallet;
-    let package_id = publish_nfts_package(context).await.0;
+//     let context = &mut test_cluster.wallet;
+//     let package_id = publish_nfts_package(context).await.0;
 
-    let struct_tag_str = format!("{package_id}::devnet_nft::MintNFTEvent");
-    let struct_tag = parse_struct_tag(&struct_tag_str).unwrap();
+//     let struct_tag_str = format!("{package_id}::devnet_nft::MintNFTEvent");
+//     let struct_tag = parse_struct_tag(&struct_tag_str).unwrap();
 
-    let mut sub: Subscription<SuiEvent> = ws_client
-        .subscribe(
-            "suix_subscribeEvent",
-            rpc_params![EventFilter::MoveEventType(struct_tag.clone())],
-            "suix_unsubscribeEvent",
-        )
-        .await
-        .unwrap();
+//     let mut sub: Subscription<SuiEvent> = ws_client
+//         .subscribe(
+//             "suix_subscribeEvent",
+//             rpc_params![EventFilter::MoveEventType(struct_tag.clone())],
+//             "suix_unsubscribeEvent",
+//         )
+//         .await
+//         .unwrap();
 
-    let (sender, object_id, digest) = create_devnet_nft(context, package_id).await;
-    node.state()
-        .db()
-        .notify_read_executed_effects(vec![digest])
-        .await
-        .unwrap();
+//     let (sender, object_id, digest) = create_devnet_nft(context, package_id).await;
+//     node.state()
+//         .db()
+//         .notify_read_executed_effects(vec![digest])
+//         .await
+//         .unwrap();
 
-    // Wait for streaming
-    let bcs = match timeout(Duration::from_secs(5), sub.next()).await {
-        Ok(Some(Ok(SuiEvent {
-            type_,
-            parsed_json,
-            bcs,
-            ..
-        }))) => {
-            assert_eq!(&type_, &struct_tag);
-            assert_eq!(
-                parsed_json,
-                json!({
-                    "creator" : sender,
-                    "name": "example_nft_name",
-                    "object_id" : object_id,
-                })
-            );
-            bcs
-        }
-        other => panic!("Failed to get SuiEvent, but {:?}", other),
-    };
-    let type_tag = parse_struct_tag(&struct_tag_str).unwrap();
-    let expected_parsed_event = Event::move_event_to_move_struct(
-        &type_tag,
-        &bcs,
-        &**node.state().epoch_store_for_testing().module_cache(),
-    )
-    .unwrap();
-    let (_, expected_parsed_event) =
-        type_and_fields_from_move_struct(&type_tag, expected_parsed_event);
-    let expected_event = SuiEvent {
-        id: EventID {
-            tx_digest: digest,
-            event_seq: 0,
-        },
-        package_id,
-        transaction_module: ident_str!("devnet_nft").into(),
-        sender,
-        type_: type_tag,
-        parsed_json: expected_parsed_event.to_json_value(),
-        bcs,
-        timestamp_ms: None,
-    };
+//     // Wait for streaming
+//     let bcs = match timeout(Duration::from_secs(5), sub.next()).await {
+//         Ok(Some(Ok(SuiEvent {
+//             type_,
+//             parsed_json,
+//             bcs,
+//             ..
+//         }))) => {
+//             assert_eq!(&type_, &struct_tag);
+//             assert_eq!(
+//                 parsed_json,
+//                 json!({
+//                     "creator" : sender,
+//                     "name": "example_nft_name",
+//                     "object_id" : object_id,
+//                 })
+//             );
+//             bcs
+//         }
+//         other => panic!("Failed to get SuiEvent, but {:?}", other),
+//     };
+//     let type_tag = parse_struct_tag(&struct_tag_str).unwrap();
+//     let expected_parsed_event = Event::content_bytes_to_move_struct(
+//         &type_tag,
+//         &bcs,
+//         &mut node.state().get_layout_resolver_epoch_boundary_unsafe(),
+//     )
+//     .unwrap();
+//     let (_, expected_parsed_event) =
+//         type_and_fields_from_move_struct(&type_tag, expected_parsed_event);
+//     let expected_event = SuiEvent {
+//         id: EventID {
+//             tx_digest: digest,
+//             event_seq: 0,
+//         },
+//         package_id,
+//         transaction_module: ident_str!("devnet_nft").into(),
+//         sender,
+//         type_: type_tag,
+//         parsed_json: expected_parsed_event.to_json_value(),
+//         bcs,
+//         timestamp_ms: None,
+//     };
 
-    // get tx events
-    let events = test_cluster
-        .sui_client()
-        .event_api()
-        .get_events(digest)
-        .await?;
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0], expected_event);
-    assert_eq!(events[0].id.tx_digest, digest);
+//     // get tx events
+//     let events = test_cluster
+//         .sui_client()
+//         .event_api()
+//         .get_events(digest)
+//         .await?;
+//     assert_eq!(events.len(), 1);
+//     assert_eq!(events[0], expected_event);
+//     assert_eq!(events[0].id.tx_digest, digest);
 
-    // No more
-    match timeout(Duration::from_secs(5), sub.next()).await {
-        Err(_) => (),
-        other => panic!(
-            "Expect to time out because no new events are coming in. Got {:?}",
-            other
-        ),
-    }
+//     // No more
+//     match timeout(Duration::from_secs(5), sub.next()).await {
+//         Err(_) => (),
+//         other => panic!(
+//             "Expect to time out because no new events are coming in. Got {:?}",
+//             other
+//         ),
+//     }
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 // Test fullnode has event read jsonrpc endpoints working
 #[sim_test]

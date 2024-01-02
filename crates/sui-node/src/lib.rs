@@ -435,7 +435,7 @@ impl SuiNode {
                     ),
                 );
             state
-                .try_execute_immediately(&transaction, None, &epoch_store)
+                .try_execute_immediately(&transaction, None, epoch_store.clone())
                 .instrument(span)
                 .await
                 .unwrap();

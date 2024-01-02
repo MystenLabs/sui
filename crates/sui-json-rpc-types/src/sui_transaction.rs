@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::{self, Display, Formatter, Write};
-
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
 use crate::{Filter, Page, SuiEvent, SuiObjectRef};
@@ -18,6 +16,8 @@ use move_core_types::value::MoveTypeLayout;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::fmt::{self, Display, Formatter, Write};
+// use std::sync::{Arc, Mutex};
 use sui_json::{primitive_type, SuiJsonValue};
 use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -42,6 +42,7 @@ use sui_types::transaction::{
     ProgrammableTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
     TransactionKind, VersionedProtocolMessage,
 };
+use sui_types::type_resolver::LayoutResolver;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 // similar to EpochId of sui-types but BigInt
@@ -705,7 +706,7 @@ impl SuiTransactionBlockEvents {
         events: TransactionEvents,
         tx_digest: TransactionDigest,
         timestamp_ms: Option<u64>,
-        resolver: &impl GetModule,
+        layout_resolver: &mut dyn LayoutResolver,
     ) -> SuiResult<Self> {
         Ok(Self {
             data: events
@@ -713,11 +714,30 @@ impl SuiTransactionBlockEvents {
                 .into_iter()
                 .enumerate()
                 .map(|(seq, event)| {
-                    SuiEvent::try_from(event, tx_digest, seq as u64, timestamp_ms, resolver)
+                    SuiEvent::try_from(event, tx_digest, seq as u64, timestamp_ms, layout_resolver)
                 })
                 .collect::<Result<_, _>>()?,
         })
     }
+
+    // pub fn try_from_2(
+    //     events: TransactionEvents,
+    //     tx_digest: TransactionDigest,
+    //     timestamp_ms: Option<u64>,
+    //     layout_resolver: Arc<Mutex<dyn LayoutResolver>>,
+    // ) -> SuiResult<Self> {
+    //     unreachable!()
+    // Ok(Self {
+    //     data: events
+    //         .data
+    //         .into_iter()
+    //         .enumerate()
+    //         .map(|(seq, event)| {
+    //             SuiEvent::try_from(event, tx_digest, seq as u64, timestamp_ms, layout_resolver)
+    //         })
+    //         .collect::<Result<_, _>>()?,
+    // })
+    // }
 }
 
 /// The response from processing a dev inspect transaction
@@ -760,7 +780,7 @@ impl DevInspectResults {
         effects: TransactionEffects,
         events: TransactionEvents,
         return_values: Result<Vec<ExecutionResult>, ExecutionError>,
-        resolver: &impl GetModule,
+        layout_resolver: &mut dyn LayoutResolver,
     ) -> SuiResult<Self> {
         let tx_digest = *effects.transaction_digest();
         let mut error = None;
@@ -791,7 +811,7 @@ impl DevInspectResults {
         };
         Ok(Self {
             effects: effects.try_into()?,
-            events: SuiTransactionBlockEvents::try_from(events, tx_digest, None, resolver)?,
+            events: SuiTransactionBlockEvents::try_from(events, tx_digest, None, layout_resolver)?,
             results,
             error,
         })

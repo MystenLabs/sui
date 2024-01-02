@@ -882,7 +882,7 @@ impl LocalExec {
         }
 
         let res = authority_state
-            .try_execute_immediately(certificate, None, &epoch_store)
+            .try_execute_immediately(certificate, None, epoch_store.clone())
             .await
             .map_err(ReplayEngineError::from)?;
 

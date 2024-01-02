@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
-
 use anyhow::anyhow;
 use async_trait::async_trait;
 use fastcrypto::encoding::Base64;
@@ -16,6 +13,9 @@ use move_binary_format::{file_format_common::VERSION_MAX, normalized::Module as 
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
+use sui_types::error::SuiError;
 use tap::TapFallible;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -799,13 +799,14 @@ impl ReadApiServer for ReadApi {
                 .into_iter()
                 .enumerate()
                 .map(|(seq, e)| {
-                    SuiEvent::try_from(
-                        e,
-                        *effect.transaction_digest(),
-                        seq as u64,
-                        None,
-                        store.module_cache(),
-                    )
+                    Err(SuiError::JWKRetrievalError)
+                    // SuiEvent::try_from(
+                    //     e,
+                    //     *effect.transaction_digest(),
+                    //     seq as u64,
+                    //     None,
+                    //     store.module_cache(),
+                    // )
                 })
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(Error::SuiError)?
@@ -980,21 +981,23 @@ fn to_sui_transaction_events(
     tx_digest: TransactionDigest,
     events: TransactionEvents,
 ) -> Result<SuiTransactionBlockEvents, Error> {
-    Ok(SuiTransactionBlockEvents::try_from(
-        events,
-        tx_digest,
-        None,
-        // threading the epoch_store through this API does not
-        // seem possible, so we just read it from the state and fetch
-        // the module cache out of it.
-        // Notice that no matter what module cache we get things
-        // should work
-        fullnode_api
-            .state
-            .load_epoch_store_one_call_per_task()
-            .module_cache()
-            .as_ref(),
-    )?)
+    // Err(SuiError::JWKRetrievalError)
+    Err(Error::UnexpectedError("test".into()))
+    // Ok(SuiTransactionBlockEvents::try_from(
+    //     events,
+    //     tx_digest,
+    //     None,
+    //     // threading the epoch_store through this API does not
+    //     // seem possible, so we just read it from the state and fetch
+    //     // the module cache out of it.
+    //     // Notice that no matter what module cache we get things
+    //     // should work
+    //     fullnode_api
+    //         .state
+    //         .load_epoch_store_one_call_per_task()
+    //         .module_cache()
+    //         .as_ref(),
+    // )?)
 }
 
 fn get_display_fields(

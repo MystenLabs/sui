@@ -61,7 +61,7 @@ pub struct TotalBalance {
     pub num_coins: i64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ObjectIndexChanges {
     pub deleted_owners: Vec<OwnerIndexKey>,
     pub deleted_dynamic_fields: Vec<DynamicFieldKey>,

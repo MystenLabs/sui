@@ -50,6 +50,14 @@ impl<'state, 'vm> LayoutResolver for TypeLayoutResolver<'state, 'vm> {
         format: ObjectFormatOptions,
     ) -> Result<MoveStructLayout, SuiError> {
         let struct_tag: StructTag = object.type_().clone().into();
+        self.get_layout_from_struct_tag(&struct_tag, format)
+    }
+
+    fn get_layout_from_struct_tag(
+        &mut self,
+        struct_tag: &StructTag,
+        format: ObjectFormatOptions,
+    ) -> Result<MoveStructLayout, SuiError> {
         let type_tag: TypeTag = TypeTag::from(struct_tag.clone());
         let Ok(ty) = load_type(&mut self.session, &type_tag) else {
             return Err(SuiError::FailObjectLayout {
