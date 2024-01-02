@@ -3,7 +3,7 @@
 
 use async_graphql::*;
 use sui_indexer::models_v2::events::StoredEvent;
-use sui_types::{parse_sui_struct_tag, TypeTag};
+use sui_types::{event::Event as NativeEvent, parse_sui_struct_tag, TypeTag};
 
 use crate::error::Error;
 
@@ -15,7 +15,8 @@ use super::{
 };
 
 pub(crate) struct Event {
-    pub stored: StoredEvent,
+    pub stored: Option<StoredEvent>,
+    pub native: NativeEvent,
 }
 
 #[derive(InputObject, Clone)]
@@ -51,6 +52,34 @@ pub(crate) struct EventFilter {
     // pub not
 }
 
+impl Event {
+    fn package_impl(&self) -> Result<SuiAddress, Error> {
+        if let Some(stored) = &self.stored {
+            SuiAddress::from_bytes(&stored.package).map_err(|e| Error::Internal(e.to_string()))
+        } else {
+            Ok(SuiAddress::from(self.native.package_id))
+        }
+    }
+
+    fn module_impl(&self) -> &str {
+        if let Some(stored) = &self.stored {
+            &stored.module
+        } else {
+            self.native.transaction_module.as_ident_str().as_str()
+        }
+    }
+
+    fn type_tag_impl(&self) -> Result<TypeTag, Error> {
+        let struct_tag = match &self.stored {
+            Some(stored) => parse_sui_struct_tag(&stored.event_type)
+                .map_err(|e| Error::Internal(e.to_string()))?,
+            None => self.native.type_.clone(),
+        };
+
+        Ok(TypeTag::from(struct_tag))
+    }
+}
+
 #[Object]
 impl Event {
     /// The Move module containing some function that when called by
@@ -59,40 +88,67 @@ impl Event {
     /// calls A::m2::emit_event to emit an event,
     /// the sending module would be A::m1.
     async fn sending_module(&self, ctx: &Context<'_>) -> Result<Option<MoveModule>> {
-        let sending_package = SuiAddress::from_bytes(&self.stored.package)
-            .map_err(|e| Error::Internal(e.to_string()))
-            .extend()?;
+        let sending_package = self.package_impl().extend()?;
+        let module = self.module_impl();
+
         ctx.data_unchecked::<PgManager>()
-            .fetch_move_module(sending_package, &self.stored.module)
+            .fetch_move_module(sending_package, module)
             .await
             .extend()
     }
 
     /// Addresses of the senders of the event
     async fn senders(&self) -> Result<Option<Vec<Address>>> {
-        let mut addrs = Vec::with_capacity(self.stored.senders.len());
-        for sender in &self.stored.senders {
-            let Some(sender) = &sender else { continue };
-            let address = SuiAddress::from_bytes(sender)
-                .map_err(|e| Error::Internal(format!("Failed to deserialize address: {e}")))
-                .extend()?;
-            addrs.push(Address { address });
+        if let Some(stored) = &self.stored {
+            let mut addrs = Vec::with_capacity(stored.senders.len());
+            for sender in &stored.senders {
+                let Some(sender) = &sender else { continue };
+                let address = SuiAddress::from_bytes(sender)
+                    .map_err(|e| Error::Internal(format!("Failed to deserialize address: {e}")))
+                    .extend()?;
+                addrs.push(Address { address });
+            }
+            Ok(Some(addrs))
+        } else {
+            Ok(Some(vec![Address {
+                address: SuiAddress::from(self.native.sender),
+            }]))
         }
-        Ok(Some(addrs))
     }
 
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
     async fn timestamp(&self) -> Result<Option<DateTime>, Error> {
-        Ok(DateTime::from_ms(self.stored.timestamp_ms).ok())
+        let Some(stored) = &self.stored else {
+            return Ok(None);
+        };
+        Ok(DateTime::from_ms(stored.timestamp_ms).ok())
     }
 
     #[graphql(flatten)]
     async fn move_value(&self) -> Result<MoveValue> {
-        let type_ = TypeTag::from(
-            parse_sui_struct_tag(&self.stored.event_type)
-                .map_err(|e| Error::Internal(e.to_string()))
-                .extend()?,
-        );
-        Ok(MoveValue::new(type_, Base64::from(self.stored.bcs.clone())))
+        let type_tag = self.type_tag_impl().extend()?;
+
+        Ok(MoveValue::new(
+            type_tag,
+            Base64::from(self.native.contents.clone()),
+        ))
+    }
+}
+
+impl TryFrom<StoredEvent> for Event {
+    type Error = Error;
+
+    fn try_from(stored_event: StoredEvent) -> Result<Self, Error> {
+        let native_event: NativeEvent = bcs::from_bytes(&stored_event.bcs).map_err(|_| {
+            Error::Internal(format!(
+                "Failed to deserialize event with {} at transaction {}",
+                stored_event.event_sequence_number, stored_event.tx_sequence_number
+            ))
+        })?;
+
+        Ok(Self {
+            stored: Some(stored_event),
+            native: native_event,
+        })
     }
 }
