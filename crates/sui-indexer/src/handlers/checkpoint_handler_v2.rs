@@ -644,11 +644,12 @@ where
                         let df_info =
                             try_create_dynamic_field_info(history_object, &latest_objects, module_resolver)
                                 .unwrap_or_else(|e| {
-                                    panic!(
+                                    tracing::error!(
                                         "failed to create dynamic field info for history obj: {:?}:{:?}. Err: {e}",
                                         history_object.id(),
                                         history_object.version()
-                                    )
+                                    );
+                                    None
                                 });
 
                         IndexedObject::from_object(checkpoint_seq, history_object.clone(), df_info)
