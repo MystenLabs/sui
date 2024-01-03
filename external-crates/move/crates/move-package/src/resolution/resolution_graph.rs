@@ -18,6 +18,8 @@ use std::{
 };
 use treeline::Tree;
 
+use crate::package_hooks::custom_resolve_pkg_name;
+use crate::source_package::parsed_manifest as PM;
 use crate::{
     source_package::{
         layout::SourcePackageLayout,
@@ -110,12 +112,28 @@ impl ResolvedGraph {
             let mut resolved_pkg = Package::new(package_path, &build_options)
                 .with_context(|| format!("Resolving package '{pkg_name}'"))?;
 
-            if pkg_name != resolved_pkg.source_package.package.name {
-                bail!(
-                    "Name of dependency '{}' does not match dependency's package name '{}'",
-                    pkg_name,
-                    resolved_pkg.source_package.package.name
-                )
+            // Check dependencies package names from manifest are consistent with ther names
+            // in parent (this) manifest. We do this check only for local and git
+            // dependencies as we assume custom dependencies might not have a user-defined
+            // name.
+            for (dep_name, dep) in &resolved_pkg.source_package.dependencies {
+                match dep {
+                    PM::Dependency::External(_) => continue,
+                    PM::Dependency::Internal(internal) => {
+                        if let PM::DependencyKind::Custom(_) = internal.kind {
+                            continue;
+                        }
+                        let dep_path = &resolved_pkg.package_path.join(local_path(&internal.kind));
+                        let dep_manifest = parse_move_manifest_from_file(dep_path)?;
+                        if dep_name != &dep_manifest.package.name {
+                            bail!(
+                                "Name of dependency '{}' does not match dependency's package name '{}'",
+                                dep_name,
+                                dep_manifest.package.name
+                            )
+                        }
+                    }
+                };
             }
 
             resolved_pkg
@@ -325,9 +343,14 @@ impl Package {
     }
 
     fn define_addresses_in_package(&self, resolving_table: &mut ResolvingTable) -> Result<()> {
-        let package = self.source_package.package.name;
+        let pkg_name = custom_resolve_pkg_name(&self.source_package).with_context(|| {
+            format!(
+                "Resolving package name for '{}'",
+                &self.source_package.package.name
+            )
+        })?;
         for (name, addr) in self.source_package.addresses.iter().flatten() {
-            resolving_table.define((package, *name), *addr)?;
+            resolving_table.define((pkg_name, *name), *addr)?;
         }
         Ok(())
     }
@@ -339,7 +362,12 @@ impl Package {
         package_table: &PackageTable,
         resolving_table: &mut ResolvingTable,
     ) -> Result<()> {
-        let pkg_name = self.source_package.package.name;
+        let pkg_name = custom_resolve_pkg_name(&self.source_package).with_context(|| {
+            format!(
+                "Resolving package name for '{}'",
+                &self.source_package.package.name
+            )
+        })?;
         let mut dep_renaming = BTreeMap::new();
 
         for (to, subst) in dep.subst.iter().flatten() {
@@ -404,9 +432,14 @@ impl Package {
     }
 
     fn finalize_address_resolution(&mut self, resolving_table: &ResolvingTable) -> Result<()> {
+        let pkg_name = custom_resolve_pkg_name(&self.source_package).with_context(|| {
+            format!(
+                "Resolving package name for '{}'",
+                &self.source_package.package.name
+            )
+        })?;
         let mut unresolved_addresses = Vec::new();
 
-        let pkg_name = self.source_package.package.name;
         for (name, addr) in resolving_table.bindings(pkg_name) {
             match *addr {
                 Some(addr) => {
@@ -430,10 +463,19 @@ impl Package {
     }
 
     pub fn immediate_dependencies(&self, graph: &ResolvedGraph) -> BTreeSet<PackageName> {
+        let pkg_name = custom_resolve_pkg_name(&self.source_package)
+            .with_context(|| {
+                format!(
+                    "Resolving package name for '{}'",
+                    &self.source_package.package.name
+                )
+            })
+            .unwrap();
+
         graph
             .graph
             .immediate_dependencies(
-                self.source_package.package.name,
+                pkg_name,
                 if graph.build_options.dev_mode {
                     DG::DependencyMode::DevOnly
                 } else {
