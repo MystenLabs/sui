@@ -207,28 +207,17 @@ impl ProgrammableTransactionBlock {
     ) -> Result<Connection<String, TransactionInput>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
-        let total = self.0.inputs.len();
-        let mut lo = page.after().map_or(0, |a| *a + 1);
-        let mut hi = page.before().map_or(total, |b| *b);
-
         let mut connection = Connection::new(false, false);
-        if hi <= lo {
+        let Some((prev, next, cs)) = page.select(self.0.inputs.len()) else {
             return Ok(connection);
-        } else if (hi - lo) > page.limit() {
-            if page.is_from_front() {
-                hi = lo + page.limit();
-            } else {
-                lo = hi - page.limit();
-            }
-        }
+        };
 
-        connection.has_previous_page = 0 < lo;
-        connection.has_next_page = hi < total;
+        connection.has_previous_page = prev;
+        connection.has_next_page = next;
 
-        for idx in lo..hi {
-            let input = TransactionInput::from(self.0.inputs[idx].clone());
-            let cursor = Cursor::new(idx).encode_cursor();
-            connection.edges.push(Edge::new(cursor, input));
+        for c in cs {
+            let input = TransactionInput::from(self.0.inputs[*c].clone());
+            connection.edges.push(Edge::new(c.encode_cursor(), input));
         }
 
         Ok(connection)
@@ -245,28 +234,17 @@ impl ProgrammableTransactionBlock {
     ) -> Result<Connection<String, ProgrammableTransaction>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
-        let total = self.0.commands.len();
-        let mut lo = page.after().map_or(0, |a| *a + 1);
-        let mut hi = page.before().map_or(total, |b| *b);
-
         let mut connection = Connection::new(false, false);
-        if hi <= lo {
+        let Some((prev, next, cs)) = page.select(self.0.commands.len()) else {
             return Ok(connection);
-        } else if (hi - lo) > page.limit() {
-            if page.is_from_front() {
-                hi = lo + page.limit();
-            } else {
-                lo = hi - page.limit();
-            }
-        }
+        };
 
-        connection.has_previous_page = 0 < lo;
-        connection.has_next_page = hi < total;
+        connection.has_previous_page = prev;
+        connection.has_next_page = next;
 
-        for idx in lo..hi {
-            let txn = ProgrammableTransaction::from(self.0.commands[idx].clone());
-            let cursor = Cursor::new(idx).encode_cursor();
-            connection.edges.push(Edge::new(cursor, txn));
+        for c in cs {
+            let txn = ProgrammableTransaction::from(self.0.commands[*c].clone());
+            connection.edges.push(Edge::new(c.encode_cursor(), txn));
         }
 
         Ok(connection)
