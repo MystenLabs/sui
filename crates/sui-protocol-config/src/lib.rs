@@ -97,7 +97,8 @@ const MAX_PROTOCOL_VERSION: u64 = 33;
 //             Enable transfer to object in testnet.
 //             Enable Narwhal CertificateV2 on mainnet
 //             Make critbit tree and order getters public in deepbook.
-// Version 33: Improved sui framework constant usage.
+// Version 33: Add support for `receiving_object_id` function in framework
+//             Hardened OTW check.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -353,6 +354,14 @@ struct FeatureFlags {
     // It can be used to detect consensus output folk.
     #[serde(skip_serializing_if = "is_false")]
     include_consensus_digest_in_prologue: bool,
+
+    // If true, use the hardened OTW check
+    #[serde(skip_serializing_if = "is_false")]
+    hardened_otw_check: bool,
+
+    // If true allow calling receiving_object_id function
+    #[serde(skip_serializing_if = "is_false")]
+    allow_receiving_object_id: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -883,6 +892,10 @@ impl ProtocolConfig {
         }
     }
 
+    pub fn allow_receiving_object_id(&self) -> bool {
+        self.feature_flags.allow_receiving_object_id
+    }
+
     pub fn receiving_objects_supported(&self) -> bool {
         self.feature_flags.receive_objects
     }
@@ -1057,6 +1070,10 @@ impl ProtocolConfig {
 
     pub fn include_consensus_digest_in_prologue(&self) -> bool {
         self.feature_flags.include_consensus_digest_in_prologue
+    }
+
+    pub fn hardened_otw_check(&self) -> bool {
+        self.feature_flags.hardened_otw_check
     }
 }
 
@@ -1687,7 +1704,10 @@ impl ProtocolConfig {
                     // enable nw cert v2 on mainnet
                     cfg.feature_flags.narwhal_certificate_v2 = true;
                 }
-                33 => {}
+                33 => {
+                    cfg.feature_flags.hardened_otw_check = true;
+                    cfg.feature_flags.allow_receiving_object_id = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
