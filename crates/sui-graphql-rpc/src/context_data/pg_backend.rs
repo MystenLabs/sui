@@ -95,13 +95,6 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
             .into_boxed()
     }
 
-    fn get_earliest_complete_checkpoint() -> checkpoints::BoxedQuery<'static, Pg> {
-        checkpoints::dsl::checkpoints
-            .order_by(checkpoints::dsl::sequence_number.asc())
-            .limit(1)
-            .into_boxed()
-    }
-
     fn get_display_by_obj_type(object_type: String) -> display::BoxedQuery<'static, Pg> {
         display::dsl::display
             .filter(display::dsl::object_type.eq(object_type))
