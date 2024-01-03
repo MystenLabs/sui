@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod health;
+pub mod metrics;
 mod service;
 
 pub use service::get_mysten_service;

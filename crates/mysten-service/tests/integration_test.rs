@@ -1,14 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::body;
 use axum::body::Body;
 use axum::body::HttpBody;
 use axum::http::Request;
 use tower::ServiceExt;
 
 #[tokio::test]
-async fn test_add() {
+async fn test_mysten_service() {
     let app = mysten_service::get_mysten_service("itest", "0.0.0");
 
     let res = app
