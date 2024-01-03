@@ -32,6 +32,40 @@ async fn main() -> Result<(), anyhow::Error> {
 
 ```
 
+## Documentation for sui-sdk crate
+
+[GitHub Pages](https://mystenlabs.github.io/sui/sui_sdk/index.html) hosts the generated documentation for all Rust crates in the Sui repository.
+
+### Building documentation locally
+
+You can also build the documentation locally. To do so, open a Terminal or Console to the `sui/crates/sui-sdk` directory:
+
+1. Use the `rustup toolchain` command to install the `nightly` release channel.
+
+   ```rust
+   rustup toolchain install nightly-2023-06-15
+   ```
+
+1. Use the `rustup override` command to set the `nightly` release channel as active.
+
+   ```rust
+   rustup override set nightly-2023-06-15
+   ```
+
+1. Use `cargo doc` with the following `RUSTDOCFLAGS` set to build the documentation into the `sui/target` directory.  
+
+   ```rust
+   RUSTDOCFLAGS="--enable-index-page -Zunstable-options" cargo doc --no-deps
+   ```
+
+1. Open the `sui/target/doc/sui_sdk/index.html` file with a browser, like Chrome.
+
+1. After building the docs, use the `rustup override` command again to return to the default toolchain.
+
+   ```rust
+   rustup override unset
+   ```
+
 ## Rust SDK examples
 
 The [examples](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk/examples) folder provides both basic and advanced examples.
@@ -162,40 +196,6 @@ See the programmable transactions [example](https://github.com/MystenLabs/sui/bl
    Run the following command in the Sui source code directory to join the game, replacing the game ID and address accordingly:
    ```shell
    cargo run --example tic-tac-toe -- --game-package-id <<games package object ID>> join-game --my-identity <<address>> --game-id <<game ID>>
-   ```
-
-## Documentation for sui-sdk crate
-
-[GitHub Pages](https://mystenlabs.github.io/sui/sui_sdk/index.html) hosts the generated documentation for all Rust crates in the Sui repository.
-
-### Building documentation locally
-
-You can also build the documentation locally. To do so, open a Terminal or Console to the `sui/crates/sui-sdk` directory:
-
-1. Use the `rustup toolchain` command to install the `nightly` release channel.
-
-   ```rust
-   rustup toolchain install nightly-2023-06-15
-   ```
-
-1. Use the `rustup override` command to set the `nightly` release channel as active.
-
-   ```rust
-   rustup override set nightly-2023-06-15
-   ```
-
-1. Use `cargo doc` with the following `RUSTDOCFLAGS` set to build the documentation into the `sui/target` directory.  
-
-   ```rust
-   RUSTDOCFLAGS="--enable-index-page -Zunstable-options" cargo doc --no-deps
-   ```
-
-1. Open the `sui/target/doc/sui_sdk/index.html` file with a browser, like Chrome.
-
-1. After building the docs, use the `rustup override` command again to return to the default toolchain.
-
-   ```rust
-   rustup override unset
    ```
 
 ## License
