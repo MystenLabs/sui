@@ -62,9 +62,7 @@ fn main() {
     // ProtocolConfig::poison_get_for_min_version();
 
     move_vm_profiler::gas_profiler_feature! {
-        if true {
-            panic!("Cannot run the sui-node binary with gas-profiler feature enabled");
-        }
+        panic!("Cannot run the sui-node binary with gas-profiler feature enabled");
     }
 
     let args = Args::parse();

@@ -11524,6 +11524,7 @@ dependencies = [
  "json_to_table",
  "move-core-types",
  "move-package",
+ "move-vm-profiler",
  "num-bigint 0.4.4",
  "prometheus",
  "rand 0.8.5",

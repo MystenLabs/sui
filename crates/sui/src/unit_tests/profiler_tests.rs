@@ -29,6 +29,19 @@ use sui_replay::ReplayToolCommand;
 ///
 /// Note this crate will always have the feature enabled in testing due to the addition of
 /// `sui = { path = ".", features = ["gas-profiler"] }` to our dev-dependencies.
+
+#[cfg(feature = "gas-profiler")]
+#[test]
+fn test_macro_shows_feature_enabled() {
+    let mut called = false;
+    assert!(!called);
+    move_vm_profiler::gas_profiler_feature! {
+        called = true;
+    }
+    assert!(called);
+}
+
+#[ignore]
 #[cfg(feature = "gas-profiler")]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_profiler() {

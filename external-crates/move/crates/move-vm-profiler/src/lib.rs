@@ -342,7 +342,10 @@ macro_rules! profile_dump_file {
 #[macro_export]
 macro_rules! gas_profiler_feature {
     ($($tt:tt)*) => {
+        #[cfg(feature = "gas-profiler")]
+      {
         $($tt)*
+      }
     };
 }
 
