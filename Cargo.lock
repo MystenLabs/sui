@@ -2486,6 +2486,7 @@ dependencies = [
 name = "consensus-core"
 version = "0.1.0"
 dependencies = [
+ "base64 0.21.2",
  "bcs",
  "consensus-config",
  "fastcrypto",
