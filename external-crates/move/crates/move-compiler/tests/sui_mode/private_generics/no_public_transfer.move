@@ -20,6 +20,10 @@ module a::m {
     public fun t4(p: &mut UID, s: Receiving<other::S>): other::S {
         transfer::receive(p, s)
     }
+
+    public fun t5(s: &Receiving<other::S>) {
+        transfer::receiving_object_id(s);
+    }
 }
 
 module a::other {
@@ -32,10 +36,13 @@ module sui::object {
     struct UID has store {
         id: address,
     }
+    struct ID has copy, drop, store {
+        id: address,
+    }
 }
 
 module sui::transfer {
-    use sui::object::UID;
+    use sui::object::{UID, ID};
 
     struct Receiving<phantom T: key> { }
 
@@ -68,6 +75,10 @@ module sui::transfer {
     }
 
     public fun public_receive<T: key + store>(_: &mut UID, _: Receiving<T>): T {
+        abort 0
+    }
+
+    public fun receiving_object_id<T: key>(_: &Receiving<T>): ID {
         abort 0
     }
 }

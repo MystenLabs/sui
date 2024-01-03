@@ -12399,6 +12399,7 @@ dependencies = [
  "move-package",
  "move-symbol-pool",
  "serde-reflection",
+ "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
  "tempfile",
@@ -13477,6 +13478,7 @@ dependencies = [
  "move-bytecode-verifier",
  "move-core-types",
  "move-vm-config",
+ "sui-protocol-config",
  "sui-types",
  "workspace-hack",
 ]

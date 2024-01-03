@@ -22,7 +22,7 @@ mod checked {
     };
     use sui_move_natives::object_runtime;
     use sui_types::metrics::BytecodeVerifierMetrics;
-    use sui_verifier::check_for_verifier_timeout;
+    use sui_verifier::{check_for_verifier_timeout, default_verifier_config};
     use tracing::instrument;
 
     use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
@@ -35,50 +35,6 @@ mod checked {
         storage::ChildObjectResolver,
     };
     use sui_verifier::verifier::sui_verify_module_metered_check_timeout_only;
-
-    pub fn default_verifier_config(
-        protocol_config: &ProtocolConfig,
-        is_metered: bool,
-    ) -> VerifierConfig {
-        let (
-            max_back_edges_per_function,
-            max_back_edges_per_module,
-            max_per_fun_meter_units,
-            max_per_mod_meter_units,
-        ) = if is_metered {
-            (
-                Some(protocol_config.max_back_edges_per_function() as usize),
-                Some(protocol_config.max_back_edges_per_module() as usize),
-                Some(protocol_config.max_verifier_meter_ticks_per_function() as u128),
-                Some(protocol_config.max_meter_ticks_per_module() as u128),
-            )
-        } else {
-            (None, None, None, None)
-        };
-
-        VerifierConfig {
-            max_loop_depth: Some(protocol_config.max_loop_depth() as usize),
-            max_generic_instantiation_length: Some(
-                protocol_config.max_generic_instantiation_length() as usize,
-            ),
-            max_function_parameters: Some(protocol_config.max_function_parameters() as usize),
-            max_basic_blocks: Some(protocol_config.max_basic_blocks() as usize),
-            max_value_stack_size: protocol_config.max_value_stack_size() as usize,
-            max_type_nodes: Some(protocol_config.max_type_nodes() as usize),
-            max_push_size: Some(protocol_config.max_push_size() as usize),
-            max_dependency_depth: Some(protocol_config.max_dependency_depth() as usize),
-            max_fields_in_struct: Some(protocol_config.max_fields_in_struct() as usize),
-            max_function_definitions: Some(protocol_config.max_function_definitions() as usize),
-            max_struct_definitions: Some(protocol_config.max_struct_definitions() as usize),
-            max_constant_vector_len: Some(protocol_config.max_move_vector_len()),
-            max_back_edges_per_function,
-            max_back_edges_per_module,
-            max_basic_blocks_in_script: None,
-            max_per_fun_meter_units,
-            max_per_mod_meter_units,
-            max_idenfitier_len: protocol_config.max_move_identifier_len_as_option(), // Before protocol version 9, there was no limit
-        }
-    }
 
     pub fn new_move_vm(
         natives: NativeFunctionTable,
@@ -95,6 +51,7 @@ mod checked {
                 runtime_limits_config: VMRuntimeLimitsConfig {
                     vector_len_max: protocol_config.max_move_vector_len(),
                     max_value_nest_depth: protocol_config.max_move_value_depth_as_option(),
+                    hardened_otw_check: protocol_config.hardened_otw_check(),
                 },
                 enable_invariant_violation_check_in_swap_loc: !protocol_config
                     .disable_invariant_violation_check_in_swap_loc(),
@@ -208,9 +165,12 @@ mod checked {
                         error: format!("Verification timedout: {}", e),
                     });
                 };
-            } else if let Err(err) =
-                sui_verify_module_metered_check_timeout_only(module, &BTreeMap::new(), meter)
-            {
+            } else if let Err(err) = sui_verify_module_metered_check_timeout_only(
+                module,
+                &BTreeMap::new(),
+                meter,
+                verifier_config,
+            ) {
                 // We only checked that the failure was due to timeout
                 // Discard success timer, but record timeout/failure timer
                 metrics

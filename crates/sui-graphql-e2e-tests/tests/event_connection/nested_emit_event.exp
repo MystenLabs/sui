@@ -26,7 +26,7 @@ Response: {
             "name": "M3"
           },
           "type": {
-            "repr": "0x65c6bd1a5bf110348abed43aa1f1c54708f38364aea951d4012564fcb27cde39::M1::EventA"
+            "repr": "0xe5d352f1a366cbdc34eb6e7b0fc2f1284937b060cc829a196722fd2ba5b25a34::M1::EventA"
           },
           "senders": [
             {
@@ -53,7 +53,7 @@ Response: {
             "name": "M3"
           },
           "type": {
-            "repr": "0x65c6bd1a5bf110348abed43aa1f1c54708f38364aea951d4012564fcb27cde39::M1::EventA"
+            "repr": "0xe5d352f1a366cbdc34eb6e7b0fc2f1284937b060cc829a196722fd2ba5b25a34::M1::EventA"
           },
           "senders": [
             {
@@ -98,7 +98,7 @@ Response: {
             "name": "M3"
           },
           "type": {
-            "repr": "0x65c6bd1a5bf110348abed43aa1f1c54708f38364aea951d4012564fcb27cde39::M1::EventA"
+            "repr": "0xe5d352f1a366cbdc34eb6e7b0fc2f1284937b060cc829a196722fd2ba5b25a34::M1::EventA"
           },
           "senders": [
             {
