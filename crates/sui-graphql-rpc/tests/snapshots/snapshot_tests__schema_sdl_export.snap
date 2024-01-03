@@ -642,7 +642,7 @@ type Epoch {
 	protocolConfigs: ProtocolConfigs
 	"""
 	SUI set aside to account for objects stored on-chain, at the start of the epoch.
-	This is also used for object rebates.
+	This is also used for storage rebates.
 	"""
 	storageFund: StorageFund
 	"""
@@ -655,7 +655,7 @@ type Epoch {
 	version changes whenever the fields contained in the system state object (held in a dynamic
 	field attached to `0x5`) change.
 	"""
-	systemStateVersion: BigInt
+	systemStateVersion: Int
 	"""
 	Details of the system that are decided during genesis.
 	"""
@@ -809,9 +809,8 @@ enum Feature {
 	"""
 	SUBSCRIPTIONS
 	"""
-	Information about the system that changes from epoch to epoch, such as
-	aspects that affect the running of the system that are managed by the validators either
-	directly, or through system transactions.
+	Aspects that affect the running of the system that are managed by the
+	validators either directly, or through system transactions.
 	"""
 	SYSTEM_STATE
 }

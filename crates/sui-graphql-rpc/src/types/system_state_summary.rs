@@ -18,7 +18,7 @@ pub(crate) struct SystemStateSummary {
 #[Object]
 impl SystemStateSummary {
     /// SUI set aside to account for objects stored on-chain, at the start of the epoch.
-    /// This is also used for object rebates.
+    /// This is also used for storage rebates.
     async fn storage_fund(&self) -> Option<StorageFund> {
         Some(StorageFund {
             total_object_storage_rebates: Some(BigInt::from(
@@ -47,8 +47,8 @@ impl SystemStateSummary {
     /// The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.  This
     /// version changes whenever the fields contained in the system state object (held in a dynamic
     /// field attached to `0x5`) change.
-    async fn system_state_version(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.native.system_state_version))
+    async fn system_state_version(&self) -> Option<u64> {
+        Some(self.native.system_state_version)
     }
 
     /// Details of the system that are decided during genesis.

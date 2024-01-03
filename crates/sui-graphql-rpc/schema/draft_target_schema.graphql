@@ -595,7 +595,6 @@ type Epoch {
   fundInflow: BigInt
   fundOutflow: BigInt
 
-  # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
   # SystemState fields
   storageFund: StorageFund
   safeMode: SafeMode
