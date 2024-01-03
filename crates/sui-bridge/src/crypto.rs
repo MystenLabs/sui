@@ -8,8 +8,10 @@ use crate::{
 use fastcrypto::{
     encoding::{Encoding, Hex},
     secp256k1::{
-        Secp256k1KeyPair, Secp256k1PublicKey, Secp256k1PublicKeyAsBytes, Secp256k1Signature,
+        recoverable::Secp256k1RecoverableSignature, Secp256k1KeyPair, Secp256k1PublicKey,
+        Secp256k1PublicKeyAsBytes,
     },
+    traits::{RecoverableSigner, VerifyRecoverable},
 };
 use fastcrypto::{hash::Keccak256, traits::KeyPair};
 use serde::{Deserialize, Serialize};
@@ -19,7 +21,7 @@ use sui_types::{base_types::ConciseableName, message_envelope::VerifiedEnvelope}
 use tap::TapFallible;
 pub type BridgeAuthorityKeyPair = Secp256k1KeyPair;
 pub type BridgeAuthorityPublicKey = Secp256k1PublicKey;
-pub type BridgeAuthoritySignature = Secp256k1Signature;
+pub type BridgeAuthorityRecoverableSignature = Secp256k1RecoverableSignature;
 
 #[derive(Ord, PartialOrd, PartialEq, Eq, Clone, Debug, Hash)]
 pub struct BridgeAuthorityPublicKeyBytes(Secp256k1PublicKeyAsBytes);
@@ -68,7 +70,7 @@ impl<'a> ConciseableName<'a> for BridgeAuthorityPublicKeyBytes {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BridgeAuthoritySignInfo {
     pub authority_pub_key: BridgeAuthorityPublicKey,
-    pub signature: BridgeAuthoritySignature,
+    pub signature: BridgeAuthorityRecoverableSignature,
 }
 
 impl BridgeAuthoritySignInfo {
@@ -77,7 +79,7 @@ impl BridgeAuthoritySignInfo {
 
         Self {
             authority_pub_key: secret.public().clone(),
-            signature: secret.sign_with_hash::<Keccak256>(&msg_bytes),
+            signature: secret.sign_recoverable_with_hash::<Keccak256>(&msg_bytes),
         }
     }
 
@@ -93,7 +95,7 @@ impl BridgeAuthoritySignInfo {
         let msg_bytes = msg.to_bytes();
 
         self.authority_pub_key
-            .verify_with_hash::<Keccak256>(&msg_bytes, &self.signature)
+            .verify_recoverable_with_hash::<Keccak256>(&msg_bytes, &self.signature)
             .map_err(|e| {
                 BridgeError::InvalidBridgeAuthoritySignature((
                     self.authority_pub_key_bytes(),
