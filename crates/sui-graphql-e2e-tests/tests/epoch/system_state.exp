@@ -73,7 +73,7 @@ Response: {
   "data": {
     "epoch": {
       "epochId": 4,
-      "systemStateVersion": "2",
+      "systemStateVersion": 2,
       "storageFund": {
         "totalObjectStorageRebates": "15762400",
         "nonRefundableBalance": "180424"
@@ -87,7 +87,7 @@ Response: {
   "data": {
     "epoch": {
       "epochId": 3,
-      "systemStateVersion": "2",
+      "systemStateVersion": 2,
       "storageFund": {
         "totalObjectStorageRebates": "16066400",
         "nonRefundableBalance": "29640"
@@ -101,7 +101,7 @@ Response: {
   "data": {
     "epoch": {
       "epochId": 2,
-      "systemStateVersion": "2",
+      "systemStateVersion": 2,
       "storageFund": {
         "totalObjectStorageRebates": "15078400",
         "nonRefundableBalance": "19760"
@@ -115,7 +115,7 @@ Response: {
   "data": {
     "epoch": {
       "epochId": 1,
-      "systemStateVersion": "2",
+      "systemStateVersion": 2,
       "storageFund": {
         "totalObjectStorageRebates": "15078400",
         "nonRefundableBalance": "19760"
@@ -129,7 +129,7 @@ Response: {
   "data": {
     "epoch": {
       "epochId": 4,
-      "systemStateVersion": "2",
+      "systemStateVersion": 2,
       "storageFund": {
         "totalObjectStorageRebates": "15762400",
         "nonRefundableBalance": "180424"
