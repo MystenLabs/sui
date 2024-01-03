@@ -45,6 +45,8 @@ pub struct VMRuntimeLimitsConfig {
     pub vector_len_max: u64,
     /// Maximum value nest depth for structs
     pub max_value_nest_depth: Option<u64>,
+    // include hardened OTW checks
+    pub hardened_otw_check: bool,
 }
 
 impl Default for VMRuntimeLimitsConfig {
@@ -52,6 +54,7 @@ impl Default for VMRuntimeLimitsConfig {
         Self {
             vector_len_max: DEFAULT_MAX_CONSTANT_VECTOR_LEN,
             max_value_nest_depth: Some(DEFAULT_MAX_VALUE_NEST_DEPTH),
+            hardened_otw_check: true,
         }
     }
 }

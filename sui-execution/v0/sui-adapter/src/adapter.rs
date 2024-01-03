@@ -96,6 +96,7 @@ mod checked {
                 runtime_limits_config: VMRuntimeLimitsConfig {
                     vector_len_max: protocol_config.max_move_vector_len(),
                     max_value_nest_depth: protocol_config.max_move_value_depth_as_option(),
+                    hardened_otw_check: protocol_config.hardened_otw_check(),
                 },
                 enable_invariant_violation_check_in_swap_loc: !protocol_config
                     .disable_invariant_violation_check_in_swap_loc(),
