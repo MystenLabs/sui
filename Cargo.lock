@@ -2478,6 +2478,7 @@ dependencies = [
  "multiaddr",
  "rand 0.8.5",
  "serde",
+ "shared-crypto",
  "workspace-hack",
 ]
 
@@ -2485,7 +2486,11 @@ dependencies = [
 name = "consensus-core"
 version = "0.1.0"
 dependencies = [
+ "base64 0.21.2",
+ "bcs",
  "consensus-config",
+ "fastcrypto",
+ "serde",
  "workspace-hack",
 ]
 
