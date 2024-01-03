@@ -50,58 +50,59 @@
 //# run-graphql
 {
   epoch(id: 4) {
-	epochId
-	systemStateVersion
-	storageFund {
+    epochId
+    systemStateVersion
+    storageFund {
       totalObjectStorageRebates
       nonRefundableBalance
     }
-  }	
+  }
 }
 
 //# run-graphql
 {
   epoch(id: 3) {
-	epochId
-	systemStateVersion
+    epochId
+    systemStateVersion
     storageFund {
       totalObjectStorageRebates
       nonRefundableBalance
     }
-  }	
+  }
 }
+
 //# run-graphql
 {
   epoch(id: 2) {
-	epochId
-	systemStateVersion
+    epochId
+    systemStateVersion
     storageFund {
       totalObjectStorageRebates
       nonRefundableBalance
     }
-  }	
+  }
 }
 
 //# run-graphql
 {
   epoch(id: 1) {
-	epochId
-	systemStateVersion
+    epochId
+    systemStateVersion
     storageFund {
       totalObjectStorageRebates
       nonRefundableBalance
     }
-  }	
+  }
 }
 
 //# run-graphql
 {
   epoch(id: 4) {
-	epochId
-	systemStateVersion
+    epochId
+    systemStateVersion
     storageFund {
       totalObjectStorageRebates
       nonRefundableBalance
     }
-  }	
+  } 
 }
