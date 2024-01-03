@@ -1,0 +1,88 @@
+processed 23 tasks
+
+task 1 'create-checkpoint'. lines 6-8:
+Checkpoint created: 1
+
+task 3 'create-checkpoint'. lines 11-13:
+Checkpoint created: 2
+
+task 5 'create-checkpoint'. lines 16-18:
+Checkpoint created: 3
+
+task 7 'create-checkpoint'. lines 21-23:
+Checkpoint created: 4
+
+task 9 'create-checkpoint'. lines 26-28:
+Checkpoint created: 5
+
+task 11 'create-checkpoint'. lines 31-33:
+Checkpoint created: 6
+
+task 13 'create-checkpoint'. lines 36-38:
+Checkpoint created: 7
+
+task 15 'advance-epoch'. lines 41-41:
+Epoch advanced: 0
+
+task 16 'run-graphql'. lines 43-48:
+Response: {
+  "data": {
+    "checkpoint": {
+      "timestamp": "1970-01-01T00:00:00.001Z"
+    }
+  }
+}
+
+task 17 'run-graphql'. lines 50-55:
+Response: {
+  "data": {
+    "checkpoint": {
+      "timestamp": "1970-01-01T00:00:00.002Z"
+    }
+  }
+}
+
+task 18 'run-graphql'. lines 57-62:
+Response: {
+  "data": {
+    "checkpoint": {
+      "timestamp": "1970-01-01T00:00:00.003Z"
+    }
+  }
+}
+
+task 19 'run-graphql'. lines 64-69:
+Response: {
+  "data": {
+    "checkpoint": {
+      "timestamp": "1970-01-01T00:00:00.013Z"
+    }
+  }
+}
+
+task 20 'run-graphql'. lines 71-76:
+Response: {
+  "data": {
+    "checkpoint": {
+      "timestamp": "1970-01-01T00:00:02.013Z"
+    }
+  }
+}
+
+task 21 'run-graphql'. lines 78-83:
+Response: {
+  "data": {
+    "checkpoint": {
+      "timestamp": "1970-01-01T00:16:32.013Z"
+    }
+  }
+}
+
+task 22 'run-graphql'. lines 85-90:
+Response: {
+  "data": {
+    "checkpoint": {
+      "timestamp": "1970-01-01T03:01:32.013Z"
+    }
+  }
+}
