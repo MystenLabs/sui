@@ -71,7 +71,7 @@ mod checked {
         reference_gas_price: u64,
         transaction: &TransactionData,
         input_objects: InputObjects,
-        receiving_objects: ReceivingObjects,
+        receiving_objects: &ReceivingObjects,
         metrics: &Arc<BytecodeVerifierMetrics>,
     ) -> SuiResult<(SuiGasStatus, CheckedInputObjects)> {
         let gas_status = check_transaction_input_inner(
@@ -81,7 +81,7 @@ mod checked {
             &input_objects,
             &[],
         )?;
-        check_receiving_objects(&input_objects, &receiving_objects)?;
+        check_receiving_objects(&input_objects, receiving_objects)?;
         // Runs verifier, which could be expensive.
         check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
 

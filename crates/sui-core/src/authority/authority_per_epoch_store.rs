@@ -833,6 +833,10 @@ impl AuthorityPerEpochStore {
             .is_some()
     }
 
+    pub fn coin_deny_list_state_enabled(&self) -> bool {
+        self.protocol_config().enable_coin_deny_list() && self.coin_deny_list_state_exists()
+    }
+
     pub fn get_parent_path(&self) -> PathBuf {
         self.parent_path.clone()
     }

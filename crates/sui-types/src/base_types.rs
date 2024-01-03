@@ -306,6 +306,24 @@ impl MoveObjectType {
         }
     }
 
+    pub fn is_upgrade_cap(&self) -> bool {
+        self.address() == SUI_FRAMEWORK_ADDRESS
+            && self.module().as_str() == "package"
+            && self.name().as_str() == "UpgradeCap"
+    }
+
+    pub fn is_regulated_coin_metadata(&self) -> bool {
+        self.address() == SUI_FRAMEWORK_ADDRESS
+            && self.module().as_str() == "coin"
+            && self.name().as_str() == "RegulatedCoinMetadata"
+    }
+
+    pub fn is_coin_deny_cap(&self) -> bool {
+        self.address() == SUI_FRAMEWORK_ADDRESS
+            && self.module().as_str() == "coin"
+            && self.name().as_str() == "DenyCap"
+    }
+
     pub fn is_dynamic_field(&self) -> bool {
         match &self.0 {
             MoveObjectType_::GasCoin | MoveObjectType_::StakedSui | MoveObjectType_::Coin(_) => {
@@ -348,7 +366,7 @@ impl MoveObjectType {
         }
     }
 
-    /// Returns the string representation of this object's type using the canonical display.    
+    /// Returns the string representation of this object's type using the canonical display.
     pub fn to_canonical_string(&self, with_prefix: bool) -> String {
         StructTag::from(self.clone()).to_canonical_string(with_prefix)
     }

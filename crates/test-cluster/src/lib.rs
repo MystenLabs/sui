@@ -227,6 +227,13 @@ impl TestCluster {
             .await
     }
 
+    pub async fn get_latest_object_ref(&self, object_id: &ObjectID) -> ObjectRef {
+        self.get_object_from_fullnode_store(object_id)
+            .await
+            .unwrap()
+            .compute_object_reference()
+    }
+
     pub async fn get_object_or_tombstone_from_fullnode_store(
         &self,
         object_id: ObjectID,
@@ -440,6 +447,20 @@ impl TestCluster {
 
     pub async fn test_transaction_builder(&self) -> TestTransactionBuilder {
         let (sender, gas) = self.wallet.get_one_gas_object().await.unwrap().unwrap();
+        self.test_transaction_builder_with_gas_object(sender, gas)
+            .await
+    }
+
+    pub async fn test_transaction_builder_with_sender(
+        &self,
+        sender: SuiAddress,
+    ) -> TestTransactionBuilder {
+        let gas = self
+            .wallet
+            .get_one_gas_object_owned_by_address(sender)
+            .await
+            .unwrap()
+            .unwrap();
         self.test_transaction_builder_with_gas_object(sender, gas)
             .await
     }
