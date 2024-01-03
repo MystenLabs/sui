@@ -1385,7 +1385,7 @@ impl PgManager {
         let mut connection = Connection::new(false, has_next_page);
         for stored_event in events {
             let cursor = self.build_event_cursor(&stored_event);
-            let event = Event::try_from(stored_event)?;
+            let event = Event::from(stored_event);
             connection.edges.push(Edge::new(cursor, event));
         }
 

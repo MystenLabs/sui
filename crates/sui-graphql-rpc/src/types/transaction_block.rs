@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use async_graphql::{connection::Connection, *};
+use async_graphql::{
+    connection::{Connection, CursorType, Edge},
+    *,
+};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer::models_v2::transactions::StoredTransaction;
 use sui_types::{
@@ -15,8 +18,9 @@ use crate::{context_data::db_data_provider::PgManager, error::Error};
 use super::{
     address::Address,
     base64::Base64,
+    cursor::{Cursor, Page},
     epoch::Epoch,
-    event::{Event, EventFilter},
+    event::Event,
     gas::GasInput,
     sui_address::SuiAddress,
     transaction_block_effects::TransactionBlockEffects,
@@ -60,6 +64,8 @@ pub(crate) struct TransactionBlockFilter {
 
     pub transaction_ids: Option<Vec<String>>,
 }
+
+pub(crate) type CTxEvent = Cursor<usize>;
 
 #[Object]
 impl TransactionBlock {
@@ -119,23 +125,39 @@ impl TransactionBlock {
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<CTxEvent>,
         last: Option<u64>,
-        before: Option<String>,
-        filter: Option<EventFilter>,
-    ) -> Result<Option<Connection<String, Event>>> {
-        let mut event_filter = match filter {
-            Some(filter) => filter,
-            None => EventFilter::default(),
-        };
+        before: Option<CTxEvent>,
+    ) -> Result<Connection<String, Event>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
-        // Overwrite with the current transaction's digest.
-        event_filter.transaction_digest = Some(Base58::encode(&self.stored.transaction_digest));
+        let total = self.stored.events.len();
 
-        ctx.data_unchecked::<PgManager>()
-            .fetch_events(first, after, last, before, Some(event_filter))
-            .await
-            .extend()
+        // Add one to make [lo, hi) a half-open interval ((after, before) is an open interval).
+        let mut lo = page.after().map_or(0, |a| *a + 1);
+        let mut hi = page.before().map_or(total, |b| *b);
+
+        let mut connection = Connection::new(false, false);
+        if hi <= lo {
+            return Ok(connection);
+        } else if (hi - lo) > page.limit() {
+            if page.is_from_front() {
+                hi = lo + page.limit();
+            } else {
+                lo = hi - page.limit();
+            }
+        }
+
+        connection.has_previous_page = 0 < lo;
+        connection.has_next_page = hi < total;
+
+        for idx in lo..hi {
+            let event = Event::try_from(&self.stored, idx).extend()?;
+            let cursor = Cursor::new(idx).encode_cursor();
+            connection.edges.push(Edge::new(cursor, event));
+        }
+
+        Ok(connection)
     }
 
     /// This field is set by senders of a transaction block. It is an epoch reference that sets a
