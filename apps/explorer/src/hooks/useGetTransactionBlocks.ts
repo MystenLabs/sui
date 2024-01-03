@@ -13,12 +13,12 @@ export function useGetTransactionBlocks({
 	filter,
 	limit = DEFAULT_TRANSACTIONS_LIMIT,
 	refetchInterval,
-	disabled,
+	enabled,
 }: {
 	filter?: TransactionFilter;
 	limit?: number;
 	refetchInterval?: number;
-	disabled?: boolean;
+	enabled?: boolean;
 }) {
 	const client = useSuiClient();
 
@@ -41,6 +41,6 @@ export function useGetTransactionBlocks({
 		retry: false,
 		placeholderData: keepPreviousData,
 		refetchInterval,
-		enabled: !disabled,
+		enabled,
 	});
 }

@@ -104,7 +104,7 @@ function TransactionBlocksForAddress({
 			filter: {
 				[filter]: address,
 			} as TransactionFilter,
-			disabled: !isObject,
+			enabled: isObject,
 		});
 
 	const {
