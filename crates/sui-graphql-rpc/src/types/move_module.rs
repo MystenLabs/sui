@@ -69,27 +69,15 @@ impl MoveModule {
         before: Option<CFriend>,
     ) -> Result<Connection<String, MoveModule>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-
         let bytecode = self.parsed.bytecode();
-        let total = bytecode.friend_decls.len();
-
-        // Add one to make [lo, hi) a half-open interval ((after, before) is an open interval).
-        let mut lo = page.after().map_or(0, |a| *a + 1);
-        let mut hi = page.before().map_or(total, |b| *b);
 
         let mut connection = Connection::new(false, false);
-        if hi <= lo {
+        let Some((prev, next, cs)) = page.select(bytecode.friend_decls.len()) else {
             return Ok(connection);
-        } else if (hi - lo) > page.limit() {
-            if page.is_from_front() {
-                hi = lo + page.limit();
-            } else {
-                lo = hi - page.limit();
-            }
-        }
+        };
 
-        connection.has_previous_page = 0 < lo;
-        connection.has_next_page = hi < total;
+        connection.has_previous_page = prev;
+        connection.has_next_page = next;
 
         let runtime_id = *bytecode.self_id().address();
         let Some(package) = ctx
@@ -107,8 +95,8 @@ impl MoveModule {
 
         // Select `friend_decls[lo..hi]` using iterators to enumerate before taking a sub-sequence
         // from it, to get pairs `(i, friend_decls[i])`.
-        for idx in lo..hi {
-            let decl = &bytecode.friend_decls[idx];
+        for c in cs {
+            let decl = &bytecode.friend_decls[*c];
             let friend_pkg = bytecode.address_identifier_at(decl.address);
             let friend_mod = bytecode.identifier_at(decl.name);
 
@@ -132,8 +120,7 @@ impl MoveModule {
                 .extend());
             };
 
-            let cursor = Cursor::new(idx).encode_cursor();
-            connection.edges.push(Edge::new(cursor, friend));
+            connection.edges.push(Edge::new(c.encode_cursor(), friend));
         }
 
         Ok(connection)

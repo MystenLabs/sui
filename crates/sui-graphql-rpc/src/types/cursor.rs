@@ -110,6 +110,31 @@ impl<C> Page<C> {
     }
 }
 
+impl Page<usize> {
+    /// Treat the cursors of this Page as indices into a range [0, total). Returns two booleans
+    /// indicating whether there is a previous or next page in the range, followed by an iterator of
+    /// cursors within that Page.
+    pub(crate) fn select(
+        &self,
+        total: usize,
+    ) -> Option<(bool, bool, impl Iterator<Item = Cursor<usize>>)> {
+        let mut lo = self.after().map_or(0, |a| *a + 1);
+        let mut hi = self.before().map_or(total, |b| *b);
+
+        if hi <= lo {
+            return None;
+        } else if (hi - lo) > self.limit() {
+            if self.is_from_front() {
+                hi = lo + self.limit();
+            } else {
+                lo = hi - self.limit();
+            }
+        }
+
+        Some((0 < lo, hi < total, (lo..hi).map(Cursor::new)))
+    }
+}
+
 #[Scalar(name = "String", visible = false)]
 impl<C> ScalarType for Cursor<C>
 where
