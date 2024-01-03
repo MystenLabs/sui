@@ -151,7 +151,7 @@ module Test::M1 {
 
 //# run-graphql --variables validator_0
 {
-  latestSuiSystemState {
+  epoch {
     validatorSet {
       activeValidators {
         address {
@@ -168,7 +168,7 @@ module Test::M1 {
 //# run-graphql
 # Since we set it at the init, it should be the same as 234
 {
-  latestSuiSystemState {
+  epoch {
     referenceGasPrice
   }
 }

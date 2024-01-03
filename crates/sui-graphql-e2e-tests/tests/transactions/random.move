@@ -10,7 +10,7 @@
 //# run-graphql
 # Make sure the randomness state was created on the epoch boundary
 {
-    latestSuiSystemState {
+    epoch {
         protocolConfigs {
             protocolVersion
             randomBeacon: featureFlag(key: "random_beacon") { value }

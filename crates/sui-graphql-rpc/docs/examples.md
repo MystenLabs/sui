@@ -1219,47 +1219,41 @@
 ## Sui System State Summary
 ### <a id=1048560></a>
 ### Sui System State Summary
+####  Get the latest sui system state data
 
 ><pre>{
->  latestSuiSystemState {
->    systemStateVersion
->    referenceGasPrice
->    startTimestamp
->    validatorSet {
->      totalStake
->      pendingActiveValidatorsSize
->      stakePoolMappingsSize
->      inactivePoolsSize
->      validatorCandidatesSize
->      activeValidators {
->        name
->        description
->        imageUrl
->        projectUrl
->        exchangeRates {
->          asObject {
->            storageRebate
->            bcs
->            kind
->          }
->          hasPublicTransfer
->        }
->        exchangeRatesSize
->        stakingPoolActivationEpoch
->        stakingPoolSuiBalance
->        rewardsPool
->        poolTokenBalance
->        pendingStake
->        pendingTotalSuiWithdraw
->        pendingPoolTokenWithdraw
->        votingPower
->        gasPrice
->        commissionRate
->        nextEpochStake
->        nextEpochGasPrice
->        nextEpochCommissionRate
->        atRisk
+>  epoch {
+>    storageFund {
+>      totalObjectStorageRebates
+>      nonRefundableBalance
+>    }
+>    safeMode {
+>      enabled
+>      gasSummary {
+>         computationCost
+>         storageCost
+>         storageRebate
+>         nonRefundableStorageFee
 >      }
+>    }
+>    systemStateVersion
+>    systemParameters {
+>      durationMs
+>      stakeSubsidyStartEpoch
+>      minValidatorCount
+>      maxValidatorCount
+>      minValidatorJoiningStake
+>      validatorLowStakeThreshold
+>      validatorVeryLowStakeThreshold
+>      validatorLowStakeGracePeriod
+>    }
+>    systemStakeSubsidy {
+>      balance
+>      distributionCounter
+>      currentDistributionAmount
+>      periodLength
+>      decreaseRate
+>
 >    }
 >  }
 >}</pre>
