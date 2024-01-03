@@ -296,7 +296,7 @@ impl BridgeActionDigest {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BridgeCommitteeValiditySignInfo {
     pub signatures: BTreeMap<BridgeAuthorityPublicKeyBytes, BridgeAuthorityRecoverableSignature>,
 }

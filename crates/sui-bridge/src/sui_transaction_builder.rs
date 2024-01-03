@@ -1,0 +1,193 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use fastcrypto::traits::ToFromBytes;
+use move_core_types::ident_str;
+use once_cell::sync::OnceCell;
+use sui_types::{
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
+    transaction::{ObjectArg, TransactionData},
+};
+
+use crate::{
+    error::{BridgeError, BridgeResult},
+    types::{BridgeAction, VerifiedCertifiedBridgeAction},
+};
+
+// TODO: once we have bridge package on sui framework, we can hardcode the actual
+// bridge dynamic field object id (not 0x9 or dynamic field wrapper) and update
+// along with software upgrades.
+// Or do we always retrieve from 0x9? We can figure this out before the first uggrade.
+fn get_bridge_package_id() -> &'static ObjectID {
+    static BRIDGE_PACKAGE_ID: OnceCell<ObjectID> = OnceCell::new();
+    BRIDGE_PACKAGE_ID.get_or_init(|| match std::env::var("BRIDGE_PACKAGE_ID") {
+        Ok(id) => {
+            ObjectID::from_hex_literal(&id).expect("BRIDGE_PACKAGE_ID must be a valid hex string")
+        }
+        Err(_) => ObjectID::from_hex_literal("0x9").unwrap(),
+    })
+}
+
+// TODO: this should be 0x9 once we have bridge package on sui framework.
+pub fn get_root_bridge_object_arg() -> &'static ObjectArg {
+    static ROOT_BRIDGE_OBJ_ID: OnceCell<ObjectArg> = OnceCell::new();
+    ROOT_BRIDGE_OBJ_ID.get_or_init(|| {
+        let bridge_object_id = std::env::var("ROOT_BRIDGE_OBJECT_ID")
+            .expect("Expect ROOT_BRIDGE_OBJECT_ID env var set");
+        let object_id = ObjectID::from_hex_literal(&bridge_object_id)
+            .expect("ROOT_BRIDGE_OBJECT_ID must be a valid hex string");
+        let initial_shared_version = std::env::var("ROOT_BRIDGE_OBJECT_INITIAL_SHARED_VERSION")
+            .expect("Expect ROOT_BRIDGE_OBJECT_INITIAL_SHARED_VERSION env var set")
+            .parse::<u64>()
+            .expect("ROOT_BRIDGE_OBJECT_INITIAL_SHARED_VERSION must be a valid u64");
+        ObjectArg::SharedObject {
+            id: object_id,
+            initial_shared_version: SequenceNumber::from_u64(initial_shared_version),
+            mutable: true,
+        }
+    })
+}
+
+pub fn build_transaction(
+    client_address: SuiAddress,
+    gas_object_ref: &ObjectRef,
+    action: VerifiedCertifiedBridgeAction,
+) -> BridgeResult<TransactionData> {
+    match action.data() {
+        BridgeAction::EthToSuiBridgeAction(_) | BridgeAction::SuiToEthBridgeAction(_) => {
+            build_token_bridge_approve_transaction(client_address, gas_object_ref, action)
+        }
+    }
+}
+
+fn build_token_bridge_approve_transaction(
+    client_address: SuiAddress,
+    gas_object_ref: &ObjectRef,
+    action: VerifiedCertifiedBridgeAction,
+) -> BridgeResult<TransactionData> {
+    let (bridge_action, sigs) = action.into_inner().into_data_and_sig();
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    let (source_chain, seq_num, sender, target_chain, target, token_type, amount) =
+        match bridge_action {
+            BridgeAction::SuiToEthBridgeAction(a) => {
+                let bridge_event = a.sui_bridge_event;
+                (
+                    bridge_event.sui_chain_id,
+                    bridge_event.nonce,
+                    bridge_event.sui_address.to_vec(),
+                    bridge_event.eth_chain_id,
+                    bridge_event.eth_address.to_fixed_bytes().to_vec(),
+                    bridge_event.token_id,
+                    bridge_event.amount,
+                )
+            }
+            BridgeAction::EthToSuiBridgeAction(a) => {
+                let bridge_event = a.eth_bridge_event;
+                (
+                    bridge_event.eth_chain_id,
+                    bridge_event.nonce,
+                    bridge_event.eth_address.to_fixed_bytes().to_vec(),
+                    bridge_event.sui_chain_id,
+                    bridge_event.sui_address.to_vec(),
+                    bridge_event.token_id,
+                    bridge_event.amount,
+                )
+            }
+        };
+
+    let source_chain = builder.pure(source_chain as u8).map_err(|e| {
+        BridgeError::BridgeEventParameterSerializationError(format!(
+            "Failed to serialize source_chain: {:?}. Err: {:?}",
+            source_chain, e
+        ))
+    })?;
+    let seq_num = builder.pure(seq_num).map_err(|e| {
+        BridgeError::BridgeEventParameterSerializationError(format!(
+            "Failed to serialize seq_num: {:?}. Err: {:?}",
+            seq_num, e
+        ))
+    })?;
+    let sender = builder.pure(sender.clone()).map_err(|e| {
+        BridgeError::BridgeEventParameterSerializationError(format!(
+            "Failed to serialize sender: {:?}. Err: {:?}",
+            sender, e
+        ))
+    })?;
+    let target_chain = builder.pure(target_chain as u8).map_err(|e| {
+        BridgeError::BridgeEventParameterSerializationError(format!(
+            "Failed to serialize target_chain: {:?}. Err: {:?}",
+            target_chain, e
+        ))
+    })?;
+    let target = builder.pure(target.clone()).map_err(|e| {
+        BridgeError::BridgeEventParameterSerializationError(format!(
+            "Failed to serialize target: {:?}. Err: {:?}",
+            target, e
+        ))
+    })?;
+    let token_type = builder.pure(token_type as u8).map_err(|e| {
+        BridgeError::BridgeEventParameterSerializationError(format!(
+            "Failed to serialize token_type: {:?}. Err: {:?}",
+            token_type, e
+        ))
+    })?;
+    let amount = builder.pure(amount).map_err(|e| {
+        BridgeError::BridgeEventParameterSerializationError(format!(
+            "Failed to serialize amount: {:?}. Err: {:?}",
+            amount, e
+        ))
+    })?;
+
+    let arg_msg = builder.programmable_move_call(
+        *get_bridge_package_id(),
+        ident_str!("message").to_owned(),
+        ident_str!("create_token_bridge_message").to_owned(),
+        vec![],
+        vec![
+            source_chain,
+            seq_num,
+            sender,
+            target_chain,
+            target,
+            token_type,
+            amount,
+        ],
+    );
+
+    // Unwrap: this should not fail
+    let arg_bridge = builder.obj(*get_root_bridge_object_arg()).unwrap();
+
+    let mut sig_bytes = vec![];
+    for (_, sig) in sigs.signatures {
+        sig_bytes.extend_from_slice(sig.as_bytes());
+    }
+    let arg_signatures = builder.pure(sig_bytes).unwrap();
+
+    builder.programmable_move_call(
+        *get_bridge_package_id(),
+        ident_str!("bridge").to_owned(),
+        ident_str!("approve_bridge_message").to_owned(),
+        vec![],
+        vec![arg_bridge, arg_msg, arg_signatures],
+    );
+
+    let pt = builder.finish();
+
+    Ok(TransactionData::new_programmable(
+        client_address,
+        vec![*gas_object_ref],
+        pt,
+        15_000_000,
+        1500,
+    ))
+
+    // builder.programmable_move_call(
+    //     *get_bridge_package_id(),
+    //     ident_str!("bridge").to_owned(),
+    //     ident_str!("claim_and_transfer_token").to_owned(),
+    //     vec![TypeTag::from_str("0xb::btc::BTC").unwrap()],
+    //     vec![bridge, source_chain, seq_num],
+    // );
+}

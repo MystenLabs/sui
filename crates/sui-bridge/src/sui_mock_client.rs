@@ -33,6 +33,7 @@ pub struct SuiMockClient {
     events_by_tx_digest: Arc<Mutex<HashMap<TransactionDigest, Vec<SuiEvent>>>>,
     transaction_responses:
         Arc<Mutex<HashMap<TransactionDigest, BridgeResult<SuiTransactionBlockResponse>>>>,
+    wildcard_transaction_response: Arc<Mutex<Option<BridgeResult<SuiTransactionBlockResponse>>>>,
     get_object_info: Arc<Mutex<HashMap<ObjectID, (GasCoin, ObjectRef, Owner)>>>,
 
     requested_transactions_tx: tokio::sync::broadcast::Sender<TransactionDigest>,
@@ -47,6 +48,7 @@ impl SuiMockClient {
             past_event_query_params: Default::default(),
             events_by_tx_digest: Default::default(),
             transaction_responses: Default::default(),
+            wildcard_transaction_response: Default::default(),
             get_object_info: Default::default(),
             requested_transactions_tx: tokio::sync::broadcast::channel(10000).0,
         }
@@ -85,6 +87,13 @@ impl SuiMockClient {
             .lock()
             .unwrap()
             .insert(tx_digest, response);
+    }
+
+    pub fn set_wildcard_transaction_response(
+        &self,
+        response: BridgeResult<SuiTransactionBlockResponse>,
+    ) {
+        *self.wildcard_transaction_response.lock().unwrap() = Some(response);
     }
 
     pub fn add_gas_object_info(&self, gas_coin: GasCoin, object_ref: ObjectRef, owner: Owner) {
@@ -164,13 +173,15 @@ impl SuiClientInner for SuiMockClient {
         tx: Transaction,
     ) -> Result<SuiTransactionBlockResponse, BridgeError> {
         self.requested_transactions_tx.send(*tx.digest()).unwrap();
-        Ok(self
-            .transaction_responses
-            .lock()
-            .unwrap()
-            .get(tx.digest())
-            .cloned()
-            .unwrap_or_else(|| panic!("No preset transaction response found for tx: {:?}", tx))?)
+        match self.transaction_responses.lock().unwrap().get(tx.digest()) {
+            Some(response) => response.clone(),
+            None => self
+                .wildcard_transaction_response
+                .lock()
+                .unwrap()
+                .clone()
+                .unwrap_or_else(|| panic!("No preset transaction response found for tx: {:?}", tx)),
+        }
     }
 
     async fn get_gas_data_panic_if_not_gas(
