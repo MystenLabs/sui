@@ -358,6 +358,10 @@ struct FeatureFlags {
     // If true, use the hardened OTW check
     #[serde(skip_serializing_if = "is_false")]
     hardened_otw_check: bool,
+
+    // If true allow calling receiving_object_id function
+    #[serde(skip_serializing_if = "is_false")]
+    allow_receiving_object_id: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -886,6 +890,10 @@ impl ProtocolConfig {
                 self.version
             )))
         }
+    }
+
+    pub fn allow_receiving_object_id(&self) -> bool {
+        self.feature_flags.allow_receiving_object_id
     }
 
     pub fn receiving_objects_supported(&self) -> bool {
@@ -1698,6 +1706,7 @@ impl ProtocolConfig {
                 }
                 33 => {
                     cfg.feature_flags.hardened_otw_check = true;
+                    cfg.feature_flags.allow_receiving_object_id = true;
                 }
                 // Use this template when making changes:
                 //

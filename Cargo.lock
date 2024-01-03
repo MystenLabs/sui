@@ -13478,6 +13478,7 @@ dependencies = [
  "move-bytecode-verifier",
  "move-core-types",
  "move-vm-config",
+ "sui-protocol-config",
  "sui-types",
  "workspace-hack",
 ]

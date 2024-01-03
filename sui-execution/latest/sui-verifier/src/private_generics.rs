@@ -12,6 +12,7 @@ use move_binary_format::{
 };
 use move_bytecode_utils::format_signature_token;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
+use move_vm_config::verifier::VerifierConfig;
 use sui_types::{error::ExecutionError, SUI_FRAMEWORK_ADDRESS};
 
 use crate::{verification_failure, TEST_SCENARIO_MODULE_NAME};
@@ -49,7 +50,10 @@ pub const TRANSFER_IMPL_FUNCTIONS: &[&IdentStr] = &[
 /// is no relaxation for `store`
 /// Concretely, with `event::emit<T>(...)`:
 /// - `T` must be a type declared in the current module
-pub fn verify_module(module: &CompiledModule, protocol_version: u64) -> Result<(), ExecutionError> {
+pub fn verify_module(
+    module: &CompiledModule,
+    verifier_config: &VerifierConfig,
+) -> Result<(), ExecutionError> {
     if *module.address() == SUI_FRAMEWORK_ADDRESS
         && module.name() == IdentStr::new(TEST_SCENARIO_MODULE_NAME).unwrap()
     {
@@ -60,14 +64,16 @@ pub fn verify_module(module: &CompiledModule, protocol_version: u64) -> Result<(
     let view = &BinaryIndexedView::Module(module);
     // do not need to check the sui::transfer module itself
     for func_def in &module.function_defs {
-        verify_function(view, func_def, protocol_version).map_err(|error| {
-            verification_failure(format!(
-                "{}::{}. {}",
-                module.self_id(),
-                module.identifier_at(module.function_handle_at(func_def.function).name),
-                error
-            ))
-        })?;
+        verify_function(view, func_def, verifier_config.allow_receiving_object_id).map_err(
+            |error| {
+                verification_failure(format!(
+                    "{}::{}. {}",
+                    module.self_id(),
+                    module.identifier_at(module.function_handle_at(func_def.function).name),
+                    error
+                ))
+            },
+        )?;
     }
     Ok(())
 }
@@ -75,7 +81,7 @@ pub fn verify_module(module: &CompiledModule, protocol_version: u64) -> Result<(
 fn verify_function(
     view: &BinaryIndexedView,
     fdef: &FunctionDefinition,
-    protocol_version: u64,
+    allow_receiving_object_id: bool,
 ) -> Result<(), String> {
     let code = match &fdef.code {
         None => return Ok(()),
@@ -94,7 +100,7 @@ fn verify_function(
             let type_arguments = &view.signature_at(*type_parameters).0;
             let ident = addr_module(view, mhandle);
             if ident == (SUI_FRAMEWORK_ADDRESS, TRANSFER_MODULE) {
-                verify_private_transfer(view, fhandle, type_arguments, protocol_version)?
+                verify_private_transfer(view, fhandle, type_arguments, allow_receiving_object_id)?
             } else if ident == (SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
                 verify_private_event_emit(view, fhandle, type_arguments)?
             }
@@ -107,9 +113,9 @@ fn verify_private_transfer(
     view: &BinaryIndexedView,
     fhandle: &FunctionHandle,
     type_arguments: &[SignatureToken],
-    protocol_version: u64,
+    allow_receiving_object_id: bool,
 ) -> Result<(), String> {
-    let public_transfer_functions = if protocol_version >= 33 {
+    let public_transfer_functions = if allow_receiving_object_id {
         PUBLIC_TRANSFER_FUNCTIONS
     } else {
         // Before protocol version 33, the `receiving_object_id` function was not public

@@ -44,7 +44,7 @@ use move_package::{
 };
 use move_symbol_pool::Symbol;
 use serde_reflection::Registry;
-use sui_protocol_config::ProtocolVersion;
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::ObjectID,
     error::{SuiError, SuiResult},
@@ -52,7 +52,7 @@ use sui_types::{
     move_package::{FnInfo, FnInfoKey, FnInfoMap, MovePackage},
     DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
 };
-use sui_verifier::verifier as sui_bytecode_verifier;
+use sui_verifier::{default_verifier_config, verifier as sui_bytecode_verifier};
 
 #[cfg(test)]
 #[path = "unit_tests/build_tests.rs"]
@@ -251,7 +251,10 @@ pub fn build_from_resolution_graph(
             sui_bytecode_verifier::sui_verify_module_unmetered(
                 m,
                 &fn_info,
-                ProtocolVersion::MAX.as_u64(),
+                &default_verifier_config(
+                    &ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown),
+                    false,
+                ),
             )?;
         }
         // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker

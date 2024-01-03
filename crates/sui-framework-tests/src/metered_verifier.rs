@@ -4,7 +4,7 @@
 use move_bytecode_verifier::meter::Scope;
 use prometheus::Registry;
 use std::{path::PathBuf, sync::Arc, time::Instant};
-use sui_adapter::adapter::{default_verifier_config, run_metered_move_bytecode_verifier};
+use sui_adapter::adapter::run_metered_move_bytecode_verifier;
 use sui_framework::BuiltInFramework;
 use sui_move_build::{CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
@@ -12,7 +12,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
     metrics::BytecodeVerifierMetrics,
 };
-use sui_verifier::meter::SuiVerifierMeter;
+use sui_verifier::{default_verifier_config, meter::SuiVerifierMeter};
 
 fn build(path: PathBuf) -> SuiResult<CompiledPackage> {
     let mut config = sui_move_build::BuildConfig::new_for_testing();
@@ -43,7 +43,6 @@ fn test_metered_move_bytecode_verifier() {
         &metered_verifier_config,
         &mut meter,
         &bytecode_verifier_metrics,
-        &ProtocolConfig::get_for_max_version_UNSAFE(),
     );
     let elapsed = timer_start.elapsed().as_micros() as f64 / (1000.0 * 1000.0);
     assert!(r.is_ok());
@@ -134,7 +133,6 @@ fn test_metered_move_bytecode_verifier() {
         &metered_verifier_config,
         &mut meter,
         &bytecode_verifier_metrics,
-        &ProtocolConfig::get_for_max_version_UNSAFE(),
     );
     let elapsed = timer_start.elapsed().as_micros() as f64 / (1000.0 * 1000.0);
 
@@ -237,7 +235,6 @@ fn test_metered_move_bytecode_verifier() {
             &metered_verifier_config,
             &mut meter,
             &bytecode_verifier_metrics,
-            &ProtocolConfig::get_for_max_version_UNSAFE(),
         )
         .expect("Verification should not timeout");
 
@@ -263,7 +260,6 @@ fn test_meter_system_packages() {
             &metered_verifier_config,
             &mut meter,
             &bytecode_verifier_metrics,
-            &ProtocolConfig::get_for_max_version_UNSAFE(),
         )
         .unwrap_or_else(|_| {
             panic!(
@@ -345,7 +341,6 @@ fn test_build_and_verify_programmability_examples() {
             &metered_verifier_config,
             &mut meter,
             &bytecode_verifier_metrics,
-            &ProtocolConfig::get_for_max_version_UNSAFE(),
         )
         .unwrap_or_else(|_| {
             panic!(
