@@ -11,6 +11,8 @@ use chrono::{
 
 use crate::error::Error;
 
+/// The DateTime in UTC format. The milliseconds part is optional,
+/// and it will be omitted if the ms value is zero.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct DateTime(ChronoDateTime<ChronoUtc>);
 
@@ -24,6 +26,8 @@ impl DateTime {
     }
 }
 
+/// The DateTime in UTC format. The milliseconds part is optional,
+/// and it will be omitted if the ms value is zero.
 #[Scalar(use_type_description = true)]
 impl ScalarType for DateTime {
     fn parse(value: Value) -> InputValueResult<Self> {
@@ -42,7 +46,7 @@ impl ScalarType for DateTime {
 
 impl Description for DateTime {
     fn description() -> &'static str {
-        "ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ"
+        "ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ. Note that the milliseconds part is optional, and it may be omitted if its value is 0."
     }
 }
 

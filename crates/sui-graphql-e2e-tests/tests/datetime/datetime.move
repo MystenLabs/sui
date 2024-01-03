@@ -40,51 +40,47 @@
 
 //# advance-epoch
 
+//# create-checkpoint
+
+// advance the clock by 1888ms, next checkpoint timestmap should be 1970-01-01T03:01:33:901Z
+//# advance-clock --duration-ns 1888000000
+
+// advance the clock by 99ms, next checkpoint timestmap should be 1970-01-01T03:01:34:00Z
+//# advance-clock --duration-ns 99000000
+
+//# create-checkpoint
+
+//# advance-epoch
+
 //# run-graphql
 {
-  checkpoint(id:{sequenceNumber: 2}) {
-    timestamp
+  checkpointConnection(last: 10) {
+    nodes {
+      sequenceNumber
+      timestamp
+      epoch {
+        epochId
+      }
+    }
   }
 }
 
 //# run-graphql
+# Query for the system transaction that corresponds to a checkpoint (note that
+# its timestamp is advanced, because the clock has advanced).
 {
-  checkpoint(id:{sequenceNumber: 3}) {
-    timestamp
-  }
-}
-
-//# run-graphql
-{
-  checkpoint(id:{sequenceNumber: 4}) {
-    timestamp
-  }
-}
-
-//# run-graphql
-{
-  checkpoint(id:{sequenceNumber: 5}) {
-    timestamp
-  }
-}
-
-//# run-graphql
-{
-  checkpoint(id:{sequenceNumber: 6}) {
-    timestamp
-  }
-}
-
-//# run-graphql
-{
-  checkpoint(id:{sequenceNumber: 7}) {
-    timestamp
-  }
-}
-
-//# run-graphql
-{
-  checkpoint(id:{sequenceNumber: 8}) {
-    timestamp
+  transactionBlockConnection(last: 10) {
+    nodes {
+      kind {
+        __typename
+        ... on ConsensusCommitPrologueTransaction {
+          epoch {
+            epochId
+          }
+          commitTimestamp
+          consensusCommitDigest
+        }
+      }
+    }
   }
 }
