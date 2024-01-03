@@ -4105,6 +4105,22 @@ impl AuthorityState {
         Some(tx)
     }
 
+    #[instrument(level = "debug", skip_all)]
+    fn create_coin_deny_list_state_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if !epoch_store.protocol_config().enable_coin_deny_list() {
+            return None;
+        }
+
+        if epoch_store.coin_deny_list_state_exists() {
+            return None;
+        }
+
+        Some(EndOfEpochTransactionKind::CoinDenyListStateCreate)
+    }
+
     /// Creates and execute the advance epoch transaction to effects without committing it to the database.
     /// The effects of the change epoch tx are only written to the database after a certified checkpoint has been
     /// formed and executed by CheckpointExecutor.
@@ -4129,6 +4145,9 @@ impl AuthorityState {
             txns.push(tx);
         }
         if let Some(tx) = self.create_randomness_state_tx(epoch_store) {
+            txns.push(tx);
+        }
+        if let Some(tx) = self.create_coin_deny_list_state_tx(epoch_store) {
             txns.push(tx);
         }
 

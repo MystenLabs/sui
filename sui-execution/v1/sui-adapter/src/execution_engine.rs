@@ -599,6 +599,9 @@ mod checked {
                         EndOfEpochTransactionKind::RandomnessStateCreate => {
                             panic!("EndOfEpochTransactionKind::RandomnessStateCreate should not exist in v1");
                         }
+                        EndOfEpochTransactionKind::CoinDenyListStateCreate => {
+                            panic!("EndOfEpochTransactionKind::CoinDenyListStateCreate should not exist in v1");
+                        }
                     }
                 }
                 unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")

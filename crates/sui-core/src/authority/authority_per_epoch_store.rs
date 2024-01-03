@@ -122,7 +122,7 @@ pub enum ConsensusCertificateResult {
     /// An executable transaction (can be a user tx or a system tx)
     SuiTransaction(VerifiedExecutableTransaction),
     /// The transaction should be re-processed at a future commit, specified by the DeferralKey
-    Defered(DeferralKey),
+    Deferred(DeferralKey),
     /// Everything else, e.g. AuthorityCapabilities, CheckpointSignatures, etc.
     ConsensusMessage,
     /// A system message in consensus was ignored (e.g. because of end of epoch).
@@ -220,7 +220,7 @@ pub struct AuthorityPerEpochStore {
 
     /// Holds the underlying per-epoch typed store tables.
     /// This is an ArcSwapOption because it needs to be used concurrently,
-    /// and it nees to be cleared at the end of the epoch.
+    /// and it needs to be cleared at the end of the epoch.
     tables: ArcSwapOption<AuthorityEpochTables>,
 
     protocol_config: ProtocolConfig,
@@ -828,6 +828,12 @@ impl AuthorityPerEpochStore {
     pub fn randomness_state_exists(&self) -> bool {
         self.epoch_start_configuration
             .randomness_obj_initial_shared_version()
+            .is_some()
+    }
+
+    pub fn coin_deny_list_state_exists(&self) -> bool {
+        self.epoch_start_configuration
+            .coin_deny_list_obj_initial_shared_version()
             .is_some()
     }
 
@@ -2179,7 +2185,7 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        // Load transactions deferred from prevous commits.
+        // Load transactions deferred from previous commits.
         // We do this after updating the last_randomness_round_written above so that every deferred
         // transaction that can be run with this commit is loaded.
         let deferred_tx: Vec<VerifiedSequencedConsensusTransaction> = self
@@ -2393,7 +2399,7 @@ impl AuthorityPerEpochStore {
                     notifications.push(key.clone());
                     verified_certificates.push(cert);
                 }
-                ConsensusCertificateResult::Defered(deferral_key) => {
+                ConsensusCertificateResult::Deferred(deferral_key) => {
                     // Note: record_consensus_message_processed() must be called for this
                     // cert even though we are not processing it now!
                     deferred_txns
@@ -2577,7 +2583,7 @@ impl AuthorityPerEpochStore {
                         "Deferring consensus certificate for transaction {:?} until {deferral_key:?}",
                         certificate.digest(),
                     );
-                    return Ok(ConsensusCertificateResult::Defered(deferral_key));
+                    return Ok(ConsensusCertificateResult::Deferred(deferral_key));
                 }
 
                 if certificate.contains_shared_object() {

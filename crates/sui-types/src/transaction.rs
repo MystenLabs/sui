@@ -293,6 +293,7 @@ pub enum EndOfEpochTransactionKind {
     AuthenticatorStateCreate,
     AuthenticatorStateExpire(AuthenticatorStateExpire),
     RandomnessStateCreate,
+    CoinDenyListStateCreate,
 }
 
 impl EndOfEpochTransactionKind {
@@ -354,6 +355,7 @@ impl EndOfEpochTransactionKind {
                 }]
             }
             Self::RandomnessStateCreate => vec![],
+            Self::CoinDenyListStateCreate => vec![],
         }
     }
 
@@ -367,6 +369,7 @@ impl EndOfEpochTransactionKind {
             })),
             Self::AuthenticatorStateCreate => Either::Right(iter::empty()),
             Self::RandomnessStateCreate => Either::Right(iter::empty()),
+            Self::CoinDenyListStateCreate => Either::Right(iter::empty()),
         }
     }
 
@@ -380,6 +383,10 @@ impl EndOfEpochTransactionKind {
             Self::RandomnessStateCreate => {
                 // Transaction should have been rejected earlier (or never formed).
                 assert!(config.random_beacon());
+            }
+            Self::CoinDenyListStateCreate => {
+                // Transaction should have been rejected earlier (or never formed).
+                assert!(config.enable_coin_deny_list());
             }
         }
         Ok(())
@@ -453,6 +460,13 @@ impl VersionedProtocolMessage for TransactionKind {
                                 if !protocol_config.random_beacon() {
                                     return Err(SuiError::UnsupportedFeatureError {
                                         error: "random beacon not enabled".to_string(),
+                                    });
+                                }
+                            }
+                            EndOfEpochTransactionKind::CoinDenyListStateCreate => {
+                                if !protocol_config.enable_coin_deny_list() {
+                                    return Err(SuiError::UnsupportedFeatureError {
+                                        error: "coin deny list not enabled".to_string(),
                                     });
                                 }
                             }

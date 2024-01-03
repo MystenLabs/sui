@@ -38,7 +38,7 @@ use sui_types::{
 pub(crate) mod object_store;
 
 use object_store::ChildObjectStore;
-use sui_types::coin_deny_list::SUI_COIN_DENY_LIST_OBJECT_ID;
+use sui_types::coin_deny_list::COIN_DENY_LIST_OBJECT_ID;
 
 use self::object_store::{ChildObjectEffect, ObjectResult};
 
@@ -256,7 +256,7 @@ impl<'a> ObjectRuntime<'a> {
             SUI_CLOCK_OBJECT_ID,
             SUI_AUTHENTICATOR_STATE_OBJECT_ID,
             SUI_RANDOMNESS_STATE_OBJECT_ID,
-            SUI_COIN_DENY_LIST_OBJECT_ID,
+            COIN_DENY_LIST_OBJECT_ID,
         ]
         .contains(&id);
         let transfer_result = if self.state.new_ids.contains(&id) {
