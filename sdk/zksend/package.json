@@ -48,6 +48,7 @@
 	"dependencies": {
 		"@mysten/wallet-standard": "workspace:*",
 		"mitt": "^3.0.1",
+		"nanostores": "^0.9.3",
 		"valibot": "^0.25.0"
 	}
 }

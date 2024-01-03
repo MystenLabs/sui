@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { atom, WritableAtom } from 'nanostores';
 import { parse, safeParse } from 'valibot';
 
 import { withResolvers } from '../utils/withResolvers';
 import {
 	ZkSendRequest,
 	ZkSendRequestType,
+	ZkSendResolveResponse,
 	ZkSendResponse,
 	ZkSendResponsePayload,
-	ZkSendResponsePaylodForType,
 } from './events';
 
 const DEFAULT_ZKSEND_ORIGIN = 'https://zksend.com';
@@ -20,40 +21,44 @@ export class ZkSendPopup {
 	#close?: () => void;
 
 	constructor(origin = DEFAULT_ZKSEND_ORIGIN) {
-		// TODO: If we want shorter IDs we can just use nanoID too:
 		this.#id = crypto.randomUUID();
 		this.#origin = origin;
 	}
 
-	async createRequest<T extends ZkSendRequestType>(
-		type: T,
-		request: Omit<ZkSendRequest, 'id' | 'origin'>,
-	): Promise<ZkSendResponsePaylodForType<T>> {
-		const { promise, resolve, reject } = withResolvers();
+	async createRequest(
+		type: ZkSendRequestType,
+		partialRequest: Omit<ZkSendRequest, 'id' | 'origin'>,
+	): Promise<ZkSendResolveResponse['data']> {
+		const { promise, resolve, reject } = withResolvers<ZkSendResolveResponse['data']>();
 
-		const params = parse(ZkSendRequest, {
+		const request = parse(ZkSendRequest, {
 			id: this.#id,
-			origin: this.#origin,
-			...request,
-		});
+			...partialRequest,
+		} satisfies ZkSendRequest);
+
+		let popup: Window | null = null;
 
 		const listener = (event: MessageEvent) => {
 			if (event.origin !== this.#origin) {
 				return;
 			}
-			const parsed = safeParse(ZkSendResponse, event.data);
-			if (!parsed.success) return;
+			const { success, output } = safeParse(ZkSendResponse, event.data);
+			if (!success || output.id !== this.#id) return;
 
 			window.removeEventListener('message', listener);
 
-			if (parsed.output.payload.type === 'reject') {
+			if (output.payload.type === 'reject') {
 				reject(new Error('TODO: Better error message'));
-			} else {
-				resolve(parsed.output.payload);
+			} else if (output.payload.type === 'resolve') {
+				resolve(output.payload.data);
+			} else if (output.payload.type === 'ready') {
+				if (!popup) {
+					throw new Error('TODO: Better error message');
+				}
+
+				popup.postMessage(request, this.#origin);
 			}
 		};
-
-		let popup: Window | null = null;
 
 		this.#close = () => {
 			popup?.close();
@@ -62,7 +67,9 @@ export class ZkSendPopup {
 
 		window.addEventListener('message', listener);
 
-		popup = window.open(`${origin}/dapp/${type}?${new URLSearchParams(params)}`);
+		popup = window.open(
+			`${origin}/dapp/${type}?${new URLSearchParams({ id: this.#id, origin: this.#origin })}`,
+		);
 
 		if (!popup) {
 			throw new Error('TODO: Better error message');
@@ -77,25 +84,45 @@ export class ZkSendPopup {
 }
 
 export class ZkSendHost {
-	request: ZkSendRequest;
+	#id: string;
+	#origin: string;
 
-	constructor(params: Record<string, unknown>) {
+	$request: WritableAtom<ZkSendRequest | null>;
+
+	constructor(id: string, origin: string) {
 		if (typeof window === 'undefined' || !window.opener) {
 			throw new Error('TODO: Better error message');
 		}
 
-		this.request = parse(ZkSendRequest, params);
+		this.#id = id;
+		this.#origin = origin;
+		this.$request = atom(null);
+
+		window.addEventListener('message', this.#listener);
+
+		this.sendMessage({ type: 'ready' });
 	}
 
-	sendResponse(payload: ZkSendResponsePayload) {
+	#listener = (event: MessageEvent) => {
+		if (event.origin !== this.#origin) return;
+		const { success, output } = safeParse(ZkSendRequest, event.data);
+		if (!success || output.id !== this.#id) return;
+
+		this.$request.set(output);
+	};
+
+	close() {
+		window.removeEventListener('message', this.#listener);
+	}
+
+	sendMessage(payload: ZkSendResponsePayload) {
 		window.opener.postMessage(
 			{
-				id: this.request.id,
+				id: this.#id,
 				source: 'zksend-channel',
 				payload,
 			} satisfies ZkSendResponse,
-
-			this.request.origin,
+			this.#origin,
 		);
 	}
 }

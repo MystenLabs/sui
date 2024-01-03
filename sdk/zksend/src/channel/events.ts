@@ -7,40 +7,32 @@ export type ZkSendRequestType = 'connect' | 'sign-transaction-block';
 
 export const ZkSendRequest = object({
 	id: string([uuid()]),
-	origin: string([url()]),
 	data: optional(string()),
 });
 
 export type ZkSendRequest = Output<typeof ZkSendRequest>;
 
+export const ZkSendReadyResponse = object({
+	type: literal('ready'),
+});
+
 export const ZkSendRejectResponse = object({
 	type: literal('reject'),
 });
 
-export const ZkSendConnectResponse = object({
-	type: literal('connect'),
-	address: string(),
+export const ZkSendResolveResponse = object({
+	type: literal('resolve'),
+	data: union([object({ address: string() }), object({ bytes: string(), signature: string() })]),
 });
 
-export const ZkSendSignTransactionBlockResponse = object({
-	type: literal('sign-transaction-block'),
-	signature: string(),
-	bytes: string(),
-});
+export type ZkSendResolveResponse = Output<typeof ZkSendResolveResponse>;
 
 export const ZkSendResponsePayload = union([
+	ZkSendReadyResponse,
 	ZkSendRejectResponse,
-	ZkSendConnectResponse,
-	ZkSendSignTransactionBlockResponse,
+	ZkSendResolveResponse,
 ]);
 export type ZkSendResponsePayload = Output<typeof ZkSendResponsePayload>;
-
-export type ZkSendResponsePaylodForType<T extends ZkSendResponsePayload['type']> =
-	T extends 'connect'
-		? Output<typeof ZkSendConnectResponse>
-		: T extends 'sign-transaction-block'
-		? Output<typeof ZkSendSignTransactionBlockResponse>
-		: never;
 
 export const ZkSendResponse = object({
 	id: string([uuid()]),
