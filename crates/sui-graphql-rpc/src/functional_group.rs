@@ -29,8 +29,8 @@ pub(crate) enum FunctionalGroup {
     /// Transaction and Event subscriptions.
     Subscriptions,
 
-    /// Information about the system that changes from epoch to epoch (protocol config, committee,
-    /// reference gas price).
+    /// Aspects that affect the running of the system that are managed by the
+    /// validators either directly, or through system transactions.
     SystemState,
 }
 
@@ -75,22 +75,6 @@ fn functional_groups() -> &'static BTreeMap<(&'static str, &'static str), Functi
             (("Epoch", "protocolConfigs"), G::SystemState),
             (("Epoch", "referenceGasPrice"), G::SystemState),
             (("Epoch", "validatorSet"), G::SystemState),
-            (("SuiSystemStateSummary", "protocolConfigs"), G::SystemState),
-            (
-                ("SuiSystemStateSummary", "referenceGasPrice"),
-                G::SystemState,
-            ),
-            (("SuiSystemStateSummary", "safeMode"), G::SystemState),
-            (("SuiSystemStateSummary", "storageFund"), G::SystemState),
-            (
-                ("SuiSystemStateSummary", "systemParameters"),
-                G::SystemState,
-            ),
-            (
-                ("SuiSystemStateSummary", "systemStateVersion"),
-                G::SystemState,
-            ),
-            (("SuiSystemStateSummary", "validatorSet"), G::SystemState),
             (("Object", "balance"), G::Coins),
             (("Object", "balanceConnection"), G::Coins),
             (("Object", "coinConnection"), G::Coins),
@@ -110,6 +94,10 @@ fn functional_groups() -> &'static BTreeMap<(&'static str, &'static str), Functi
             (("Query", "resolveNameServiceAddress"), G::NameService),
             (("Subscription", "events"), G::Subscriptions),
             (("Subscription", "transactions"), G::Subscriptions),
+            (("SystemStateSummary", "safeMode"), G::SystemState),
+            (("SystemStateSummary", "storageFund"), G::SystemState),
+            (("SystemStateSummary", "systemParameters"), G::SystemState),
+            (("SystemStateSummary", "systemStateVersion"), G::SystemState),
         ])
     });
 

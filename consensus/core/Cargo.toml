@@ -7,6 +7,11 @@ edition = "2021"
 publish = false
 
 [dependencies]
+base64.workspace = true
+bcs.workspace = true
+fastcrypto.workspace = true
+serde.workspace = true
+
 consensus-config.workspace = true
 
 workspace-hack.workspace = true

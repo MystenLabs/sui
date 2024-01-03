@@ -11,6 +11,7 @@ fastcrypto.workspace = true
 multiaddr.workspace = true
 rand.workspace = true
 serde.workspace = true
+shared-crypto.workspace = true
 
 workspace-hack.workspace = true
 

@@ -420,6 +420,7 @@ type ServiceConfig {
 
   maxQueryDepth: Int!
   maxQueryNodes: Int!
+  maxOutputNodes: Int!
   defaultPageSize: Int!
   maxPageSize: Int!
   requestTimeoutMs: Int!
@@ -581,6 +582,7 @@ type Epoch {
   epochId: Int!
   protocolConfigs: ProtocolConfigs
   referenceGasPrice: BigInt
+  validatorSet: ValidatorSet
 
   startTimestamp: DateTime!
   endTimestamp: DateTime
@@ -594,8 +596,12 @@ type Epoch {
   fundInflow: BigInt
   fundOutflow: BigInt
 
-  # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
-  systemState: SystemState
+  # SystemState fields
+  storageFund: StorageFund
+  safeMode: SafeMode
+  systemStateVersion: BigInt
+  systemParameters: SystemParameters
+  systemStakeSubsidy: StakeSubsidy
 
   checkpoints(
     first: Int,
@@ -612,16 +618,6 @@ type Epoch {
     # Enhancement (post-MVP) relies on compound filters.
     filter: TransactionBlockFilter,
   ): TransactionBlockConnection!
-}
-
-type SystemState {
-  version: Int
-
-  systemParameters: SystemParameters
-  stakeSubsidy: StakeSubsidy
-  validatorSet: ValidatorSet
-  storageFund: StorageFund
-  safeMode: SafeMode
 }
 
 type ProtocolConfigs {

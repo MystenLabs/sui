@@ -13,7 +13,6 @@ use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
-use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::future::Future;
 use std::iter;
@@ -99,7 +98,6 @@ use typed_store_derive::DBMapUtils;
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
 const LAST_CONSENSUS_STATS_ADDR: u64 = 0;
 const RECONFIG_STATE_INDEX: u64 = 0;
-const FINAL_EPOCH_CHECKPOINT_INDEX: u64 = 0;
 const OVERRIDE_PROTOCOL_UPGRADE_BUFFER_STAKE_INDEX: u64 = 0;
 pub const EPOCH_DB_PREFIX: &str = "epoch_";
 
@@ -365,10 +363,8 @@ pub struct AuthorityEpochTables {
     /// Validators that have sent EndOfPublish message in this epoch
     end_of_publish: DBMap<AuthorityName, ()>,
 
-    // todo - if we move processing of entire nw commit into single DB batch,
-    // we can potentially get rid of this table
-    /// Records narwhal consensus output index of the final checkpoint in epoch
-    /// This is a single entry table with key FINAL_EPOCH_CHECKPOINT_INDEX
+    // TODO: Unused. Remove when removal of DBMap tables is supported.
+    #[allow(dead_code)]
     final_epoch_checkpoint: DBMap<u64, u64>,
 
     /// This table has information for the checkpoints for which we constructed all the data
@@ -1932,13 +1928,6 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn final_epoch_checkpoint(&self) -> SuiResult<Option<u64>> {
-        Ok(self
-            .tables()?
-            .final_epoch_checkpoint
-            .get(&FINAL_EPOCH_CHECKPOINT_INDEX)?)
-    }
-
     pub fn get_reconfig_state_read_lock_guard(&self) -> RwLockReadGuard<ReconfigState> {
         self.reconfig_state_mem.read()
     }
@@ -2210,7 +2199,7 @@ impl AuthorityPerEpochStore {
             .chain(sequenced_transactions)
             .collect();
 
-        let (transactions_to_schedule, notifications, lock_and_final_round) = self
+        let (transactions_to_schedule, notifications, lock, final_round) = self
             .process_consensus_transactions(
                 &mut batch,
                 &consensus_transactions,
@@ -2224,46 +2213,39 @@ impl AuthorityPerEpochStore {
             .await?;
         self.record_consensus_commit_stats(&mut batch, consensus_stats)?;
 
-        // The last block in this function notifies about new checkpoint if needed
-        // It's important that we use as_ref() here to make sure we are not dropping the lock.
-        // The lock needs to be held until the end of this function.
-        let final_checkpoint_round = lock_and_final_round.as_ref().map(|(_, r)| *r);
-        let final_checkpoint = match final_checkpoint_round.map(|r| r.cmp(&commit_round)) {
-            Some(Ordering::Less) => {
-                debug!(
-                    "Not forming checkpoint for round {} above final checkpoint round {:?}",
-                    commit_round, final_checkpoint_round
-                );
-                return Ok(vec![]);
-            }
-            Some(Ordering::Equal) => true,
-            Some(Ordering::Greater) => false,
-            None => false,
+        // Create a pending checkpoint if we are still accepting tx.
+        let should_accept_tx = if let Some(lock) = &lock {
+            lock.should_accept_tx()
+        } else {
+            self.get_reconfig_state_read_lock_guard().should_accept_tx()
         };
-        let pending_checkpoint = PendingCheckpoint {
-            roots: roots.into_iter().collect(),
-            details: PendingCheckpointInfo {
-                timestamp_ms: commit_timestamp,
-                last_of_epoch: final_checkpoint,
-                commit_height: commit_round,
-            },
-        };
+        let make_checkpoint = should_accept_tx || final_round;
+        if make_checkpoint {
+            let pending_checkpoint = PendingCheckpoint {
+                roots: roots.into_iter().collect(),
+                details: PendingCheckpointInfo {
+                    timestamp_ms: commit_timestamp,
+                    last_of_epoch: final_round,
+                    commit_height: commit_round,
+                },
+            };
 
-        self.write_pending_checkpoint(&mut batch, &pending_checkpoint)?;
+            self.write_pending_checkpoint(&mut batch, &pending_checkpoint)?;
+            checkpoint_service.notify_checkpoint(&pending_checkpoint)?;
+        }
 
         batch.write()?;
 
         self.process_notifications(&notifications, &end_of_publish_transactions);
 
-        checkpoint_service.notify_checkpoint(&pending_checkpoint)?;
-
-        if final_checkpoint {
+        if final_round {
             info!(
                 epoch=?self.epoch(),
-                // Accessing lock_and_final_round on purpose so that the compiler ensures
+                // Accessing lock on purpose so that the compiler ensures
                 // the lock is not yet dropped.
-                last_checkpoint_round=?lock_and_final_round.as_ref().map(|(_, r)| *r),
-                "Received 2f+1 EndOfPublish messages, notifying last checkpoint"
+                lock=?lock.as_ref(),
+                final_round=?final_round,
+                "Notified last checkpoint"
             );
             self.record_end_of_message_quorum_time_metric();
         }
@@ -2340,7 +2322,8 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult<(
         Vec<VerifiedExecutableTransaction>,
         Vec<SequencedConsensusTransactionKey>, // keys to notify as complete
-        Option<(RwLockWriteGuard<ReconfigState>, u64)>,
+        Option<RwLockWriteGuard<ReconfigState>>,
+        bool, // true if final round
     )> {
         let mut verified_certificates = Vec::with_capacity(transactions.len());
         let mut notifications = Vec::with_capacity(transactions.len());
@@ -2412,6 +2395,7 @@ impl AuthorityPerEpochStore {
             }
         }
 
+        let commit_has_deferred_txns = !deferred_txns.is_empty();
         for (key, txns) in deferred_txns.into_iter() {
             self.defer_transactions(batch, key, txns)?;
         }
@@ -2421,27 +2405,28 @@ impl AuthorityPerEpochStore {
             shared_input_next_versions.into_iter(),
         )?;
 
-        let lock_and_final_round =
-            self.process_end_of_publish_transactions(batch, end_of_publish_transactions)?;
+        let (lock, final_round) = self.process_end_of_publish_transactions_and_reconfig(
+            batch,
+            end_of_publish_transactions,
+            commit_has_deferred_txns,
+        )?;
 
-        Ok((verified_certificates, notifications, lock_and_final_round))
+        Ok((verified_certificates, notifications, lock, final_round))
     }
 
-    fn process_end_of_publish_transactions(
+    fn process_end_of_publish_transactions_and_reconfig(
         &self,
         write_batch: &mut DBBatch,
         transactions: &[VerifiedSequencedConsensusTransaction],
-    ) -> SuiResult<
-        Option<(
-            RwLockWriteGuard<ReconfigState>,
-            u64, /* final checkpoint round */
-        )>,
-    > {
-        let mut ret = None;
+        commit_has_deferred_txns: bool,
+    ) -> SuiResult<(
+        Option<RwLockWriteGuard<ReconfigState>>,
+        bool, // true if final round
+    )> {
+        let mut lock = None;
 
         for transaction in transactions {
             let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
-                consensus_index,
                 transaction,
                 ..
             }) = transaction;
@@ -2455,7 +2440,7 @@ impl AuthorityPerEpochStore {
 
                 // It is ok to just release lock here as this function is the only place that transition into RejectAllCerts state
                 // And this function itself is always executed from consensus task
-                let collected_end_of_publish = if ret.is_none()
+                let collected_end_of_publish = if lock.is_none()
                     && self
                         .get_reconfig_state_read_lock_guard()
                         .should_accept_consensus_certs()
@@ -2472,37 +2457,50 @@ impl AuthorityPerEpochStore {
                 };
 
                 if collected_end_of_publish {
-                    assert!(ret.is_none());
+                    assert!(lock.is_none());
                     debug!(
                         "Collected enough end_of_publish messages with last message from validator {:?}",
                         authority.concise()
                     );
-                    let mut lock = self.get_reconfig_state_write_lock_guard();
-                    lock.close_all_certs();
-                    // We store reconfig_state and end_of_publish in same batch to avoid dealing with inconsistency here on restart
-                    self.store_reconfig_state_batch(&lock, write_batch)?;
-                    write_batch.insert_batch(
-                        &self.tables()?.final_epoch_checkpoint,
-                        [(
-                            &FINAL_EPOCH_CHECKPOINT_INDEX,
-                            &consensus_index.last_committed_round,
-                        )],
-                    )?;
+                    let mut l = self.get_reconfig_state_write_lock_guard();
+                    l.close_all_certs();
+                    self.store_reconfig_state_batch(&l, write_batch)?;
                     // Holding this lock until end of process_consensus_transactions_and_commit_boundary() where we write batch to DB
-                    ret = Some((lock, consensus_index.last_committed_round));
+                    lock = Some(l);
                 };
-                // Important: we actually rely here on fact that ConsensusHandler panics if it's
+                // Important: we actually rely here on fact that ConsensusHandler panics if its
                 // operation returns error. If some day we won't panic in ConsensusHandler on error
                 // we need to figure out here how to revert in-memory state of .end_of_publish
                 // and .reconfig_state when write fails.
                 self.record_consensus_message_processed(write_batch, transaction.key())?;
             } else {
                 panic!(
-                    "process_end_of_publish_transaction called with non-end-of-publish transaction"
+                    "process_end_of_publish_transactions_and_reconfig called with non-end-of-publish transaction"
                 );
             }
         }
-        Ok(ret)
+
+        // Determine if we're ready to advance reconfig state to RejectAllTx.
+        let is_reject_all_certs = if let Some(lock) = &lock {
+            lock.is_reject_all_certs()
+        } else {
+            // It is ok to just release lock here as this function is the only place that
+            // transitions into RejectAllTx state, and this function itself is always
+            // executed from consensus task.
+            self.get_reconfig_state_read_lock_guard()
+                .is_reject_all_certs()
+        };
+
+        if !is_reject_all_certs || !self.deferred_transactions_empty() || commit_has_deferred_txns {
+            // Don't end epoch until all deferred transactions are processed.
+            return Ok((lock, false));
+        }
+
+        // Acquire lock to advance state if we don't already have it.
+        let mut lock = lock.unwrap_or_else(|| self.get_reconfig_state_write_lock_guard());
+        lock.close_all_tx();
+        self.store_reconfig_state_batch(&lock, write_batch)?;
+        Ok((Some(lock), true))
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -2561,6 +2559,7 @@ impl AuthorityPerEpochStore {
                 if !self
                     .get_reconfig_state_read_lock_guard()
                     .should_accept_consensus_certs()
+                    && !previously_deferred_tx_digests.contains(certificate.digest())
                 {
                     debug!("Ignoring consensus certificate for transaction {:?} because of end of epoch",
                     certificate.digest());
@@ -2664,10 +2663,7 @@ impl AuthorityPerEpochStore {
                 panic!("process_consensus_transaction called with external RandomnessStateUpdate");
             }
             SequencedConsensusTransactionKind::System(system_transaction) => {
-                if !self
-                    .get_reconfig_state_read_lock_guard()
-                    .should_accept_consensus_certs()
-                {
+                if !self.get_reconfig_state_read_lock_guard().should_accept_tx() {
                     debug!(
                         "Ignoring system transaction {:?} because of end of epoch",
                         system_transaction.digest()

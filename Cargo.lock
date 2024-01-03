@@ -2478,6 +2478,7 @@ dependencies = [
  "multiaddr",
  "rand 0.8.5",
  "serde",
+ "shared-crypto",
  "workspace-hack",
 ]
 
@@ -2485,7 +2486,11 @@ dependencies = [
 name = "consensus-core"
 version = "0.1.0"
 dependencies = [
+ "base64 0.21.2",
+ "bcs",
  "consensus-config",
+ "fastcrypto",
+ "serde",
  "workspace-hack",
 ]
 
@@ -11450,13 +11455,17 @@ dependencies = [
  "async-trait",
  "axum",
  "bcs",
+ "clap",
+ "const-str",
  "ethers",
  "eyre",
  "fastcrypto",
  "futures",
+ "git-version",
  "hex-literal 0.3.4",
  "move-core-types",
  "mysten-metrics",
+ "num_enum 0.6.1",
  "once_cell",
  "prometheus",
  "rand 0.8.5",
@@ -11464,6 +11473,7 @@ dependencies = [
  "rocksdb",
  "serde",
  "serde_json",
+ "serde_with",
  "shared-crypto",
  "sui-common",
  "sui-config",
@@ -12268,6 +12278,31 @@ dependencies = [
  "sui-types",
  "tokio",
  "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-light-client"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bcs",
+ "bytes",
+ "clap",
+ "move-binary-format",
+ "move-core-types",
+ "serde",
+ "serde_json",
+ "serde_yaml 0.8.26",
+ "sui-config",
+ "sui-json",
+ "sui-json-rpc-types",
+ "sui-package-resolver",
+ "sui-rest-api",
+ "sui-sdk",
+ "sui-types",
+ "tokio",
  "workspace-hack",
 ]
 

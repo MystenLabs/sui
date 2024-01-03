@@ -1,0 +1,5 @@
+When resolving dependencies for package Root, conflicting versions of package C-resolved found:
+At A-resolved -> C-resolved
+	C-resolved = { local = "deps_only/C-rename-v3" }
+At B -> C-resolved
+	C-resolved = { local = "deps_only/C-rename-v2" }

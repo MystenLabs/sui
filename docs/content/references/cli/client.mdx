@@ -38,7 +38,6 @@ Commands:
   publish            	Publish Move modules
   replay-transaction    Replay a given transaction to view transaction effects. Set environment variable MOVE_VM_STEP=1 to debug.
   replay-batch          Replay transactions listed in a file.
-  replay-checkpoint     Replay all transactions in a range of checkpoints. 
   split-coin         	Split a coin object into multiple coins
   switch             	Switch active address and network(e.g., devnet, local rpc server)
   tx-block           	Get the effects of executing the given transaction block
@@ -183,6 +182,61 @@ $ sui client dynamic-field 0x5
 │         	  │ ╰───────────────────────────────────────────────────────────────────────────────────────╯ │
 ╰─────────────┴───────────────────────────────────────────────────────────────────────────────────────────╯
 ```
+
+### Replay a transaction
+
+Use the `sui client replay-transaction --tx-digest <TRANSACTION-DIGEST>` to re-execute a transaction locally and show the transaction effects.
+This command will fetch the transaction dependencies from the fullnode specified in the client env. For transactions that happened quite far in
+the past, it is advised to set the client fullnode to one that has non-pruned chain data for that transaction.
+This will also verify that the resulting effects from the locally executed transaction match the effects of the transaction stored on-chain.
+
+```
+$ sui client replay-transaction --tx-digest 51MzJP2Uesvza8vXGpPCGbfLrY6UCfdvdoErN1z4oXPW
+╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Effects                                                                               │
+├───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Digest: 51MzJP2Uesvza8vXGpPCGbfLrY6UCfdvdoErN1z4oXPW                                              │
+│ Status: Success                                                                                   │
+│ Executed Epoch: 237                                                                               │
+│                                                                                                   │
+│ Mutated Objects:                                                                                  │
+│  ┌──                                                                                              │
+│  │ ID: 0x0000000000000000000000000000000000000000000000000000000000000006                         │
+│  │ Owner: Shared                                                                                  │
+│  │ Version: 20303014                                                                              │
+│  │ Digest: 3FyU88FpFFa2mhDFJWcabwQNdfaVaWvvnbjkfErD6AgJ                                           │
+│  └──                                                                                              │
+│                                                                                                   │
+│ Shared Objects:                                                                                   │
+│  ┌──                                                                                              │
+│  │ ID: 0x0000000000000000000000000000000000000000000000000000000000000006                         │
+│  │ Version: 20303013                                                                              │
+│  │ Digest: 7uGV3aHa9NDAWLX1UUyV1DG7wAuhfFkzSGo514wtco1C                                           │
+│  └──                                                                                              │
+│                                                                                                   │
+│ Gas Object:                                                                                       │
+│  ┌──                                                                                              │
+│  │ ID: 0x0000000000000000000000000000000000000000000000000000000000000000                         │
+│  │ Owner: Account Address ( 0x0000000000000000000000000000000000000000000000000000000000000000 )  │
+│  │ Version: 0                                                                                     │
+│  │ Digest: 11111111111111111111111111111111                                                       │
+│  └──                                                                                              │
+│                                                                                                   │
+│ Gas Cost Summary:                                                                                 │
+│    Storage Cost: 0                                                                                │
+│    Computation Cost: 0                                                                            │
+│    Storage Rebate: 0                                                                              │
+│    Non-refundable Storage Fee: 0                                                                  │
+│                                                                                                   │
+│ Transaction Dependencies:                                                                         │
+│    EvDLzYeKbrxDNHJomgrr2zwAJ7FJDtb2uNwfbonF2uGK                                                   │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
+Execution finished successfully. Local and on-chain effects match.
+```
+
+Use `sui client replay-batch --path <FILEPATH>` to replay several transactions listed in a newline-separated file. This
+will verify that all transactions local execution results match the effects on-chain.
+
 
 ## Publish a Move package
 

@@ -27,17 +27,11 @@ use crate::{
         move_type::MoveType,
         object::{Object, ObjectFilter},
         protocol_config::{ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs},
-        safe_mode::SafeMode,
         stake::StakedSui,
-        stake_subsidy::StakeSubsidy,
-        storage_fund::StorageFund,
         sui_address::SuiAddress,
-        sui_system_state_summary::SuiSystemStateSummary,
         suins_registration::SuinsRegistration,
-        system_parameters::SystemParameters,
         transaction_block::{TransactionBlock, TransactionBlockFilter},
         validator::Validator,
-        validator_set::ValidatorSet,
     },
 };
 use async_graphql::connection::{Connection, Edge};
@@ -1226,16 +1220,6 @@ impl PgManager {
         }
     }
 
-    pub(crate) async fn fetch_latest_sui_system_state(
-        &self,
-    ) -> Result<SuiSystemStateSummary, Error> {
-        let result = self
-            .inner
-            .spawn_blocking(|this| this.get_latest_sui_system_state())
-            .await?;
-        SuiSystemStateSummary::try_from(result)
-    }
-
     pub(crate) async fn fetch_protocol_configs(
         &self,
         protocol_version: Option<u64>,
@@ -1693,85 +1677,6 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
             }),
             epoch_id: c.epoch as u64,
             end_of_epoch,
-        })
-    }
-}
-
-impl TryFrom<NativeSuiSystemStateSummary> for SuiSystemStateSummary {
-    type Error = Error;
-    fn try_from(system_state: NativeSuiSystemStateSummary) -> Result<Self, Self::Error> {
-        let active_validators = convert_to_validators(
-            system_state.active_validators.clone(),
-            Some(system_state.clone()),
-        );
-
-        let start_timestamp = i64::try_from(system_state.epoch_start_timestamp_ms).map_err(|_| {
-            Error::Internal(format!(
-                "Cannot convert start timestamp u64 ({}) of system state into i64 required by DateTime",
-                system_state.epoch_start_timestamp_ms
-            ))
-        })?;
-
-        let start_timestamp = DateTime::from_ms(start_timestamp)?;
-        Ok(SuiSystemStateSummary {
-            epoch_id: system_state.epoch,
-            system_state_version: Some(BigInt::from(system_state.system_state_version)),
-            reference_gas_price: Some(BigInt::from(system_state.reference_gas_price)),
-            system_parameters: Some(SystemParameters {
-                duration_ms: Some(BigInt::from(system_state.epoch_duration_ms)),
-                stake_subsidy_start_epoch: Some(system_state.stake_subsidy_start_epoch),
-                min_validator_count: Some(system_state.max_validator_count),
-                max_validator_count: Some(system_state.max_validator_count),
-                min_validator_joining_stake: Some(BigInt::from(
-                    system_state.min_validator_joining_stake,
-                )),
-                validator_low_stake_threshold: Some(BigInt::from(
-                    system_state.validator_low_stake_threshold,
-                )),
-                validator_very_low_stake_threshold: Some(BigInt::from(
-                    system_state.validator_very_low_stake_threshold,
-                )),
-                validator_low_stake_grace_period: Some(BigInt::from(
-                    system_state.validator_low_stake_grace_period,
-                )),
-            }),
-            stake_subsidy: Some(StakeSubsidy {
-                balance: Some(BigInt::from(system_state.stake_subsidy_balance)),
-                distribution_counter: Some(system_state.stake_subsidy_distribution_counter),
-                current_distribution_amount: Some(BigInt::from(
-                    system_state.stake_subsidy_current_distribution_amount,
-                )),
-                period_length: Some(system_state.stake_subsidy_period_length),
-                decrease_rate: Some(system_state.stake_subsidy_decrease_rate as u64),
-            }),
-            validator_set: Some(ValidatorSet {
-                total_stake: Some(BigInt::from(system_state.total_stake)),
-                active_validators: Some(active_validators),
-                pending_removals: Some(system_state.pending_removals.clone()),
-                pending_active_validators_size: Some(system_state.pending_active_validators_size),
-                stake_pool_mappings_size: Some(system_state.staking_pool_mappings_size),
-                inactive_pools_size: Some(system_state.inactive_pools_size),
-                validator_candidates_size: Some(system_state.validator_candidates_size),
-            }),
-            storage_fund: Some(StorageFund {
-                total_object_storage_rebates: Some(BigInt::from(
-                    system_state.storage_fund_total_object_storage_rebates,
-                )),
-                non_refundable_balance: Some(BigInt::from(
-                    system_state.storage_fund_non_refundable_balance,
-                )),
-            }),
-            safe_mode: Some(SafeMode {
-                enabled: Some(system_state.safe_mode),
-                gas_summary: Some(GasCostSummary {
-                    computation_cost: system_state.safe_mode_computation_rewards,
-                    storage_cost: system_state.safe_mode_storage_rewards,
-                    storage_rebate: system_state.safe_mode_storage_rebates,
-                    non_refundable_storage_fee: system_state.safe_mode_non_refundable_storage_fee,
-                }),
-            }),
-            protocol_version: system_state.protocol_version,
-            start_timestamp: Some(start_timestamp),
         })
     }
 }

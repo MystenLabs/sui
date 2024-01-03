@@ -318,7 +318,7 @@ Value: "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
 task 21 'run-graphql'. lines 152-166:
 Response: {
   "data": {
-    "latestSuiSystemState": {
+    "epoch": {
       "validatorSet": {
         "activeValidators": [
           {
@@ -338,7 +338,7 @@ Response: {
 task 22 'run-graphql'. lines 168-174:
 Response: {
   "data": {
-    "latestSuiSystemState": {
+    "epoch": {
       "referenceGasPrice": "234"
     }
   }
