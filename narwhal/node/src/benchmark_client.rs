@@ -81,34 +81,6 @@ impl std::str::FromStr for OperatingMode {
     }
 }
 
-#[async_trait::async_trait]
-pub trait SubmitToConsensus: Sync + Send + 'static {
-    async fn submit_to_consensus(&self, transaction: Vec<u8>) -> Result<(), eyre::Report>;
-}
-
-#[async_trait::async_trait]
-impl SubmitToConsensus for LazyNarwhalClient {
-    async fn submit_to_consensus(&self, transaction: Vec<u8>) -> Result<(), eyre::Report> {
-        // The retrieved LocalNarwhalClient can be from the past epoch. Submit would fail after
-        // Narwhal shuts down, so there should be no correctness issue.
-        let client = {
-            let c = self.client.load();
-            if c.is_some() {
-                c
-            } else {
-                self.client.store(Some(self.get().await));
-                self.client.load()
-            }
-        };
-        let client = client.as_ref().unwrap().load();
-        client
-            .submit_transaction(transaction)
-            .await
-            .map_err(|e| eyre::Report::msg(format!("Failed to submit to consensus: {:?}", e)))?;
-        Ok(())
-    }
-}
-
 #[allow(dead_code)]
 #[tokio::main]
 async fn main() -> Result<(), eyre::Report> {
@@ -270,7 +242,8 @@ impl Client {
 
                     let submission_error: Option<eyre::Report>;
                     if local_client.is_some() {
-                        if let Err(e) = local_client_clone.submit_to_consensus(transaction).await {
+                        if let Err(e) = submit_to_consensus(&local_client_clone, transaction).await
+                        {
                             submission_error = Some(e)
                         } else {
                             submission_error = None;
@@ -400,4 +373,25 @@ pub fn timestamp_utc() -> Duration {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap()
+}
+
+async fn submit_to_consensus(
+    client_arc: &Arc<LazyNarwhalClient>,
+    transaction: Vec<u8>,
+) -> Result<(), eyre::Report> {
+    let client = {
+        let c = client_arc.client.load();
+        if c.is_some() {
+            c
+        } else {
+            client_arc.client.store(Some(client_arc.get().await));
+            client_arc.client.load()
+        }
+    };
+    let client = client.as_ref().unwrap().load();
+    client
+        .submit_transaction(transaction)
+        .await
+        .map_err(|e| eyre::Report::msg(format!("Failed to submit to consensus: {:?}", e)))?;
+    Ok(())
 }

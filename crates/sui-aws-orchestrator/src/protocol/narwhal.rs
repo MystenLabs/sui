@@ -202,6 +202,8 @@ impl ProtocolCommands<NarwhalBenchmarkType> for NarwhalProtocol {
     where
         I: IntoIterator<Item = Instance>,
     {
+        // client is started in process with the primary/worker via node_command,
+        // so nothing to start here.
         vec![]
     }
 }

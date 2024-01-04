@@ -6,6 +6,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use mysten_metrics::histogram::Histogram as MystenHistogram;
 use mysten_metrics::spawn_monitored_task;
+use narwhal_worker::LazyNarwhalClient;
 use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
     IntCounterVec, Registry,
@@ -40,7 +41,6 @@ use crate::{
     authority::AuthorityState,
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
 };
-use narwhal_worker::LazyNarwhalClient;
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
