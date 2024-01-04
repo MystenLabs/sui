@@ -1710,31 +1710,36 @@ pub(crate) fn convert_to_validators(
     validators: Vec<SuiValidatorSummary>,
     system_state: Option<NativeSuiSystemStateSummary>,
 ) -> Vec<Validator> {
-    let at_risk_validators: Option<BTreeMap<NativeSuiAddress, u64>> = system_state
-        .clone()
-        .map(|x| BTreeMap::from_iter(x.at_risk_validators));
-
-    let report_records: Option<BTreeMap<NativeSuiAddress, Vec<NativeSuiAddress>>> =
-        system_state.map(|x| BTreeMap::from_iter(x.validator_report_records));
+    let (at_risk, reports) = if let Some(NativeSuiSystemStateSummary {
+        at_risk_validators,
+        validator_report_records,
+        ..
+    }) = system_state
+    {
+        (
+            BTreeMap::from_iter(at_risk_validators),
+            BTreeMap::from_iter(validator_report_records),
+        )
+    } else {
+        Default::default()
+    };
 
     validators
-        .iter()
-        .map(|v| {
-            let at_risk = at_risk_validators
-                .as_ref()
-                .and_then(|map| map.get(&v.sui_address).copied());
-            let report_records = report_records.as_ref().and_then(|map| {
-                map.get(&v.sui_address).map(|addrs| {
-                    addrs
-                        .iter()
-                        .map(|a| Address {
-                            address: SuiAddress::from(*a),
-                        })
-                        .collect()
-                })
+        .into_iter()
+        .map(|validator_summary| {
+            let at_risk = at_risk.get(&validator_summary.sui_address).copied();
+            let report_records = reports.get(&validator_summary.sui_address).map(|addrs| {
+                addrs
+                    .iter()
+                    .cloned()
+                    .map(|a| Address {
+                        address: SuiAddress::from(a),
+                    })
+                    .collect()
             });
+
             Validator {
-                validator_summary: v.clone(),
+                validator_summary,
                 at_risk,
                 report_records,
             }
