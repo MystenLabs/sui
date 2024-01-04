@@ -438,7 +438,7 @@ export class BCS {
 					(param) =>
 						new BcsType<unknown>({
 							name: String(param),
-							write: (data, writer) => {
+							write: (_data, _writer) => {
 								throw new Error('Not implemented');
 							},
 							read: (reader) => {
