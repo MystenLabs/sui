@@ -6,7 +6,6 @@ use futures::FutureExt;
 use std::sync::{Arc, Weak};
 use std::thread;
 use sui_config::NodeConfig;
-use sui_core::checkpoints::checkpoint_executor::RunWithRange;
 use sui_node::{SuiNode, SuiNodeHandle};
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::{AuthorityPublicKeyBytes, KeypairTraits};
@@ -96,7 +95,8 @@ impl Container {
                     "Started Prometheus HTTP endpoint. To query metrics use\n\tcurl -s http://{}/metrics",
                     config.metrics_address
                 );
-                let server = SuiNode::start(&config, registry_service, None, RunWithRange::None, None).await.unwrap();
+                
+                let server = SuiNode::start(&config, registry_service, None).await.unwrap();
                 // Notify that we've successfully started the node
                 let _ = startup_sender.send(Arc::downgrade(&server));
                 // run until canceled

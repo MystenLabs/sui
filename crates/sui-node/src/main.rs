@@ -5,13 +5,13 @@ use clap::{ArgGroup, Parser};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc;
+use tokio::sync::broadcast;
 use tokio::time::sleep;
 use tracing::{error, info};
 
 use mysten_common::sync::async_once_cell::AsyncOnceCell;
+use sui_config::node::RunWithRange;
 use sui_config::{Config, NodeConfig};
-use sui_core::checkpoints::checkpoint_executor::RunWithRange;
 use sui_core::runtime::SuiRuntimes;
 use sui_node::metrics;
 use sui_protocol_config::SupportedProtocolVersions;
@@ -69,10 +69,13 @@ fn main() {
     );
     config.supported_protocol_versions = Some(SupportedProtocolVersions::SYSTEM_DEFAULT);
 
-    let run_with_range = match (args.run_with_range_epoch, args.run_with_range_checkpoint) {
-        (None, Some(checkpoint)) => RunWithRange::Checkpoint(checkpoint),
-        (Some(epoch), None) => RunWithRange::Epoch(epoch),
-        (None, None) | (Some(_), Some(_)) => RunWithRange::None,
+    // TODO: Discuss with @William if this is what we want. effectively ALWAYs be writing to the
+    // config, or should we not write to the config if flags are not present?
+    match (args.run_with_range_epoch, args.run_with_range_checkpoint) {
+        (None, Some(checkpoint)) => config.run_with_range = RunWithRange::Checkpoint(checkpoint),
+        (Some(epoch), None) => config.run_with_range = RunWithRange::Epoch(epoch),
+        _ => config.run_with_range = RunWithRange::None, // not sure if we want this or simply do
+                                                         // nothing ()
     };
 
     let runtimes = SuiRuntimes::new(&config);
@@ -120,18 +123,10 @@ fn main() {
     let rpc_runtime = runtimes.json_rpc.handle().clone();
 
     // let sui-node signal main to shutdown runtimes
-    let (shutdown_tx, shutdown_rx) = mpsc::channel(1);
+    let (runtime_shutdown_tx, runtime_shutdown_rx) = broadcast::channel(1);
 
     runtimes.sui_node.spawn(async move {
-        match sui_node::SuiNode::start_async(
-            &config,
-            registry_service,
-            Some(rpc_runtime),
-            run_with_range,
-            Some(shutdown_tx),
-        )
-        .await
-        {
+        match sui_node::SuiNode::start_async(&config, registry_service, Some(rpc_runtime)).await {
             Ok(sui_node) => node_once_cell_clone
                 .set(sui_node)
                 .expect("Failed to set node in AsyncOnceCell"),
@@ -139,6 +134,18 @@ fn main() {
             Err(e) => {
                 error!("Failed to start node: {e:?}");
                 std::process::exit(1);
+            }
+        }
+
+        // get node, subscribe to shutdown channel
+        let node = node_once_cell_clone.get().await;
+        let mut shutdown_rx = node.subscribe_to_shutdown_channel();
+
+        // when we get a shutdown signal from sui-node, forward it on to the runtime_shutdown_channel here in
+        // main to signal runtimes t oall shutdown.
+        tokio::select! {
+           run_with_range = shutdown_rx.recv() => {
+                runtime_shutdown_tx.send(run_with_range).expect("failed to forwad shutdown signal from sui-node to sui-node main");
             }
         }
         // TODO: Do we want to provide a way for the node to gracefully shutdown?
@@ -185,14 +192,18 @@ fn main() {
         .enable_all()
         .build()
         .unwrap()
-        .block_on(wait_termination(shutdown_rx));
+        .block_on(wait_termination(runtime_shutdown_rx));
 
     // Drop and wait all runtimes on main thread
     drop(runtimes);
 }
 
 #[cfg(not(unix))]
-async fn wait_termination(mut shutdown_rx: tokio::sync::mpsc::Receiver<()>) {
+async fn wait_termination(
+    mut shutdown_rx: tokio::sync::broadcast::Receiver<
+        Result<RunWithRange, tokio::sync::broadcast::error::RecvError>,
+    >,
+) {
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {},
         _ = shutdown_rx.recv() => {},
@@ -200,7 +211,11 @@ async fn wait_termination(mut shutdown_rx: tokio::sync::mpsc::Receiver<()>) {
 }
 
 #[cfg(unix)]
-async fn wait_termination(mut shutdown_rx: tokio::sync::mpsc::Receiver<()>) {
+async fn wait_termination(
+    mut shutdown_rx: tokio::sync::broadcast::Receiver<
+        Result<RunWithRange, tokio::sync::broadcast::error::RecvError>,
+    >,
+) {
     use futures::FutureExt;
     use tokio::signal::unix::*;
 

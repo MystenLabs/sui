@@ -34,7 +34,7 @@ use tap::tap::TapFallible;
 use tokio::runtime::Handle;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
-use tokio::sync::{mpsc, watch, Mutex};
+use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tracing::{debug, error, warn};
@@ -48,7 +48,7 @@ use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_archival::writer::ArchiveWriter;
-use sui_config::node::{ConsensusProtocol, DBCheckpointConfig};
+use sui_config::node::{ConsensusProtocol, DBCheckpointConfig, RunWithRange};
 use sui_config::node_config_metrics::NodeConfigMetrics;
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -57,8 +57,7 @@ use sui_core::authority::epoch_start_configuration::EpochStartConfigTrait;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_server::{ValidatorService, ValidatorServiceMetrics};
-use sui_core::checkpoints::checkpoint_executor;
-use sui_core::checkpoints::checkpoint_executor::{CheckpointExecutor, RunWithRange, StopReason};
+use sui_core::checkpoints::checkpoint_executor::{CheckpointExecutor, StopReason};
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
     SubmitCheckpointToConsensus,
@@ -233,7 +232,7 @@ pub struct SuiNode {
     _kv_store_uploader_handle: Option<oneshot::Sender<()>>,
 
     // Channel to allow signaling upstream to shutdown sui-node
-    _shutdown_tx_channel: Option<mpsc::Sender<()>>,
+    shutdown_channel_tx: broadcast::Sender<RunWithRange>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -251,17 +250,8 @@ impl SuiNode {
         config: &NodeConfig,
         registry_service: RegistryService,
         custom_rpc_runtime: Option<Handle>,
-        run_with_range: checkpoint_executor::RunWithRange,
-        shutdown_tx_channel: Option<mpsc::Sender<()>>,
     ) -> Result<Arc<SuiNode>> {
-        Self::start_async(
-            config,
-            registry_service,
-            custom_rpc_runtime,
-            run_with_range,
-            shutdown_tx_channel,
-        )
-        .await
+        Self::start_async(config, registry_service, custom_rpc_runtime).await
     }
 
     fn start_jwk_updater(
@@ -403,8 +393,6 @@ impl SuiNode {
         config: &NodeConfig,
         registry_service: RegistryService,
         custom_rpc_runtime: Option<Handle>,
-        run_with_range: checkpoint_executor::RunWithRange,
-        shutdown_tx_channel: Option<mpsc::Sender<()>>,
     ) -> Result<Arc<SuiNode>> {
         NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(config);
         let mut config = config.clone();
@@ -416,6 +404,7 @@ impl SuiNode {
             config.supported_protocol_versions = Some(SupportedProtocolVersions::SYSTEM_DEFAULT);
         }
 
+        let run_with_range = config.run_with_range;
         let is_validator = config.consensus_config().is_some();
         let is_full_node = !is_validator;
         let prometheus_registry = registry_service.default_registry();
@@ -716,6 +705,9 @@ impl SuiNode {
             None
         };
 
+        // setup shutdown channel
+        let (shutdown_channel, _) = broadcast::channel::<RunWithRange>(1);
+
         let node = Self {
             config,
             validator_components: Mutex::new(validator_components),
@@ -741,21 +733,23 @@ impl SuiNode {
             _state_archive_handle: state_archive_handle,
             _state_snapshot_uploader_handle: state_snapshot_handle,
             _kv_store_uploader_handle: kv_store_uploader_handle,
-            _shutdown_tx_channel: shutdown_tx_channel,
+            shutdown_channel_tx: shutdown_channel,
         };
 
         info!("SuiNode started!");
         let node = Arc::new(node);
         let node_copy = node.clone();
-        spawn_monitored_task!(async move {
-            Self::monitor_reconfiguration(node_copy, run_with_range).await
-        });
+        spawn_monitored_task!(async move { Self::monitor_reconfiguration(node_copy).await });
 
         Ok(node)
     }
 
     pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<SuiSystemState> {
         self.end_of_epoch_channel.subscribe()
+    }
+
+    pub fn subscribe_to_shutdown_channel(&self) -> broadcast::Receiver<RunWithRange> {
+        self.shutdown_channel_tx.subscribe()
     }
 
     pub fn current_epoch_for_testing(&self) -> EpochId {
@@ -1359,10 +1353,7 @@ impl SuiNode {
 
     /// This function awaits the completion of checkpoint execution of the current epoch,
     /// after which it iniitiates reconfiguration of the entire system.
-    pub async fn monitor_reconfiguration(
-        self: Arc<Self>,
-        run_with_range: RunWithRange,
-    ) -> Result<()> {
+    pub async fn monitor_reconfiguration(self: Arc<Self>) -> Result<()> {
         let mut checkpoint_executor = CheckpointExecutor::new(
             self.state_sync.subscribe_to_synced_checkpoints(),
             self.checkpoint_store.clone(),
@@ -1373,6 +1364,7 @@ impl SuiNode {
             &self.registry_service.default_registry(),
         );
 
+        let run_with_range = self.config.run_with_range;
         loop {
             let cur_epoch_store = self.state.load_epoch_store_one_call_per_task();
 
@@ -1408,13 +1400,10 @@ impl SuiNode {
                 .await;
 
             if stop_conditon == StopReason::RunWithRangeCondition {
-                if let Some(shutdown_channel) = &self._shutdown_tx_channel {
-                    shutdown_channel
-                        .send(())
-                        .await
-                        .expect("RunWithRangeCondition met but failed to send shutdown message");
-                    return Ok(());
-                }
+                self.shutdown_channel_tx
+                    .send(run_with_range)
+                    .expect("RunWithRangeCondition met but failed to send shutdown message");
+                return Ok(());
             }
 
             let latest_system_state = self

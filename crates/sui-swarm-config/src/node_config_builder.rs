@@ -16,7 +16,7 @@ use sui_config::node::{
     OverloadThresholdConfig, StateArchiveConfig, StateSnapshotConfig,
     DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
-use sui_config::node::{default_zklogin_oauth_providers, ConsensusProtocol};
+use sui_config::node::{default_zklogin_oauth_providers, ConsensusProtocol, RunWithRange};
 use sui_config::p2p::{P2pConfig, SeedPeer};
 use sui_config::{
     local_ip_utils, ConsensusConfig, NodeConfig, AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME,
@@ -189,6 +189,7 @@ impl ValidatorConfigBuilder {
                 .unwrap_or(3600),
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
             overload_threshold_config: self.overload_threshold_config.unwrap_or_default(),
+            run_with_range: RunWithRange::None,
         }
     }
 
@@ -220,6 +221,7 @@ pub struct FullnodeConfigBuilder {
     p2p_external_address: Option<Multiaddr>,
     p2p_listen_address: Option<SocketAddr>,
     network_key_pair: Option<KeyPairWithPath>,
+    run_with_range: Option<RunWithRange>,
 }
 
 impl FullnodeConfigBuilder {
@@ -307,6 +309,11 @@ impl FullnodeConfigBuilder {
             self.network_key_pair =
                 Some(KeyPairWithPath::new(SuiKeyPair::Ed25519(network_key_pair)));
         }
+        self
+    }
+
+    pub fn with_run_with_range(mut self, run_with_range: RunWithRange) -> Self {
+        self.run_with_range = Some(run_with_range);
         self
     }
 
@@ -426,6 +433,7 @@ impl FullnodeConfigBuilder {
             jwk_fetch_interval_seconds: 3600,
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
             overload_threshold_config: Default::default(),
+            run_with_range: self.run_with_range.unwrap_or_else(|| RunWithRange::None),
         }
     }
 }

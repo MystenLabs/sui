@@ -11,6 +11,7 @@ use rand::rngs::OsRng;
 use serde_json::json;
 use std::sync::Arc;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
+use sui_config::node::RunWithRange;
 use sui_core::authority::EffectsNotifyRead;
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, EventPage, SuiEvent, SuiExecutionStatus,
@@ -1369,3 +1370,113 @@ async fn transfer_coin(
     let resp = context.execute_transaction_must_succeed(txn).await;
     Ok((object_to_send.0, sender, receiver, resp.digest, gas_object))
 }
+
+/* TODO make these tests do stuff we want.
+#[sim_test]
+async fn test_full_node_bootstrap_from_snapshot_run_with_range_checkpoint(
+) -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(10_000)
+        // This will also do aggressive pruning and compaction of the snapshot
+        .with_enable_db_checkpoints_fullnodes()
+        .build()
+        .await;
+
+    let checkpoint_path = test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.db_checkpoint_path());
+    let config = test_cluster
+        .fullnode_config_builder()
+        .with_run_with_range(RunWithRange::Checkpoint(1))
+        .build(&mut OsRng, test_cluster.swarm.config());
+
+    let epoch_0_db_path = config.db_path().join("store").join("epoch_0");
+    let _ = transfer_coin(&test_cluster.wallet).await?;
+    let _ = transfer_coin(&test_cluster.wallet).await?;
+    let (_transferred_object, _, _, digest, ..) = transfer_coin(&test_cluster.wallet).await?;
+
+    // Skip the first epoch change from epoch 0 to epoch 1, but wait for the second
+    // epoch change from epoch 1 to epoch 2 at which point during reconfiguration we will take
+    // the db snapshot for epoch 1
+    loop {
+        if checkpoint_path.join("epoch_1").exists() {
+            break;
+        }
+        sleep(Duration::from_millis(500)).await;
+    }
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_full_node_bootstrap_from_snapshot_run_with_range_epoch() -> Result<(), anyhow::Error>
+{
+    telemetry_subscribers::init_for_testing();
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(10_000)
+        // This will also do aggressive pruning and compaction of the snapshot
+        .with_enable_db_checkpoints_fullnodes()
+        .build()
+        .await;
+
+    let checkpoint_path = test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.db_checkpoint_path());
+    let config = test_cluster
+        .fullnode_config_builder()
+        .with_run_with_range(RunWithRange::Epoch(1))
+        .build(&mut OsRng, test_cluster.swarm.config());
+
+    let epoch_0_db_path = config.db_path().join("store").join("epoch_0");
+    let _ = transfer_coin(&test_cluster.wallet).await?;
+    let _ = transfer_coin(&test_cluster.wallet).await?;
+    let (_transferred_object, _, _, digest, ..) = transfer_coin(&test_cluster.wallet).await?;
+
+    // Skip the first epoch change from epoch 0 to epoch 1, but wait for the second
+    // epoch change from epoch 1 to epoch 2 at which point during reconfiguration we will take
+    // the db snapshot for epoch 1
+    loop {
+        if checkpoint_path.join("epoch_1").exists() {
+            break;
+        }
+        sleep(Duration::from_millis(500)).await;
+    }
+
+    // Spin up a new full node restored from the snapshot taken at the end of epoch 1
+    restore_from_db_checkpoint(&config, &checkpoint_path.join("epoch_1")).await?;
+    let node = test_cluster
+        .start_fullnode_from_config(config)
+        .await
+        .sui_node;
+
+    node.state()
+        .db()
+        .notify_read_executed_effects(vec![digest])
+        .await
+        .unwrap();
+
+    loop {
+        // Ensure this full node is able to transition to the next epoch
+        if node.with(|node| node.current_epoch_for_testing()) >= 1 {
+            break;
+        }
+        sleep(Duration::from_millis(500)).await;
+    }
+
+    // Ensure this fullnode never processed older epoch (before snapshot) i.e. epoch_0 store was
+    // doesn't exist
+    assert!(!epoch_0_db_path.exists());
+
+    let (_transferred_object, _, _, digest_after_restore, ..) =
+        transfer_coin(&test_cluster.wallet).await?;
+    node.state()
+        .db()
+        .notify_read_executed_effects(vec![digest_after_restore])
+        .await
+        .unwrap();
+    Ok(())
+}
+*/

@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Arc;
-use sui_core::checkpoints::checkpoint_executor::RunWithRange;
+use sui_config::node::RunWithRange;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_grpc::HandleTransactionResponse;

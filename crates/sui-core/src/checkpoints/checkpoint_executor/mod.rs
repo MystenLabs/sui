@@ -29,9 +29,8 @@ use futures::stream::FuturesOrdered;
 use itertools::izip;
 use mysten_metrics::{spawn_monitored_task, MonitoredFutureExt};
 use prometheus::Registry;
-use sui_config::node::CheckpointExecutorConfig;
+use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::{fail_point, fail_point_async};
-use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
@@ -69,25 +68,6 @@ type CheckpointExecutionBuffer = FuturesOrdered<JoinHandle<VerifiedCheckpoint>>;
 
 /// The interval to log checkpoint progress, in # of checkpoints processed.
 const CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL: u64 = 5000;
-
-// RunWithRange is used to specify the ending epoch/checkpoint to process.
-// this is intended for use with disaster recoery debugging and verification workflows, never in normal operations
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum RunWithRange {
-    Epoch(EpochId),
-    Checkpoint(CheckpointSequenceNumber),
-    None,
-}
-
-impl RunWithRange {
-    // checks if we have hit a condition specified by run_with_range enum type
-    fn matches_epoch(&self, epoch_id: EpochId) -> bool {
-        matches!(self, RunWithRange::Epoch(e) if *e == epoch_id)
-    }
-    fn matches_checkpoint(&self, seq_num: CheckpointSequenceNumber) -> bool {
-        matches!(self, RunWithRange::Checkpoint(seq) if *seq == seq_num)
-    }
-}
 
 #[derive(PartialEq, Eq)]
 pub enum StopReason {
@@ -161,11 +141,10 @@ impl CheckpointExecutor {
             .set(epoch_store.epoch() as i64);
 
         // check if we want to run this epoch based on RunWithRange condition value
-        if run_with_range.matches_epoch(epoch_store.epoch()) {
-            info!(
-                "RunWithRange condition satisfied at epoch {:?}",
-                epoch_store.epoch()
-            );
+        // we want to be inclusive of the defined RunWithRangeEpoch::Epoch
+        // i.e Epoch(N) means we will execute epoch N and stop when reaching N+1
+        if run_with_range.is_epoch_gt(epoch_store.epoch()) {
+            info!("RunWithRange condition satisfied at {:?}", run_with_range);
             return StopReason::RunWithRangeCondition;
         }
 
@@ -211,13 +190,17 @@ impl CheckpointExecutor {
                 fail_point_async!("crash");
                 return StopReason::EpochComplete;
             }
-            self.schedule_synced_checkpoints(
-                &mut pending,
-                // next_to_schedule will be updated to the next checkpoint to schedule.
-                // This makes sure we don't re-schedule the same checkpoint multiple times.
-                &mut next_to_schedule,
-                epoch_store.clone(),
-            );
+
+            // dont schedule checkpoints > RunWithRange::Checkpoint
+            if run_with_range.is_checkpoint_leq(next_to_schedule) {
+                self.schedule_synced_checkpoints(
+                    &mut pending,
+                    // next_to_schedule will be updated to the next checkpoint to schedule.
+                    // This makes sure we don't re-schedule the same checkpoint multiple times.
+                    &mut next_to_schedule,
+                    epoch_store.clone(),
+                );
+            }
 
             self.metrics
                 .checkpoint_exec_inflight
@@ -231,11 +214,12 @@ impl CheckpointExecutor {
                     self.process_executed_checkpoint(&checkpoint);
                     highest_executed = Some(checkpoint.clone());
 
-                    let (checkpoint_seq, _) = checkpoint.into_summary_and_sequence();
-                    if run_with_range.matches_checkpoint(checkpoint_seq) {
+                    // we want to be inclusive of checkpoints in RunWithRange::Checkpoint type
+                    // so only stop once > RunWithRange::Checkpoint
+                    if run_with_range.matches_checkpoint(checkpoint.sequence_number) {
                         info!(
-                            "RunWithRange condition satisifed at checkpoint sequence number {:?}",
-                            checkpoint_seq
+                            "RunWithRange condition satisifed after checkpoint sequence number {:?}",
+                            checkpoint.sequence_number
                         );
                         return StopReason::RunWithRangeCondition;
                     }

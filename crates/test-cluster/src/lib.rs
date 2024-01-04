@@ -12,7 +12,7 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use sui_config::node::{DBCheckpointConfig, OverloadThresholdConfig};
+use sui_config::node::{DBCheckpointConfig, OverloadThresholdConfig, RunWithRange};
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
@@ -55,7 +55,7 @@ use sui_types::transaction::{
 };
 use tokio::time::{timeout, Instant};
 use tokio::{task::JoinHandle, time::sleep};
-use tracing::info;
+use tracing::{error, info};
 
 const NUM_VALIDATOR: usize = 4;
 
@@ -277,6 +277,26 @@ impl TestCluster {
         })
         .await
         .expect("Timed out waiting for cluster to target epoch")
+    }
+
+    pub async fn wait_for_run_with_range_shutdown_signal(&self) -> RunWithRange {
+        let mut shutdown_channel_rx = self
+            .fullnode_handle
+            .sui_node
+            .with(|node| node.subscribe_to_shutdown_channel());
+
+        tokio::select! {
+            msg = shutdown_channel_rx.recv() =>
+            {
+                match msg {
+                    Ok(run_with_range) => return run_with_range,
+                    Err(e) => {
+                        error!("failed recv from sui-node shutdown channel: {}", e);
+                        return RunWithRange::None
+                    },
+                }
+            },
+        }
     }
 
     pub async fn wait_for_protocol_version(
