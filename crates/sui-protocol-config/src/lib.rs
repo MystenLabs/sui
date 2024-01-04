@@ -100,6 +100,7 @@ const MAX_PROTOCOL_VERSION: u64 = 33;
 // Version 33: Add support for `receiving_object_id` function in framework
 //             Hardened OTW check.
 //             Enable transfer-to-object in mainnet.
+//             Enable shared object deletion in testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1712,6 +1713,11 @@ impl ProtocolConfig {
                     // Enable transfer-to-object in mainnet
                     cfg.transfer_receive_object_cost_base = Some(52);
                     cfg.feature_flags.receive_objects = true;
+
+                    // Enable shared object deletion in testnet and devnet
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.shared_object_deletion = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
