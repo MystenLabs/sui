@@ -51,23 +51,25 @@ impl Validator {
 mod tests {
     use crate::block_verifier::TestBlockVerifier;
     use crate::validator::Validator;
-    use consensus_config::{AuthorityIndex, Committee, Parameters, ProtocolKeyPair};
+    use consensus_config::{Committee, Parameters, ProtocolKeyPair};
     use fastcrypto::traits::ToFromBytes;
     use prometheus::Registry;
 
     #[tokio::test]
     async fn validator_start_and_stop() {
-        let committee = Committee::new(0, vec![]);
+        let (committee, keypairs) = Committee::new_for_test(0, 1);
         let registry = Registry::new();
         let parameters = Parameters::default();
-        let signer = ProtocolKeyPair::from_bytes(&[0u8; 32]).unwrap();
         let block_verifier = TestBlockVerifier {};
 
+        let (authority_index, _) = committee.authorities().last().unwrap();
+        let singer = ProtocolKeyPair::from_bytes(keypairs[0].1.as_bytes()).unwrap();
+
         let validator = Validator::start(
-            AuthorityIndex::new_for_test(),
+            authority_index,
             committee,
             parameters,
-            signer,
+            singer,
             block_verifier,
             registry,
         );
