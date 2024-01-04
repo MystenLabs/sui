@@ -69,6 +69,7 @@ move-package.workspace = true
 csv.workspace = true
 workspace-hack.workspace = true
 petgraph.workspace = true
+move-command-line-common.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl.workspace = true
