@@ -232,12 +232,14 @@ fn merge_simple() {
             dep_override: false,
         }),
     )]);
+    let orig_names: BTreeMap<Symbol, Symbol> = dependencies.keys().map(|k| (*k, *k)).collect();
     assert!(outer
         .merge(
             dep_graphs,
             &DependencyKind::default(),
             dependencies,
-            &BTreeMap::new()
+            &BTreeMap::new(),
+            &orig_names,
         )
         .is_ok(),);
     assert_eq!(
@@ -282,12 +284,14 @@ fn merge_into_root() {
             dep_override: false,
         }),
     )]);
+    let orig_names: BTreeMap<Symbol, Symbol> = dependencies.keys().map(|k| (*k, *k)).collect();
     assert!(outer
         .merge(
             dep_graphs,
             &DependencyKind::default(),
             dependencies,
-            &BTreeMap::new()
+            &BTreeMap::new(),
+            &orig_names
         )
         .is_ok());
 
@@ -324,11 +328,13 @@ fn merge_detached() {
         Symbol::from("OtherDep"),
         DependencyGraphInfo::new(inner, DependencyMode::Always, false, false),
     )]);
+    let orig_names: BTreeMap<Symbol, Symbol> = dep_graphs.keys().map(|k| (*k, *k)).collect();
     let Err(err) = outer.merge(
         dep_graphs,
         &DependencyKind::default(),
         &BTreeMap::new(),
         &BTreeMap::new(),
+        &orig_names,
     ) else {
         panic!("Inner's root is not part of outer's graph, so this should fail");
     };
@@ -359,11 +365,13 @@ fn merge_after_calculating_always_deps() {
         Symbol::from("A"),
         DependencyGraphInfo::new(inner, DependencyMode::Always, false, false),
     )]);
+    let orig_names: BTreeMap<Symbol, Symbol> = dep_graphs.keys().map(|k| (*k, *k)).collect();
     let Err(err) = outer.merge(
         dep_graphs,
         &DependencyKind::default(),
         &BTreeMap::new(),
         &BTreeMap::new(),
+        &orig_names,
     ) else {
         panic!("Outer's always deps have already been calculated so this should fail");
     };
@@ -433,12 +441,14 @@ fn merge_overlapping() {
             }),
         ),
     ]);
+    let orig_names: BTreeMap<Symbol, Symbol> = dependencies.keys().map(|k| (*k, *k)).collect();
     assert!(outer
         .merge(
             dep_graphs,
             &DependencyKind::default(),
             dependencies,
-            &BTreeMap::new()
+            &BTreeMap::new(),
+            &orig_names
         )
         .is_ok());
 }
@@ -505,11 +515,13 @@ fn merge_overlapping_different_deps() {
             }),
         ),
     ]);
+    let orig_names: BTreeMap<Symbol, Symbol> = dependencies.keys().map(|k| (*k, *k)).collect();
     let Err(err) = outer.merge(
         dep_graphs,
         &DependencyKind::default(),
         dependencies,
         &BTreeMap::new(),
+        &orig_names,
     ) else {
         panic!("Outer and inner mention package A which has different dependencies in both.");
     };
