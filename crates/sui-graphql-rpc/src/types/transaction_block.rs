@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use async_graphql::{connection::Connection, *};
+use async_graphql::{
+    connection::{Connection, CursorType, Edge},
+    *,
+};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer::models_v2::transactions::StoredTransaction;
 use sui_types::{
@@ -15,9 +18,10 @@ use crate::error::Error;
 use super::{
     address::Address,
     base64::Base64,
+    cursor::{Cursor, Page},
     digest::Digest,
     epoch::Epoch,
-    event::{Event, EventFilter},
+    event::Event,
     gas::GasInput,
     sui_address::SuiAddress,
     transaction_block_effects::TransactionBlockEffects,
@@ -61,6 +65,8 @@ pub(crate) struct TransactionBlockFilter {
 
     pub transaction_ids: Option<Vec<Digest>>,
 }
+
+pub(crate) type CTxEvent = Cursor<usize>;
 
 #[Object]
 impl TransactionBlock {
@@ -120,23 +126,25 @@ impl TransactionBlock {
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<CTxEvent>,
         last: Option<u64>,
-        before: Option<String>,
-        filter: Option<EventFilter>,
-    ) -> Result<Option<Connection<String, Event>>> {
-        let mut event_filter = match filter {
-            Some(filter) => filter,
-            None => EventFilter::default(),
+        before: Option<CTxEvent>,
+    ) -> Result<Connection<String, Event>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        let mut connection = Connection::new(false, false);
+        let Some((prev, next, cs)) = page.paginate_indices(self.stored.events.len()) else {
+            return Ok(connection);
         };
 
-        // Overwrite with the current transaction's digest.
-        event_filter.transaction_digest = Some(Base58::encode(&self.stored.transaction_digest));
+        connection.has_previous_page = prev;
+        connection.has_next_page = next;
 
-        ctx.data_unchecked::<PgManager>()
-            .fetch_events(first, after, last, before, Some(event_filter))
-            .await
-            .extend()
+        for c in cs {
+            let event = Event::try_from_stored_transaction(&self.stored, *c).extend()?;
+            connection.edges.push(Edge::new(c.encode_cursor(), event));
+        }
+
+        Ok(connection)
     }
 
     /// This field is set by senders of a transaction block. It is an epoch reference that sets a

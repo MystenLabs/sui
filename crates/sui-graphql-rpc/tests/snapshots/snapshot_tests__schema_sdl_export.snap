@@ -2406,7 +2406,7 @@ type TransactionBlock {
 	"""
 	Events emitted by this transaction block.
 	"""
-	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
+	events(first: Int, after: String, last: Int, before: String): EventConnection!
 	"""
 	This field is set by senders of a transaction block. It is an epoch reference that sets a
 	deadline after which validators will no longer consider the transaction valid. By default,

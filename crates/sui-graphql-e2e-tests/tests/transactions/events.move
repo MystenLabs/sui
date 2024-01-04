@@ -19,11 +19,19 @@ module Test::M1 {
         event::emit(EventA { new_value: value });
         event::emit(EventA { new_value: value + 1})
     }
+
+        public entry fun emit_3(value: u64) {
+        event::emit(EventA { new_value: value });
+        event::emit(EventA { new_value: value + 1});
+        event::emit(EventA { new_value: value + 2});
+    }
 }
 
-//# run Test::M1::emit_1 --sender A --args 0
+//# run Test::M1::emit_1 --sender A --args 1
 
-//# run Test::M1::emit_2 --sender A --args 1
+//# run Test::M1::emit_2 --sender A --args 10
+
+//# run Test::M1::emit_3 --sender A --args 100
 
 //# create-checkpoint
 
@@ -37,12 +45,6 @@ module Test::M1 {
             sendingModule {
               name
             }
-            type {
-              repr
-            }
-            senders {
-              address
-            }
             json
             bcs
           }
@@ -54,19 +56,26 @@ module Test::M1 {
 
 //# run-graphql
 {
-  transactionBlockConnection(filter: {sentAddress: "@{A}"}) {
+  eventConnection(filter: {sender: "@{A}"}) {
     nodes {
-      events(first: 2 after: "2:0", filter: {sender: "@{A}"}) {
+      sendingModule {
+        name
+      }
+      json
+      bcs
+    }
+  }
+}
+
+//# run-graphql
+{
+  transactionBlockConnection(first: 1, filter: {sentAddress: "@{A}"}) {
+    nodes {
+      events(last: 1) {
         edges {
           node {
             sendingModule {
               name
-            }
-            type {
-              repr
-            }
-            senders {
-              address
             }
             json
             bcs
@@ -77,21 +86,15 @@ module Test::M1 {
   }
 }
 
-//# run-graphql
+//# run-graphql --cursors 0
 {
-  transactionBlockConnection(filter: {sentAddress: "@{A}"}) {
+  transactionBlockConnection(last: 1, filter: {sentAddress: "@{A}"}) {
     nodes {
-      events(last: 2 before: "3:1", filter: {sender: "@{A}"}) {
+      events(first: 2, after: "@{cursor_0}") {
         edges {
           node {
             sendingModule {
               name
-            }
-            type {
-              repr
-            }
-            senders {
-              address
             }
             json
             bcs
