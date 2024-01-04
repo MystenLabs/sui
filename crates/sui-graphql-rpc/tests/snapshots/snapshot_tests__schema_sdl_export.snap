@@ -99,6 +99,10 @@ type Address implements ObjectOwner {
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
+type AddressOwner {
+	owner: Owner
+}
+
 enum AddressTransactionBlockRelationship {
 	SIGN
 	SENT
@@ -906,6 +910,10 @@ type GenesisTransaction {
 }
 
 
+type Immutable {
+	dummy: Boolean
+}
+
 """
 One of the input objects or primitive values to the programmable transaction block.
 """
@@ -1455,15 +1463,10 @@ type Object implements ObjectOwner {
 	"""
 	previousTransactionBlock: TransactionBlock
 	"""
-	Objects can either be immutable, shared, owned by an address,
-	or are child objects (part of a dynamic field)
+	The owner type of this Object.
+	Immutable and Shared Objects do not have owners.
 	"""
-	kind: ObjectKind
-	"""
-	The Address or Object that owns this Object.  Immutable and Shared Objects do not have
-	owners.
-	"""
-	owner: Owner
+	owner: ObjectOwnerNew
 	"""
 	Attempts to convert the object into a MoveObject
 	"""
@@ -1645,13 +1648,6 @@ input ObjectKey {
 	version: Int!
 }
 
-enum ObjectKind {
-	OWNED
-	CHILD
-	SHARED
-	IMMUTABLE
-}
-
 interface ObjectOwner {
 	address: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
@@ -1665,6 +1661,8 @@ interface ObjectOwner {
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
+
+union ObjectOwnerNew = Immutable | Shared | Parent | AddressOwner
 
 """
 Represents types that could contain references or free type parameters.  Such types can appear
@@ -1795,6 +1793,10 @@ type PageInfo {
 	When paginating forwards, the cursor to continue.
 	"""
 	endCursor: String
+}
+
+type Parent {
+	parent: Object
 }
 
 """
@@ -1933,7 +1935,7 @@ type Query {
 	Configuration for this RPC service
 	"""
 	serviceConfig: ServiceConfig!
-	owner(address: SuiAddress!): ObjectOwner
+	owner(address: SuiAddress!): Owner
 	object(address: SuiAddress!, version: Int): Object
 	address(address: SuiAddress!): Address
 	"""
@@ -2128,6 +2130,10 @@ type ServiceConfig {
 	Maximum nesting allowed in struct fields when calculating the layout of a single Move Type.
 	"""
 	maxMoveValueDepth: Int!
+}
+
+type Shared {
+	initialSharedVersion: Int!
 }
 
 """

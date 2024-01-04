@@ -40,14 +40,6 @@ pub(crate) struct Object {
     pub native: NativeObject,
 }
 
-#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
-pub(crate) enum ObjectKind {
-    Owned,
-    Child,
-    Shared,
-    Immutable,
-}
-
 #[derive(InputObject, Default, Clone)]
 pub(crate) struct ObjectFilter {
     /// This field is used to specify the type of objects that should be included in the query
@@ -74,6 +66,34 @@ pub(crate) struct ObjectFilter {
 pub(crate) struct ObjectKey {
     object_id: SuiAddress,
     version: u64,
+}
+
+#[derive(Union, Clone)]
+pub enum ObjectOwnerNew {
+    Immutable(Immutable),
+    Shared(Shared),
+    Parent(Parent),
+    Address(AddressOwner),
+}
+
+#[derive(SimpleObject, Clone)]
+pub struct Immutable {
+    dummy: Option<bool>,
+}
+
+#[derive(SimpleObject, Clone)]
+pub struct Shared {
+    initial_shared_version: u64,
+}
+
+#[derive(SimpleObject, Clone)]
+pub struct Parent {
+    parent: Option<Object>,
+}
+
+#[derive(SimpleObject, Clone)]
+pub struct AddressOwner {
+    owner: Option<Owner>,
 }
 
 #[Object]
@@ -166,29 +186,38 @@ impl Object {
             .extend()
     }
 
-    /// Objects can either be immutable, shared, owned by an address,
-    /// or are child objects (part of a dynamic field)
-    async fn kind(&self) -> Option<ObjectKind> {
+    /// The owner type of this Object.
+    /// Immutable and Shared Objects do not have owners.
+    async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwnerNew> {
         use NativeOwner as O;
-        use ObjectKind as K;
-        Some(match self.native.owner {
-            O::AddressOwner(_) => K::Owned,
-            O::ObjectOwner(_) => K::Child,
-            O::Shared { .. } => K::Shared,
-            O::Immutable => K::Immutable,
-        })
-    }
 
-    /// The Address or Object that owns this Object.  Immutable and Shared Objects do not have
-    /// owners.
-    async fn owner(&self) -> Option<Owner> {
-        use NativeOwner as O;
-        let (O::AddressOwner(address) | O::ObjectOwner(address)) = self.native.owner else {
-            return None;
-        };
+        if self.native.owner.is_child_object() {
+            let parent = match self.native.owner.get_owner_address().ok() {
+                Some(addr) => ctx
+                    .data_unchecked::<PgManager>()
+                    .fetch_obj(addr.into(), None)
+                    .await
+                    .ok()
+                    .flatten(),
+                None => None,
+            };
+            return Some(ObjectOwnerNew::Parent(Parent { parent }));
+        }
 
-        let address = SuiAddress::from(address);
-        Some(Owner { address })
+        match self.native.owner {
+            O::AddressOwner(address) | O::ObjectOwner(address) => {
+                let address = SuiAddress::from(address);
+                Some(ObjectOwnerNew::Address(AddressOwner {
+                    owner: Some(Owner { address }),
+                }))
+            }
+            O::Shared {
+                initial_shared_version,
+            } => Some(ObjectOwnerNew::Shared(Shared {
+                initial_shared_version: initial_shared_version.value(),
+            })),
+            O::Immutable => Some(ObjectOwnerNew::Immutable(Immutable { dummy: Some(true) })),
+        }
     }
 
     /// Attempts to convert the object into a MoveObject
