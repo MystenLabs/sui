@@ -86,7 +86,8 @@ impl Mimir<remote_write::Histogram> {
 }
 impl From<Vec<MetricFamily>> for Mimir<Vec<remote_write::WriteRequest>> {
     fn from(metric_families: Vec<MetricFamily>) -> Self {
-        let mut timeseries: Vec<remote_write::TimeSeries> = Vec::new();
+        let mut timeseries: Vec<remote_write::TimeSeries> =
+            Vec::with_capacity(metric_families.len());
         // we may have more but we'll have at least this many timeseries
         timeseries.reserve(metric_families.len());
 

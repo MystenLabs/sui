@@ -1600,7 +1600,7 @@ async fn slow_node() {
             Outcome::Commit => {
                 assert_eq!(sub_dags.len(), 1);
 
-                let sub_dag = sub_dags.get(0).unwrap();
+                let sub_dag = sub_dags.first().unwrap();
 
                 for committed in &sub_dag.certificates {
                     assert!(
@@ -1661,7 +1661,7 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
 
     // on round 3 we'll create certificates that don't provide f+1 support to round 2.
     let mut round_3_certificates: Vec<Certificate> = Vec::new();
-    let first_node = keys_with_dead_node.get(0).unwrap();
+    let first_node = keys_with_dead_node.first().unwrap();
     for id in &keys_with_dead_node {
         // Only the first one will provide support to it's own certificate apart from the others
         if id == first_node {

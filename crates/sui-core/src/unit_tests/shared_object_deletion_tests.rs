@@ -1316,7 +1316,7 @@ async fn test_mutate_interleaved_read_only_enqueued_after_delete() {
 
     let res = user_1.enqueue_all_and_execute_all(txs).await.unwrap();
 
-    let delete_digest = res.get(0).unwrap().transaction_digest();
+    let delete_digest = res.first().unwrap().transaction_digest();
     let first_mutate_digest = res.get(2).unwrap().transaction_digest();
 
     {
@@ -1473,7 +1473,7 @@ async fn test_delete_with_shared_after_mutate_enqueued() {
         .await
         .unwrap();
 
-    let delete_effects = res.get(0).unwrap();
+    let delete_effects = res.first().unwrap();
     assert!(delete_effects.status().is_ok());
     let deleted_obj_ver = delete_effects.deleted()[0].1;
 

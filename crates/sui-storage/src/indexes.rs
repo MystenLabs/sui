@@ -1464,7 +1464,6 @@ impl IndexStore {
         metrics.all_balance_lookup_from_db.inc();
         let mut balances: HashMap<TypeTag, TotalBalance> = HashMap::new();
         let coins = Self::get_owned_coins_iterator(&coin_index, owner, None)?
-            .map(|(coin_type, obj_id, coin)| (coin_type, obj_id, coin))
             .group_by(|(coin_type, _obj_id, _coin)| coin_type.clone());
         for (coin_type, coins) in &coins {
             let mut total_balance = 0i128;

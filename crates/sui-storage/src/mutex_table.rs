@@ -329,17 +329,17 @@ async fn test_mutex_table() {
     let jane = mutex_table.try_acquire_lock("jane".to_string());
     assert!(jane.is_ok());
     MutexTable::cleanup(mutex_table.lock_table.clone());
-    let map = mutex_table.lock_table.get(0).as_ref().unwrap().try_read();
+    let map = mutex_table.lock_table.first().as_ref().unwrap().try_read();
     assert!(map.is_ok());
     assert_eq!(map.unwrap().len(), 2);
     drop(john2);
     MutexTable::cleanup(mutex_table.lock_table.clone());
-    let map = mutex_table.lock_table.get(0).as_ref().unwrap().try_read();
+    let map = mutex_table.lock_table.first().as_ref().unwrap().try_read();
     assert!(map.is_ok());
     assert_eq!(map.unwrap().len(), 1);
     drop(jane);
     MutexTable::cleanup(mutex_table.lock_table.clone());
-    let map = mutex_table.lock_table.get(0).as_ref().unwrap().try_read();
+    let map = mutex_table.lock_table.first().as_ref().unwrap().try_read();
     assert!(map.is_ok());
     assert!(map.unwrap().is_empty());
 }

@@ -4612,7 +4612,7 @@ async fn make_test_transaction(
     let function = "set_value";
 
     let rgp = authorities
-        .get(0)
+        .first()
         .unwrap()
         .reference_gas_price_for_testing()
         .unwrap();

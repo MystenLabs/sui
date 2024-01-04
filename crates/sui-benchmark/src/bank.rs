@@ -192,7 +192,7 @@ impl BenchmarkBank {
             self.primary_coin.2.clone(),
         );
 
-        match effects.created().get(0) {
+        match effects.created().first() {
             Some(created_coin) => Ok((
                 created_coin.0,
                 created_coin.1.get_owner_address()?,

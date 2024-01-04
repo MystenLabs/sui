@@ -1760,7 +1760,7 @@ impl LoadedModule {
                         | Bytecode::VecUnpack(si, _)
                         | Bytecode::VecSwap(si) => {
                             if !single_signature_token_map.contains_key(si) {
-                                let ty = match module.signature_at(*si).0.get(0) {
+                                let ty = match module.signature_at(*si).0.first() {
                                     None => {
                                         return Err(PartialVMError::new(
                                             StatusCode::VERIFIER_INVARIANT_VIOLATION,
@@ -2019,7 +2019,7 @@ impl LoadedScript {
                 | Bytecode::VecUnpack(si, _)
                 | Bytecode::VecSwap(si) => {
                     if !single_signature_token_map.contains_key(si) {
-                        let ty = match script.signature_at(*si).0.get(0) {
+                        let ty = match script.signature_at(*si).0.first() {
                             None => {
                                 return Err(PartialVMError::new(
                                     StatusCode::VERIFIER_INVARIANT_VIOLATION,
@@ -2216,18 +2216,6 @@ impl Function {
 
     pub(crate) fn type_parameters(&self) -> &[AbilitySet] {
         &self.type_parameters
-    }
-
-    pub(crate) fn local_types(&self) -> &[Type] {
-        &self.local_types
-    }
-
-    pub(crate) fn return_types(&self) -> &[Type] {
-        &self.return_types
-    }
-
-    pub(crate) fn parameter_types(&self) -> &[Type] {
-        &self.parameter_types
     }
 
     pub(crate) fn pretty_string(&self) -> String {

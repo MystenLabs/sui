@@ -700,7 +700,7 @@ impl<'env> FunctionContext<'env> {
             | Operation::UnpackRefDeep => {
                 if cfg!(debug_assertions) {
                     assert_eq!(typed_args.len(), 1);
-                    let arg_ty = typed_args.get(0).unwrap().get_ty();
+                    let arg_ty = typed_args.first().unwrap().get_ty();
                     assert!(arg_ty.is_struct() || arg_ty.is_ref_struct(Some(true)));
                 }
                 Ok(vec![])
@@ -1234,7 +1234,7 @@ impl<'env> FunctionContext<'env> {
                 Pointer::ArgRef(idx, _) => {
                     if idx == parent_idx {
                         if trace.len() == 1 {
-                            follow_pointer_edge(trace.get(0).unwrap(), edge)
+                            follow_pointer_edge(trace.first().unwrap(), edge)
                         } else {
                             match edge {
                                 BorrowEdge::Hyper(hyper) => {
@@ -1327,7 +1327,7 @@ impl<'env> FunctionContext<'env> {
                 // check pointer validity
                 if cfg!(debug_assertions) {
                     assert_eq!(trace.len(), 1);
-                    match trace.get(0).unwrap() {
+                    match trace.first().unwrap() {
                         Pointer::ArgRef(ref_idx, original_ptr) => {
                             assert_eq!(*ref_idx, local_ref);
                             assert_eq!(original_ptr.as_ref(), old_val.get_ptr());
@@ -1372,7 +1372,7 @@ impl<'env> FunctionContext<'env> {
                         }
                         _ => unreachable!(),
                     }
-                    match trace.get(0).unwrap() {
+                    match trace.first().unwrap() {
                         Pointer::RefField(_, ref_field) => {
                             assert_eq!(*ref_field, field_num);
                         }
@@ -1408,7 +1408,7 @@ impl<'env> FunctionContext<'env> {
                     }
                     _ => unreachable!(),
                 }
-                match trace.get(0).unwrap() {
+                match trace.first().unwrap() {
                     Pointer::RefElement(_, elem_num) => elem_num,
                     _ => unreachable!(),
                 }
@@ -2076,7 +2076,7 @@ impl<'env> FunctionContext<'env> {
         if cfg!(debug_assertions) {
             assert_eq!(self.ty_args.len(), 1);
         }
-        TypedValue::mk_vector(self.ty_args.get(0).unwrap().clone(), vec![])
+        TypedValue::mk_vector(self.ty_args.first().unwrap().clone(), vec![])
     }
 
     fn native_vector_length(&self, vec_val: TypedValue) -> TypedValue {
@@ -2086,7 +2086,7 @@ impl<'env> FunctionContext<'env> {
             // This is different from the Move native implementation.
             assert_eq!(
                 vec_val.get_ty().get_vector_elem(),
-                self.ty_args.get(0).unwrap()
+                self.ty_args.first().unwrap()
             );
         }
         TypedValue::mk_u64(vec_val.into_vector().len() as u64)
@@ -2103,7 +2103,7 @@ impl<'env> FunctionContext<'env> {
             // This is different from the Move native implementation.
             assert_eq!(
                 vec_val.get_ty().get_vector_elem(),
-                self.ty_args.get(0).unwrap()
+                self.ty_args.first().unwrap()
             );
         }
         let elem_num = elem_val.into_u64() as usize;
@@ -2122,7 +2122,7 @@ impl<'env> FunctionContext<'env> {
             assert_eq!(self.ty_args.len(), 1);
             assert_eq!(
                 vec_val.get_ty().get_ref_vector_elem(Some(true)),
-                self.ty_args.get(0).unwrap()
+                self.ty_args.first().unwrap()
             );
         }
         let elem_num = elem_val.into_u64() as usize;
@@ -2136,7 +2136,7 @@ impl<'env> FunctionContext<'env> {
             assert_eq!(self.ty_args.len(), 1);
             assert_eq!(
                 vec_val.get_ty().get_ref_vector_elem(Some(true)),
-                self.ty_args.get(0).unwrap()
+                self.ty_args.first().unwrap()
             );
         }
         vec_val.update_ref_vector_push_back(elem_val)
@@ -2150,7 +2150,7 @@ impl<'env> FunctionContext<'env> {
             assert_eq!(self.ty_args.len(), 1);
             assert_eq!(
                 vec_val.get_ty().get_ref_vector_elem(Some(true)),
-                self.ty_args.get(0).unwrap()
+                self.ty_args.first().unwrap()
             );
         }
         vec_val
@@ -2163,7 +2163,7 @@ impl<'env> FunctionContext<'env> {
             assert_eq!(self.ty_args.len(), 1);
             assert_eq!(
                 vec_val.get_ty().get_vector_elem(),
-                self.ty_args.get(0).unwrap()
+                self.ty_args.first().unwrap()
             );
         }
         if !vec_val.into_vector().is_empty() {
@@ -2182,7 +2182,7 @@ impl<'env> FunctionContext<'env> {
             assert_eq!(self.ty_args.len(), 1);
             assert_eq!(
                 vec_val.get_ty().get_ref_vector_elem(Some(true)),
-                self.ty_args.get(0).unwrap()
+                self.ty_args.first().unwrap()
             );
         }
         vec_val
@@ -2237,7 +2237,7 @@ impl<'env> FunctionContext<'env> {
             assert_eq!(self.ty_args.len(), 1);
             object
                 .get_ty()
-                .is_ref_of(self.ty_args.get(0).unwrap(), Some(false));
+                .is_ref_of(self.ty_args.first().unwrap(), Some(false));
         }
         object
             .into_bcs_bytes()
@@ -2259,7 +2259,7 @@ impl<'env> FunctionContext<'env> {
             assert_eq!(self.ty_args.len(), 1);
             assert_eq!(
                 msg_val.get_ty().get_base_type(),
-                self.ty_args.get(0).unwrap()
+                self.ty_args.first().unwrap()
             );
         }
         let guid = guid_val

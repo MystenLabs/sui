@@ -110,7 +110,7 @@ impl ReadApi {
     ///         .get_owned_objects(address, None, None, None)
     ///         .await?;
     ///     // this code example assumes that there are previous owned objects
-    ///     let object = owned_objects.data.get(0).expect(&format!(
+    ///     let object = owned_objects.data.first().expect(&format!(
     ///         "No owned objects for this address {}",
     ///         address
     ///     ));
@@ -175,7 +175,7 @@ impl ReadApi {
     ///         .get_owned_objects(address, None, None, None)
     ///         .await?;
     ///     // this code example assumes that there are previous owned objects
-    ///     let object = owned_objects.data.get(0).expect(&format!(
+    ///     let object = owned_objects.data.first().expect(&format!(
     ///         "No owned objects for this address {}",
     ///         address
     ///     ));
@@ -238,7 +238,7 @@ impl ReadApi {
     ///         .get_owned_objects(address, None, None, None)
     ///         .await?;
     ///     // this code example assumes that there are previous owned objects
-    ///     let object = owned_objects.data.get(0).expect(&format!(
+    ///     let object = owned_objects.data.first().expect(&format!(
     ///         "No owned objects for this address {}",
     ///         address
     ///     ));
@@ -321,7 +321,7 @@ impl ReadApi {
     ///         .get_owned_objects(address, None, None, None)
     ///         .await?;
     ///     // this code example assumes that there are previous owned objects
-    ///     let object = owned_objects.data.get(0).expect(&format!(
+    ///     let object = owned_objects.data.first().expect(&format!(
     ///         "No owned objects for this address {}",
     ///         address
     ///     ));
@@ -372,7 +372,7 @@ impl ReadApi {
     ///         .get_owned_objects(address, None, None, None)
     ///         .await?;
     ///     // this code example assumes that there are previous owned objects
-    ///     let object = owned_objects.data.get(0).expect(&format!(
+    ///     let object = owned_objects.data.first().expect(&format!(
     ///         "No owned objects for this address {}",
     ///         address
     ///     ));

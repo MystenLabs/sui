@@ -87,7 +87,7 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
             node_counter_start,
             accessed_locals: BTreeSet::new(),
             outer_context_scopes: 0,
-            /// Following flags used to translate pure Move functions.
+            // Following flags used to translate pure Move functions.
             translating_fun_as_spec_fun: false,
             errors_generated: RefCell::new(false),
             called_spec_funs: BTreeSet::new(),

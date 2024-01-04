@@ -146,7 +146,7 @@ fn vec_element_type(
     verifier: &mut ReferenceSafetyAnalysis,
     idx: SignatureIndex,
 ) -> PartialVMResult<SignatureToken> {
-    match verifier.resolver.signature_at(idx).0.get(0) {
+    match verifier.resolver.signature_at(idx).0.first() {
         Some(ty) => Ok(ty.clone()),
         None => Err(PartialVMError::new(
             StatusCode::VERIFIER_INVARIANT_VIOLATION,
