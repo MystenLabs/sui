@@ -228,12 +228,25 @@ impl Diagnostics {
 
     pub fn max_severity(&self) -> Option<Severity> {
         let Self(Some(inner)) = self else { return None };
+        // map would be empty at the severity, so it should never be zero
         debug_assert!(inner.severity_count.values().all(|count| *count > 0));
         inner
             .severity_count
             .iter()
             .max_by_key(|(sev, _count)| **sev)
             .map(|(sev, _count)| *sev)
+    }
+
+    pub fn count_diags_at_or_above_severity(&self, threshold: Severity) -> usize {
+        let Self(Some(inner)) = self else { return 0 };
+        // map would be empty at the severity, so it should never be zero
+        debug_assert!(inner.severity_count.values().all(|count| *count > 0));
+        inner
+            .severity_count
+            .iter()
+            .filter(|(sev, _count)| **sev >= threshold)
+            .map(|(_sev, count)| *count)
+            .sum()
     }
 
     pub fn is_empty(&self) -> bool {

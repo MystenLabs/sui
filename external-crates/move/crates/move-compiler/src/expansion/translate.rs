@@ -15,7 +15,7 @@ use crate::{
     },
     parser::ast::{
         self as P, Ability, BlockLabel, ConstantName, Field, FieldBindings, FunctionName,
-        ModuleName, Mutability, StructName, Var,
+        ModuleName, Mutability, StructName, Var, ENTRY_MODIFIER, MACRO_MODIFIER,
     },
     shared::{known_attributes::AttributePosition, unique_map::UniqueMap, *},
     FullyCompiledProgram,
@@ -2333,6 +2333,7 @@ fn function_(
         name,
         visibility: pvisibility,
         entry,
+        macro_,
         signature: psignature,
         body: pbody,
     } = pfunction;
@@ -2341,6 +2342,19 @@ fn function_(
     context
         .env()
         .add_warning_filter_scope(warning_filter.clone());
+    if let (Some(entry_loc), Some(macro_loc)) = (entry, macro_) {
+        let e_msg = format!(
+            "Invalid function declaration. \
+            It is meaningless for '{MACRO_MODIFIER}' functions to be '{ENTRY_MODIFIER}' since they \
+            do not persist after compilation"
+        );
+        let m_msg = format!("Function declared as '{MACRO_MODIFIER}' here");
+        context.env().add_diag(diag!(
+            Declarations::InvalidFunction,
+            (entry_loc, e_msg),
+            (macro_loc, m_msg),
+        ));
+    }
     let visibility = visibility(pvisibility);
     let signature = function_signature(context, psignature);
     let body = function_body(context, pbody);
@@ -2363,6 +2377,7 @@ fn function_(
         loc,
         visibility,
         entry,
+        macro_,
         signature,
         body,
     };
@@ -2479,10 +2494,10 @@ fn type_(context: &mut Context, sp!(loc, pt_): P::Type) -> E::Type {
             }
         }
         PT::Ref(mut_, inner) => ET::Ref(mut_, Box::new(type_(context, *inner))),
-        PT::Fun(_, _) => {
-            // TODO these will be used later by macros
-            context.spec_deprecated(loc, /* is_error */ true);
-            ET::UnresolvedError
+        PT::Fun(args, result) => {
+            let args = types(context, args);
+            let result = type_(context, *result);
+            ET::Fun(args, Box::new(result))
         }
     };
     sp(loc, t_)
@@ -2654,8 +2669,18 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
         }
         PE::NamedBlock(name, seq) => EE::NamedBlock(name, sequence(context, loc, seq)),
         PE::Block(seq) => EE::Block(sequence(context, loc, seq)),
-        PE::Lambda(..) | PE::Quant(..) => {
-            // TODO lambdas will be used later by macros
+        PE::Lambda(pbs, pe) => {
+            let bs_opt = bind_list(context, pbs);
+            let e = exp_(context, *pe);
+            match bs_opt {
+                Some(bs) => EE::Lambda(bs, Box::new(e)),
+                None => {
+                    assert!(context.env().has_errors());
+                    EE::UnresolvedError
+                }
+            }
+        }
+        PE::Quant(..) => {
             context.spec_deprecated(loc, /* is_error */ true);
             EE::UnresolvedError
         }

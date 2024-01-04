@@ -11,7 +11,7 @@ use crate::{
     },
     parser::ast::{
         Ability_, BinOp, ConstantName, Field, FunctionName, Mutability, StructName, UnaryOp,
-        ENTRY_MODIFIER,
+        ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
     },
     shared::{ast_debug::*, program_info::NamingProgramInfo, unique_map::UniqueMap, *},
 };
@@ -150,6 +150,7 @@ pub struct Function {
     pub attributes: Attributes,
     pub visibility: Visibility,
     pub entry: Option<Loc>,
+    pub macro_: Option<Loc>,
     pub signature: FunctionSignature,
     pub body: FunctionBody,
 }
@@ -906,6 +907,7 @@ impl AstDebug for (FunctionName, &Function) {
                 index,
                 attributes,
                 visibility,
+                macro_,
                 entry,
                 signature,
                 body,
@@ -917,8 +919,11 @@ impl AstDebug for (FunctionName, &Function) {
         if entry.is_some() {
             w.write(&format!("{} ", ENTRY_MODIFIER));
         }
+        if macro_.is_some() {
+            w.write(&format!("{} ", MACRO_MODIFIER));
+        }
         if let FunctionBody_::Native = &body.value {
-            w.write("native ");
+            w.write(&format!("{} ", NATIVE_MODIFIER));
         }
         w.write(&format!("fun#{index} {name}"));
         signature.ast_debug(w);

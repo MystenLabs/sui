@@ -524,6 +524,7 @@ struct Modifiers {
     visibility: Option<Visibility>,
     entry: Option<Loc>,
     native: Option<Loc>,
+    macro_: Option<Loc>,
 }
 
 impl Modifiers {
@@ -532,6 +533,7 @@ impl Modifiers {
             visibility: None,
             entry: None,
             native: None,
+            macro_: None,
         }
     }
 }
@@ -590,6 +592,31 @@ fn parse_module_member_modifiers(context: &mut Context) -> Result<Modifiers, Box
         }
     }
     Ok(mods)
+}
+
+fn check_no_modifier(
+    context: &mut Context,
+    modifier_name: &'static str,
+    modifier_loc: Option<Loc>,
+    module_member: &str,
+) {
+    const LOCATIONS: &[(&'static str, &'static str)] = &[
+        (NATIVE_MODIFIER, "functions or structs"),
+        (ENTRY_MODIFIER, "functions"),
+        (MACRO_MODIFIER, "functions"),
+    ];
+    let Some(loc) = modifier_loc else { return };
+    let location = LOCATIONS
+        .iter()
+        .find(|(name, _)| *name == modifier_name)
+        .unwrap()
+        .1;
+    let msg = format!(
+        "Invalid {module_member} declaration. '{modifier_name}' is used only on {location}",
+    );
+    context
+        .env
+        .add_diag(diag!(Syntax::InvalidModifier, (loc, msg)));
 }
 
 // Parse a function visibility modifier:
@@ -2170,6 +2197,7 @@ fn parse_function_decl(
         visibility,
         entry,
         native,
+        macro_,
     } = modifiers;
 
     // "fun" <FunctionDefName>
@@ -2244,6 +2272,7 @@ fn parse_function_decl(
         loc,
         visibility: visibility.unwrap_or(Visibility::Internal),
         entry,
+        macro_,
         signature,
         name,
         body,
@@ -2289,19 +2318,13 @@ fn parse_struct_decl(
         visibility,
         entry,
         native,
+        macro_,
     } = modifiers;
 
     check_struct_visibility(visibility, context);
 
-    if let Some(loc) = entry {
-        let msg = format!(
-            "Invalid constant declaration. '{}' is used only on functions",
-            ENTRY_MODIFIER
-        );
-        context
-            .env
-            .add_diag(diag!(Syntax::InvalidModifier, (loc, msg)));
-    }
+    check_no_modifier(context, ENTRY_MODIFIER, entry, "struct");
+    check_no_modifier(context, MACRO_MODIFIER, macro_, "struct");
 
     consume_token(context.tokens, Tok::Struct)?;
 
@@ -2534,6 +2557,7 @@ fn parse_constant_decl(
         visibility,
         entry,
         native,
+        macro_,
     } = modifiers;
     if let Some(vis) = visibility {
         let msg = "Invalid constant declaration. Constants cannot have visibility modifiers as \
@@ -2542,21 +2566,9 @@ fn parse_constant_decl(
             .env
             .add_diag(diag!(Syntax::InvalidModifier, (vis.loc().unwrap(), msg)));
     }
-    if let Some(loc) = entry {
-        let msg = format!(
-            "Invalid constant declaration. '{}' is used only on functions",
-            ENTRY_MODIFIER
-        );
-        context
-            .env
-            .add_diag(diag!(Syntax::InvalidModifier, (loc, msg)));
-    }
-    if let Some(loc) = native {
-        let msg = "Invalid constant declaration. 'native' constants are not supported";
-        context
-            .env
-            .add_diag(diag!(Syntax::InvalidModifier, (loc, msg)));
-    }
+    check_no_modifier(context, NATIVE_MODIFIER, native, "constant");
+    check_no_modifier(context, ENTRY_MODIFIER, entry, "constant");
+    check_no_modifier(context, MACRO_MODIFIER, macro_, "constant");
     consume_token(context.tokens, Tok::Const)?;
     let name = ConstantName(parse_identifier(context)?);
     expect_token!(
@@ -2694,22 +2706,11 @@ fn parse_use_decl(
         visibility,
         entry,
         native,
+        macro_,
     } = modifiers;
-    if let Some(loc) = entry {
-        let msg = format!(
-            "Invalid use declaration. '{}' is used only on functions",
-            ENTRY_MODIFIER
-        );
-        context
-            .env
-            .add_diag(diag!(Syntax::InvalidModifier, (loc, msg)));
-    }
-    if let Some(loc) = native {
-        let msg = "Invalid use declaration. Unexpected 'native' modifier";
-        context
-            .env
-            .add_diag(diag!(Syntax::InvalidModifier, (loc, msg)));
-    }
+    check_no_modifier(context, NATIVE_MODIFIER, native, "use");
+    check_no_modifier(context, ENTRY_MODIFIER, entry, "use");
+    check_no_modifier(context, MACRO_MODIFIER, macro_, "use");
     let use_ = match context.tokens.peek() {
         Tok::Fun => {
             consume_token(context.tokens, Tok::Fun).unwrap();

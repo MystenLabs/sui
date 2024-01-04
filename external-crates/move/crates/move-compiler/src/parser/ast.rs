@@ -242,6 +242,7 @@ new_name!(FunctionName);
 
 pub const NATIVE_MODIFIER: &str = "native";
 pub const ENTRY_MODIFIER: &str = "entry";
+pub const MACRO_MODIFIER: &str = "macro";
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct FunctionSignature {
@@ -275,6 +276,7 @@ pub struct Function {
     pub loc: Loc,
     pub visibility: Visibility,
     pub entry: Option<Loc>,
+    pub macro_: Option<Loc>,
     pub signature: FunctionSignature,
     pub name: FunctionName,
     pub body: FunctionBody,
@@ -1498,6 +1500,7 @@ impl AstDebug for Function {
             loc: _loc,
             visibility,
             entry,
+            macro_,
             signature,
             name,
             body,
@@ -1507,8 +1510,11 @@ impl AstDebug for Function {
         if entry.is_some() {
             w.write(&format!("{} ", ENTRY_MODIFIER));
         }
+        if macro_.is_some() {
+            w.write(&format!("{} ", MACRO_MODIFIER));
+        }
         if let FunctionBody_::Native = &body.value {
-            w.write("native ");
+            w.write(&format!("{} ", NATIVE_MODIFIER));
         }
         w.write(&format!("fun {}", name));
         signature.ast_debug(w);
