@@ -11502,6 +11502,7 @@ dependencies = [
  "inquire",
  "jemalloc-ctl",
  "json_to_table",
+ "move-command-line-common",
  "move-core-types",
  "move-package",
  "move-vm-profiler",
