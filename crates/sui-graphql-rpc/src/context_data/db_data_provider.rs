@@ -557,10 +557,11 @@ impl PgManager {
         }
     }
 
-    pub(crate) async fn fetch_tx(&self, digest: &str) -> Result<Option<TransactionBlock>, Error> {
-        let digest = Digest::from_str(digest)?.into_vec();
-
-        self.get_tx(digest)
+    pub(crate) async fn fetch_tx(
+        &self,
+        digest: &Digest,
+    ) -> Result<Option<TransactionBlock>, Error> {
+        self.get_tx(digest.to_vec())
             .await?
             .map(TransactionBlock::try_from)
             .transpose()
@@ -669,7 +670,7 @@ impl PgManager {
             paid_address: None,
             input_object: None,
             changed_object: None,
-            transaction_ids: Some(digests.iter().map(|x| x.to_string()).collect::<Vec<_>>()),
+            transaction_ids: Some(digests.iter().map(|d| Digest::from(*d)).collect()),
         };
         let txs = self
             .multi_get_txs(None, None, None, None, Some(tx_block_filter))

@@ -5,6 +5,7 @@ use super::{
     base64::Base64,
     cursor::{self, Page, Target},
     date_time::DateTime,
+    digest::Digest,
     epoch::Epoch,
     gas::GasCostSummary,
     transaction_block::{TransactionBlock, TransactionBlockFilter},
@@ -26,7 +27,7 @@ use sui_types::messages_checkpoint::{CheckpointCommitment, CheckpointDigest};
 /// Filter either by the digest, or the sequence number, or neither, to get the latest checkpoint.
 #[derive(Default, InputObject)]
 pub(crate) struct CheckpointId {
-    pub digest: Option<String>,
+    pub digest: Option<Digest>,
     pub sequence_number: Option<u64>,
 }
 
@@ -161,12 +162,7 @@ impl Checkpoint {
     pub(crate) async fn query(db: &Db, filter: CheckpointId) -> Result<Option<Self>, Error> {
         use checkpoints::dsl;
 
-        let digest = filter
-            .digest
-            .map(|d| Base58::decode(&d))
-            .transpose()
-            .map_err(|e| Error::Internal(format!("Bad digest: {e}")))?;
-
+        let digest = filter.digest.map(|d| d.to_vec());
         let seq_num = filter.sequence_number.map(|n| n as i64);
 
         let stored = db
