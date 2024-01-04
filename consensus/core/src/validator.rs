@@ -16,7 +16,7 @@ pub struct Validator {
 
 impl Validator {
     #[allow(unused)]
-    fn start(
+    async fn start(
         authority: AuthorityIndex,
         _committee: Committee,
         _parameters: Parameters,
@@ -35,7 +35,7 @@ impl Validator {
     }
 
     #[allow(unused)]
-    fn stop(self) {
+    async fn stop(self) {
         info!(
             "Stopping validator. Total run time: {:?}",
             self.start_time.elapsed()
@@ -72,8 +72,9 @@ mod tests {
             singer,
             block_verifier,
             registry,
-        );
+        )
+        .await;
 
-        validator.stop();
+        validator.stop().await;
     }
 }
