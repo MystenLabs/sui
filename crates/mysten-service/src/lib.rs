@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod health;
+pub mod logging;
 pub mod metrics;
 mod service;
 
