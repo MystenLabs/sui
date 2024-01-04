@@ -1,11 +1,11 @@
 # Get the checkpoint at sequence 9769 and show
-# the new committee authority and stake units
+# its transactions
 {
   checkpoint(id: { sequenceNumber: 9769 }) {
     digest
     sequenceNumber
     timestamp
-    validatorSignature
+    validatorSignatures
     previousCheckpointDigest
     liveObjectSetDigest
     networkTotalTransactions
@@ -17,13 +17,6 @@
     }
     epoch {
       epochId
-    }
-    endOfEpoch {
-      newCommittee {
-        authorityName
-        stakeUnit
-      }
-      nextProtocolVersion
     }
     transactionBlockConnection {
       edges {

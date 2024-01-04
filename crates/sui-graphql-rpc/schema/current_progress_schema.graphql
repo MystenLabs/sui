@@ -264,13 +264,14 @@ type ChangeEpochTransaction {
 
 type Checkpoint {
 	"""
-	A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58.
-	This hash can be used to verify checkpoint contents by checking signatures against the committee,
+	A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58. This
+	hash can be used to verify checkpoint contents by checking signatures against the committee,
 	Hashing contents to match digest, and checking that the previous checkpoint digest matches.
 	"""
 	digest: String!
 	"""
-	This checkpoint's position in the total order of finalized checkpoints, agreed upon by consensus.
+	This checkpoint's position in the total order of finalized checkpoints, agreed upon by
+	consensus.
 	"""
 	sequenceNumber: Int!
 	"""
@@ -279,35 +280,36 @@ type Checkpoint {
 	"""
 	timestamp: DateTime!
 	"""
-	This is an aggregation of signatures from a quorum of validators for the checkpoint proposal.
+	This is an aggregation of signatures from a quorum of validators for the checkpoint
+	proposal.
 	"""
-	validatorSignature: Base64
+	validatorSignatures: Base64!
 	"""
 	The digest of the checkpoint at the previous sequence number.
 	"""
 	previousCheckpointDigest: String
 	"""
-	This is a commitment by the committee at the end of epoch
-	on the contents of the live object set at that time.
-	This can be used to verify state snapshots.
+	A commitment by the committee at the end of epoch on the contents of the live object set at
+	that time. This can be used to verify state snapshots.
 	"""
 	liveObjectSetDigest: String
 	"""
-	Tracks the total number of transaction blocks in the network at the time of the checkpoint.
+	The total number of transaction blocks in the network by the end of this checkpoint.
 	"""
 	networkTotalTransactions: Int
 	"""
-	The computation and storage cost, storage rebate, and nonrefundable storage fee accumulated
-	during this epoch, up to and including this checkpoint.
-	These values increase monotonically across checkpoints in the same epoch.
+	The computation cost, storage cost, storage rebate, and non-refundable storage fee
+	accumulated during this epoch, up to and including this checkpoint. These values increase
+	monotonically across checkpoints in the same epoch, and reset on epoch boundaries.
 	"""
 	rollingGasSummary: GasCostSummary
 	"""
-	End of epoch data is only available on the final checkpoint of an epoch.
-	This field provides information on the new committee and protocol version for the next epoch.
+	The epoch this checkpoint is part of.
 	"""
-	endOfEpoch: EndOfEpochData
 	epoch: Epoch
+	"""
+	Transactions in this checkpoint.
+	"""
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 }
 
@@ -416,11 +418,6 @@ type CoinMetadata {
 	asMoveObject: MoveObject!
 }
 
-type CommitteeMember {
-	authorityName: String
-	stakeUnit: Int
-}
-
 """
 System transaction that runs at the beginning of a checkpoint, and is responsible for setting
 the current value of the clock, based on the timestamp from consensus.
@@ -526,11 +523,6 @@ input DynamicFieldName {
 }
 
 union DynamicFieldValue = MoveObject | MoveValue
-
-type EndOfEpochData {
-	newCommittee: [CommitteeMember!]
-	nextProtocolVersion: Int
-}
 
 """
 System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions

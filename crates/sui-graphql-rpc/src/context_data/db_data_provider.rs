@@ -12,14 +12,10 @@ use crate::{
         checkpoint::Checkpoint,
         coin::Coin,
         coin_metadata::CoinMetadata,
-        committee_member::CommitteeMember,
-        date_time::DateTime,
         digest::Digest,
         dynamic_field::{DynamicField, DynamicFieldName},
-        end_of_epoch_data::EndOfEpochData,
         epoch::Epoch,
         event::{Event, EventFilter},
-        gas::GasCostSummary,
         move_function::MoveFunction,
         move_module::MoveModule,
         move_object::MoveObject,
@@ -55,7 +51,6 @@ use sui_json_rpc::{
 };
 use sui_json_rpc_types::{ProtocolConfigResponse, Stake as RpcStakedSui};
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
-use sui_types::base_types::ConciseableName;
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SuiAddress as NativeSuiAddress},
     coin::{CoinMetadata as NativeCoinMetadata, TreasuryCap},
@@ -64,9 +59,7 @@ use sui_types::{
     dynamic_field::{DynamicFieldType, Field},
     gas_coin::{GAS, TOTAL_SUPPLY_SUI},
     governance::StakedSui as NativeStakedSui,
-    messages_checkpoint::{
-        CheckpointCommitment, CheckpointDigest, EndOfEpochData as NativeEndOfEpochData,
-    },
+    messages_checkpoint::CheckpointDigest,
     object::Object as NativeObject,
     sui_system_state::sui_system_state_summary::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
@@ -730,7 +723,7 @@ impl PgManager {
     pub(crate) async fn fetch_latest_checkpoint(&self) -> Result<Checkpoint, Error> {
         let stored_checkpoint = self.get_checkpoint(None, None).await?;
         match stored_checkpoint {
-            Some(stored_checkpoint) => Ok(Checkpoint::try_from(stored_checkpoint)?),
+            Some(stored) => Ok(Checkpoint { stored }),
             None => Err(Error::Internal("Latest checkpoint not found".to_string())),
         }
     }
@@ -748,7 +741,8 @@ impl PgManager {
                 sequence_number.map(|sequence_number| sequence_number as i64),
             )
             .await?;
-        stored_checkpoint.map(Checkpoint::try_from).transpose()
+
+        Ok(stored_checkpoint.map(|stored| Checkpoint { stored }))
     }
 
     pub(crate) async fn fetch_display_object_by_type(
@@ -997,25 +991,19 @@ impl PgManager {
             .multi_get_checkpoints(first, after, last, before, epoch)
             .await?;
 
-        if let Some((stored_checkpoints, has_next_page)) = checkpoints {
-            let mut connection = Connection::new(false, has_next_page);
+        let Some((stored_checkpoints, has_next_page)) = checkpoints else {
+            return Ok(None);
+        };
+
+        let mut connection = Connection::new(false, has_next_page);
+        for stored in stored_checkpoints {
+            let cursor = stored.sequence_number.to_string();
             connection
                 .edges
-                .extend(
-                    stored_checkpoints
-                        .into_iter()
-                        .filter_map(|stored_checkpoint| {
-                            let cursor = stored_checkpoint.sequence_number.to_string();
-                            Checkpoint::try_from(stored_checkpoint)
-                                .map_err(|e| eprintln!("Error converting checkpoint: {:?}", e))
-                                .ok()
-                                .map(|checkpoint| Edge::new(cursor, checkpoint))
-                        }),
-                );
-            Ok(Some(connection))
-        } else {
-            Ok(None)
+                .push(Edge::new(cursor, Checkpoint { stored }));
         }
+
+        Ok(Some(connection))
     }
 
     pub(crate) async fn fetch_balance(
@@ -1597,86 +1585,6 @@ impl PgManager {
         }
 
         Ok(Some(connection))
-    }
-}
-
-impl TryFrom<StoredCheckpoint> for Checkpoint {
-    type Error = Error;
-    fn try_from(c: StoredCheckpoint) -> Result<Self, Self::Error> {
-        let checkpoint_commitments: Vec<CheckpointCommitment> =
-            bcs::from_bytes(&c.checkpoint_commitments).map_err(|e| {
-                Error::Internal(format!(
-                    "Can't convert checkpoint_commitments into CheckpointCommitments. Error: {e}",
-                ))
-            })?;
-
-        let live_object_set_digest =
-            checkpoint_commitments
-                .iter()
-                .find_map(|commitment| match commitment {
-                    CheckpointCommitment::ECMHLiveObjectSetDigest(digest) => {
-                        Some(Digest::from_array(digest.digest.into_inner()).to_string())
-                    }
-                    #[allow(unreachable_patterns)]
-                    _ => None,
-                });
-
-        let end_of_epoch_data: Option<NativeEndOfEpochData> = if c.end_of_epoch {
-            c.end_of_epoch_data
-                .map(|data| {
-                    bcs::from_bytes(&data).map_err(|e| {
-                        Error::Internal(format!(
-                            "Can't convert end_of_epoch_data into EndOfEpochData. Error: {e}",
-                        ))
-                    })
-                })
-                .transpose()?
-        } else {
-            None
-        };
-
-        let end_of_epoch = end_of_epoch_data.map(|e| {
-            let committees = e.next_epoch_committee;
-            let new_committee = if committees.is_empty() {
-                None
-            } else {
-                Some(
-                    committees
-                        .iter()
-                        .map(|c| CommitteeMember {
-                            authority_name: Some(c.0.concise_owned().to_string()),
-                            stake_unit: Some(c.1),
-                        })
-                        .collect::<Vec<_>>(),
-                )
-            };
-
-            EndOfEpochData {
-                new_committee,
-                next_protocol_version: Some(e.next_epoch_protocol_version.as_u64()),
-            }
-        });
-
-        Ok(Self {
-            digest: Digest::try_from(c.checkpoint_digest)?.to_string(),
-            sequence_number: c.sequence_number as u64,
-            timestamp: DateTime::from_ms(c.timestamp_ms)?,
-            validator_signature: Some(c.validator_signature.into()),
-            previous_checkpoint_digest: c
-                .previous_checkpoint_digest
-                .map(|d| Digest::try_from(d).map(|digest| digest.to_string()))
-                .transpose()?,
-            live_object_set_digest,
-            network_total_transactions: Some(c.network_total_transactions as u64),
-            rolling_gas_summary: Some(GasCostSummary {
-                computation_cost: c.computation_cost as u64,
-                storage_cost: c.storage_cost as u64,
-                storage_rebate: c.storage_rebate as u64,
-                non_refundable_storage_fee: c.non_refundable_storage_fee as u64,
-            }),
-            epoch_id: c.epoch as u64,
-            end_of_epoch,
-        })
     }
 }
 

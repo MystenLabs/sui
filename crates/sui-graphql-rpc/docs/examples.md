@@ -191,7 +191,7 @@
 >  checkpoint(id: { digest: "GaDeWEfbSQCQ8FBQHUHVdm4KjrnbgMqEZPuhStoq5njU" }) {
 >    digest
 >    sequenceNumber
->    validatorSignature
+>    validatorSignatures
 >    previousCheckpointDigest
 >    networkTotalTransactions
 >    rollingGasSummary {
@@ -205,9 +205,6 @@
 >      referenceGasPrice
 >      startTimestamp
 >      endTimestamp
->    }
->    endOfEpoch {
->      nextProtocolVersion
 >    }
 >  }
 >}</pre>
@@ -220,7 +217,7 @@
 >  checkpoint(id: { sequenceNumber: 10 }) {
 >    digest
 >    sequenceNumber
->    validatorSignature
+>    validatorSignatures
 >    previousCheckpointDigest
 >    networkTotalTransactions
 >    rollingGasSummary {
@@ -234,9 +231,6 @@
 >      referenceGasPrice
 >      startTimestamp
 >      endTimestamp
->    }
->    endOfEpoch {
->      nextProtocolVersion
 >    }
 >  }
 >}</pre>
@@ -280,7 +274,7 @@
 >  checkpoint {
 >    digest
 >    sequenceNumber
->    validatorSignature
+>    validatorSignatures
 >    previousCheckpointDigest
 >    networkTotalTransactions
 >    rollingGasSummary {
@@ -295,23 +289,20 @@
 >      startTimestamp
 >      endTimestamp
 >    }
->    endOfEpoch {
->      nextProtocolVersion
->    }
 >  }
 >}</pre>
 
 ### <a id=196609></a>
 ### Multiple Selections
 ####  Get the checkpoint at sequence 9769 and show
-####  the new committee authority and stake units
+####  its transactions
 
 ><pre>{
 >  checkpoint(id: { sequenceNumber: 9769 }) {
 >    digest
 >    sequenceNumber
 >    timestamp
->    validatorSignature
+>    validatorSignatures
 >    previousCheckpointDigest
 >    liveObjectSetDigest
 >    networkTotalTransactions
@@ -323,13 +314,6 @@
 >    }
 >    epoch {
 >      epochId
->    }
->    endOfEpoch {
->      newCommittee {
->        authorityName
->        stakeUnit
->      }
->      nextProtocolVersion
 >    }
 >    transactionBlockConnection {
 >      edges {
@@ -414,7 +398,7 @@
 >    nodes {
 >      digest
 >      sequenceNumber
->      validatorSignature
+>      validatorSignatures
 >      previousCheckpointDigest
 >      networkTotalTransactions
 >      rollingGasSummary {
@@ -428,9 +412,6 @@
 >        referenceGasPrice
 >        startTimestamp
 >        endTimestamp
->      }
->      endOfEpoch {
->        nextProtocolVersion
 >      }
 >    }
 >  }
