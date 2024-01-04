@@ -10994,6 +10994,7 @@ dependencies = [
  "inquire",
  "jemalloc-ctl",
  "json_to_table",
+ "move-command-line-common",
  "move-core-types",
  "move-package",
  "num-bigint 0.4.4",
