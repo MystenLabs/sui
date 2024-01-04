@@ -30,6 +30,7 @@ async function getCoinsByBalance({
 	let currentBalance = 0n;
 	let hasNextPage = true;
 	const coins = [];
+
 	const bigIntBalance = BigInt(new BigNumber(balance).integerValue(BigNumber.ROUND_UP).toString());
 
 	while (currentBalance < bigIntBalance && hasNextPage) {
@@ -224,6 +225,7 @@ export function useGetEstimate({
 	totalQuoteBalance,
 	baseConversionRate,
 	quoteConversionRate,
+	enabled,
 }: {
 	accountCapId: string;
 	signer: WalletSigner | null;
@@ -236,6 +238,7 @@ export function useGetEstimate({
 	totalQuoteBalance: string;
 	baseConversionRate: number;
 	quoteConversionRate: number;
+	enabled?: boolean;
 }) {
 	const walletFeeAddress = useDeepBookContext().walletFeeAddress;
 	const queryClient = useQueryClient();
@@ -313,6 +316,7 @@ export function useGetEstimate({
 			};
 		},
 		enabled:
+			enabled &&
 			!!baseBalance &&
 			baseBalance !== '0' &&
 			!!quoteBalance &&

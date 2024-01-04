@@ -243,8 +243,8 @@ export function SwapPageContent() {
 		control,
 	});
 
-	const baseBalance = new BigNumber(amount).shiftedBy(USDC_CONVERSION_RATE).toString();
-	const quoteBalance = new BigNumber(amount).shiftedBy(SUI_CONVERSION_RATE).toString();
+	const baseBalance = amount && new BigNumber(amount).shiftedBy(USDC_CONVERSION_RATE).toString();
+	const quoteBalance = amount && new BigNumber(amount).shiftedBy(SUI_CONVERSION_RATE).toString();
 
 	const isPayAll = amount === (isAsk ? formattedBaseTokenBalance : formattedQuoteTokenBalance);
 
@@ -256,9 +256,12 @@ export function SwapPageContent() {
 	}, [isAsk, baseCoinSymbol, baseCoinType, coinsMap, quoteCoinSymbol, quoteCoinType]);
 
 	const {
+		error: estimateError,
 		data: dataFromEstimate,
-		isPending: dataFromEstimateLoading,
-		isError: dataFromEstimateError,
+		isPending: dataFromEstimatePending,
+		isFetching: dataFromEstimateFetching,
+		isError: isDataFromEstimateError,
+		refetch: refetchEstimate,
 	} = useGetEstimate({
 		signer,
 		accountCapId,
@@ -271,6 +274,7 @@ export function SwapPageContent() {
 		totalQuoteBalance: formattedQuoteTokenBalance,
 		baseConversionRate: USDC_CONVERSION_RATE,
 		quoteConversionRate: SUI_CONVERSION_RATE,
+		enabled: isValid,
 	});
 
 	const recognizedPackagesList = useRecognizedPackages();
@@ -445,6 +449,9 @@ export function SwapPageContent() {
 									balanceChanges={balanceChanges}
 									baseCoinType={baseCoinType}
 									quoteCoinType={quoteCoinType}
+									loading={dataFromEstimateFetching}
+									refetch={refetchEstimate}
+									error={estimateError}
 								/>
 
 								{isValid && (
@@ -477,7 +484,11 @@ export function SwapPageContent() {
 								variant="primary"
 								loading={isSubmitting || isSwapLoading}
 								disabled={
-									!isValid || isSubmitting || dataFromEstimateLoading || dataFromEstimateError
+									!isValid ||
+									isSubmitting ||
+									dataFromEstimatePending ||
+									dataFromEstimateFetching ||
+									isDataFromEstimateError
 								}
 								size="tall"
 								text={atcText}
