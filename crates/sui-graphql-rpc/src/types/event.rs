@@ -84,10 +84,10 @@ impl Event {
         })?;
 
         let stored_event = StoredEvent {
-            tx_sequence_number: stored_tx.tx_sequence_number as i64,
+            tx_sequence_number: stored_tx.tx_sequence_number,
             event_sequence_number: idx as i64,
             transaction_digest: stored_tx.transaction_digest.clone(),
-            checkpoint_sequence_number: stored_tx.checkpoint_sequence_number as i64,
+            checkpoint_sequence_number: stored_tx.checkpoint_sequence_number,
             senders: vec![Some(native_event.sender.to_vec())],
             package: native_event.package_id.to_vec(),
             module: native_event.transaction_module.to_string(),
