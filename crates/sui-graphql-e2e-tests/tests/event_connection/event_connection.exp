@@ -51,7 +51,7 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0x0e505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::M1::EventA"
+            "repr": "0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::M1::EventA"
           },
           "senders": [
             {
@@ -68,7 +68,7 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0x0e505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::M1::EventB<0x0e505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::M1::Object>"
+            "repr": "0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::M1::EventB<0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::M1::Object>"
           },
           "senders": [
             {
@@ -85,7 +85,7 @@ Response: {
             "name": "M2"
           },
           "type": {
-            "repr": "0x0e505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::M2::EventA"
+            "repr": "0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::M2::EventA"
           },
           "senders": [
             {
@@ -102,7 +102,7 @@ Response: {
             "name": "M2"
           },
           "type": {
-            "repr": "0x0e505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::M2::EventB<0x0e505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::M2::Object>"
+            "repr": "0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::M2::EventB<0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::M2::Object>"
           },
           "senders": [
             {
@@ -129,7 +129,7 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0x0e505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::M1::EventA"
+            "repr": "0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::M1::EventA"
           },
           "senders": [
             {
@@ -146,7 +146,7 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0x0e505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::M1::EventB<0x0e505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::M1::Object>"
+            "repr": "0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::M1::EventB<0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::M1::Object>"
           },
           "senders": [
             {
@@ -163,7 +163,7 @@ Response: {
             "name": "M2"
           },
           "type": {
-            "repr": "0x0e505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::M2::EventA"
+            "repr": "0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::M2::EventA"
           },
           "senders": [
             {
@@ -180,7 +180,7 @@ Response: {
             "name": "M2"
           },
           "type": {
-            "repr": "0x0e505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::M2::EventB<0x0e505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::M2::Object>"
+            "repr": "0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::M2::EventB<0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::M2::Object>"
           },
           "senders": [
             {
@@ -207,7 +207,7 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0x0e505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::M1::EventA"
+            "repr": "0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::M1::EventA"
           },
           "senders": [
             {
@@ -224,7 +224,7 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0x0e505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::M1::EventB<0x0e505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::M1::Object>"
+            "repr": "0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::M1::EventB<0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::M1::Object>"
           },
           "senders": [
             {
@@ -251,7 +251,7 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0x0e505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::M1::EventA"
+            "repr": "0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::M1::EventA"
           },
           "senders": [
             {
@@ -278,7 +278,7 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0x0e505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::M1::EventB<0x0e505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::M1::Object>"
+            "repr": "0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::M1::EventB<0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::M1::Object>"
           },
           "senders": [
             {
@@ -300,7 +300,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Invalid type provided as filter: Invalid struct type: 0xe505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::M1::EventB<. Got error: unexpected end of tokens",
+      "message": "Invalid type provided as filter: Invalid struct type: 0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::M1::EventB<. Got error: unexpected end of tokens",
       "locations": [
         {
           "line": 2,
@@ -344,7 +344,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Invalid type provided as filter: Invalid format in '0xe505a96cad52b742f6fd8366bc012df942aed4f8c61f9736f4d2d15a68655fd::' - if '::' is present, there must be a non-empty string on both sides. Expected format like 'package[::module[::type[<type_params>]]]'",
+      "message": "Invalid type provided as filter: Invalid format in '0x2290f0254f821e8a4e31df0ec3b64559848729bf7a4d17f0af0271b1b95eef03::' - if '::' is present, there must be a non-empty string on both sides. Expected format like 'package[::module[::type[<type_params>]]]'",
       "locations": [
         {
           "line": 2,

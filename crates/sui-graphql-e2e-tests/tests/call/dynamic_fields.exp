@@ -35,6 +35,20 @@ Response: {
           {
             "name": {
               "type": {
+                "repr": "vector<u8>"
+              },
+              "data": {
+                "Vector": []
+              },
+              "bcs": "AA=="
+            },
+            "value": {
+              "__typename": "MoveValue"
+            }
+          },
+          {
+            "name": {
+              "type": {
                 "repr": "bool"
               },
               "data": {
@@ -58,20 +72,6 @@ Response: {
             },
             "value": {
               "__typename": "MoveObject"
-            }
-          },
-          {
-            "name": {
-              "type": {
-                "repr": "vector<u8>"
-              },
-              "data": {
-                "Vector": []
-              },
-              "bcs": "AA=="
-            },
-            "value": {
-              "__typename": "MoveValue"
             }
           },
           {
@@ -119,6 +119,24 @@ Response: {
           {
             "name": {
               "type": {
+                "repr": "vector<u8>"
+              },
+              "data": {
+                "Vector": []
+              },
+              "bcs": "AA=="
+            },
+            "value": {
+              "bcs": "AQAAAAAAAAA=",
+              "data": {
+                "Number": "1"
+              },
+              "__typename": "MoveValue"
+            }
+          },
+          {
+            "name": {
+              "type": {
                 "repr": "bool"
               },
               "data": {
@@ -146,24 +164,6 @@ Response: {
             },
             "value": {
               "__typename": "MoveObject"
-            }
-          },
-          {
-            "name": {
-              "type": {
-                "repr": "vector<u8>"
-              },
-              "data": {
-                "Vector": []
-              },
-              "bcs": "AA=="
-            },
-            "value": {
-              "bcs": "AQAAAAAAAAA=",
-              "data": {
-                "Number": "1"
-              },
-              "__typename": "MoveValue"
             }
           },
           {
