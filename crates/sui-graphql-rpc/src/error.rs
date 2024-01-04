@@ -76,10 +76,6 @@ pub enum Error {
     DbValidation(#[from] DbValidationError),
     #[error("Invalid coin type: {0}")]
     InvalidCoinType(String),
-    #[error("String is not valid base58: {0}")]
-    InvalidBase58(String),
-    #[error("Invalid digest length: expected {expected}, actual {actual}")]
-    InvalidDigestLength { expected: usize, actual: usize },
     #[error("'before' and 'after' must not be used together")]
     CursorNoBeforeAfter,
     #[error("'first' and 'last' must not be used together")]
@@ -117,8 +113,6 @@ impl ErrorExtensions for Error {
             | Error::InvalidCursor(_)
             | Error::_CursorConnectionFetchFailed(_)
             | Error::MultiGet(_)
-            | Error::InvalidBase58(_)
-            | Error::InvalidDigestLength { .. }
             | Error::Client(_) => {
                 e.set("code", code::BAD_USER_INPUT);
             }

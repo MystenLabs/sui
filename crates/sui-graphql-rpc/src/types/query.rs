@@ -15,6 +15,7 @@ use super::{
     coin::Coin,
     coin_metadata::CoinMetadata,
     cursor::Page,
+    digest::Digest,
     epoch::Epoch,
     event::{Event, EventFilter},
     move_type::MoveType,
@@ -113,7 +114,7 @@ impl Query {
     async fn transaction_block(
         &self,
         ctx: &Context<'_>,
-        digest: String,
+        digest: Digest,
     ) -> Result<Option<TransactionBlock>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_tx(&digest)

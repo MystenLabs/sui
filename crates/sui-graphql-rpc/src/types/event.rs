@@ -9,6 +9,7 @@ use crate::error::Error;
 
 use crate::context_data::db_data_provider::PgManager;
 
+use super::digest::Digest;
 use super::{
     address::Address, base64::Base64, date_time::DateTime, move_module::MoveModule,
     move_value::MoveValue, sui_address::SuiAddress,
@@ -21,7 +22,7 @@ pub(crate) struct Event {
 #[derive(InputObject, Clone)]
 pub(crate) struct EventFilter {
     pub sender: Option<SuiAddress>,
-    pub transaction_digest: Option<String>,
+    pub transaction_digest: Option<Digest>,
     // Enhancement (post-MVP)
     // after_checkpoint
     // before_checkpoint

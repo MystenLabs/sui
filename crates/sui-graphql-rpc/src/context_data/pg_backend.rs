@@ -9,7 +9,7 @@ use crate::{
     context_data::db_data_provider::PgManager,
     error::Error,
     types::{
-        digest::Digest, event::EventFilter, object::ObjectFilter, sui_address::SuiAddress,
+        event::EventFilter, object::ObjectFilter, sui_address::SuiAddress,
         transaction_block::TransactionBlockFilter,
     },
 };
@@ -110,10 +110,7 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
                     .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint as i64));
             }
             if let Some(transaction_ids) = filter.transaction_ids {
-                let digests = transaction_ids
-                    .into_iter()
-                    .map(|id| Ok::<Vec<u8>, Error>(Digest::from_str(&id)?.into_vec()))
-                    .collect::<Result<Vec<_>, _>>()?;
+                let digests: Vec<_> = transaction_ids.iter().map(|d| d.to_vec()).collect();
                 query = query.filter(transactions::dsl::transaction_digest.eq_any(digests));
             }
 
@@ -371,9 +368,8 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         }
 
         if let Some(digest) = filter.transaction_digest {
-            let tx_digest = Digest::from_str(&digest)?.into_vec();
             let subquery = transactions::dsl::transactions
-                .filter(transactions::dsl::transaction_digest.eq(tx_digest))
+                .filter(transactions::dsl::transaction_digest.eq(digest.to_vec()))
                 .select(transactions::dsl::tx_sequence_number);
 
             query = query.filter(events::dsl::tx_sequence_number.eq_any(subquery));
