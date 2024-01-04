@@ -4,7 +4,7 @@
     nodes {
       digest
       sequenceNumber
-      validatorSignature
+      validatorSignatures
       previousCheckpointDigest
       networkTotalTransactions
       rollingGasSummary {
@@ -18,9 +18,6 @@
         referenceGasPrice
         startTimestamp
         endTimestamp
-      }
-      endOfEpoch {
-        nextProtocolVersion
       }
     }
   }

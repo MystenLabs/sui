@@ -755,7 +755,7 @@ type Checkpoint {
   sequenceNumber: Int!
 
   timestamp: DateTime!
-  validatorSignature: Base64
+  validatorSignatures: Base64
 
   # Commitments
   previousCheckpointDigest: String
