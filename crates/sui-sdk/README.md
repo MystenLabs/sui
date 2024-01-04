@@ -49,7 +49,7 @@ You can also build the documentation locally. To do so, open a Terminal or Conso
 1. Use the `rustup override` command to set the `nightly` release channel as active.
 
    ```rust
-   rustup override set nightly-2023-06-15
+   rustup override set nightly
    ```
 
 1. Use `cargo doc` with the following `RUSTDOCFLAGS` set to build the documentation into the `sui/target` directory.  
