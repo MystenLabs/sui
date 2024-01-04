@@ -18,7 +18,6 @@ use sui_types::{
 use crate::types::cursor::{Cursor, Page};
 use crate::types::sui_address::SuiAddress;
 use crate::{
-    context_data::db_data_provider::PgManager,
     error::Error,
     types::{
         big_int::BigInt, date_time::DateTime, epoch::Epoch, move_package::MovePackage,
@@ -103,9 +102,8 @@ impl EndOfEpochTransaction {
 #[Object]
 impl ChangeEpochTransaction {
     /// The next (to become) epoch.
-    async fn epoch(&self, ctx: &Context<'_>) -> Result<Epoch> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_epoch_strict(self.0.epoch)
+    async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
+        Epoch::query(ctx.data_unchecked(), Some(self.0.epoch))
             .await
             .extend()
     }
@@ -194,9 +192,8 @@ impl ChangeEpochTransaction {
 #[Object]
 impl AuthenticatorStateExpireTransaction {
     /// Expire JWKs that have a lower epoch than this.
-    async fn min_epoch(&self, ctx: &Context<'_>) -> Result<Epoch> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_epoch_strict(self.0.min_epoch)
+    async fn min_epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
+        Epoch::query(ctx.data_unchecked(), Some(self.0.min_epoch))
             .await
             .extend()
     }

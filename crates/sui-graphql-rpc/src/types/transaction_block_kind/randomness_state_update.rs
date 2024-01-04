@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    context_data::db_data_provider::PgManager,
-    types::{base64::Base64, epoch::Epoch},
-};
+use crate::types::{base64::Base64, epoch::Epoch};
 use async_graphql::*;
 use sui_types::transaction::RandomnessStateUpdate as NativeRandomnessStateUpdate;
 
@@ -15,9 +12,8 @@ pub(crate) struct RandomnessStateUpdateTransaction(pub NativeRandomnessStateUpda
 #[Object]
 impl RandomnessStateUpdateTransaction {
     /// Epoch of the randomness state update transaction.
-    async fn epoch(&self, ctx: &Context<'_>) -> Result<Epoch> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_epoch_strict(self.0.epoch)
+    async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
+        Epoch::query(ctx.data_unchecked(), Some(self.0.epoch))
             .await
             .extend()
     }

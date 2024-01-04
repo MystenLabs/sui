@@ -10,9 +10,11 @@ use sui_types::TypeTag;
 use super::{
     address::Address,
     available_range::AvailableRange,
-    checkpoint::{Checkpoint, CheckpointId},
+    chain_identifier::ChainIdentifier,
+    checkpoint::{self, Checkpoint, CheckpointId},
     coin::Coin,
     coin_metadata::CoinMetadata,
+    cursor::Page,
     epoch::Epoch,
     event::{Event, EventFilter},
     move_type::MoveType,
@@ -35,10 +37,10 @@ impl Query {
     /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the
     /// network).
     async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_chain_identifier()
+        Ok(ChainIdentifier::query(ctx.data_unchecked())
             .await
-            .extend()
+            .extend()?
+            .to_string())
     }
 
     /// Range of checkpoints that the RPC has data available for (for data
@@ -92,19 +94,7 @@ impl Query {
 
     /// Fetch epoch information by ID (defaults to the latest epoch).
     async fn epoch(&self, ctx: &Context<'_>, id: Option<u64>) -> Result<Option<Epoch>> {
-        if let Some(epoch_id) = id {
-            ctx.data_unchecked::<PgManager>()
-                .fetch_epoch(epoch_id)
-                .await
-                .extend()
-        } else {
-            Ok(Some(
-                ctx.data_unchecked::<PgManager>()
-                    .fetch_latest_epoch()
-                    .await
-                    .extend()?,
-            ))
-        }
+        Epoch::query(ctx.data_unchecked(), id).await.extend()
     }
 
     /// Fetch checkpoint information by sequence number or digest (defaults to the latest available
@@ -114,23 +104,9 @@ impl Query {
         ctx: &Context<'_>,
         id: Option<CheckpointId>,
     ) -> Result<Option<Checkpoint>> {
-        if let Some(id) = id {
-            match (&id.digest, &id.sequence_number) {
-                (Some(_), Some(_)) => Err(Error::InvalidCheckpointQuery.extend()),
-                _ => ctx
-                    .data_unchecked::<PgManager>()
-                    .fetch_checkpoint(id.digest.as_deref(), id.sequence_number)
-                    .await
-                    .extend(),
-            }
-        } else {
-            Ok(Some(
-                ctx.data_unchecked::<PgManager>()
-                    .fetch_latest_checkpoint()
-                    .await
-                    .extend()?,
-            ))
-        }
+        Checkpoint::query(ctx.data_unchecked(), id.unwrap_or_default())
+            .await
+            .extend()
     }
 
     /// Fetch a transaction block by its transaction digest.
@@ -164,16 +140,16 @@ impl Query {
             .extend()
     }
 
-    async fn checkpoint_connection(
+    async fn checkpoints(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<checkpoint::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, Checkpoint>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_checkpoints(first, after, last, before, None)
+        before: Option<checkpoint::Cursor>,
+    ) -> Result<Connection<String, Checkpoint>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        Checkpoint::paginate(ctx.data_unchecked(), page, None)
             .await
             .extend()
     }
@@ -230,8 +206,7 @@ impl Query {
         ctx: &Context<'_>,
         protocol_version: Option<u64>,
     ) -> Result<ProtocolConfigs> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_protocol_configs(protocol_version)
+        ProtocolConfigs::query(ctx.data_unchecked(), protocol_version)
             .await
             .extend()
     }

@@ -1,22 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt, ops::Deref};
+use std::{fmt, ops::Deref, vec};
 
 use async_graphql::{
     connection::{CursorType, OpaqueCursor},
     *,
 };
+use diesel::{query_builder::QueryFragment, query_dsl::LoadQuery, QueryDsl, QuerySource};
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{config::ServiceConfig, error::Error};
+use crate::{
+    config::ServiceConfig,
+    data::{BoxedQuery, Db, DbBackend, DbConnection, QueryExecutor},
+    error::Error,
+};
 
 /// Wrap the `OpaqueCursor` type to implement Scalar for it.
 pub(crate) struct Cursor<C>(OpaqueCursor<C>);
 
 /// Connection field parameters parsed into a single type that encodes the bounds of a single page
 /// in a paginated response.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct Page<C> {
     /// The exclusive lower bound of the page (no bound means start from the beginning of the
     /// data-set).
@@ -35,10 +40,40 @@ pub(crate) struct Page<C> {
 }
 
 /// Whether the page is extracted from the beginning or the end of the range bounded by the cursors.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 enum End {
     Front,
     Back,
+}
+
+/// Results from the database that are pointed to by cursors.
+pub(crate) trait Target<C> {
+    type Source: QuerySource;
+
+    /// Adds a filter to `query` to bound its result to be greater than or equal to `cursor`
+    /// (returning the new query).
+    fn filter_ge<ST, GB>(
+        cursor: &C,
+        query: BoxedQuery<ST, Self::Source, Db, GB>,
+    ) -> BoxedQuery<ST, Self::Source, Db, GB>;
+
+    /// Adds a filter to `query` to bound its results to be less than or equal to `cursor`
+    /// (returning the new query).
+    fn filter_le<ST, GB>(
+        cursor: &C,
+        query: BoxedQuery<ST, Self::Source, Db, GB>,
+    ) -> BoxedQuery<ST, Self::Source, Db, GB>;
+
+    /// Adds an `ORDER BY` clause to `query` to order rows according to their cursor values
+    /// (returning the new query). The `asc` parameter controls whether the ordering is ASCending
+    /// (`true`) or descending (`false`).
+    fn order<ST, GB>(
+        asc: bool,
+        query: BoxedQuery<ST, Self::Source, Db, GB>,
+    ) -> BoxedQuery<ST, Self::Source, Db, GB>;
+
+    /// The cursor pointing at this target value.
+    fn cursor(&self) -> C;
 }
 
 impl<C> Cursor<C> {
@@ -135,6 +170,133 @@ impl Page<usize> {
     }
 }
 
+impl<C: Eq + Clone + Send + Sync + 'static> Page<C> {
+    /// Treat the cursors of this page as upper- and lowerbound filters for a database `query`.
+    /// Returns two booleans indicating whether there is a previous or next page in the range,
+    /// followed by an iterator of values in the page, fetched from the database.
+    ///
+    /// The values returned implement `Target<C>`, so are able to compute their own cursors.
+    pub(crate) async fn paginate_query<T, Q, ST, GB>(
+        &self,
+        db: &Db,
+        query: Q,
+    ) -> Result<(bool, bool, impl Iterator<Item = T>), Error>
+    where
+        Q: Fn() -> BoxedQuery<ST, T::Source, Db, GB>,
+        BoxedQuery<ST, T::Source, Db, GB>: LoadQuery<'static, DbConnection, T>,
+        BoxedQuery<ST, T::Source, Db, GB>: QueryFragment<DbBackend>,
+        <T as Target<C>>::Source: Send + 'static,
+        <<T as Target<C>>::Source as QuerySource>::FromClause: Send + 'static,
+        Q: Send + 'static,
+        T: Send + Target<C> + 'static,
+        ST: Send + 'static,
+        GB: Send + 'static,
+    {
+        let page = self.clone();
+        let query = move || {
+            let mut query = query();
+            if let Some(after) = page.after() {
+                query = T::filter_ge(after, query);
+            }
+
+            if let Some(before) = page.before() {
+                query = T::filter_le(before, query);
+            }
+
+            // Load extra rows to detect the existence of pages on either side.
+            query = query.limit(page.limit() as i64 + 2);
+            T::order(page.is_from_front(), query)
+        };
+
+        let results: Vec<T> = if self.limit() == 0 {
+            // Avoid the database roundtrip in the degenerate case.
+            vec![]
+        } else {
+            let mut results = db.results(query).await?;
+            if !self.is_from_front() {
+                results.reverse();
+            }
+            results
+        };
+
+        // Detect whether the results imply the existence of a previous or next page.
+        let (prev, next, prefix, suffix) = match (
+            self.after(),
+            results.first(),
+            results.last(),
+            self.before(),
+            self.end,
+        ) {
+            // Results came back empty, despite supposedly including the `after` and `before`
+            // cursors, so the bounds must have been invalid, no matter which end the page was
+            // drawn from.
+            (_, None, _, _, _) | (_, _, None, _, _) => {
+                return Ok((false, false, vec![].into_iter()));
+            }
+
+            // Page drawn from the front, and the cursor for the first element does not match
+            // `after`. This implies the bound was invalid, so we return an empty result.
+            (Some(a), Some(f), _, _, End::Front) if f.cursor() != *a => {
+                return Ok((false, false, vec![].into_iter()));
+            }
+
+            // Similar to above case, but for back of results.
+            (_, _, Some(l), Some(b), End::Back) if l.cursor() != *b => {
+                return Ok((false, false, vec![].into_iter()));
+            }
+
+            // From here onwards, we know that the results are non-empty and if a cursor was
+            // supplied on the end the page is being drawn from, it was found in the results
+            // (implying a page follows in that direction).
+
+            // If both cursors are provided, and match both edges of the results, then we are in a
+            // special case where the limit, or the end of the page being drawn from do not matter,
+            // because the subsequence defined by the cursors is smaller than the limit.
+            (Some(a), Some(f), Some(l), Some(b), _) if f.cursor() == *a && l.cursor() == *b => {
+                (true, true, 1, 1)
+            }
+
+            // From here onwards, to detect whether there is a page on the other side than the page
+            // is being drawn from, it is enough to check the length of the results.
+            (after, _, _, _, End::Front) => {
+                let has_previous_page = after.is_some();
+                let prefix = has_previous_page as usize;
+                let suffix = results.len() - results.len().min(self.limit() + prefix);
+                let has_next_page = suffix > 0;
+
+                (has_previous_page, has_next_page, prefix, suffix)
+            }
+
+            (_, _, _, before, End::Back) => {
+                let has_next_page = before.is_some();
+                let suffix = has_next_page as usize;
+                let prefix = results.len() - results.len().min(self.limit() + suffix);
+                let has_previous_page = prefix > 0;
+
+                (has_previous_page, has_next_page, prefix, suffix)
+            }
+        };
+
+        // If after trimming, we're going to return no elements, then forget whether there's a
+        // previous or next page, because there will be no start or end cursor for this page to
+        // anchor on.
+        if results.len() == prefix + suffix {
+            return Ok((false, false, vec![].into_iter()));
+        }
+
+        // We finally made it -- trim the prefix and suffix rows from the result and send it!
+        let mut results = results.into_iter();
+        if prefix > 0 {
+            results.nth(prefix - 1);
+        }
+        if suffix > 0 {
+            results.nth_back(suffix - 1);
+        }
+
+        Ok((prev, next, results))
+    }
+}
+
 #[Scalar(name = "String", visible = false)]
 impl<C> ScalarType for Cursor<C>
 where
@@ -187,6 +349,12 @@ impl<C> Deref for Cursor<C> {
 impl<C: fmt::Debug> fmt::Debug for Cursor<C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", *self.0)
+    }
+}
+
+impl<C: Clone> Clone for Cursor<C> {
+    fn clone(&self) -> Self {
+        Cursor::new(self.0 .0.clone())
     }
 }
 

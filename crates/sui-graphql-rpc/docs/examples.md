@@ -394,7 +394,7 @@
 ####  Use the checkpoint connection to fetch some default amount of checkpoints in an ascending order
 
 ><pre>{
->  checkpointConnection {
+>  checkpoints {
 >    nodes {
 >      digest
 >      sequenceNumber
@@ -419,10 +419,10 @@
 
 ### <a id=262141></a>
 ### First Ten After Checkpoint
-####  Fetch the digest and sequence number of the first 10 checkpoints after the cursor, which in this example is set to be checkpoint 11. Note that cursor will be opaque
+####  Fetch the digest and sequence number of the first 10 checkpoints after the cursor, which in this example is set to be checkpoint 11. Note that the cursor is opaque.
 
 ><pre>{
->  checkpointConnection(first: 10, after: "11") {
+>  checkpoints(first: 10, after: "MTE=") {
 >    nodes {
 >      sequenceNumber
 >      digest
@@ -435,7 +435,7 @@
 ####  Fetch the digest and the sequence number of the last 20 checkpoints before the cursor
 
 ><pre>{
->  checkpointConnection(last: 20, before: "100") {
+>  checkpoints(last: 20, before: "MTAw") {
 >    nodes {
 >      sequenceNumber
 >      digest
@@ -559,7 +559,7 @@
 
 ><pre>{
 >  epoch {
->    checkpointConnection {
+>    checkpoints {
 >      nodes {
 >        transactionBlockConnection(first: 10) {
 >          pageInfo {

@@ -26,7 +26,7 @@ type ActiveJwk {
 	"""
 	The most recent epoch in which the JWK was validated.
 	"""
-	epoch: Epoch!
+	epoch: Epoch
 }
 
 type ActiveJwkConnection {
@@ -113,7 +113,7 @@ type AuthenticatorStateExpireTransaction {
 	"""
 	Expire JWKs that have a lower epoch than this.
 	"""
-	minEpoch: Epoch!
+	minEpoch: Epoch
 	"""
 	The initial version that the AuthenticatorStateUpdate was shared at.
 	"""
@@ -127,7 +127,7 @@ type AuthenticatorStateUpdateTransaction {
 	"""
 	Epoch of the authenticator state update transaction.
 	"""
-	epoch: Epoch!
+	epoch: Epoch
 	"""
 	Consensus round of the authenticator state update.
 	"""
@@ -228,7 +228,7 @@ type ChangeEpochTransaction {
 	"""
 	The next (to become) epoch.
 	"""
-	epoch: Epoch!
+	epoch: Epoch
 	"""
 	The protocol version in effect in the new epoch.
 	"""
@@ -426,7 +426,7 @@ type ConsensusCommitPrologueTransaction {
 	"""
 	Epoch of the commit prologue transaction.
 	"""
-	epoch: Epoch!
+	epoch: Epoch
 	"""
 	Consensus round of the commit.
 	"""
@@ -627,7 +627,7 @@ type Epoch {
 	"""
 	The epoch's corresponding protocol configuration, including the feature flags and the configuration options
 	"""
-	protocolConfigs: ProtocolConfigs
+	protocolConfigs: ProtocolConfigs!
 	"""
 	SUI set aside to account for objects stored on-chain, at the start of the epoch.
 	This is also used for storage rebates.
@@ -655,7 +655,7 @@ type Epoch {
 	"""
 	The epoch's corresponding checkpoints
 	"""
-	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
+	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	"""
 	The epoch's corresponding transaction blocks
 	"""
@@ -1789,7 +1789,7 @@ A single protocol configuration value.
 """
 type ProtocolConfigAttr {
 	key: String!
-	value: String!
+	value: String
 }
 
 """
@@ -1899,7 +1899,7 @@ type Query {
 	(e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
-	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
+	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 	eventConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
@@ -1929,7 +1929,7 @@ type RandomnessStateUpdateTransaction {
 	"""
 	Epoch of the randomness state update transaction.
 	"""
-	epoch: Epoch!
+	epoch: Epoch
 	"""
 	Randomness round of the update.
 	"""
