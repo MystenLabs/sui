@@ -7,6 +7,7 @@ pub(crate) mod balance;
 pub(crate) mod balance_change;
 pub(crate) mod base64;
 pub(crate) mod big_int;
+pub(crate) mod chain_identifier;
 pub(crate) mod checkpoint;
 pub(crate) mod coin;
 pub(crate) mod coin_metadata;

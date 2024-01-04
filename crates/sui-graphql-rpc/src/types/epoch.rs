@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::context_data::db_data_provider::{convert_to_validators, PgManager};
+use crate::data::{Db, QueryExecutor};
 use crate::error::Error;
 
 use super::big_int::BigInt;
-use super::checkpoint::Checkpoint;
+use super::checkpoint::{self, Checkpoint, CheckpointId};
+use super::cursor::Page;
 use super::date_time::DateTime;
 use super::protocol_config::ProtocolConfigs;
 use super::system_state_summary::SystemStateSummary;
@@ -13,7 +15,9 @@ use super::transaction_block::{TransactionBlock, TransactionBlockFilter};
 use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
 use async_graphql::*;
+use diesel::{ExpressionMethods, QueryDsl, SelectableHelper};
 use sui_indexer::models_v2::epoch::QueryableEpochInfo;
+use sui_indexer::schema_v2::epochs;
 
 pub(crate) struct Epoch {
     pub stored: QueryableEpochInfo,
@@ -61,14 +65,15 @@ impl Epoch {
     }
 
     /// The total number of checkpoints in this epoch.
-    async fn total_checkpoints(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, Error> {
+    async fn total_checkpoints(&self, ctx: &Context<'_>) -> Result<Option<BigInt>> {
         let last = match self.stored.last_checkpoint_id {
             Some(last) => last as u64,
-            None => ctx
-                .data_unchecked::<PgManager>()
-                .fetch_latest_checkpoint()
-                .await?
-                .sequence_number_impl(),
+            None => Checkpoint::query(ctx.data_unchecked(), CheckpointId::default())
+                .await
+                .extend()?
+                .map_or(self.stored.first_checkpoint_id as u64, |c| {
+                    c.sequence_number_impl()
+                }),
         };
         Ok(Some(BigInt::from(
             last - self.stored.first_checkpoint_id as u64,
@@ -123,13 +128,10 @@ impl Epoch {
     }
 
     /// The epoch's corresponding protocol configuration, including the feature flags and the configuration options
-    async fn protocol_configs(&self, ctx: &Context<'_>) -> Result<Option<ProtocolConfigs>> {
-        Ok(Some(
-            ctx.data_unchecked::<PgManager>()
-                .fetch_protocol_configs(Some(self.protocol_version()))
-                .await
-                .extend()?,
-        ))
+    async fn protocol_configs(&self, ctx: &Context<'_>) -> Result<ProtocolConfigs> {
+        ProtocolConfigs::query(ctx.data_unchecked(), Some(self.protocol_version()))
+            .await
+            .extend()
     }
 
     #[graphql(flatten)]
@@ -142,17 +144,17 @@ impl Epoch {
     }
 
     /// The epoch's corresponding checkpoints
-    async fn checkpoint_connection(
+    async fn checkpoints(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<checkpoint::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, Checkpoint>>> {
+        before: Option<checkpoint::Cursor>,
+    ) -> Result<Connection<String, Checkpoint>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let epoch = self.stored.epoch as u64;
-        ctx.data_unchecked::<PgManager>()
-            .fetch_checkpoints(first, after, last, before, Some(epoch))
+        Checkpoint::paginate(ctx.data_unchecked(), page, Some(epoch))
             .await
             .extend()
     }
@@ -188,13 +190,39 @@ impl Epoch {
 
 impl Epoch {
     /// The epoch's protocol version
-    pub fn protocol_version(&self) -> u64 {
+    pub(crate) fn protocol_version(&self) -> u64 {
         self.stored.protocol_version as u64
+    }
+
+    /// Look up an `Epoch` in the database, optionally filtered by its Epoch ID. If no ID is
+    /// supplied, defaults to fetching the latest epoch.
+    pub(crate) async fn query(db: &Db, filter: Option<u64>) -> Result<Option<Self>, Error> {
+        use epochs::dsl;
+
+        let id = filter.map(|id| id as i64);
+        let stored: Option<QueryableEpochInfo> = db
+            .optional(move || {
+                let mut query = dsl::epochs
+                    .select(QueryableEpochInfo::as_select())
+                    .order_by(dsl::epoch.desc())
+                    .limit(1)
+                    .into_boxed();
+
+                if let Some(id) = id {
+                    query = query.filter(dsl::epoch.eq(id));
+                }
+
+                query
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch epoch: {e}")))?;
+
+        Ok(stored.map(Epoch::from))
     }
 }
 
 impl From<QueryableEpochInfo> for Epoch {
-    fn from(e: QueryableEpochInfo) -> Self {
-        Epoch { stored: e }
+    fn from(stored: QueryableEpochInfo) -> Self {
+        Epoch { stored }
     }
 }

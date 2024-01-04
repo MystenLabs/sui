@@ -10,7 +10,7 @@ use sui_types::{
     },
 };
 
-use crate::{context_data::db_data_provider::PgManager, error::Error};
+use crate::error::Error;
 
 use super::{
     address::Address, base64::Base64, epoch::Epoch, gas::GasInput, sui_address::SuiAddress,
@@ -117,12 +117,7 @@ impl TransactionBlock {
             return Ok(None);
         };
 
-        Ok(Some(
-            ctx.data_unchecked::<PgManager>()
-                .fetch_epoch_strict(*id)
-                .await
-                .extend()?,
-        ))
+        Epoch::query(ctx.data_unchecked(), Some(*id)).await.extend()
     }
 
     /// Serialized form of this transaction's `SenderSignedData`, BCS serialized and Base64 encoded.

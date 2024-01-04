@@ -9,12 +9,10 @@ use crate::{
         address::{Address, AddressTransactionBlockRelationship},
         balance::Balance,
         big_int::BigInt,
-        checkpoint::Checkpoint,
         coin::Coin,
         coin_metadata::CoinMetadata,
         digest::Digest,
         dynamic_field::{DynamicField, DynamicFieldName},
-        epoch::Epoch,
         event::{Event, EventFilter},
         move_function::MoveFunction,
         move_module::MoveModule,
@@ -22,7 +20,6 @@ use crate::{
         move_package::MovePackage,
         move_type::MoveType,
         object::{Object, ObjectFilter},
-        protocol_config::{ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs},
         stake::StakedSui,
         sui_address::SuiAddress,
         suins_registration::SuinsRegistration,
@@ -38,8 +35,8 @@ use sui_indexer::{
     apis::GovernanceReadApiV2,
     indexer_reader::IndexerReader,
     models_v2::{
-        checkpoints::StoredCheckpoint, display::StoredDisplay, epoch::QueryableEpochInfo,
-        events::StoredEvent, objects::StoredObject, transactions::StoredTransaction,
+        display::StoredDisplay, events::StoredEvent, objects::StoredObject,
+        transactions::StoredTransaction,
     },
     schema_v2::transactions,
     types_v2::OwnerType,
@@ -49,17 +46,14 @@ use sui_json_rpc::{
     coin_api::{parse_to_struct_tag, parse_to_type_tag},
     name_service::{Domain, NameRecord, NameServiceConfig},
 };
-use sui_json_rpc_types::{ProtocolConfigResponse, Stake as RpcStakedSui};
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_json_rpc_types::Stake as RpcStakedSui;
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SuiAddress as NativeSuiAddress},
     coin::{CoinMetadata as NativeCoinMetadata, TreasuryCap},
-    digests::ChainIdentifier,
     digests::TransactionDigest,
     dynamic_field::{DynamicFieldType, Field},
     gas_coin::{GAS, TOTAL_SUPPLY_SUI},
     governance::StakedSui as NativeStakedSui,
-    messages_checkpoint::CheckpointDigest,
     object::Object as NativeObject,
     sui_system_state::sui_system_state_summary::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
@@ -180,47 +174,6 @@ impl PgManager {
         .await
     }
 
-    pub async fn get_epoch(
-        &self,
-        epoch_id: Option<i64>,
-    ) -> Result<Option<QueryableEpochInfo>, Error> {
-        let query_fn = move || {
-            Ok(match epoch_id {
-                Some(epoch_id) => QueryBuilder::get_epoch_info(epoch_id),
-                None => QueryBuilder::get_latest_epoch_info(),
-            })
-        };
-
-        self.run_query_async_with_cost(query_fn, |query| {
-            move |conn| query.get_result::<QueryableEpochInfo>(conn).optional()
-        })
-        .await
-    }
-
-    async fn get_checkpoint(
-        &self,
-        digest: Option<Vec<u8>>,
-        sequence_number: Option<i64>,
-    ) -> Result<Option<StoredCheckpoint>, Error> {
-        let query = move || {
-            Ok(match (digest.clone(), sequence_number) {
-                (Some(digest), None) => QueryBuilder::get_checkpoint_by_digest(digest),
-                (None, Some(sequence_number)) => {
-                    QueryBuilder::get_checkpoint_by_sequence_number(sequence_number)
-                }
-                (Some(_), Some(_)) => {
-                    return Err(Error::InvalidCheckpointQuery);
-                }
-                _ => QueryBuilder::get_latest_checkpoint(),
-            })
-        };
-
-        self.run_query_async_with_cost(query, |query| {
-            move |conn| query.get_result::<StoredCheckpoint>(conn).optional()
-        })
-        .await
-    }
-
     async fn get_display_by_obj_type(
         &self,
         object_type: String,
@@ -230,20 +183,6 @@ impl PgManager {
             |query| move |conn| query.get_result::<StoredDisplay>(conn).optional(),
         )
         .await
-    }
-
-    async fn get_chain_identifier(&self) -> Result<ChainIdentifier, Error> {
-        let result = self
-            .get_checkpoint(None, Some(0))
-            .await?
-            .ok_or_else(|| Error::Internal("Genesis checkpoint cannot be found".to_string()))?;
-
-        let digest = CheckpointDigest::try_from(result.checkpoint_digest).map_err(|e| {
-            Error::Internal(format!(
-                "Failed to convert checkpoint digest to CheckpointDigest. Error: {e}",
-            ))
-        })?;
-        Ok(ChainIdentifier::from(digest))
     }
 
     /// Fetches the coins owned by the address and filters them by the given coin type.
@@ -413,60 +352,6 @@ impl PgManager {
                 }
 
                 Ok((stored_txs, has_next_page))
-            })
-            .transpose()
-    }
-
-    pub(crate) fn parse_checkpoint_cursor(&self, cursor: &str) -> Result<i64, Error> {
-        let sequence_number = cursor.parse::<i64>().map_err(|e| {
-            Error::InvalidCursor(format!("Failed to parse checkpoint cursor: {}", e))
-        })?;
-        Ok(sequence_number)
-    }
-
-    async fn multi_get_checkpoints(
-        &self,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        epoch: Option<u64>,
-    ) -> Result<Option<(Vec<StoredCheckpoint>, bool)>, Error> {
-        validate_cursor_pagination(&first, &after, &last, &before)?;
-        let limit = self.validate_page_limit(first, last)?;
-        let before = before
-            .map(|cursor| self.parse_checkpoint_cursor(&cursor))
-            .transpose()?;
-        let after = after
-            .map(|cursor| self.parse_checkpoint_cursor(&cursor))
-            .transpose()?;
-
-        let result: Option<Vec<StoredCheckpoint>> = self
-            .run_query_async_with_cost(
-                move || {
-                    Ok(QueryBuilder::multi_get_checkpoints(
-                        before,
-                        after,
-                        limit,
-                        epoch.map(|e| e as i64),
-                    ))
-                },
-                |query| move |conn| query.load(conn).optional(),
-            )
-            .await?;
-
-        result
-            .map(|mut stored_checkpoints| {
-                let has_next_page = stored_checkpoints.len() as i64 > limit.value();
-                if has_next_page {
-                    stored_checkpoints.pop();
-                }
-
-                if last.is_some() {
-                    stored_checkpoints.reverse();
-                }
-
-                Ok((stored_checkpoints, has_next_page))
             })
             .transpose()
     }
@@ -694,68 +579,12 @@ impl PgManager {
             .map_err(|e| Error::Internal(format!("{e}")))
     }
 
-    pub(crate) async fn fetch_latest_epoch(&self) -> Result<Epoch, Error> {
-        let result = self
-            .get_epoch(None)
-            .await?
-            .ok_or_else(|| Error::Internal("Latest epoch not found".to_string()))?;
-
-        Ok(Epoch::from(result))
-    }
-
-    // To be used in scenarios where epoch may not exist, such as when epoch_id is provided by caller
-    pub(crate) async fn fetch_epoch(&self, epoch_id: u64) -> Result<Option<Epoch>, Error> {
-        let epoch_id = i64::try_from(epoch_id)
-            .map_err(|_| Error::Internal("Failed to convert epoch id to i64".to_string()))?;
-        Ok(self.get_epoch(Some(epoch_id)).await?.map(Epoch::from))
-    }
-
-    // To be used in scenarios where epoch is expected to exist
-    // For example, epoch of a transaction or checkpoint
-    pub(crate) async fn fetch_epoch_strict(&self, epoch_id: u64) -> Result<Epoch, Error> {
-        let result = self.fetch_epoch(epoch_id).await?;
-        match result {
-            Some(epoch) => Ok(epoch),
-            None => Err(Error::Internal(format!("Epoch {} not found", epoch_id))),
-        }
-    }
-
-    pub(crate) async fn fetch_latest_checkpoint(&self) -> Result<Checkpoint, Error> {
-        let stored_checkpoint = self.get_checkpoint(None, None).await?;
-        match stored_checkpoint {
-            Some(stored) => Ok(Checkpoint { stored }),
-            None => Err(Error::Internal("Latest checkpoint not found".to_string())),
-        }
-    }
-
-    pub(crate) async fn fetch_checkpoint(
-        &self,
-        digest: Option<&str>,
-        sequence_number: Option<u64>,
-    ) -> Result<Option<Checkpoint>, Error> {
-        let stored_checkpoint = self
-            .get_checkpoint(
-                digest
-                    .map(|digest| Digest::from_str(digest).map(|digest| digest.into_vec()))
-                    .transpose()?,
-                sequence_number.map(|sequence_number| sequence_number as i64),
-            )
-            .await?;
-
-        Ok(stored_checkpoint.map(|stored| Checkpoint { stored }))
-    }
-
     pub(crate) async fn fetch_display_object_by_type(
         &self,
         object_type: &StructTag,
     ) -> Result<Option<StoredDisplay>, Error> {
         let object_type = object_type.to_canonical_string(/* with_prefix */ true);
         self.get_display_by_obj_type(object_type).await
-    }
-
-    pub(crate) async fn fetch_chain_identifier(&self) -> Result<String, Error> {
-        let result = self.get_chain_identifier().await?;
-        Ok(result.to_string())
     }
 
     pub(crate) async fn fetch_txs_for_address(
@@ -979,33 +808,6 @@ impl PgManager {
         }
     }
 
-    pub(crate) async fn fetch_checkpoints(
-        &self,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        epoch: Option<u64>,
-    ) -> Result<Option<Connection<String, Checkpoint>>, Error> {
-        let checkpoints = self
-            .multi_get_checkpoints(first, after, last, before, epoch)
-            .await?;
-
-        let Some((stored_checkpoints, has_next_page)) = checkpoints else {
-            return Ok(None);
-        };
-
-        let mut connection = Connection::new(false, has_next_page);
-        for stored in stored_checkpoints {
-            let cursor = stored.sequence_number.to_string();
-            connection
-                .edges
-                .push(Edge::new(cursor, Checkpoint { stored }));
-        }
-
-        Ok(Some(connection))
-    }
-
     pub(crate) async fn fetch_balance(
         &self,
         address: SuiAddress,
@@ -1205,50 +1007,6 @@ impl PgManager {
                 .spawn_blocking(move |this| this.get_epoch_sui_system_state(epoch_id))
                 .await?)
         }
-    }
-
-    pub(crate) async fn fetch_protocol_configs(
-        &self,
-        protocol_version: Option<u64>,
-    ) -> Result<ProtocolConfigs, Error> {
-        let chain = self.get_chain_identifier().await?.chain();
-        let version: ProtocolVersion = if let Some(version) = protocol_version {
-            (version).into()
-        } else {
-            (self.fetch_latest_epoch().await?.protocol_version()).into()
-        };
-
-        let cfg = ProtocolConfig::get_for_version_if_supported(version, chain)
-            .ok_or(Error::ProtocolVersionUnsupported(
-                ProtocolVersion::MIN.as_u64(),
-                ProtocolVersion::MAX.as_u64(),
-            ))
-            .map(ProtocolConfigResponse::from)?;
-
-        Ok(ProtocolConfigs {
-            configs: cfg
-                .attributes
-                .into_iter()
-                .map(|(k, v)| ProtocolConfigAttr {
-                    key: k,
-                    // TODO:  what to return when value is None? nothing?
-                    // TODO: do we want to return type info separately?
-                    value: match v {
-                        Some(q) => format!("{:?}", q),
-                        None => "".to_string(),
-                    },
-                })
-                .collect(),
-            feature_flags: cfg
-                .feature_flags
-                .into_iter()
-                .map(|x| ProtocolConfigFeatureFlag {
-                    key: x.0,
-                    value: x.1,
-                })
-                .collect(),
-            protocol_version: cfg.protocol_version.as_u64(),
-        })
     }
 
     pub(crate) async fn fetch_staked_sui(

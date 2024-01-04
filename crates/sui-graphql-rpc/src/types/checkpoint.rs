@@ -3,19 +3,28 @@
 
 use super::{
     base64::Base64,
+    cursor::{self, Page, Target},
     date_time::DateTime,
     epoch::Epoch,
     gas::GasCostSummary,
     transaction_block::{TransactionBlock, TransactionBlockFilter},
 };
-use crate::{context_data::db_data_provider::PgManager, error::Error};
-use async_graphql::{connection::Connection, *};
+use crate::{
+    context_data::db_data_provider::PgManager,
+    data::{BoxedQuery, Db, QueryExecutor},
+    error::Error,
+};
+use async_graphql::{
+    connection::{Connection, CursorType, Edge},
+    *,
+};
+use diesel::{ExpressionMethods, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
-use sui_indexer::models_v2::checkpoints::StoredCheckpoint;
-use sui_types::messages_checkpoint::CheckpointCommitment;
+use sui_indexer::{models_v2::checkpoints::StoredCheckpoint, schema_v2::checkpoints};
+use sui_types::messages_checkpoint::{CheckpointCommitment, CheckpointDigest};
 
 /// Filter either by the digest, or the sequence number, or neither, to get the latest checkpoint.
-#[derive(InputObject)]
+#[derive(Default, InputObject)]
 pub(crate) struct CheckpointId {
     pub digest: Option<String>,
     pub sequence_number: Option<u64>,
@@ -28,13 +37,16 @@ pub(crate) struct Checkpoint {
     pub stored: StoredCheckpoint,
 }
 
+pub(crate) type Cursor = cursor::Cursor<u64>;
+type Query<ST, GB> = BoxedQuery<ST, checkpoints::table, Db, GB>;
+
 #[Object]
 impl Checkpoint {
     /// A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58. This
     /// hash can be used to verify checkpoint contents by checking signatures against the committee,
     /// Hashing contents to match digest, and checking that the previous checkpoint digest matches.
-    async fn digest(&self) -> String {
-        Base58::encode(&self.stored.checkpoint_digest)
+    async fn digest(&self) -> Result<String> {
+        Ok(self.digest_impl().extend()?.base58_encode())
     }
 
     /// This checkpoint's position in the total order of finalized checkpoints, agreed upon by
@@ -99,13 +111,9 @@ impl Checkpoint {
 
     /// The epoch this checkpoint is part of.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        let epoch = ctx
-            .data_unchecked::<PgManager>()
-            .fetch_epoch_strict(self.stored.epoch as u64)
+        Epoch::query(ctx.data_unchecked(), Some(self.stored.epoch as u64))
             .await
-            .extend()?;
-
-        Ok(Some(epoch))
+            .extend()
     }
 
     /// Transactions in this checkpoint.
@@ -128,8 +136,114 @@ impl Checkpoint {
     }
 }
 
+impl CheckpointId {
+    pub(crate) fn by_seq_num(seq_num: u64) -> Self {
+        CheckpointId {
+            sequence_number: Some(seq_num),
+            digest: None,
+        }
+    }
+}
+
 impl Checkpoint {
     pub(crate) fn sequence_number_impl(&self) -> u64 {
         self.stored.sequence_number as u64
+    }
+
+    pub(crate) fn digest_impl(&self) -> Result<CheckpointDigest, Error> {
+        CheckpointDigest::try_from(self.stored.checkpoint_digest.clone())
+            .map_err(|e| Error::Internal(format!("Failed to deserialize checkpoint digest: {e}")))
+    }
+
+    /// Look up a `Checkpoint` in the database, filtered by either sequence number or digest. If
+    /// both filters are supplied they will both be applied. If none are supplied, the latest
+    /// checkpoint is fetched.
+    pub(crate) async fn query(db: &Db, filter: CheckpointId) -> Result<Option<Self>, Error> {
+        use checkpoints::dsl;
+
+        let digest = filter
+            .digest
+            .map(|d| Base58::decode(&d))
+            .transpose()
+            .map_err(|e| Error::Internal(format!("Bad digest: {e}")))?;
+
+        let seq_num = filter.sequence_number.map(|n| n as i64);
+
+        let stored = db
+            .optional(move || {
+                let mut query = dsl::checkpoints
+                    .order_by(dsl::sequence_number.desc())
+                    .limit(1)
+                    .into_boxed();
+
+                if let Some(digest) = digest.clone() {
+                    query = query.filter(dsl::checkpoint_digest.eq(digest));
+                }
+
+                if let Some(seq_num) = seq_num {
+                    query = query.filter(dsl::sequence_number.eq(seq_num));
+                }
+
+                query
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch checkpoint: {e}")))?;
+
+        Ok(stored.map(|stored| Checkpoint { stored }))
+    }
+
+    /// Query the database for a `page` of checkpoints. The Page uses checkpoint sequence numbers as
+    /// the cursor, and can optionally be further `filter`-ed by an epoch number (to only return
+    /// checkpoints within that epoch).
+    pub(crate) async fn paginate(
+        db: &Db,
+        page: Page<u64>,
+        filter: Option<u64>,
+    ) -> Result<Connection<String, Checkpoint>, Error> {
+        use checkpoints::dsl;
+
+        let (prev, next, results) = page
+            .paginate_query::<StoredCheckpoint, _, _, _>(db, move || {
+                let mut query = dsl::checkpoints.into_boxed();
+                if let Some(epoch) = filter {
+                    query = query.filter(dsl::epoch.eq(epoch as i64));
+                }
+
+                query
+            })
+            .await?;
+
+        let mut conn = Connection::new(prev, next);
+        for stored in results {
+            let cursor = Cursor::new(stored.cursor()).encode_cursor();
+            conn.edges.push(Edge::new(cursor, Checkpoint { stored }));
+        }
+
+        Ok(conn)
+    }
+}
+
+impl Target<u64> for StoredCheckpoint {
+    type Source = checkpoints::table;
+
+    fn filter_ge<ST, GB>(cursor: &u64, query: Query<ST, GB>) -> Query<ST, GB> {
+        query.filter(checkpoints::dsl::sequence_number.ge(*cursor as i64))
+    }
+
+    fn filter_le<ST, GB>(cursor: &u64, query: Query<ST, GB>) -> Query<ST, GB> {
+        query.filter(checkpoints::dsl::sequence_number.le(*cursor as i64))
+    }
+
+    fn order<ST, GB>(asc: bool, query: Query<ST, GB>) -> Query<ST, GB> {
+        use checkpoints::dsl;
+        if asc {
+            query.order(dsl::sequence_number)
+        } else {
+            query.order(dsl::sequence_number.desc())
+        }
+    }
+
+    fn cursor(&self) -> u64 {
+        self.sequence_number as u64
     }
 }

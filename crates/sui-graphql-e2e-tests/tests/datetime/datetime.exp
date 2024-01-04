@@ -36,7 +36,7 @@ Epoch advanced: 1
 task 21 'run-graphql'. lines 55-66:
 Response: {
   "data": {
-    "checkpointConnection": {
+    "checkpoints": {
       "nodes": [
         {
           "sequenceNumber": 2,
