@@ -96,11 +96,11 @@ impl NameServiceConfig {
         .unwrap()
     }
 
-    pub fn reverse_record_field_id(&self, address: SuiAddress) -> ObjectID {
+    pub fn reverse_record_field_id(&self, address: &[u8]) -> ObjectID {
         sui_types::dynamic_field::derive_dynamic_field_id(
             self.reverse_registry_id,
             &TypeTag::Address,
-            address.as_ref(),
+            address,
         )
         .unwrap()
     }
