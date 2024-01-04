@@ -101,6 +101,7 @@ const MAX_PROTOCOL_VERSION: u64 = 33;
 //             Hardened OTW check.
 //             Enable transfer-to-object in mainnet.
 //             Enable shared object deletion in testnet.
+//             Enable effects v2 in mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1718,6 +1719,8 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.shared_object_deletion = true;
                     }
+
+                    cfg.feature_flags.enable_effects_v2 = true;
                 }
                 // Use this template when making changes:
                 //
