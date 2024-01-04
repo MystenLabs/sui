@@ -185,6 +185,10 @@ impl JsonRpcServerBuilder {
                 router = router.route(
                     "/",
                     axum::routing::post(crate::axum_router::json_rpc_handler),
+                )
+                .route(
+                    "/json-rpc",
+                    axum::routing::post(crate::axum_router::json_rpc_handler),
                 );
             }
             None => {
@@ -196,6 +200,10 @@ impl JsonRpcServerBuilder {
                     .route(
                         "/",
                         axum::routing::get(crate::axum_router::ws::ws_json_rpc_upgrade),
+                    )
+                    .route(
+                        "/json-rpc",
+                        axum::routing::post(crate::axum_router::json_rpc_handler),
                     );
             }
         }
