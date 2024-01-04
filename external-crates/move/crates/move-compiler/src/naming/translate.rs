@@ -435,11 +435,16 @@ impl<'env> Context<'env> {
         sp(vloc, nvar_)
     }
 
-    fn resolve_local(&mut self, loc: Loc, verb: &str, sp!(vloc, name): Name) -> Option<N::Var> {
+    fn resolve_local<S: ToString>(
+        &mut self,
+        loc: Loc,
+        variable_msg: impl FnOnce(Symbol) -> S,
+        sp!(vloc, name): Name,
+    ) -> Option<N::Var> {
         let id_opt = self.local_scopes.last().unwrap().get(&name).copied();
         match id_opt {
             None => {
-                let msg = format!("Invalid {}. Unbound variable '{}'", verb, name);
+                let msg = variable_msg(name);
                 self.env
                     .add_diag(diag!(NameResolution::UnboundVariable, (loc, msg)));
                 None
@@ -1246,30 +1251,16 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
     let ne_ = match e_ {
         EE::Unit { trailing } => NE::Unit { trailing },
         EE::Value(val) => NE::Value(val),
-        EE::Move(v) => match context.resolve_local(eloc, "move", v.0) {
-            None => {
-                debug_assert!(context.env.has_errors());
-                NE::UnresolvedError
-            }
-            Some(nv) => NE::Move(nv),
-        },
-        EE::Copy(v) => match context.resolve_local(eloc, "copy", v.0) {
-            None => {
-                debug_assert!(context.env.has_errors());
-                NE::UnresolvedError
-            }
-            Some(nv) => NE::Copy(nv),
-        },
         EE::Name(sp!(aloc, E::ModuleAccess_::Name(v)), None) => {
             if is_constant_name(&v.value) {
                 access_constant(context, sp(aloc, E::ModuleAccess_::Name(v)))
             } else {
-                match context.resolve_local(eloc, "variable usage", v) {
+                match context.resolve_local(eloc, |name| format!("Unbound variable '{name}'"), v) {
                     None => {
                         debug_assert!(context.env.has_errors());
                         NE::UnresolvedError
                     }
-                    Some(nv) => NE::Use(nv),
+                    Some(nv) => NE::Var(nv),
                 }
             }
         }
@@ -1431,26 +1422,12 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
             NE::ExpList(exps(context, es))
         }
 
-        EE::Borrow(mut_, inner) => match *inner {
-            sp!(_, EE::ExpDotted(edot)) => match dotted(context, *edot) {
-                None => {
-                    assert!(context.env.has_errors());
-                    NE::UnresolvedError
-                }
-                Some(d) => NE::Borrow(mut_, d),
-            },
-            e => {
-                let ne = exp(context, e);
-                NE::Borrow(mut_, sp(ne.loc, N::ExpDotted_::Exp(ne)))
-            }
-        },
-
-        EE::ExpDotted(edot) => match dotted(context, *edot) {
+        EE::ExpDotted(case, edot) => match dotted(context, *edot) {
             None => {
                 assert!(context.env.has_errors());
                 NE::UnresolvedError
             }
-            Some(d) => NE::DerefBorrow(d),
+            Some(d) => NE::ExpDotted(case, d),
         },
 
         EE::Cast(e, t) => NE::Cast(exp(context, *e), type_(context, t)),
@@ -1562,7 +1539,11 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                 .filter_map(|v| {
                     if context.local_scopes.last()?.contains_key(&v.value) {
                         let nv = context
-                            .resolve_local(v.loc, "ICE should always resolve", v)
+                            .resolve_local::<String>(
+                                v.loc,
+                                |_| panic!("ICE should always resolve"),
+                                v,
+                            )
                             .unwrap();
                         Some(nv)
                     } else {
@@ -1656,7 +1637,11 @@ fn lvalue(
                         let is_parameter = false;
                         context.declare_local(is_parameter, n)
                     }
-                    C::Assign => context.resolve_local(loc, "assignment", n)?,
+                    C::Assign => context.resolve_local(
+                        loc,
+                        |name| format!("Invalid assignment. Unbound variable '{name}'"),
+                        n,
+                    )?,
                 };
                 NL::Var {
                     mut_,
@@ -1975,9 +1960,7 @@ fn remove_unused_bindings_exp(
 ) {
     match e_ {
         N::Exp_::Value(_)
-        | N::Exp_::Move(_)
-        | N::Exp_::Copy(_)
-        | N::Exp_::Use(_)
+        | N::Exp_::Var(_)
         | N::Exp_::Constant(_, _)
         | N::Exp_::Continue(_)
         | N::Exp_::Unit { .. }
@@ -2031,9 +2014,7 @@ fn remove_unused_bindings_exp(
             }
         }
 
-        N::Exp_::DerefBorrow(ed) | N::Exp_::Borrow(_, ed) => {
-            remove_unused_bindings_exp_dotted(context, used, ed)
-        }
+        N::Exp_::ExpDotted(_, ed) => remove_unused_bindings_exp_dotted(context, used, ed),
     }
 }
 
@@ -2239,8 +2220,6 @@ fn spec_module_access(
 fn spec_exp(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, sp!(_, e_): &E::Exp) {
     match e_ {
         E::Exp_::Value(_)
-        | E::Exp_::Move(_)
-        | E::Exp_::Copy(_)
         | E::Exp_::Continue(_)
         | E::Exp_::Unit { .. }
         | E::Exp_::Spec(_, _)
@@ -2251,8 +2230,7 @@ fn spec_exp(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, sp!(_, e_): &E::Exp) {
         | E::Exp_::Break(_, einner)
         | E::Exp_::Abort(einner)
         | E::Exp_::Dereference(einner)
-        | E::Exp_::UnaryExp(_, einner)
-        | E::Exp_::Borrow(_, einner) => spec_exp(used, einner),
+        | E::Exp_::UnaryExp(_, einner) => spec_exp(used, einner),
 
         E::Exp_::Mutate(el, er) | E::Exp_::BinopExp(el, _, er) | E::Exp_::Index(el, er) => {
             spec_exp(used, el);
@@ -2344,7 +2322,7 @@ fn spec_exp(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, sp!(_, e_): &E::Exp) {
                 spec_exp(used, e)
             }
         }
-        E::Exp_::ExpDotted(edotted) => spec_exp_dotted(used, edotted),
+        E::Exp_::ExpDotted(_, edotted) => spec_exp_dotted(used, edotted),
         E::Exp_::Cast(e, ty) | E::Exp_::Annotate(e, ty) => {
             spec_exp(used, e);
             spec_type(used, ty)

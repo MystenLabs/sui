@@ -363,7 +363,7 @@ module sui_system::validator_tests {
         test_scenario::end(scenario_val);
     }
 
-    #[test]
+    #[test, allow(implicit_const_copy)]
     fun test_validator_update_metadata_ok() {
         let sender = VALID_ADDRESS;
         let scenario_val = test_scenario::begin(sender);

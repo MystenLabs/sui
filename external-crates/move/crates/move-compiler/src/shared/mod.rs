@@ -6,7 +6,7 @@ use crate::{
     cfgir::visitor::{AbsIntVisitorObj, AbstractInterpreterVisitor},
     command_line as cli,
     diagnostics::{
-        codes::{Category, Declarations, DiagnosticsID, Severity, UnusedItem, WarningFilter},
+        codes::{Category, Declarations, DiagnosticsID, Severity, WarningFilter},
         Diagnostic, Diagnostics, WarningFilters,
     },
     editions::{check_feature_or_error as edition_check_feature, Edition, FeatureGate, Flavor},
@@ -158,6 +158,7 @@ pub const FILTER_DEAD_CODE: &str = "dead_code";
 pub const FILTER_UNUSED_LET_MUT: &str = "unused_let_mut";
 pub const FILTER_UNUSED_MUT_REF: &str = "unused_mut_ref";
 pub const FILTER_UNUSED_MUT_PARAM: &str = "unused_mut_parameter";
+pub const FILTER_IMPLICIT_CONST_COPY: &str = "implicit_const_copy";
 
 pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
 
@@ -263,6 +264,7 @@ impl CompilationEnv {
         package_configs: BTreeMap<Symbol, PackageConfig>,
         default_config: Option<PackageConfig>,
     ) -> Self {
+        use crate::diagnostics::codes::{TypeSafety, UnusedItem};
         visitors.extend([
             sui_mode::id_leak::IDLeakVerifier.visitor(),
             sui_mode::typing::SuiTypeChecks.visitor(),
@@ -353,6 +355,11 @@ impl CompilationEnv {
             known_code_filter!(
                 FILTER_UNUSED_MUT_PARAM,
                 UnusedItem::MutParam,
+                filter_attr_name
+            ),
+            known_code_filter!(
+                FILTER_IMPLICIT_CONST_COPY,
+                TypeSafety::ImplicitConstantCopy,
                 filter_attr_name
             ),
         ]);

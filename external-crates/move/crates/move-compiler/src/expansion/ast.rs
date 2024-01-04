@@ -392,6 +392,15 @@ pub enum ExpDotted_ {
 }
 pub type ExpDotted = Spanned<ExpDotted_>;
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+
+pub enum DottedUsage {
+    Move(Loc),
+    Copy(Loc),
+    Use,
+    Borrow(/* mut */ bool),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Value_ {
     // 0x<hex representation up to 64 digits with padding 0s>
@@ -421,8 +430,6 @@ pub type Value = Spanned<Value_>;
 #[allow(clippy::large_enum_variant)]
 pub enum Exp_ {
     Value(Value),
-    Move(Var),
-    Copy(Var),
 
     Name(ModuleAccess, Option<Vec<Type>>),
     Call(
@@ -452,7 +459,6 @@ pub enum Exp_ {
     Assign(LValueList, Box<Exp>),
     FieldMutate(Box<ExpDotted>, Box<Exp>),
     Mutate(Box<Exp>, Box<Exp>),
-
     Abort(Box<Exp>),
     Return(Option<BlockLabel>, Box<Exp>),
     Break(Option<BlockLabel>, Box<Exp>),
@@ -467,8 +473,7 @@ pub enum Exp_ {
         trailing: bool,
     },
 
-    Borrow(bool, Box<Exp>),
-    ExpDotted(Box<ExpDotted>),
+    ExpDotted(DottedUsage, Box<ExpDotted>),
     Index(Box<Exp>, Box<Exp>), // spec only (no mutation needed right now)
 
     Cast(Box<Exp>, Type),
@@ -1601,8 +1606,6 @@ impl AstDebug for Exp_ {
                 trailing: _trailing,
             } => w.write("/*()*/"),
             E::Value(v) => v.ast_debug(w),
-            E::Move(v) => w.write(&format!("move {}", v)),
-            E::Copy(v) => w.write(&format!("copy {}", v)),
             E::Name(ma, tys_opt) => {
                 ma.ast_debug(w);
                 if let Some(ss) = tys_opt {
@@ -1764,14 +1767,17 @@ impl AstDebug for Exp_ {
                 w.write(" ");
                 r.ast_debug(w)
             }
-            E::Borrow(mut_, e) => {
-                w.write("&");
-                if *mut_ {
-                    w.write("mut ");
-                }
-                e.ast_debug(w);
+            E::ExpDotted(usage, ed) => {
+                let case = match usage {
+                    DottedUsage::Move(_) => "move ",
+                    DottedUsage::Copy(_) => "copy ",
+                    DottedUsage::Use => "use ",
+                    DottedUsage::Borrow(false) => "&",
+                    DottedUsage::Borrow(true) => "&mut ",
+                };
+                w.write(case);
+                ed.ast_debug(w)
             }
-            E::ExpDotted(ed) => ed.ast_debug(w),
             E::Cast(e, ty) => {
                 w.write("(");
                 e.ast_debug(w);

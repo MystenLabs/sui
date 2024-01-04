@@ -29,19 +29,7 @@ Response: {
                   "asMoveObject": {
                     "contents": {
                       "type": {
-                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
-                      }
-                    },
-                    "hasPublicTransfer": true
-                  }
-                }
-              },
-              {
-                "outputState": {
-                  "asMoveObject": {
-                    "contents": {
-                      "type": {
-                        "repr": "0x3caf74baf93749db187d16daa8789476a84e0c78dd10ec0789a8d513f08714b2::m::Bar"
+                        "repr": "0x6495062df5a0b150f8d2fb5293765050d6d99daa8cbdb39a97ff7ed9fbf756b2::m::Bar"
                       }
                     },
                     "hasPublicTransfer": false
@@ -53,7 +41,19 @@ Response: {
                   "asMoveObject": {
                     "contents": {
                       "type": {
-                        "repr": "0x3caf74baf93749db187d16daa8789476a84e0c78dd10ec0789a8d513f08714b2::m::Foo"
+                        "repr": "0x6495062df5a0b150f8d2fb5293765050d6d99daa8cbdb39a97ff7ed9fbf756b2::m::Foo"
+                      }
+                    },
+                    "hasPublicTransfer": true
+                  }
+                }
+              },
+              {
+                "outputState": {
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
                       }
                     },
                     "hasPublicTransfer": true

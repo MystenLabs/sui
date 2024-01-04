@@ -298,9 +298,7 @@ fn sequence(context: &mut Context, (uf, seq): &mut N::Sequence) {
 fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
     match e_ {
         N::Exp_::Value(_)
-        | N::Exp_::Move(_)
-        | N::Exp_::Copy(_)
-        | N::Exp_::Use(_)
+        | N::Exp_::Var(_)
         | N::Exp_::Constant(_, _)
         | N::Exp_::Continue(_)
         | N::Exp_::Unit { .. }
@@ -354,7 +352,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             }
         }
 
-        N::Exp_::DerefBorrow(ed) | N::Exp_::Borrow(_, ed) => exp_dotted(context, ed),
+        N::Exp_::ExpDotted(_, ed) => exp_dotted(context, ed),
     }
 }
 

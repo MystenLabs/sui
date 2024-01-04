@@ -2841,8 +2841,6 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
                 EE::UnresolvedError
             }
         },
-        PE::Move(v) => EE::Move(v),
-        PE::Copy(v) => EE::Copy(v),
         PE::Name(_, Some(_)) if !context.in_spec_context => {
             context.env().add_diag(diag!(
                 Syntax::SpecContextRestricted,
@@ -3024,9 +3022,17 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
             )
             .value
         }
-        PE::Borrow(mut_, pr) => EE::Borrow(mut_, exp(context, *pr)),
+        PE::Move(loc, pdotted) => move_or_copy_path(context, PathCase::Move(loc), *pdotted),
+        PE::Copy(loc, pdotted) => move_or_copy_path(context, PathCase::Copy(loc), *pdotted),
+        PE::Borrow(mut_, pdotted) => match exp_dotted(context, *pdotted) {
+            Some(edotted) => EE::ExpDotted(E::DottedUsage::Borrow(mut_), Box::new(edotted)),
+            None => {
+                assert!(context.env().has_errors());
+                EE::UnresolvedError
+            }
+        },
         pdotted_ @ PE::Dot(_, _) => match exp_dotted(context, sp(loc, pdotted_)) {
-            Some(edotted) => EE::ExpDotted(Box::new(edotted)),
+            Some(edotted) => EE::ExpDotted(E::DottedUsage::Use, Box::new(edotted)),
             None => {
                 assert!(context.env().has_errors());
                 EE::UnresolvedError
@@ -3097,6 +3103,65 @@ fn maybe_named_loop(
     } else {
         (None, exp(context, body))
     }
+}
+
+#[derive(Copy, Clone)]
+enum PathCase {
+    Move(Loc),
+    Copy(Loc),
+}
+
+impl PathCase {
+    fn loc(self) -> Loc {
+        match self {
+            PathCase::Move(loc) | PathCase::Copy(loc) => loc,
+        }
+    }
+    fn case(self) -> &'static str {
+        match self {
+            PathCase::Move(_) => "move",
+            PathCase::Copy(_) => "copy",
+        }
+    }
+}
+
+fn move_or_copy_path(context: &mut Context, case: PathCase, pe: P::Exp) -> E::Exp_ {
+    match move_or_copy_path_(context, case, pe) {
+        Some(e) => e,
+        None => {
+            assert!(context.env().has_errors());
+            E::Exp_::UnresolvedError
+        }
+    }
+}
+
+fn move_or_copy_path_(context: &mut Context, case: PathCase, pe: P::Exp) -> Option<E::Exp_> {
+    let e = exp_dotted(context, pe)?;
+    let cloc = case.loc();
+    match &e.value {
+        E::ExpDotted_::Exp(inner) => {
+            if !matches!(&inner.value, E::Exp_::Name(_, _)) {
+                let cmsg = format!("Invalid '{}' of expression", case.case());
+                let emsg = "Expected a name or path access, e.g. 'x' or 'e.f'";
+                context.env().add_diag(diag!(
+                    Syntax::InvalidMoveOrCopy,
+                    (cloc, cmsg),
+                    (inner.loc, emsg)
+                ));
+                return None;
+            }
+        }
+        E::ExpDotted_::Dot(_, _) => {
+            let current_package = context.current_package;
+            context
+                .env()
+                .check_feature(FeatureGate::Move2024Paths, current_package, cloc);
+        }
+    }
+    Some(match case {
+        PathCase::Move(loc) => E::Exp_::ExpDotted(E::DottedUsage::Move(loc), Box::new(e)),
+        PathCase::Copy(loc) => E::Exp_::ExpDotted(E::DottedUsage::Copy(loc), Box::new(e)),
+    })
 }
 
 fn exp_dotted(context: &mut Context, sp!(loc, pdotted_): P::Exp) -> Option<E::ExpDotted> {
@@ -3496,9 +3561,6 @@ fn unbound_names_exp(unbound: &mut BTreeSet<Name>, sp!(_, e_): &E::Exp) {
         | EE::UnresolvedError
         | EE::Name(sp!(_, E::ModuleAccess_::ModuleAccess(..)), _)
         | EE::Unit { .. } => (),
-        EE::Copy(v) | EE::Move(v) => {
-            unbound.insert(v.0);
-        }
         EE::Name(sp!(_, E::ModuleAccess_::Name(n)), _) => {
             unbound.insert(*n);
         }
@@ -3560,7 +3622,6 @@ fn unbound_names_exp(unbound: &mut BTreeSet<Name>, sp!(_, e_): &E::Exp) {
         EE::Abort(e)
         | EE::Dereference(e)
         | EE::UnaryExp(_, e)
-        | EE::Borrow(_, e)
         | EE::Cast(e, _)
         | EE::Annotate(e, _) => unbound_names_exp(unbound, e),
         EE::FieldMutate(ed, er) => {
@@ -3572,7 +3633,7 @@ fn unbound_names_exp(unbound: &mut BTreeSet<Name>, sp!(_, e_): &E::Exp) {
             unbound_names_exp(unbound, el)
         }
         EE::ExpList(es) => unbound_names_exps(unbound, es),
-        EE::ExpDotted(ed) => unbound_names_dotted(unbound, ed),
+        EE::ExpDotted(_, ed) => unbound_names_dotted(unbound, ed),
         EE::Index(el, ei) => {
             unbound_names_exp(unbound, ei);
             unbound_names_exp(unbound, el)
