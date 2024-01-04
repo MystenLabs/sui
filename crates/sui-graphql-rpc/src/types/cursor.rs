@@ -114,7 +114,7 @@ impl Page<usize> {
     /// Treat the cursors of this Page as indices into a range [0, total). Returns two booleans
     /// indicating whether there is a previous or next page in the range, followed by an iterator of
     /// cursors within that Page.
-    pub(crate) fn select(
+    pub(crate) fn paginate_indices(
         &self,
         total: usize,
     ) -> Option<(bool, bool, impl Iterator<Item = Cursor<usize>>)> {
