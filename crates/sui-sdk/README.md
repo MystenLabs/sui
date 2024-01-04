@@ -43,7 +43,7 @@ You can also build the documentation locally. To do so, open a Terminal or Conso
 1. Use the `rustup toolchain` command to install the `nightly` release channel.
 
    ```rust
-   rustup toolchain install nightly-2023-06-15
+   rustup toolchain install nightly
    ```
 
 1. Use the `rustup override` command to set the `nightly` release channel as active.
