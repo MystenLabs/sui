@@ -1179,8 +1179,7 @@ impl PgManager {
         name_service_config: &NameServiceConfig,
         address: SuiAddress,
     ) -> Result<Option<String>, Error> {
-        let reverse_record_id =
-            name_service_config.reverse_record_field_id(NativeSuiAddress::from(address));
+        let reverse_record_id = name_service_config.reverse_record_field_id(address.as_slice());
 
         let field_reverse_record_object = match self
             .inner
@@ -1725,8 +1724,14 @@ pub(crate) fn convert_to_validators(
                 .as_ref()
                 .and_then(|map| map.get(&v.sui_address).copied());
             let report_records = report_records.as_ref().and_then(|map| {
-                map.get(&v.sui_address)
-                    .map(|addrs| addrs.iter().map(Address::from).collect())
+                map.get(&v.sui_address).map(|addrs| {
+                    addrs
+                        .iter()
+                        .map(|a| Address {
+                            address: SuiAddress::from(*a),
+                        })
+                        .collect()
+                })
             });
             Validator {
                 validator_summary: v.clone(),
@@ -1735,48 +1740,4 @@ pub(crate) fn convert_to_validators(
             }
         })
         .collect()
-}
-
-impl From<Address> for SuiAddress {
-    fn from(a: Address) -> Self {
-        a.address
-    }
-}
-
-impl From<SuiAddress> for Address {
-    fn from(a: SuiAddress) -> Self {
-        Address { address: a }
-    }
-}
-
-impl From<NativeSuiAddress> for SuiAddress {
-    fn from(a: NativeSuiAddress) -> Self {
-        SuiAddress::from_array(a.to_inner())
-    }
-}
-
-impl From<&NativeSuiAddress> for SuiAddress {
-    fn from(a: &NativeSuiAddress) -> Self {
-        SuiAddress::from_array(a.to_inner())
-    }
-}
-
-impl From<&NativeSuiAddress> for Address {
-    fn from(a: &NativeSuiAddress) -> Self {
-        Self {
-            address: SuiAddress::from_array(a.to_inner()),
-        }
-    }
-}
-
-impl From<SuiAddress> for NativeSuiAddress {
-    fn from(a: SuiAddress) -> Self {
-        NativeSuiAddress::try_from(a.as_slice()).unwrap()
-    }
-}
-
-impl From<&SuiAddress> for NativeSuiAddress {
-    fn from(a: &SuiAddress) -> Self {
-        NativeSuiAddress::try_from(a.as_slice()).unwrap()
-    }
 }
