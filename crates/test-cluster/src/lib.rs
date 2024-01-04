@@ -280,23 +280,35 @@ impl TestCluster {
     }
 
     pub async fn wait_for_run_with_range_shutdown_signal(&self) -> RunWithRange {
+        self.wait_for_run_with_range_shutdown_signal_with_timeout(Duration::from_secs(60))
+            .await
+    }
+
+    pub async fn wait_for_run_with_range_shutdown_signal_with_timeout(
+        &self,
+        timeout_dur: Duration,
+    ) -> RunWithRange {
         let mut shutdown_channel_rx = self
             .fullnode_handle
             .sui_node
             .with(|node| node.subscribe_to_shutdown_channel());
 
-        tokio::select! {
-            msg = shutdown_channel_rx.recv() =>
-            {
-                match msg {
-                    Ok(run_with_range) => return run_with_range,
-                    Err(e) => {
-                        error!("failed recv from sui-node shutdown channel: {}", e);
-                        return RunWithRange::None
-                    },
-                }
-            },
-        }
+        timeout(timeout_dur, async move {
+            tokio::select! {
+                msg = shutdown_channel_rx.recv() =>
+                {
+                    match msg {
+                        Ok(run_with_range) => return run_with_range,
+                        Err(e) => {
+                            error!("failed recv from sui-node shutdown channel: {}", e);
+                            return RunWithRange::None
+                        },
+                    }
+                },
+            }
+        })
+        .await
+        .expect("Timed out waiting for cluster to hit target epoch and recv shutdown signal from sui-node")
     }
 
     pub async fn wait_for_protocol_version(
@@ -678,6 +690,7 @@ pub struct TestClusterBuilder {
     default_jwks: bool,
     overload_threshold_config: Option<OverloadThresholdConfig>,
     data_ingestion_dir: Option<PathBuf>,
+    fullnode_run_with_range: RunWithRange,
 }
 
 impl TestClusterBuilder {
@@ -699,7 +712,13 @@ impl TestClusterBuilder {
             default_jwks: false,
             overload_threshold_config: None,
             data_ingestion_dir: None,
+            fullnode_run_with_range: RunWithRange::None,
         }
+    }
+
+    pub fn with_fullnode_run_with_range(mut self, run_with_range: RunWithRange) -> Self {
+        self.fullnode_run_with_range = run_with_range;
+        self
     }
 
     pub fn with_fullnode_rpc_port(mut self, rpc_port: u16) -> Self {
@@ -928,7 +947,8 @@ impl TestClusterBuilder {
                     .clone()
                     .unwrap_or(self.validator_supported_protocol_versions_config.clone()),
             )
-            .with_db_checkpoint_config(self.db_checkpoint_config_fullnodes.clone());
+            .with_db_checkpoint_config(self.db_checkpoint_config_fullnodes.clone())
+            .with_fullnode_run_with_range(self.fullnode_run_with_range);
 
         if let Some(genesis_config) = self.genesis_config.take() {
             builder = builder.with_genesis_config(genesis_config);

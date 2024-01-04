@@ -433,7 +433,7 @@ impl FullnodeConfigBuilder {
             jwk_fetch_interval_seconds: 3600,
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
             overload_threshold_config: Default::default(),
-            run_with_range: self.run_with_range.unwrap_or_else(|| RunWithRange::None),
+            run_with_range: self.run_with_range.unwrap_or(RunWithRange::None),
         }
     }
 }
