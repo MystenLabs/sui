@@ -116,9 +116,13 @@ pub struct Authority {
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Default, Hash, Serialize, Deserialize,
 )]
-pub struct AuthorityIndex(pub u32);
+pub struct AuthorityIndex(u32);
 
 impl AuthorityIndex {
+    pub fn new_for_test() -> Self {
+        Self(0)
+    }
+
     pub fn value(&self) -> usize {
         self.0 as usize
     }

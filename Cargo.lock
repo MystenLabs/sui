@@ -2490,7 +2490,6 @@ dependencies = [
  "base64 0.21.2",
  "bcs",
  "consensus-config",
- "eyre",
  "fastcrypto",
  "prometheus",
  "serde",

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::block_validator::BlockValidator;
+use crate::block_verifier::BlockVerifier;
 use crate::metrics::{initialise_metrics, Metrics};
 use consensus_config::{AuthorityIndex, Committee, Parameters, ProtocolKeyPair};
 use prometheus::Registry;
@@ -21,7 +21,7 @@ impl Validator {
         _committee: Committee,
         _parameters: Parameters,
         _signer: ProtocolKeyPair,
-        _block_validator: impl BlockValidator,
+        _block_verifier: impl BlockVerifier,
         registry: Registry,
     ) -> Self {
         info!("Boot validator with index {}", authority);
@@ -49,7 +49,7 @@ impl Validator {
 
 #[cfg(test)]
 mod tests {
-    use crate::block_validator::AcceptAllBlockValidator;
+    use crate::block_verifier::TestBlockVerifier;
     use crate::validator::Validator;
     use consensus_config::{AuthorityIndex, Committee, Parameters, ProtocolKeyPair};
     use fastcrypto::traits::ToFromBytes;
@@ -61,14 +61,14 @@ mod tests {
         let registry = Registry::new();
         let parameters = Parameters::default();
         let signer = ProtocolKeyPair::from_bytes(&[0u8; 32]).unwrap();
-        let block_validator = AcceptAllBlockValidator {};
+        let block_verifier = TestBlockVerifier {};
 
         let validator = Validator::start(
-            AuthorityIndex(0),
+            AuthorityIndex::new_for_test(),
             committee,
             parameters,
             signer,
-            block_validator,
+            block_verifier,
             registry,
         );
 
