@@ -72,7 +72,7 @@ impl MoveModule {
         let bytecode = self.parsed.bytecode();
 
         let mut connection = Connection::new(false, false);
-        let Some((prev, next, cs)) = page.select(bytecode.friend_decls.len()) else {
+        let Some((prev, next, cs)) = page.paginate_indices(bytecode.friend_decls.len()) else {
             return Ok(connection);
         };
 
