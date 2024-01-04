@@ -79,7 +79,7 @@ impl EndOfEpochTransaction {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let mut connection = Connection::new(false, false);
-        let Some((prev, next, cs)) = page.select(self.0.len()) else {
+        let Some((prev, next, cs)) = page.paginate_indices(self.0.len()) else {
             return Ok(connection);
         };
 
@@ -155,7 +155,7 @@ impl ChangeEpochTransaction {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let mut connection = Connection::new(false, false);
-        let Some((prev, next, cs)) = page.select(self.0.system_packages.len()) else {
+        let Some((prev, next, cs)) = page.paginate_indices(self.0.system_packages.len()) else {
             return Ok(connection);
         };
 

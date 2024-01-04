@@ -208,7 +208,7 @@ impl ProgrammableTransactionBlock {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let mut connection = Connection::new(false, false);
-        let Some((prev, next, cs)) = page.select(self.0.inputs.len()) else {
+        let Some((prev, next, cs)) = page.paginate_indices(self.0.inputs.len()) else {
             return Ok(connection);
         };
 
@@ -235,7 +235,7 @@ impl ProgrammableTransactionBlock {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let mut connection = Connection::new(false, false);
-        let Some((prev, next, cs)) = page.select(self.0.commands.len()) else {
+        let Some((prev, next, cs)) = page.paginate_indices(self.0.commands.len()) else {
             return Ok(connection);
         };
 
