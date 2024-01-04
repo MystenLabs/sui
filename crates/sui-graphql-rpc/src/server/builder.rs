@@ -365,11 +365,13 @@ pub mod tests {
         ) -> Response {
             let db_url: String = connection_config.db_url.clone();
             let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-            let pg_conn_pool = PgManager::new(reader, Limits::default());
             let mut cfg = ServiceConfig::default();
             cfg.limits.request_timeout_ms = timeout.as_millis() as u64;
 
+            let db = Db::new(reader.clone(), cfg.limits);
+            let pg_conn_pool = PgManager::new(reader, cfg.limits);
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+                .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(cfg)
                 .extension(TimedExecuteExt {
@@ -409,17 +411,19 @@ pub mod tests {
         ) -> Response {
             let db_url: String = connection_config.db_url.clone();
             let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-            let pg_conn_pool = PgManager::new(reader, Limits::default());
-            let server_config = ServiceConfig {
+            let service_config = ServiceConfig {
                 limits: Limits {
                     max_query_depth: depth,
                     ..Default::default()
                 },
                 ..Default::default()
             };
+            let db = Db::new(reader.clone(), service_config.limits);
+            let pg_conn_pool = PgManager::new(reader, service_config.limits);
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+                .context_data(db)
                 .context_data(pg_conn_pool)
-                .context_data(server_config)
+                .context_data(service_config)
                 .extension(QueryLimitsChecker::default())
                 .build_schema();
             schema.execute(query).await
@@ -476,17 +480,19 @@ pub mod tests {
         ) -> Response {
             let db_url: String = connection_config.db_url.clone();
             let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-            let pg_conn_pool = PgManager::new(reader, Limits::default());
-            let server_config = ServiceConfig {
+            let service_config = ServiceConfig {
                 limits: Limits {
                     max_query_nodes: nodes,
                     ..Default::default()
                 },
                 ..Default::default()
             };
+            let db = Db::new(reader.clone(), service_config.limits);
+            let pg_conn_pool = PgManager::new(reader, service_config.limits);
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+                .context_data(db)
                 .context_data(pg_conn_pool)
-                .context_data(server_config)
+                .context_data(service_config)
                 .extension(QueryLimitsChecker::default())
                 .build_schema();
             schema.execute(query).await
@@ -541,23 +547,29 @@ pub mod tests {
         sim.create_checkpoint();
 
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
-        let limits = Limits {
-            default_page_size: 1,
+        let service_config = ServiceConfig {
+            limits: Limits {
+                default_page_size: 1,
+                ..Default::default()
+            },
             ..Default::default()
         };
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-        let pg_conn_pool = PgManager::new(reader, limits);
+        let db = Db::new(reader.clone(), service_config.limits);
+        let pg_conn_pool = PgManager::new(reader, service_config.limits);
         let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+            .context_data(db)
             .context_data(pg_conn_pool)
+            .context_data(service_config)
             .build_schema();
 
         let resp = schema
-            .execute("{ checkpointConnection { nodes { sequenceNumber } } }")
+            .execute("{ checkpoints { nodes { sequenceNumber } } }")
             .await;
         let data = resp.data.clone().into_json().unwrap();
         let checkpoints = data
-            .get("checkpointConnection")
+            .get("checkpoints")
             .unwrap()
             .get("nodes")
             .unwrap()
@@ -570,11 +582,11 @@ pub mod tests {
         );
 
         let resp = schema
-            .execute("{ checkpointConnection(first: 2) { nodes { sequenceNumber } } }")
+            .execute("{ checkpoints(first: 2) { nodes { sequenceNumber } } }")
             .await;
         let data = resp.data.clone().into_json().unwrap();
         let checkpoints = data
-            .get("checkpointConnection")
+            .get("checkpoints")
             .unwrap()
             .get("nodes")
             .unwrap()
@@ -631,10 +643,12 @@ pub mod tests {
 
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
+        let db = Db::new(reader.clone(), service_config.limits);
         let pg_conn_pool = PgManager::new(reader, service_config.limits);
         let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
-            .context_data(service_config)
+            .context_data(db)
             .context_data(pg_conn_pool)
+            .context_data(service_config)
             .context_data(metrics)
             .extension(QueryLimitsChecker::default())
             .build_schema();

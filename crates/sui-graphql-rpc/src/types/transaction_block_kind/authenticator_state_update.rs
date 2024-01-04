@@ -11,12 +11,9 @@ use sui_types::{
     transaction::AuthenticatorStateUpdate as NativeAuthenticatorStateUpdateTransaction,
 };
 
-use crate::{
-    context_data::db_data_provider::PgManager,
-    types::{
-        cursor::{Cursor, Page},
-        epoch::Epoch,
-    },
+use crate::types::{
+    cursor::{Cursor, Page},
+    epoch::Epoch,
 };
 
 #[derive(Clone, PartialEq, Eq)]
@@ -32,9 +29,8 @@ struct ActiveJwk(NativeActiveJwk);
 #[Object]
 impl AuthenticatorStateUpdateTransaction {
     /// Epoch of the authenticator state update transaction.
-    async fn epoch(&self, ctx: &Context<'_>) -> Result<Epoch> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_epoch_strict(self.0.epoch)
+    async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
+        Epoch::query(ctx.data_unchecked(), Some(self.0.epoch))
             .await
             .extend()
     }
@@ -112,9 +108,8 @@ impl ActiveJwk {
     }
 
     /// The most recent epoch in which the JWK was validated.
-    async fn epoch(&self, ctx: &Context<'_>) -> Result<Epoch> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_epoch_strict(self.0.epoch)
+    async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
+        Epoch::query(ctx.data_unchecked(), Some(self.0.epoch))
             .await
             .extend()
     }

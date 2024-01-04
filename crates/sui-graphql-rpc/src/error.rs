@@ -74,8 +74,6 @@ pub enum Error {
     DomainParse(#[from] DomainParseError),
     #[error(transparent)]
     DbValidation(#[from] DbValidationError),
-    #[error("Provide one of digest or sequence_number, not both")]
-    InvalidCheckpointQuery,
     #[error("Invalid coin type: {0}")]
     InvalidCoinType(String),
     #[error("String is not valid base58: {0}")]
@@ -112,7 +110,6 @@ impl ErrorExtensions for Error {
             | Error::ProtocolVersionUnsupported { .. }
             | Error::DomainParse(_)
             | Error::DbValidation(_)
-            | Error::InvalidCheckpointQuery
             | Error::CursorNoBeforeAfter
             | Error::CursorNoFirstLast
             | Error::_CursorNoReversePagination

@@ -1,6 +1,6 @@
 # Use the checkpoint connection to fetch some default amount of checkpoints in an ascending order
 {
-  checkpointConnection {
+  checkpoints {
     nodes {
       digest
       sequenceNumber
