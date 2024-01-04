@@ -2522,7 +2522,7 @@ async fn test_batch_withdraw_stakes_with_u64_amount() -> Result<(), anyhow::Erro
 
     let coin1 = coins[0].coin_object_id;
     let coin2 = coins[1].coin_object_id;
-   
+
        
         test_with_sui_binary(&[
             "client",
@@ -2557,6 +2557,7 @@ async fn test_batch_withdraw_stakes_with_u64_amount() -> Result<(), anyhow::Erro
     );
 
     // TODO: To add the batch withdraw stake test case here.
+    // TODO: To cross check the Liquid Stake is correct upon withdrawn
     // How to pass multiple staked Object Ids???
     // TODO: Need to deploy the latest sui_system MOVE code module with the batch withdraw stake feature.
         test_with_sui_binary(&[
@@ -2577,7 +2578,8 @@ async fn test_batch_withdraw_stakes_with_u64_amount() -> Result<(), anyhow::Erro
             "1000000000",
         ])
         .await?;
-    
+
+
 
     Ok(())
 }
