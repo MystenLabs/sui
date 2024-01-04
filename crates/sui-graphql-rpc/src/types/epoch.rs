@@ -64,12 +64,11 @@ impl Epoch {
     async fn total_checkpoints(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, Error> {
         let last = match self.stored.last_checkpoint_id {
             Some(last) => last as u64,
-            None => {
-                ctx.data_unchecked::<PgManager>()
-                    .fetch_latest_checkpoint()
-                    .await?
-                    .sequence_number
-            }
+            None => ctx
+                .data_unchecked::<PgManager>()
+                .fetch_latest_checkpoint()
+                .await?
+                .sequence_number_impl(),
         };
         Ok(Some(BigInt::from(
             last - self.stored.first_checkpoint_id as u64,
