@@ -290,6 +290,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "bytecode-interpreter-testsuite"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "datatest-stable",
+ "move-command-line-common",
+ "move-prover-test-utils",
+ "move-stackless-bytecode-interpreter",
+ "move-stdlib",
+ "move-unit-test",
+]
+
+[[package]]
 name = "bytecode-verifier-libfuzzer"
 version = "0.0.0"
 dependencies = [

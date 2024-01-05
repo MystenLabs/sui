@@ -1,0 +1,5 @@
+Running Move unit tests
+[ PASS    ] 0x2::A::load_constant_number_literal_u128
+[ PASS    ] 0x2::A::load_constant_number_literal_u64
+[ PASS    ] 0x2::A::load_constant_number_literal_u8
+Test result: OK. Total tests: 3; passed: 3; failed: 0
