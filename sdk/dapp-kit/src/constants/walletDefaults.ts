@@ -7,7 +7,8 @@ import { createInMemoryStore } from '../utils/stateStorage.js';
 
 export const SUI_WALLET_NAME = 'Sui Wallet';
 
-export const DEFAULT_STORAGE = typeof window === 'undefined' ? createInMemoryStore() : localStorage;
+export const DEFAULT_STORAGE =
+	typeof window !== 'undefined' && window.localStorage ? localStorage : createInMemoryStore();
 
 export const DEFAULT_STORAGE_KEY = 'sui-dapp-kit:wallet-connection-info';
 
