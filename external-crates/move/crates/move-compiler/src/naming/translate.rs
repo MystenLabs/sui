@@ -52,6 +52,7 @@ struct ModuleType {
 enum ResolvedFunction {
     Builtin(N::BuiltinFunction),
     Module(Box<ResolvedModuleFunction>),
+    Var(N::Var),
     Unbound,
 }
 
@@ -694,6 +695,13 @@ fn explicit_use_fun(
                 .add_diag(diag!(Declarations::InvalidUseFun, (loc, msg)));
             None
         }
+        ResolvedFunction::Var(_) => {
+            let msg = "Invalid 'use fun'. Cannot use a local variable as a method";
+            context
+                .env
+                .add_diag(diag!(Declarations::InvalidUseFun, (loc, msg)));
+            None
+        }
         ResolvedFunction::Unbound => {
             assert!(context.env.has_errors());
             None
@@ -841,6 +849,7 @@ fn function(
         attributes,
         loc: _,
         visibility,
+        macro_,
         entry,
         signature,
         body,
@@ -875,6 +884,7 @@ fn function(
         index,
         attributes,
         visibility,
+        macro_,
         entry,
         signature,
         body,
@@ -1277,6 +1287,19 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
             NE::NamedBlock(context.exit_nominal_block(eloc), body)
         }
         EE::Block(seq) => NE::Block(sequence(context, seq)),
+        EE::Lambda(args, body) => {
+            context.new_local_scope();
+            let bind_opt = bind_list(context, args);
+            let body = Box::new(exp_(context, *body));
+            context.close_local_scope();
+            match bind_opt {
+                None => {
+                    assert!(context.env.has_errors());
+                    N::Exp_::UnresolvedError
+                }
+                Some(bind) => NE::Lambda(bind, body),
+            }
+        }
 
         EE::Assign(a, e) => {
             let na_opt = assign_list(context, a);
@@ -1488,6 +1511,7 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                     } = *mf;
                     NE::ModuleCall(module, function, ty_args, nes)
                 }
+                ResolvedFunction::Var(v) => NE::VarCall(v, nes),
                 ResolvedFunction::Unbound => {
                     assert!(context.env.has_errors());
                     NE::UnresolvedError
@@ -1709,11 +1733,25 @@ fn resolve_function(
             }
         }
         EA::Name(n) => {
-            context.env.add_diag(diag!(
-                NameResolution::UnboundUnscopedName,
-                (n.loc, format!("Unbound function '{}' in current scope", n)),
-            ));
-            ResolvedFunction::Unbound
+            match context.resolve_local(
+                n.loc,
+                |n| format!("Unbound function '{}' in current scope", n),
+                n,
+            ) {
+                None => {
+                    assert!(context.env.has_errors());
+                    ResolvedFunction::Unbound
+                }
+                Some(v) => {
+                    if ty_args.is_some() {
+                        context.env.add_diag(diag!(
+                            NameResolution::TooManyTypeArguments,
+                            (mloc, "Invalid lambda call. Expected zero type arguments"),
+                        ));
+                    }
+                    ResolvedFunction::Var(v)
+                }
+            }
         }
         EA::ModuleAccess(m, n) => match context.resolve_module_function(mloc, &m, &n) {
             None => {
@@ -1955,6 +1993,10 @@ fn remove_unused_bindings_exp(
         }
         N::Exp_::NamedBlock(_, s) => remove_unused_bindings_seq(context, used, s),
         N::Exp_::Block(s) => remove_unused_bindings_seq(context, used, s),
+        N::Exp_::Lambda(args, body) => {
+            remove_unused_bindings_lvalues(context, used, args, /* report unused */ true);
+            remove_unused_bindings_exp(context, used, body)
+        }
         N::Exp_::FieldMutate(ed, e) => {
             remove_unused_bindings_exp_dotted(context, used, ed);
             remove_unused_bindings_exp(context, used, e)
@@ -1971,6 +2013,7 @@ fn remove_unused_bindings_exp(
         N::Exp_::Builtin(_, sp!(_, es))
         | N::Exp_::Vector(_, _, sp!(_, es))
         | N::Exp_::ModuleCall(_, _, _, sp!(_, es))
+        | N::Exp_::VarCall(_, sp!(_, es))
         | N::Exp_::ExpList(es) => {
             for e in es {
                 remove_unused_bindings_exp(context, used, e)

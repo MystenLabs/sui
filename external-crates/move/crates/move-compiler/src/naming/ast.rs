@@ -229,6 +229,7 @@ pub enum Type_ {
     Ref(bool, Box<Type>),
     Param(TParam),
     Apply(Option<AbilitySet>, TypeName, Vec<Type>),
+    Fun(Vec<Type>, Box<Type>),
     Var(TVar),
     Anything,
     UnresolvedError,
@@ -294,6 +295,7 @@ pub enum Exp_ {
         Spanned<Vec<Exp>>,
     ),
     MethodCall(ExpDotted, Name, Option<Vec<Type>>, Spanned<Vec<Exp>>),
+    VarCall(Var, Spanned<Vec<Exp>>),
     Builtin(BuiltinFunction, Spanned<Vec<Exp>>),
     Vector(Loc, Option<Type>, Spanned<Vec<Exp>>),
 
@@ -302,6 +304,7 @@ pub enum Exp_ {
     Loop(BlockLabel, Box<Exp>),
     NamedBlock(BlockLabel, Sequence),
     Block(Sequence),
+    Lambda(LValueList, Box<Exp>),
 
     Assign(LValueList, Box<Exp>),
     FieldMutate(ExpDotted, Box<Exp>),
@@ -654,6 +657,7 @@ impl Type_ {
             Type_::Ref(_, _) => Some(AbilitySet::references(loc)),
             Type_::Anything | Type_::UnresolvedError => Some(AbilitySet::all(loc)),
             Type_::Var(_) => None,
+            Type_::Fun(_, _) => None,
         }
     }
 
@@ -665,6 +669,7 @@ impl Type_ {
             Type_::Ref(_, _) => Some(AbilitySet::REFERENCES.contains(&ability)),
             Type_::Anything | Type_::UnresolvedError => Some(true),
             Type_::Var(_) => None,
+            Type_::Fun(_, _) => None,
         }
     }
 }
@@ -1112,6 +1117,12 @@ impl AstDebug for Type_ {
                     }),
                 }
             }
+            Type_::Fun(args, result) => {
+                w.write("|");
+                w.comma(args, |w, ty| ty.ast_debug(w));
+                w.write("|");
+                result.ast_debug(w);
+            }
             Type_::Var(tv) => w.write(&format!("#{}", tv.0)),
             Type_::Anything => w.write("_"),
             Type_::UnresolvedError => w.write("_|_"),
@@ -1191,6 +1202,12 @@ impl AstDebug for Exp_ {
                 w.comma(rhs, |w, e| e.ast_debug(w));
                 w.write(")");
             }
+            E::VarCall(var, sp!(_, rhs)) => {
+                var.ast_debug(w);
+                w.write("(");
+                w.comma(rhs, |w, e| e.ast_debug(w));
+                w.write(")");
+            }
             E::Builtin(bf, sp!(_, rhs)) => {
                 bf.ast_debug(w);
                 w.write("(");
@@ -1252,6 +1269,12 @@ impl AstDebug for Exp_ {
                 seq.ast_debug(w);
             }
             E::Block(seq) => seq.ast_debug(w),
+            E::Lambda(sp!(_, bs), e) => {
+                w.write("|");
+                bs.ast_debug(w);
+                w.write("|");
+                e.ast_debug(w);
+            }
             E::ExpList(es) => {
                 w.write("(");
                 w.comma(es, |w, e| e.ast_debug(w));
