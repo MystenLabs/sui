@@ -39,47 +39,50 @@ module P0::m {
 
 //# run-graphql
 {
-    transactionBlockConnection(last: 3) {
-        nodes {
-            kind {
-                __typename
-                ... on ProgrammableTransactionBlock {
-                    transactions {
-                        nodes {
-                            ... on MoveCallTransaction {
-                                package
-                                module
-                                functionName
-                            }
-                        }
-                    }
-                }
+  transactionBlockConnection(last: 3) {
+    nodes {
+      kind {
+        __typename
+        ... on ProgrammableTransactionBlock {
+          transactions {
+            nodes {
+              ... on MoveCallTransaction {
+                package
+                module
+                functionName
+              }
             }
-            effects {
-                status
-                unchangedSharedObjects {
-                    __typename
-                    ... on SharedObjectRead {
-                        address
-                        version
-                        digest
-                        object {
-                            asMoveObject {
-                                contents {
-                                    type { repr }
-                                    json
-                                }
-                            }
-                        }
-                    }
-
-                    ... on SharedObjectDelete {
-                        address
-                        version
-                        mutable
-                    }
-                }
-            }
+          }
         }
+      }
+      effects {
+        status
+        unchangedSharedObjects {
+          nodes {
+            __typename
+            ... on SharedObjectRead {
+              address
+              version
+              digest
+              object {
+                asMoveObject {
+                  contents {
+                    type {
+                      repr
+                    }
+                    json
+                  }
+                }
+              }
+            }
+            ... on SharedObjectDelete {
+              address
+              version
+              mutable
+            }
+          }
+        }
+      }
     }
+  }
 }
