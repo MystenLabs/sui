@@ -1,4 +1,4 @@
-processed 26 tasks
+processed 25 tasks
 
 init:
 validator_0: object(0,0)
@@ -40,14 +40,14 @@ task 8 'view-checkpoint'. lines 42-42:
 CheckpointSummary { epoch: 0, seq: 4, content_digest: D3oWLCcqoa1D15gxzvMaDemNNY8YYVspAkYkcmtQKWRt,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 3000000, storage_cost: 10176400, storage_rebate: 1956240, non_refundable_storage_fee: 19760 }}
 
-task 9 'advance-epoch'. lines 45-45:
+task 9 'advance-epoch'. lines 44-44:
 Epoch advanced: 5
 
-task 10 'view-checkpoint'. lines 47-47:
+task 10 'view-checkpoint'. lines 46-46:
 CheckpointSummary { epoch: 5, seq: 10, content_digest: B5upjfaYHdtnxEmH68QF7iQC5PcqZFDuCEJgfZGuX7Nt,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}
 
-task 11 'run-graphql'. lines 49-55:
+task 11 'run-graphql'. lines 48-53:
 Response: {
   "data": {
     "checkpoint": {
@@ -56,14 +56,14 @@ Response: {
   }
 }
 
-task 12 'create-checkpoint'. lines 56-56:
+task 12 'create-checkpoint'. lines 55-55:
 Checkpoint created: 11
 
-task 13 'view-checkpoint'. lines 58-58:
+task 13 'view-checkpoint'. lines 57-57:
 CheckpointSummary { epoch: 6, seq: 11, content_digest: D3oWLCcqoa1D15gxzvMaDemNNY8YYVspAkYkcmtQKWRt,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}
 
-task 14 'run-graphql'. lines 60-66:
+task 14 'run-graphql'. lines 59-64:
 Response: {
   "data": {
     "checkpoint": {
@@ -72,7 +72,7 @@ Response: {
   }
 }
 
-task 15 'run-graphql'. lines 68-74:
+task 15 'run-graphql'. lines 66-71:
 Headers: {
     "content-type": "application/json",
     "content-length": "157",
@@ -97,14 +97,14 @@ Response: {
   }
 }
 
-task 16 'view-checkpoint'. lines 76-76:
+task 16 'view-checkpoint'. lines 73-73:
 CheckpointSummary { epoch: 6, seq: 11, content_digest: D3oWLCcqoa1D15gxzvMaDemNNY8YYVspAkYkcmtQKWRt,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}
 
-task 17 'advance-epoch'. lines 78-81:
+task 17 'advance-epoch'. lines 75-78:
 Epoch advanced: 6
 
-task 18 'run-graphql'. lines 83-98:
+task 18 'run-graphql'. lines 80-95:
 Response: {
   "data": {
     "address": {
@@ -125,7 +125,7 @@ Response: {
   }
 }
 
-task 19 'run-graphql'. lines 100-155:
+task 19 'run-graphql'. lines 97-152:
 Response: {
   "data": {
     "address": {
@@ -220,104 +220,7 @@ Response: {
   }
 }
 
-task 20 'view-graphql-variables'. lines 158-159:
-Name: A
-Type: SuiAddress!
-Value: "0x42"
-
-Name: A_opt
-Type: SuiAddress
-Value: "0x42"
-
-Name: Test
-Type: SuiAddress!
-Value: "0xdc7a6a72118903b903eb2a890903e0a4290e16cdd995e63b6a88491d231ab41f"
-
-Name: Test_opt
-Type: SuiAddress
-Value: "0xdc7a6a72118903b903eb2a890903e0a4290e16cdd995e63b6a88491d231ab41f"
-
-Name: deepbook
-Type: SuiAddress!
-Value: "0xdee9"
-
-Name: deepbook_opt
-Type: SuiAddress
-Value: "0xdee9"
-
-Name: obj_0_0
-Type: SuiAddress!
-Value: "0x15185c3222855fbd3dedb8d89302127683df515a5180ca6b8c2d1d469c5419a8"
-
-Name: obj_0_0_opt
-Type: SuiAddress
-Value: "0x15185c3222855fbd3dedb8d89302127683df515a5180ca6b8c2d1d469c5419a8"
-
-Name: obj_0_1
-Type: SuiAddress!
-Value: "0x2fbcf16a09621693013ade94d19616a74d4ce9f8338d5cf0a3f2d041d1f3d694"
-
-Name: obj_0_1_opt
-Type: SuiAddress
-Value: "0x2fbcf16a09621693013ade94d19616a74d4ce9f8338d5cf0a3f2d041d1f3d694"
-
-Name: obj_1_0
-Type: SuiAddress!
-Value: "0xdc7a6a72118903b903eb2a890903e0a4290e16cdd995e63b6a88491d231ab41f"
-
-Name: obj_1_0_opt
-Type: SuiAddress
-Value: "0xdc7a6a72118903b903eb2a890903e0a4290e16cdd995e63b6a88491d231ab41f"
-
-Name: obj_2_0
-Type: SuiAddress!
-Value: "0x8e9a6c3b9d73fec551cb042c7283de0076fbdb60b8b2c41f6f916f9b1d11a114"
-
-Name: obj_2_0_opt
-Type: SuiAddress
-Value: "0x8e9a6c3b9d73fec551cb042c7283de0076fbdb60b8b2c41f6f916f9b1d11a114"
-
-Name: obj_3_0
-Type: SuiAddress!
-Value: "0x5421f975384c0c0a3a22ce771dd616bde2acbb6ffc16a8a8b4595e33f79d2aa5"
-
-Name: obj_3_0_opt
-Type: SuiAddress
-Value: "0x5421f975384c0c0a3a22ce771dd616bde2acbb6ffc16a8a8b4595e33f79d2aa5"
-
-Name: std
-Type: SuiAddress!
-Value: "0x1"
-
-Name: std_opt
-Type: SuiAddress
-Value: "0x1"
-
-Name: sui
-Type: SuiAddress!
-Value: "0x2"
-
-Name: sui_opt
-Type: SuiAddress
-Value: "0x2"
-
-Name: sui_system
-Type: SuiAddress!
-Value: "0x3"
-
-Name: sui_system_opt
-Type: SuiAddress
-Value: "0x3"
-
-Name: validator_0
-Type: SuiAddress!
-Value: "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
-
-Name: validator_0_opt
-Type: SuiAddress
-Value: "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
-
-task 21 'run-graphql'. lines 162-176:
+task 20 'run-graphql'. lines 154-168:
 Response: {
   "data": {
     "epoch": {
@@ -337,7 +240,7 @@ Response: {
   }
 }
 
-task 22 'run-graphql'. lines 178-184:
+task 21 'run-graphql'. lines 170-176:
 Response: {
   "data": {
     "epoch": {
@@ -346,17 +249,17 @@ Response: {
   }
 }
 
-task 23 'run'. lines 186-186:
-created: object(23,0)
+task 22 'run'. lines 178-178:
+created: object(22,0)
 mutated: object(0,1)
 gas summary: computation_cost: 999000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 24 'run'. lines 188-188:
-created: object(24,0)
+task 23 'run'. lines 180-180:
+created: object(23,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 25 'run'. lines 190-190:
-created: object(25,0)
+task 24 'run'. lines 182-182:
+created: object(24,0)
 mutated: object(0,1)
 gas summary: computation_cost: 235000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
