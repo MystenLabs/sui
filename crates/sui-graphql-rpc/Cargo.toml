@@ -52,6 +52,10 @@ tower.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 
+sui-graphql-rpc-headers.workspace = true
+sui-graphql-rpc-client.workspace = true
+
+
 # TODO: put these behind feature flag to prevent leakage
 # Used for dummy data
 bcs.workspace = true

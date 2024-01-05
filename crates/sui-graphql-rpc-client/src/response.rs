@@ -1,16 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::ClientError;
 use async_graphql::{Response, ServerError, Value};
 use axum::http::HeaderName;
 use hyper::HeaderMap;
 use reqwest::Response as ReqwestResponse;
 use serde_json::json;
 use std::{collections::BTreeMap, net::SocketAddr};
-
-use crate::server::version::VERSION_HEADER;
-
-use super::ClientError;
+use sui_graphql_rpc_headers::VERSION_HEADER;
 
 #[derive(Debug)]
 pub struct GraphqlResponse {

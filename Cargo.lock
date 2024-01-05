@@ -11898,6 +11898,8 @@ dependencies = [
  "similar",
  "simulacrum",
  "sui-framework",
+ "sui-graphql-rpc-client",
+ "sui-graphql-rpc-headers",
  "sui-indexer",
  "sui-json-rpc",
  "sui-json-rpc-types",
@@ -11916,6 +11918,28 @@ dependencies = [
  "tower",
  "tracing",
  "uuid 1.2.2",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-graphql-rpc-client"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "axum",
+ "hyper",
+ "reqwest",
+ "serde_json",
+ "sui-graphql-rpc-headers",
+ "thiserror",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-graphql-rpc-headers"
+version = "0.1.0"
+dependencies = [
+ "axum",
  "workspace-hack",
 ]
 
