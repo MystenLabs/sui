@@ -91,6 +91,7 @@ fn setup_test_storage<'a>(
         .compute_topological_order()?
     {
         let module_id = module.self_id();
+        println!("[x] adding module_id {} in setup_test_storage (external-crates/move/crates/move-unit-test/src/)", module_id);
         let mut module_bytes = Vec::new();
         module.serialize(&mut module_bytes)?;
         storage.publish_or_overwrite_module(module_id, module_bytes);

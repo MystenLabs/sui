@@ -523,7 +523,7 @@ impl CompiledPackage {
                 root_compiled_units.push(unit)
             } else {
                 // IDEA / NEEDED: add built_deps / prebuilt deps here to save
-                println!("[&] triggered: appending {package_name} for deps_compiled_units (not expected) for precompiled but desired");
+                println!("[&] triggered: appending {package_name}::{} for deps_compiled_units (not expected) for precompiled but desired", unit.unit.name);
                 deps_compiled_units.push((package_name, unit))
             }
         }
@@ -1005,6 +1005,7 @@ fn download_and_compile(
             OsStr::new(flavor.to_string().as_str()),
             OsStr::new("-p"),
             OsStr::new(root.as_path()),
+            OsStr::new("--test"),
         ])
         .output()
         .expect("failed to build package");
