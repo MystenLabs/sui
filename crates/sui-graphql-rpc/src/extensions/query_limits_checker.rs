@@ -10,6 +10,7 @@ use crate::error::graphql_error_at_pos;
 use crate::metrics::RequestMetrics;
 use async_graphql::extensions::NextParseQuery;
 use async_graphql::extensions::NextRequest;
+use async_graphql::parser::types::Directive;
 use async_graphql::parser::types::ExecutableDocument;
 use async_graphql::parser::types::FragmentDefinition;
 use async_graphql::parser::types::Selection;
@@ -28,6 +29,8 @@ use async_graphql::{
 use axum::headers;
 use axum::http::HeaderName;
 use axum::http::HeaderValue;
+use once_cell::sync::Lazy;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -221,13 +224,7 @@ impl QueryLimitsChecker {
 
                 match &curr_sel.node {
                     Selection::Field(f) => {
-                        if !f.node.directives.is_empty() {
-                            return Err(graphql_error_at_pos(
-                                INTERNAL_SERVER_ERROR,
-                                "Fields with directives are not supported",
-                                f.pos,
-                            ));
-                        }
+                        check_directives(&f.node.directives)?;
                         for field_sel in f.node.selection_set.node.items.iter() {
                             que.push_back(field_sel);
                             cost.num_nodes += 1;
@@ -250,13 +247,7 @@ impl QueryLimitsChecker {
                         // TODO: this is inefficient as we might loop over same fragment multiple times
                         // Ideally web should cache the costs of fragments we've seen before
                         // Will do as enhancement
-                        if !frag_def.node.directives.is_empty() {
-                            return Err(graphql_error_at_pos(
-                                INTERNAL_SERVER_ERROR,
-                                "Fragments with directives are not supported",
-                                frag_def.pos,
-                            ));
-                        }
+                        check_directives(&frag_def.node.directives)?;
                         for frag_sel in frag_def.node.selection_set.node.items.iter() {
                             que.push_back(frag_sel);
                             cost.num_nodes += 1;
@@ -264,13 +255,7 @@ impl QueryLimitsChecker {
                         }
                     }
                     Selection::InlineFragment(fs) => {
-                        if !fs.node.directives.is_empty() {
-                            return Err(graphql_error_at_pos(
-                                INTERNAL_SERVER_ERROR,
-                                "Inline fragments with directives are not supported",
-                                fs.pos,
-                            ));
-                        }
+                        check_directives(&fs.node.directives)?;
                         for in_frag_sel in fs.node.selection_set.node.items.iter() {
                             que.push_back(in_frag_sel);
                             cost.num_nodes += 1;
@@ -312,5 +297,34 @@ fn check_limits(limits: &Limits, nodes: u32, depth: u32, pos: Option<Pos>) -> Se
         ));
     }
 
+    Ok(())
+}
+
+// TODO: make this configurable
+fn allowed_directives() -> &'static BTreeSet<&'static str> {
+    static DIRECTIVES: Lazy<BTreeSet<&str>> =
+        Lazy::new(|| BTreeSet::from_iter(["skip", "include"]));
+
+    Lazy::force(&DIRECTIVES)
+}
+
+fn check_directives(directives: &[Positioned<Directive>]) -> ServerResult<()> {
+    for directive in directives {
+        if !allowed_directives().contains(&directive.node.name.node.as_str()) {
+            return Err(graphql_error_at_pos(
+                INTERNAL_SERVER_ERROR,
+                format!(
+                    "Directive `@{}` is not supported. Supported directives are {}",
+                    directive.node.name.node,
+                    allowed_directives()
+                        .iter()
+                        .map(|s| format!("`@{}`", s))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                directive.pos,
+            ));
+        }
+    }
     Ok(())
 }
