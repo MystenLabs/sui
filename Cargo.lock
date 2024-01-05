@@ -12437,6 +12437,7 @@ dependencies = [
  "mysten-metrics",
  "mysten-network",
  "narwhal-network",
+ "narwhal-worker",
  "prometheus",
  "reqwest",
  "serde",

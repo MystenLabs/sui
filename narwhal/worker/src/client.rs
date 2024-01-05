@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use arc_swap::{ArcSwap, ArcSwapOption};
+use mysten_metrics::metered_channel::Sender;
+use mysten_network::{multiaddr::Protocol, Multiaddr};
 use std::{
     collections::{btree_map::Entry, BTreeMap},
     net::Ipv4Addr,
     sync::{Arc, Mutex},
 };
-
-use arc_swap::ArcSwap;
-use mysten_metrics::metered_channel::Sender;
-use mysten_network::{multiaddr::Protocol, Multiaddr};
 use thiserror::Error;
+use tokio::time::{sleep, timeout, Duration};
 use tracing::info;
 use types::{Transaction, TxResponse};
 
@@ -36,6 +36,48 @@ pub enum NarwhalError {
 }
 
 /// TODO: add NarwhalClient trait and implement RemoteNarwhalClient with grpc.
+
+/// A Narwhal client that instantiates LocalNarwhalClient lazily.
+pub struct LazyNarwhalClient {
+    /// Outer ArcSwapOption allows initialization after the first connection to Narwhal.
+    /// Inner ArcSwap allows Narwhal restarts across epoch changes.
+    pub client: ArcSwapOption<ArcSwap<LocalNarwhalClient>>,
+    pub addr: Multiaddr,
+}
+
+impl LazyNarwhalClient {
+    /// Lazily instantiates LocalNarwhalClient keyed by the address of the Narwhal worker.
+    pub fn new(addr: Multiaddr) -> Self {
+        Self {
+            client: ArcSwapOption::empty(),
+            addr,
+        }
+    }
+
+    pub async fn get(&self) -> Arc<ArcSwap<LocalNarwhalClient>> {
+        // Narwhal may not have started and created LocalNarwhalClient, so retry in a loop.
+        // Retries should only happen on Sui process start.
+        const NARWHAL_WORKER_START_TIMEOUT: Duration = Duration::from_secs(30);
+        if let Ok(client) = timeout(NARWHAL_WORKER_START_TIMEOUT, async {
+            loop {
+                match LocalNarwhalClient::get_global(&self.addr) {
+                    Some(c) => return c,
+                    None => {
+                        sleep(Duration::from_millis(100)).await;
+                    }
+                };
+            }
+        })
+        .await
+        {
+            return client;
+        }
+        panic!(
+            "Timed out after {:?} waiting for Narwhal worker ({}) to start!",
+            NARWHAL_WORKER_START_TIMEOUT, self.addr,
+        );
+    }
+}
 
 /// A client that connects to Narwhal locally.
 #[derive(Clone)]

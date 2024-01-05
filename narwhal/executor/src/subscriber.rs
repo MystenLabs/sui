@@ -271,6 +271,13 @@ impl Subscriber {
             Self::fetch_batches_from_workers(&inner, batch_digests_and_workers).await;
         drop(fetched_batches_timer);
 
+        for batch in fetched_batches.values() {
+            inner
+                .metrics
+                .consensus_output_transactions
+                .inc_by(batch.transactions().len() as u64);
+        }
+
         // Map all fetched batches to their respective certificates and submit as
         // consensus output
         for cert in &sub_dag.certificates {
