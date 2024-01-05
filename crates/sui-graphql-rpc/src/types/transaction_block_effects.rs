@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{context_data::db_data_provider::PgManager, error::Error};
-use async_graphql::*;
+use async_graphql::{
+    connection::{Connection, CursorType, Edge},
+    *,
+};
 use either::Either;
 use sui_indexer::models_v2::transactions::StoredTransaction;
 use sui_types::{
@@ -15,6 +18,7 @@ use super::{
     balance_change::BalanceChange,
     base64::Base64,
     checkpoint::{Checkpoint, CheckpointId},
+    cursor::{Cursor, Page},
     date_time::DateTime,
     epoch::Epoch,
     gas::GasEffects,
@@ -38,6 +42,11 @@ pub enum ExecutionStatus {
     Success,
     Failure,
 }
+
+pub(crate) type CDependencies = Cursor<usize>;
+pub(crate) type CUnchangedSharedObject = Cursor<usize>;
+pub(crate) type CObjectChange = Cursor<usize>;
+pub(crate) type CBalanceChange = Cursor<usize>;
 
 #[Object]
 impl TransactionBlockEffects {
@@ -117,29 +126,82 @@ impl TransactionBlockEffects {
     }
 
     /// The effect this transaction had on objects on-chain.
-    async fn object_changes(&self) -> Option<Vec<ObjectChange>> {
-        Some(
+    async fn object_changes(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CObjectChange>,
+        last: Option<u64>,
+        before: Option<CObjectChange>,
+    ) -> Result<Option<Vec<ObjectChange>>> {
+        // ) -> Result<Connection<String, ObjectChange>> {
+        //     let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+
+        //     let mut connection = Connection::new(false, false);
+
+        //     let Some((prev, next, cs)) = page.paginate_indices(self.native.object_changes().len())
+        //     else {
+        //         return Ok(connection);
+        //     };
+
+        //     connection.has_previous_page = prev;
+        //     connection.has_next_page = next;
+
+        //     for c in cs {
+        //         let object_change = ObjectChange {
+        //             native: self.native.object_changes()[*c],
+        //         };
+
+        //         connection
+        //             .edges
+        //             .push(Edge::new(c.encode_cursor(), object_change));
+        //     }
+
+        Ok(Some(
             self.native
                 .object_changes()
                 .into_iter()
                 .map(|native| ObjectChange { native })
                 .collect(),
-        )
+        ))
     }
 
     /// The effect this transaction had on the balances (sum of coin values per coin type) of
     /// addresses and objects.
-    async fn balance_changes(&self) -> Result<Option<Vec<BalanceChange>>> {
+    async fn balance_changes(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CBalanceChange>,
+        last: Option<u64>,
+        before: Option<CBalanceChange>,
+    ) -> Result<Connection<String, BalanceChange>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        let mut connection = Connection::new(false, false);
+
         let Some(stored_tx) = self.tx_data.as_ref().left() else {
-            return Ok(None);
+            return Ok(connection);
         };
 
-        let mut changes = Vec::with_capacity(stored_tx.balance_changes.len());
-        for change in stored_tx.balance_changes.iter().flatten() {
-            changes.push(BalanceChange::read(change).extend()?);
+        let Some((prev, next, cs)) = page.paginate_indices(stored_tx.balance_changes.len()) else {
+            return Ok(connection);
+        };
+
+        connection.has_previous_page = prev;
+        connection.has_next_page = next;
+
+        for c in cs {
+            let Some(serialized) = &stored_tx.balance_changes[*c] else {
+                continue;
+            };
+
+            let balance_change = BalanceChange::read(serialized).extend()?;
+            connection
+                .edges
+                .push(Edge::new(c.encode_cursor(), balance_change));
         }
 
-        Ok(Some(changes))
+        Ok(connection)
     }
 
     /// Timestamp corresponding to the checkpoint this transaction was finalized in.
