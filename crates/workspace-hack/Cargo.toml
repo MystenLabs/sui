@@ -54,7 +54,7 @@ ark-snark = { version = "0.4", default-features = false }
 ark-std = { version = "0.4", default-features = false }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7" }
-arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5" }
+arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", default-features = false }
 arrow-array = { version = "47", default-features = false }
 arrow-buffer = { version = "47", default-features = false }
 arrow-cast = { version = "47", default-features = false }
@@ -169,7 +169,6 @@ cfg-expr = { version = "0.13", features = ["targets"] }
 cfg-if = { version = "1", default-features = false }
 chacha20 = { version = "0.9", default-features = false }
 chrono = { version = "0.4", features = ["serde"] }
-chrono-tz = { version = "0.6" }
 ciborium = { version = "0.2" }
 ciborium-io = { version = "0.2", default-features = false, features = ["std"] }
 ciborium-ll = { version = "0.2", default-features = false }
@@ -232,7 +231,6 @@ der-ca01ad9e24f5d932 = { package = "der", version = "0.7", default-features = fa
 der-parser = { version = "8", features = ["bigint"] }
 derive_builder = { version = "0.12" }
 determinator = { version = "0.10", default-features = false }
-deunicode = { version = "0.4", default-features = false }
 diesel = { version = "2", features = ["64-column-tables", "chrono", "i-implement-a-third-party-backend-and-opt-into-breaking-changes", "postgres", "r2d2", "serde_json"] }
 diesel_migrations = { version = "2" }
 diff = { version = "0.1", default-features = false }
@@ -334,7 +332,6 @@ gimli = { version = "0.27", default-features = false, features = ["read"] }
 git-version = { version = "0.3", default-features = false }
 glob = { version = "0.3", default-features = false }
 globset = { version = "0.4" }
-globwalk = { version = "0.8", default-features = false }
 gloo-timers = { version = "0.2", features = ["futures"] }
 governor = { version = "0.6" }
 group-594e8ee84c453af0 = { package = "group", version = "0.13", features = ["tests"] }
@@ -365,14 +362,12 @@ http-body = { version = "0.4", default-features = false }
 http-range-header = { version = "0.3", default-features = false }
 httparse = { version = "1" }
 httpdate = { version = "1", default-features = false }
-humansize = { version = "1", default-features = false }
 humantime = { version = "2", default-features = false }
 hyper = { version = "0.14", features = ["full"] }
 hyper-rustls-2b5c6dc72f624058 = { package = "hyper-rustls", version = "0.23", features = ["http2", "webpki-tokio"] }
 hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", features = ["http2"] }
 hyper-timeout = { version = "0.4", default-features = false }
 idna = { version = "0.3", default-features = false }
-ignore = { version = "0.4", default-features = false }
 im = { version = "15", default-features = false }
 impl-codec-3b31131e45eafb45 = { package = "impl-codec", version = "0.6", default-features = false, features = ["std"] }
 impl-codec-d8f496e17d97b5cb = { package = "impl-codec", version = "0.5", default-features = false, features = ["std"] }
@@ -473,7 +468,6 @@ move-ir-types = { path = "../../external-crates/move/crates/move-ir-types", defa
 move-model = { path = "../../external-crates/move/crates/move-model", default-features = false }
 move-package = { path = "../../external-crates/move/crates/move-package", default-features = false }
 move-prover = { path = "../../external-crates/move/crates/move-prover", default-features = false }
-move-prover-boogie-backend = { path = "../../external-crates/move/crates/move-prover-boogie-backend", default-features = false }
 move-read-write-set-types = { path = "../../external-crates/move/crates/move-read-write-set-types", default-features = false }
 move-stackless-bytecode = { path = "../../external-crates/move/crates/move-stackless-bytecode", default-features = false }
 move-stackless-bytecode-interpreter = { path = "../../external-crates/move/crates/move-stackless-bytecode-interpreter", default-features = false }
@@ -569,8 +563,8 @@ percent-encoding = { version = "2" }
 pest = { version = "2" }
 petgraph-3b31131e45eafb45 = { package = "petgraph", version = "0.6", default-features = false, features = ["graphmap"] }
 petgraph-d8f496e17d97b5cb = { package = "petgraph", version = "0.5" }
-phf = { version = "0.11", features = ["macros", "uncased"] }
-phf_shared = { version = "0.11", features = ["uncased"] }
+phf = { version = "0.11", features = ["macros"] }
+phf_shared = { version = "0.11", default-features = false, features = ["std"] }
 pin-project = { version = "1", default-features = false }
 pin-project-lite = { version = "0.2", default-features = false }
 pin-utils = { version = "0.1", default-features = false }
@@ -588,7 +582,6 @@ pq-sys = { version = "0.4", default-features = false }
 predicates = { version = "2" }
 predicates-core = { version = "1", default-features = false }
 predicates-tree = { version = "1", default-features = false }
-pretty = { version = "0.10", default-features = false }
 pretty_assertions = { version = "1" }
 prettyplease-c65f7effa3be6d31 = { package = "prettyplease", version = "0.1", default-features = false }
 prettytable-rs = { version = "0.10" }
@@ -705,7 +698,6 @@ siphasher = { version = "0.3" }
 sized-chunks = { version = "0.6" }
 slab = { version = "0.4" }
 slip10_ed25519 = { version = "0.1", default-features = false }
-slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
 snap = { version = "1", default-features = false }
 socket2-9fbad63c4bcf4a8f = { package = "socket2", version = "0.4", default-features = false, features = ["all"] }
@@ -730,7 +722,6 @@ tap = { version = "1", default-features = false }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["summaries"] }
 tempfile = { version = "3", default-features = false }
-tera = { version = "1" }
 term = { version = "0.7" }
 termcolor = { version = "1", default-features = false }
 terminal_size = { version = "0.2", default-features = false }
@@ -786,19 +777,11 @@ ttl_cache = { version = "0.5" }
 tui = { version = "0.17" }
 tungstenite = { version = "0.20", default-features = false, features = ["handshake"] }
 twox-hash = { version = "1", default-features = false }
-typed-arena = { version = "2" }
 typenum = { version = "1", default-features = false }
 ucd-trie = { version = "0.1", default-features = false, features = ["std"] }
 uint = { version = "0.9" }
 unarray = { version = "0.1", default-features = false }
-uncased = { version = "0.9", default-features = false }
 unescape = { version = "0.1", default-features = false }
-unic-char-property = { version = "0.9", default-features = false }
-unic-char-range = { version = "0.9" }
-unic-common = { version = "0.9" }
-unic-segment = { version = "0.9", default-features = false }
-unic-ucd-segment = { version = "0.9", default-features = false }
-unic-ucd-version = { version = "0.9", default-features = false }
 unicase = { version = "2", default-features = false }
 unicode-bidi = { version = "0.3" }
 unicode-ident = { version = "1", default-features = false }
@@ -886,7 +869,7 @@ ark-snark = { version = "0.4", default-features = false }
 ark-std = { version = "0.4", default-features = false }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7" }
-arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5" }
+arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", default-features = false }
 arrow-array = { version = "47", default-features = false }
 arrow-buffer = { version = "47", default-features = false }
 arrow-cast = { version = "47", default-features = false }
@@ -1015,8 +998,6 @@ cfg-expr = { version = "0.13", features = ["targets"] }
 cfg-if = { version = "1", default-features = false }
 chacha20 = { version = "0.9", default-features = false }
 chrono = { version = "0.4", features = ["serde"] }
-chrono-tz = { version = "0.6" }
-chrono-tz-build = { version = "0.0.3", default-features = false }
 ciborium = { version = "0.2" }
 ciborium-io = { version = "0.2", default-features = false, features = ["std"] }
 ciborium-ll = { version = "0.2", default-features = false }
@@ -1095,7 +1076,6 @@ derive_builder_core = { version = "0.12", default-features = false }
 derive_builder_macro = { version = "0.12", default-features = false }
 derive_more = { version = "0.99" }
 determinator = { version = "0.10", default-features = false }
-deunicode = { version = "0.4", default-features = false }
 diesel = { version = "2", features = ["64-column-tables", "chrono", "i-implement-a-third-party-backend-and-opt-into-breaking-changes", "postgres", "r2d2", "serde_json"] }
 diesel-derive-enum = { version = "2", default-features = false, features = ["postgres"] }
 diesel_derives = { version = "2", features = ["64-column-tables", "postgres", "r2d2", "with-deprecated"] }
@@ -1207,7 +1187,6 @@ git-version = { version = "0.3", default-features = false }
 git-version-macro = { version = "0.3", default-features = false }
 glob = { version = "0.3", default-features = false }
 globset = { version = "0.4" }
-globwalk = { version = "0.8", default-features = false }
 gloo-timers = { version = "0.2", features = ["futures"] }
 governor = { version = "0.6" }
 group-594e8ee84c453af0 = { package = "group", version = "0.13", features = ["tests"] }
@@ -1241,7 +1220,6 @@ http-body = { version = "0.4", default-features = false }
 http-range-header = { version = "0.3", default-features = false }
 httparse = { version = "1" }
 httpdate = { version = "1", default-features = false }
-humansize = { version = "1", default-features = false }
 humantime = { version = "2", default-features = false }
 hyper = { version = "0.14", features = ["full"] }
 hyper-rustls-2b5c6dc72f624058 = { package = "hyper-rustls", version = "0.23", features = ["http2", "webpki-tokio"] }
@@ -1250,7 +1228,6 @@ hyper-timeout = { version = "0.4", default-features = false }
 ident_case = { version = "1", default-features = false }
 idna = { version = "0.3", default-features = false }
 if_chain = { version = "1", default-features = false }
-ignore = { version = "0.4", default-features = false }
 im = { version = "15", default-features = false }
 impl-codec-3b31131e45eafb45 = { package = "impl-codec", version = "0.6", default-features = false, features = ["std"] }
 impl-codec-d8f496e17d97b5cb = { package = "impl-codec", version = "0.5", default-features = false, features = ["std"] }
@@ -1360,7 +1337,6 @@ move-model = { path = "../../external-crates/move/crates/move-model", default-fe
 move-package = { path = "../../external-crates/move/crates/move-package", default-features = false }
 move-proc-macros = { path = "../../external-crates/move/crates/move-proc-macros", default-features = false }
 move-prover = { path = "../../external-crates/move/crates/move-prover", default-features = false }
-move-prover-boogie-backend = { path = "../../external-crates/move/crates/move-prover-boogie-backend", default-features = false }
 move-read-write-set-types = { path = "../../external-crates/move/crates/move-read-write-set-types", default-features = false }
 move-stackless-bytecode = { path = "../../external-crates/move/crates/move-stackless-bytecode", default-features = false }
 move-stackless-bytecode-interpreter = { path = "../../external-crates/move/crates/move-stackless-bytecode-interpreter", default-features = false }
@@ -1455,7 +1431,6 @@ parking_lot-a6292c17cd707f01 = { package = "parking_lot", version = "0.11" }
 parking_lot_core-274715c4dabd11b0 = { package = "parking_lot_core", version = "0.9", default-features = false }
 parking_lot_core-c38e5c1d305a1b54 = { package = "parking_lot_core", version = "0.8", default-features = false }
 parquet = { version = "47" }
-parse-zoneinfo = { version = "0.3", default-features = false }
 password-hash = { version = "0.4", default-features = false, features = ["rand_core"] }
 pasta_curves = { version = "0.5", features = ["gpu", "serde"] }
 paste = { version = "1", default-features = false }
@@ -1473,11 +1448,10 @@ pest_generator = { version = "2", default-features = false, features = ["std"] }
 pest_meta = { version = "2", default-features = false }
 petgraph-3b31131e45eafb45 = { package = "petgraph", version = "0.6", default-features = false, features = ["graphmap"] }
 petgraph-d8f496e17d97b5cb = { package = "petgraph", version = "0.5" }
-phf = { version = "0.11", features = ["macros", "uncased"] }
-phf_codegen = { version = "0.11", default-features = false }
+phf = { version = "0.11", features = ["macros"] }
 phf_generator = { version = "0.11", default-features = false }
 phf_macros = { version = "0.11", default-features = false }
-phf_shared = { version = "0.11", features = ["uncased"] }
+phf_shared = { version = "0.11", default-features = false, features = ["std"] }
 pin-project = { version = "1", default-features = false }
 pin-project-internal = { version = "1", default-features = false }
 pin-project-lite = { version = "0.2", default-features = false }
@@ -1498,7 +1472,6 @@ pq-sys = { version = "0.4", default-features = false }
 predicates = { version = "2" }
 predicates-core = { version = "1", default-features = false }
 predicates-tree = { version = "1", default-features = false }
-pretty = { version = "0.10", default-features = false }
 pretty_assertions = { version = "1" }
 prettyplease-6f8ce4dd05d13bba = { package = "prettyplease", version = "0.2", default-features = false }
 prettyplease-c65f7effa3be6d31 = { package = "prettyplease", version = "0.1", default-features = false }
@@ -1643,7 +1616,6 @@ siphasher = { version = "0.3" }
 sized-chunks = { version = "0.6" }
 slab = { version = "0.4" }
 slip10_ed25519 = { version = "0.1", default-features = false }
-slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
 snap = { version = "1", default-features = false }
 socket2-9fbad63c4bcf4a8f = { package = "socket2", version = "0.4", default-features = false, features = ["all"] }
@@ -1676,7 +1648,6 @@ tap = { version = "1", default-features = false }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["summaries"] }
 tempfile = { version = "3", default-features = false }
-tera = { version = "1" }
 term = { version = "0.7" }
 termcolor = { version = "1", default-features = false }
 terminal_size = { version = "0.2", default-features = false }
@@ -1740,19 +1711,11 @@ ttl_cache = { version = "0.5" }
 tui = { version = "0.17" }
 tungstenite = { version = "0.20", default-features = false, features = ["handshake"] }
 twox-hash = { version = "1", default-features = false }
-typed-arena = { version = "2" }
 typenum = { version = "1", default-features = false }
 ucd-trie = { version = "0.1", default-features = false, features = ["std"] }
 uint = { version = "0.9" }
 unarray = { version = "0.1", default-features = false }
-uncased = { version = "0.9", default-features = false }
 unescape = { version = "0.1", default-features = false }
-unic-char-property = { version = "0.9", default-features = false }
-unic-char-range = { version = "0.9" }
-unic-common = { version = "0.9" }
-unic-segment = { version = "0.9", default-features = false }
-unic-ucd-segment = { version = "0.9", default-features = false }
-unic-ucd-version = { version = "0.9", default-features = false }
 unicase = { version = "2", default-features = false }
 unicode-bidi = { version = "0.3" }
 unicode-ident = { version = "1", default-features = false }
