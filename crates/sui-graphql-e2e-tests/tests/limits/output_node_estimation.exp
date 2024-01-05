@@ -7,9 +7,7 @@ Response: {
       "edges": [
         {
           "node": {
-            "signatures": [
-              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
-            ]
+            "digest": "FbaziGbTUgv1hCfsnzivvm4e7BuWvYjCibecqkLEohLv"
           }
         }
       ]
@@ -22,7 +20,7 @@ Response: {
       "depth": 4,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 176
+      "queryPayload": 172
     }
   }
 }
@@ -37,9 +35,7 @@ Response: {
             "edges": [
               {
                 "txns": {
-                  "signatures": [
-                    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
-                  ]
+                  "digest": "FbaziGbTUgv1hCfsnzivvm4e7BuWvYjCibecqkLEohLv"
                 }
               }
             ]
@@ -55,7 +51,7 @@ Response: {
       "depth": 6,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 219
+      "queryPayload": 215
     }
   }
 }
@@ -70,9 +66,7 @@ Response: {
             "edges": [
               {
                 "txns": {
-                  "signatures": [
-                    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
-                  ]
+                  "digest": "FbaziGbTUgv1hCfsnzivvm4e7BuWvYjCibecqkLEohLv"
                 }
               }
             ]
@@ -81,9 +75,7 @@ Response: {
             "edges": [
               {
                 "txns": {
-                  "signatures": [
-                    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
-                  ]
+                  "digest": "FbaziGbTUgv1hCfsnzivvm4e7BuWvYjCibecqkLEohLv"
                 }
               }
             ]
@@ -99,7 +91,7 @@ Response: {
       "depth": 6,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 332
+      "queryPayload": 324
     }
   }
 }
@@ -114,9 +106,7 @@ Response: {
             "edges": [
               {
                 "txns": {
-                  "signatures": [
-                    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
-                  ]
+                  "digest": "FbaziGbTUgv1hCfsnzivvm4e7BuWvYjCibecqkLEohLv"
                 }
               }
             ]
@@ -135,7 +125,7 @@ Response: {
       "depth": 6,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 334
+      "queryPayload": 326
     }
   }
 }
@@ -147,9 +137,7 @@ Response: {
       "edges": [
         {
           "txns": {
-            "signatures": [
-              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
-            ]
+            "digest": "FbaziGbTUgv1hCfsnzivvm4e7BuWvYjCibecqkLEohLv"
           }
         }
       ]
@@ -162,7 +150,7 @@ Response: {
       "depth": 4,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 158
+      "queryPayload": 154
     }
   }
 }
@@ -174,9 +162,7 @@ Response: {
       "edges": [
         {
           "txns": {
-            "signatures": [
-              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
-            ]
+            "digest": "FbaziGbTUgv1hCfsnzivvm4e7BuWvYjCibecqkLEohLv"
           }
         }
       ]
@@ -189,7 +175,7 @@ Response: {
       "depth": 4,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 156
+      "queryPayload": 152
     }
   }
 }
@@ -201,9 +187,7 @@ Response: {
       "edges": [
         {
           "txns": {
-            "signatures": [
-              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
-            ],
+            "digest": "FbaziGbTUgv1hCfsnzivvm4e7BuWvYjCibecqkLEohLv",
             "first": null,
             "last": null
           }
@@ -218,7 +202,7 @@ Response: {
       "depth": 8,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 514
+      "queryPayload": 510
     }
   }
 }
@@ -229,9 +213,7 @@ Response: {
     "transactionBlockConnection": {
       "nodes": [
         {
-          "signatures": [
-            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
-          ],
+          "digest": "FbaziGbTUgv1hCfsnzivvm4e7BuWvYjCibecqkLEohLv",
           "first": null,
           "last": null
         }
@@ -245,7 +227,7 @@ Response: {
       "depth": 7,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 546
+      "queryPayload": 542
     }
   }
 }
@@ -257,9 +239,7 @@ Response: {
       "edges": [
         {
           "txns": {
-            "signatures": [
-              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
-            ],
+            "digest": "FbaziGbTUgv1hCfsnzivvm4e7BuWvYjCibecqkLEohLv",
             "a": null,
             "b": null
           }
@@ -277,7 +257,7 @@ Response: {
       "depth": 11,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 1443
+      "queryPayload": 1431
     }
   }
 }
@@ -289,9 +269,7 @@ Response: {
       "edges": [
         {
           "node": {
-            "signatures": [
-              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
-            ],
+            "digest": "FbaziGbTUgv1hCfsnzivvm4e7BuWvYjCibecqkLEohLv",
             "a": null
           }
         }
@@ -305,7 +283,7 @@ Response: {
       "depth": 11,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 730
+      "queryPayload": 722
     }
   }
 }
@@ -320,7 +298,7 @@ Response: {
       "depth": 4,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 167
+      "queryPayload": 163
     }
   },
   "errors": [
@@ -352,7 +330,7 @@ Response: {
       "depth": 4,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 160
+      "queryPayload": 156
     }
   },
   "errors": [

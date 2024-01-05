@@ -9,7 +9,7 @@
   transactionBlockConnection {
     edges {
       node {
-        signatures
+        digest
       }
     }
   }
@@ -23,7 +23,7 @@
       transactionBlockConnection {
         edges {
           txns: node {
-            signatures
+            digest
           }
         }
       }
@@ -39,14 +39,14 @@
       notOne: transactionBlockConnection {
         edges {
           txns: node {
-            signatures
+            digest
           }
         }
       }
       isOne: transactionBlockConnection(first: 1) {
         edges {
           txns: node {
-            signatures
+            digest
           }
         }
       }
@@ -62,14 +62,14 @@
       notZero: transactionBlockConnection {
         edges {
           txns: node {
-            signatures
+            digest
           }
         }
       }
       isZero: transactionBlockConnection(first: 0) {
         edges {
           txns: node {
-            signatures
+            digest
           }
         }
       }
@@ -83,7 +83,7 @@
   transactionBlockConnection(first: 1) {
     edges {
       txns: node {
-        signatures
+        digest
       }
     }
   }
@@ -95,7 +95,7 @@
   transactionBlockConnection(last: 1) {
     edges {
       txns: node {
-        signatures
+        digest
       }
     }
   }
@@ -107,7 +107,7 @@
   transactionBlockConnection {
     edges {
       txns: node {
-        signatures
+        digest
         first: expiration {
           checkpoints(first: 20) {
             edges {
@@ -136,7 +136,7 @@
 {
   transactionBlockConnection {
     nodes {
-      signatures
+      digest
       first: expiration { # 80 cumulative
         checkpoints(first: 20) {
           edges {
@@ -167,7 +167,7 @@
   transactionBlockConnection(first: 50) { # 50, 50
     edges { # 50, 100
       txns: node { # 50, 150
-        signatures # 50, 200
+        digest # 50, 200
         a: expiration { # 50, 250
           checkpoints(last: 20) { # 50 * 20 = 1000, 1250
             edges { # 1000, 2250
@@ -175,7 +175,7 @@
                 transactionBlockConnection(first: 10) { # 50 * 20 * 10 = 10000, 13250
                   edges { # 10000, 23250
                     node { # 10000, 33250
-                      signatures # 10000, 43250
+                      digest # 10000, 43250
                     }
                   }
                 }
@@ -190,7 +190,7 @@
                 transactionBlockConnection(last: 10) { # 50 * 20 * 10 = 10000, 56300
                   edges { # 10000, 66300
                     node { # 10000, 76300
-                      signatures # 10000, 86300
+                      digest # 10000, 86300
                     }
                   }
                 }
@@ -216,7 +216,7 @@ query NullVariableForLimit($howMany: Int) {
   transactionBlockConnection(last: $howMany) { # 20, 20
     edges { # 20, 40
       node { # 20, 60
-        signatures # 20, 80
+        digest # 20, 80
         a: expiration { # 20, 100
           checkpoints { # 20 * 20， 500
             edges { # 400, 900
@@ -224,7 +224,7 @@ query NullVariableForLimit($howMany: Int) {
                 transactionBlockConnection(first: $howMany) { # 20 * 20 * 20 = 8000， 9300
                   edges { # 8000, 17300
                     node { # 8000, 25300
-                      signatures # 8000, 33300
+                      digest # 8000, 33300
                     }
                   }
                 }
@@ -243,7 +243,7 @@ query NullVariableForLimit($howMany: Int) {
   transactionBlockConnection(first: 20, last: 30) {
     edges {
       node {
-        signatures
+        digest
       }
     }
   }
@@ -255,7 +255,7 @@ query NullVariableForLimit($howMany: Int) {
   transactionBlockConnection(first: 36893488147419103000) {
     edges {
       node {
-        signatures
+        digest
       }
     }
   }
