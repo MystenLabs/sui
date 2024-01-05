@@ -14,8 +14,6 @@ module sui::coin {
     use sui::transfer;
     use sui::url::{Self, Url};
     use std::vector;
-    use sui::table;
-    use sui::vec_set;
     use sui::freezer::{Self, Freezer};
 
     /// A type passed to create_supply is not a one-time witness.
@@ -24,8 +22,6 @@ module sui::coin {
     const EInvalidArg: u64 = 1;
     /// Trying to split a coin more times than its balance allows.
     const ENotEnough: u64 = 2;
-    /// The specified address to be unfrozen is not already frozen.
-    const ENotFrozen: u64 = 3;
 
     /// A coin of type `T` worth `value`. Transferable and storable
     struct Coin<phantom T> has key, store {
@@ -283,6 +279,9 @@ module sui::coin {
         balance::decrease_supply(&mut cap.total_supply, balance)
     }
 
+    /// The index into the freezers vector for the `sui::coin::Coin` type.
+    const FREEZER_COIN_INDEX: u64 = 0; // TODO public(package) const
+
     /// Freezes the given address, preventing it
     /// from interacting with the coin as an input to a transaction.
     public fun freeze_address<T>(
@@ -291,21 +290,12 @@ module sui::coin {
        addr: address,
        _ctx: &mut TxContext
     ) {
-        let (frozen_count, frozen_addresses) = freezer::coin_tables_mut(freezer);
-        let coin_package = freeze_cap.package;
-        if (!table::contains(frozen_addresses, coin_package)) {
-            table::add(frozen_addresses, coin_package, vec_set::empty());
-        };
-        let frozen_addresses_set = table::borrow_mut(frozen_addresses, coin_package);
-        let already_frozen = vec_set::contains(frozen_addresses_set, &addr);
-        if (already_frozen) return;
-
-        vec_set::insert(frozen_addresses_set, addr);
-        if (!table::contains(frozen_count, addr)) {
-            table::add(frozen_count, addr, 0);
-        };
-        let frozen_count = table::borrow_mut(frozen_count, addr);
-        *frozen_count = *frozen_count + 1;
+        freezer::freeze_address(
+            freezer,
+            FREEZER_COIN_INDEX,
+            freeze_cap.package,
+            addr,
+        )
     }
 
     /// Removes a previously frozen address from the freeze list.
@@ -316,16 +306,12 @@ module sui::coin {
        addr: address,
        _ctx: &mut TxContext
     ) {
-        let (frozen_count, frozen_addresses) = freezer::coin_tables_mut(freezer);
-        let coin_package = freeze_cap.package;
-        let frozen_addresses_set = table::borrow_mut(frozen_addresses, coin_package);
-        assert!(vec_set::contains(frozen_addresses_set, &addr), ENotFrozen);
-        vec_set::remove(frozen_addresses_set, &addr);
-        let addr_frozen_count = table::borrow_mut(frozen_count, addr);
-        *addr_frozen_count = *addr_frozen_count - 1;
-        if (*addr_frozen_count == 0) {
-            table::remove(frozen_count, addr);
-        }
+        freezer::unfreeze_address(
+            freezer,
+            FREEZER_COIN_INDEX,
+            freeze_cap.package,
+            addr,
+        )
     }
 
     /// Returns true iff the given address is frozen for the given coin type. It will
@@ -334,12 +320,6 @@ module sui::coin {
        freezer: &Freezer,
        addr: address,
     ): bool {
-        let (frozen_count, frozen_addresses) = freezer::coin_tables(freezer);
-        if (!table::contains(frozen_count, addr)) return false;
-
-        let frozen_count = table::borrow(frozen_count, addr);
-        if (*frozen_count == 0) return false;
-
         let coin_package = {
             let type_name = std::type_name::get_with_original_ids<T>();
             // return false if it does not have a package
@@ -350,10 +330,12 @@ module sui::coin {
             );
             object::id_from_address(package_addr)
         };
-        if (!table::contains(frozen_addresses, coin_package)) return false;
-
-        let frozen_addresses_set = table::borrow(frozen_addresses, coin_package);
-        vec_set::contains(frozen_addresses_set, &addr)
+        freezer::address_is_frozen(
+            freezer,
+            FREEZER_COIN_INDEX,
+            coin_package,
+            addr,
+        )
     }
 
     // === Entrypoints ===

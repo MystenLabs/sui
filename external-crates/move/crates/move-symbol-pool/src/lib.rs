@@ -83,6 +83,7 @@ static_symbols!(
     "Receiving",
     "receive",
     "loop",
+    "freezer",
 );
 
 /// The global, unique cache of strings.

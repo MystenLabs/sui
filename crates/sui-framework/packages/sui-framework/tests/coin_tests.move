@@ -88,7 +88,7 @@ module sui::coin_tests {
     fun frozen_coins() {
         let scenario = test_scenario::begin(@0);
         let test = &mut scenario;
-        freezer::create_deny_list_object_for_test(test_scenario::ctx(test));
+        freezer::create_for_test(test_scenario::ctx(test));
         test_scenario::next_tx(test, TEST_ADDR);
 
         let witness = COIN_TESTS {};

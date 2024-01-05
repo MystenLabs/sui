@@ -5433,7 +5433,6 @@ module deepbook::clob_test {
         {
             let pool = test::take_shared<Pool<SUI, USD>>(&test);
             let account_cap = test::take_from_address<AccountCap>(&test, alice);
-            std::debug::print(&clob::list_open_orders(&pool, &account_cap));
             // cancel all order
             // clob::cancel_order<SUI, USD>(&mut pool, 1, &account_cap);
             // clob::cancel_all_orders<SUI, USD>(&mut pool, &account_cap);
@@ -5450,9 +5449,9 @@ module deepbook::clob_test {
             let clock = test::take_shared<Clock>(&test);
 
             let (base_coin, quote_coin) = clob::place_market_order<SUI, USD>(
-                &mut pool, 
-                &account_cap, 
-                CLIENT_ID_BOB, 
+                &mut pool,
+                &account_cap,
+                CLIENT_ID_BOB,
                 100000,
                 true,
                 mint_for_testing<SUI>(0, ctx(&mut test)),
@@ -5466,9 +5465,9 @@ module deepbook::clob_test {
 
             // buy second time
             let (base_coin, quote_coin) = clob::place_market_order<SUI, USD>(
-                &mut pool, 
-                &account_cap, 
-                CLIENT_ID_BOB, 
+                &mut pool,
+                &account_cap,
+                CLIENT_ID_BOB,
                 100000,
                 true,
                 mint_for_testing<SUI>(0, ctx(&mut test)),
@@ -5483,9 +5482,9 @@ module deepbook::clob_test {
 
             // Buys but this time utilizes a different code path
             let (base_coin, quote_coin) = clob::place_market_order<SUI, USD>(
-                &mut pool, 
-                &account_cap, 
-                CLIENT_ID_BOB, 
+                &mut pool,
+                &account_cap,
+                CLIENT_ID_BOB,
                 100000,
                 false,
                 mint_for_testing<SUI>(100000, ctx(&mut test)),
@@ -5499,9 +5498,9 @@ module deepbook::clob_test {
 
             // buy second time
             let (base_coin, quote_coin) = clob::place_market_order<SUI, USD>(
-                &mut pool, 
-                &account_cap, 
-                CLIENT_ID_BOB, 
+                &mut pool,
+                &account_cap,
+                CLIENT_ID_BOB,
                 100000,
                 false,
                 mint_for_testing<SUI>(100000, ctx(&mut test)),
