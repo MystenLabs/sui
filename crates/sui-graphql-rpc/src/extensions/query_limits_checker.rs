@@ -31,9 +31,8 @@ use axum::http::HeaderValue;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use sui_graphql_rpc_headers::LIMITS_HEADER;
 use tokio::sync::Mutex;
-
-pub static LIMITS_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-show-usage");
 
 /// Only display usage information if this header was in the request.
 pub(crate) struct ShowUsage;

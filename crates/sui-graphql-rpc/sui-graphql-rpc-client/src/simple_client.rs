@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client::ClientError;
-use crate::extensions::query_limits_checker::LIMITS_HEADER;
+use crate::ClientError;
 use axum::http::HeaderValue;
 use hyper::header;
 use reqwest::Response;
 use serde_json::Value;
 use std::collections::BTreeMap;
+use sui_graphql_rpc_headers::LIMITS_HEADER;
 
 use super::response::GraphqlResponse;
 
