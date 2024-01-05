@@ -269,14 +269,10 @@ impl TryFrom<Object> for NameRecord {
     type Error = NameServiceError;
 
     fn try_from(object: Object) -> Result<Self, NameServiceError> {
-        let obj = object
+        object
             .to_rust::<Field<Domain, Self>>()
-            .map(|record| record.value);
-
-        match obj {
-            Some(record) => Ok(record),
-            None => Err(NameServiceError::MalformedObject(object.id())),
-        }
+            .map(|record| record.value)
+            .ok_or_else(|| NameServiceError::MalformedObject(object.id()))
     }
 }
 
