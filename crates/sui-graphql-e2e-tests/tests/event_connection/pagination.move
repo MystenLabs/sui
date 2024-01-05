@@ -29,7 +29,63 @@ module Test::M1 {
 
 //# run-graphql
 {
-  eventConnection(filter: {sender: "@{A}"}) {
+  events(filter: {sender: "@{A}"}) {
+    pageInfo {
+      hasPreviousPage
+      hasNextPage
+    }
+    edges {
+      cursor
+      node {
+        sendingModule {
+          name
+        }
+        type {
+          repr
+        }
+        sender {
+          address
+        }
+        json
+        bcs
+      }
+    }
+  }
+}
+
+//# run-graphql --cursors {"tx":2,"e":0}
+{
+  events(first: 2 after: "@{cursor_0}", filter: {sender: "@{A}"}) {
+    pageInfo {
+      hasPreviousPage
+      hasNextPage
+    }
+    edges {
+      cursor
+      node {
+        sendingModule {
+          name
+        }
+        type {
+          repr
+        }
+        sender {
+          address
+        }
+        json
+        bcs
+      }
+    }
+  }
+}
+
+//# run-graphql --cursors {"tx":3,"e":1}
+{
+  events(last: 2 before: "@{cursor_0}", filter: {sender: "@{A}"}) {
+    pageInfo {
+      hasPreviousPage
+      hasNextPage
+    }
     edges {
       cursor
       node {
@@ -51,51 +107,11 @@ module Test::M1 {
 
 //# run-graphql
 {
-  eventConnection(first: 2 after: "2:0", filter: {sender: "@{A}"}) {
-    edges {
-      cursor
-      node {
-        sendingModule {
-          name
-        }
-        type {
-          repr
-        }
-        sender {
-          address
-        }
-        json
-        bcs
-      }
+  events(last: 2) {
+    pageInfo {
+      hasPreviousPage
+      hasNextPage
     }
-  }
-}
-
-//# run-graphql
-{
-  eventConnection(last: 2 before: "3:1", filter: {sender: "@{A}"}) {
-    edges {
-      cursor
-      node {
-        sendingModule {
-          name
-        }
-        type {
-          repr
-        }
-        sender {
-          address
-        }
-        json
-        bcs
-      }
-    }
-  }
-}
-
-//# run-graphql
-{
-  eventConnection(last: 2) {
     edges {
       cursor
       node {

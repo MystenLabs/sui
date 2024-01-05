@@ -1,8 +1,11 @@
-query byEmittingPackageModuleAndEventType {
-  eventConnection(
+query ByEmittingPackageModuleAndEventType {
+  events(
     first: 1
-    after: "85173:0"
-    filter: {emittingModule: "0x3::sui_system", eventType: "0x3::validator::StakingRequestEvent"}
+    after: "eyJ0eCI6ODUxNzMsImUiOjB9"
+    filter: {
+      emittingModule: "0x3::sui_system",
+      eventType: "0x3::validator::StakingRequestEvent"
+    }
   ) {
     pageInfo {
       hasNextPage

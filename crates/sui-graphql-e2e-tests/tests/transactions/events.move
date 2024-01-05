@@ -56,7 +56,7 @@ module Test::M1 {
 
 //# run-graphql
 {
-  eventConnection(filter: {sender: "@{A}"}) {
+  events(filter: {sender: "@{A}"}) {
     nodes {
       sendingModule {
         name

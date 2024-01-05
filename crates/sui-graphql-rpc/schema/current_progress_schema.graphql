@@ -1977,7 +1977,7 @@ type Query {
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
-	eventConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
+	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	"""
 	Fetch the protocol config by protocol version (defaults to the latest protocol

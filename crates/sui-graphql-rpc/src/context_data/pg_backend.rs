@@ -9,8 +9,7 @@ use crate::{
     context_data::db_data_provider::PgManager,
     error::Error,
     types::{
-        event::EventFilter, object::ObjectFilter, sui_address::SuiAddress,
-        transaction_block::TransactionBlockFilter,
+        object::ObjectFilter, sui_address::SuiAddress, transaction_block::TransactionBlockFilter,
     },
 };
 use async_trait::async_trait;
@@ -23,7 +22,7 @@ use diesel::{
 use std::str::FromStr;
 use sui_indexer::{
     schema_v2::{
-        display, events, objects, transactions, tx_calls, tx_changed_objects, tx_input_objects,
+        display, objects, transactions, tx_calls, tx_changed_objects, tx_input_objects,
         tx_recipients, tx_senders,
     },
     types_v2::OwnerType,
@@ -345,128 +344,6 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         let query = PgQueryBuilder::multi_get_balances(address);
         query.filter(objects::dsl::coin_type.eq(coin_type))
     }
-    fn multi_get_events(
-        before: Option<(i64, i64)>,
-        after: Option<(i64, i64)>,
-        limit: PageLimit,
-        filter: Option<EventFilter>,
-    ) -> Result<events::BoxedQuery<'static, Pg>, Error> {
-        let mut query = order_events(before, after, &limit);
-        query = query.limit(limit.value() + 1);
-
-        let Some(filter) = filter else {
-            return Ok(query);
-        };
-
-        if let Some(sender) = filter.sender {
-            // Construct a subquery to filter on senders - this is because we do not have an index on the senders column.
-            let subquery = tx_senders::dsl::tx_senders
-                .filter(tx_senders::dsl::sender.eq(sender.into_vec()))
-                .select(tx_senders::dsl::tx_sequence_number);
-
-            query = query.filter(events::dsl::tx_sequence_number.eq_any(subquery));
-        }
-
-        if let Some(digest) = filter.transaction_digest {
-            let subquery = transactions::dsl::transactions
-                .filter(transactions::dsl::transaction_digest.eq(digest.to_vec()))
-                .select(transactions::dsl::tx_sequence_number);
-
-            query = query.filter(events::dsl::tx_sequence_number.eq_any(subquery));
-        }
-
-        // Filters on the package and/ or module that emitted some event
-        if let Some(pm) = filter.emitting_module {
-            let format = "package[::module]";
-            let parts: Vec<_> = pm.splitn(2, "::").collect();
-
-            if parts.iter().any(|&part| part.is_empty()) {
-                return Err(DbValidationError::InvalidType(
-                    TypeFilterError::MissingComponents(pm, format).to_string(),
-                ))?;
-            }
-
-            let p = SuiAddress::from_str(parts[0])
-                .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
-
-            match parts.len() {
-                1 => {
-                    query = query.filter(events::dsl::package.eq(p.into_vec()));
-                }
-                2 => {
-                    query = query.filter(events::dsl::package.eq(p.into_vec()));
-                    query = query.filter(events::dsl::module.eq(parts[1].to_string()));
-                }
-                _ => {
-                    return Err(DbValidationError::InvalidType(
-                        TypeFilterError::TooManyComponents(pm, 2, format).to_string(),
-                    )
-                    .into());
-                }
-            }
-        }
-
-        // Filters on the event type
-        if let Some(event_type) = filter.event_type {
-            let parts: Vec<_> = event_type.splitn(3, "::").collect();
-
-            if parts.iter().any(|&part| part.is_empty()) {
-                return Err(DbValidationError::InvalidType(
-                    TypeFilterError::MissingComponents(
-                        event_type,
-                        "package[::module[::type[<type_params>]]]",
-                    )
-                    .to_string(),
-                ))?;
-            }
-
-            let p = SuiAddress::from_str(parts[0])
-                .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
-
-            match parts.len() {
-                1 => query = query.filter(events::dsl::event_type.like(format!("{}::%", p))),
-                2 => {
-                    query = query
-                        .filter(events::dsl::event_type.like(format!("{}::{}::%", p, parts[1])))
-                }
-                3 => {
-                    let validated_type = parse_sui_struct_tag(&event_type)
-                        .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
-
-                    if validated_type.type_params.is_empty() {
-                        query = query.filter(
-                            events::dsl::event_type
-                                .like(format!(
-                                    "{}<%",
-                                    validated_type.to_canonical_string(/* with_prefix */ true)
-                                ))
-                                .or(events::dsl::event_type
-                                    .eq(validated_type
-                                        .to_canonical_string(/* with_prefix */ true))),
-                        );
-                    } else {
-                        query = query.filter(
-                            events::dsl::event_type
-                                .eq(validated_type.to_canonical_string(/* with_prefix */ true)),
-                        );
-                    }
-                }
-                _ => {
-                    return Err(DbValidationError::InvalidType(
-                        TypeFilterError::TooManyComponents(
-                            event_type,
-                            3,
-                            "package[::module[::type[<type_params>]]]",
-                        )
-                        .to_string(),
-                    )
-                    .into());
-                }
-            }
-        }
-
-        Ok(query)
-    }
 }
 
 /// Allows methods like load(), get_result(), etc. on an Explained query
@@ -629,45 +506,6 @@ fn order_objs(
                 query = query.filter(objects::dsl::object_id.lt(before));
             }
             query = query.order(objects::dsl::object_id.desc());
-        }
-    }
-    query
-}
-
-fn order_events(
-    before: Option<(i64, i64)>,
-    after: Option<(i64, i64)>,
-    limit: &PageLimit,
-) -> events::BoxedQuery<'static, Pg> {
-    let mut query = events::dsl::events.into_boxed();
-    match limit {
-        PageLimit::First(_) => {
-            if let Some(after) = after {
-                query = query.filter(
-                    events::dsl::tx_sequence_number
-                        .gt(after.0)
-                        .or(events::dsl::tx_sequence_number
-                            .eq(after.0)
-                            .and(events::dsl::event_sequence_number.gt(after.1))),
-                );
-            }
-            query = query
-                .order(events::dsl::tx_sequence_number.asc())
-                .then_order_by(events::dsl::event_sequence_number.asc());
-        }
-        PageLimit::Last(_) => {
-            if let Some(before) = before {
-                query = query.filter(
-                    events::dsl::tx_sequence_number.lt(before.0).or(
-                        events::dsl::tx_sequence_number
-                            .eq(before.0)
-                            .and(events::dsl::event_sequence_number.lt(before.1)),
-                    ),
-                );
-            }
-            query = query
-                .order(events::dsl::tx_sequence_number.desc())
-                .then_order_by(events::dsl::event_sequence_number.desc());
         }
     }
     query

@@ -267,7 +267,7 @@ Response: {
         }
       ]
     },
-    "eventConnection": {
+    "events": {
       "edges": []
     }
   },
@@ -278,7 +278,7 @@ Response: {
       "depth": 11,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 1431
+      "queryPayload": 1422
     }
   }
 }

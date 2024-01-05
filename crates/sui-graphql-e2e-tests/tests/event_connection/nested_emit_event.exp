@@ -16,10 +16,10 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0
 task 3 'create-checkpoint'. lines 41-41:
 Checkpoint created: 1
 
-task 4 'run-graphql'. lines 43-62:
+task 4 'run-graphql'. lines 43-60:
 Response: {
   "data": {
-    "eventConnection": {
+    "events": {
       "nodes": [
         {
           "sendingModule": {
@@ -41,10 +41,10 @@ Response: {
   }
 }
 
-task 5 'run-graphql'. lines 64-83:
+task 5 'run-graphql'. lines 62-79:
 Response: {
   "data": {
-    "eventConnection": {
+    "events": {
       "nodes": [
         {
           "sendingModule": {
@@ -66,28 +66,28 @@ Response: {
   }
 }
 
-task 6 'run-graphql'. lines 85-104:
+task 6 'run-graphql'. lines 81-98:
 Response: {
   "data": {
-    "eventConnection": {
+    "events": {
       "nodes": []
     }
   }
 }
 
-task 7 'run-graphql'. lines 106-125:
+task 7 'run-graphql'. lines 100-117:
 Response: {
   "data": {
-    "eventConnection": {
+    "events": {
       "nodes": []
     }
   }
 }
 
-task 8 'run-graphql'. lines 127-146:
+task 8 'run-graphql'. lines 119-136:
 Response: {
   "data": {
-    "eventConnection": {
+    "events": {
       "nodes": [
         {
           "sendingModule": {

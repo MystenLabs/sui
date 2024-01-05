@@ -211,7 +211,7 @@
       }
     }
   }
-  eventConnection(last: 10) { # 10
+  events(last: 10) { # 10
     edges {
       node {
         timestamp
