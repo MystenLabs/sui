@@ -21,7 +21,7 @@ gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 
 task 4 'view-object'. lines 34-34:
 Owner: Account Address ( validator_0 )
 Version: 1
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(0,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 300000000000000u64}}
+Contents: sui_system::staking_pool::StakedSui {id: sui::object::UID {id: sui::object::ID {bytes: fake(0,0)}}, pool_id: sui::object::ID {bytes: _}, stake_activation_epoch: 0u64, principal: sui::balance::Balance<sui::sui::SUI> {value: 20000000000000000u64}}
 
 task 5 'view-object'. lines 36-36:
 Owner: Account Address ( A )
@@ -44,7 +44,7 @@ task 9 'advance-epoch'. lines 45-45:
 Epoch advanced: 5
 
 task 10 'view-checkpoint'. lines 47-47:
-CheckpointSummary { epoch: 5, seq: 10, content_digest: BEPntdMPjzSNqpjTVqj2bqK73XZaJjmGD9aveCCxiVk1,
+CheckpointSummary { epoch: 5, seq: 10, content_digest: EGS6axSNhobsYewj16BkK6BXqMiFjL5xCwcRHkrohgHM,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}
 
 task 11 'run-graphql'. lines 49-55:
@@ -111,8 +111,8 @@ Response: {
         "edges": [
           {
             "node": {
-              "address": "0x71820fc5ca7bf6cc98ac5a413470b5c8e3574aa97b6526509359a59a87146efe",
-              "digest": "4kCBMkJH8vpM37EK3tX5RoX35y3eqyKCjV3MjaHULhVj",
+              "address": "0x8b0e0310a07085ad13f91adb49a9ee30b002c2074addc4b0487f7195d44e928a",
+              "digest": "85b8jVWZrQNAaJ7suXm8w8cdDbq85tkQRo4CGrY5cS4H",
               "kind": "OWNED"
             }
           }
@@ -135,8 +135,8 @@ Response: {
         "edges": [
           {
             "node": {
-              "address": "0x71820fc5ca7bf6cc98ac5a413470b5c8e3574aa97b6526509359a59a87146efe",
-              "digest": "4kCBMkJH8vpM37EK3tX5RoX35y3eqyKCjV3MjaHULhVj",
+              "address": "0x8b0e0310a07085ad13f91adb49a9ee30b002c2074addc4b0487f7195d44e928a",
+              "digest": "85b8jVWZrQNAaJ7suXm8w8cdDbq85tkQRo4CGrY5cS4H",
               "kind": "OWNED"
             }
           }
@@ -149,7 +149,7 @@ Response: {
           {
             "node": {
               "address": "0x511fd9ce0b6943a3968d0d5cc377322cd0118433f65dcb51e9d1727d771047f0",
-              "digest": "GACjkKi51h6tikZb7ezNQo9uARMfUWpnPE6Wh5YUGJZG",
+              "digest": "HMRSJr7gKNHC1nYbt8nBsXxdiJ1wnoHZuMRN1DA3jhXo",
               "kind": "OWNED",
               "owner": {
                 "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
@@ -158,8 +158,8 @@ Response: {
           },
           {
             "node": {
-              "address": "0x7c32b3f10019c3bd80d6ec381bf45e3fcb8717b1428077f42a023f8cfcec2d3e",
-              "digest": "AX3yRpQxggnKrXUiF46pw6ZMk5DeLvnurdf6JHUjF8Kq",
+              "address": "0x7827de2a83a6b4ac36d2ac1764ad0f811308521407a5b72ae69559dda2cd2058",
+              "digest": "DMMSd4mQuDW3VnySiLcZQzwX9zK6SKPnKJ17NwVBHuzz",
               "kind": "OWNED",
               "owner": {
                 "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
@@ -168,8 +168,8 @@ Response: {
           },
           {
             "node": {
-              "address": "0xa718099558ebd8490b4687796c6014fc91e1b50f515eb67cea18b94967d18f87",
-              "digest": "H9g1c6GwCvPVu9bX6ybhVGvaJhL3swwdW9RDUwYKnaV7",
+              "address": "0x936681de92a7306429f56748932bfbf17e199363edafa8ab973cd2e203c0c384",
+              "digest": "D3ybZDPxmpsbm5Ufr5sRmfHzYW8eSRDtyVUsGjqGyrQu",
               "kind": "OWNED",
               "owner": {
                 "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
@@ -178,8 +178,8 @@ Response: {
           },
           {
             "node": {
-              "address": "0xd5009e28d1ec2b810358bf7409b85ef35705ec242a841ae58b0a6be78ee36ceb",
-              "digest": "45enuZW7hi6iEB6JtpoG6sgqeKR1YRuYQdueb2j7SAtW",
+              "address": "0xc9234d34e6067dc9ef92cbc2480dee6776e9884eba8fbda5c3f01f4fe96195ed",
+              "digest": "4wBDM7bxAQvBf51jftjwCx7rdeZ2zcBbgvW2P6rkxokW",
               "kind": "OWNED",
               "owner": {
                 "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
@@ -188,8 +188,8 @@ Response: {
           },
           {
             "node": {
-              "address": "0xdee417395dafb605070695e09358564b69b9a89835c5bd217f8e96171f8ff5b8",
-              "digest": "AjqqC7S6uPgn5M3mbTGYM4WiitstjdgX1UfnbuhFumsm",
+              "address": "0xd92d2142638f7d211143788ea1ad6e51185869bc4469f744aabd4f29e05ee5f2",
+              "digest": "5tdgwqrvoKVcRcyNzKo8Usz2MtPCok2oV3G3ncaxWH4c",
               "kind": "OWNED",
               "owner": {
                 "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
@@ -198,8 +198,8 @@ Response: {
           },
           {
             "node": {
-              "address": "0xf1a03b810d02a6bf9be35f570e8532f0bc024860851a667a081c1e1c0e150c32",
-              "digest": "7i2RstnRZpGiNfCdzMSRGaLg9tFb9PCA8XiXcgGohRJr",
+              "address": "0xfe3f0fecd990aa6e3be0409a7f22fca7b45b98d9003f9f5d27d08f90cd39441b",
+              "digest": "3zkW5RrBhsdMphKHbeGP5jJB498ZfKwMH563SZGC94JA",
               "kind": "OWNED",
               "owner": {
                 "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
@@ -229,11 +229,11 @@ Value: "0x42"
 
 Name: Test
 Type: SuiAddress!
-Value: "0x211a1fa27976401d1f1cc1e2e5d6f2e60cab8868f48be8135a3ce1b8d9bffd32"
+Value: "0x8fa22ff0885e01db3fbe1830d142385c1626904337c9d68957ce834c36df82e9"
 
 Name: Test_opt
 Type: SuiAddress
-Value: "0x211a1fa27976401d1f1cc1e2e5d6f2e60cab8868f48be8135a3ce1b8d9bffd32"
+Value: "0x8fa22ff0885e01db3fbe1830d142385c1626904337c9d68957ce834c36df82e9"
 
 Name: deepbook
 Type: SuiAddress!
@@ -245,43 +245,43 @@ Value: "0xdee9"
 
 Name: obj_0_0
 Type: SuiAddress!
-Value: "0x7c32b3f10019c3bd80d6ec381bf45e3fcb8717b1428077f42a023f8cfcec2d3e"
+Value: "0x7827de2a83a6b4ac36d2ac1764ad0f811308521407a5b72ae69559dda2cd2058"
 
 Name: obj_0_0_opt
 Type: SuiAddress
-Value: "0x7c32b3f10019c3bd80d6ec381bf45e3fcb8717b1428077f42a023f8cfcec2d3e"
+Value: "0x7827de2a83a6b4ac36d2ac1764ad0f811308521407a5b72ae69559dda2cd2058"
 
 Name: obj_0_1
 Type: SuiAddress!
-Value: "0xf87a3aa05cb102b31d2a0706b067c9b41de31c421657ae8312a7982d26e5e8a7"
+Value: "0xf6709ad5c03195ba6c0af8a5c535a9c277160b81c6998e7365be5c04ec23881f"
 
 Name: obj_0_1_opt
 Type: SuiAddress
-Value: "0xf87a3aa05cb102b31d2a0706b067c9b41de31c421657ae8312a7982d26e5e8a7"
+Value: "0xf6709ad5c03195ba6c0af8a5c535a9c277160b81c6998e7365be5c04ec23881f"
 
 Name: obj_1_0
 Type: SuiAddress!
-Value: "0x211a1fa27976401d1f1cc1e2e5d6f2e60cab8868f48be8135a3ce1b8d9bffd32"
+Value: "0x8fa22ff0885e01db3fbe1830d142385c1626904337c9d68957ce834c36df82e9"
 
 Name: obj_1_0_opt
 Type: SuiAddress
-Value: "0x211a1fa27976401d1f1cc1e2e5d6f2e60cab8868f48be8135a3ce1b8d9bffd32"
+Value: "0x8fa22ff0885e01db3fbe1830d142385c1626904337c9d68957ce834c36df82e9"
 
 Name: obj_2_0
 Type: SuiAddress!
-Value: "0x71820fc5ca7bf6cc98ac5a413470b5c8e3574aa97b6526509359a59a87146efe"
+Value: "0x8b0e0310a07085ad13f91adb49a9ee30b002c2074addc4b0487f7195d44e928a"
 
 Name: obj_2_0_opt
 Type: SuiAddress
-Value: "0x71820fc5ca7bf6cc98ac5a413470b5c8e3574aa97b6526509359a59a87146efe"
+Value: "0x8b0e0310a07085ad13f91adb49a9ee30b002c2074addc4b0487f7195d44e928a"
 
 Name: obj_3_0
 Type: SuiAddress!
-Value: "0xf1a03b810d02a6bf9be35f570e8532f0bc024860851a667a081c1e1c0e150c32"
+Value: "0x936681de92a7306429f56748932bfbf17e199363edafa8ab973cd2e203c0c384"
 
 Name: obj_3_0_opt
 Type: SuiAddress
-Value: "0xf1a03b810d02a6bf9be35f570e8532f0bc024860851a667a081c1e1c0e150c32"
+Value: "0x936681de92a7306429f56748932bfbf17e199363edafa8ab973cd2e203c0c384"
 
 Name: std
 Type: SuiAddress!
