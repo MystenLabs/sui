@@ -143,14 +143,14 @@ pub struct FunctionDef {
 /// to a map, an instance can be created to query the map without having to allocate strings on the
 /// heap.
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Hash)]
-pub struct StructRef<'m, 'n> {
+pub struct DatatypeRef<'m, 'n> {
     pub package: AccountAddress,
     pub module: Cow<'m, str>,
     pub name: Cow<'n, str>,
 }
 
 /// A `StructRef` that owns its strings.
-pub type StructKey = StructRef<'static, 'static>;
+pub type DatatypeKey = DatatypeRef<'static, 'static>;
 
 #[derive(Clone, Debug)]
 pub enum Reference {
@@ -178,7 +178,7 @@ pub enum OpenSignatureBody {
     U128,
     U256,
     Vector(Box<OpenSignatureBody>),
-    Struct(StructKey, Vec<OpenSignatureBody>),
+    Datatype(DatatypeKey, Vec<OpenSignatureBody>),
     TypeParameter(u16),
 }
 
@@ -186,7 +186,7 @@ pub enum OpenSignatureBody {
 #[derive(Debug, Default)]
 struct ResolutionContext<'l> {
     /// Definitions (field information) for structs referred to by types added to this context.
-    structs: BTreeMap<StructKey, StructDef>,
+    structs: BTreeMap<DatatypeKey, StructDef>,
     /// Limits configuration from the calling resolver.
     limits: Option<&'l Limits>,
 }
@@ -628,9 +628,9 @@ impl OpenSignatureBody {
 
             S::Vector(sig) => O::Vector(Box::new(OpenSignatureBody::read(sig, bytecode)?)),
 
-            S::Struct(ix) => O::Struct(StructKey::read(*ix, bytecode), vec![]),
-            S::StructInstantiation(ix, params) => O::Struct(
-                StructKey::read(*ix, bytecode),
+            S::Struct(ix) => O::Datatype(DatatypeKey::read(*ix, bytecode), vec![]),
+            S::StructInstantiation(ix, params) => O::Datatype(
+                DatatypeKey::read(*ix, bytecode),
                 params
                     .iter()
                     .map(|sig| OpenSignatureBody::read(sig, bytecode))
@@ -640,9 +640,9 @@ impl OpenSignatureBody {
     }
 }
 
-impl<'m, 'n> StructRef<'m, 'n> {
-    pub fn as_key(&self) -> StructKey {
-        StructKey {
+impl<'m, 'n> DatatypeRef<'m, 'n> {
+    pub fn as_key(&self) -> DatatypeKey {
+        DatatypeKey {
             package: self.package,
             module: self.module.to_string().into(),
             name: self.name.to_string().into(),
@@ -650,7 +650,7 @@ impl<'m, 'n> StructRef<'m, 'n> {
     }
 }
 
-impl StructKey {
+impl DatatypeKey {
     fn read(ix: StructHandleIndex, bytecode: &CompiledModule) -> Self {
         let sh = bytecode.struct_handle_at(ix);
         let mh = bytecode.module_handle_at(sh.module);
@@ -659,7 +659,7 @@ impl StructKey {
         let module = bytecode.identifier_at(mh.name).to_string().into();
         let name = bytecode.identifier_at(sh.name).to_string().into();
 
-        StructKey {
+        DatatypeKey {
             package,
             module,
             name,
@@ -740,7 +740,7 @@ impl<'l> ResolutionContext<'l> {
                     // for keys.  Take care to do this before generating the key that is used to
                     // query and/or write into `self.structs.
                     s.address = context.runtime_id;
-                    let key = StructRef::from(s.as_ref()).as_key();
+                    let key = DatatypeRef::from(s.as_ref()).as_key();
 
                     if def.type_params.len() != s.type_params.len() {
                         return Err(Error::TypeArityMismatch(
@@ -810,7 +810,7 @@ impl<'l> ResolutionContext<'l> {
 
                 O::Vector(sig) => frontier.push(*sig),
 
-                O::Struct(key, params) => {
+                O::Datatype(key, params) => {
                     check_max_limit!(
                         TooManyTypeParams, self.limits;
                         max_type_argument_width >= params.len()
@@ -894,7 +894,7 @@ impl<'l> ResolutionContext<'l> {
                 // they are keyed by runtime IDs.
 
                 // SAFETY: `add_type_tag` ensures `structs` has an element with this key.
-                let key = StructRef::from(s.as_ref());
+                let key = DatatypeRef::from(s.as_ref());
                 let def = &self.structs[&key];
 
                 let StructTag {
@@ -1009,7 +1009,7 @@ impl<'l> ResolutionContext<'l> {
                 (L::Vector(Box::new(layout)), depth + 1)
             }
 
-            O::Struct(key, params) => {
+            O::Datatype(key, params) => {
                 // SAFETY: `add_signature` ensures `structs` has an element with this key.
                 let def = &self.structs[key];
 
@@ -1069,7 +1069,7 @@ impl<'l> ResolutionContext<'l> {
 
             T::Struct(s) => {
                 // SAFETY: `add_type_tag` ensures `structs` has an element with this key.
-                let key = StructRef::from(s.as_ref());
+                let key = DatatypeRef::from(s.as_ref());
                 let def = &self.structs[&key];
 
                 if def.type_params.len() != s.type_params.len() {
@@ -1105,9 +1105,9 @@ impl<'l> ResolutionContext<'l> {
     }
 }
 
-impl<'s> From<&'s StructTag> for StructRef<'s, 's> {
+impl<'s> From<&'s StructTag> for DatatypeRef<'s, 's> {
     fn from(tag: &'s StructTag) -> Self {
-        StructRef {
+        DatatypeRef {
             package: tag.address,
             module: tag.module.as_str().into(),
             name: tag.name.as_str().into(),
@@ -1692,15 +1692,15 @@ mod tests {
                     (
                         "v",
                         Vector(
-                            Struct(
-                                StructRef {
+                            Datatype(
+                                DatatypeRef {
                                     package: 00000000000000000000000000000000000000000000000000000000000000a0,
                                     module: "m",
                                     name: "T1",
                                 },
                                 [
-                                    Struct(
-                                        StructRef {
+                                    Datatype(
+                                        DatatypeRef {
                                             package: 00000000000000000000000000000000000000000000000000000000000000a0,
                                             module: "m",
                                             name: "T2",
@@ -1822,8 +1822,8 @@ mod tests {
                         ref_: Some(
                             Immutable,
                         ),
-                        body: Struct(
-                            StructRef {
+                        body: Datatype(
+                            DatatypeRef {
                                 package: 00000000000000000000000000000000000000000000000000000000000000c0,
                                 module: "m",
                                 name: "T0",
@@ -1835,8 +1835,8 @@ mod tests {
                         ref_: Some(
                             Mutable,
                         ),
-                        body: Struct(
-                            StructRef {
+                        body: Datatype(
+                            DatatypeRef {
                                 package: 00000000000000000000000000000000000000000000000000000000000000a0,
                                 module: "n",
                                 name: "T1",
@@ -2146,7 +2146,7 @@ mod tests {
 
     /***** Test Helpers ***************************************************************************/
 
-    type TypeOriginTable = Vec<StructKey>;
+    type TypeOriginTable = Vec<DatatypeKey>;
 
     fn a0_types() -> TypeOriginTable {
         vec![
@@ -2322,8 +2322,8 @@ mod tests {
         AccountAddress::from_str(a).unwrap()
     }
 
-    fn struct_(a: &str, m: &'static str, n: &'static str) -> StructKey {
-        StructKey {
+    fn struct_(a: &str, m: &'static str, n: &'static str) -> DatatypeKey {
+        DatatypeKey {
             package: addr(a),
             module: m.into(),
             name: n.into(),
