@@ -2436,7 +2436,11 @@ impl AuthorityPerEpochStore {
                 ..
             }) = transaction
             {
-                debug!("Received EndOfPublish from {:?}", authority.concise());
+                debug!(
+                    "Received EndOfPublish for epoch {} from {:?}",
+                    self.committee.epoch,
+                    authority.concise()
+                );
 
                 // It is ok to just release lock here as this function is the only place that transition into RejectAllCerts state
                 // And this function itself is always executed from consensus task
@@ -2459,8 +2463,9 @@ impl AuthorityPerEpochStore {
                 if collected_end_of_publish {
                     assert!(lock.is_none());
                     debug!(
-                        "Collected enough end_of_publish messages with last message from validator {:?}",
-                        authority.concise()
+                        "Collected enough end_of_publish messages for epoch {} with last message from validator {:?}",
+                        self.committee.epoch,
+                        authority.concise(),
                     );
                     let mut l = self.get_reconfig_state_write_lock_guard();
                     l.close_all_certs();
@@ -2493,6 +2498,12 @@ impl AuthorityPerEpochStore {
 
         if !is_reject_all_certs || !self.deferred_transactions_empty() || commit_has_deferred_txns {
             // Don't end epoch until all deferred transactions are processed.
+            if is_reject_all_certs {
+                debug!(
+                    "Blocking end of epoch on deferred transactions, from previous commits?={}, from this commit?={commit_has_deferred_txns}",
+                    !self.deferred_transactions_empty(),
+                );
+            }
             return Ok((lock, false));
         }
 
