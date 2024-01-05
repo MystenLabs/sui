@@ -69,7 +69,7 @@ type CheckpointExecutionBuffer = FuturesOrdered<JoinHandle<VerifiedCheckpoint>>;
 /// The interval to log checkpoint progress, in # of checkpoints processed.
 const CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL: u64 = 5000;
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum StopReason {
     EpochComplete,
     RunWithRangeCondition,
@@ -132,6 +132,18 @@ impl CheckpointExecutor {
         epoch_store: Arc<AuthorityPerEpochStore>,
         run_with_range: RunWithRange,
     ) -> StopReason {
+        // check if we want to run this epoch based on RunWithRange condition value
+        // we want to be inclusive of the defined RunWithRangeEpoch::Epoch
+        // i.e Epoch(N) means we will execute epoch N and stop when reaching N+1
+        if run_with_range.is_epoch_gt(epoch_store.epoch()) {
+            info!(
+                "RunWithRange condition satisfied at {:?}, run_epoch={:?}",
+                run_with_range,
+                epoch_store.epoch()
+            );
+            return StopReason::RunWithRangeCondition;
+        }
+
         debug!(
             "Checkpoint executor running for epoch {}",
             epoch_store.epoch(),
@@ -139,14 +151,6 @@ impl CheckpointExecutor {
         self.metrics
             .checkpoint_exec_epoch
             .set(epoch_store.epoch() as i64);
-
-        // check if we want to run this epoch based on RunWithRange condition value
-        // we want to be inclusive of the defined RunWithRangeEpoch::Epoch
-        // i.e Epoch(N) means we will execute epoch N and stop when reaching N+1
-        if run_with_range.is_epoch_gt(epoch_store.epoch()) {
-            info!("RunWithRange condition satisfied at {:?}", run_with_range);
-            return StopReason::RunWithRangeCondition;
-        }
 
         // Decide the first checkpoint to schedule for execution.
         // If we haven't executed anything in the past, we schedule checkpoint 0.
@@ -192,7 +196,9 @@ impl CheckpointExecutor {
             }
 
             // dont schedule checkpoints > RunWithRange::Checkpoint
-            if run_with_range.is_checkpoint_leq(next_to_schedule) {
+            if run_with_range == RunWithRange::None
+                || run_with_range.is_checkpoint_leq(next_to_schedule)
+            {
                 self.schedule_synced_checkpoints(
                     &mut pending,
                     // next_to_schedule will be updated to the next checkpoint to schedule.
@@ -214,15 +220,6 @@ impl CheckpointExecutor {
                     self.process_executed_checkpoint(&checkpoint);
                     highest_executed = Some(checkpoint.clone());
 
-                    // we want to be inclusive of checkpoints in RunWithRange::Checkpoint type
-                    // so only stop once > RunWithRange::Checkpoint
-                    if run_with_range.matches_checkpoint(checkpoint.sequence_number) {
-                        info!(
-                            "RunWithRange condition satisifed after checkpoint sequence number {:?}",
-                            checkpoint.sequence_number
-                        );
-                        return StopReason::RunWithRangeCondition;
-                    }
 
                     // Estimate TPS every 10k transactions or 30 sec
                     let elapsed = now_time.elapsed().as_millis();
@@ -233,6 +230,15 @@ impl CheckpointExecutor {
                         now_time = Instant::now();
                         now_transaction_num = current_transaction_num;
                     }
+                     // we want to be inclusive of checkpoints in RunWithRange::Checkpoint type
+                    if run_with_range.matches_checkpoint(checkpoint.sequence_number) {
+                        info!(
+                            "RunWithRange condition satisifed after checkpoint sequence number {:?}",
+                            checkpoint.sequence_number
+                        );
+                        return StopReason::RunWithRangeCondition;
+                    }
+
 
                 }
                 // Check for newly synced checkpoints from StateSync.

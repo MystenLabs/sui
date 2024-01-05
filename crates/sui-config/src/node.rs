@@ -977,13 +977,13 @@ impl RunWithRange {
         matches!(self, RunWithRange::Epoch(e) if *e == epoch_id)
     }
     pub fn is_epoch_gt(&self, epoch_id: EpochId) -> bool {
-        matches!(self, RunWithRange::Epoch(e) if *e <= epoch_id)
+        matches!(self, RunWithRange::Epoch(e) if epoch_id > *e)
     }
 
     pub fn matches_checkpoint(&self, seq_num: CheckpointSequenceNumber) -> bool {
         matches!(self, RunWithRange::Checkpoint(seq) if *seq == seq_num)
     }
     pub fn is_checkpoint_leq(&self, seq_num: CheckpointSequenceNumber) -> bool {
-        matches!(self, RunWithRange::Checkpoint(seq) if *seq <= seq_num)
+        matches!(self, RunWithRange::Checkpoint(seq) if seq_num <= *seq)
     }
 }

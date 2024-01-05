@@ -1395,11 +1395,11 @@ impl SuiNode {
                     .submit(transaction, None, &cur_epoch_store)?;
             }
 
-            let stop_conditon = checkpoint_executor
+            let stop_condition = checkpoint_executor
                 .run_epoch(cur_epoch_store.clone(), run_with_range)
                 .await;
 
-            if stop_conditon == StopReason::RunWithRangeCondition {
+            if stop_condition == StopReason::RunWithRangeCondition {
                 self.shutdown_channel_tx
                     .send(run_with_range)
                     .expect("RunWithRangeCondition met but failed to send shutdown message");
@@ -1761,7 +1761,11 @@ pub fn build_http_server(
             kv_store.clone(),
             metrics.clone(),
         ))?;
-        server.register_module(TransactionBuilderApi::new(state.clone()))?;
+
+        // if run_with_range is enabled we want to prevent any transactions
+        if config.run_with_range == RunWithRange::None {
+            server.register_module(TransactionBuilderApi::new(state.clone()))?;
+        }
         server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;
 
         if let Some(transaction_orchestrator) = transaction_orchestrator {

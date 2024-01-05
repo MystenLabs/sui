@@ -298,7 +298,7 @@ impl TestCluster {
                 msg = shutdown_channel_rx.recv() =>
                 {
                     match msg {
-                        Ok(run_with_range) => return run_with_range,
+                        Ok(run_with_range) => run_with_range,
                         Err(e) => {
                             error!("failed recv from sui-node shutdown channel: {}", e);
                             return RunWithRange::None
