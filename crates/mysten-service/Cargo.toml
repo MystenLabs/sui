@@ -12,6 +12,8 @@ axum.workspace = true
 tokio.workspace = true
 serde.workspace = true
 workspace-hack.workspace = true
+prometheus.workspace = true
+mysten-metrics.workspace = true
 
 [dev-dependencies]
 tower.workspace = true

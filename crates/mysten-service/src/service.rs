@@ -8,7 +8,10 @@ use axum::routing::get;
 use axum::Json;
 use axum::Router;
 
-pub fn get_mysten_service(app_name: &str, app_version: &str) -> Router {
+pub fn get_mysten_service<S>(app_name: &str, app_version: &str) -> Router<S>
+where
+    S: Send + Clone + Sync + 'static,
+{
     // build our application with a single route
     Router::new().route(
         "/health",
