@@ -85,7 +85,7 @@ fn setup_test_storage<'a>(
     //    let modules = topo_sort_modules(modules);
     // for module in modules {
     //
-    let modules = Modules::new(modules);
+    let modules = Modules::new(modules); // XXX 4
     for module in modules
         .compute_dependency_graph() // XXX
         .compute_topological_order()?
@@ -120,11 +120,14 @@ impl TestRunner {
             .collect();
         // module_info has the map of module ids to compiled modules...
         let modules = tests.module_info.values().map(|info| &info.module);
-        for m in modules.clone() {
-            println!("[x] {}", m.name());
+        println!("[6] test_runner needs all modules included (external-crates/move/crates/move-unit-test/src/test_runner.rs)");
+        /*
+            for m in modules.clone() {
+                println!("[x] {}", m.name());
         }
+        */
         // we need ingest all modules here somehow, from deps.
-        let starting_storage_state = setup_test_storage(modules)?;
+        let starting_storage_state = setup_test_storage(modules)?; // XXX 3 modules from somewhere end up getting passed to `Modules::new(...)` which computes graph
         let native_function_table = native_function_table.unwrap_or_else(|| {
             move_stdlib::natives::all_natives(
                 AccountAddress::from_hex_literal("0x1").unwrap(),

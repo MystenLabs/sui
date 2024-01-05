@@ -54,7 +54,7 @@ struct KnownFiltersInfo {
 pub struct Compiler<'a> {
     maps: NamedAddressMaps,
     targets: Vec<IndexedPackagePath>,
-    deps: Vec<IndexedPackagePath>,
+    pub deps: Vec<IndexedPackagePath>,
     interface_files_dir_opt: Option<String>,
     pre_compiled_lib: Option<&'a FullyCompiledProgram>,
     compiled_module_named_address_mapping: BTreeMap<CompiledModuleId, String>,

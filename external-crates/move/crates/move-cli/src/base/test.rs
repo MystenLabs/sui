@@ -183,6 +183,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
     // control back to the Move package system.
     let mut warning_diags = None;
     build_plan.compile_with_driver(writer, |compiler| {
+        // IDEA: compiler has access to built_deps for prior, it is in deps: Vec<IndexpedPackagePath>. can we populate something with that?
         let (files, comments_and_compiler_res) = compiler.run::<PASS_CFGIR>().unwrap();
         let (_, compiler) =
             diagnostics::unwrap_or_report_diagnostics(&files, comments_and_compiler_res);
@@ -192,20 +193,25 @@ pub fn run_move_unit_tests<W: Write + Send>(
 
         let compilation_result = compiler.at_cfgir(cfgir).build();
         let (units, warnings) =
-            diagnostics::unwrap_or_report_diagnostics(&files, compilation_result);
+            diagnostics::unwrap_or_report_diagnostics(&files, compilation_result); // XXX -2 Need units
         diagnostics::report_warnings(&files, warnings.clone());
-        println!("[~] compiled units done");
+        println!("[4] compiled units done (external-crates/move/crates/move-cli/src/base/test.rs)");
         test_plan = Some((built_test_plan, files.clone(), units.clone()));
         warning_diags = Some(warnings);
         Ok((files, units))
     })?;
 
-    let (test_plan, mut files, units) = test_plan.unwrap();
+    let (test_plan, mut files, units) = test_plan.unwrap(); // XXX -1 Need units -- is it in bytecode deps?
+                                                            /*
+                                                            for u in units.clone() {
+                                                                println!("[%] has bytecode? {}", u.named_module.name);
+                                                            }
+                                                            */
     files.extend(dep_file_map);
     let test_plan = test_plan.unwrap();
     let no_tests = test_plan.is_empty();
-    println!("[~] test plan construction");
-    let test_plan = TestPlan::new(test_plan, files, units);
+    println!("[4] test plan construction (external-crates/move/crates/move-cli/src/base/test.rs)");
+    let test_plan = TestPlan::new(test_plan, files, units); // XXX 0 this fucking test_plan needs to populate compiled dep modules
 
     let trace_path = pkg_path.join(".trace");
     let coverage_map_path = pkg_path
@@ -228,7 +234,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
     // Run the tests. If any of the tests fail, then we don't produce a coverage report, so cleanup
     // the trace files.
     if !unit_test_config
-        .run_and_report_unit_tests(test_plan, Some(natives), cost_table, writer)
+        .run_and_report_unit_tests(test_plan, Some(natives), cost_table, writer) // XXX 1
         .unwrap()
         .1
     {

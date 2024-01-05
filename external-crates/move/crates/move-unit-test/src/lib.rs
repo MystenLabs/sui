@@ -230,10 +230,14 @@ impl UnitTestingConfig {
         cost_table: Option<CostTable>,
         writer: W,
     ) -> Result<(W, bool)> {
-        println!("[_] run_and_report_unit_tests");
-        for (k, _v) in test_plan.module_info.clone() {
-            println!("[_] module: {}", k.name());
+        println!(
+            "[5] run_and_report_unit_tests, we have test_plan.module_info (external-crates/move/crates/move-unit-test/src/lib.rs)"
+        );
+        /*
+            for (k, _v) in test_plan.module_info.clone() {
+                println!("[_] module: {}", k.name());
         }
+        */
         let shared_writer = Mutex::new(writer);
 
         if self.list {
@@ -252,6 +256,7 @@ impl UnitTestingConfig {
 
         writeln!(shared_writer.lock().unwrap(), "Running Move unit tests")?;
         let mut test_runner = TestRunner::new(
+            // XXX 2. test_plan.module_info contains compiled modules as module_info, but not all those we need to include
             self.gas_limit.unwrap_or(DEFAULT_EXECUTION_BOUND),
             self.num_threads,
             self.check_stackless_vm,

@@ -28,8 +28,9 @@ impl<'a> Modules<'a> {
     /// Panics if `modules` contains duplicates
     pub fn new(modules: impl IntoIterator<Item = &'a CompiledModule>) -> Self {
         let mut map = BTreeMap::new();
+        println!("[7] constructing Modules::new (external-crates/move/crates/move-bytecode-utils/src/lib.rs)");
         for m in modules {
-            println!("module {}", m.self_id());
+            // println!("[!] module {}", m.self_id());
             assert!(
                 map.insert(m.self_id(), m).is_none(),
                 "Duplicate module found"

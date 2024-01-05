@@ -505,6 +505,9 @@ impl CompiledPackage {
                 .add_custom_known_filters(filters, filter_attr_name);
         }
         let (file_map, all_compiled_units) = compiler_driver(compiler)?;
+        // IDEA: add prebuilt to all_compiled_units here. what does it achieve tho? it will save to deps, but i don't know that that helps in any material way. it could help be a place to find the deps, and then insert them into the resolution graph.
+        // all_compiled_units.push();
+        //
         let mut root_compiled_units = vec![];
         let mut deps_compiled_units = vec![];
         for annot_unit in all_compiled_units {
@@ -514,12 +517,19 @@ impl CompiledPackage {
                 unit: annot_unit.into_compiled_unit(),
                 source_path,
             };
+            println!(
+                "[!] deps compiled units should be included here in the package construction..."
+            );
             if package_name == root_package_name {
                 root_compiled_units.push(unit)
             } else {
+                // IDEA / NEEDED: add built_deps / prebuilt deps here to save
+                println!("[&] triggered: appending {package_name} for deps_compiled_units (not expected) for precompiled but desired");
                 deps_compiled_units.push((package_name, unit))
             }
         }
+
+        println!("adding precompiled to deps_compiled_units...");
 
         let mut compiled_docs = None;
         if resolution_graph.build_options.generate_docs {
@@ -833,7 +843,7 @@ pub fn partition_deps_by_toolchain(
             }
             Some(toolchain_version) => {
                 println!(
-                    "compiler_version {} does not match env version {}",
+                    "[3] compiler_version {} does not match env version {} (external-crates/move/crates/move-package/src/compilation/compiled_package.rs)",
                     toolchain_version.compiler_version,
                     env!("CARGO_PKG_VERSION")
                 );
@@ -904,7 +914,7 @@ fn download_and_compile(
     }
 
     println!(
-        "[+] sui move build --default-move-edition {} --default-move-flavor {} -p {}",
+        "[3] sui move build --default-move-edition {} --default-move-flavor {} -p {} (external-crates/move/crates/move-package/src/compilation/compiled_package.rs)",
         edition.to_string().as_str(),
         flavor.to_string().as_str(),
         root.display()

@@ -85,6 +85,7 @@ impl BuildPlan {
             .into_iter()
             .filter(|package_name| *package_name != self.root)
             .map(|package_name| {
+                println!("[2] compile_with_driver sees dep {} (external-crates/move/crates/move-package/src/compilation/build_plan.rs)", package_name);
                 let dep_package = self
                     .resolution_graph
                     .package_table
@@ -95,8 +96,9 @@ impl BuildPlan {
                     .unwrap();
                 let mut source_available = true;
                 // If source is empty, search bytecode(mv) files
+                println!("[2] dep package path: {} (external-crates/move/crates/move-package/src/compilation/build_plan.rs)", dep_package.package_path.display());
                 if dep_source_paths.is_empty() {
-                    dep_source_paths = dep_package.get_bytecodes().unwrap();
+                    dep_source_paths = dep_package.get_bytecodes().unwrap(); // XXX can I use this or is it fucked. this is kklas stuff
                     source_available = false;
                 }
                 DependencyInfo {
