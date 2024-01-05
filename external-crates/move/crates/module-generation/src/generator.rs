@@ -246,7 +246,6 @@ impl<'a> ModuleGenerator<'a> {
         let fun = Function_ {
             visibility: FunctionVisibility::Public,
             is_entry: false,
-            specifications: Vec::new(),
             signature,
             body: FunctionBody::Move {
                 locals,
@@ -273,7 +272,6 @@ impl<'a> ModuleGenerator<'a> {
             name,
             type_formals: type_parameters,
             fields,
-            invariants: vec![],
         };
         self.current_module
             .structs
@@ -341,7 +339,6 @@ impl<'a> ModuleGenerator<'a> {
             structs: Vec::new(),
             functions: Vec::new(),
             constants: Vec::new(),
-            synthetics: Vec::new(),
         };
         Self {
             options,

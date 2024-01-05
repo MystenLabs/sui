@@ -19,7 +19,7 @@ use move_core_types::{
     vm_status::{sub_status, StatusCode},
 };
 use move_model::{
-    ast::{Exp, MemoryLabel, TempIndex},
+    ast::TempIndex,
     model::{FunId, FunctionEnv, ModuleId, StructId},
     ty as MT,
 };
@@ -28,18 +28,17 @@ use move_stackless_bytecode::{
     function_target_pipeline::FunctionTargetsHolder,
     stackless_bytecode::{
         AbortAction, AssignKind, BorrowEdge, BorrowNode, Bytecode, Constant, HavocKind, Label,
-        Operation, PropKind,
+        Operation,
     },
 };
 
 use crate::{
     concrete::{
-        evaluator::{Evaluator, ExpState},
         local_state::{AbortInfo, LocalState, TerminationStatus},
         settings::InterpreterSettings,
         ty::{
-            convert_model_base_type, convert_model_local_type, convert_model_partial_struct_type,
-            convert_model_struct_type, BaseType, CodeOffset, Type,
+            convert_model_base_type, convert_model_local_type, convert_model_struct_type, BaseType,
+            CodeOffset, Type,
         },
         value::{BaseValue, EvalState, GlobalState, LocalSlot, Pointer, TypedValue},
     },
@@ -364,28 +363,6 @@ impl<'env> FunctionContext<'env> {
             Bytecode::Abort(_, index) => self.handle_abort(*index, local_state),
             Bytecode::Ret(_, rets) => self.handle_return(rets, local_state),
             Bytecode::Nop(_) => (),
-            Bytecode::SaveMem(_, mem_label, qid) => self.handle_save_mem(
-                *mem_label,
-                qid.module_id,
-                qid.id,
-                &qid.inst,
-                global_state,
-                eval_state,
-            ),
-            Bytecode::Prop(_, PropKind::Assert, exp) => {
-                if !local_state.is_spec_skipped() {
-                    self.handle_prop_assert(exp, eval_state, local_state, global_state)
-                }
-            }
-            Bytecode::Prop(_, PropKind::Assume, exp) => {
-                if !local_state.is_spec_skipped() {
-                    self.handle_prop_assume(exp, eval_state, local_state, global_state)?
-                }
-            }
-            // expressions (TODO: not supported yet)
-            Bytecode::Prop(_, PropKind::Modifies, _) => {}
-            // not-in-use as of now
-            Bytecode::SaveSpecVar(..) => unreachable!(),
         }
         local_state.ready_pc_for_next_instruction();
         Ok(())
@@ -534,17 +511,6 @@ impl<'env> FunctionContext<'env> {
                 if cfg!(debug_assertions) {
                     assert_eq!(srcs.len(), 1);
                     assert!(local_state.get_type(srcs[0]).is_compatible_for_abort_code());
-                }
-                return Ok(());
-            }
-            Operation::TraceExp(_kind, node_id) => {
-                // Perhaps do something with kind?
-                if cfg!(debug_assertions) {
-                    let env = self.target.global_env();
-                    let node_ty =
-                        convert_model_local_type(env, &env.get_node_type(*node_id), &self.ty_args);
-                    assert_eq!(srcs.len(), 1);
-                    assert_eq!(local_state.get_type(srcs[0]), &node_ty);
                 }
                 return Ok(());
             }
@@ -904,8 +870,6 @@ impl<'env> FunctionContext<'env> {
                     self.handle_binary_boolean(op, lhs, rhs, local_state.get_type(dsts[0]));
                 Ok(vec![calculated])
             }
-            // event (TODO: not supported yet)
-            Operation::EmitEvent | Operation::EventStoreDiverge => Ok(vec![]),
             // already handled
             Operation::Stop
             | Operation::Uninit
@@ -913,9 +877,7 @@ impl<'env> FunctionContext<'env> {
             | Operation::Havoc(..)
             | Operation::TraceLocal(..)
             | Operation::TraceReturn(..)
-            | Operation::TraceAbort
-            | Operation::TraceExp(..)
-            | Operation::TraceGlobalMem(..) => {
+            | Operation::TraceAbort => {
                 unreachable!();
             }
         };
@@ -2017,57 +1979,6 @@ impl<'env> FunctionContext<'env> {
         local_state.terminate_with_return(ret_vals);
     }
 
-    fn handle_prop_assert(
-        &self,
-        exp: &Exp,
-        eval_state: &EvalState,
-        local_state: &LocalState,
-        global_state: &GlobalState,
-    ) {
-        let evaluator = Evaluator::new(
-            self.holder,
-            &self.target,
-            &self.ty_args,
-            self.level,
-            ExpState::default(),
-            eval_state,
-            local_state,
-            global_state,
-        );
-        evaluator.check_assert(exp);
-    }
-
-    fn handle_prop_assume(
-        &self,
-        exp: &Exp,
-        eval_state: &EvalState,
-        local_state: &mut LocalState,
-        global_state: &GlobalState,
-    ) -> ExecResult<()> {
-        let evaluator = Evaluator::new(
-            self.holder,
-            &self.target,
-            &self.ty_args,
-            self.level,
-            ExpState::default(),
-            eval_state,
-            local_state,
-            global_state,
-        );
-        match evaluator.check_assume(exp) {
-            None => (),
-            // handle let-bindings
-            Some(Ok((local_idx, local_val))) => {
-                local_state.put_value_override(local_idx, local_val);
-            }
-            Some(Err(_)) => {
-                // unable to find a satisfiable value for a let-binding
-                local_state.skip_specs();
-            }
-        }
-        Ok(())
-    }
-
     //
     // natives
     //
@@ -2321,24 +2232,6 @@ impl<'env> FunctionContext<'env> {
             .collect();
         let verified = ed25519_verify_signature(&key, &sig, &msg_bytes).is_ok();
         TypedValue::mk_bool(verified)
-    }
-
-    //
-    // expressions
-    //
-
-    fn handle_save_mem(
-        &self,
-        mem_label: MemoryLabel,
-        module_id: ModuleId,
-        struct_id: StructId,
-        ty_args: &[MT::Type],
-        global_state: &GlobalState,
-        eval_state: &mut EvalState,
-    ) {
-        let env = self.target.global_env();
-        let inst = convert_model_partial_struct_type(env, module_id, struct_id, ty_args);
-        eval_state.save_memory(mem_label, inst, global_state);
     }
 
     //

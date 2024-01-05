@@ -1617,8 +1617,8 @@ fn parse_binop_exp(context: &mut Context, lhs: Exp, min_prec: u32) -> Result<Exp
 //          | "&" "mut" <UnaryExp>
 //          | "&" <UnaryExp>
 //          | "*" <UnaryExp>
-//          | "move" <Var>
-//          | "copy" <Var>
+//          | "move" <UnaryExp>
+//          | "copy" <UnaryExp>
 //          | <DotOrIndexChain>
 fn parse_unary_exp(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
@@ -1653,11 +1653,23 @@ fn parse_unary_exp(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
         }
         Tok::Move => {
             context.tokens.advance()?;
-            Exp_::Move(parse_var(context)?)
+            let op_end_loc = make_loc(
+                context.tokens.file_hash(),
+                start_loc,
+                context.tokens.previous_end_loc(),
+            );
+            let e = parse_unary_exp(context)?;
+            Exp_::Move(op_end_loc, Box::new(e))
         }
         Tok::Copy => {
             context.tokens.advance()?;
-            Exp_::Copy(parse_var(context)?)
+            let op_end_loc = make_loc(
+                context.tokens.file_hash(),
+                start_loc,
+                context.tokens.previous_end_loc(),
+            );
+            let e = parse_unary_exp(context)?;
+            Exp_::Copy(op_end_loc, Box::new(e))
         }
         _ => {
             return parse_dot_or_index_chain(context);

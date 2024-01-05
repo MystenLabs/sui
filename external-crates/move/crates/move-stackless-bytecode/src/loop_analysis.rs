@@ -5,12 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use move_binary_format::file_format::CodeOffset;
-use move_model::{
-    ast::{self, TempIndex},
-    exp_generator::ExpGenerator,
-    model::FunctionEnv,
-    ty::{PrimitiveType, Type},
-};
+use move_model::{ast::TempIndex, model::FunctionEnv};
 
 use crate::{
     function_data_builder::{FunctionDataBuilder, FunctionDataBuilderOptions},
@@ -18,12 +13,9 @@ use crate::{
     function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder},
     graph::{Graph, NaturalLoop},
     options::ProverOptions,
-    stackless_bytecode::{AttrId, Bytecode, HavocKind, Label, Operation, PropKind},
+    stackless_bytecode::{Bytecode, HavocKind, Label, Operation},
     stackless_control_flow_graph::{BlockContent, BlockId, StacklessControlFlowGraph},
 };
-
-const LOOP_INVARIANT_BASE_FAILED: &str = "base case of the loop invariant does not hold";
-const LOOP_INVARIANT_INDUCTION_FAILED: &str = "induction case of the loop invariant does not hold";
 
 /// A fat-loop captures the information of one or more natural loops that share the same loop
 /// header. This shared header is called the header of the fat-loop.
@@ -36,7 +28,6 @@ const LOOP_INVARIANT_INDUCTION_FAILED: &str = "induction case of the loop invari
 /// is the union of loop targets per each natural loop that share the header.
 #[derive(Debug, Clone)]
 pub struct FatLoop {
-    pub invariants: BTreeMap<CodeOffset, (AttrId, ast::Exp)>,
     pub val_targets: BTreeSet<TempIndex>,
     pub mut_targets: BTreeMap<TempIndex, bool>,
     pub back_edges: BTreeSet<CodeOffset>,
@@ -52,14 +43,6 @@ impl LoopAnnotation {
         self.fat_loops
             .values()
             .flat_map(|l| l.back_edges.iter())
-            .copied()
-            .collect()
-    }
-
-    fn invariants_locations(&self) -> BTreeSet<CodeOffset> {
-        self.fat_loops
-            .values()
-            .flat_map(|l| l.invariants.keys())
             .copied()
             .collect()
     }
@@ -118,7 +101,6 @@ impl LoopAnalysisProcessor {
         let options = ProverOptions::get(func_env.module_env.env);
 
         let back_edge_locs = loop_annotation.back_edges_locations();
-        let invariant_locs = loop_annotation.invariants_locations();
         let mut builder = FunctionDataBuilder::new_with_options(
             func_env,
             data,
@@ -134,36 +116,7 @@ impl LoopAnalysisProcessor {
                     builder.emit(bytecode);
                     builder.set_loc_from_attr(attr_id);
                     if let Some(loop_info) = loop_annotation.fat_loops.get(&label) {
-                        // assert loop invariants -> this is the base case
-                        for (attr_id, exp) in loop_info.invariants.values() {
-                            builder.set_loc_and_vc_info(
-                                builder.get_loc(*attr_id),
-                                LOOP_INVARIANT_BASE_FAILED,
-                            );
-                            builder.emit_with(|attr_id| {
-                                Bytecode::Prop(attr_id, PropKind::Assert, exp.clone())
-                            });
-                        }
-
                         // havoc all loop targets
-                        for idx in &loop_info.val_targets {
-                            builder.emit_with(|attr_id| {
-                                Bytecode::Call(
-                                    attr_id,
-                                    vec![*idx],
-                                    Operation::Havoc(HavocKind::Value),
-                                    vec![],
-                                    None,
-                                )
-                            });
-                            // add a well-formed assumption explicitly and immediately
-                            let exp = builder.mk_call(
-                                &Type::Primitive(PrimitiveType::Bool),
-                                ast::Operation::WellFormed,
-                                vec![builder.mk_temporary(*idx)],
-                            );
-                            builder.emit_with(move |id| Bytecode::Prop(id, PropKind::Assume, exp));
-                        }
                         for (idx, havoc_all) in &loop_info.mut_targets {
                             let havoc_kind = if *havoc_all {
                                 HavocKind::MutationAll
@@ -179,13 +132,6 @@ impl LoopAnalysisProcessor {
                                     None,
                                 )
                             });
-                            // add a well-formed assumption explicitly and immediately
-                            let exp = builder.mk_call(
-                                &Type::Primitive(PrimitiveType::Bool),
-                                ast::Operation::WellFormed,
-                                vec![builder.mk_temporary(*idx)],
-                            );
-                            builder.emit_with(move |id| Bytecode::Prop(id, PropKind::Assume, exp));
                         }
 
                         // trace implicitly reassigned variables after havocking
@@ -204,13 +150,7 @@ impl LoopAnalysisProcessor {
 
                         if affected_non_temporary_variables.is_empty() {
                             // no user declared local is havocked
-                            builder.set_next_debug_comment(format!(
-                                "info: enter loop {}",
-                                match loop_info.invariants.is_empty() {
-                                    true => "",
-                                    false => ", loop invariant holds at current state",
-                                }
-                            ));
+                            builder.set_next_debug_comment("info: enter loop".to_owned());
                         } else {
                             // show the havocked locals to user
                             let affected_non_temporary_variable_names: Vec<_> =
@@ -246,30 +186,14 @@ impl LoopAnalysisProcessor {
                         }
 
                         // after showing the havocked locals and their new values, show the following message
-                        if !affected_non_temporary_variables.is_empty()
-                            && !loop_info.invariants.is_empty()
-                        {
+                        if !affected_non_temporary_variables.is_empty() {
                             builder.set_next_debug_comment(
                                 "info: loop invariant holds at current state".to_string(),
                             );
                         }
-
-                        // add an additional assumption that the loop did not abort
-                        let exp =
-                            builder.mk_not(builder.mk_bool_call(ast::Operation::AbortFlag, vec![]));
-                        builder.emit_with(|attr_id| Bytecode::Prop(attr_id, PropKind::Assume, exp));
-
-                        // re-assume loop invariants
-                        for (attr_id, exp) in loop_info.invariants.values() {
-                            builder.emit(Bytecode::Prop(*attr_id, PropKind::Assume, exp.clone()));
-                        }
                     }
                 }
-                Bytecode::Prop(_, PropKind::Assert, _)
-                    if invariant_locs.contains(&(offset as CodeOffset)) =>
-                {
-                    // skip it, as the invariant should have been added as an assert after the label
-                }
+
                 _ => {
                     builder.emit(bytecode);
                 }
@@ -288,7 +212,7 @@ impl LoopAnalysisProcessor {
             .map(|label| (*label, builder.new_label()))
             .collect();
 
-        for (label, loop_info) in &loop_annotation.fat_loops {
+        for label in loop_annotation.fat_loops.keys() {
             let checker_label = invariant_checker_labels.get(label).unwrap();
             builder.set_next_debug_comment(format!(
                 "Loop invariant checking block for the loop started with header: L{}",
@@ -296,15 +220,6 @@ impl LoopAnalysisProcessor {
             ));
             builder.emit_with(|attr_id| Bytecode::Label(attr_id, *checker_label));
             builder.clear_next_debug_comment();
-
-            // add instrumentations to assert loop invariants -> this is the induction case
-            for (attr_id, exp) in loop_info.invariants.values() {
-                builder.set_loc_and_vc_info(
-                    builder.get_loc(*attr_id),
-                    LOOP_INVARIANT_INDUCTION_FAILED,
-                );
-                builder.emit_with(|attr_id| Bytecode::Prop(attr_id, PropKind::Assert, exp.clone()));
-            }
 
             // stop the checking in proving mode (branch back to loop header for interpretation mode)
             builder.emit_with(|attr_id| {
@@ -337,52 +252,6 @@ impl LoopAnalysisProcessor {
         // we have unrolled the loop into a DAG, and there will be no loop invariants left
         builder.data.loop_invariants.clear();
         builder.data
-    }
-
-    /// Collect invariants in the given loop header block
-    ///
-    /// Loop invariants are defined as
-    /// 1) the longest sequence of consecutive
-    /// 2) `PropKind::Assert` propositions
-    /// 3) in the loop header block, immediately after the `Label` statement,
-    /// 4) which are also marked in the `loop_invariants` field in the `FunctionData`.
-    /// All above conditions must be met to be qualified as a loop invariant.
-    ///
-    /// The reason we piggyback on `PropKind::Assert` instead of introducing a new
-    /// `PropKind::Invariant` is that we don't want to introduce a`PropKind::Invariant` type which
-    /// only exists to be eliminated. The same logic applies for other invariants in the system
-    /// (e.g., data invariants, global invariants, etc).
-    ///
-    /// In other words, for the loop header block:
-    /// - the first statement must be a `label`,
-    /// - followed by N `assert` statements, N >= 0
-    /// - all these N `assert` statements are marked as loop invariants,
-    /// - statement N + 1 is either not an `assert` or is not marked in `loop_invariants`.
-    fn collect_loop_invariants(
-        cfg: &StacklessControlFlowGraph,
-        func_target: &FunctionTarget<'_>,
-        loop_header: BlockId,
-    ) -> BTreeMap<CodeOffset, (AttrId, ast::Exp)> {
-        let code = func_target.get_bytecode();
-        let asserts_as_invariants = &func_target.data.loop_invariants;
-
-        let mut invariants = BTreeMap::new();
-        for (index, code_offset) in cfg.instr_indexes(loop_header).unwrap().enumerate() {
-            let bytecode = &code[code_offset as usize];
-            if index == 0 {
-                assert!(matches!(bytecode, Bytecode::Label(_, _)));
-            } else {
-                match bytecode {
-                    Bytecode::Prop(attr_id, PropKind::Assert, exp)
-                        if asserts_as_invariants.contains(attr_id) =>
-                    {
-                        invariants.insert(code_offset, (*attr_id, exp.clone()));
-                    }
-                    _ => break,
-                }
-            }
-        }
-        invariants
     }
 
     /// Collect variables that may be changed during the loop execution.
@@ -499,7 +368,6 @@ impl LoopAnalysisProcessor {
                 },
             };
 
-            let invariants = Self::collect_loop_invariants(&cfg, &func_target, fat_root);
             let (val_targets, mut_targets) =
                 Self::collect_loop_targets(&cfg, &func_target, &sub_loops);
             let back_edges = Self::collect_loop_back_edges(code, &cfg, label, &sub_loops);
@@ -508,26 +376,10 @@ impl LoopAnalysisProcessor {
             fat_loops.insert(
                 label,
                 FatLoop {
-                    invariants,
                     val_targets,
                     mut_targets,
                     back_edges,
                 },
-            );
-        }
-
-        // check for redundant loop invariant declarations in the spec
-        let all_invariants: BTreeSet<_> = fat_loops
-            .values()
-            .flat_map(|l| l.invariants.values().map(|(attr_id, _)| *attr_id))
-            .collect();
-
-        let env = func_target.global_env();
-        for attr_id in data.loop_invariants.difference(&all_invariants) {
-            env.error(
-                &func_target.get_bytecode_loc(*attr_id),
-                "Loop invariants must be declared at the beginning of the loop header in a \
-                consecutive sequence",
             );
         }
 

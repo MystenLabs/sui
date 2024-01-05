@@ -1868,11 +1868,14 @@ impl AuthorityState {
 
                     let Some(df_info) = self
                         .try_create_dynamic_field_info(new_object, written, module_resolver)
-                        .expect("try_create_dynamic_field_info should not fail.")
-                    else {
-                        // Skip indexing for non dynamic field objects.
-                        continue;
-                    };
+                        .unwrap_or_else(|e| {
+                            error!("try_create_dynamic_field_info should not fail, {}, new_object={:?}", e, new_object);
+                            None
+                        })
+                        else {
+                            // Skip indexing for non dynamic field objects.
+                            continue;
+                        };
                     new_dynamic_fields.push(((ObjectID::from(owner), *id), df_info))
                 }
                 _ => {}

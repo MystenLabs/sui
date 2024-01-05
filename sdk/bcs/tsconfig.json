@@ -1,17 +1,11 @@
 {
+	"extends": "../build-scripts/tsconfig.shared.json",
+	"include": ["src"],
 	"compilerOptions": {
-		"target": "ES2020",
-		"module": "ES2015",
-		"moduleResolution": "node",
-		"lib": ["ESNext", "dom"],
-		"declaration": true,
+		"module": "CommonJS",
+		"outDir": "dist/cjs",
+		"isolatedModules": true,
 		"rootDir": "src",
-		"outDir": "dist",
-		"strict": true,
-		"esModuleInterop": true,
-		"skipLibCheck": true,
-		"composite": true,
-		"isolatedModules": true
-	},
-	"include": ["src"]
+		"lib": ["ESNext", "dom"]
+	}
 }

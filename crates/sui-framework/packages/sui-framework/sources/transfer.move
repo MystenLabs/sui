@@ -5,7 +5,6 @@
 module sui::transfer {
 
     use sui::object::{Self, ID, UID};
-    use sui::prover;
 
     #[test_only]
     friend sui::test_scenario;
@@ -133,48 +132,9 @@ module sui::transfer {
 
     public(friend) native fun freeze_object_impl<T: key>(obj: T);
 
-    spec freeze_object_impl {
-        pragma opaque;
-        // aborts if shared object:
-        // - it's OK to freeze whether object is fresh or owned
-        // - immutable object cannot be passed by value
-        aborts_if [abstract] sui::prover::shared(obj);
-        modifies [abstract] global<object::Ownership>(object::id(obj).bytes);
-        ensures [abstract] exists<object::Ownership>(object::id(obj).bytes);
-        ensures [abstract] global<object::Ownership>(object::id(obj).bytes).status == prover::IMMUTABLE;
-    }
-
     public(friend) native fun share_object_impl<T: key>(obj: T);
-
-    spec share_object_impl {
-        pragma opaque;
-        aborts_if [abstract] sui::prover::owned(obj);
-        modifies [abstract] global<object::Ownership>(object::id(obj).bytes);
-        ensures [abstract] exists<object::Ownership>(object::id(obj).bytes);
-        ensures [abstract] global<object::Ownership>(object::id(obj).bytes).status == prover::SHARED;
-    }
-
 
     public(friend) native fun transfer_impl<T: key>(obj: T, recipient: address);
 
-    spec transfer_impl {
-        pragma opaque;
-        // aborts if shared object:
-        // - it's OK to transfer whether object is fresh or already owned
-        // - immutable object cannot be passed by value
-        aborts_if [abstract] sui::prover::shared(obj);
-        modifies [abstract] global<object::Ownership>(object::id(obj).bytes);
-        ensures [abstract] exists<object::Ownership>(object::id(obj).bytes);
-        ensures [abstract] global<object::Ownership>(object::id(obj).bytes).owner == recipient;
-        ensures [abstract] global<object::Ownership>(object::id(obj).bytes).status == prover::OWNED;
-    }
-
     native fun receive_impl<T: key>(parent: address, to_receive: object::ID, version: u64): T;
-
-    spec receive_impl {
-        pragma opaque;
-        // TODO: stub to be replaced by actual abort conditions if any
-        aborts_if [abstract] true;
-        // TODO: specify actual function behavior
-    }
 }

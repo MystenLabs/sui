@@ -137,15 +137,18 @@ impl TryFrom<StoredEpochInfo> for EpochInfo {
     fn try_from(value: StoredEpochInfo) -> Result<Self, Self::Error> {
         let epoch = value.epoch as u64;
         let end_of_epoch_info = (&value).into();
-        let system_state: SuiSystemStateSummary =
-            bcs::from_bytes(&value.system_state).map_err(|_| {
+        let system_state: Option<SuiSystemStateSummary> = bcs::from_bytes(&value.system_state)
+            .map_err(|_| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(
                     "Failed to deserialize `system_state` for epoch {epoch}",
                 ))
-            })?;
+            })
+            .ok();
         Ok(EpochInfo {
             epoch: value.epoch as u64,
-            validators: system_state.active_validators,
+            validators: system_state
+                .map(|s| s.active_validators)
+                .unwrap_or_default(),
             epoch_total_transactions: value.epoch_total_transactions.unwrap_or(0) as u64,
             first_checkpoint_id: value.first_checkpoint_id as u64,
             epoch_start_timestamp: value.epoch_start_timestamp as u64,

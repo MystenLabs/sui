@@ -1,0 +1,34 @@
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/expansion/use_spec_function.move:3:5
+  │  
+3 │ ╭     spec module {
+4 │ │         fun foo(): bool { true }
+5 │ │         fun bar(): bool { true }
+6 │ │     }
+  │ ╰─────^ Specification blocks are deprecated
+
+warning[W09001]: unused alias
+   ┌─ tests/move_check/expansion/use_spec_function.move:10:18
+   │
+10 │     use 0x2::X::{foo, bar as baz};
+   │                  ^^^ Unused 'use' of alias 'foo'. Consider removing it
+   │
+   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+   ┌─ tests/move_check/expansion/use_spec_function.move:10:30
+   │
+10 │     use 0x2::X::{foo, bar as baz};
+   │                              ^^^ Unused 'use' of alias 'baz'. Consider removing it
+   │
+   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/use_spec_function.move:14:5
+   │  
+14 │ ╭     spec t {
+15 │ │         ensures foo();
+16 │ │         ensures baz();
+17 │ │     }
+   │ ╰─────^ Specification blocks are deprecated
+

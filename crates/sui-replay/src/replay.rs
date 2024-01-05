@@ -43,8 +43,8 @@ use sui_framework::BuiltInFramework;
 use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_types::storage::{get_module, PackageObject};
 use sui_types::{
-    authenticator_state::get_authenticator_state_obj_initial_shared_version,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
     committee::EpochId,
     digests::{ChainIdentifier, CheckpointDigest, ObjectDigest, TransactionDigest},
@@ -63,10 +63,6 @@ use sui_types::{
         TransactionKind, VerifiedCertificate, VerifiedTransaction,
     },
     DEEPBOOK_PACKAGE_ID,
-};
-use sui_types::{
-    randomness_state::get_randomness_state_obj_initial_shared_version,
-    storage::{get_module, PackageObject},
 };
 use tracing::{error, info, warn};
 
@@ -347,7 +343,7 @@ impl LocalExec {
 
         if let Some(url) = rpc_url.clone() {
             info!("Using RPC URL: {}", url);
-            match inner_exec(
+            return match inner_exec(
                 url,
                 tx_digest,
                 expensive_safety_check_config.clone(),
@@ -357,14 +353,14 @@ impl LocalExec {
             )
             .await
             {
-                Ok(exec_state) => return Ok(exec_state),
-                Err(e) => {
-                    warn!(
+                Ok(exec_state) => Ok(exec_state),
+                Err(e) => Err(ReplayEngineError::SuiRpcError {
+                    err: format!(
                         "Failed to execute transaction with provided RPC URL: Error {}",
                         e
-                    );
-                }
-            }
+                    ),
+                }),
+            };
         }
 
         let cfg = ReplayableNetworkConfigSet::load_config(path)?;
@@ -388,7 +384,7 @@ impl LocalExec {
                     warn!("Failed to execute transaction with network config: {}. Attempting next network config...", e);
                     continue;
                 }
-            }
+            };
         }
         error!("No more configs to attempt. Try specifying Full Node RPC URL directly or provide a config file with a valid URL");
         Err(ReplayEngineError::UnableToExecuteWithNetworkConfigs { cfgs: cfg })
@@ -2118,11 +2114,9 @@ async fn create_epoch_store(
     let epoch_start_config = EpochStartConfiguration::new(
         sys_state,
         CheckpointDigest::random(),
-        get_authenticator_state_obj_initial_shared_version(&authority_state.database)
-            .expect("read cannot fail"),
-        get_randomness_state_obj_initial_shared_version(&authority_state.database)
-            .expect("read cannot fail"),
-    );
+        &authority_state.database,
+    )
+    .unwrap();
 
     let registry = Registry::new();
     let cache_metrics = Arc::new(ResolverMetrics::new(&registry));

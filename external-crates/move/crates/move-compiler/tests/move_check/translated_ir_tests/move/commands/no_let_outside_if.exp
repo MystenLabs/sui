@@ -14,5 +14,5 @@ error[E03009]: unbound variable
   ┌─ tests/move_check/translated_ir_tests/move/commands/no_let_outside_if.move:8:13
   │
 8 │     assert!(y == 5, 42);
-  │             ^ Invalid variable usage. Unbound variable 'y'
+  │             ^ Unbound variable 'y'
 

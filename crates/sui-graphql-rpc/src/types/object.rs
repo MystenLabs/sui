@@ -159,9 +159,9 @@ impl Object {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<TransactionBlock>> {
-        let digest = self.native.previous_transaction.to_string();
+        let digest = self.native.previous_transaction;
         ctx.data_unchecked::<PgManager>()
-            .fetch_tx(digest.as_str())
+            .fetch_tx(&digest.into())
             .await
             .extend()
     }

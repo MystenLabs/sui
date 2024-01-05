@@ -4,7 +4,7 @@
 use move_bytecode_verifier::meter::Scope;
 use prometheus::Registry;
 use std::{path::PathBuf, sync::Arc, time::Instant};
-use sui_adapter::adapter::{default_verifier_config, run_metered_move_bytecode_verifier};
+use sui_adapter::adapter::run_metered_move_bytecode_verifier;
 use sui_framework::BuiltInFramework;
 use sui_move_build::{CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
@@ -12,7 +12,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
     metrics::BytecodeVerifierMetrics,
 };
-use sui_verifier::meter::SuiVerifierMeter;
+use sui_verifier::{default_verifier_config, meter::SuiVerifierMeter};
 
 fn build(path: PathBuf) -> SuiResult<CompiledPackage> {
     let mut config = sui_move_build::BuildConfig::new_for_testing();

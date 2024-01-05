@@ -5,14 +5,6 @@
 
 A variable-sized container that can hold any type. Indexing is 0-based, and
 vectors are growable. This module has many native functions.
-Verification of modules that use this one uses model functions that are implemented
-directly in Boogie. The specification language has built-in functions operations such
-as <code>singleton_vector</code>. There are some helper functions defined here for specifications in other
-modules as well.
-
->Note: We did not verify most of the
-Move functions here because many have loops, requiring loop invariants to prove, and
-the return on investment didn't seem worth it for these simple functions.
 
 
 -  [Constants](#@Constants_0)
@@ -33,8 +25,6 @@ the return on investment didn't seem worth it for these simple functions.
 -  [Function `remove`](#0x1_vector_remove)
 -  [Function `insert`](#0x1_vector_insert)
 -  [Function `swap_remove`](#0x1_vector_swap_remove)
--  [Module Specification](#@Module_Specification_1)
-    -  [Helper Functions](#@Helper_Functions_2)
 
 
 <pre><code></code></pre>
@@ -272,19 +262,6 @@ Return an vector of size one containing element <code>e</code>.
 
 </details>
 
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>aborts_if</b> <b>false</b>;
-<b>ensures</b> result == vec(e);
-</code></pre>
-
-
-
-</details>
-
 <a name="0x1_vector_reverse"></a>
 
 ## Function `reverse`
@@ -319,18 +296,6 @@ Reverses the order of the elements in the vector <code>v</code> in place.
 
 </details>
 
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>pragma</b> intrinsic = <b>true</b>;
-</code></pre>
-
-
-
-</details>
-
 <a name="0x1_vector_append"></a>
 
 ## Function `append`
@@ -358,18 +323,6 @@ Pushes all of the elements of the <code>other</code> vector into the <code>lhs</
 
 </details>
 
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>pragma</b> intrinsic = <b>true</b>;
-</code></pre>
-
-
-
-</details>
-
 <a name="0x1_vector_is_empty"></a>
 
 ## Function `is_empty`
@@ -389,18 +342,6 @@ Return <code><b>true</b></code> if the vector <code>v</code> has no elements and
 <pre><code><b>public</b> <b>fun</b> <a href="vector.md#0x1_vector_is_empty">is_empty</a>&lt;Element&gt;(v: &<a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;): bool {
     <a href="vector.md#0x1_vector_length">length</a>(v) == 0
 }
-</code></pre>
-
-
-
-</details>
-
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>pragma</b> intrinsic = <b>true</b>;
 </code></pre>
 
 
@@ -439,18 +380,6 @@ Otherwise, returns false.
 
 </details>
 
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>pragma</b> intrinsic = <b>true</b>;
-</code></pre>
-
-
-
-</details>
-
 <a name="0x1_vector_index_of"></a>
 
 ## Function `index_of`
@@ -477,18 +406,6 @@ Otherwise, returns <code>(<b>false</b>, 0)</code>.
     };
     (<b>false</b>, 0)
 }
-</code></pre>
-
-
-
-</details>
-
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>pragma</b> intrinsic = <b>true</b>;
 </code></pre>
 
 
@@ -522,18 +439,6 @@ Aborts if <code>i</code> is out of bounds.
     <b>while</b> (i &lt; len) <a href="vector.md#0x1_vector_swap">swap</a>(v, i, { i = i + 1; i });
     <a href="vector.md#0x1_vector_pop_back">pop_back</a>(v)
 }
-</code></pre>
-
-
-
-</details>
-
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>pragma</b> intrinsic = <b>true</b>;
 </code></pre>
 
 
@@ -577,18 +482,6 @@ Aborts if <code>i &gt; <a href="vector.md#0x1_vector_length">length</a>(v)</code
 
 </details>
 
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>pragma</b> intrinsic = <b>true</b>;
-</code></pre>
-
-
-
-</details>
-
 <a name="0x1_vector_swap_remove"></a>
 
 ## Function `swap_remove`
@@ -618,83 +511,6 @@ Aborts if <code>i</code> is out of bounds.
 
 
 </details>
-
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>pragma</b> intrinsic = <b>true</b>;
-</code></pre>
-
-
-
-</details>
-
-<a name="@Module_Specification_1"></a>
-
-## Module Specification
-
-
-
-<a name="@Helper_Functions_2"></a>
-
-### Helper Functions
-
-
-Check if <code>v1</code> is equal to the result of adding <code>e</code> at the end of <code>v2</code>
-
-
-<a name="0x1_vector_eq_push_back"></a>
-
-
-<pre><code><b>fun</b> <a href="vector.md#0x1_vector_eq_push_back">eq_push_back</a>&lt;Element&gt;(v1: <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;, v2: <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;, e: Element): bool {
-    len(v1) == len(v2) + 1 &&
-    v1[len(v1)-1] == e &&
-    v1[0..len(v1)-1] == v2[0..len(v2)]
-}
-</code></pre>
-
-
-Check if <code>v</code> is equal to the result of concatenating <code>v1</code> and <code>v2</code>
-
-
-<a name="0x1_vector_eq_append"></a>
-
-
-<pre><code><b>fun</b> <a href="vector.md#0x1_vector_eq_append">eq_append</a>&lt;Element&gt;(v: <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;, v1: <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;, v2: <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;): bool {
-    len(v) == len(v1) + len(v2) &&
-    v[0..len(v1)] == v1 &&
-    v[len(v1)..len(v)] == v2
-}
-</code></pre>
-
-
-Check <code>v1</code> is equal to the result of removing the first element of <code>v2</code>
-
-
-<a name="0x1_vector_eq_pop_front"></a>
-
-
-<pre><code><b>fun</b> <a href="vector.md#0x1_vector_eq_pop_front">eq_pop_front</a>&lt;Element&gt;(v1: <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;, v2: <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;): bool {
-    len(v1) + 1 == len(v2) &&
-    v1 == v2[1..len(v2)]
-}
-</code></pre>
-
-
-Check that <code>v1</code> is equal to the result of removing the element at index <code>i</code> from <code>v2</code>.
-
-
-<a name="0x1_vector_eq_remove_elem_at_index"></a>
-
-
-<pre><code><b>fun</b> <a href="vector.md#0x1_vector_eq_remove_elem_at_index">eq_remove_elem_at_index</a>&lt;Element&gt;(i: u64, v1: <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;, v2: <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;): bool {
-    len(v1) + 1 == len(v2) &&
-    v1[0..i] == v2[0..i] &&
-    v1[i..len(v1)] == v2[i + 1..len(v2)]
-}
-</code></pre>
 
 
 [//]: # ("File containing references which can be used from documentation")

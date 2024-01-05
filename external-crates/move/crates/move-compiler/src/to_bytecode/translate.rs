@@ -7,11 +7,8 @@ use crate::{
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
-    expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, SpecId},
-    hlir::{
-        ast::{self as H, Value_, Var, Visibility},
-        translate::{display_var, DisplayVar},
-    },
+    expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_},
+    hlir::ast::{self as H, Value_, Var, Visibility},
     naming::{
         ast::{BuiltinTypeName_, StructTypeParameter, TParam},
         fake_natives,
@@ -34,11 +31,7 @@ use std::{
 };
 
 type CollectedInfos = UniqueMap<FunctionName, CollectedInfo>;
-type CollectedInfo = (
-    Vec<(Var, H::SingleType)>,
-    BTreeMap<SpecId, (IR::NopLabel, BTreeMap<Var, H::SingleType>)>,
-    Attributes,
-);
+type CollectedInfo = (Vec<(Var, H::SingleType)>, Attributes);
 
 fn extract_decls(
     compilation_env: &mut CompilationEnv,
@@ -204,7 +197,6 @@ fn module(
         structs,
         constants,
         functions,
-        synthetics: vec![],
     };
     let deps: Vec<&F::CompiledModule> = vec![];
     let (mut module, source_map) =
@@ -288,25 +280,12 @@ fn function_info_map(
         .into_iter()
         .map(|(n, v)| (Symbol::from(n.as_str()), v))
         .collect();
-    let (params, specs, attributes) = collected_function_infos.get_(&name).unwrap();
+    let (params, attributes) = collected_function_infos.get_(&name).unwrap();
     let parameters = params
         .iter()
         .map(|(v, ty)| var_info(&local_map, *v, ty.clone()))
         .collect();
-    let spec_info = specs
-        .iter()
-        .map(|(id, (label, used_local_types))| {
-            let offset = *function_source_map.nops.get(label).unwrap();
-            let used_locals = used_local_info(&local_map, used_local_types);
-            let info = SpecInfo {
-                offset,
-                used_locals,
-            };
-            (*id, info)
-        })
-        .collect();
     let function_info = FunctionInfo {
-        spec_info,
         parameters,
         attributes: attributes.clone(),
     };
@@ -314,22 +293,6 @@ fn function_info_map(
     let name_loc = *collected_function_infos.get_loc_(&name).unwrap();
     let function_name = FunctionName(sp(name_loc, name));
     (function_name, function_info)
-}
-
-fn used_local_info(
-    local_map: &BTreeMap<Symbol, F::LocalIndex>,
-    used_local_types: &BTreeMap<Var, H::SingleType>,
-) -> UniqueMap<Var, VarInfo> {
-    UniqueMap::maybe_from_iter(used_local_types.iter().map(|(v, ty)| {
-        let (v, info) = var_info(local_map, *v, ty.clone());
-        let v_orig_ = match display_var(v.0.value) {
-            DisplayVar::Tmp => panic!("ICE spec block captured a tmp"),
-            DisplayVar::Orig(s) => s,
-        };
-        let v_orig = Var(sp(v.0.loc, v_orig_.into()));
-        (v_orig, info)
-    }))
-    .unwrap()
 }
 
 fn var_info(
@@ -384,7 +347,6 @@ fn struct_def(
             abilities,
             type_formals,
             fields,
-            invariants: vec![],
         },
     )
 }
@@ -524,13 +486,9 @@ fn function(
         visibility: v,
         is_entry: entry.is_some(),
         signature,
-        specifications: vec![],
         body,
     };
-    (
-        (name, sp(loc, ir_function)),
-        (parameters, context.finish_function(), attributes),
-    )
+    ((name, sp(loc, ir_function)), (parameters, attributes))
 }
 
 fn visibility(_context: &mut Context, v: Visibility) -> IR::FunctionVisibility {
@@ -905,8 +863,6 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
         E::Unreachable => panic!("ICE should not compile dead code"),
         E::UnresolvedError => panic!("ICE should not have reached compilation if there are errors"),
         E::Unit { .. } => (),
-        // remember to switch to orig_name
-        E::Spec(id, used_locals) => code.push(sp(loc, B::Nop(Some(context.spec(id, used_locals))))),
         E::Value(sp!(_, v_)) => {
             let ld_value = match v_ {
                 V::U8(u) => B::LdU8(u),

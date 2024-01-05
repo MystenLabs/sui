@@ -5,7 +5,7 @@
 use crate::{
     diag,
     diagnostics::Diagnostics,
-    expansion::ast::{Attributes, ModuleIdent, ModuleIdent_, SpecId},
+    expansion::ast::{Attributes, ModuleIdent, ModuleIdent_},
     hlir::ast as H,
     parser::ast::{FunctionName, ModuleName},
     shared::{unique_map::UniqueMap, Name, NumericalAddress},
@@ -18,7 +18,6 @@ use move_core_types::{
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::collections::BTreeMap;
 
 //**************************************************************************************************
 // Compiled Unit
@@ -31,15 +30,7 @@ pub struct VarInfo {
 }
 
 #[derive(Debug, Clone)]
-pub struct SpecInfo {
-    pub offset: F::CodeOffset,
-    // Free locals that are used but not declared in the block
-    pub used_locals: UniqueMap<H::Var, VarInfo>,
-}
-
-#[derive(Debug, Clone)]
 pub struct FunctionInfo {
-    pub spec_info: BTreeMap<SpecId, SpecInfo>,
     pub parameters: Vec<(H::Var, VarInfo)>,
     pub attributes: Attributes,
 }

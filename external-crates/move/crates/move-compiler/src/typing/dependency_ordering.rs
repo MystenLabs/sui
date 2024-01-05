@@ -244,13 +244,6 @@ fn module(context: &mut Context, mident: ModuleIdent, mdef: &T::ModuleDefinition
     mdef.functions
         .iter()
         .for_each(|(_, _, fdef)| function(context, fdef));
-    for (mident, sp!(loc, neighbor_)) in &mdef.spec_dependencies {
-        let dep = match neighbor_ {
-            Neighbor_::Dependency => DepType::Use,
-            Neighbor_::Friend => DepType::Friend,
-        };
-        context.add_neighbor(*mident, dep, *loc);
-    }
 }
 
 //**************************************************************************************************
@@ -440,7 +433,6 @@ fn exp(context: &mut Context, e: &T::Exp) {
         | E::Constant(..)
         | E::Continue(_)
         | E::BorrowLocal(..)
-        | E::Spec(..)
         | E::UnresolvedError => (),
     }
 }

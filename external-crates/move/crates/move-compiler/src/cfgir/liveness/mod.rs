@@ -124,10 +124,6 @@ fn exp(state: &mut LivenessState, parent_e: &Exp) {
             state.0.insert(*var);
         }
 
-        E::Spec(_, used_locals) => used_locals.keys().for_each(|v| {
-            state.0.insert(*v);
-        }),
-
         E::ModuleCall(mcall) => mcall.arguments.iter().for_each(|e| exp(state, e)),
         E::Vector(_, _, _, args) => args.iter().for_each(|e| exp(state, e)),
         E::Freeze(e)
@@ -323,13 +319,6 @@ mod last_usage {
             E::BorrowLocal(_, var) | E::Move { var, .. } => {
                 // remove it from context to prevent accidental dropping in previous usages
                 context.dropped_live.remove(var);
-            }
-
-            E::Spec(_, used_locals) => {
-                // remove it from context to prevent accidental dropping in previous usages
-                used_locals.keys().for_each(|var| {
-                    context.dropped_live.remove(var);
-                })
             }
 
             E::Copy { var, from_user } => {

@@ -192,21 +192,8 @@ module sui::object {
     // helper for delete
     native fun delete_impl(id: address);
 
-    spec delete_impl {
-        pragma opaque;
-        aborts_if [abstract] false;
-        ensures [abstract] !exists<Ownership>(id);
-    }
-
     // marks newly created UIDs from hash
     native fun record_new_uid(id: address);
-
-    spec record_new_uid {
-        pragma opaque;
-        // TODO: stub to be replaced by actual abort conditions if any
-        aborts_if [abstract] true;
-        // TODO: specify actual function behavior
-     }
 
     #[test_only]
     /// Return the most recent created object ID.

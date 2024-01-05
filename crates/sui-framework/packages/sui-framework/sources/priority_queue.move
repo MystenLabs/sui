@@ -86,10 +86,6 @@ module sui::priority_queue {
         }
     }
 
-    spec restore_heap_recursive {
-        pragma opaque;
-    }
-
     /// Max heapify the subtree whose root is at index `i`. That means after this function
     /// finishes, the subtree should have the property that the parent node has higher priority
     /// than both child nodes.
@@ -119,10 +115,6 @@ module sui::priority_queue {
             // max heapify the subtree rooted at node `max`.
             max_heapify_recursive(v, len, max);
         }
-    }
-
-    spec max_heapify_recursive {
-        pragma opaque;
     }
 
     public fun priorities<T: drop>(pq: &PriorityQueue<T>): vector<u64> {

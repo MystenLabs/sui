@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::connection::{Connection, Edge};
+use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use move_binary_format::errors::PartialVMResult;
 use move_binary_format::CompiledModule;
@@ -15,10 +15,9 @@ use sui_types::{
     },
 };
 
-use crate::context_data::db_data_provider::validate_cursor_pagination;
+use crate::types::cursor::{Cursor, Page};
 use crate::types::sui_address::SuiAddress;
 use crate::{
-    context_data::db_data_provider::PgManager,
     error::Error,
     types::{
         big_int::BigInt, date_time::DateTime, epoch::Epoch, move_package::MovePackage,
@@ -59,70 +58,36 @@ pub(crate) struct RandomnessStateCreateTransaction {
     dummy: Option<bool>,
 }
 
+pub(crate) type CTxn = Cursor<usize>;
+pub(crate) type CPackage = Cursor<usize>;
+
 /// System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions
 /// at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other
 /// optional transactions to run at the end of the epoch.
 #[Object]
 impl EndOfEpochTransaction {
     /// The list of system transactions that are allowed to run at the end of the epoch.
-    async fn transaction_connection(
+    async fn transactions(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
-        before: Option<String>,
+        before: Option<CTxn>,
         last: Option<u64>,
-        after: Option<String>,
+        after: Option<CTxn>,
     ) -> Result<Connection<String, EndOfEpochTransactionKind>> {
-        // TODO: make cursor opaque (currently just an offset).
-        validate_cursor_pagination(&first, &after, &last, &before).extend()?;
-
-        let total = self.0.len();
-        let mut lo = if let Some(after) = after {
-            1 + after
-                .parse::<usize>()
-                .map_err(|_| Error::InvalidCursor("Failed to parse 'after' cursor.".to_string()))
-                .extend()?
-        } else {
-            0
-        };
-
-        let mut hi = if let Some(before) = before {
-            before
-                .parse::<usize>()
-                .map_err(|_| Error::InvalidCursor("Failed to parse 'before' cursor.".to_string()))
-                .extend()?
-        } else {
-            total
-        };
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let mut connection = Connection::new(false, false);
-        if hi <= lo {
+        let Some((prev, next, cs)) = page.paginate_indices(self.0.len()) else {
             return Ok(connection);
-        }
+        };
 
-        // If there's a `first` limit, bound the upperbound to be at most `first` away from the
-        // lowerbound.
-        if let Some(first) = first {
-            let first = first as usize;
-            if hi - lo > first {
-                hi = lo + first;
-            }
-        }
+        connection.has_previous_page = prev;
+        connection.has_next_page = next;
 
-        // If there's a `last` limit, bound the lowerbound to be at most `last` away from the
-        // upperbound.  NB. This applies after we bounded the upperbound, using `first`.
-        if let Some(last) = last {
-            let last = last as usize;
-            if hi - lo > last {
-                lo = hi - last;
-            }
-        }
-
-        connection.has_previous_page = 0 < lo;
-        connection.has_next_page = hi < total;
-
-        for (idx, tx) in self.0.iter().enumerate().skip(lo).take(hi - lo) {
-            let tx = EndOfEpochTransactionKind::from(tx.clone());
-            connection.edges.push(Edge::new(idx.to_string(), tx));
+        for c in cs {
+            let tx = EndOfEpochTransactionKind::from(self.0[*c].clone());
+            connection.edges.push(Edge::new(c.encode_cursor(), tx));
         }
 
         Ok(connection)
@@ -137,9 +102,8 @@ impl EndOfEpochTransaction {
 #[Object]
 impl ChangeEpochTransaction {
     /// The next (to become) epoch.
-    async fn epoch(&self, ctx: &Context<'_>) -> Result<Epoch> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_epoch_strict(self.0.epoch)
+    async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
+        Epoch::query(ctx.data_unchecked(), Some(self.0.epoch))
             .await
             .extend()
     }
@@ -178,70 +142,26 @@ impl ChangeEpochTransaction {
     /// System packages (specifically framework and move stdlib) that are written before the new
     /// epoch starts, to upgrade them on-chain. Validators write these packages out when running the
     /// transaction.
-    async fn system_package_connection(
+    async fn system_packages(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<CPackage>,
         last: Option<u64>,
-        before: Option<String>,
+        before: Option<CPackage>,
     ) -> Result<Connection<String, MovePackage>> {
-        // TODO: make cursor opaque (currently just an offset).
-        validate_cursor_pagination(&first, &after, &last, &before).extend()?;
-
-        let total = self.0.system_packages.len();
-
-        let mut lo = if let Some(after) = after {
-            1 + after
-                .parse::<usize>()
-                .map_err(|_| Error::InvalidCursor("Failed to parse 'after' cursor.".to_string()))
-                .extend()?
-        } else {
-            0
-        };
-
-        let mut hi = if let Some(before) = before {
-            before
-                .parse::<usize>()
-                .map_err(|_| Error::InvalidCursor("Failed to parse 'before' cursor.".to_string()))
-                .extend()?
-        } else {
-            total
-        };
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let mut connection = Connection::new(false, false);
-        if hi <= lo {
+        let Some((prev, next, cs)) = page.paginate_indices(self.0.system_packages.len()) else {
             return Ok(connection);
-        }
+        };
 
-        // If there's a `first` limit, bound the upperbound to be at most `first` away from the
-        // lowerbound.
-        if let Some(first) = first {
-            let first = first as usize;
-            if hi - lo > first {
-                hi = lo + first;
-            }
-        }
+        connection.has_previous_page = prev;
+        connection.has_next_page = next;
 
-        // If there's a `last` limit, bound the lowerbound to be at most `last` away from the
-        // upperbound.  NB. This applies after we bounded the upperbound, using `first`.
-        if let Some(last) = last {
-            let last = last as usize;
-            if hi - lo > last {
-                lo = hi - last;
-            }
-        }
-
-        connection.has_previous_page = 0 < lo;
-        connection.has_next_page = hi < total;
-
-        for (idx, (version, modules, deps)) in self
-            .0
-            .system_packages
-            .iter()
-            .enumerate()
-            .skip(lo)
-            .take(hi - lo)
-        {
+        for c in cs {
+            let (version, modules, deps) = &self.0.system_packages[*c];
             let compiled_modules = modules
                 .iter()
                 .map(|bytes| CompiledModule::deserialize_with_defaults(bytes))
@@ -262,7 +182,7 @@ impl ChangeEpochTransaction {
                 .map_err(|_| Error::Internal("Failed to create system package".to_string()))
                 .extend()?;
 
-            connection.edges.push(Edge::new(idx.to_string(), package));
+            connection.edges.push(Edge::new(c.encode_cursor(), package));
         }
 
         Ok(connection)
@@ -272,9 +192,8 @@ impl ChangeEpochTransaction {
 #[Object]
 impl AuthenticatorStateExpireTransaction {
     /// Expire JWKs that have a lower epoch than this.
-    async fn min_epoch(&self, ctx: &Context<'_>) -> Result<Epoch> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_epoch_strict(self.0.min_epoch)
+    async fn min_epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
+        Epoch::query(ctx.data_unchecked(), Some(self.0.min_epoch))
             .await
             .extend()
     }

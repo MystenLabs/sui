@@ -12,7 +12,6 @@ use indexmap::IndexMap;
 use lru::LruCache;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::{base_types::TransactionDigest, error::SuiResult, fp_ensure};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
@@ -22,8 +21,9 @@ use sui_types::{
     storage::InputKey,
     transaction::{TransactionDataAPI, VerifiedCertificate},
 };
+use sui_types::{executable_transaction::VerifiedExecutableTransaction, fp_bail};
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{error, instrument, trace, warn};
+use tracing::{error, info, instrument, trace, warn};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::{AuthorityMetrics, AuthorityStore};
@@ -806,24 +806,27 @@ impl TransactionManager {
                 .collect(),
         ) {
             // When this occurs, most likely transactions piled up on a shared object.
-            fp_ensure!(
-                queue_len < MAX_PER_OBJECT_QUEUE_LENGTH,
-                SuiError::TooManyTransactionsPendingOnObject {
+            if queue_len >= MAX_PER_OBJECT_QUEUE_LENGTH {
+                info!(
+                    "Overload detected on object {:?} with {} pending transactions",
+                    object_id, queue_len
+                );
+                fp_bail!(SuiError::TooManyTransactionsPendingOnObject {
                     object_id,
                     queue_len,
                     threshold: MAX_PER_OBJECT_QUEUE_LENGTH,
-                }
-            );
+                });
+            }
             if let Some(age) = txn_age {
                 // Check that we don't have a txn that has been waiting for a long time in the queue.
-                fp_ensure!(
-                    age < txn_age_threshold,
-                    SuiError::TooOldTransactionPendingOnObject {
+                if age >= txn_age_threshold {
+                    info!("Overload detected on object {:?} with oldest transaction pending for {} secs", object_id, age.as_secs());
+                    fp_bail!(SuiError::TooOldTransactionPendingOnObject {
                         object_id,
                         txn_age_sec: age.as_secs(),
                         threshold: txn_age_threshold.as_secs(),
-                    }
-                );
+                    });
+                }
             }
         }
         Ok(())

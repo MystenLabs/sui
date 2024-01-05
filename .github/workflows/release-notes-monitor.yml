@@ -59,7 +59,7 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         echo "Processing ${{ matrix.pr }} PR"
-        export rel_notes=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }}} --jq ".body" | awk '/### Release notes/{p=1; next} p' | grep '\S')
+        export rel_notes=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" /repos/MystenLabs/sui/pulls/${{ matrix.pr }} --jq ".body" | awk '/### Release notes/{p=1; next} p' | sed '/^[[:space:]]*$/d')
         echo "release_notes=${rel_notes}" >> $GITHUB_ENV
 
     - name: Configure AWS credentials
@@ -103,7 +103,7 @@ jobs:
   tag:
     name: Adding git tag to processed commit
     needs: [ get-list-of-prs ]
-    if: ${{ needs.get-list-of-prs.outputs.existing_commit_tag == '' }}
+    if: ${{ success() && needs.get-list-of-prs.outputs.existing_commit_tag == '' }}
     uses: mystenlabs/sui/.github/workflows/tag.yml@main
     with:
       sui_commit: ${{ needs.get-list-of-prs.outputs.new_commit_hash }}
