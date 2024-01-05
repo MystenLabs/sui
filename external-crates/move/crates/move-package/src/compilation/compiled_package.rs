@@ -21,8 +21,8 @@ use move_bytecode_utils::Modules;
 use move_command_line_common::{
     env::get_bytecode_version_from_env,
     files::{
-        extension_equals, find_filenames, try_exists, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,
-        SOURCE_MAP_EXTENSION,
+        extension_equals, find_filenames, find_move_filenames, try_exists, MOVE_COMPILED_EXTENSION,
+        MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
     },
 };
 use move_compiler::{
@@ -494,7 +494,7 @@ impl CompiledPackage {
         built_deps.extend(deps_for_prior_compiler);
         built_deps.extend(bytecode_deps);
         // invoke the compiler
-        let mut compiler = Compiler::from_package_paths(paths, built_deps)
+        let mut compiler = Compiler::from_package_paths(paths, built_deps.clone())
             .unwrap()
             .set_flags(flags);
 
@@ -517,9 +517,6 @@ impl CompiledPackage {
                 unit: annot_unit.into_compiled_unit(),
                 source_path,
             };
-            println!(
-                "[!] deps compiled units should be included here in the package construction..."
-            );
             if package_name == root_package_name {
                 root_compiled_units.push(unit)
             } else {
@@ -530,6 +527,51 @@ impl CompiledPackage {
         }
 
         println!("adding precompiled to deps_compiled_units...");
+        // populating this will expose it to source verification and ... OnDiskCompiledPackage retrieving with into_compiled_package. important.
+        // let mut compiled_unit_paths = vec![];
+        for prebuilt in built_deps {
+            println!("have prebuilt dep {:#?}", prebuilt);
+
+            /*
+               let paths: Vec<_> = prebuilt
+                   .paths
+                   .into_iter()
+                   .map(|path| PathBuf::from(path.as_str()))
+                   .collect();
+               println!("paths {:#?}", paths);
+            */
+
+            // chop this: let package_dir = "./../move-stdlib/sources/address.move" from
+            let _package_dir = PathBuf::from(prebuilt.paths[0].as_str());
+            let package_dir = PathBuf::from("./../move-stdlib/build/MoveStdlib");
+            let module_path = package_dir.join(CompiledPackageLayout::CompiledModules.path());
+            println!("module path {:#?}", module_path);
+
+            let mut compiled_unit_paths = vec![];
+            compiled_unit_paths.push(module_path);
+            let compiled_units = find_filenames(&compiled_unit_paths, |path| {
+                extension_equals(path, MOVE_COMPILED_EXTENSION)
+            });
+            println!("compiled_units {:#?}", compiled_units);
+            let dep_name = prebuilt.name.unwrap().0;
+            // dummy_on_disk = OnDiskCompiledPackage {};
+            for bytecode_path in compiled_units.unwrap() {
+                println!("adding dep_name {} and unit {:#?}", dep_name, bytecode_path);
+                // deps_compiled_units.push((dep_name, self.decode_unit(dep_name, &bytecode_path)?))
+            }
+
+            /*
+                let compiled_units = find_filenames(&compiled_unit_paths, |path| {
+                    extension_equals(path, MOVE_COMPILED_EXTENSION)
+                });
+                println!("compiled_units {:#?}", compiled_units);
+                let dep_name = prebuilt.name.unwrap().0;
+                for bytecode_path in compiled_units.unwrap() {
+                    println!("adding dep_name {} and unit {:#?}", dep_name, bytecode_path);
+                    // deps_compiled_units.push((dep_name, self.decode_unit(dep_name, &bytecode_path)?))
+            }
+            */
+        }
 
         let mut compiled_docs = None;
         if resolution_graph.build_options.generate_docs {
