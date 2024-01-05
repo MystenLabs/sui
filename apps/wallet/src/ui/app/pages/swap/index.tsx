@@ -449,9 +449,9 @@ export function SwapPageContent() {
 									balanceChanges={balanceChanges}
 									baseCoinType={baseCoinType}
 									quoteCoinType={quoteCoinType}
-									loading={dataFromEstimateFetching}
 									refetch={refetchEstimate}
-									error={estimateError}
+									loading={isValid && dataFromEstimateFetching}
+									error={isValid && estimateError ? estimateError : null}
 								/>
 
 								{isValid && (
