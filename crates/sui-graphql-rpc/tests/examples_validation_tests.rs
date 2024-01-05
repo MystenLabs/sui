@@ -79,7 +79,7 @@ mod tests {
                 let depth = *usage.get("depth").unwrap_or_else(|| {
                     panic!("Depth usage should be present for query: {}", query.name)
                 });
-                let payload = *usage.get("query_payload").unwrap_or_else(|| {
+                let payload = *usage.get("queryPayload").unwrap_or_else(|| {
                     panic!("Payload usage should be present for query: {}", query.name)
                 });
                 *max_nodes = max(*max_nodes, nodes);
