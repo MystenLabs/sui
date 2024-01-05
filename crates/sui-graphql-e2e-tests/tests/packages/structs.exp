@@ -139,56 +139,58 @@ gas summary: computation_cost: 1000000, storage_cost: 5213600,  storage_rebate: 
 task 3 'create-checkpoint'. lines 58-58:
 Checkpoint created: 1
 
-task 4 'run-graphql'. lines 60-100:
+task 4 'run-graphql'. lines 60-102:
 Response: {
   "data": {
     "transactionBlockConnection": {
       "nodes": [
         {
           "effects": {
-            "objectChanges": [
-              {
-                "outputState": {
-                  "address": "0x9ac4c0b096b0309b6bc76213ae2df606ad595afe0ad10369a1cf7c5127147636",
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "address": "0xc5bc732d1b17c3197f4bf54f70b2177c509c02f85bc8d89d7c3241aea14f4714",
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "address": "0xc981db970ede1a25da3aa4dc3b4de8b9414332d79aa6f977600f43cd7e457f64",
-                  "asMovePackage": {
-                    "module": {
-                      "struct": {
-                        "name": "S",
-                        "abilities": [
-                          "COPY",
-                          "DROP"
-                        ],
-                        "typeParameters": [],
-                        "fields": [
-                          {
-                            "name": "x",
-                            "type": {
-                              "repr": "u64",
-                              "signature": {
-                                "ref": null,
-                                "body": "u64"
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "address": "0x9ac4c0b096b0309b6bc76213ae2df606ad595afe0ad10369a1cf7c5127147636",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xc5bc732d1b17c3197f4bf54f70b2177c509c02f85bc8d89d7c3241aea14f4714",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xc981db970ede1a25da3aa4dc3b4de8b9414332d79aa6f977600f43cd7e457f64",
+                    "asMovePackage": {
+                      "module": {
+                        "struct": {
+                          "name": "S",
+                          "abilities": [
+                            "COPY",
+                            "DROP"
+                          ],
+                          "typeParameters": [],
+                          "fields": [
+                            {
+                              "name": "x",
+                              "type": {
+                                "repr": "u64",
+                                "signature": {
+                                  "ref": null,
+                                  "body": "u64"
+                                }
                               }
                             }
-                          }
-                        ]
+                          ]
+                        }
                       }
                     }
                   }
                 }
-              }
-            ]
+              ]
+            }
           }
         }
       ]
@@ -196,142 +198,144 @@ Response: {
   }
 }
 
-task 5 'upgrade'. lines 102-108:
+task 5 'upgrade'. lines 104-110:
 created: object(5,0)
 mutated: object(0,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 6049600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 6 'create-checkpoint'. lines 110-110:
+task 6 'create-checkpoint'. lines 112-112:
 Checkpoint created: 2
 
-task 7 'run-graphql'. lines 112-167:
+task 7 'run-graphql'. lines 114-171:
 Response: {
   "data": {
     "transactionBlockConnection": {
       "nodes": [
         {
           "effects": {
-            "objectChanges": [
-              {
-                "outputState": {
-                  "address": "0x787a1341a104a895eaafa45928ef577d16ff11172076237c26666f7c448e117d",
-                  "asMovePackage": {
-                    "module": {
-                      "s": {
-                        "module": {
-                          "package": {
-                            "asObject": {
-                              "address": "0xc981db970ede1a25da3aa4dc3b4de8b9414332d79aa6f977600f43cd7e457f64"
-                            }
-                          }
-                        },
-                        "name": "S",
-                        "abilities": [
-                          "COPY",
-                          "DROP"
-                        ],
-                        "typeParameters": [],
-                        "fields": [
-                          {
-                            "name": "x",
-                            "type": {
-                              "repr": "u64",
-                              "signature": {
-                                "ref": null,
-                                "body": "u64"
-                              }
-                            }
-                          }
-                        ]
-                      },
-                      "t": {
-                        "module": {
-                          "package": {
-                            "asObject": {
-                              "address": "0x787a1341a104a895eaafa45928ef577d16ff11172076237c26666f7c448e117d"
-                            }
-                          }
-                        },
-                        "name": "T",
-                        "abilities": [],
-                        "typeParameters": [
-                          {
-                            "constraints": [
-                              "DROP"
-                            ],
-                            "isPhantom": false
-                          }
-                        ],
-                        "fields": [
-                          {
-                            "name": "y",
-                            "type": {
-                              "repr": "u64",
-                              "signature": {
-                                "ref": null,
-                                "body": "u64"
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "address": "0x787a1341a104a895eaafa45928ef577d16ff11172076237c26666f7c448e117d",
+                    "asMovePackage": {
+                      "module": {
+                        "s": {
+                          "module": {
+                            "package": {
+                              "asObject": {
+                                "address": "0xc981db970ede1a25da3aa4dc3b4de8b9414332d79aa6f977600f43cd7e457f64"
                               }
                             }
                           },
-                          {
-                            "name": "s",
-                            "type": {
-                              "repr": "0xc981db970ede1a25da3aa4dc3b4de8b9414332d79aa6f977600f43cd7e457f64::m::S",
-                              "signature": {
-                                "ref": null,
-                                "body": {
-                                  "datatype": {
-                                    "package": "0xc981db970ede1a25da3aa4dc3b4de8b9414332d79aa6f977600f43cd7e457f64",
-                                    "module": "m",
-                                    "type": "S",
-                                    "typeParameters": []
+                          "name": "S",
+                          "abilities": [
+                            "COPY",
+                            "DROP"
+                          ],
+                          "typeParameters": [],
+                          "fields": [
+                            {
+                              "name": "x",
+                              "type": {
+                                "repr": "u64",
+                                "signature": {
+                                  "ref": null,
+                                  "body": "u64"
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        "t": {
+                          "module": {
+                            "package": {
+                              "asObject": {
+                                "address": "0x787a1341a104a895eaafa45928ef577d16ff11172076237c26666f7c448e117d"
+                              }
+                            }
+                          },
+                          "name": "T",
+                          "abilities": [],
+                          "typeParameters": [
+                            {
+                              "constraints": [
+                                "DROP"
+                              ],
+                              "isPhantom": false
+                            }
+                          ],
+                          "fields": [
+                            {
+                              "name": "y",
+                              "type": {
+                                "repr": "u64",
+                                "signature": {
+                                  "ref": null,
+                                  "body": "u64"
+                                }
+                              }
+                            },
+                            {
+                              "name": "s",
+                              "type": {
+                                "repr": "0xc981db970ede1a25da3aa4dc3b4de8b9414332d79aa6f977600f43cd7e457f64::m::S",
+                                "signature": {
+                                  "ref": null,
+                                  "body": {
+                                    "datatype": {
+                                      "package": "0xc981db970ede1a25da3aa4dc3b4de8b9414332d79aa6f977600f43cd7e457f64",
+                                      "module": "m",
+                                      "type": "S",
+                                      "typeParameters": []
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "u",
+                              "type": {
+                                "repr": "$0",
+                                "signature": {
+                                  "ref": null,
+                                  "body": {
+                                    "typeParameter": 0
                                   }
                                 }
                               }
                             }
-                          },
-                          {
-                            "name": "u",
-                            "type": {
-                              "repr": "$0",
-                              "signature": {
-                                "ref": null,
-                                "body": {
-                                  "typeParameter": 0
-                                }
+                          ]
+                        },
+                        "v": {
+                          "name": "V",
+                          "fields": [
+                            {
+                              "name": "t",
+                              "type": {
+                                "repr": "0xc981db970ede1a25da3aa4dc3b4de8b9414332d79aa6f977600f43cd7e457f64::m::T<0xc981db970ede1a25da3aa4dc3b4de8b9414332d79aa6f977600f43cd7e457f64::m::S>"
                               }
                             }
-                          }
-                        ]
-                      },
-                      "v": {
-                        "name": "V",
-                        "fields": [
-                          {
-                            "name": "t",
-                            "type": {
-                              "repr": "0xc981db970ede1a25da3aa4dc3b4de8b9414332d79aa6f977600f43cd7e457f64::m::T<0xc981db970ede1a25da3aa4dc3b4de8b9414332d79aa6f977600f43cd7e457f64::m::S>"
-                            }
-                          }
-                        ]
+                          ]
+                        }
                       }
                     }
                   }
+                },
+                {
+                  "outputState": {
+                    "address": "0x9ac4c0b096b0309b6bc76213ae2df606ad595afe0ad10369a1cf7c5127147636",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xc5bc732d1b17c3197f4bf54f70b2177c509c02f85bc8d89d7c3241aea14f4714",
+                    "asMovePackage": null
+                  }
                 }
-              },
-              {
-                "outputState": {
-                  "address": "0x9ac4c0b096b0309b6bc76213ae2df606ad595afe0ad10369a1cf7c5127147636",
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "address": "0xc5bc732d1b17c3197f4bf54f70b2177c509c02f85bc8d89d7c3241aea14f4714",
-                  "asMovePackage": null
-                }
-              }
-            ]
+              ]
+            }
           }
         }
       ]
@@ -339,45 +343,47 @@ Response: {
   }
 }
 
-task 8 'run-graphql'. lines 169-202:
+task 8 'run-graphql'. lines 173-208:
 Response: {
   "data": {
     "transactionBlockConnection": {
       "nodes": [
         {
           "effects": {
-            "objectChanges": [
-              {
-                "outputState": {
-                  "asMovePackage": {
-                    "module": {
-                      "s": {
-                        "module": {
-                          "struct": null
-                        }
-                      },
-                      "t": {
-                        "module": {
-                          "struct": {
-                            "name": "T"
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "asMovePackage": {
+                      "module": {
+                        "s": {
+                          "module": {
+                            "struct": null
+                          }
+                        },
+                        "t": {
+                          "module": {
+                            "struct": {
+                              "name": "T"
+                            }
                           }
                         }
                       }
                     }
                   }
+                },
+                {
+                  "outputState": {
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "asMovePackage": null
+                  }
                 }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              }
-            ]
+              ]
+            }
           }
         }
       ]
@@ -385,7 +391,7 @@ Response: {
   }
 }
 
-task 9 'run-graphql'. lines 205-245:
+task 9 'run-graphql'. lines 211-251:
 Response: {
   "data": {
     "object": {
@@ -543,7 +549,7 @@ Response: {
   }
 }
 
-task 10 'run-graphql'. lines 247-294:
+task 10 'run-graphql'. lines 253-300:
 Response: {
   "data": {
     "object": {

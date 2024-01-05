@@ -11,99 +11,101 @@ gas summary: computation_cost: 1000000, storage_cost: 7379600,  storage_rebate: 
 task 2 'create-checkpoint'. lines 19-19:
 Checkpoint created: 1
 
-task 3 'run-graphql'. lines 21-77:
+task 3 'run-graphql'. lines 21-79:
 Response: {
   "data": {
     "transactionBlockConnection": {
       "nodes": [
         {
           "effects": {
-            "objectChanges": [
-              {
-                "outputState": {
-                  "asMovePackage": {
-                    "module": {
-                      "all": {
-                        "edges": [
-                          {
-                            "cursor": "MA",
-                            "node": {
-                              "name": "m0"
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "asMovePackage": {
+                      "module": {
+                        "all": {
+                          "edges": [
+                            {
+                              "cursor": "MA",
+                              "node": {
+                                "name": "m0"
+                              }
+                            },
+                            {
+                              "cursor": "MQ",
+                              "node": {
+                                "name": "m1"
+                              }
+                            },
+                            {
+                              "cursor": "Mg",
+                              "node": {
+                                "name": "m2"
+                              }
                             }
-                          },
-                          {
-                            "cursor": "MQ",
-                            "node": {
-                              "name": "m1"
-                            }
-                          },
-                          {
-                            "cursor": "Mg",
-                            "node": {
-                              "name": "m2"
-                            }
+                          ],
+                          "pageInfo": {
+                            "hasNextPage": false,
+                            "hasPreviousPage": false
                           }
-                        ],
-                        "pageInfo": {
-                          "hasNextPage": false,
-                          "hasPreviousPage": false
-                        }
-                      },
-                      "after": {
-                        "edges": [
-                          {
-                            "cursor": "MQ",
-                            "node": {
-                              "name": "m1"
+                        },
+                        "after": {
+                          "edges": [
+                            {
+                              "cursor": "MQ",
+                              "node": {
+                                "name": "m1"
+                              }
+                            },
+                            {
+                              "cursor": "Mg",
+                              "node": {
+                                "name": "m2"
+                              }
                             }
-                          },
-                          {
-                            "cursor": "Mg",
-                            "node": {
-                              "name": "m2"
-                            }
+                          ],
+                          "pageInfo": {
+                            "hasNextPage": false,
+                            "hasPreviousPage": true
                           }
-                        ],
-                        "pageInfo": {
-                          "hasNextPage": false,
-                          "hasPreviousPage": true
-                        }
-                      },
-                      "before": {
-                        "edges": [
-                          {
-                            "cursor": "MA",
-                            "node": {
-                              "name": "m0"
+                        },
+                        "before": {
+                          "edges": [
+                            {
+                              "cursor": "MA",
+                              "node": {
+                                "name": "m0"
+                              }
+                            },
+                            {
+                              "cursor": "MQ",
+                              "node": {
+                                "name": "m1"
+                              }
                             }
-                          },
-                          {
-                            "cursor": "MQ",
-                            "node": {
-                              "name": "m1"
-                            }
+                          ],
+                          "pageInfo": {
+                            "hasNextPage": true,
+                            "hasPreviousPage": false
                           }
-                        ],
-                        "pageInfo": {
-                          "hasNextPage": true,
-                          "hasPreviousPage": false
                         }
                       }
                     }
                   }
+                },
+                {
+                  "outputState": {
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "asMovePackage": null
+                  }
                 }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              }
-            ]
+              ]
+            }
           }
         }
       ]
@@ -111,32 +113,34 @@ Response: {
   }
 }
 
-task 4 'run-graphql'. lines 80-107:
+task 4 'run-graphql'. lines 82-111:
 Response: {
   "data": {
     "transactionBlockConnection": {
       "nodes": [
         {
           "effects": {
-            "objectChanges": [
-              {
-                "outputState": {
-                  "asMovePackage": {
-                    "module": null
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "asMovePackage": {
+                      "module": null
+                    }
+                  }
+                },
+                {
+                  "outputState": {
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "asMovePackage": null
                   }
                 }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              }
-            ]
+              ]
+            }
           }
         }
       ]
@@ -157,6 +161,7 @@ Response: {
         0,
         "effects",
         "objectChanges",
+        "nodes",
         0,
         "outputState",
         "asMovePackage",
@@ -170,101 +175,103 @@ Response: {
   ]
 }
 
-task 5 'run-graphql'. lines 109-169:
+task 5 'run-graphql'. lines 113-175:
 Response: {
   "data": {
     "transactionBlockConnection": {
       "nodes": [
         {
           "effects": {
-            "objectChanges": [
-              {
-                "outputState": {
-                  "asMovePackage": {
-                    "module": {
-                      "prefix": {
-                        "edges": [
-                          {
-                            "cursor": "MQ",
-                            "node": {
-                              "name": "m1"
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "asMovePackage": {
+                      "module": {
+                        "prefix": {
+                          "edges": [
+                            {
+                              "cursor": "MQ",
+                              "node": {
+                                "name": "m1"
+                              }
                             }
+                          ],
+                          "pageInfo": {
+                            "hasNextPage": true,
+                            "hasPreviousPage": true
                           }
-                        ],
-                        "pageInfo": {
-                          "hasNextPage": true,
-                          "hasPreviousPage": true
-                        }
-                      },
-                      "prefixAll": {
-                        "edges": [
-                          {
-                            "cursor": "MQ",
-                            "node": {
-                              "name": "m1"
+                        },
+                        "prefixAll": {
+                          "edges": [
+                            {
+                              "cursor": "MQ",
+                              "node": {
+                                "name": "m1"
+                              }
+                            },
+                            {
+                              "cursor": "Mg",
+                              "node": {
+                                "name": "m2"
+                              }
                             }
-                          },
-                          {
-                            "cursor": "Mg",
-                            "node": {
-                              "name": "m2"
-                            }
+                          ],
+                          "pageInfo": {
+                            "hasNextPage": false,
+                            "hasPreviousPage": true
                           }
-                        ],
-                        "pageInfo": {
-                          "hasNextPage": false,
-                          "hasPreviousPage": true
-                        }
-                      },
-                      "suffix": {
-                        "edges": [
-                          {
-                            "cursor": "MQ",
-                            "node": {
-                              "name": "m1"
+                        },
+                        "suffix": {
+                          "edges": [
+                            {
+                              "cursor": "MQ",
+                              "node": {
+                                "name": "m1"
+                              }
                             }
+                          ],
+                          "pageInfo": {
+                            "hasNextPage": true,
+                            "hasPreviousPage": true
                           }
-                        ],
-                        "pageInfo": {
-                          "hasNextPage": true,
-                          "hasPreviousPage": true
-                        }
-                      },
-                      "suffixAll": {
-                        "edges": [
-                          {
-                            "cursor": "MA",
-                            "node": {
-                              "name": "m0"
+                        },
+                        "suffixAll": {
+                          "edges": [
+                            {
+                              "cursor": "MA",
+                              "node": {
+                                "name": "m0"
+                              }
+                            },
+                            {
+                              "cursor": "MQ",
+                              "node": {
+                                "name": "m1"
+                              }
                             }
-                          },
-                          {
-                            "cursor": "MQ",
-                            "node": {
-                              "name": "m1"
-                            }
+                          ],
+                          "pageInfo": {
+                            "hasNextPage": true,
+                            "hasPreviousPage": false
                           }
-                        ],
-                        "pageInfo": {
-                          "hasNextPage": true,
-                          "hasPreviousPage": false
                         }
                       }
                     }
                   }
+                },
+                {
+                  "outputState": {
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "asMovePackage": null
+                  }
                 }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              }
-            ]
+              ]
+            }
           }
         }
       ]
@@ -272,69 +279,71 @@ Response: {
   }
 }
 
-task 6 'upgrade'. lines 171-185:
+task 6 'upgrade'. lines 177-191:
 created: object(6,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 8139600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 7 'create-checkpoint'. lines 187-187:
+task 7 'create-checkpoint'. lines 193-193:
 Checkpoint created: 2
 
-task 8 'run-graphql'. lines 189-220:
+task 8 'run-graphql'. lines 195-228:
 Response: {
   "data": {
     "transactionBlockConnection": {
       "nodes": [
         {
           "effects": {
-            "objectChanges": [
-              {
-                "outputState": {
-                  "asMovePackage": {
-                    "module": {
-                      "friends": {
-                        "edges": [
-                          {
-                            "cursor": "MA",
-                            "node": {
-                              "name": "m0"
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "asMovePackage": {
+                      "module": {
+                        "friends": {
+                          "edges": [
+                            {
+                              "cursor": "MA",
+                              "node": {
+                                "name": "m0"
+                              }
+                            },
+                            {
+                              "cursor": "MQ",
+                              "node": {
+                                "name": "m1"
+                              }
+                            },
+                            {
+                              "cursor": "Mg",
+                              "node": {
+                                "name": "m2"
+                              }
+                            },
+                            {
+                              "cursor": "Mw",
+                              "node": {
+                                "name": "m3"
+                              }
                             }
-                          },
-                          {
-                            "cursor": "MQ",
-                            "node": {
-                              "name": "m1"
-                            }
-                          },
-                          {
-                            "cursor": "Mg",
-                            "node": {
-                              "name": "m2"
-                            }
-                          },
-                          {
-                            "cursor": "Mw",
-                            "node": {
-                              "name": "m3"
-                            }
-                          }
-                        ]
+                          ]
+                        }
                       }
                     }
                   }
+                },
+                {
+                  "outputState": {
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "asMovePackage": null
+                  }
                 }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              }
-            ]
+              ]
+            }
           }
         }
       ]

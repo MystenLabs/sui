@@ -80,68 +80,70 @@ gas summary: computation_cost: 1000000, storage_cost: 5183200,  storage_rebate: 
 task 3 'create-checkpoint'. lines 46-46:
 Checkpoint created: 1
 
-task 4 'run-graphql'. lines 48-84:
+task 4 'run-graphql'. lines 48-86:
 Response: {
   "data": {
     "transactionBlockConnection": {
       "nodes": [
         {
           "effects": {
-            "objectChanges": [
-              {
-                "outputState": {
-                  "address": "0x6d819f18d445c9f3ac48e8e64880d6097152b6d33c94a1f82dd713960492ed19",
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "address": "0x7daf44be83c47c8d79c98ca8dd98b0c47075a6a6d0263bcfedbbd330512b4a4e",
-                  "asMovePackage": {
-                    "module": {
-                      "function": {
-                        "module": {
-                          "package": {
-                            "asObject": {
-                              "address": "0x7daf44be83c47c8d79c98ca8dd98b0c47075a6a6d0263bcfedbbd330512b4a4e"
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "address": "0x6d819f18d445c9f3ac48e8e64880d6097152b6d33c94a1f82dd713960492ed19",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0x7daf44be83c47c8d79c98ca8dd98b0c47075a6a6d0263bcfedbbd330512b4a4e",
+                    "asMovePackage": {
+                      "module": {
+                        "function": {
+                          "module": {
+                            "package": {
+                              "asObject": {
+                                "address": "0x7daf44be83c47c8d79c98ca8dd98b0c47075a6a6d0263bcfedbbd330512b4a4e"
+                              }
                             }
-                          }
-                        },
-                        "name": "f",
-                        "visibility": "PUBLIC",
-                        "isEntry": false,
-                        "typeParameters": [
-                          {
-                            "constraints": [
-                              "DROP"
-                            ]
-                          }
-                        ],
-                        "parameters": [
-                          {
-                            "repr": "$0"
-                          }
-                        ],
-                        "return": [
-                          {
-                            "repr": "u64"
                           },
-                          {
-                            "repr": "u64"
-                          }
-                        ]
+                          "name": "f",
+                          "visibility": "PUBLIC",
+                          "isEntry": false,
+                          "typeParameters": [
+                            {
+                              "constraints": [
+                                "DROP"
+                              ]
+                            }
+                          ],
+                          "parameters": [
+                            {
+                              "repr": "$0"
+                            }
+                          ],
+                          "return": [
+                            {
+                              "repr": "u64"
+                            },
+                            {
+                              "repr": "u64"
+                            }
+                          ]
+                        }
                       }
                     }
                   }
+                },
+                {
+                  "outputState": {
+                    "address": "0xc5bc732d1b17c3197f4bf54f70b2177c509c02f85bc8d89d7c3241aea14f4714",
+                    "asMovePackage": null
+                  }
                 }
-              },
-              {
-                "outputState": {
-                  "address": "0xc5bc732d1b17c3197f4bf54f70b2177c509c02f85bc8d89d7c3241aea14f4714",
-                  "asMovePackage": null
-                }
-              }
-            ]
+              ]
+            }
           }
         }
       ]
@@ -149,95 +151,97 @@ Response: {
   }
 }
 
-task 5 'upgrade'. lines 86-91:
+task 5 'upgrade'. lines 88-93:
 created: object(5,0)
 mutated: object(0,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 5418800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 6 'create-checkpoint'. lines 93-93:
+task 6 'create-checkpoint'. lines 95-95:
 Checkpoint created: 2
 
-task 7 'run-graphql'. lines 95-132:
+task 7 'run-graphql'. lines 97-136:
 Response: {
   "data": {
     "transactionBlockConnection": {
       "nodes": [
         {
           "effects": {
-            "objectChanges": [
-              {
-                "outputState": {
-                  "address": "0x17796e2ffb0bba66c5cbe385b94b91a0fab3e0a63fe8c628a446155ac673a80b",
-                  "asMovePackage": {
-                    "module": {
-                      "f": {
-                        "module": {
-                          "package": {
-                            "asObject": {
-                              "address": "0x17796e2ffb0bba66c5cbe385b94b91a0fab3e0a63fe8c628a446155ac673a80b"
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "address": "0x17796e2ffb0bba66c5cbe385b94b91a0fab3e0a63fe8c628a446155ac673a80b",
+                    "asMovePackage": {
+                      "module": {
+                        "f": {
+                          "module": {
+                            "package": {
+                              "asObject": {
+                                "address": "0x17796e2ffb0bba66c5cbe385b94b91a0fab3e0a63fe8c628a446155ac673a80b"
+                              }
                             }
-                          }
-                        },
-                        "name": "f",
-                        "visibility": "PUBLIC",
-                        "isEntry": false,
-                        "typeParameters": [
-                          {
-                            "constraints": [
-                              "DROP"
-                            ]
-                          }
-                        ],
-                        "parameters": [
-                          {
-                            "repr": "$0"
-                          }
-                        ],
-                        "return": [
-                          {
-                            "repr": "u64"
                           },
-                          {
-                            "repr": "u64"
-                          }
-                        ]
-                      },
-                      "g": {
-                        "module": {
-                          "package": {
-                            "asObject": {
-                              "address": "0x17796e2ffb0bba66c5cbe385b94b91a0fab3e0a63fe8c628a446155ac673a80b"
+                          "name": "f",
+                          "visibility": "PUBLIC",
+                          "isEntry": false,
+                          "typeParameters": [
+                            {
+                              "constraints": [
+                                "DROP"
+                              ]
                             }
-                          }
+                          ],
+                          "parameters": [
+                            {
+                              "repr": "$0"
+                            }
+                          ],
+                          "return": [
+                            {
+                              "repr": "u64"
+                            },
+                            {
+                              "repr": "u64"
+                            }
+                          ]
                         },
-                        "name": "g",
-                        "visibility": "PRIVATE",
-                        "isEntry": true,
-                        "typeParameters": [],
-                        "parameters": [],
-                        "return": [
-                          {
-                            "repr": "u64"
-                          }
-                        ]
+                        "g": {
+                          "module": {
+                            "package": {
+                              "asObject": {
+                                "address": "0x17796e2ffb0bba66c5cbe385b94b91a0fab3e0a63fe8c628a446155ac673a80b"
+                              }
+                            }
+                          },
+                          "name": "g",
+                          "visibility": "PRIVATE",
+                          "isEntry": true,
+                          "typeParameters": [],
+                          "parameters": [],
+                          "return": [
+                            {
+                              "repr": "u64"
+                            }
+                          ]
+                        }
                       }
                     }
                   }
+                },
+                {
+                  "outputState": {
+                    "address": "0x6d819f18d445c9f3ac48e8e64880d6097152b6d33c94a1f82dd713960492ed19",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xc5bc732d1b17c3197f4bf54f70b2177c509c02f85bc8d89d7c3241aea14f4714",
+                    "asMovePackage": null
+                  }
                 }
-              },
-              {
-                "outputState": {
-                  "address": "0x6d819f18d445c9f3ac48e8e64880d6097152b6d33c94a1f82dd713960492ed19",
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "address": "0xc5bc732d1b17c3197f4bf54f70b2177c509c02f85bc8d89d7c3241aea14f4714",
-                  "asMovePackage": null
-                }
-              }
-            ]
+              ]
+            }
           }
         }
       ]
@@ -245,7 +249,7 @@ Response: {
   }
 }
 
-task 8 'run-graphql'. lines 134-169:
+task 8 'run-graphql'. lines 138-173:
 Response: {
   "data": {
     "object": {
@@ -392,7 +396,7 @@ Response: {
   }
 }
 
-task 9 'run-graphql'. lines 171-242:
+task 9 'run-graphql'. lines 175-246:
 Response: {
   "data": {
     "object": {

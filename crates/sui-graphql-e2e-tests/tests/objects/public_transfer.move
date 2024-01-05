@@ -42,10 +42,12 @@ module P0::m {
         nodes {
             effects {
                 objectChanges {
-                    outputState {
-                        asMoveObject {
-                            contents { type { repr } }
-                            hasPublicTransfer
+                    nodes {
+                        outputState {
+                            asMoveObject {
+                                contents { type { repr } }
+                                hasPublicTransfer
+                            }
                         }
                     }
                 }

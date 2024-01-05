@@ -1,6 +1,6 @@
 processed 8 tasks
 
-task 1 'run-graphql'. lines 8-96:
+task 1 'run-graphql'. lines 8-102:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -1025,191 +1025,197 @@ Response: {
             "status": "SUCCESS",
             "errors": null,
             "lamportVersion": 1,
-            "dependencies": [],
-            "balanceChanges": [
-              {
-                "owner": {
-                  "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+            "dependencies": {
+              "nodes": []
+            },
+            "balanceChanges": {
+              "nodes": [
+                {
+                  "owner": {
+                    "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+                  },
+                  "amount": "30000000000000000",
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  }
                 },
-                "amount": "30000000000000000",
-                "coinType": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                {
+                  "owner": {
+                    "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+                  },
+                  "amount": "300000000000000",
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  }
                 }
-              },
-              {
-                "owner": {
-                  "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-                },
-                "amount": "300000000000000",
-                "coinType": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-                }
-              }
-            ],
-            "objectChanges": [
-              {
-                "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+              ]
+            },
+            "objectChanges": {
+              "nodes": [
+                {
                   "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
-                  "digest": "4La8NFKpsswwE5diR1Rxj8Tyk2t3duUVuCouJ7Wt8svb"
-                }
-              },
-              {
-                "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                    "digest": "4La8NFKpsswwE5diR1Rxj8Tyk2t3duUVuCouJ7Wt8svb"
+                  }
+                },
+                {
                   "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
-                  "digest": "5r41AM22CjLYi7f3xcX8oQLHScfg1A4fP89MaN4n3t5b"
-                }
-              },
-              {
-                "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                    "digest": "5r41AM22CjLYi7f3xcX8oQLHScfg1A4fP89MaN4n3t5b"
+                  }
+                },
+                {
                   "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
-                  "digest": "EGLgXChDs3ju9xdNmE8tHqPqF49Z323WGFFnsVXkyLPy"
-                }
-              },
-              {
-                "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
+                    "digest": "EGLgXChDs3ju9xdNmE8tHqPqF49Z323WGFFnsVXkyLPy"
+                  }
+                },
+                {
                   "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
-                  "digest": "2yFN9437ZmJH3pxefp39uq5k7Kr1tAsB1BzQVnY6E67H"
-                }
-              },
-              {
-                "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                    "digest": "2yFN9437ZmJH3pxefp39uq5k7Kr1tAsB1BzQVnY6E67H"
+                  }
+                },
+                {
                   "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
-                  "digest": "Ge3zcnywEYBxpWEzG2iUmfk4mMcqm1UDJdg6YnMEN3kb"
-                }
-              },
-              {
-                "address": "0x0000000000000000000000000000000000000000000000000000000000000007",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                    "digest": "Ge3zcnywEYBxpWEzG2iUmfk4mMcqm1UDJdg6YnMEN3kb"
+                  }
+                },
+                {
                   "address": "0x0000000000000000000000000000000000000000000000000000000000000007",
-                  "digest": "7Y8Gczfr5iC15v5RaRru5xvgRAS1wAX6aZS2gymdV4pb"
-                }
-              },
-              {
-                "address": "0x0000000000000000000000000000000000000000000000000000000000000008",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000007",
+                    "digest": "7Y8Gczfr5iC15v5RaRru5xvgRAS1wAX6aZS2gymdV4pb"
+                  }
+                },
+                {
                   "address": "0x0000000000000000000000000000000000000000000000000000000000000008",
-                  "digest": "BdDaZ9C93uPFuuCSha3mYFDEW6BECe5SXFSwtQmEpKoG"
-                }
-              },
-              {
-                "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000008",
+                    "digest": "BdDaZ9C93uPFuuCSha3mYFDEW6BECe5SXFSwtQmEpKoG"
+                  }
+                },
+                {
                   "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
-                  "digest": "DshoWDcgKSdNxa7ijZRNBcyfoQG2Qhebpr9b72MPaqri"
-                }
-              },
-              {
-                "address": "0x4dfcce9313ede5c6d6fc7f250fa8f4bafba4a59f2838430ba663520982815e19",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
+                    "digest": "DshoWDcgKSdNxa7ijZRNBcyfoQG2Qhebpr9b72MPaqri"
+                  }
+                },
+                {
                   "address": "0x4dfcce9313ede5c6d6fc7f250fa8f4bafba4a59f2838430ba663520982815e19",
-                  "digest": "4p7SGmTSEM854dQVuejBMu5UBQF5v8dLe3GN1iZedydo"
-                }
-              },
-              {
-                "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x4dfcce9313ede5c6d6fc7f250fa8f4bafba4a59f2838430ba663520982815e19",
+                    "digest": "4p7SGmTSEM854dQVuejBMu5UBQF5v8dLe3GN1iZedydo"
+                  }
+                },
+                {
                   "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
-                  "digest": "5xcJZaQYbVb3vaAbLsFUCJjqm4G1gu8Te2zw1f9LvDAt"
-                }
-              },
-              {
-                "address": "0x9347811e2c21de0e674038a1a60887d35bb7aa5a95040d1e99994cd8db6840ec",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
+                    "digest": "5xcJZaQYbVb3vaAbLsFUCJjqm4G1gu8Te2zw1f9LvDAt"
+                  }
+                },
+                {
                   "address": "0x9347811e2c21de0e674038a1a60887d35bb7aa5a95040d1e99994cd8db6840ec",
-                  "digest": "CZCUN3xZqLAKGvHDgEekrh9Jtbjds9vpVE9PQ5zRgdME"
-                }
-              },
-              {
-                "address": "0x9f7f44205e91f67d8cbeb4a83f7276205bd13027902a15b724914747532f4698",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x9347811e2c21de0e674038a1a60887d35bb7aa5a95040d1e99994cd8db6840ec",
+                    "digest": "CZCUN3xZqLAKGvHDgEekrh9Jtbjds9vpVE9PQ5zRgdME"
+                  }
+                },
+                {
                   "address": "0x9f7f44205e91f67d8cbeb4a83f7276205bd13027902a15b724914747532f4698",
-                  "digest": "3xnMqmH3Yjf83eVD7LPUksYk927qdRdDW3THsv7CkDDJ"
-                }
-              },
-              {
-                "address": "0x9fc0d6ce469f5568eab60e4c6aa93d935fd7533914c9742607f5776271c00baa",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x9f7f44205e91f67d8cbeb4a83f7276205bd13027902a15b724914747532f4698",
+                    "digest": "3xnMqmH3Yjf83eVD7LPUksYk927qdRdDW3THsv7CkDDJ"
+                  }
+                },
+                {
                   "address": "0x9fc0d6ce469f5568eab60e4c6aa93d935fd7533914c9742607f5776271c00baa",
-                  "digest": "D52rREkMfrhQeRmXzwSyx86w3LpzSfoN1FrLoYuWaYDu"
-                }
-              },
-              {
-                "address": "0xcd2bba84122ee134ee1f3761b5b70b988e49bbe01197848695328e8d06b609d4",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x9fc0d6ce469f5568eab60e4c6aa93d935fd7533914c9742607f5776271c00baa",
+                    "digest": "D52rREkMfrhQeRmXzwSyx86w3LpzSfoN1FrLoYuWaYDu"
+                  }
+                },
+                {
                   "address": "0xcd2bba84122ee134ee1f3761b5b70b988e49bbe01197848695328e8d06b609d4",
-                  "digest": "HAXNFvcNwZWXZEQ33QGtCg2y4cM53ydMieUwwSac8vWz"
-                }
-              },
-              {
-                "address": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0xcd2bba84122ee134ee1f3761b5b70b988e49bbe01197848695328e8d06b609d4",
+                    "digest": "HAXNFvcNwZWXZEQ33QGtCg2y4cM53ydMieUwwSac8vWz"
+                  }
+                },
+                {
                   "address": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
-                  "digest": "D1Yg3Km48dScZpoL9CHvrLXApJbWUEkAUmx9brAZaZEb"
-                }
-              },
-              {
-                "address": "0xda1ee806d7edc7cd9f6ee8617ec7ed0b7de1babaed2fd3415bb893d0fe3838a6",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
+                    "digest": "D1Yg3Km48dScZpoL9CHvrLXApJbWUEkAUmx9brAZaZEb"
+                  }
+                },
+                {
                   "address": "0xda1ee806d7edc7cd9f6ee8617ec7ed0b7de1babaed2fd3415bb893d0fe3838a6",
-                  "digest": "87JUwganfZw8xxL9wRJabnbSBFYGBrmkugyTJChPRVDr"
-                }
-              },
-              {
-                "address": "0xe13a15930ffb515a4b58cfbd603ef2a7ae3a2f305b6ca40d1f5d688ab514e316",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0xda1ee806d7edc7cd9f6ee8617ec7ed0b7de1babaed2fd3415bb893d0fe3838a6",
+                    "digest": "87JUwganfZw8xxL9wRJabnbSBFYGBrmkugyTJChPRVDr"
+                  }
+                },
+                {
                   "address": "0xe13a15930ffb515a4b58cfbd603ef2a7ae3a2f305b6ca40d1f5d688ab514e316",
-                  "digest": "FK8dcoLWGbRumiyYk2E3ngxxnHmg1AMZiovVJmFJy6fK"
-                }
-              },
-              {
-                "address": "0xeea300ef57f3012e53106a884ee9f7412fc31798cf6b2bc779182474d3c3a9a1",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0xe13a15930ffb515a4b58cfbd603ef2a7ae3a2f305b6ca40d1f5d688ab514e316",
+                    "digest": "FK8dcoLWGbRumiyYk2E3ngxxnHmg1AMZiovVJmFJy6fK"
+                  }
+                },
+                {
                   "address": "0xeea300ef57f3012e53106a884ee9f7412fc31798cf6b2bc779182474d3c3a9a1",
-                  "digest": "uLQMroh8can7LSzHBB6LGGkD7CkwwgJsDHytfbBG8jb"
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0xeea300ef57f3012e53106a884ee9f7412fc31798cf6b2bc779182474d3c3a9a1",
+                    "digest": "uLQMroh8can7LSzHBB6LGGkD7CkwwgJsDHytfbBG8jb"
+                  }
                 }
-              }
-            ],
+              ]
+            },
             "gasEffects": {
               "gasObject": null,
               "gasSummary": {
@@ -1237,10 +1243,10 @@ Response: {
   }
 }
 
-task 3 'create-checkpoint'. lines 100-100:
+task 3 'create-checkpoint'. lines 106-106:
 Checkpoint created: 1
 
-task 4 'run-graphql'. lines 102-171:
+task 4 'run-graphql'. lines 108-183:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -1274,23 +1280,29 @@ Response: {
             "status": "SUCCESS",
             "errors": null,
             "lamportVersion": 2,
-            "dependencies": [
-              {
-                "digest": "FbaziGbTUgv1hCfsnzivvm4e7BuWvYjCibecqkLEohLv"
-              }
-            ],
-            "balanceChanges": [],
-            "objectChanges": [
-              {
-                "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
-                "idCreated": false,
-                "idDeleted": false,
-                "outputState": {
-                  "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
-                  "digest": "28w3Mp2x4vt94bq4TejrbLcfMsMaevDyPz6h98sgcnw4"
+            "dependencies": {
+              "nodes": [
+                {
+                  "digest": "FbaziGbTUgv1hCfsnzivvm4e7BuWvYjCibecqkLEohLv"
                 }
-              }
-            ],
+              ]
+            },
+            "balanceChanges": {
+              "nodes": []
+            },
+            "objectChanges": {
+              "nodes": [
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                  "idCreated": false,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                    "digest": "28w3Mp2x4vt94bq4TejrbLcfMsMaevDyPz6h98sgcnw4"
+                  }
+                }
+              ]
+            },
             "gasEffects": {
               "gasObject": null,
               "gasSummary": {
@@ -1318,10 +1330,10 @@ Response: {
   }
 }
 
-task 6 'advance-epoch'. lines 175-175:
+task 6 'advance-epoch'. lines 187-187:
 Epoch advanced: 0
 
-task 7 'run-graphql'. lines 177-258:
+task 7 'run-graphql'. lines 189-276:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -1368,47 +1380,53 @@ Response: {
             "status": "SUCCESS",
             "errors": null,
             "lamportVersion": 2,
-            "dependencies": [
-              {
-                "digest": "FbaziGbTUgv1hCfsnzivvm4e7BuWvYjCibecqkLEohLv"
-              }
-            ],
-            "balanceChanges": [],
-            "objectChanges": [
-              {
-                "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
-                "idCreated": false,
-                "idDeleted": false,
-                "outputState": {
+            "dependencies": {
+              "nodes": [
+                {
+                  "digest": "FbaziGbTUgv1hCfsnzivvm4e7BuWvYjCibecqkLEohLv"
+                }
+              ]
+            },
+            "balanceChanges": {
+              "nodes": []
+            },
+            "objectChanges": {
+              "nodes": [
+                {
                   "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
-                  "digest": "J1nhWGfCYDessGpN996RAgJUyWkn28VAWsWWPTg5oWkN"
-                }
-              },
-              {
-                "address": "0x5b890eaf2abcfa2ab90b77b8e6f3d5d8609586c3e583baf3dccd5af17edf48d1",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+                  "idCreated": false,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                    "digest": "J1nhWGfCYDessGpN996RAgJUyWkn28VAWsWWPTg5oWkN"
+                  }
+                },
+                {
                   "address": "0x5b890eaf2abcfa2ab90b77b8e6f3d5d8609586c3e583baf3dccd5af17edf48d1",
-                  "digest": "8AbgKiQ9zc2BRePYJUcvL9prejJ8VozxAptqsceYu9sJ"
-                }
-              },
-              {
-                "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
-                "idCreated": false,
-                "idDeleted": true,
-                "outputState": null
-              },
-              {
-                "address": "0x9e2141bf8dd9ed7fa8ebb3a74deb74fc7cc70774693586361d88af51df4bf4ca",
-                "idCreated": true,
-                "idDeleted": false,
-                "outputState": {
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x5b890eaf2abcfa2ab90b77b8e6f3d5d8609586c3e583baf3dccd5af17edf48d1",
+                    "digest": "8AbgKiQ9zc2BRePYJUcvL9prejJ8VozxAptqsceYu9sJ"
+                  }
+                },
+                {
+                  "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
+                  "idCreated": false,
+                  "idDeleted": true,
+                  "outputState": null
+                },
+                {
                   "address": "0x9e2141bf8dd9ed7fa8ebb3a74deb74fc7cc70774693586361d88af51df4bf4ca",
-                  "digest": "CKjYKzD8gb8ksMasigZ7WJ4k5Xs9wEpiCsfX59KzNYPu"
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x9e2141bf8dd9ed7fa8ebb3a74deb74fc7cc70774693586361d88af51df4bf4ca",
+                    "digest": "CKjYKzD8gb8ksMasigZ7WJ4k5Xs9wEpiCsfX59KzNYPu"
+                  }
                 }
-              }
-            ],
+              ]
+            },
             "gasEffects": {
               "gasObject": null,
               "gasSummary": {
