@@ -7113,8 +7113,10 @@ dependencies = [
  "prometheus",
  "serde",
  "serde_json",
+ "telemetry-subscribers",
  "tokio",
  "tower",
+ "tracing",
  "workspace-hack",
 ]
 
