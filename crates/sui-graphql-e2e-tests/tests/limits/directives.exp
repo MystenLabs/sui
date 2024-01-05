@@ -49,14 +49,14 @@ Response: {
 task 4 'run-graphql'. lines 48-52:
 Response: {
   "data": {
-    "chainIdentifier": "d0ebf23a"
+    "chainIdentifier": "6258cc9e"
   }
 }
 
 task 5 'run-graphql'. lines 54-58:
 Response: {
   "data": {
-    "chainIdentifier": "d0ebf23a"
+    "chainIdentifier": "6258cc9e"
   }
 }
 
