@@ -231,7 +231,7 @@
           "type": "uint8"
         }
       ],
-      "name": "adjustDecimalsForSuiCoin",
+      "name": "adjustDecimalsForSuiToken",
       "outputs": [
         {
           "internalType": "uint64",
@@ -478,9 +478,9 @@
     {
       "inputs": [
         {
-          "internalType": "uint256",
+          "internalType": "uint8",
           "name": "",
-          "type": "uint256"
+          "type": "uint8"
         }
       ],
       "name": "supportedTokens",
@@ -641,4 +641,4 @@
       "stateMutability": "view",
       "type": "function"
     }
-  ]
+]
