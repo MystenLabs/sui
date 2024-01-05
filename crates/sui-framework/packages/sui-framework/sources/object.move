@@ -14,6 +14,7 @@ module sui::object {
     friend sui::transfer;
     friend sui::authenticator_state;
     friend sui::random;
+    friend sui::freezer;
 
     #[test_only]
     friend sui::test_scenario;

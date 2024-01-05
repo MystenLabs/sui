@@ -12,6 +12,7 @@ module sui::coin_tests {
     use sui::tx_context;
     use std::string;
     use std::ascii;
+    use sui::freezer;
 
     struct COIN_TESTS has drop {}
 
@@ -87,7 +88,7 @@ module sui::coin_tests {
     fun frozen_coins() {
         let scenario = test_scenario::begin(@0);
         let test = &mut scenario;
-        coin::create_deny_list_object_for_test(test_scenario::ctx(test));
+        freezer::create_deny_list_object_for_test(test_scenario::ctx(test));
         test_scenario::next_tx(test, TEST_ADDR);
 
         let witness = COIN_TESTS {};
@@ -105,7 +106,7 @@ module sui::coin_tests {
         {
             // test freezing an address
             test_scenario::next_tx(test, TEST_ADDR);
-            let freezer: coin::Freezer = test_scenario::take_shared(test);
+            let freezer: freezer::Freezer = test_scenario::take_shared(test);
             assert!(!coin::address_is_frozen<COIN_TESTS>(&freezer, @1), 0);
             coin::freeze_address(&mut freezer, &mut freeze_cap, @1, test_scenario::ctx(test));
             assert!(coin::address_is_frozen<COIN_TESTS>(&freezer, @1), 0);
@@ -116,7 +117,7 @@ module sui::coin_tests {
         {
             // test freezing an address over multiple "transactions"
             test_scenario::next_tx(test, TEST_ADDR);
-            let freezer: coin::Freezer = test_scenario::take_shared(test);
+            let freezer: freezer::Freezer = test_scenario::take_shared(test);
             assert!(!coin::address_is_frozen<COIN_TESTS>(&freezer, @1), 0);
             assert!(!coin::address_is_frozen<COIN_TESTS>(&freezer, @2), 0);
             coin::freeze_address(&mut freezer, &mut freeze_cap, @2, test_scenario::ctx(test));
@@ -124,7 +125,7 @@ module sui::coin_tests {
             test_scenario::return_shared(freezer);
 
             test_scenario::next_tx(test, TEST_ADDR);
-            let freezer: coin::Freezer = test_scenario::take_shared(test);
+            let freezer: freezer::Freezer = test_scenario::take_shared(test);
             assert!(coin::address_is_frozen<COIN_TESTS>(&freezer, @2), 0);
             coin::unfreeze_address(&mut freezer, &mut freeze_cap, @2, test_scenario::ctx(test));
             assert!(!coin::address_is_frozen<COIN_TESTS>(&freezer, @2), 0);
