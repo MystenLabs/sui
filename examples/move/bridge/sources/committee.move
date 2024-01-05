@@ -51,26 +51,45 @@ module bridge::committee {
         // TODO: change this to real committe members
         let members = vec_map::empty<vector<u8>, CommitteeMember>();
 
-        let bridge_pubkey_bytes = hex::decode(b"029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964");
+        let bridge_pubkey_bytes = hex::decode(b"02321ede33d2c2d7a8a152f275a1484edef2098f034121a602cb7d767d38680aa4");
         vec_map::insert(&mut members, bridge_pubkey_bytes, CommitteeMember {
+            // TODO: why do we need sui_address?
             sui_address: address::from_u256(1),
             bridge_pubkey_bytes,
-            voting_power: 10,
-            http_rest_url: b"https://127.0.0.1:9191",
+            voting_power: 2500,
+            http_rest_url: b"http://127.0.0.1:9191",
             blocklisted: false
         });
 
-        let bridge_pubkey_bytes = hex::decode(b"033e99a541db69bd32040dfe5037fbf5210dafa8151a71e21c5204b05d95ce0a62");
+        let bridge_pubkey_bytes = hex::decode(b"027f1178ff417fc9f5b8290bd8876f0a157a505a6c52db100a8492203ddd1d4279");
         vec_map::insert(&mut members, bridge_pubkey_bytes, CommitteeMember {
             sui_address: address::from_u256(2),
             bridge_pubkey_bytes,
-            voting_power: 10,
-            http_rest_url: b"https://127.0.0.1:9192",
+            voting_power: 2500,
+            http_rest_url: b"http://127.0.0.1:9192",
+            blocklisted: false
+        });
+
+        let bridge_pubkey_bytes = hex::decode(b"026f311bcd1c2664c14277c7a80e4857c690626597064f89edc33b8f67b99c6bc0");
+        vec_map::insert(&mut members, bridge_pubkey_bytes, CommitteeMember {
+            sui_address: address::from_u256(3),
+            bridge_pubkey_bytes,
+            voting_power: 2500,
+            http_rest_url: b"http://127.0.0.1:9193",
+            blocklisted: false
+        });
+
+        let bridge_pubkey_bytes = hex::decode(b"03a57b85771aedeb6d31c808be9a6e73194e4b70e679608f2bca68bcc684773736");
+        vec_map::insert(&mut members, bridge_pubkey_bytes, CommitteeMember {
+            sui_address: address::from_u256(4),
+            bridge_pubkey_bytes,
+            voting_power: 2500,
+            http_rest_url: b"http://127.0.0.1:9194",
             blocklisted: false
         });
 
         let thresholds = vec_map::empty();
-        vec_map::insert(&mut thresholds, message_types::token(), 10);
+        vec_map::insert(&mut thresholds, message_types::token(), 3334);
         BridgeCommittee { members, thresholds }
     }
 
