@@ -145,6 +145,8 @@ impl OnDiskCompiledPackage {
         let (buf, build_path) = if try_exists(p)? && extension_equals(p, "yaml") {
             (std::fs::read(p)?, p.parent().unwrap().parent().unwrap())
         } else {
+            let _p = p.join(CompiledPackageLayout::BuildInfo.path());
+            println!("from_path else {:#?}", _p);
             (
                 std::fs::read(p.join(CompiledPackageLayout::BuildInfo.path()))?,
                 p.parent().unwrap(),
@@ -526,11 +528,36 @@ impl CompiledPackage {
             }
         }
 
-        println!("adding precompiled to deps_compiled_units...");
+        /*
+        // absence of no-lint means we can't deser
+                for _prebuilt in built_deps {
+                    // println!("prebuilt {:#?}", _prebuilt);
+                    let _package_dir = PathBuf::from(_prebuilt.paths[0].as_str());
+                    let _package_dir = SourcePackageLayout::try_find_root(&_package_dir).unwrap();
+                    // let _package_dir = fs::canonicalize(_package_dir).unwrap();
+                    let dep_name = _prebuilt.name.unwrap().0;
+                    println!("dep_name {}", dep_name);
+                    let _package_dir = _package_dir.join("build").join(dep_name.as_str());
+                    println!("package_dir: {:#?}", _package_dir);
+                    let on_disk_dep = OnDiskCompiledPackage::from_path(&_package_dir).unwrap();
+                    let _dep_package = on_disk_dep.into_compiled_package().unwrap();
+                    println!("_dep_package: {:#?}", _dep_package);
+                    let _compiled = _dep_package.root_compiled_units;
+                    for unit in _compiled {
+                        println!(
+                            "Adding (\"MoveStdlib\", {}::{})",
+                            unit.unit.address, unit.unit.name
+                        );
+                        deps_compiled_units.push(("MoveStdlib".into(), unit));
+                    }
+            }
+            */
+
         // populating this will expose it to source verification and ... OnDiskCompiledPackage retrieving with into_compiled_package. important.
         // let mut compiled_unit_paths = vec![];
-        for prebuilt in built_deps {
-            println!("have prebuilt dep {:#?}", prebuilt);
+
+        for _prebuilt in built_deps {
+            println!("have prebuilt dep {:#?}", _prebuilt);
 
             /*
                let paths: Vec<_> = prebuilt
@@ -542,9 +569,17 @@ impl CompiledPackage {
             */
 
             // chop this: let package_dir = "./../move-stdlib/sources/address.move" from
-            let _package_dir = PathBuf::from(prebuilt.paths[0].as_str());
-            let package_dir = PathBuf::from("./../move-stdlib/build/MoveStdlib");
-            let module_path = package_dir.join(CompiledPackageLayout::CompiledModules.path());
+            //            let _package_dir = PathBuf::from(prebuilt.paths[0].as_str());
+            //	                let package_dir = PathBuf::from("./../move-stdlib/build/MoveStdlib");
+
+            let _package_dir = PathBuf::from(_prebuilt.paths[0].as_str());
+            let _package_dir = SourcePackageLayout::try_find_root(&_package_dir).unwrap();
+            // let _package_dir = fs::canonicalize(_package_dir).unwrap();
+            let dep_name = _prebuilt.name.unwrap().0;
+            println!("dep_name {}", dep_name);
+            let _package_dir = _package_dir.join("build").join(dep_name.as_str());
+            println!("package_dir: {:#?}", _package_dir);
+            let module_path = _package_dir.join(CompiledPackageLayout::CompiledModules.path());
             println!("module path {:#?}", module_path);
 
             let mut compiled_unit_paths = vec![];
@@ -553,11 +588,10 @@ impl CompiledPackage {
                 extension_equals(path, MOVE_COMPILED_EXTENSION)
             });
             println!("compiled_units {:#?}", compiled_units);
-            let dep_name = prebuilt.name.unwrap().0;
-            // dummy_on_disk = OnDiskCompiledPackage {};
             for bytecode_path in compiled_units.unwrap() {
                 println!("adding dep_name {} and unit {:#?}", dep_name, bytecode_path);
-                // deps_compiled_units.push((dep_name, self.decode_unit(dep_name, &bytecode_path)?))
+                let decoded = decode_ffs(_package_dir.clone(), dep_name, &bytecode_path)?;
+                deps_compiled_units.push((dep_name, decoded));
             }
 
             /*
@@ -975,4 +1009,54 @@ fn download_and_compile(
         .output()
         .expect("failed to build package");
     Ok(())
+}
+
+fn decode_ffs(
+    root_path: PathBuf,
+    package_name: Symbol,
+    bytecode_path_str: &str,
+) -> Result<CompiledUnitWithSource> {
+    let package_name_opt = Some(package_name);
+    let bytecode_path = Path::new(bytecode_path_str);
+    let path_to_file = CompiledPackageLayout::path_to_file_after_category(bytecode_path);
+    let bytecode_bytes = std::fs::read(bytecode_path)?;
+    let source_map = source_map_from_file(
+        &root_path
+            .join(CompiledPackageLayout::SourceMaps.path())
+            .join(&path_to_file)
+            .with_extension(SOURCE_MAP_EXTENSION),
+    )?;
+    let source_path = &root_path
+        .join(CompiledPackageLayout::Sources.path())
+        .join(path_to_file)
+        .with_extension(MOVE_EXTENSION);
+    ensure!(
+        source_path.is_file(),
+        "Error decoding package: {}. \
+            Unable to find corresponding source file for '{}' in package {}",
+        "hmmmmm",
+        bytecode_path_str,
+        package_name
+    );
+    let module = CompiledModule::deserialize_with_defaults(&bytecode_bytes)?;
+    let (address_bytes, module_name) = {
+        let id = module.self_id();
+        let parsed_addr = NumericalAddress::new(
+            id.address().into_bytes(),
+            move_compiler::shared::NumberFormat::Hex,
+        );
+        let module_name = FileName::from(id.name().as_str());
+        (parsed_addr, module_name)
+    };
+    let unit = NamedCompiledModule {
+        package_name: package_name_opt,
+        address: address_bytes,
+        name: module_name,
+        module,
+        source_map,
+    };
+    Ok(CompiledUnitWithSource {
+        unit,
+        source_path: source_path.clone(),
+    })
 }

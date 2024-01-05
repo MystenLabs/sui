@@ -7,12 +7,14 @@ use anyhow::Result;
 use clap::*;
 use move_command_line_common::files::{FileHash, MOVE_COVERAGE_MAP_EXTENSION};
 use move_compiler::{
+    compiled_unit::AnnotatedCompiledModule,
     diagnostics::{self, Diagnostics},
-    shared::{NumberFormat, NumericalAddress},
+    shared::{unique_map::UniqueMap, NumberFormat, NumericalAddress},
     unit_test::{plan_builder::construct_test_plan, TestPlan},
     PASS_CFGIR,
 };
 use move_coverage::coverage_map::{output_map_to_file, CoverageMap};
+use move_ir_types::location::Loc;
 use move_package::{compilation::build_plan::BuildPlan, BuildConfig};
 use move_unit_test::UnitTestingConfig;
 use move_vm_test_utils::gas_schedule::CostTable;
@@ -182,7 +184,11 @@ pub fn run_move_unit_tests<W: Write + Send>(
     // then save it, before resuming the rest of the compilation and returning the results and
     // control back to the Move package system.
     let mut warning_diags = None;
-    build_plan.compile_with_driver(writer, |compiler| {
+    // when you call compile_with_driver, it will call CompiledPackage::build_all and send down the compiler_driver call back to compiled_package.
+    // finally, compiled_package::build_all will call the function with compiler, which should return "all_compiled_units".
+    // After that result, we do things by getting root_compiled_units and deps_compiled units
+    // These units are only the root compiled units. all_compiled_units are saved to disk and stuff.
+    let fully_compiled_package = build_plan.compile_with_driver(writer, |compiler| {
         // IDEA: compiler has access to built_deps for prior, it is in deps: Vec<IndexpedPackagePath>. can we populate something with that?
         let (files, comments_and_compiler_res) = compiler.run::<PASS_CFGIR>().unwrap();
         let (_, compiler) =
@@ -194,6 +200,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
         let compilation_result = compiler.at_cfgir(cfgir).build();
         let (units, warnings) =
             diagnostics::unwrap_or_report_diagnostics(&files, compilation_result); // XXX -2 Need units
+                                                                                   // ZZZ append to units
         diagnostics::report_warnings(&files, warnings.clone());
         println!("[4] compiled units done (external-crates/move/crates/move-cli/src/base/test.rs)");
         test_plan = Some((built_test_plan, files.clone(), units.clone()));
@@ -201,16 +208,34 @@ pub fn run_move_unit_tests<W: Write + Send>(
         Ok((files, units))
     })?;
 
-    let (test_plan, mut files, units) = test_plan.unwrap(); // XXX -1 Need units -- is it in bytecode deps?
-                                                            /*
-                                                            for u in units.clone() {
-                                                                println!("[%] has bytecode? {}", u.named_module.name);
-                                                            }
-                                                            */
+    let (test_plan, mut files, mut units) = test_plan.unwrap(); // XXX -1 Need units -- is it in bytecode deps?
+                                                                /*
+                                                                                                                       for u in units.clone() {
+                                                                                                                           println!("[%] has bytecode? {}", u.named_module.name);
+                                                                                                                       }
+                                                                */
+
+    for (_, dep) in fully_compiled_package.deps_compiled_units {
+        // want to turn CompiledUnitWithSource into AnnotUnit.
+        // We can turn CompiledUnitWithSource into NamedCompiledUnit.
+        // then turn NamedCompiledUnit into AnnotatedCompiledUnit ?? How??
+        // TEST SETUP ONLY NEEDS unit.named_module, which is NamedCompiledModule!! set the rest to null
+        // refactor this dogshit.
+        let ann = AnnotatedCompiledModule {
+            loc: Loc::invalid(),
+            module_name_loc: Loc::invalid(),
+            address_name: None,
+            named_module: dep.unit,
+            function_infos: UniqueMap::default(),
+        };
+        units.push(ann)
+    }
+
     files.extend(dep_file_map);
     let test_plan = test_plan.unwrap();
     let no_tests = test_plan.is_empty();
     println!("[4] test plan construction (external-crates/move/crates/move-cli/src/base/test.rs)");
+    // ZZZ add to units here or before
     let test_plan = TestPlan::new(test_plan, files, units); // XXX 0 this fucking test_plan needs to populate compiled dep modules
 
     let trace_path = pkg_path.join(".trace");
