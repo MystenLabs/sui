@@ -26,7 +26,7 @@ type ActiveJwk {
 	"""
 	The most recent epoch in which the JWK was validated.
 	"""
-	epoch: Epoch!
+	epoch: Epoch
 }
 
 type ActiveJwkConnection {
@@ -113,7 +113,7 @@ type AuthenticatorStateExpireTransaction {
 	"""
 	Expire JWKs that have a lower epoch than this.
 	"""
-	minEpoch: Epoch!
+	minEpoch: Epoch
 	"""
 	The initial version that the AuthenticatorStateUpdate was shared at.
 	"""
@@ -127,7 +127,7 @@ type AuthenticatorStateUpdateTransaction {
 	"""
 	Epoch of the authenticator state update transaction.
 	"""
-	epoch: Epoch!
+	epoch: Epoch
 	"""
 	Consensus round of the authenticator state update.
 	"""
@@ -228,7 +228,7 @@ type ChangeEpochTransaction {
 	"""
 	The next (to become) epoch.
 	"""
-	epoch: Epoch!
+	epoch: Epoch
 	"""
 	The protocol version in effect in the new epoch.
 	"""
@@ -259,18 +259,19 @@ type ChangeEpochTransaction {
 	epoch starts, to upgrade them on-chain. Validators write these packages out when running the
 	transaction.
 	"""
-	systemPackageConnection(first: Int, after: String, last: Int, before: String): MovePackageConnection!
+	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection!
 }
 
 type Checkpoint {
 	"""
-	A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58.
-	This hash can be used to verify checkpoint contents by checking signatures against the committee,
+	A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58. This
+	hash can be used to verify checkpoint contents by checking signatures against the committee,
 	Hashing contents to match digest, and checking that the previous checkpoint digest matches.
 	"""
 	digest: String!
 	"""
-	This checkpoint's position in the total order of finalized checkpoints, agreed upon by consensus.
+	This checkpoint's position in the total order of finalized checkpoints, agreed upon by
+	consensus.
 	"""
 	sequenceNumber: Int!
 	"""
@@ -279,35 +280,36 @@ type Checkpoint {
 	"""
 	timestamp: DateTime!
 	"""
-	This is an aggregation of signatures from a quorum of validators for the checkpoint proposal.
+	This is an aggregation of signatures from a quorum of validators for the checkpoint
+	proposal.
 	"""
-	validatorSignature: Base64
+	validatorSignatures: Base64!
 	"""
 	The digest of the checkpoint at the previous sequence number.
 	"""
 	previousCheckpointDigest: String
 	"""
-	This is a commitment by the committee at the end of epoch
-	on the contents of the live object set at that time.
-	This can be used to verify state snapshots.
+	A commitment by the committee at the end of epoch on the contents of the live object set at
+	that time. This can be used to verify state snapshots.
 	"""
 	liveObjectSetDigest: String
 	"""
-	Tracks the total number of transaction blocks in the network at the time of the checkpoint.
+	The total number of transaction blocks in the network by the end of this checkpoint.
 	"""
 	networkTotalTransactions: Int
 	"""
-	The computation and storage cost, storage rebate, and nonrefundable storage fee accumulated
-	during this epoch, up to and including this checkpoint.
-	These values increase monotonically across checkpoints in the same epoch.
+	The computation cost, storage cost, storage rebate, and non-refundable storage fee
+	accumulated during this epoch, up to and including this checkpoint. These values increase
+	monotonically across checkpoints in the same epoch, and reset on epoch boundaries.
 	"""
 	rollingGasSummary: GasCostSummary
 	"""
-	End of epoch data is only available on the final checkpoint of an epoch.
-	This field provides information on the new committee and protocol version for the next epoch.
+	The epoch this checkpoint is part of.
 	"""
-	endOfEpoch: EndOfEpochData
 	epoch: Epoch
+	"""
+	Transactions in this checkpoint.
+	"""
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 }
 
@@ -416,11 +418,6 @@ type CoinMetadata {
 	asMoveObject: MoveObject!
 }
 
-type CommitteeMember {
-	authorityName: String
-	stakeUnit: Int
-}
-
 """
 System transaction that runs at the beginning of a checkpoint, and is responsible for setting
 the current value of the clock, based on the timestamp from consensus.
@@ -429,7 +426,7 @@ type ConsensusCommitPrologueTransaction {
 	"""
 	Epoch of the commit prologue transaction.
 	"""
-	epoch: Epoch!
+	epoch: Epoch
 	"""
 	Consensus round of the commit.
 	"""
@@ -527,11 +524,6 @@ input DynamicFieldName {
 
 union DynamicFieldValue = MoveObject | MoveValue
 
-type EndOfEpochData {
-	newCommittee: [CommitteeMember!]
-	nextProtocolVersion: Int
-}
-
 """
 System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions
 at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other
@@ -541,7 +533,7 @@ type EndOfEpochTransaction {
 	"""
 	The list of system transactions that are allowed to run at the end of the epoch.
 	"""
-	transactionConnection(first: Int, before: String, last: Int, after: String): EndOfEpochTransactionKindConnection!
+	transactions(first: Int, before: String, last: Int, after: String): EndOfEpochTransactionKindConnection!
 }
 
 union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction
@@ -635,7 +627,7 @@ type Epoch {
 	"""
 	The epoch's corresponding protocol configuration, including the feature flags and the configuration options
 	"""
-	protocolConfigs: ProtocolConfigs
+	protocolConfigs: ProtocolConfigs!
 	"""
 	SUI set aside to account for objects stored on-chain, at the start of the epoch.
 	This is also used for storage rebates.
@@ -663,7 +655,7 @@ type Epoch {
 	"""
 	The epoch's corresponding checkpoints
 	"""
-	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
+	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	"""
 	The epoch's corresponding transaction blocks
 	"""
@@ -1797,7 +1789,7 @@ A single protocol configuration value.
 """
 type ProtocolConfigAttr {
 	key: String!
-	value: String!
+	value: String
 }
 
 """
@@ -1907,7 +1899,7 @@ type Query {
 	(e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
-	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
+	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 	eventConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
@@ -1937,7 +1929,7 @@ type RandomnessStateUpdateTransaction {
 	"""
 	Epoch of the randomness state update transaction.
 	"""
-	epoch: Epoch!
+	epoch: Epoch
 	"""
 	Randomness round of the update.
 	"""
@@ -2407,6 +2399,10 @@ type TransactionBlock {
 	The effects field captures the results to the chain of executing this transaction.
 	"""
 	effects: TransactionBlockEffects
+	"""
+	Events emitted by this transaction block.
+	"""
+	events(first: Int, after: String, last: Int, before: String): EventConnection!
 	"""
 	This field is set by senders of a transaction block. It is an epoch reference that sets a
 	deadline after which validators will no longer consider the transaction valid. By default,

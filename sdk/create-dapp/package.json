@@ -36,7 +36,6 @@
 	},
 	"devDependencies": {
 		"@mysten/build-scripts": "workspace:*",
-		"tsx": "^3.12.7",
 		"typescript": "^5.1.6"
 	},
 	"dependencies": {

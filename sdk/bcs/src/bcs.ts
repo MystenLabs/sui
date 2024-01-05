@@ -563,7 +563,7 @@ export const bcs = {
 	 * ```
 	 */
 	generic<const Names extends readonly string[], const Type extends BcsType<any>>(
-		names: Names,
+		_names: Names,
 		cb: (...types: { [K in keyof Names]: BcsType<GenericPlaceholder<Names[K]>> }) => Type,
 	): <T extends { [K in keyof Names]: BcsType<any> }>(
 		...types: T

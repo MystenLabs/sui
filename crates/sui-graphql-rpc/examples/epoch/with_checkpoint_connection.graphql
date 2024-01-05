@@ -1,6 +1,6 @@
 {
   epoch {
-    checkpointConnection {
+    checkpoints {
       nodes {
         transactionBlockConnection(first: 10) {
           pageInfo {

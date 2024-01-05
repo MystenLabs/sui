@@ -54,7 +54,7 @@
 
 //# run-graphql
 {
-  checkpointConnection(last: 10) {
+  checkpoints(last: 10) {
     nodes {
       sequenceNumber
       timestamp

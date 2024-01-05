@@ -1321,7 +1321,7 @@ Response: {
 task 6 'advance-epoch'. lines 175-175:
 Epoch advanced: 0
 
-task 7 'run-graphql'. lines 177-255:
+task 7 'run-graphql'. lines 177-258:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -1344,19 +1344,22 @@ Response: {
           },
           "kind": {
             "__typename": "EndOfEpochTransaction",
-            "transactionConnection": {
-              "nodes": [
+            "transactions": {
+              "edges": [
                 {
-                  "__typename": "ChangeEpochTransaction",
-                  "epoch": {
-                    "epochId": 1
-                  },
-                  "protocolVersion": 33,
-                  "storageCharge": "0",
-                  "computationCharge": "0",
-                  "storageRebate": "0",
-                  "nonRefundableStorageFee": "0",
-                  "startTimestamp": "1970-01-01T00:01:25Z"
+                  "cursor": "MA",
+                  "node": {
+                    "__typename": "ChangeEpochTransaction",
+                    "epoch": {
+                      "epochId": 1
+                    },
+                    "protocolVersion": 33,
+                    "storageCharge": "0",
+                    "computationCharge": "0",
+                    "storageRebate": "0",
+                    "nonRefundableStorageFee": "0",
+                    "startTimestamp": "1970-01-01T00:01:25Z"
+                  }
                 }
               ]
             }

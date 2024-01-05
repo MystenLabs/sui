@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    db_backend::{BalanceQuery, Explain, Explained, GenericQueryBuilder, QueryableEpochInfoType},
+    db_backend::{BalanceQuery, Explain, Explained, GenericQueryBuilder},
     db_data_provider::{DbValidationError, PageLimit, TypeFilterError},
 };
 use crate::{
     context_data::db_data_provider::PgManager,
     error::Error,
     types::{
-        digest::Digest, event::EventFilter, object::ObjectFilter, sui_address::SuiAddress,
+        event::EventFilter, object::ObjectFilter, sui_address::SuiAddress,
         transaction_block::TransactionBlockFilter,
     },
 };
@@ -22,18 +22,15 @@ use diesel::{
 };
 use std::str::FromStr;
 use sui_indexer::{
-    models_v2::epoch::QueryableEpochInfo,
     schema_v2::{
-        checkpoints, display, epochs, events, objects, transactions, tx_calls, tx_changed_objects,
-        tx_input_objects, tx_recipients, tx_senders,
+        display, events, objects, transactions, tx_calls, tx_changed_objects, tx_input_objects,
+        tx_recipients, tx_senders,
     },
     types_v2::OwnerType,
 };
 use sui_types::parse_sui_struct_tag;
 use tap::TapFallible;
 use tracing::{info, warn};
-
-use diesel::SelectableHelper;
 
 pub(crate) const EXPLAIN_COSTING_LOG_TARGET: &str = "gql-explain-costing";
 
@@ -58,47 +55,6 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         objects::dsl::objects
             .filter(objects::dsl::object_type.eq(object_type))
             .limit(1) // Fetches for a single object and as such has a limit of 1
-            .into_boxed()
-    }
-    fn get_epoch_info(
-        epoch_id: i64,
-    ) -> epochs::BoxedQuery<'static, Pg, QueryableEpochInfoType<Pg>> {
-        epochs::dsl::epochs
-            .filter(epochs::dsl::epoch.eq(epoch_id))
-            .select(QueryableEpochInfo::as_select())
-            .into_boxed()
-    }
-
-    fn get_latest_epoch_info() -> epochs::BoxedQuery<'static, Pg, QueryableEpochInfoType<Pg>> {
-        epochs::dsl::epochs
-            .order_by(epochs::dsl::epoch.desc())
-            .limit(1)
-            .select(QueryableEpochInfo::as_select())
-            .into_boxed()
-    }
-    fn get_checkpoint_by_digest(digest: Vec<u8>) -> checkpoints::BoxedQuery<'static, Pg> {
-        checkpoints::dsl::checkpoints
-            .filter(checkpoints::dsl::checkpoint_digest.eq(digest))
-            .into_boxed()
-    }
-    fn get_checkpoint_by_sequence_number(
-        sequence_number: i64,
-    ) -> checkpoints::BoxedQuery<'static, Pg> {
-        checkpoints::dsl::checkpoints
-            .filter(checkpoints::dsl::sequence_number.eq(sequence_number))
-            .into_boxed()
-    }
-    fn get_latest_checkpoint() -> checkpoints::BoxedQuery<'static, Pg> {
-        checkpoints::dsl::checkpoints
-            .order_by(checkpoints::dsl::sequence_number.desc())
-            .limit(1)
-            .into_boxed()
-    }
-
-    fn get_earliest_complete_checkpoint() -> checkpoints::BoxedQuery<'static, Pg> {
-        checkpoints::dsl::checkpoints
-            .order_by(checkpoints::dsl::sequence_number.asc())
-            .limit(1)
             .into_boxed()
     }
 
@@ -154,10 +110,7 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
                     .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint as i64));
             }
             if let Some(transaction_ids) = filter.transaction_ids {
-                let digests = transaction_ids
-                    .into_iter()
-                    .map(|id| Ok::<Vec<u8>, Error>(Digest::from_str(&id)?.into_vec()))
-                    .collect::<Result<Vec<_>, _>>()?;
+                let digests: Vec<_> = transaction_ids.iter().map(|d| d.to_vec()).collect();
                 query = query.filter(transactions::dsl::transaction_digest.eq_any(digests));
             }
 
@@ -392,21 +345,6 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         let query = PgQueryBuilder::multi_get_balances(address);
         query.filter(objects::dsl::coin_type.eq(coin_type))
     }
-    fn multi_get_checkpoints(
-        before: Option<i64>,
-        after: Option<i64>,
-        limit: PageLimit,
-        epoch: Option<i64>,
-    ) -> checkpoints::BoxedQuery<'static, Pg> {
-        let mut query = order_checkpoints(before, after, &limit);
-        query = query.limit(limit.value() + 1);
-
-        if let Some(epoch) = epoch {
-            query = query.filter(checkpoints::dsl::epoch.eq(epoch));
-        }
-
-        query
-    }
     fn multi_get_events(
         before: Option<(i64, i64)>,
         after: Option<(i64, i64)>,
@@ -430,9 +368,8 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         }
 
         if let Some(digest) = filter.transaction_digest {
-            let tx_digest = Digest::from_str(&digest)?.into_vec();
             let subquery = transactions::dsl::transactions
-                .filter(transactions::dsl::transaction_digest.eq(tx_digest))
+                .filter(transactions::dsl::transaction_digest.eq(digest.to_vec()))
                 .select(transactions::dsl::tx_sequence_number);
 
             query = query.filter(events::dsl::tx_sequence_number.eq_any(subquery));
@@ -692,29 +629,6 @@ fn order_objs(
                 query = query.filter(objects::dsl::object_id.lt(before));
             }
             query = query.order(objects::dsl::object_id.desc());
-        }
-    }
-    query
-}
-
-fn order_checkpoints(
-    before: Option<i64>,
-    after: Option<i64>,
-    limit: &PageLimit,
-) -> checkpoints::BoxedQuery<'static, Pg> {
-    let mut query = checkpoints::dsl::checkpoints.into_boxed();
-    match limit {
-        PageLimit::First(_) => {
-            if let Some(after) = after {
-                query = query.filter(checkpoints::dsl::sequence_number.gt(after));
-            }
-            query = query.order(checkpoints::dsl::sequence_number.asc());
-        }
-        PageLimit::Last(_) => {
-            if let Some(before) = before {
-                query = query.filter(checkpoints::dsl::sequence_number.lt(before));
-            }
-            query = query.order(checkpoints::dsl::sequence_number.desc());
         }
     }
     query

@@ -193,17 +193,20 @@
             kind {
                 __typename
                 ... on EndOfEpochTransaction {
-                    transactionConnection {
-                        nodes {
-                            __typename
-                            ... on ChangeEpochTransaction {
-                                epoch { epochId }
-                                protocolVersion
-                                storageCharge
-                                computationCharge
-                                storageRebate
-                                nonRefundableStorageFee
-                                startTimestamp
+                    transactions {
+                        edges {
+                            cursor
+                            node {
+                                __typename
+                                ... on ChangeEpochTransaction {
+                                    epoch { epochId }
+                                    protocolVersion
+                                    storageCharge
+                                    computationCharge
+                                    storageRebate
+                                    nonRefundableStorageFee
+                                    startTimestamp
+                                }
                             }
                         }
                     }

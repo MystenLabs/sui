@@ -402,7 +402,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         _limit: Option<usize>,
     ) -> RpcResult<Page<String, ObjectID>> {
         with_tracing!(async move {
-            let reverse_record_id = self.name_service_config.reverse_record_field_id(address);
+            let reverse_record_id = self
+                .name_service_config
+                .reverse_record_field_id(address.as_ref());
 
             let field_reverse_record_object =
                 match self.state.get_object(&reverse_record_id).await? {
