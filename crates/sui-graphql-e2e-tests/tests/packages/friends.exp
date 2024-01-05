@@ -21,11 +21,6 @@ Response: {
             "objectChanges": [
               {
                 "outputState": {
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
                   "asMovePackage": {
                     "module": {
                       "all": {
@@ -102,6 +97,11 @@ Response: {
                 "outputState": {
                   "asMovePackage": null
                 }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
               }
             ]
           }
@@ -121,14 +121,14 @@ Response: {
             "objectChanges": [
               {
                 "outputState": {
-                  "asMovePackage": null
+                  "asMovePackage": {
+                    "module": null
+                  }
                 }
               },
               {
                 "outputState": {
-                  "asMovePackage": {
-                    "module": null
-                  }
+                  "asMovePackage": null
                 }
               },
               {
@@ -157,7 +157,7 @@ Response: {
         0,
         "effects",
         "objectChanges",
-        1,
+        0,
         "outputState",
         "asMovePackage",
         "module",
@@ -178,11 +178,6 @@ Response: {
         {
           "effects": {
             "objectChanges": [
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              },
               {
                 "outputState": {
                   "asMovePackage": {
@@ -263,6 +258,11 @@ Response: {
                 "outputState": {
                   "asMovePackage": null
                 }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
               }
             ]
           }
@@ -288,16 +288,6 @@ Response: {
         {
           "effects": {
             "objectChanges": [
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              },
               {
                 "outputState": {
                   "asMovePackage": {
@@ -332,6 +322,16 @@ Response: {
                       }
                     }
                   }
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
                 }
               }
             ]
