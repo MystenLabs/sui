@@ -2,7 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 query getLatestSuiSystemState {
-	latestSuiSystemState {
+	epoch {
+		epochId
+		startTimestamp
+		endTimestamp
 		referenceGasPrice
 		safeMode {
 			enabled
@@ -14,7 +17,7 @@ query getLatestSuiSystemState {
 			}
 		}
 
-		stakeSubsidy {
+		systemStakeSubsidy {
 			balance
 			currentDistributionAmount
 			decreaseRate
@@ -56,12 +59,6 @@ query getLatestSuiSystemState {
 			validatorCandidatesSize
 			pendingRemovals
 			totalStake
-		}
-
-		epoch {
-			epochId
-			startTimestamp
-			endTimestamp
 		}
 	}
 }

@@ -3,7 +3,7 @@
 
 query resolveNameServiceAddress($name: String!) {
 	resolveNameServiceAddress(name: $name) {
-		location
+		address
 	}
 }
 

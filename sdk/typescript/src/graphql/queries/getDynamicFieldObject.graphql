@@ -19,7 +19,7 @@ query getDynamicFieldObject($parentId: SuiAddress!, $name: DynamicFieldName!) {
 						}
 					}
 					asObject {
-						location
+						address
 						digest
 						version
 					}

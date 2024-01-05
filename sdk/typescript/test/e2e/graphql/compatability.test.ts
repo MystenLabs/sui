@@ -128,14 +128,12 @@ describe('GraphQL SuiClient compatibility', () => {
 		expect(graphQLgetTotalSupply).toEqual(rpcSupply);
 	});
 
-	test.skip('getMoveFunctionArgTypes', async () => {
+	test('getMoveFunctionArgTypes', async () => {
 		const rpcMoveFunction = await toolbox.client.getMoveFunctionArgTypes({
 			package: '0x02',
 			module: 'coin',
 			function: 'balance',
 		});
-
-		console.log(rpcMoveFunction);
 
 		const graphQLMoveFunction = await toolbox.graphQLClient!.getMoveFunctionArgTypes({
 			package: '0x02',
@@ -146,14 +144,12 @@ describe('GraphQL SuiClient compatibility', () => {
 		expect(graphQLMoveFunction).toEqual(rpcMoveFunction);
 	});
 
-	test.skip('getNormalizedMoveFunction', async () => {
+	test('getNormalizedMoveFunction', async () => {
 		const rpcMoveFunction = await toolbox.client.getNormalizedMoveFunction({
 			package: '0x02',
 			module: 'coin',
 			function: 'balance',
 		});
-
-		console.log(rpcMoveFunction);
 
 		const graphQLMoveFunction = await toolbox.graphQLClient!.getNormalizedMoveFunction({
 			package: '0x02',
@@ -164,12 +160,10 @@ describe('GraphQL SuiClient compatibility', () => {
 		expect(graphQLMoveFunction).toEqual(rpcMoveFunction);
 	});
 
-	test.skip('getNormalizedMoveModulesByPackage', async () => {
+	test('getNormalizedMoveModulesByPackage', async () => {
 		const rpcMovePackage = await toolbox.client.getNormalizedMoveModulesByPackage({
 			package: '0x02',
 		});
-
-		console.log(rpcMovePackage);
 
 		const graphQLMovePackage = await toolbox.graphQLClient!.getNormalizedMoveModulesByPackage({
 			package: '0x02',
@@ -178,13 +172,11 @@ describe('GraphQL SuiClient compatibility', () => {
 		expect(graphQLMovePackage).toEqual(rpcMovePackage);
 	});
 
-	test.skip('getNormalizedMoveModule', async () => {
+	test('getNormalizedMoveModule', async () => {
 		const rpcMoveModule = await toolbox.client.getNormalizedMoveModule({
 			package: '0x02',
 			module: 'coin',
 		});
-
-		console.log(rpcMoveModule);
 
 		const graphQLMoveModule = await toolbox.graphQLClient!.getNormalizedMoveModule({
 			package: '0x02',
@@ -194,35 +186,17 @@ describe('GraphQL SuiClient compatibility', () => {
 		expect(graphQLMoveModule).toEqual(rpcMoveModule);
 	});
 
-	test.skip('getNormalizedMoveModule', async () => {
-		const rpcMoveModule = await toolbox.client.getNormalizedMoveModule({
-			package: '0x02',
-			module: 'coin',
-		});
-
-		console.log(rpcMoveModule);
-
-		const graphQLMoveModule = await toolbox.graphQLClient!.getNormalizedMoveModule({
-			package: '0x02',
-			module: 'coin',
-		});
-
-		expect(graphQLMoveModule).toEqual(rpcMoveModule);
-	});
-
-	test.skip('getNormalizedMoveStruct', async () => {
+	test('getNormalizedMoveStruct', async () => {
 		const rpcMoveStruct = await toolbox.client.getNormalizedMoveStruct({
 			package: '0x02',
 			module: 'coin',
-			struct: 'Balance',
+			struct: 'Coin',
 		});
-
-		console.log(rpcMoveStruct);
 
 		const graphQLMoveStruct = await toolbox.graphQLClient!.getNormalizedMoveStruct({
 			package: '0x02',
 			module: 'coin',
-			struct: 'Balance',
+			struct: 'Coin',
 		});
 
 		expect(graphQLMoveStruct).toEqual(rpcMoveStruct);
@@ -598,11 +572,11 @@ describe('GraphQL SuiClient compatibility', () => {
 	});
 
 	test('getCheckpoints', async () => {
-		const rpc = await toolbox.client.getCheckpoints({
+		const { data: rpc } = await toolbox.client.getCheckpoints({
 			descendingOrder: false,
 			limit: 5,
 		});
-		const graphql = await toolbox.graphQLClient!.getCheckpoints({
+		const { data: graphql } = await toolbox.graphQLClient!.getCheckpoints({
 			descendingOrder: false,
 			limit: 5,
 		});

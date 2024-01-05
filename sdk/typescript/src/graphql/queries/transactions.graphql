@@ -76,12 +76,10 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 	rawTransaction: bcs @include(if: $showInput)
 	rawTransaction: bcs @include(if: $showRawInput)
 	sender {
-		location
+		address
 	}
 
-	signatures {
-		base64Sig
-	}
+	signatures
 	effects {
 		# eventsConnection @include(if: $showEvents) {... }
 		checkpoint {
@@ -94,10 +92,10 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 			}
 			owner {
 				asAddress {
-					location
+					address
 				}
 				asObject {
-					location
+					address
 				}
 			}
 			amount
@@ -110,15 +108,15 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 			gasObject {
 				owner {
 					asAddress {
-						location
+						address
 					}
 					asObject {
-						location
+						address
 					}
 				}
 				digest
 				version
-				location
+				address
 			}
 			gasSummary {
 				storageCost
@@ -137,18 +135,18 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 			inputState {
 				version
 				digest
-				location
+				address
 			}
 			outputState {
 				version
 				digest
-				location
+				address
 				owner {
 					asAddress {
-						location
+						address
 					}
 					asObject {
-						location
+						address
 					}
 				}
 			}
@@ -160,7 +158,7 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 			inputState {
 				version
 				digest
-				location
+				address
 				asMoveObject {
 					contents {
 						type {
@@ -170,17 +168,17 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 				}
 				owner {
 					asAddress {
-						location
+						address
 					}
 					asObject {
-						location
+						address
 					}
 				}
 			}
 			outputState {
 				version
 				digest
-				location
+				address
 				asMoveObject {
 					contents {
 						type {
@@ -190,10 +188,10 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 				}
 				owner {
 					asAddress {
-						location
+						address
 					}
 					asObject {
-						location
+						address
 					}
 				}
 			}

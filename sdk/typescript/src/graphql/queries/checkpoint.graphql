@@ -8,7 +8,7 @@ query getCheckpoint($id: CheckpointId) {
 }
 
 query getCheckpoints($first: Int, $before: String, $last: Int, $after: String) {
-	checkpointConnection(first: $first, after: $after, last: $last, before: $before) {
+	checkpoints(first: $first, after: $after, last: $last, before: $before) {
 		pageInfo {
 			startCursor
 			endCursor
@@ -24,13 +24,6 @@ query getCheckpoints($first: Int, $before: String, $last: Int, $after: String) {
 fragment RPC_Checkpoint_Fields on Checkpoint {
 	# checkpointCommitments
 	digest
-	endOfEpoch {
-		newCommittee {
-			authorityName
-			stakeUnit
-		}
-		nextProtocolVersion
-	}
 	epoch {
 		epochId
 	}
@@ -51,5 +44,5 @@ fragment RPC_Checkpoint_Fields on Checkpoint {
 			digest
 		}
 	}
-	validatorSignature
+	validatorSignatures
 }

@@ -5,9 +5,33 @@ query getNormalizedMoveModule($packageId: SuiAddress!, $module: String!) {
 	object(address: $packageId) {
 		asMovePackage {
 			module(name: $module) {
-				fileFormatVersion
-				# Missing function definitions
+				...RPC_MOVE_MODULE_FIELDS
 			}
+		}
+	}
+}
+
+fragment RPC_MOVE_MODULE_FIELDS on MoveModule {
+	name
+	friends(first: 50) {
+		nodes {
+			name
+			package {
+				asObject {
+					address
+				}
+			}
+		}
+	}
+	structs(first: 50) {
+		nodes {
+			...RPC_MOVE_STRUCT_FIELDS
+		}
+	}
+	fileFormatVersion
+	functions(first: 50) {
+		nodes {
+			...RPC_MOVE_FUNCTION_FIELDS
 		}
 	}
 }

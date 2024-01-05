@@ -29,7 +29,7 @@ query getDynamicFields($parentId: SuiAddress!, $first: Int, $cursor: String) {
 
 						asObject {
 							storageRebate
-							location
+							address
 							digest
 							version
 						}

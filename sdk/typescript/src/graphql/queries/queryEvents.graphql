@@ -24,15 +24,15 @@ query queryEvents(
 			sendingModule {
 				package {
 					asObject {
-						location
+						address
 					}
 				}
 				name
 			}
 			senders {
-				location
+				address
 			}
-			eventType {
+			type {
 				repr
 			}
 			json

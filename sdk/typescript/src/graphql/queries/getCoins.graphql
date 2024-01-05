@@ -3,7 +3,7 @@
 
 query getCoins($owner: SuiAddress!, $first: Int, $cursor: String, $type: String = "0x2::sui::SUI") {
 	address(address: $owner) {
-		location
+		address
 		coinConnection(first: $first, after: $cursor, type: $type) {
 			pageInfo {
 				hasNextPage
@@ -18,7 +18,7 @@ query getCoins($owner: SuiAddress!, $first: Int, $cursor: String, $type: String 
 						}
 					}
 					asObject {
-						coinObjectId: location
+						coinObjectId: address
 						version
 						digest
 						previousTransactionBlock {

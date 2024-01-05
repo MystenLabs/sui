@@ -10,7 +10,7 @@ query getCurrentEpoch {
 			}
 		}
 		# epochTotalTransactions
-		firstCheckpoint: checkpointConnection(first: 1) {
+		firstCheckpoint: checkpoints(first: 1) {
 			nodes {
 				sequenceNumber
 			}
@@ -30,7 +30,7 @@ fragment RPC_VALIDATOR_FIELDS on Validator {
 			json
 		}
 		asObject {
-			location
+			address
 		}
 	}
 	description
@@ -49,7 +49,7 @@ fragment RPC_VALIDATOR_FIELDS on Validator {
 	nextEpochCommissionRate
 	operationCap {
 		asObject {
-			location
+			address
 		}
 	}
 	pendingPoolTokenWithdraw
@@ -60,16 +60,18 @@ fragment RPC_VALIDATOR_FIELDS on Validator {
 	rewardsPool
 	stakingPool {
 		asObject {
-			location
+			address
 		}
 	}
 	stakingPoolActivationEpoch
 	stakingPoolSuiBalance
 	address {
-		location
+		address
 	}
 	votingPower
-	reportRecords
+	reportRecords {
+		address
+	}
 }
 
 fragment RPC_CREDENTIAL_FIELDS on ValidatorCredentials {

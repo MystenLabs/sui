@@ -34,10 +34,11 @@ query getStakesByIds($ids: [SuiAddress!]!, $limit: Int, $cursor: String) {
 
 fragment RPC_STAKE_FIELDS on StakedSui {
 	principal
-	activeEpoch {
+	activatedEpoch {
 		epochId
+		referenceGasPrice
 	}
-	requestEpoch {
+	requestedEpoch {
 		epochId
 	}
 	asMoveObject {
@@ -47,12 +48,9 @@ fragment RPC_STAKE_FIELDS on StakedSui {
 		}
 		# bad nesting
 		asObject {
-			location
+			address
 		}
 	}
 	estimatedReward
 	# validatorAddress?
-	activeEpoch {
-		referenceGasPrice
-	}
 }

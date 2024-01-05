@@ -42,10 +42,12 @@ import type {
 	ProtocolConfig,
 	ProtocolConfigValue,
 	SuiEvent,
+	SuiMoveAbility,
 	SuiMoveFunctionArgType,
 	SuiMoveNormalizedFunction,
 	SuiMoveNormalizedModule,
 	SuiMoveNormalizedStruct,
+	SuiMoveNormalizedType,
 	SuiObjectResponse,
 	SuiSystemStateSummary,
 	SuiTransactionBlockResponse,
@@ -93,6 +95,9 @@ import type {
 import { normalizeStructTag, normalizeSuiAddress, parseStructTag } from '../utils/sui-types.js';
 import type {
 	QueryEventsQueryVariables,
+	Rpc_Move_Function_FieldsFragment,
+	Rpc_Move_Module_FieldsFragment,
+	Rpc_Move_Struct_FieldsFragment,
 	Rpc_Object_FieldsFragment,
 	Rpc_Transaction_FieldsFragment,
 	Rpc_Validator_FieldsFragment,
@@ -260,8 +265,8 @@ export class GraphQLSuiClient extends SuiClient {
 			data: coins.map((coin) => ({
 				balance: coin.balance,
 				coinObjectId: coin.asMoveObject.asObject.coinObjectId,
-				coinType: normalizeStructTag(
-					parseStructTag(coin.asMoveObject?.contents?.type.repr!).typeParams[0],
+				coinType: toShortTypeString(
+					normalizeStructTag(parseStructTag(coin.asMoveObject?.contents?.type.repr!).typeParams[0]),
 				),
 				digest: coin.asMoveObject?.asObject?.digest!,
 				previousTransaction: coin.asMoveObject?.asObject?.previousTransactionBlock?.digest!,
@@ -291,7 +296,7 @@ export class GraphQLSuiClient extends SuiClient {
 		);
 
 		return {
-			coinType: balance.coinType?.repr!,
+			coinType: toShortTypeString(balance.coinType?.repr!),
 			coinObjectCount: balance.coinObjectCount!,
 			totalBalance: balance.totalBalance,
 			lockedBalance: {},
@@ -309,7 +314,7 @@ export class GraphQLSuiClient extends SuiClient {
 		);
 
 		return balances.map((balance) => ({
-			coinType: balance.coinType?.repr!,
+			coinType: toShortTypeString(balance.coinType?.repr!),
 			coinObjectCount: balance.coinObjectCount!,
 			totalBalance: balance.totalBalance,
 			lockedBalance: {},
@@ -333,7 +338,7 @@ export class GraphQLSuiClient extends SuiClient {
 			symbol: metadata.symbol!,
 			description: metadata.description!,
 			iconUrl: metadata.iconUrl,
-			id: metadata.asMoveObject.asObject.location,
+			id: metadata.asMoveObject.asObject.address,
 		};
 	}
 
@@ -365,17 +370,29 @@ export class GraphQLSuiClient extends SuiClient {
 					function: input.function,
 				},
 			},
-			(data) => data.object?.asMovePackage?.module,
+			(data) => data.object?.asMovePackage?.module?.function?.parameters,
 		);
 
-		void moveModule;
-		throw new Error('Method not implemented.');
+		return moveModule.map((parameter) => {
+			if (!parameter.signature.body.struct) {
+				return 'Pure';
+			}
+
+			return {
+				Object:
+					parameter.signature.ref === '&'
+						? 'ByImmutableReference'
+						: parameter.signature.ref === '&mut'
+						? 'ByMutableReference'
+						: 'ByValue',
+			};
+		});
 	}
 
 	override async getNormalizedMoveFunction(
 		input: GetNormalizedMoveFunctionParams,
 	): Promise<SuiMoveNormalizedFunction> {
-		const moveModule = await this.#graphqlQuery(
+		const moveFunction = await this.#graphqlQuery(
 			{
 				query: GetNormalizedMoveFunctionDocument,
 				variables: {
@@ -384,11 +401,10 @@ export class GraphQLSuiClient extends SuiClient {
 					function: input.function,
 				},
 			},
-			(data) => data.object?.asMovePackage?.module,
+			(data) => data.object?.asMovePackage?.module?.function,
 		);
 
-		void moveModule;
-		throw new Error('Method not implemented.');
+		return mapNormalizedMoveFunction(moveFunction);
 	}
 
 	override async getNormalizedMoveModulesByPackage(
@@ -404,8 +420,14 @@ export class GraphQLSuiClient extends SuiClient {
 			(data) => data.object?.asMovePackage,
 		);
 
-		void movePackage;
-		throw new Error('Method not implemented.');
+		const address = toShortTypeString(movePackage.asObject.address);
+		const modules: Record<string, SuiMoveNormalizedModule> = {};
+
+		movePackage.modules?.nodes.forEach((module) => {
+			modules[module.name] = mapNormalizedMoveModule(module, address);
+		});
+
+		return modules;
 	}
 
 	override async getNormalizedMoveModule(
@@ -422,26 +444,25 @@ export class GraphQLSuiClient extends SuiClient {
 			(data) => data.object?.asMovePackage?.module,
 		);
 
-		void moveModule;
-		throw new Error('Method not implemented.');
+		return mapNormalizedMoveModule(moveModule, input.package);
 	}
 
 	override async getNormalizedMoveStruct(
 		input: GetNormalizedMoveStructParams,
 	): Promise<SuiMoveNormalizedStruct> {
-		const moveModule = await this.#graphqlQuery(
+		const moveStruct = await this.#graphqlQuery(
 			{
 				query: GetNormalizedMoveStructDocument,
 				variables: {
 					module: input.module,
 					packageId: input.package,
+					struct: input.struct,
 				},
 			},
-			(data) => data.object?.asMovePackage?.module,
+			(data) => data.object?.asMovePackage?.module?.struct,
 		);
 
-		void moveModule;
-		throw new Error('Method not implemented.');
+		return mapNormalizedMoveStruct(moveStruct);
 	}
 
 	override async getOwnedObjects(input: GetOwnedObjectsParams): Promise<PaginatedObjectsResponse> {
@@ -716,7 +737,7 @@ export class GraphQLSuiClient extends SuiClient {
 			{
 				query: GetLatestSuiSystemStateDocument,
 			},
-			(data) => data.latestSuiSystemState,
+			(data) => data.epoch,
 		);
 
 		return {
@@ -724,12 +745,12 @@ export class GraphQLSuiClient extends SuiClient {
 				mapGraphQlValidatorToRpcValidator,
 			)!,
 			atRiskValidators: [], // TODO;
-			epoch: String(systemState.epoch?.epochId),
+			epoch: String(systemState.epochId),
 			epochDurationMs: String(
-				new Date(systemState.epoch?.endTimestamp).getTime() -
-					new Date(systemState.epoch?.startTimestamp).getTime(),
+				new Date(systemState.endTimestamp).getTime() -
+					new Date(systemState.startTimestamp).getTime(),
 			),
-			epochStartTimestampMs: String(new Date(systemState.epoch?.startTimestamp).getTime()),
+			epochStartTimestampMs: String(new Date(systemState.startTimestamp).getTime()),
 			inactivePoolsId: 'TODO',
 			inactivePoolsSize: String(systemState.validatorSet?.inactivePoolsSize),
 			maxValidatorCount: String(systemState.systemParameters?.maxValidatorCount),
@@ -746,13 +767,13 @@ export class GraphQLSuiClient extends SuiClient {
 			),
 			safeModeStorageRebates: String(systemState.safeMode?.gasSummary?.storageRebate),
 			safeModeStorageRewards: String(systemState.safeMode?.gasSummary?.storageCost),
-			stakeSubsidyBalance: String(systemState.stakeSubsidy?.balance),
+			stakeSubsidyBalance: String(systemState.systemStakeSubsidy?.balance),
 			stakeSubsidyCurrentDistributionAmount: String(
-				systemState.stakeSubsidy?.currentDistributionAmount,
+				systemState.systemStakeSubsidy?.currentDistributionAmount,
 			),
-			stakeSubsidyDecreaseRate: systemState.stakeSubsidy?.decreaseRate!,
-			stakeSubsidyDistributionCounter: String(systemState.stakeSubsidy?.distributionCounter),
-			stakeSubsidyPeriodLength: String(systemState.stakeSubsidy?.periodLength),
+			stakeSubsidyDecreaseRate: systemState.systemStakeSubsidy?.decreaseRate!,
+			stakeSubsidyDistributionCounter: String(systemState.systemStakeSubsidy?.distributionCounter),
+			stakeSubsidyPeriodLength: String(systemState.systemStakeSubsidy?.periodLength),
 			stakeSubsidyStartEpoch: 'TODO',
 			stakingPoolMappingsId: 'TODO',
 			stakingPoolMappingsSize: 'TODO',
@@ -767,7 +788,7 @@ export class GraphQLSuiClient extends SuiClient {
 			validatorLowStakeGracePeriod: systemState.systemParameters?.validatorLowStakeGracePeriod,
 			validatorLowStakeThreshold: systemState.systemParameters?.validatorLowStakeThreshold,
 			validatorReportRecords: systemState.validatorSet?.activeValidators?.flatMap(
-				(validator) => validator.reportRecords,
+				(validator) => validator.reportRecords?.map((record) => record.address)!,
 			)!,
 			validatorVeryLowStakeThreshold: systemState.systemParameters?.validatorVeryLowStakeThreshold,
 		};
@@ -782,18 +803,19 @@ export class GraphQLSuiClient extends SuiClient {
 		const filter: QueryEventsQueryVariables['filter'] = {
 			sender: 'Sender' in input.query ? input.query.Sender : undefined,
 			transactionDigest: 'Transaction' in input.query ? input.query.Transaction : undefined,
-			emittingPackage: 'Package' in input.query ? input.query.Package : undefined,
 			eventType: 'MoveEventType' in input.query ? input.query.MoveEventType : undefined,
+			emittingModule:
+				'MoveModule' in input.query
+					? `${input.query.MoveModule.package}::${input.query.MoveModule.module}`
+					: undefined,
 		};
 
-		if ('MoveModule' in input.query) {
-			filter.emittingPackage = input.query.MoveModule.package;
-			filter.emittingModule = input.query.MoveModule.module;
+		if ('Package' in input.query) {
+			throw new Error('querying events by Package is not supported in the GraphQL API');
 		}
 
 		if ('MoveEventModule' in input.query) {
-			filter.eventPackage = input.query.MoveEventModule.package;
-			filter.eventModule = input.query.MoveEventModule.module;
+			throw new Error('querying events by MoveEventModule is not supported in the GraphQL API');
 		}
 
 		const { nodes: events, pageInfo } = await this.#graphqlQuery(
@@ -817,12 +839,12 @@ export class GraphQLSuiClient extends SuiClient {
 			data: events.map((event) => ({
 				bcs: event.bcs,
 				id: 'TODO' as never, // TODO: turn id into an object
-				packageId: event.sendingModule?.package.asObject?.location!,
+				packageId: event.sendingModule?.package.asObject?.address!,
 				parsedJson: event.json ? JSON.parse(event.json) : undefined,
-				sender: event.senders?.[0]?.location,
+				sender: event.senders?.[0]?.address,
 				timestampMs: new Date(event.timestamp).getTime().toString(),
 				transactionModule: 'TODO',
-				type: toShortTypeString(event.eventType?.repr)!,
+				type: toShortTypeString(event.type?.repr)!,
 			})),
 		};
 	}
@@ -858,7 +880,7 @@ export class GraphQLSuiClient extends SuiClient {
 					value: field.name?.json.bytes,
 				},
 				objectId:
-					field.value?.__typename === 'MoveObject' ? field.value.asObject.location : undefined,
+					field.value?.__typename === 'MoveObject' ? field.value.asObject.address : undefined,
 				objectType: (field.value?.__typename === 'MoveObject'
 					? field.value.contents?.type.repr
 					: undefined)!,
@@ -900,7 +922,7 @@ export class GraphQLSuiClient extends SuiClient {
 				content: field.value.contents?.json, // TODO: requires formatting
 				digest: field.value.asObject.digest,
 				display: {}, // TODO
-				objectId: field.value.asObject.location,
+				objectId: field.value.asObject.address,
 				type: toShortTypeString(field.value.contents?.type.repr),
 				version: field.value.asObject.version as unknown as string, // RPC types are wrong here
 			},
@@ -993,7 +1015,7 @@ export class GraphQLSuiClient extends SuiClient {
 				checkpoint.transactionBlockConnection?.nodes.map(
 					(transactionBlock) => transactionBlock.digest!,
 				) ?? [],
-			validatorSignature: checkpoint.validatorSignature,
+			validatorSignature: checkpoint.validatorSignatures,
 		};
 	}
 	override async getCheckpoints(
@@ -1010,7 +1032,7 @@ export class GraphQLSuiClient extends SuiClient {
 					...pagination,
 				},
 			},
-			(data) => data.checkpointConnection,
+			(data) => data.checkpoints,
 		);
 
 		if (pagination.last) {
@@ -1045,7 +1067,7 @@ export class GraphQLSuiClient extends SuiClient {
 					checkpoint.transactionBlockConnection?.nodes.map(
 						(transactionBlock) => transactionBlock.digest!,
 					) ?? [],
-				validatorSignature: checkpoint.validatorSignature,
+				validatorSignature: checkpoint.validatorSignatures,
 			})),
 		};
 	}
@@ -1135,11 +1157,23 @@ export class GraphQLSuiClient extends SuiClient {
 		const featureFlags: Record<string, boolean> = {};
 		const attributes: Record<string, ProtocolConfigValue | null> = {};
 
-		for (const { key, value } of protocolConfig.configs) {
-			const [_, type, val] = /^(.+)\((.*)\)$/i.exec(value) ?? [value, 'u64', value];
+		const configTypeMap: Record<string, string> = {
+			max_arguments: 'u32',
+			max_gas_payment_objects: 'u32',
+			max_modules_in_publish: 'u32',
+			max_programmable_tx_commands: 'u32',
+			max_pure_argument_size: 'u32',
+			max_type_argument_depth: 'u32',
+			max_type_arguments: 'u32',
+			move_binary_format_version: 'u32',
+			random_beacon_reduction_allowed_delta: 'u16',
+			scoring_decision_cutoff_value: 'f64',
+			scoring_decision_mad_divisor: 'f64',
+		};
 
+		for (const { key, value } of protocolConfig.configs) {
 			attributes[key] = {
-				[type.toLocaleLowerCase()]: val,
+				[configTypeMap[key] ?? 'u64']: value,
 			} as ProtocolConfigValue;
 		}
 
@@ -1166,7 +1200,7 @@ export class GraphQLSuiClient extends SuiClient {
 			},
 		});
 
-		return data.resolveNameServiceAddress?.location ?? null;
+		return data.resolveNameServiceAddress?.address ?? null;
 	}
 
 	override async resolveNameServiceNames(
@@ -1240,10 +1274,10 @@ function mapGraphQLObjectToRpcObject(
 		objectId: object.objectId,
 		owner: object.owner?.asObject
 			? {
-					ObjectOwner: object.owner.asObject.location,
+					ObjectOwner: object.owner.asObject.address,
 			  }
 			: {
-					AddressOwner: object.owner?.asAddress?.location,
+					AddressOwner: object.owner?.asAddress?.address,
 			  },
 		previousTransaction: object.previousTransactionBlock?.digest,
 		storageRebate: object.storageRebate,
@@ -1261,9 +1295,9 @@ function mapGraphQLTransactionBlockToRpcTransactionBlock(
 			amount: balanceChange?.amount,
 			coinType: toShortTypeString(balanceChange?.coinType?.repr),
 			owner: balanceChange?.owner?.asObject
-				? { ObjectOwner: balanceChange?.owner?.asObject.location }
+				? { ObjectOwner: balanceChange?.owner?.asObject.address }
 				: {
-						AddressOwner: balanceChange?.owner?.asAddress?.location,
+						AddressOwner: balanceChange?.owner?.asAddress?.address,
 				  },
 		})),
 		checkpoint: transactionBlock.effects?.checkpoint?.sequenceNumber.toString(),
@@ -1277,15 +1311,15 @@ function mapGraphQLTransactionBlockToRpcTransactionBlock(
 						.map((change) => ({
 							owner: change?.outputState?.owner?.asObject
 								? {
-										ObjectOwner: change?.outputState?.owner?.asObject.location,
+										ObjectOwner: change?.outputState?.owner?.asObject.address,
 								  }
 								: {
-										AddressOwner: change?.outputState?.owner?.asAddress?.location,
+										AddressOwner: change?.outputState?.owner?.asAddress?.address,
 								  },
 							reference: {
 								digest: change?.outputState?.digest!,
 								version: change?.outputState?.version?.toString()!,
-								objectId: change?.outputState?.location,
+								objectId: change?.outputState?.address,
 							},
 						})),
 					deleted: transactionBlock.effects?.objectChanges
@@ -1293,7 +1327,7 @@ function mapGraphQLTransactionBlockToRpcTransactionBlock(
 						.map((change) => ({
 							digest: change?.inputState?.digest!,
 							version: String(change?.inputState?.version),
-							objectId: change?.inputState?.location,
+							objectId: change?.inputState?.address,
 						})),
 					dependencies: transactionBlock.effects?.dependencies?.map((dep) => dep?.digest!),
 					eventsDigest: transactionBlock.digest, // TODO check this is the correct digest
@@ -1302,16 +1336,16 @@ function mapGraphQLTransactionBlockToRpcTransactionBlock(
 						owner: transactionBlock.effects?.gasEffects?.gasObject?.owner?.asObject
 							? {
 									ObjectOwner:
-										transactionBlock.effects?.gasEffects?.gasObject?.owner?.asObject.location,
+										transactionBlock.effects?.gasEffects?.gasObject?.owner?.asObject.address,
 							  }
 							: {
 									AddressOwner:
-										transactionBlock.effects?.gasEffects?.gasObject?.owner?.asAddress?.location,
+										transactionBlock.effects?.gasEffects?.gasObject?.owner?.asAddress?.address,
 							  },
 						reference: {
 							digest: transactionBlock.effects?.gasEffects?.gasObject?.digest!,
 							version: transactionBlock.effects?.gasEffects?.gasObject?.version.toString()!,
-							objectId: transactionBlock.effects?.gasEffects?.gasObject?.location,
+							objectId: transactionBlock.effects?.gasEffects?.gasObject?.address,
 						},
 					},
 					gasUsed: {
@@ -1323,21 +1357,21 @@ function mapGraphQLTransactionBlockToRpcTransactionBlock(
 					},
 					messageVersion: 'v1' as const,
 					modifiedAtVersions: transactionBlock.effects?.objectChanges?.map((change) => ({
-						objectId: change?.inputState?.location,
+						objectId: change?.inputState?.address,
 						sequenceNumber: String(change?.inputState?.version),
 					})),
 					mutated: transactionBlock.effects?.objectChanges
 						?.filter((change) => !change?.idCreated && !change?.idDeleted)
 						?.map((change) => ({
 							owner: change?.outputState?.owner?.asObject
-								? { ObjectOwner: change?.outputState?.owner?.asObject.location }
+								? { ObjectOwner: change?.outputState?.owner?.asObject.address }
 								: {
-										AddressOwner: change?.outputState?.owner?.asAddress?.location,
+										AddressOwner: change?.outputState?.owner?.asAddress?.address,
 								  },
 							reference: {
 								digest: change?.outputState?.digest!,
 								version: String(change?.outputState?.version),
-								objectId: change?.outputState?.location,
+								objectId: change?.outputState?.address,
 							},
 						})),
 
@@ -1363,28 +1397,28 @@ function mapGraphQLTransactionBlockToRpcTransactionBlock(
 					change?.idDeleted
 						? {
 								digest: change?.inputState?.digest!,
-								objectId: change?.inputState?.location,
+								objectId: change?.inputState?.address,
 								owner: change?.inputState?.owner?.asObject
-									? { ObjectOwner: change?.inputState?.owner?.asObject.location }
-									: { AddressOwner: change?.inputState?.owner?.asAddress?.location },
+									? { ObjectOwner: change?.inputState?.owner?.asObject.address }
+									: { AddressOwner: change?.inputState?.owner?.asAddress?.address },
 								objectType: toShortTypeString(
 									change?.inputState?.asMoveObject?.contents?.type.repr,
 								),
-								sender: transactionBlock.sender?.location!,
+								sender: transactionBlock.sender?.address!,
 								type: 'deleted',
 								version: change?.inputState?.version.toString()!,
 						  }
 						: {
 								digest: change?.outputState?.digest!,
-								objectId: change?.outputState?.location,
+								objectId: change?.outputState?.address,
 								owner: change?.outputState?.owner?.asObject
-									? { ObjectOwner: change?.outputState?.owner?.asObject.location }
-									: { AddressOwner: change?.outputState?.owner?.asAddress?.location },
+									? { ObjectOwner: change?.outputState?.owner?.asObject.address }
+									: { AddressOwner: change?.outputState?.owner?.asAddress?.address },
 								objectType: toShortTypeString(
 									change?.outputState?.asMoveObject?.contents?.type.repr,
 								),
 								previousVersion: change?.inputState?.version.toString()!,
-								sender: transactionBlock.sender?.location,
+								sender: transactionBlock.sender?.address,
 								type: change?.idCreated ? 'created' : 'mutated',
 								version: change?.outputState?.version.toString()!,
 						  },
@@ -1480,7 +1514,7 @@ function mapGraphQlValidatorToRpcValidator(
 	return {
 		commissionRate: validator.commissionRate?.toString()!,
 		description: validator.description!,
-		exchangeRatesId: validator.exchangeRates?.asObject?.location!,
+		exchangeRatesId: validator.exchangeRates?.asObject?.address!,
 		exchangeRatesSize: 'TODO',
 		gasPrice: validator.gasPrice,
 		imageUrl: validator.imageUrl!,
@@ -1498,7 +1532,7 @@ function mapGraphQlValidatorToRpcValidator(
 		nextEpochStake: validator.nextEpochStake!,
 		nextEpochWorkerAddress: validator.nextEpochCredentials?.workerAddress,
 		nextEpochWorkerPubkeyBytes: validator.nextEpochCredentials?.workerPubKey,
-		operationCapId: validator.operationCap?.asObject?.location!,
+		operationCapId: validator.operationCap?.asObject?.address!,
 		p2pAddress: validator.credentials?.p2PAddress!,
 		pendingTotalSuiWithdraw: validator.pendingTotalSuiWithdraw,
 		pendingPoolTokenWithdraw: validator.pendingPoolTokenWithdraw,
@@ -1509,10 +1543,10 @@ function mapGraphQlValidatorToRpcValidator(
 		proofOfPossessionBytes: validator.credentials?.proofOfPossession,
 		protocolPubkeyBytes: validator.credentials?.protocolPubKey,
 		rewardsPool: validator.rewardsPool,
-		stakingPoolId: validator.stakingPool?.asObject?.location!,
+		stakingPoolId: validator.stakingPool?.asObject?.address!,
 		stakingPoolActivationEpoch: validator.stakingPoolActivationEpoch?.toString(),
 		stakingPoolSuiBalance: validator.stakingPoolSuiBalance,
-		suiAddress: validator.address.location,
+		suiAddress: validator.address.address,
 		votingPower: validator.votingPower?.toString()!,
 		workerAddress: validator.credentials?.workerAddress!,
 		workerPubkeyBytes: validator.credentials?.workerPubKey,
@@ -1525,4 +1559,164 @@ function toShortTypeString<T extends string | null | undefined>(type?: T): T {
 
 function isNumericString(value: string) {
 	return /^-?\d+$/.test(value);
+}
+
+type OpenMoveTypeSignatureBody =
+	| 'address'
+	| 'bool'
+	| 'u8'
+	| 'u16'
+	| 'u32'
+	| 'u64'
+	| 'u128'
+	| 'u256'
+	| { vector: OpenMoveTypeSignatureBody }
+	| {
+			struct: {
+				package: string;
+				module: string;
+				type: string;
+				type_parameters?: [OpenMoveTypeSignatureBody];
+			};
+	  }
+	| { typeParameter: number };
+
+function mapOpenMoveType(type: { ref?: '&' | '&mut'; body: OpenMoveTypeSignatureBody }) {
+	const body = mapNormalizedType(type.body);
+
+	if (type.ref === '&') {
+		return {
+			Reference: body,
+		};
+	}
+
+	if (type.ref === '&mut') {
+		return {
+			MutableReference: body,
+		};
+	}
+
+	return body;
+}
+
+function mapNormalizedType(type: OpenMoveTypeSignatureBody): SuiMoveNormalizedType {
+	switch (type) {
+		case 'address':
+			return 'Address';
+		case 'bool':
+			return 'Bool';
+		case 'u8':
+			return 'U8';
+		case 'u16':
+			return 'U16';
+		case 'u32':
+			return 'U32';
+		case 'u64':
+			return 'U64';
+		case 'u128':
+			return 'U128';
+		case 'u256':
+			return 'U256';
+	}
+
+	if ('vector' in type) {
+		return {
+			Vector: mapNormalizedType(type.vector),
+		};
+	}
+
+	if ('typeParameter' in type) {
+		return {
+			TypeParameter: type.typeParameter,
+		};
+	}
+
+	if ('struct' in type) {
+		return {
+			Struct: {
+				address: toShortTypeString(type.struct.package),
+				module: type.struct.module,
+				name: type.struct.type,
+				typeArguments: type.struct.type_parameters?.map(mapNormalizedType) ?? [],
+			},
+		};
+	}
+
+	throw new Error('Invalid type');
+}
+
+function mapNormalizedMoveFunction(
+	fn: Rpc_Move_Function_FieldsFragment,
+): SuiMoveNormalizedFunction {
+	return {
+		visibility: `${fn.visibility?.[0]}${fn.visibility?.slice(1).toLowerCase()}` as never,
+		isEntry: fn.isEntry!,
+		typeParameters:
+			fn.typeParameters?.map((param) => ({
+				abilities:
+					param.constraints?.map(
+						(constraint) =>
+							`${constraint[0]}${constraint.slice(1).toLowerCase()}` as SuiMoveAbility,
+					) ?? [],
+			})) ?? [],
+		return: fn.return?.map((param) => mapOpenMoveType(param.signature)) ?? [],
+		parameters: fn.parameters?.map((param) => mapOpenMoveType(param.signature)) ?? [],
+	};
+}
+
+function mapNormalizedMoveStruct(struct: Rpc_Move_Struct_FieldsFragment): SuiMoveNormalizedStruct {
+	return {
+		abilities: {
+			abilities:
+				struct.abilities?.map(
+					(ability) => `${ability[0]}${ability.slice(1).toLowerCase()}` as SuiMoveAbility,
+				) ?? [],
+		},
+		fields:
+			struct.fields?.map((field) => ({
+				name: field.name,
+				type: mapOpenMoveType(field.type?.signature),
+			})) ?? [],
+		typeParameters:
+			struct.typeParameters?.map((param) => ({
+				isPhantom: param.isPhantom!,
+				constraints: {
+					abilities: param.constraints?.map(
+						(constraint) =>
+							`${constraint[0]}${constraint.slice(1).toLowerCase()}` as SuiMoveAbility,
+					),
+				},
+			})) ?? [],
+	};
+}
+
+function mapNormalizedMoveModule(
+	module: Rpc_Move_Module_FieldsFragment,
+	address: string,
+): SuiMoveNormalizedModule {
+	const exposedFunctions: Record<string, SuiMoveNormalizedFunction> = {};
+	const structs: Record<string, SuiMoveNormalizedStruct> = {};
+
+	module.functions?.nodes
+		.filter((func) => func.visibility === 'PUBLIC' || func.isEntry || func.visibility === 'FRIEND')
+		.forEach((func) => {
+			exposedFunctions[func.name] = mapNormalizedMoveFunction(func);
+		});
+
+	module.structs?.nodes.forEach((struct) => {
+		structs[struct.name] = mapNormalizedMoveStruct(struct);
+	});
+
+	return {
+		address: toShortTypeString(address),
+		name: module.name,
+		fileFormatVersion: module.fileFormatVersion,
+		friends:
+			module.friends.nodes?.map((friend) => ({
+				address: toShortTypeString(friend.package.asObject.address),
+				name: friend.name,
+			})) ?? [],
+		structs,
+		exposedFunctions,
+	};
 }

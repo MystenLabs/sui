@@ -86,7 +86,7 @@ query multiGetObjects(
 
 fragment RPC_OBJECT_FIELDS on Object {
 	# display not implemented
-	objectId: location
+	objectId: address
 	bcs @include(if: $showBcs)
 	version
 	asMoveObject @include(if: $showType) {
@@ -117,12 +117,12 @@ fragment RPC_OBJECT_FIELDS on Object {
 		}
 	}
 	owner @include(if: $showOwner) {
-		location
+		address
 		asAddress {
-			location
+			address
 		}
 		asObject {
-			location
+			address
 		}
 	}
 	previousTransactionBlock @include(if: $showPreviousTransaction) {
