@@ -26,6 +26,7 @@ module bridge::message {
     const CURRENT_MESSAGE_VERSION: u8 = 1;
 
     const ETrailingBytes: u64 = 0;
+    const ENotTokenTransferMessage: u64 = 1;
 
     struct BridgeMessage has copy, drop, store {
         message_type: u8,
@@ -168,13 +169,7 @@ module bridge::message {
     }
 
     public fun key(self: &BridgeMessage): BridgeMessageKey {
-        let source_chain = if (self.message_type == message_types::token()) {
-            let bcs = bcs::new(self.payload);
-            bcs::peel_u8(&mut bcs)
-        } else {
-            0
-        };
-        create_key(source_chain, self.message_type, self.seq_num)
+        create_key(self.source_chain, self.message_type, self.seq_num)
     }
 
     // BridgeMessage getters

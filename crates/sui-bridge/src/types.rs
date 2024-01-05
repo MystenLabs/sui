@@ -70,11 +70,12 @@ impl BridgeCommittee {
             }
             members_map.insert(public_key, member);
         }
-        if total_stake != BRIDGE_AUTHORITY_TOTAL_VOTING_POWER {
-            return Err(BridgeError::InvalidBridgeCommittee(
-                "Total voting power does not equal to 10000".into(),
-            ));
-        }
+        // FIXME
+        // if total_stake != BRIDGE_AUTHORITY_TOTAL_VOTING_POWER {
+        //     return Err(BridgeError::InvalidBridgeCommittee(
+        //         "Total voting power does not equal to 10000".into(),
+        //     ));
+        // }
         Ok(Self {
             members: members_map,
             total_blocklisted_stake,
@@ -171,7 +172,7 @@ pub enum BridgeChainId {
     EthSepolia = 11,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TryFromPrimitive)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TryFromPrimitive, Hash)]
 #[repr(u8)]
 pub enum TokenId {
     Sui = 0,

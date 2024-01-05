@@ -3,13 +3,13 @@
 
 //! `BridgeClient` talks to BridgeNode.
 
-use std::str::FromStr;
-use std::sync::Arc;
-
 use crate::crypto::{verify_signed_bridge_action, BridgeAuthorityPublicKeyBytes};
 use crate::error::{BridgeError, BridgeResult};
 use crate::server::APPLICATION_JSON;
 use crate::types::{BridgeAction, BridgeCommittee, VerifiedSignedBridgeAction};
+use fastcrypto::encoding::{Encoding, Hex};
+use std::str::FromStr;
+use std::sync::Arc;
 use url::Url;
 
 // Note: `base_url` is `Option<Url>` because `quorum_map_then_reduce_with_timeout_and_prefs`
@@ -48,6 +48,7 @@ impl BridgeClient {
         self.committee = committee;
     }
 
+    // FIXME add unit tests for this function
     // Important: the paths need to match the ones in server.rs
     fn bridge_action_to_path(event: &BridgeAction) -> String {
         match event {
@@ -55,8 +56,11 @@ impl BridgeClient {
                 "sign/bridge_tx/sui/eth/{}/{}",
                 e.sui_tx_digest, e.sui_tx_event_index
             ),
-            // TODO add other events
-            _ => unimplemented!(),
+            BridgeAction::EthToSuiBridgeAction(e) => format!(
+                "sign/bridge_tx/eth/sui/{}/{}",
+                Hex::encode(e.eth_tx_hash.0),
+                e.eth_event_index
+            ),
         }
     }
 
@@ -97,9 +101,11 @@ impl BridgeClient {
             .send()
             .await?;
         if !resp.status().is_success() {
+            let error_status = format!("{:?}", resp.error_for_status_ref());
             return Err(BridgeError::RestAPIError(format!(
-                "request_sign_bridge_action failed with status: {:?}",
-                resp.error_for_status()
+                "request_sign_bridge_action failed with status {:?}: {:?}",
+                error_status,
+                resp.text().await?
             )));
         }
         let signed_bridge_action = resp.json().await?;

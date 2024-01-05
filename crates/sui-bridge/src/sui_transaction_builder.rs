@@ -1,18 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::traits::ToFromBytes;
+use std::{
+    collections::{BTreeMap, HashMap},
+    str::FromStr,
+};
+
+use fastcrypto::{hash::Hash, traits::ToFromBytes};
 use move_core_types::ident_str;
 use once_cell::sync::OnceCell;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{ObjectArg, TransactionData},
+    TypeTag,
 };
 
 use crate::{
     error::{BridgeError, BridgeResult},
-    types::{BridgeAction, VerifiedCertifiedBridgeAction},
+    types::{BridgeAction, TokenId, VerifiedCertifiedBridgeAction},
 };
 
 // TODO: once we have bridge package on sui framework, we can hardcode the actual
@@ -47,6 +53,35 @@ pub fn get_root_bridge_object_arg() -> &'static ObjectArg {
             mutable: true,
         }
     })
+}
+
+// TODO: how do we generalize this thing more?
+pub fn get_sui_token_type_tag(token_id: TokenId) -> TypeTag {
+    static TYPE_TAGS: OnceCell<HashMap<TokenId, TypeTag>> = OnceCell::new();
+    let type_tags = TYPE_TAGS.get_or_init(|| {
+        let package_id = get_bridge_package_id();
+        // println!("{:?}", format!("{:?}::btc::BTC", package_id));
+        let mut type_tags = HashMap::new();
+        type_tags.insert(TokenId::Sui, TypeTag::from_str("0x2::sui::SUI").unwrap());
+        type_tags.insert(
+            TokenId::BTC,
+            TypeTag::from_str(&format!("{:?}::btc::BTC", package_id)).unwrap(),
+        );
+        type_tags.insert(
+            TokenId::ETH,
+            TypeTag::from_str(&format!("{:?}::eth::ETH", package_id)).unwrap(),
+        );
+        type_tags.insert(
+            TokenId::USDC,
+            TypeTag::from_str(&format!("{:?}::usdc::USDC", package_id)).unwrap(),
+        );
+        type_tags.insert(
+            TokenId::USDT,
+            TypeTag::from_str(&format!("{:?}::usdt::USDT", package_id)).unwrap(),
+        );
+        type_tags
+    });
+    type_tags.get(&token_id).unwrap().clone()
 }
 
 pub fn build_transaction(
@@ -127,7 +162,7 @@ fn build_token_bridge_approve_transaction(
             target, e
         ))
     })?;
-    let token_type = builder.pure(token_type as u8).map_err(|e| {
+    let arg_token_type = builder.pure(token_type as u8).map_err(|e| {
         BridgeError::BridgeEventParameterSerializationError(format!(
             "Failed to serialize token_type: {:?}. Err: {:?}",
             token_type, e
@@ -151,7 +186,7 @@ fn build_token_bridge_approve_transaction(
             sender,
             target_chain,
             target,
-            token_type,
+            arg_token_type,
             amount,
         ],
     );
@@ -161,7 +196,7 @@ fn build_token_bridge_approve_transaction(
 
     let mut sig_bytes = vec![];
     for (_, sig) in sigs.signatures {
-        sig_bytes.extend_from_slice(sig.as_bytes());
+        sig_bytes.push(sig.as_bytes().to_vec());
     }
     let arg_signatures = builder.pure(sig_bytes).unwrap();
 
@@ -171,6 +206,13 @@ fn build_token_bridge_approve_transaction(
         ident_str!("approve_bridge_message").to_owned(),
         vec![],
         vec![arg_bridge, arg_msg, arg_signatures],
+    );
+    builder.programmable_move_call(
+        *get_bridge_package_id(),
+        ident_str!("bridge").to_owned(),
+        ident_str!("claim_and_transfer_token").to_owned(),
+        vec![get_sui_token_type_tag(token_type)],
+        vec![arg_bridge, source_chain, seq_num],
     );
 
     let pt = builder.finish();
