@@ -30,6 +30,7 @@ import type {
 	CommitteeInfo,
 	DelegatedStake,
 	DevInspectResults,
+	DisplayFieldsResponse,
 	DryRunTransactionBlockResponse,
 	ExecutionStatus,
 	MoveStruct,
@@ -374,7 +375,7 @@ export class GraphQLSuiClient extends SuiClient {
 		);
 
 		return moveModule.map((parameter) => {
-			if (!parameter.signature.body.struct) {
+			if (!parameter.signature.body.datatype) {
 				return 'Pure';
 			}
 
@@ -1250,6 +1251,23 @@ function mapGraphQLObjectToRpcObject(
 	object: Rpc_Object_FieldsFragment,
 	options: { showBcs?: boolean | null } = {},
 ): NonNullable<SuiObjectResponse['data']> {
+	let display: DisplayFieldsResponse = {
+		data: null,
+		error: null,
+	};
+
+	if (object.display) {
+		object.display.forEach((displayItem) => {
+			if (displayItem.error) {
+				display!.error = displayItem.error as never;
+			} else if (displayItem.value != null) {
+				if (!display!.data) {
+					display!.data = {};
+				}
+				display!.data[displayItem.key] = displayItem.value;
+			}
+		});
+	}
 	return {
 		bcs: options?.showBcs
 			? {
@@ -1270,7 +1288,7 @@ function mapGraphQLObjectToRpcObject(
 			type: toShortTypeString(object.asMoveObject?.contents?.type.repr!),
 		},
 		digest: object.digest,
-		// display: {}, // Not implemented yet
+		display,
 		objectId: object.objectId,
 		owner: object.owner?.asObject
 			? {
@@ -1430,6 +1448,7 @@ function mapGraphQLTransactionBlockToRpcTransactionBlock(
 type MoveData =
 	| { Address: number[] }
 	| { UID: number[] }
+	| { ID: number[] }
 	| { Bool: boolean }
 	| { Number: string }
 	| { String: string }
@@ -1448,7 +1467,10 @@ type MoveTypeLayout =
 	| 'u256'
 	| { vector: MoveTypeLayout }
 	| {
-			struct: { name: string; layout: MoveTypeLayout }[];
+			struct: {
+				type: string;
+				fields: { name: string; layout: MoveTypeLayout }[];
+			};
 	  };
 
 function moveDataToRpcContent(data: MoveData, layout: MoveTypeLayout): MoveValue {
@@ -1462,6 +1484,10 @@ function moveDataToRpcContent(data: MoveData, layout: MoveTypeLayout): MoveValue
 		return {
 			id: normalizeSuiAddress(data.UID.map((byte) => byte.toString(16).padStart(2, '0')).join('')),
 		};
+	}
+
+	if ('ID' in data) {
+		return normalizeSuiAddress(data.ID.map((byte) => byte.toString(16).padStart(2, '0')).join(''));
 	}
 
 	if ('Bool' in data) {
@@ -1498,14 +1524,37 @@ function moveDataToRpcContent(data: MoveData, layout: MoveTypeLayout): MoveValue
 		}
 
 		data.Struct.forEach((item, index) => {
-			const { name, layout: itemLayout } = layout.struct[index];
+			const { name, layout: itemLayout } = layout.struct.fields[index];
+
 			result[name] = moveDataToRpcContent(item.value, itemLayout);
 		});
+
+		// https://github.com/MystenLabs/sui/blob/5849f6845a3ab9fdb4c17523994adad461478a4c/crates/sui-json-rpc-types/src/sui_move.rs#L481
+		const tag = parseStructTag(layout.struct.type);
+		const structName = `${toShortTypeString(tag.address)}::${tag.module}::${tag.name}`;
+
+		switch (structName) {
+			case '0x1::string::String':
+			case '0x1::ascii::String':
+				return result['bytes'];
+			case '0x2::url::Url':
+				return result['url'];
+			case '0x2::object::ID':
+				return result['bytes'];
+			case '0x2::object::UID':
+				return {
+					id: result['id'] as string,
+				};
+			case '0x2::balance::Balance':
+				return result['value'];
+			case '0x1::option::Option':
+				return (result['vec'] as MoveValue[])[0] ?? null;
+		}
 
 		return result;
 	}
 
-	throw new Error('Invalid move data');
+	throw new Error('Invalid move data: ' + JSON.stringify(data));
 }
 
 function mapGraphQlValidatorToRpcValidator(
@@ -1572,11 +1621,11 @@ type OpenMoveTypeSignatureBody =
 	| 'u256'
 	| { vector: OpenMoveTypeSignatureBody }
 	| {
-			struct: {
+			datatype: {
 				package: string;
 				module: string;
 				type: string;
-				type_parameters?: [OpenMoveTypeSignatureBody];
+				typeParameters?: [OpenMoveTypeSignatureBody];
 			};
 	  }
 	| { typeParameter: number };
@@ -1631,13 +1680,13 @@ function mapNormalizedType(type: OpenMoveTypeSignatureBody): SuiMoveNormalizedTy
 		};
 	}
 
-	if ('struct' in type) {
+	if ('datatype' in type) {
 		return {
 			Struct: {
-				address: toShortTypeString(type.struct.package),
-				module: type.struct.module,
-				name: type.struct.type,
-				typeArguments: type.struct.type_parameters?.map(mapNormalizedType) ?? [],
+				address: toShortTypeString(type.datatype.package),
+				module: type.datatype.module,
+				name: type.datatype.type,
+				typeArguments: type.datatype.typeParameters?.map(mapNormalizedType) ?? [],
 			},
 		};
 	}

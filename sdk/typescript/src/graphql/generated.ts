@@ -64,7 +64,7 @@ export type Scalars = {
    *   | "u8" | "u16" | ... | "u256"
    *   | { vector: MoveTypeSignature }
    *   | {
-   *       struct: {
+   *       datatype: {
    *         package: string,
    *         module: string,
    *         type: string,
@@ -87,7 +87,7 @@ export type Scalars = {
    *   | "u8" | "u16" | ... | "u256"
    *   | { vector: OpenMoveTypeSignatureBody }
    *   | {
-   *       struct {
+   *       datatype {
    *         package: string,
    *         module: string,
    *         type: string,
@@ -2871,6 +2871,7 @@ export type GetOwnedObjectsQueryVariables = Exact<{
   cursor?: InputMaybe<Scalars['String']['input']>;
   showBcs?: InputMaybe<Scalars['Boolean']['input']>;
   showContent?: InputMaybe<Scalars['Boolean']['input']>;
+  showDisplay?: InputMaybe<Scalars['Boolean']['input']>;
   showType?: InputMaybe<Scalars['Boolean']['input']>;
   showOwner?: InputMaybe<Scalars['Boolean']['input']>;
   showPreviousTransaction?: InputMaybe<Scalars['Boolean']['input']>;
@@ -2879,7 +2880,7 @@ export type GetOwnedObjectsQueryVariables = Exact<{
 }>;
 
 
-export type GetOwnedObjectsQuery = { __typename?: 'Query', address?: { __typename?: 'Address', objectConnection?: { __typename?: 'ObjectConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Object', bcs?: any | null, version: number, storageRebate?: any | null, digest: string, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null } | null, owner?: { __typename?: 'Owner', address: any, asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest: string } | null }> } | null } | null };
+export type GetOwnedObjectsQuery = { __typename?: 'Query', address?: { __typename?: 'Address', objectConnection?: { __typename?: 'ObjectConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Object', bcs?: any | null, version: number, storageRebate?: any | null, digest: string, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null } | null, owner?: { __typename?: 'Owner', address: any, asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest: string } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null }> } | null } | null };
 
 export type GetObjectQueryVariables = Exact<{
   id: Scalars['SuiAddress']['input'];
@@ -2887,12 +2888,13 @@ export type GetObjectQueryVariables = Exact<{
   showOwner?: InputMaybe<Scalars['Boolean']['input']>;
   showPreviousTransaction?: InputMaybe<Scalars['Boolean']['input']>;
   showContent?: InputMaybe<Scalars['Boolean']['input']>;
+  showDisplay?: InputMaybe<Scalars['Boolean']['input']>;
   showType?: InputMaybe<Scalars['Boolean']['input']>;
   showStorageRebate?: InputMaybe<Scalars['Boolean']['input']>;
 }>;
 
 
-export type GetObjectQuery = { __typename?: 'Query', object?: { __typename?: 'Object', bcs?: any | null, version: number, storageRebate?: any | null, digest: string, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null } | null, owner?: { __typename?: 'Owner', address: any, asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest: string } | null } | null };
+export type GetObjectQuery = { __typename?: 'Query', object?: { __typename?: 'Object', bcs?: any | null, version: number, storageRebate?: any | null, digest: string, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null } | null, owner?: { __typename?: 'Owner', address: any, asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest: string } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null } | null };
 
 export type TryGetPastObjectQueryVariables = Exact<{
   id: Scalars['SuiAddress']['input'];
@@ -2901,12 +2903,13 @@ export type TryGetPastObjectQueryVariables = Exact<{
   showOwner?: InputMaybe<Scalars['Boolean']['input']>;
   showPreviousTransaction?: InputMaybe<Scalars['Boolean']['input']>;
   showContent?: InputMaybe<Scalars['Boolean']['input']>;
+  showDisplay?: InputMaybe<Scalars['Boolean']['input']>;
   showType?: InputMaybe<Scalars['Boolean']['input']>;
   showStorageRebate?: InputMaybe<Scalars['Boolean']['input']>;
 }>;
 
 
-export type TryGetPastObjectQuery = { __typename?: 'Query', object?: { __typename?: 'Object', bcs?: any | null, version: number, storageRebate?: any | null, digest: string, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null } | null, owner?: { __typename?: 'Owner', address: any, asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest: string } | null } | null };
+export type TryGetPastObjectQuery = { __typename?: 'Query', object?: { __typename?: 'Object', bcs?: any | null, version: number, storageRebate?: any | null, digest: string, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null } | null, owner?: { __typename?: 'Owner', address: any, asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest: string } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null } | null };
 
 export type MultiGetObjectsQueryVariables = Exact<{
   ids: Array<Scalars['SuiAddress']['input']> | Scalars['SuiAddress']['input'];
@@ -2914,6 +2917,7 @@ export type MultiGetObjectsQueryVariables = Exact<{
   cursor?: InputMaybe<Scalars['String']['input']>;
   showBcs?: InputMaybe<Scalars['Boolean']['input']>;
   showContent?: InputMaybe<Scalars['Boolean']['input']>;
+  showDisplay?: InputMaybe<Scalars['Boolean']['input']>;
   showType?: InputMaybe<Scalars['Boolean']['input']>;
   showOwner?: InputMaybe<Scalars['Boolean']['input']>;
   showPreviousTransaction?: InputMaybe<Scalars['Boolean']['input']>;
@@ -2921,9 +2925,9 @@ export type MultiGetObjectsQueryVariables = Exact<{
 }>;
 
 
-export type MultiGetObjectsQuery = { __typename?: 'Query', objectConnection?: { __typename?: 'ObjectConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Object', bcs?: any | null, version: number, storageRebate?: any | null, digest: string, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null } | null, owner?: { __typename?: 'Owner', address: any, asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest: string } | null }> } | null };
+export type MultiGetObjectsQuery = { __typename?: 'Query', objectConnection?: { __typename?: 'ObjectConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Object', bcs?: any | null, version: number, storageRebate?: any | null, digest: string, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null } | null, owner?: { __typename?: 'Owner', address: any, asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest: string } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null }> } | null };
 
-export type Rpc_Object_FieldsFragment = { __typename?: 'Object', bcs?: any | null, version: number, storageRebate?: any | null, digest: string, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null } | null, owner?: { __typename?: 'Owner', address: any, asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest: string } | null };
+export type Rpc_Object_FieldsFragment = { __typename?: 'Object', bcs?: any | null, version: number, storageRebate?: any | null, digest: string, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null } | null, owner?: { __typename?: 'Owner', address: any, asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest: string } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null };
 
 export type QueryEventsQueryVariables = Exact<{
   filter: EventFilter;
@@ -3247,6 +3251,11 @@ export const Rpc_Object_FieldsFragmentDoc = new TypedDocumentString(`
   storageRebate @include(if: $showStorageRebate)
   digest
   version
+  display @include(if: $showDisplay) {
+    key
+    value
+    error
+  }
 }
     `, {"fragmentName":"RPC_OBJECT_FIELDS"}) as unknown as TypedDocumentString<Rpc_Object_FieldsFragment, unknown>;
 export const Rpc_Stake_FieldsFragmentDoc = new TypedDocumentString(`
@@ -4075,7 +4084,7 @@ export const ResolveNameServiceNamesDocument = new TypedDocumentString(`
 }
     `) as unknown as TypedDocumentString<ResolveNameServiceNamesQuery, ResolveNameServiceNamesQueryVariables>;
 export const GetOwnedObjectsDocument = new TypedDocumentString(`
-    query getOwnedObjects($owner: SuiAddress!, $limit: Int, $cursor: String, $showBcs: Boolean = false, $showContent: Boolean = false, $showType: Boolean = false, $showOwner: Boolean = false, $showPreviousTransaction: Boolean = false, $showStorageRebate: Boolean = false, $filter: ObjectFilter) {
+    query getOwnedObjects($owner: SuiAddress!, $limit: Int, $cursor: String, $showBcs: Boolean = false, $showContent: Boolean = false, $showDisplay: Boolean = false, $showType: Boolean = false, $showOwner: Boolean = false, $showPreviousTransaction: Boolean = false, $showStorageRebate: Boolean = false, $filter: ObjectFilter) {
   address(address: $owner) {
     objectConnection(first: $limit, after: $cursor, filter: $filter) {
       pageInfo {
@@ -4134,9 +4143,14 @@ export const GetOwnedObjectsDocument = new TypedDocumentString(`
   storageRebate @include(if: $showStorageRebate)
   digest
   version
+  display @include(if: $showDisplay) {
+    key
+    value
+    error
+  }
 }`) as unknown as TypedDocumentString<GetOwnedObjectsQuery, GetOwnedObjectsQueryVariables>;
 export const GetObjectDocument = new TypedDocumentString(`
-    query getObject($id: SuiAddress!, $showBcs: Boolean = false, $showOwner: Boolean = false, $showPreviousTransaction: Boolean = false, $showContent: Boolean = false, $showType: Boolean = false, $showStorageRebate: Boolean = false) {
+    query getObject($id: SuiAddress!, $showBcs: Boolean = false, $showOwner: Boolean = false, $showPreviousTransaction: Boolean = false, $showContent: Boolean = false, $showDisplay: Boolean = false, $showType: Boolean = false, $showStorageRebate: Boolean = false) {
   object(address: $id) {
     ...RPC_OBJECT_FIELDS
   }
@@ -4187,9 +4201,14 @@ export const GetObjectDocument = new TypedDocumentString(`
   storageRebate @include(if: $showStorageRebate)
   digest
   version
+  display @include(if: $showDisplay) {
+    key
+    value
+    error
+  }
 }`) as unknown as TypedDocumentString<GetObjectQuery, GetObjectQueryVariables>;
 export const TryGetPastObjectDocument = new TypedDocumentString(`
-    query tryGetPastObject($id: SuiAddress!, $version: Int, $showBcs: Boolean = false, $showOwner: Boolean = false, $showPreviousTransaction: Boolean = false, $showContent: Boolean = false, $showType: Boolean = false, $showStorageRebate: Boolean = false) {
+    query tryGetPastObject($id: SuiAddress!, $version: Int, $showBcs: Boolean = false, $showOwner: Boolean = false, $showPreviousTransaction: Boolean = false, $showContent: Boolean = false, $showDisplay: Boolean = false, $showType: Boolean = false, $showStorageRebate: Boolean = false) {
   object(address: $id, version: $version) {
     ...RPC_OBJECT_FIELDS
   }
@@ -4240,9 +4259,14 @@ export const TryGetPastObjectDocument = new TypedDocumentString(`
   storageRebate @include(if: $showStorageRebate)
   digest
   version
+  display @include(if: $showDisplay) {
+    key
+    value
+    error
+  }
 }`) as unknown as TypedDocumentString<TryGetPastObjectQuery, TryGetPastObjectQueryVariables>;
 export const MultiGetObjectsDocument = new TypedDocumentString(`
-    query multiGetObjects($ids: [SuiAddress!]!, $limit: Int, $cursor: String, $showBcs: Boolean = false, $showContent: Boolean = false, $showType: Boolean = false, $showOwner: Boolean = false, $showPreviousTransaction: Boolean = false, $showStorageRebate: Boolean = false) {
+    query multiGetObjects($ids: [SuiAddress!]!, $limit: Int, $cursor: String, $showBcs: Boolean = false, $showContent: Boolean = false, $showDisplay: Boolean = false, $showType: Boolean = false, $showOwner: Boolean = false, $showPreviousTransaction: Boolean = false, $showStorageRebate: Boolean = false) {
   objectConnection(first: $limit, after: $cursor, filter: {objectIds: $ids}) {
     pageInfo {
       hasNextPage
@@ -4299,6 +4323,11 @@ export const MultiGetObjectsDocument = new TypedDocumentString(`
   storageRebate @include(if: $showStorageRebate)
   digest
   version
+  display @include(if: $showDisplay) {
+    key
+    value
+    error
+  }
 }`) as unknown as TypedDocumentString<MultiGetObjectsQuery, MultiGetObjectsQueryVariables>;
 export const QueryEventsDocument = new TypedDocumentString(`
     query queryEvents($filter: EventFilter!, $before: String, $after: String, $first: Int, $last: Int) {

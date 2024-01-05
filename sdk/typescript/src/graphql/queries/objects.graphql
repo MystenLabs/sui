@@ -7,7 +7,7 @@ query getOwnedObjects(
 	$cursor: String
 	$showBcs: Boolean = false
 	$showContent: Boolean = false
-	#$showDisplay: Boolean = false,
+	$showDisplay: Boolean = false
 	$showType: Boolean = false
 	$showOwner: Boolean = false
 	$showPreviousTransaction: Boolean = false
@@ -15,9 +15,6 @@ query getOwnedObjects(
 	$filter: ObjectFilter
 ) {
 	address(address: $owner) {
-		# filter missing:
-		# - version
-		# - all, any, none
 		objectConnection(first: $limit, after: $cursor, filter: $filter) {
 			pageInfo {
 				hasNextPage
@@ -36,7 +33,7 @@ query getObject(
 	$showOwner: Boolean = false
 	$showPreviousTransaction: Boolean = false
 	$showContent: Boolean = false
-	#$showDisplay: Boolean = false,
+	$showDisplay: Boolean = false
 	$showType: Boolean = false
 	$showStorageRebate: Boolean = false
 ) {
@@ -52,7 +49,7 @@ query tryGetPastObject(
 	$showOwner: Boolean = false
 	$showPreviousTransaction: Boolean = false
 	$showContent: Boolean = false
-	# display not implemented
+	$showDisplay: Boolean = false
 	$showType: Boolean = false
 	$showStorageRebate: Boolean = false
 ) {
@@ -67,7 +64,7 @@ query multiGetObjects(
 	$cursor: String
 	$showBcs: Boolean = false
 	$showContent: Boolean = false
-	#$showDisplay: Boolean = false,
+	$showDisplay: Boolean = false
 	$showType: Boolean = false
 	$showOwner: Boolean = false
 	$showPreviousTransaction: Boolean = false
@@ -132,4 +129,9 @@ fragment RPC_OBJECT_FIELDS on Object {
 	storageRebate @include(if: $showStorageRebate)
 	digest
 	version
+	display @include(if: $showDisplay) {
+		key
+		value
+		error
+	}
 }

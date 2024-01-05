@@ -4,7 +4,7 @@
 import { beforeAll, describe, expect, test } from 'vitest';
 
 import { TransactionBlock } from '../../../src/builder';
-import { SuiObjectData } from '../../../src/client';
+import { getFullnodeUrl, SuiClient, SuiObjectData } from '../../../src/client';
 import { publishPackage, setup, TestToolbox } from '../utils/setup';
 
 describe('GraphQL SuiClient compatibility', () => {
@@ -202,13 +202,13 @@ describe('GraphQL SuiClient compatibility', () => {
 		expect(graphQLMoveStruct).toEqual(rpcMoveStruct);
 	});
 
-	test.skip('getOwnedObjects', async () => {
+	test('getOwnedObjects', async () => {
 		const rpcObjects = await toolbox.client.getOwnedObjects({
 			owner: toolbox.address(),
 			options: {
 				showBcs: true,
 				showContent: true,
-				// showDisplay: true,
+				showDisplay: true,
 				showOwner: true,
 				showPreviousTransaction: true,
 				showStorageRebate: true,
@@ -220,7 +220,7 @@ describe('GraphQL SuiClient compatibility', () => {
 			options: {
 				showBcs: true,
 				showContent: true,
-				// showDisplay: true,
+				showDisplay: true,
 				showOwner: true,
 				showPreviousTransaction: true,
 				showStorageRebate: true,
@@ -231,7 +231,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		expect(graphQLObjects).toEqual(rpcObjects);
 	});
 
-	test.skip('getObject', async () => {
+	test('getObject', async () => {
 		const {
 			data: [{ coinObjectId: id }],
 		} = await toolbox.getGasObjectsOwnedByAddress();
@@ -241,7 +241,7 @@ describe('GraphQL SuiClient compatibility', () => {
 			options: {
 				showBcs: true,
 				showContent: true,
-				// showDisplay: true,
+				showDisplay: true,
 				showOwner: true,
 				showPreviousTransaction: true,
 				showStorageRebate: true,
@@ -253,7 +253,7 @@ describe('GraphQL SuiClient compatibility', () => {
 			options: {
 				showBcs: true,
 				showContent: true,
-				// showDisplay: true,
+				showDisplay: true,
 				showOwner: true,
 				showPreviousTransaction: true,
 				showStorageRebate: true,
@@ -264,18 +264,21 @@ describe('GraphQL SuiClient compatibility', () => {
 		expect(graphQLObject).toEqual(rpcObject);
 	});
 
-	test.skip('tryGetPastObject', async () => {
+	test('tryGetPastObject', async () => {
 		const {
 			data: [{ coinObjectId: id, version }],
 		} = await toolbox.getGasObjectsOwnedByAddress();
+		const fullNodeClient = new SuiClient({
+			url: getFullnodeUrl('localnet'),
+		});
 
-		const rpcObject = await toolbox.client.tryGetPastObject({
+		const rpcObject = await fullNodeClient.tryGetPastObject({
 			id,
 			version: Number.parseInt(version, 10),
 			options: {
 				showBcs: true,
 				showContent: true,
-				// showDisplay: true,
+				showDisplay: true,
 				showOwner: true,
 				showPreviousTransaction: true,
 				showStorageRebate: true,
@@ -288,7 +291,7 @@ describe('GraphQL SuiClient compatibility', () => {
 			options: {
 				showBcs: true,
 				showContent: true,
-				// showDisplay: true,
+				showDisplay: true,
 				showOwner: true,
 				showPreviousTransaction: true,
 				showStorageRebate: true,
@@ -299,7 +302,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		expect(graphQLObject).toEqual(rpcObject);
 	});
 
-	test.skip('multiGetObjects', async () => {
+	test('multiGetObjects', async () => {
 		const {
 			data: [{ coinObjectId: id }],
 		} = await toolbox.getGasObjectsOwnedByAddress();
@@ -309,7 +312,7 @@ describe('GraphQL SuiClient compatibility', () => {
 			options: {
 				showBcs: true,
 				showContent: true,
-				// showDisplay: true,
+				showDisplay: true,
 				showOwner: true,
 				showPreviousTransaction: true,
 				showStorageRebate: true,
