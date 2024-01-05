@@ -4,7 +4,9 @@
 use async_graphql::{ErrorExtensionValues, ErrorExtensions, Pos, Response, ServerError};
 use async_graphql_axum::GraphQLResponse;
 use sui_indexer::errors::IndexerError;
-use sui_json_rpc::name_service::DomainParseError;
+use sui_json_rpc::name_service::NameServiceError;
+
+use crate::context_data::db_data_provider::DbValidationError;
 
 /// Error codes for the `extensions.code` field of a GraphQL error that originates from outside
 /// GraphQL.
@@ -65,7 +67,13 @@ pub enum Error {
     #[error("Unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
     ProtocolVersionUnsupported(u64, u64),
     #[error(transparent)]
-    DomainParse(#[from] DomainParseError),
+    NameService(#[from] NameServiceError),
+    #[error(transparent)]
+    DbValidation(#[from] DbValidationError),
+    #[error("Invalid coin type: {0}")]
+    InvalidCoinType(String),
+    #[error("'before' and 'after' must not be used together")]
+    CursorNoBeforeAfter,
     #[error("'first' and 'last' must not be used together")]
     CursorNoFirstLast,
     #[error("Connection's page size of {0} exceeds max of {1}")]
@@ -80,7 +88,13 @@ pub enum Error {
 impl ErrorExtensions for Error {
     fn extend(&self) -> async_graphql::Error {
         async_graphql::Error::new(format!("{}", self)).extend_with(|_err, e| match self {
-            Error::DomainParse(_)
+            Error::InvalidCoinType(_)
+            | Error::DynamicFieldOnAddress
+            | Error::InvalidFilter
+            | Error::ProtocolVersionUnsupported { .. }
+            | Error::NameService(_)
+            | Error::DbValidation(_)
+            | Error::CursorNoBeforeAfter
             | Error::CursorNoFirstLast
             | Error::PageTooLarge(_, _)
             | Error::ProtocolVersionUnsupported(_, _)

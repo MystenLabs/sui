@@ -3,7 +3,7 @@
 
 use anyhow::bail;
 use async_trait::async_trait;
-use futures::Stream;
+use futures::{future, Stream};
 use jsonrpsee::{
     core::{error::SubscriptionClosed, RpcResult},
     types::SubscriptionResult,
@@ -13,7 +13,6 @@ use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_core_types::language_storage::TypeTag;
 use mysten_metrics::spawn_monitored_task;
 use serde::Serialize;
-use std::str::FromStr;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_json::SuiJsonValue;
@@ -41,7 +40,7 @@ use tracing::{debug, instrument, warn};
 use crate::{
     authority_state::StateRead,
     error::{Error, SuiRpcInputError},
-    name_service::{Domain, NameRecord, NameServiceConfig},
+    name_service::{Domain, NameRecord, NameServiceConfig, NameServiceError, SubNameRecord},
     with_tracing, SuiRpcModule,
 };
 
@@ -371,26 +370,103 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
     #[instrument(skip(self))]
     async fn resolve_name_service_address(&self, name: String) -> RpcResult<Option<SuiAddress>> {
         with_tracing!(async move {
-            let domain = Domain::from_str(&name).map_err(|e| {
-                Error::UnexpectedError(format!(
-                    "Failed to parse NameService Domain with error: {:?}",
-                    e
-                ))
-            })?;
+            let requested_domain = name.parse::<Domain>().map_err(Error::from)?;
 
-            let record_id = self.name_service_config.record_field_id(&domain);
-
-            let field_record_object = match self.state.get_object(&record_id).await? {
-                Some(o) => o,
-                None => return Ok(None),
+            // Get the SLD name, if we're operating on a subdomain, or use the requested as is.
+            let sld = if requested_domain.is_subdomain() {
+                requested_domain.sld()
+            } else {
+                requested_domain.clone()
             };
 
-            let record = field_record_object
-                .to_rust::<Field<Domain, NameRecord>>()
-                .ok_or_else(|| Error::UnexpectedError(format!("Malformed Object {record_id}")))?
-                .value;
+            let sld_record_id = self.name_service_config.record_field_id(&sld, None);
 
-            Ok(record.target_address)
+            let Some(field_record_object) = self.state.get_object(&sld_record_id).await? else {
+                return Ok(None);
+            };
+
+            let sld_record = NameRecord::try_from(field_record_object)?;
+
+            // Check if the record is expired.
+            if sld_record.is_expired() {
+                return Err(Error::from(NameServiceError::NameExpired));
+            }
+
+            // For SLD, we can resolve here.
+            if !requested_domain.is_subdomain() {
+                return Ok(sld_record.target_address);
+            }
+            // == Doing a subdomain lookup from this point forward ==
+
+            // Find the namespace from the name record's metadata.
+            let namespace_table_id = sld_record.namespace_table_id();
+
+            if namespace_table_id.is_none() {
+                return Ok(None);
+            }
+
+            // Look-up the subdomain record object.
+            let sub_record_object_id = self
+                .name_service_config
+                .record_field_id(&requested_domain, namespace_table_id);
+
+            let subdomain_parent = requested_domain.parent();
+
+            let sub_parent_record_object_id = self
+                .name_service_config
+                .record_field_id(&subdomain_parent, namespace_table_id);
+
+            // Flag if the subdomain's parent is also a subdomain.
+            let parent_is_subdomain = requested_domain.depth() > 3;
+
+            // Gather all requests to execute concurrently.
+            let mut requests = vec![self.state.get_object(&sub_record_object_id)];
+
+            // We only query the parent if we're looking at a subdomain whose parent is also a subdomain.
+            // Subdomains on the first level (depth === 3) have the SLD as their parent, and we already have the SLD fetched & validated.
+            if parent_is_subdomain {
+                requests.push(self.state.get_object(&sub_parent_record_object_id));
+            }
+
+            // Base indexer crate seems to fetch multiple objects similarly so this shouldn't affect performance.
+            let mut results = future::try_join_all(requests).await?;
+
+            // Removing without checking vector len, since it is known (== 1 or 2 depending on `has_subdomain_parent` flag).
+            let Some(requested_domain) = results.remove(0) else {
+                return Ok(None);
+            };
+
+            let sub_record = SubNameRecord::try_from(requested_domain)?;
+
+            // Subdomain record is a node record and has expired.
+            if sub_record.is_node_expired() {
+                return Err(Error::from(NameServiceError::NameExpired));
+            }
+
+            // For node records (non-leaf), we can resolve at this point.
+            if !sub_record.is_leaf {
+                return Ok(sub_record.name_record.target_address);
+            }
+
+            // If the subdomain is a leaf, but has a SLD parent, we can resolve.
+            // At this point, we have already checked that the SLD is valid.
+            if !parent_is_subdomain {
+                return Ok(sub_record.name_record.target_address);
+            }
+
+            // For leaf names with subdomain parents, we also need to check the parent's state.
+            // If the parent doesn't exist, the name has expired.
+            let Some(sub_parent_object) = results.remove(0) else {
+                return Err(Error::from(NameServiceError::NameExpired));
+            };
+
+            let sub_parent_record = SubNameRecord::try_from(sub_parent_object)?;
+
+            if sub_record.is_leaf_expired(&sub_parent_record.name_record) {
+                return Err(Error::from(NameServiceError::NameExpired));
+            }
+
+            Ok(sub_record.name_record.target_address)
         })
     }
 
@@ -406,17 +482,17 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .name_service_config
                 .reverse_record_field_id(address.as_ref());
 
-            let field_reverse_record_object =
-                match self.state.get_object(&reverse_record_id).await? {
-                    Some(o) => o,
-                    None => {
-                        return Ok(Page {
-                            data: vec![],
-                            next_cursor: None,
-                            has_next_page: false,
-                        })
-                    }
-                };
+            let mut result = Page {
+                data: vec![],
+                next_cursor: None,
+                has_next_page: false,
+            };
+
+            let Some(field_reverse_record_object) =
+                self.state.get_object(&reverse_record_id).await?
+            else {
+                return Ok(result);
+            };
 
             let domain = field_reverse_record_object
                 .to_rust::<Field<SuiAddress, Domain>>()
@@ -425,11 +501,20 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 })?
                 .value;
 
-            Ok(Page {
-                data: vec![domain.to_string()],
-                next_cursor: None,
-                has_next_page: false,
-            })
+            let domain_name = domain.to_string();
+
+            let resolved_address = self
+                .resolve_name_service_address(domain_name.clone())
+                .await?;
+
+            if resolved_address.is_none() || resolved_address != Some(address) {
+                return Ok(result);
+            }
+            // TODO(manos): Discuss why is this even a paginated response.
+            // This API is always going to return a single domain name.
+            result.data.push(domain_name);
+
+            Ok(result)
         })
     }
 }

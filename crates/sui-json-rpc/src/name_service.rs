@@ -8,9 +8,12 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::marker::PhantomData;
 use std::str::FromStr;
+use std::time::SystemTime;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::collection_types::VecMap;
+use sui_types::dynamic_field::Field;
 use sui_types::id::{ID, UID};
+use sui_types::object::Object;
 use sui_types::TypeTag;
 
 const NAME_SERVICE_DOMAIN_MODULE: &IdentStr = ident_str!("domain");
@@ -23,6 +26,7 @@ const NAME_SERVICE_DEFAULT_REVERSE_REGISTRY: &str =
     "0x2fd099e17a292d2bc541df474f9fafa595653848cbabb2d7a4656ec786a1969f";
 const _NAME_SERVICE_OBJECT_ADDRESS: &str =
     "0x6e0ddefc0ad98889c04bab9639e512c21766c5e6366f89e696956d9be6952871";
+const NAMESPACE_TABLE_KEY: &str = "NS_TABLE_ID";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Registry {
@@ -61,12 +65,31 @@ impl Domain {
         }
     }
 
+    /// Returns the SLD (second level domain) for a domain.
+    /// E.g. `test.test.test.example.sui` -> `example.sui`
+    pub fn sld(&self) -> Domain {
+        Domain {
+            labels: self.labels[0..2].to_vec(),
+        }
+    }
+
     /// Derive the parent domain for a given domain
     /// E.g. `test.example.sui` -> `example.sui`
     pub fn parent(&self) -> Domain {
         Domain {
             labels: self.labels[0..(self.labels.len() - 1)].to_vec(),
         }
+    }
+
+    pub fn is_subdomain(&self) -> bool {
+        self.depth() >= 3
+    }
+
+    /// Returns the depth for a name.
+    /// Depth is defined by the amount of labels in a domain, including TLD.
+    /// E.g. `test.example.sui` -> `3`
+    pub fn depth(&self) -> u8 {
+        self.labels.len() as u8
     }
 }
 
@@ -93,11 +116,11 @@ impl NameServiceConfig {
         }
     }
 
-    pub fn record_field_id(&self, domain: &Domain) -> ObjectID {
+    pub fn record_field_id(&self, domain: &Domain, registry_id: Option<ObjectID>) -> ObjectID {
         let domain_bytes = bcs::to_bytes(domain).unwrap();
 
         sui_types::dynamic_field::derive_dynamic_field_id(
-            self.registry_id,
+            registry_id.unwrap_or(self.registry_id),
             &self.domain_type_tag,
             &domain_bytes,
         )
@@ -124,29 +147,15 @@ impl Default for NameServiceConfig {
     }
 }
 
-#[derive(thiserror::Error, Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub enum DomainParseError {
-    #[error("String length: {0} exceeds maximum allowed length: {1}")]
-    ExceedsMaxLength(usize, usize),
-    #[error("String length: {0} outside of valid range: [{1}, {2}]")]
-    InvalidLength(usize, usize, usize),
-    #[error("Hyphens are not allowed as the first or last character")]
-    InvalidHyphens,
-    #[error("Only lowercase letters, numbers, and hyphens are allowed")]
-    InvalidUnderscore,
-    #[error("Domain must contain at least one label")]
-    LabelsEmpty,
-}
-
 impl FromStr for Domain {
-    type Err = DomainParseError;
+    type Err = NameServiceError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         /// The maximum length of a full domain
         const MAX_DOMAIN_LENGTH: usize = 200;
 
         if s.len() > MAX_DOMAIN_LENGTH {
-            return Err(DomainParseError::ExceedsMaxLength(
+            return Err(NameServiceError::ExceedsMaxLength(
                 s.len(),
                 MAX_DOMAIN_LENGTH,
             ));
@@ -159,7 +168,7 @@ impl FromStr for Domain {
             .collect::<Result<Vec<_>, Self::Err>>()?;
 
         if labels.is_empty() {
-            return Err(DomainParseError::LabelsEmpty);
+            return Err(NameServiceError::LabelsEmpty);
         }
 
         let labels = labels.into_iter().map(ToOwned::to_owned).collect();
@@ -168,14 +177,14 @@ impl FromStr for Domain {
     }
 }
 
-fn validate_label(label: &str) -> Result<&str, DomainParseError> {
+fn validate_label(label: &str) -> Result<&str, NameServiceError> {
     const MIN_LABEL_LENGTH: usize = 1;
     const MAX_LABEL_LENGTH: usize = 63;
     let bytes = label.as_bytes();
     let len = bytes.len();
 
     if !(MIN_LABEL_LENGTH..=MAX_LABEL_LENGTH).contains(&len) {
-        return Err(DomainParseError::InvalidLength(
+        return Err(NameServiceError::InvalidLength(
             len,
             MIN_LABEL_LENGTH,
             MAX_LABEL_LENGTH,
@@ -192,8 +201,8 @@ fn validate_label(label: &str) -> Result<&str, DomainParseError> {
 
         if !is_valid_character {
             match character {
-                b'-' => return Err(DomainParseError::InvalidHyphens),
-                _ => return Err(DomainParseError::InvalidUnderscore),
+                b'-' => return Err(NameServiceError::InvalidHyphens),
+                _ => return Err(NameServiceError::InvalidUnderscore),
             }
         };
     }
@@ -231,6 +240,108 @@ pub struct NameRecord {
     pub target_address: Option<SuiAddress>,
     /// Additional data which may be stored in a record
     pub data: VecMap<String, String>,
+}
+
+impl NameRecord {
+    /// Parses the name record's metadata and returns the `objectId` of the registry table.
+    pub fn namespace_table_id(&self) -> Option<ObjectID> {
+        let table_id_entry = self
+            .data
+            .contents
+            .iter()
+            .find(|entry| entry.key == NAMESPACE_TABLE_KEY)?;
+
+        ObjectID::from_str(&table_id_entry.value).ok()
+    }
+
+    /// Checks if a name record has expired.
+    pub fn is_expired(&self) -> bool {
+        let current_timestamp_ms = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+
+        (self.expiration_timestamp_ms as u128) < current_timestamp_ms
+    }
+}
+
+impl TryFrom<Object> for NameRecord {
+    type Error = NameServiceError;
+
+    fn try_from(object: Object) -> Result<Self, NameServiceError> {
+        let obj = object
+            .to_rust::<Field<Domain, Self>>()
+            .map(|record| record.value);
+
+        match obj {
+            Some(record) => Ok(record),
+            None => Err(NameServiceError::MalformedObject(object.id())),
+        }
+    }
+}
+
+/// A single record in a Namespace registry.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct SubNameRecord {
+    /// NameRecord for the Subdomain
+    pub name_record: NameRecord,
+    /// Whether the subdomain is a `leaf` or a `node`
+    pub is_leaf: bool,
+    /// Whether the subdomain can extend the expiration based on the parent's
+    pub allow_extension: bool,
+    /// Whether the creation of children is allowed for that subdomain.
+    pub allow_creation: bool,
+}
+
+impl SubNameRecord {
+    /// Validate that the leaf record's NFT_ID is equal to the parent's NFT_ID.
+    pub fn has_valid_parent(&self, parent: &NameRecord) -> bool {
+        self.name_record.nft_id == parent.nft_id
+    }
+
+    /// Check if a leaf subdomain has expired by passing the parent's name record.
+    /// Also is expired when the parent has changed.
+    pub fn is_leaf_expired(&self, parent: &NameRecord) -> bool {
+        self.is_leaf && (parent.is_expired() || !self.has_valid_parent(parent))
+    }
+
+    /// Check if a non-leaf (node) subdomain has expired.
+    /// Returns false for leaf names as expiration check has extra business logic (parent's expiration).
+    pub fn is_node_expired(&self) -> bool {
+        !self.is_leaf && self.name_record.is_expired()
+    }
+}
+
+impl TryFrom<Object> for SubNameRecord {
+    type Error = NameServiceError;
+
+    fn try_from(object: Object) -> Result<Self, NameServiceError> {
+        object
+            .to_rust::<Field<Domain, Self>>()
+            .map(|record: Field<Domain, SubNameRecord>| record.value)
+            .ok_or_else(|| NameServiceError::MalformedObject(object.id()))
+    }
+}
+
+#[derive(thiserror::Error, Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub enum NameServiceError {
+    #[error("Name Service: String length: {0} exceeds maximum allowed length: {1}")]
+    ExceedsMaxLength(usize, usize),
+    #[error("Name Service: String length: {0} outside of valid range: [{1}, {2}]")]
+    InvalidLength(usize, usize, usize),
+    #[error("Name Service: Hyphens are not allowed as the first or last character")]
+    InvalidHyphens,
+    #[error("Name Service: Only lowercase letters, numbers, and hyphens are allowed")]
+    InvalidUnderscore,
+    #[error("Name Service: Domain must contain at least one label")]
+    LabelsEmpty,
+    #[error("Name Service: Domain must include only one separator")]
+    InvalidSeparator,
+
+    #[error("Name Service: Name has expired.")]
+    NameExpired,
+    #[error("Name Service: Malformed object for {0}")]
+    MalformedObject(ObjectID),
 }
 
 /// A SuinsRegistration object to manage an SLD
