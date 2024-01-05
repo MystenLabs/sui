@@ -9,6 +9,7 @@ use async_graphql::{
 use either::Either;
 use sui_indexer::models_v2::transactions::StoredTransaction;
 use sui_types::{
+    digests::TransactionDigest,
     effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
     execution_status::ExecutionStatus as NativeExecutionStatus,
     transaction::TransactionData as NativeTransactionData,
@@ -102,11 +103,46 @@ impl TransactionBlockEffects {
     }
 
     /// Transactions whose outputs this transaction depends upon.
-    async fn dependencies(&self, ctx: &Context<'_>) -> Result<Option<Vec<TransactionBlock>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_txs_by_digests(self.native.dependencies())
+    async fn dependencies(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CDependencies>,
+        last: Option<u64>,
+        before: Option<CDependencies>,
+    ) -> Result<Connection<String, TransactionBlock>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        let mut connection = Connection::new(false, false);
+
+        let dependencies = self.native.dependencies();
+
+        let Some((prev, next, cs)) = page.paginate_indices(dependencies.len()) else {
+            return Ok(connection);
+        };
+
+        let indices: Vec<CDependencies> = cs.map(|c| c).collect();
+        let lookups: Vec<TransactionDigest> = indices.iter().map(|i| dependencies[**i]).collect();
+
+        let transactions = ctx
+            .data_unchecked::<PgManager>()
+            .fetch_txs_by_digests(&lookups)
             .await
-            .extend()
+            .extend()?;
+
+        let Some(transactions) = transactions else {
+            return Ok(connection);
+        };
+
+        connection.has_previous_page = prev;
+        connection.has_next_page = next;
+
+        for (c, transaction) in indices.into_iter().zip(transactions.into_iter()) {
+            connection
+                .edges
+                .push(Edge::new(c.encode_cursor(), transaction));
+        }
+
+        Ok(connection)
     }
 
     /// Effects to the gas object.
@@ -115,14 +151,41 @@ impl TransactionBlockEffects {
     }
 
     /// Shared objects that are referenced by but not changed by this transaction.
-    async fn unchanged_shared_objects(&self) -> Option<Vec<UnchangedSharedObject>> {
-        Some(
-            self.native
-                .input_shared_objects()
-                .into_iter()
-                .filter_map(|input| UnchangedSharedObject::try_from(input).ok())
-                .collect(),
-        )
+    async fn unchanged_shared_objects(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CUnchangedSharedObject>,
+        last: Option<u64>,
+        before: Option<CUnchangedSharedObject>,
+    ) -> Result<Connection<String, UnchangedSharedObject>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        let mut connection = Connection::new(false, false);
+
+        // TODO: this iterates through its shared_objects field and collects.
+        // We can consider doing that collection here so we don't double dip.
+        let input_shared_objects = self.native.input_shared_objects();
+
+        let Some((prev, next, cs)) = page.paginate_indices(input_shared_objects.len()) else {
+            return Ok(connection);
+        };
+
+        connection.has_previous_page = prev;
+        connection.has_next_page = next;
+
+        for c in cs {
+            let result = UnchangedSharedObject::try_from(input_shared_objects[*c].clone());
+            match result {
+                Ok(unchanged_shared_object) => {
+                    connection
+                        .edges
+                        .push(Edge::new(c.encode_cursor(), unchanged_shared_object));
+                }
+                Err(_) => continue, // Drop failures
+            }
+        }
+
+        Ok(connection)
     }
 
     /// The effect this transaction had on objects on-chain.
@@ -137,15 +200,16 @@ impl TransactionBlockEffects {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let mut connection = Connection::new(false, false);
 
-        let Some((prev, next, cs)) = page.paginate_indices(self.native.object_changes().len())
-        else {
+        // TODO: this function iterates through created, mutated, etc. fields and collects into one array
+        // We can consider doing that collection here so we don't double dip.
+        let object_changes = self.native.object_changes();
+
+        let Some((prev, next, cs)) = page.paginate_indices(object_changes.len()) else {
             return Ok(connection);
         };
 
         connection.has_previous_page = prev;
         connection.has_next_page = next;
-
-        let object_changes = self.native.object_changes();
 
         for c in cs {
             let object_change = ObjectChange {
