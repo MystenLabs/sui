@@ -38,3 +38,27 @@ fragment Modules on Object  @deprecated {
         }
     }
 }
+
+//# run-graphql
+
+{
+  chainIdentifier @skip(if: true)
+}
+
+//# run-graphql
+
+{
+  chainIdentifier @skip(if: false)
+}
+
+//# run-graphql
+
+{
+  chainIdentifier @include(if: true)
+}
+
+//# run-graphql
+
+{
+  chainIdentifier @include(if: false)
+}
