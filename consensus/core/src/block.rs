@@ -139,3 +139,5 @@ impl fmt::Debug for BlockDigest {
         )
     }
 }
+
+// TODO: add basic verification for BlockRef and BlockDigest computations.

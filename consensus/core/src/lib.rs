@@ -3,5 +3,6 @@
 
 mod block;
 mod block_verifier;
+mod context;
 mod metrics;
 mod validator;
