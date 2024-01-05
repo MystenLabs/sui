@@ -54,56 +54,6 @@ pub(crate) struct EventFilter {
     // pub not
 }
 
-impl Event {
-    pub(crate) fn try_from_stored_transaction(
-        stored_tx: &StoredTransaction,
-        idx: usize,
-    ) -> Result<Self, Error> {
-        let Some(serialized_event) = stored_tx
-            .events
-            .get(idx)
-            .ok_or_else(|| {
-                Error::Internal(format!(
-                    "Could not find event with event_sequence_number {} at transaction {}",
-                    idx, stored_tx.tx_sequence_number
-                ))
-            })?
-            .as_ref()
-        else {
-            return Err(Error::Internal(format!(
-                "Unexpected None value for event with event_sequence_number {} at transaction {}",
-                idx, stored_tx.tx_sequence_number
-            )));
-        };
-
-        let native_event: NativeEvent = bcs::from_bytes(serialized_event).map_err(|_| {
-            Error::Internal(format!(
-                "Failed to deserialize event with {} at transaction {}",
-                idx, stored_tx.tx_sequence_number
-            ))
-        })?;
-
-        let stored_event = StoredEvent {
-            tx_sequence_number: stored_tx.tx_sequence_number,
-            event_sequence_number: idx as i64,
-            transaction_digest: stored_tx.transaction_digest.clone(),
-            checkpoint_sequence_number: stored_tx.checkpoint_sequence_number,
-            senders: vec![Some(native_event.sender.to_vec())],
-            package: native_event.package_id.to_vec(),
-            module: native_event.transaction_module.to_string(),
-            event_type: native_event
-                .type_
-                .to_canonical_string(/* with_prefix */ true),
-            bcs: native_event.contents.clone(),
-            timestamp_ms: stored_tx.timestamp_ms,
-        };
-
-        Ok(Self {
-            stored: stored_event,
-        })
-    }
-}
-
 #[Object]
 impl Event {
     /// The Move module containing some function that when called by
@@ -147,5 +97,45 @@ impl Event {
                 .extend()?,
         );
         Ok(MoveValue::new(type_, Base64::from(self.stored.bcs.clone())))
+    }
+}
+
+impl Event {
+    pub(crate) fn try_from_stored_transaction(
+        stored_tx: &StoredTransaction,
+        idx: usize,
+    ) -> Result<Self, Error> {
+        let Some(Some(serialized_event)) = stored_tx.events.get(idx) else {
+            return Err(Error::Internal(format!(
+                "Could not find event with event_sequence_number {} at transaction {}",
+                idx, stored_tx.tx_sequence_number
+            )));
+        };
+
+        let native_event: NativeEvent = bcs::from_bytes(serialized_event).map_err(|_| {
+            Error::Internal(format!(
+                "Failed to deserialize event with {} at transaction {}",
+                idx, stored_tx.tx_sequence_number
+            ))
+        })?;
+
+        let stored_event = StoredEvent {
+            tx_sequence_number: stored_tx.tx_sequence_number,
+            event_sequence_number: idx as i64,
+            transaction_digest: stored_tx.transaction_digest.clone(),
+            checkpoint_sequence_number: stored_tx.checkpoint_sequence_number,
+            senders: vec![Some(native_event.sender.to_vec())],
+            package: native_event.package_id.to_vec(),
+            module: native_event.transaction_module.to_string(),
+            event_type: native_event
+                .type_
+                .to_canonical_string(/* with_prefix */ true),
+            bcs: native_event.contents,
+            timestamp_ms: stored_tx.timestamp_ms,
+        };
+
+        Ok(Self {
+            stored: stored_event,
+        })
     }
 }
