@@ -8,3 +8,5 @@ edition = "2021"
 
 [dependencies]
 axum.workspace = true
+
+workspace-hack.workspace = true

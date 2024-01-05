@@ -11924,6 +11924,7 @@ dependencies = [
  "serde_json",
  "sui-graphql-rpc-headers",
  "thiserror",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11931,6 +11932,7 @@ name = "sui-graphql-rpc-headers"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "workspace-hack",
 ]
 
 [[package]]
