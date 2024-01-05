@@ -133,37 +133,31 @@ impl TransactionBlockEffects {
         after: Option<CObjectChange>,
         last: Option<u64>,
         before: Option<CObjectChange>,
-    ) -> Result<Option<Vec<ObjectChange>>> {
-        // ) -> Result<Connection<String, ObjectChange>> {
-        //     let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+    ) -> Result<Connection<String, ObjectChange>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        let mut connection = Connection::new(false, false);
 
-        //     let mut connection = Connection::new(false, false);
+        let Some((prev, next, cs)) = page.paginate_indices(self.native.object_changes().len())
+        else {
+            return Ok(connection);
+        };
 
-        //     let Some((prev, next, cs)) = page.paginate_indices(self.native.object_changes().len())
-        //     else {
-        //         return Ok(connection);
-        //     };
+        connection.has_previous_page = prev;
+        connection.has_next_page = next;
 
-        //     connection.has_previous_page = prev;
-        //     connection.has_next_page = next;
+        let object_changes = self.native.object_changes();
 
-        //     for c in cs {
-        //         let object_change = ObjectChange {
-        //             native: self.native.object_changes()[*c],
-        //         };
+        for c in cs {
+            let object_change = ObjectChange {
+                native: object_changes[*c],
+            };
 
-        //         connection
-        //             .edges
-        //             .push(Edge::new(c.encode_cursor(), object_change));
-        //     }
+            connection
+                .edges
+                .push(Edge::new(c.encode_cursor(), object_change));
+        }
 
-        Ok(Some(
-            self.native
-                .object_changes()
-                .into_iter()
-                .map(|native| ObjectChange { native })
-                .collect(),
-        ))
+        Ok(connection)
     }
 
     /// The effect this transaction had on the balances (sum of coin values per coin type) of
