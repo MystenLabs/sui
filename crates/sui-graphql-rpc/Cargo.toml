@@ -52,8 +52,8 @@ tower.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 
-sui-graphql-rpc-headers = { path = "sui-graphql-rpc-headers" }
-sui-graphql-rpc-client = { path = "sui-graphql-rpc-client" }
+sui-graphql-rpc-headers.workspace = true
+sui-graphql-rpc-client.workspace = true
 
 
 # TODO: put these behind feature flag to prevent leakage

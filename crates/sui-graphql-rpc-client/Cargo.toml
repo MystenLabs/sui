@@ -12,5 +12,5 @@ axum.workspace = true
 hyper.workspace = true
 reqwest.workspace = true
 serde_json.workspace = true
-sui-graphql-rpc-headers = { path = "../sui-graphql-rpc-headers" }
+sui-graphql-rpc-headers.workspace = true
 thiserror.workspace = true
