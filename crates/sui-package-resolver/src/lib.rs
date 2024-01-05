@@ -6,6 +6,7 @@ use lru::LruCache;
 use move_binary_format::file_format::{
     AbilitySet, FunctionDefinitionIndex, Signature, SignatureIndex, StructTypeParameter, Visibility,
 };
+use std::collections::btree_map::Entry;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use std::{borrow::Cow, collections::BTreeMap};
@@ -730,7 +731,7 @@ impl<'l> ResolutionContext<'l> {
 
                 T::Struct(s) => {
                     let context = store.fetch(s.address).await?;
-                    let struct_def = context
+                    let def = context
                         .clone()
                         .struct_def(s.module.as_str(), s.name.as_str())?;
 
@@ -741,13 +742,19 @@ impl<'l> ResolutionContext<'l> {
                     s.address = context.runtime_id;
                     let key = StructRef::from(s.as_ref()).as_key();
 
+                    if def.type_params.len() != s.type_params.len() {
+                        return Err(Error::TypeArityMismatch(
+                            def.type_params.len(),
+                            s.type_params.len(),
+                        ));
+                    }
+
                     check_max_limit!(
                         TooManyTypeParams, self.limits;
                         max_type_argument_width >= s.type_params.len()
                     );
 
-                    for (param, def) in s.type_params.iter_mut().zip(struct_def.type_params.iter())
-                    {
+                    for (param, def) in s.type_params.iter_mut().zip(def.type_params.iter()) {
                         if !def.is_phantom || visit_phantoms {
                             push_ty_param!(param);
                         }
@@ -758,7 +765,7 @@ impl<'l> ResolutionContext<'l> {
                     }
 
                     if visit_fields {
-                        for (_, sig) in &struct_def.fields {
+                        for (_, sig) in &def.fields {
                             self.add_signature(sig.clone(), store, &context).await?;
                         }
                     }
@@ -768,7 +775,7 @@ impl<'l> ResolutionContext<'l> {
                         max_type_nodes > self.structs.len()
                     );
 
-                    self.structs.insert(key, struct_def);
+                    self.structs.insert(key, def);
                 }
             }
         }
@@ -809,24 +816,35 @@ impl<'l> ResolutionContext<'l> {
                         max_type_argument_width >= params.len()
                     );
 
+                    let params_count = params.len();
+                    let struct_count = self.structs.len();
                     frontier.extend(params.into_iter());
 
-                    if self.structs.contains_key(&key) {
-                        continue;
+                    let def = match self.structs.entry(key.clone()) {
+                        Entry::Occupied(e) => e.into_mut(),
+
+                        Entry::Vacant(e) => {
+                            let storage_id = context.relocate(key.package)?;
+                            let package = store.fetch(storage_id).await?;
+                            let def = package.struct_def(&key.module, &key.name)?;
+
+                            frontier.extend(def.fields.iter().map(|f| &f.1).cloned());
+
+                            check_max_limit!(
+                                TooManyTypeNodes, self.limits;
+                                max_type_nodes > struct_count
+                            );
+
+                            e.insert(def)
+                        }
+                    };
+
+                    if def.type_params.len() != params_count {
+                        return Err(Error::TypeArityMismatch(
+                            def.type_params.len(),
+                            params_count,
+                        ));
                     }
-
-                    let storage_id = context.relocate(key.package)?;
-                    let package = store.fetch(storage_id).await?;
-                    let struct_def = package.struct_def(&key.module, &key.name)?;
-
-                    frontier.extend(struct_def.fields.iter().map(|f| &f.1).cloned());
-
-                    check_max_limit!(
-                        TooManyTypeNodes, self.limits;
-                        max_type_nodes > self.structs.len()
-                    );
-
-                    self.structs.insert(key.clone(), struct_def);
                 }
             }
         }
@@ -885,13 +903,6 @@ impl<'l> ResolutionContext<'l> {
                     type_params,
                     ..
                 } = s.as_ref();
-
-                if def.type_params.len() != type_params.len() {
-                    return Err(Error::TypeArityMismatch(
-                        def.type_params.len(),
-                        type_params.len(),
-                    ));
-                }
 
                 // TODO (optimization): This could be made more efficient by only generating layouts
                 // for non-phantom types.  This efficiency could be extended to the exploration
