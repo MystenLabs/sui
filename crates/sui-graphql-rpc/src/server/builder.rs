@@ -107,6 +107,7 @@ impl ServerBuilder {
         if self.router.is_none() {
             let router: Router = Router::new()
                 .route("/", post(graphql_handler))
+                .route("/graphql", post(graphql_handler))
                 .route("/health", axum::routing::get(health_checks))
                 .layer(middleware::from_fn(check_version_middleware))
                 .layer(middleware::from_fn(set_version_middleware));
