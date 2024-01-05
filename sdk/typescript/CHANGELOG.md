@@ -1,5 +1,16 @@
 # @mysten/sui.js
 
+## 0.49.0
+
+### Minor Changes
+
+- e5f9e3ba21: Replace tsup based build to fix issues with esm/cjs dual publishing
+
+### Patch Changes
+
+- Updated dependencies [e5f9e3ba21]
+  - @mysten/bcs@0.10.0
+
 ## 0.48.1
 
 ### Patch Changes

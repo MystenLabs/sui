@@ -1,5 +1,17 @@
 # @mysten/deepbook
 
+## 0.6.0
+
+### Minor Changes
+
+- 950d50f2cf: Changed getCoinType function to public so that it is testable
+- e5f9e3ba21: Replace tsup based build to fix issues with esm/cjs dual publishing
+
+### Patch Changes
+
+- Updated dependencies [e5f9e3ba21]
+  - @mysten/sui.js@0.49.0
+
 ## 0.5.12
 
 ### Patch Changes

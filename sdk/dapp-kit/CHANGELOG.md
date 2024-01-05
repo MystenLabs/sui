@@ -1,5 +1,18 @@
 # @mysten/dapp-kit
 
+## 0.11.0
+
+### Minor Changes
+
+- e5f9e3ba21: Replace tsup based build to fix issues with esm/cjs dual publishing
+
+### Patch Changes
+
+- 9ba167b0af: Default storage to memory storage when local storage isn't available during SSR
+- Updated dependencies [e5f9e3ba21]
+  - @mysten/wallet-standard@0.10.0
+  - @mysten/sui.js@0.49.0
+
 ## 0.10.3
 
 ### Patch Changes
