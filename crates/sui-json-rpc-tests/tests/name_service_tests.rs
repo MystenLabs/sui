@@ -47,3 +47,5 @@ fn test_expirations() {
 
     assert!(name.is_expired());
 }
+
+// TODO: Add more test cases here for expiration checks on SubNameRecords (node/leafs).
