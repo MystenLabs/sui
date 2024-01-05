@@ -16,7 +16,7 @@ module bridge::bridge {
     use sui::vec_map::{Self, VecMap};
     use sui::versioned::{Self, Versioned};
 
-    use bridge::chain_ids;
+    use bridge::chain_ids::{Self, sui_testnet};
     use bridge::committee::{Self, BridgeCommittee};
     use bridge::message::{Self, BridgeMessage, BridgeMessageKey};
     use bridge::message_types;
@@ -62,13 +62,30 @@ module bridge::bridge {
     // const ENotSystemAddress: u64 = 5;
     const EUnexpectedSeqNum: u64 = 6;
     const EWrongInnerVersion: u64 = 7;
-    const EAlreadyClaimed: u64 = 8;
-    const ERecordAlreadyExists: u64 = 9;
     const EBridgeUnavailable: u64 = 10;
     const EUnexpectedOperation: u64 = 11;
     const EInvalidBridgeRoute: u64 = 12;
 
+    const EInvariantSuiInitializedTokenTransferShouldNotBeClaimed: u64 = 13;
+    const EMessageNotFoundInRecords: u64 = 14;
+
     const CURRENT_VERSION: u64 = 1;
+
+    struct TokenTransferApproved has copy, drop {
+        message_key: BridgeMessageKey,
+    }
+
+    struct TokenTransferClaimed has copy, drop {
+        message_key: BridgeMessageKey,
+    }
+
+    struct TokenTransferAlreadyApproved has copy, drop {
+        message_key: BridgeMessageKey,
+    }
+
+    struct TokenTransferAlreadyClaimed has copy, drop {
+        message_key: BridgeMessageKey,
+    }
 
     fun init(ctx: &mut TxContext) {
 
@@ -76,7 +93,8 @@ module bridge::bridge {
 
         let bridge_inner = BridgeInner {
             bridge_version: CURRENT_VERSION,
-            chain_id: 0,
+            // TODO: how do we make this configurable?
+            chain_id: sui_testnet(),
             sequence_nums: vec_map::empty<u8, u64>(),
             committee: committee::create(ctx),
             treasury: treasury,
@@ -164,6 +182,7 @@ module bridge::bridge {
     }
 
     // Record bridge message approvals in Sui, called by the bridge client
+    // If already approved, return early instead of aborting.
     public fun approve_bridge_message(
         self: &mut Bridge,
         message: BridgeMessage,
@@ -172,39 +191,59 @@ module bridge::bridge {
         let inner = load_inner_mut(self);
         let key = message::key(&message);
 
+        // TODO: use borrow mut
+
         // retrieve pending message if source chain is Sui, the initial message must exist on chain.
-        if (message::message_type(&message) == message_types::token()) {
-            if (message::source_chain(&message) == inner.chain_id) {
-                let record = linked_table::remove(&mut inner.bridge_records, key);
-                assert!(record.message == message, EMalformedMessageError);
-                // The message should be in pending state (no approval and not claimed)
-                assert!(option::is_none(&record.verified_signatures), ERecordAlreadyExists);
-                assert!(!record.claimed, EAlreadyClaimed)
+        if (message::message_type(&message) == message_types::token() && message::source_chain(&message) == inner.chain_id) {
+            let record = linked_table::remove(&mut inner.bridge_records, key);
+            assert!(record.message == message, EMalformedMessageError);
+            assert!(!record.claimed, EInvariantSuiInitializedTokenTransferShouldNotBeClaimed);
+
+            // If record already has verified signatures, it means the message has been approved.
+            // Then we push this message back to bridge_records and exit early.
+            if (option::is_some(&record.verified_signatures)) {
+                emit(TokenTransferAlreadyApproved { message_key: key });
+                linked_table::push_back(&mut inner.bridge_records, key, record);
+                return
             }
         };
 
-        // ensure bridge massage not exist
-        assert!(!linked_table::contains(&inner.bridge_records, key), ERecordAlreadyExists);
+        // At this point, if this message is in bridge_records, we know it's already approved
+        // because we only add a message to bridge_records after verifying the signatures.
+        if (linked_table::contains(&inner.bridge_records, key)) {
+            emit(TokenTransferAlreadyApproved { message_key: key });
+            return
+        };
 
+        // At this point, we know the message has not been approved, hence has not been claimed.
         // verify signatures
         committee::verify_signatures(&inner.committee, message, signatures);
+
+        // Critical: here we set `claimed` as false. It's vitally important to make sure
+        // the token transfer has not been claimed already.
         // Store approval
         linked_table::push_back(&mut inner.bridge_records, key, BridgeRecord {
             message,
             verified_signatures: some(signatures),
             claimed: false
-        })
+        });
+        emit(TokenTransferApproved { message_key: key });
     }
 
     // Claim token from approved bridge message
+    // Returns Some(Coin) if coin can be claimed. If already claimed, return None
     fun claim_token_internal<T>(
         self: &mut Bridge,
         source_chain: u8,
         bridge_seq_num: u64,
         ctx: &mut TxContext
-    ): (Coin<T>, address) {
+    ): (Option<Coin<T>>, address) {
         let inner = load_inner_mut(self);
         let key = message::create_key(source_chain, message_types::token(), bridge_seq_num);
+        if (!linked_table::contains(&inner.bridge_records, key)) {
+            abort EMessageNotFoundInRecords
+        };
+        // TODO: use borrow mut
         // retrieve approved bridge message
         let BridgeRecord {
             message,
@@ -215,17 +254,31 @@ module bridge::bridge {
         assert!(message::message_type(&message) == message_types::token(), EUnexpectedMessageType);
         // Ensure it's signed
         assert!(option::is_some(&signatures), EUnauthorisedClaim);
-        // Ensure it is not claimed already
-        assert!(!claimed, EAlreadyClaimed);
+
         // extract token message
         let token_payload = message::extract_token_bridge_payload(&message);
-        let target_chain = message::token_target_chain(&token_payload);
-        // ensure target chain is matches self.chain_id
-        assert!(target_chain == inner.chain_id, EUnexpectedChainID);
-        // Ensure route is valid
-        assert!(chain_ids::is_valid_route(source_chain, target_chain), EInvalidBridgeRoute);
         // get owner address
         let owner = address::from_bytes(message::token_target_address(&token_payload));
+
+        // If already claimed, exit early
+        if (claimed) {
+            emit(TokenTransferAlreadyClaimed { message_key: key });
+            linked_table::push_back(&mut inner.bridge_records, key, BridgeRecord {
+                message,
+                verified_signatures: signatures,
+                claimed: true // <-- this is important
+            });
+            return (option::none(), owner)
+        };
+
+        let target_chain = message::token_target_chain(&token_payload);
+        // ensure target chain matches self.chain_id
+        assert!(target_chain == inner.chain_id, EUnexpectedChainID);
+
+        // TODO: why do we check validity of the route here? what if inconsistency?
+
+        // Ensure route is valid
+        assert!(chain_ids::is_valid_route(source_chain, target_chain), EInvalidBridgeRoute);
         // check token type
         assert!(treasury::token_id<T>() == message::token_type(&token_payload), EUnexpectedTokenType);
         // claim from treasury
@@ -236,11 +289,13 @@ module bridge::bridge {
             verified_signatures: signatures,
             claimed: true
         });
-        (token, owner)
+        emit(TokenTransferClaimed { message_key: key });
+        (option::some(token), owner)
     }
 
     // This function can only be called by the token recipient
-    public fun claim_token<T>(self: &mut Bridge, source_chain: u8, bridge_seq_num: u64, ctx: &mut TxContext): Coin<T> {
+    // Returns None if the token has already been claimed.
+    public fun claim_token<T>(self: &mut Bridge, source_chain: u8, bridge_seq_num: u64, ctx: &mut TxContext): Option<Coin<T>> {
         let (token, owner) = claim_token_internal<T>(self, source_chain, bridge_seq_num, ctx);
         // Only token owner can claim the token
         assert!(tx_context::sender(ctx) == owner, EUnauthorisedClaim);
@@ -248,6 +303,7 @@ module bridge::bridge {
     }
 
     // This function can be called by anyone to claim and transfer the token to the recipient
+    // If the token has already been claimed, it will return instead of aborting.
     public fun claim_and_transfer_token<T>(
         self: &mut Bridge,
         source_chain: u8,
@@ -255,7 +311,11 @@ module bridge::bridge {
         ctx: &mut TxContext
     ) {
         let (token, owner) = claim_token_internal<T>(self, source_chain, bridge_seq_num, ctx);
-        transfer::public_transfer(token, owner)
+        if (option::is_none(&token)) {
+            option::destroy_none(token);
+            return
+        };
+        transfer::public_transfer(option::destroy_some(token), owner)
     }
 
     public fun execute_emergency_op(
