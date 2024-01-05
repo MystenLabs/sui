@@ -10,19 +10,19 @@ Response: {
           "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
           "module": "priority_queue",
           "type": "PriorityQueue",
-          "type_parameters": [
+          "typeParameters": [
             {
               "datatype": {
                 "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
                 "module": "coin",
                 "type": "Coin",
-                "type_parameters": [
+                "typeParameters": [
                   {
                     "datatype": {
                       "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
                       "module": "sui",
                       "type": "SUI",
-                      "type_parameters": []
+                      "typeParameters": []
                     }
                   }
                 ]
@@ -164,7 +164,7 @@ Response: {
           "package": "0x0000000000000000000000000000000000000000000000000000000000000042",
           "module": "not",
           "type": "Here",
-          "type_parameters": []
+          "typeParameters": []
         }
       }
     }

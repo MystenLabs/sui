@@ -75,7 +75,7 @@ Response: {
 task 15 'run-graphql'. lines 68-74:
 Headers: {
     "content-type": "application/json",
-    "content-length": "137",
+    "content-length": "136",
     "x-sui-rpc-version": "0.1.0",
 }
 Service version: 0.1.0
@@ -91,7 +91,7 @@ Response: {
       "depth": 2,
       "variables": 0,
       "fragments": 0,
-      "query_payload": 41
+      "queryPayload": 41
     }
   }
 }

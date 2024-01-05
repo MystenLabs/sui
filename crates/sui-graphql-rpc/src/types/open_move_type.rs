@@ -88,6 +88,7 @@ pub(crate) enum OpenMoveTypeSignatureBody {
         module: String,
         #[serde(rename = "type")]
         type_: String,
+        #[serde(rename = "typeParameters")]
         type_parameters: Vec<OpenMoveTypeSignatureBody>,
     },
 }

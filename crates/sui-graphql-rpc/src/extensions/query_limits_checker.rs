@@ -110,7 +110,7 @@ impl Extension for QueryLimitsChecker {
                     "depth": validation_result.depth,
                     "variables": validation_result.num_variables,
                     "fragments": validation_result.num_fragments,
-                    "query_payload": validation_result.query_payload,
+                    "queryPayload": validation_result.query_payload,
                 }),
             )
         } else {
