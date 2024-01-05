@@ -1664,9 +1664,13 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::ImmBorrowField(a) => write!(f, "ImmBorrowField({:?})", a),
             Bytecode::ImmBorrowFieldGeneric(a) => write!(f, "ImmBorrowFieldGeneric({:?})", a),
             Bytecode::MutBorrowGlobalDeprecated(a) => write!(f, "MutBorrowGlobal({:?})", a),
-            Bytecode::MutBorrowGlobalGenericDeprecated(a) => write!(f, "MutBorrowGlobalGeneric({:?})", a),
+            Bytecode::MutBorrowGlobalGenericDeprecated(a) => {
+                write!(f, "MutBorrowGlobalGeneric({:?})", a)
+            }
             Bytecode::ImmBorrowGlobalDeprecated(a) => write!(f, "ImmBorrowGlobal({:?})", a),
-            Bytecode::ImmBorrowGlobalGenericDeprecated(a) => write!(f, "ImmBorrowGlobalGeneric({:?})", a),
+            Bytecode::ImmBorrowGlobalGenericDeprecated(a) => {
+                write!(f, "ImmBorrowGlobalGeneric({:?})", a)
+            }
             Bytecode::Add => write!(f, "Add"),
             Bytecode::Sub => write!(f, "Sub"),
             Bytecode::Mul => write!(f, "Mul"),

@@ -1021,7 +1021,8 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 ));
             }
 
-            MoveBytecode::MutBorrowGlobalDeprecated(idx) | MoveBytecode::ImmBorrowGlobalDeprecated(idx) => {
+            MoveBytecode::MutBorrowGlobalDeprecated(idx)
+            | MoveBytecode::ImmBorrowGlobalDeprecated(idx) => {
                 let struct_env = self.func_env.module_env.get_struct_by_def_idx(*idx);
                 let is_mut = matches!(bytecode, MoveBytecode::MutBorrowGlobalDeprecated(..));
                 let operand_index = self.temp_stack.pop().unwrap();

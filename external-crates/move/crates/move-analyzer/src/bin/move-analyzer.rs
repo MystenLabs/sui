@@ -121,9 +121,11 @@ fn main() {
         // determine if linting is on or off based on what the editor requested
         let mut lint = false;
         if let Some(init_options) = initialize_params.initialization_options {
-            lint = init_options.get("lintOpt").and_then(serde_json::Value::as_bool).unwrap_or(false);
+            lint = init_options
+                .get("lintOpt")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false);
         }
-
 
         symbolicator_runner = symbols::SymbolicatorRunner::new(symbols.clone(), diag_sender, lint);
 
