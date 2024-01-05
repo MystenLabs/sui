@@ -11,6 +11,10 @@ base64.workspace = true
 bcs.workspace = true
 fastcrypto.workspace = true
 serde.workspace = true
+prometheus.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+async-trait.workspace = true
 
 consensus-config.workspace = true
 

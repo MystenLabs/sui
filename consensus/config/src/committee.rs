@@ -1,12 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::traits::KeyPair;
 use std::fmt::{Display, Formatter};
 
 use multiaddr::Multiaddr;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use serde::{Deserialize, Serialize};
 
-use crate::{NetworkPublicKey, ProtocolPublicKey};
+use crate::{NetworkKeyPair, NetworkPublicKey, ProtocolKeyPair, ProtocolPublicKey};
 
 /// Committee of the consensus protocol is updated each epoch.
 pub type Epoch = u64;
@@ -51,6 +54,30 @@ impl Committee {
             validity_threshold,
             authorities,
         }
+    }
+
+    pub fn new_for_test(
+        epoch: Epoch,
+        num_of_authorities: usize,
+    ) -> (Self, Vec<(NetworkKeyPair, ProtocolKeyPair)>) {
+        let mut authorities = vec![];
+        let mut key_pairs = vec![];
+        let mut rng = StdRng::from_seed([9; 32]);
+        for i in 1..=num_of_authorities {
+            let network_keypair = NetworkKeyPair::generate(&mut rng);
+            let protocol_keypair = ProtocolKeyPair::generate(&mut rng);
+            authorities.push(Authority {
+                stake: i as Stake,
+                address: Multiaddr::empty(),
+                hostname: format!("test_host {i}").to_string(),
+                network_key: network_keypair.public().clone(),
+                protocol_key: protocol_keypair.public().clone(),
+            });
+            key_pairs.push((network_keypair, protocol_keypair));
+        }
+
+        let committee = Committee::new(epoch, authorities);
+        (committee, key_pairs)
     }
 
     /// Public accessors for Committee data.
@@ -132,32 +159,14 @@ impl Display for AuthorityIndex {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Authority, Committee, NetworkKeyPair, ProtocolKeyPair, Stake};
-    use fastcrypto::traits::KeyPair as _;
-    use multiaddr::Multiaddr;
-    use rand::{rngs::StdRng, SeedableRng};
+    use crate::{Committee, Stake};
 
     #[test]
     fn committee_basic() {
         // GIVEN
         let epoch = 100;
-
-        let mut authorities = vec![];
-        let mut rng = StdRng::from_seed([9; 32]);
         let num_of_authorities = 9;
-        for i in 1..=num_of_authorities {
-            let network_keypair = NetworkKeyPair::generate(&mut rng);
-            let protocol_keypair = ProtocolKeyPair::generate(&mut rng);
-            authorities.push(Authority {
-                stake: i as Stake,
-                address: Multiaddr::empty(),
-                hostname: "test_host".to_string(),
-                network_key: network_keypair.public().clone(),
-                protocol_key: protocol_keypair.public().clone(),
-            });
-        }
-
-        let committee = Committee::new(epoch, authorities);
+        let (committee, _) = Committee::new_for_test(epoch, num_of_authorities);
 
         // THEN make sure the output Committee fields are populated correctly.
         assert_eq!(committee.size(), num_of_authorities);
