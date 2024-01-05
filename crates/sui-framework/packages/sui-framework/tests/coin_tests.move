@@ -82,4 +82,60 @@ module sui::coin_tests {
         transfer::public_transfer(treasury, tx_context::sender(test_scenario::ctx(test)));
         test_scenario::end(scenario);
     }
+
+    #[test]
+    fun frozen_coins() {
+        let scenario = test_scenario::begin(@0);
+        let test = &mut scenario;
+        coin::create_deny_list_object_for_test(test_scenario::ctx(test));
+        test_scenario::next_tx(test, TEST_ADDR);
+
+        let witness = COIN_TESTS {};
+        let (treasury, freeze_cap, metadata) = coin::create_freezable_currency(
+            witness,
+            6,
+            b"COIN_TESTS",
+            b"coin_name",
+            b"description",
+            option::some(url::new_unsafe_from_bytes(b"icon_url")),
+            test_scenario::ctx(test),
+        );
+        transfer::public_freeze_object(metadata);
+        transfer::public_freeze_object(treasury);
+        {
+            // test freezing an address
+            test_scenario::next_tx(test, TEST_ADDR);
+            let freezer: coin::Freezer = test_scenario::take_shared(test);
+            assert!(!coin::address_is_frozen<COIN_TESTS>(&freezer, @1), 0);
+            coin::freeze_address(&mut freezer, &mut freeze_cap, @1, test_scenario::ctx(test));
+            assert!(coin::address_is_frozen<COIN_TESTS>(&freezer, @1), 0);
+            coin::unfreeze_address(&mut freezer, &mut freeze_cap, @1, test_scenario::ctx(test));
+            assert!(!coin::address_is_frozen<COIN_TESTS>(&freezer, @1), 0);
+            test_scenario::return_shared(freezer);
+        };
+        {
+            // test freezing an address over multiple "transactions"
+            test_scenario::next_tx(test, TEST_ADDR);
+            let freezer: coin::Freezer = test_scenario::take_shared(test);
+            assert!(!coin::address_is_frozen<COIN_TESTS>(&freezer, @1), 0);
+            assert!(!coin::address_is_frozen<COIN_TESTS>(&freezer, @2), 0);
+            coin::freeze_address(&mut freezer, &mut freeze_cap, @2, test_scenario::ctx(test));
+            assert!(coin::address_is_frozen<COIN_TESTS>(&freezer, @2), 0);
+            test_scenario::return_shared(freezer);
+
+            test_scenario::next_tx(test, TEST_ADDR);
+            let freezer: coin::Freezer = test_scenario::take_shared(test);
+            assert!(coin::address_is_frozen<COIN_TESTS>(&freezer, @2), 0);
+            coin::unfreeze_address(&mut freezer, &mut freeze_cap, @2, test_scenario::ctx(test));
+            assert!(!coin::address_is_frozen<COIN_TESTS>(&freezer, @2), 0);
+            test_scenario::return_shared(freezer);
+        };
+        transfer::public_freeze_object(freeze_cap);
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun address_is_frozen_with_arbitrary_types() {
+
+    }
 }

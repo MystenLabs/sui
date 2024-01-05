@@ -51,15 +51,14 @@ module sui::address {
     /// will be converted to the address @0xDEADB33F.
     /// Aborts with `EAddressParseError` if the length of `s` is not 64,
     /// or if an invalid character is encountered.
-    public fun from_ascii_string(s: &ascii::String): address {
-        assert!(ascii::length(s) == 64, EAddressParseError);
-        let bytes = ascii::as_bytes(s);
+    public fun from_ascii_bytes(bytes: &vector<u8>): address {
+        assert!(vector::length(bytes) == 64, EAddressParseError);
         let hex_bytes = vector[];
         let i = 0;
         while (i < 64) {
             let hi = hex_char_value(*vector::borrow(bytes, i));
             let lo = hex_char_value(*vector::borrow(bytes, i + 1));
-            vector::push_back(&mut hex_bytes, (hi << 4) & lo);
+            vector::push_back(&mut hex_bytes, (hi << 4) | lo);
             i = i + 2;
         };
         from_bytes(hex_bytes)
