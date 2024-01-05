@@ -482,7 +482,7 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         // -----------------------------------------------------------------------------------------
         // odds and ends
         // -----------------------------------------------------------------------------------------
-        E::Use(_) | E::Spec(..) | E::UnresolvedError => None,
+        E::Use(_) | E::UnresolvedError => None,
     }
 }
 
@@ -631,7 +631,6 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         | E::Constant(_, _)
         | E::Move { .. }
         | E::Copy { .. }
-        | E::Spec(..)
         | E::UnresolvedError => value(context, e),
 
         E::Value(_) | E::Unit { .. } => None,

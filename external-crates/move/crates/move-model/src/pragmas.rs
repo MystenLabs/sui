@@ -8,12 +8,6 @@ use std::collections::BTreeMap;
 
 use once_cell::sync::Lazy;
 
-use crate::{
-    ast::{ConditionKind, PropertyBag, PropertyValue},
-    builder::module_builder::SpecBlockContext,
-    symbol::SymbolPool,
-};
-
 /// Pragma indicating whether verification should be performed for a function.
 pub const VERIFY_PRAGMA: &str = "verify";
 
@@ -182,63 +176,6 @@ pub static INTRINSIC_TYPE_MAP_ASSOC_FUNCTIONS: Lazy<BTreeMap<&'static str, bool>
         ])
     });
 
-/// Checks whether a pragma is valid in a specific spec block.
-pub fn is_pragma_valid_for_block(
-    symbols: &SymbolPool,
-    bag: &PropertyBag,
-    target: &SpecBlockContext<'_>,
-    pragma: &str,
-) -> bool {
-    use crate::builder::module_builder::SpecBlockContext::*;
-    match target {
-        Module => matches!(
-            pragma,
-            VERIFY_PRAGMA
-                | EMITS_IS_STRICT_PRAGMA
-                | EMITS_IS_PARTIAL_PRAGMA
-                | ABORTS_IF_IS_STRICT_PRAGMA
-                | ABORTS_IF_IS_PARTIAL_PRAGMA
-                | INTRINSIC_PRAGMA
-        ),
-        Function(..) => matches!(
-            pragma,
-            VERIFY_PRAGMA
-                | TIMEOUT_PRAGMA
-                | SEED_PRAGMA
-                | VERIFY_DURATION_ESTIMATE_PRAGMA
-                | INTRINSIC_PRAGMA
-                | OPAQUE_PRAGMA
-                | EMITS_IS_STRICT_PRAGMA
-                | EMITS_IS_PARTIAL_PRAGMA
-                | ABORTS_IF_IS_PARTIAL_PRAGMA
-                | ABORTS_IF_IS_STRICT_PRAGMA
-                | REQUIRES_IF_ABORTS_PRAGMA
-                | ALWAYS_ABORTS_TEST_PRAGMA
-                | ADDITION_OVERFLOW_UNCHECKED_PRAGMA
-                | ASSUME_NO_ABORT_FROM_HERE_PRAGMA
-                | EXPORT_ENSURES_PRAGMA
-                | FRIEND_PRAGMA
-                | DISABLE_INVARIANTS_IN_BODY_PRAGMA
-                | DELEGATE_INVARIANTS_TO_CALLER_PRAGMA
-                | BV_PARAM_PROP
-                | BV_RET_PROP
-        ),
-        Struct(..) => match pragma {
-            INTRINSIC_PRAGMA | BV_PARAM_PROP => true,
-            _ if INTRINSIC_TYPE_MAP_ASSOC_FUNCTIONS.contains_key(pragma) => bag
-                .get(&symbols.make(INTRINSIC_PRAGMA))
-                .map(|v| match v {
-                    PropertyValue::Symbol(s) => symbols.string(*s).as_str() == INTRINSIC_TYPE_MAP,
-                    _ => false,
-                })
-                .unwrap_or(false),
-            // all other cases
-            _ => false,
-        },
-        _ => false,
-    }
-}
-
 /// Internal property attached to conditions if they are injected via an apply or a module
 /// invariant.
 pub const CONDITION_INJECTED_PROP: &str = "$injected";
@@ -298,36 +235,3 @@ pub const BV_PARAM_PROP: &str = "bv";
 /// to explicitly specify which return value will be translated into a bv type in the boogie file
 /// example: bv_ret=b"0,1"
 pub const BV_RET_PROP: &str = "bv_ret";
-
-/// A function which determines whether a property is valid for a given condition kind.
-pub fn is_property_valid_for_condition(kind: &ConditionKind, prop: &str) -> bool {
-    if matches!(
-        prop,
-        CONDITION_INJECTED_PROP
-            | CONDITION_EXPORT_PROP
-            | CONDITION_ABSTRACT_PROP
-            | CONDITION_CONCRETE_PROP
-            | CONDITION_DEACTIVATED_PROP
-    ) {
-        // Applicable everywhere.
-        return true;
-    }
-    use crate::ast::ConditionKind::*;
-    match kind {
-        GlobalInvariant(..) | GlobalInvariantUpdate(..) => {
-            matches!(
-                prop,
-                CONDITION_GLOBAL_PROP | CONDITION_ISOLATED_PROP | CONDITION_SUSPENDABLE_PROP
-            )
-        }
-        SucceedsIf | AbortsIf => matches!(
-            prop,
-            CONDITION_ABORT_ASSERT_PROP | CONDITION_ABORT_ASSUME_PROP
-        ),
-        AbortsWith => matches!(prop, CONDITION_CHECK_ABORT_CODES_PROP),
-        _ => {
-            // every other condition can only take general properties
-            false
-        }
-    }
-}

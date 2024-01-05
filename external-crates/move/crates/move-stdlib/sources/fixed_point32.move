@@ -43,19 +43,6 @@ module std::fixed_point32 {
         assert!(product <= MAX_U64, EMULTIPLICATION);
         (product as u64)
     }
-    spec multiply_u64 {
-        pragma opaque;
-        include MultiplyAbortsIf;
-        ensures result == spec_multiply_u64(val, multiplier);
-    }
-    spec schema MultiplyAbortsIf {
-        val: num;
-        multiplier: FixedPoint32;
-        aborts_if spec_multiply_u64(val, multiplier) > MAX_U64 with EMULTIPLICATION;
-    }
-    spec fun spec_multiply_u64(val: num, multiplier: FixedPoint32): num {
-        (val * multiplier.value) >> 32
-    }
 
     /// Divide a u64 integer by a fixed-point number, truncating any
     /// fractional part of the quotient. This will abort if the divisor
@@ -72,20 +59,6 @@ module std::fixed_point32 {
         // the value may be too large, which will cause the cast to fail
         // with an arithmetic error.
         (quotient as u64)
-    }
-    spec divide_u64 {
-        pragma opaque;
-        include DivideAbortsIf;
-        ensures result == spec_divide_u64(val, divisor);
-    }
-    spec schema DivideAbortsIf {
-        val: num;
-        divisor: FixedPoint32;
-        aborts_if divisor.value == 0 with EDIVISION_BY_ZERO;
-        aborts_if spec_divide_u64(val, divisor) > MAX_U64 with EDIVISION;
-    }
-    spec fun spec_divide_u64(val: num, divisor: FixedPoint32): num {
-        (val << 32) / divisor.value
     }
 
     /// Create a fixed-point value from a rational number specified by its
@@ -113,33 +86,10 @@ module std::fixed_point32 {
         assert!(quotient <= MAX_U64, ERATIO_OUT_OF_RANGE);
         FixedPoint32 { value: (quotient as u64) }
     }
-    spec create_from_rational {
-        pragma opaque;
-        include CreateFromRationalAbortsIf;
-        ensures result == spec_create_from_rational(numerator, denominator);
-    }
-    spec schema CreateFromRationalAbortsIf {
-        numerator: u64;
-        denominator: u64;
-        let scaled_numerator = (numerator as u128) << 64;
-        let scaled_denominator = (denominator as u128) << 32;
-        let quotient = scaled_numerator / scaled_denominator;
-        aborts_if scaled_denominator == 0 with EDENOMINATOR;
-        aborts_if quotient == 0 && scaled_numerator != 0 with ERATIO_OUT_OF_RANGE;
-        aborts_if quotient > MAX_U64 with ERATIO_OUT_OF_RANGE;
-    }
-    spec fun spec_create_from_rational(numerator: num, denominator: num): FixedPoint32 {
-        FixedPoint32{value: (numerator << 64) / (denominator << 32)}
-    }
 
     /// Create a fixedpoint value from a raw value.
     public fun create_from_raw_value(value: u64): FixedPoint32 {
         FixedPoint32 { value }
-    }
-    spec create_from_raw_value {
-        pragma opaque;
-        aborts_if false;
-        ensures result.value == value;
     }
 
     /// Accessor for the raw u64 value. Other less common operations, such as
@@ -162,33 +112,9 @@ module std::fixed_point32 {
             num2
         }
     }
-    spec min {
-        pragma opaque;
-        aborts_if false;
-        ensures result == spec_min(num1, num2);
-    }
-    spec fun spec_min(num1: FixedPoint32, num2: FixedPoint32): FixedPoint32 {
-        if (num1.value < num2.value) {
-            num1
-        } else {
-            num2
-        }
-    }
 
     /// Returns the larger of the two FixedPoint32 numbers.
     public fun max(num1: FixedPoint32, num2: FixedPoint32): FixedPoint32 {
-        if (num1.value > num2.value) {
-            num1
-        } else {
-            num2
-        }
-    }
-    spec max {
-        pragma opaque;
-        aborts_if false;
-        ensures result == spec_max(num1, num2);
-    }
-    spec fun spec_max(num1: FixedPoint32, num2: FixedPoint32): FixedPoint32 {
         if (num1.value > num2.value) {
             num1
         } else {
@@ -202,36 +128,10 @@ module std::fixed_point32 {
         assert!(value <= MAX_U64, ERATIO_OUT_OF_RANGE);
         FixedPoint32{value: (value as u64)}
     }
-    spec create_from_u64 {
-        pragma opaque;
-        include CreateFromU64AbortsIf;
-        ensures result == spec_create_from_u64(val);
-    }
-    spec schema CreateFromU64AbortsIf {
-        val: num;
-        let scaled_value = (val as u128) << 32;
-        aborts_if scaled_value > MAX_U64;
-    }
-    spec fun spec_create_from_u64(val: num): FixedPoint32 {
-        FixedPoint32 {value: val << 32}
-    }
 
     /// Returns the largest integer less than or equal to a given number.
     public fun floor(num: FixedPoint32): u64 {
         num.value >> 32
-    }
-    spec floor {
-        pragma opaque;
-        aborts_if false;
-        ensures result == spec_floor(num);
-    }
-    spec fun spec_floor(val: FixedPoint32): u64 {
-        let fractional = val.value % (1 << 32);
-        if (fractional == 0) {
-            val.value >> 32
-        } else {
-            (val.value - fractional) >> 32
-        }
     }
 
     /// Rounds up the given FixedPoint32 to the next largest integer.
@@ -243,20 +143,6 @@ module std::fixed_point32 {
         let val = ((floored_num as u128) + (1 << 32));
         (val >> 32 as u64)
     }
-    spec ceil {
-        pragma opaque;
-        aborts_if false;
-        ensures result == spec_ceil(num);
-    }
-    spec fun spec_ceil(val: FixedPoint32): u64 {
-        let fractional = val.value % (1 << 32);
-        let one = 1 << 32;
-        if (fractional == 0) {
-            val.value >> 32
-        } else {
-            (val.value - fractional + one) >> 32
-        }
-    }
 
     /// Returns the value of a FixedPoint32 to the nearest integer.
     public fun round(num: FixedPoint32): u64 {
@@ -267,28 +153,5 @@ module std::fixed_point32 {
         } else {
             ceil(num)
         }
-    }
-    spec round {
-        pragma opaque;
-        aborts_if false;
-        ensures result == spec_round(num);
-    }
-    spec fun spec_round(val: FixedPoint32): u64 {
-        let fractional = val.value % (1 << 32);
-        let boundary = (1 << 32) / 2;
-        let one = 1 << 32;
-        if (fractional < boundary) {
-            (val.value - fractional) >> 32
-        } else {
-            (val.value - fractional + one) >> 32
-        }
-    }
-
-    // **************** SPECIFICATIONS ****************
-
-    spec module {} // switch documentation context to module level
-
-    spec module {
-        pragma aborts_if_is_strict;
     }
 }

@@ -57,8 +57,6 @@ module sui::hex {
         }
     }
 
-    spec module { pragma verify = false; }
-
     #[test]
     fun test_hex_encode_string_literal() {
         assert!(b"30" == encode(b"0"), 0);

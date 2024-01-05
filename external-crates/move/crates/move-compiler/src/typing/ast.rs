@@ -4,7 +4,7 @@
 
 use crate::{
     diagnostics::WarningFilters,
-    expansion::ast::{Address, Attributes, Fields, Friend, ModuleIdent, SpecId, Value, Visibility},
+    expansion::ast::{Address, Attributes, Fields, Friend, ModuleIdent, Value, Visibility},
     naming::ast::{
         BlockLabel, FunctionSignature, Neighbor, StructDefinition, Type, TypeName_, Type_, Var,
     },
@@ -14,7 +14,7 @@ use crate::{
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
+    collections::{BTreeSet, VecDeque},
     fmt,
 };
 
@@ -54,8 +54,6 @@ pub struct ModuleDefinition {
     pub structs: UniqueMap<StructName, StructDefinition>,
     pub constants: UniqueMap<ConstantName, Constant>,
     pub functions: UniqueMap<FunctionName, Function>,
-    // module dependencies referenced in specs
-    pub spec_dependencies: BTreeSet<(ModuleIdent, Neighbor)>,
 }
 
 //**************************************************************************************************
@@ -190,8 +188,6 @@ pub enum UnannotatedExp_ {
     Cast(Box<Exp>, Box<Type>),
     Annotate(Box<Exp>, Box<Type>),
 
-    Spec(SpecId, BTreeMap<Var, Type>),
-
     UnresolvedError,
 }
 pub type UnannotatedExp = Spanned<UnannotatedExp_>;
@@ -295,7 +291,6 @@ impl AstDebug for ModuleDefinition {
             structs,
             constants,
             functions,
-            spec_dependencies,
         } = self;
         warning_filter.ast_debug(w);
         if let Some(n) = package_name {
@@ -316,11 +311,6 @@ impl AstDebug for ModuleDefinition {
         for addr in used_addresses {
             w.write(&format!("uses address {};", addr));
             w.new_line()
-        }
-        for (m, neighbor) in spec_dependencies {
-            w.write(&format!("spec_dep {m} is"));
-            neighbor.ast_debug(w);
-            w.writeln(";");
         }
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(&format!("friend {};", mident));
@@ -627,14 +617,6 @@ impl AstDebug for UnannotatedExp_ {
                 w.write(": ");
                 ty.ast_debug(w);
                 w.write(")");
-            }
-            E::Spec(u, used_locals) => {
-                w.write(&format!("spec #{}", u));
-                if !used_locals.is_empty() {
-                    w.write("uses [");
-                    w.comma(used_locals, |w, (n, ty)| w.annotate(|w| n.ast_debug(w), ty));
-                    w.write("]");
-                }
             }
             E::UnresolvedError => w.write("_|_"),
         }

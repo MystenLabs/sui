@@ -38,9 +38,6 @@ module sui_system::sui_system_state_inner {
 
     const SYSTEM_STATE_VERSION_V1: u64 = 1;
 
-    // TODO: To suppress a false positive prover failure, which we should look into.
-    spec module { pragma verify = false; }
-
     /// A list of system config parameters.
     struct SystemParameters has store {
         /// The duration of an epoch, in milliseconds.

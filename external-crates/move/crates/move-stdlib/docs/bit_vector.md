@@ -108,50 +108,15 @@ The maximum allowed bitvector size
     <b>assert</b>!(<a href="bit_vector.md#0x1_bit_vector_length">length</a> &lt; <a href="bit_vector.md#0x1_bit_vector_MAX_SIZE">MAX_SIZE</a>, <a href="bit_vector.md#0x1_bit_vector_ELENGTH">ELENGTH</a>);
     <b>let</b> counter = 0;
     <b>let</b> bit_field = <a href="vector.md#0x1_vector_empty">vector::empty</a>();
-    <b>while</b> ({<b>spec</b> {
-        <b>invariant</b> counter &lt;= length;
-        <b>invariant</b> len(bit_field) == counter;
-    };
-        (counter &lt; length)}) {
+    <b>while</b> (counter &lt; length) {
         <a href="vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> bit_field, <b>false</b>);
         counter = counter + 1;
-    };
-    <b>spec</b> {
-        <b>assert</b> counter == length;
-        <b>assert</b> len(bit_field) == length;
     };
 
     <a href="bit_vector.md#0x1_bit_vector_BitVector">BitVector</a> {
         length,
         bit_field,
     }
-}
-</code></pre>
-
-
-
-</details>
-
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>include</b> <a href="bit_vector.md#0x1_bit_vector_NewAbortsIf">NewAbortsIf</a>;
-<b>ensures</b> result.length == length;
-<b>ensures</b> len(result.bit_field) == length;
-</code></pre>
-
-
-
-
-<a name="0x1_bit_vector_NewAbortsIf"></a>
-
-
-<pre><code><b>schema</b> <a href="bit_vector.md#0x1_bit_vector_NewAbortsIf">NewAbortsIf</a> {
-    length: u64;
-    <b>aborts_if</b> <a href="bit_vector.md#0x1_bit_vector_length">length</a> &lt;= 0 <b>with</b> <a href="bit_vector.md#0x1_bit_vector_ELENGTH">ELENGTH</a>;
-    <b>aborts_if</b> length &gt;= <a href="bit_vector.md#0x1_bit_vector_MAX_SIZE">MAX_SIZE</a> <b>with</b> <a href="bit_vector.md#0x1_bit_vector_ELENGTH">ELENGTH</a>;
 }
 </code></pre>
 
@@ -186,32 +151,6 @@ Set the bit at <code>bit_index</code> in the <code>bitvector</code> regardless o
 
 </details>
 
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>include</b> <a href="bit_vector.md#0x1_bit_vector_SetAbortsIf">SetAbortsIf</a>;
-<b>ensures</b> bitvector.bit_field[bit_index];
-</code></pre>
-
-
-
-
-<a name="0x1_bit_vector_SetAbortsIf"></a>
-
-
-<pre><code><b>schema</b> <a href="bit_vector.md#0x1_bit_vector_SetAbortsIf">SetAbortsIf</a> {
-    bitvector: <a href="bit_vector.md#0x1_bit_vector_BitVector">BitVector</a>;
-    bit_index: u64;
-    <b>aborts_if</b> bit_index &gt;= <a href="bit_vector.md#0x1_bit_vector_length">length</a>(bitvector) <b>with</b> <a href="bit_vector.md#0x1_bit_vector_EINDEX">EINDEX</a>;
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x1_bit_vector_unset"></a>
 
 ## Function `unset`
@@ -232,32 +171,6 @@ Unset the bit at <code>bit_index</code> in the <code>bitvector</code> regardless
     <b>assert</b>!(bit_index &lt; <a href="vector.md#0x1_vector_length">vector::length</a>(&bitvector.bit_field), <a href="bit_vector.md#0x1_bit_vector_EINDEX">EINDEX</a>);
     <b>let</b> x = <a href="vector.md#0x1_vector_borrow_mut">vector::borrow_mut</a>(&<b>mut</b> bitvector.bit_field, bit_index);
     *x = <b>false</b>;
-}
-</code></pre>
-
-
-
-</details>
-
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>include</b> <a href="bit_vector.md#0x1_bit_vector_UnsetAbortsIf">UnsetAbortsIf</a>;
-<b>ensures</b> !bitvector.bit_field[bit_index];
-</code></pre>
-
-
-
-
-<a name="0x1_bit_vector_UnsetAbortsIf"></a>
-
-
-<pre><code><b>schema</b> <a href="bit_vector.md#0x1_bit_vector_UnsetAbortsIf">UnsetAbortsIf</a> {
-    bitvector: <a href="bit_vector.md#0x1_bit_vector_BitVector">BitVector</a>;
-    bit_index: u64;
-    <b>aborts_if</b> bit_index &gt;= <a href="bit_vector.md#0x1_bit_vector_length">length</a>(bitvector) <b>with</b> <a href="bit_vector.md#0x1_bit_vector_EINDEX">EINDEX</a>;
 }
 </code></pre>
 
@@ -334,47 +247,6 @@ represents "1" and <code><b>false</b></code> represents a 0
 <pre><code><b>public</b> <b>fun</b> <a href="bit_vector.md#0x1_bit_vector_is_index_set">is_index_set</a>(bitvector: &<a href="bit_vector.md#0x1_bit_vector_BitVector">BitVector</a>, bit_index: u64): bool {
     <b>assert</b>!(bit_index &lt; <a href="vector.md#0x1_vector_length">vector::length</a>(&bitvector.bit_field), <a href="bit_vector.md#0x1_bit_vector_EINDEX">EINDEX</a>);
     *<a href="vector.md#0x1_vector_borrow">vector::borrow</a>(&bitvector.bit_field, bit_index)
-}
-</code></pre>
-
-
-
-</details>
-
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>include</b> <a href="bit_vector.md#0x1_bit_vector_IsIndexSetAbortsIf">IsIndexSetAbortsIf</a>;
-<b>ensures</b> result == bitvector.bit_field[bit_index];
-</code></pre>
-
-
-
-
-<a name="0x1_bit_vector_IsIndexSetAbortsIf"></a>
-
-
-<pre><code><b>schema</b> <a href="bit_vector.md#0x1_bit_vector_IsIndexSetAbortsIf">IsIndexSetAbortsIf</a> {
-    bitvector: <a href="bit_vector.md#0x1_bit_vector_BitVector">BitVector</a>;
-    bit_index: u64;
-    <b>aborts_if</b> bit_index &gt;= <a href="bit_vector.md#0x1_bit_vector_length">length</a>(bitvector) <b>with</b> <a href="bit_vector.md#0x1_bit_vector_EINDEX">EINDEX</a>;
-}
-</code></pre>
-
-
-
-
-<a name="0x1_bit_vector_spec_is_index_set"></a>
-
-
-<pre><code><b>fun</b> <a href="bit_vector.md#0x1_bit_vector_spec_is_index_set">spec_is_index_set</a>(bitvector: <a href="bit_vector.md#0x1_bit_vector_BitVector">BitVector</a>, bit_index: u64): bool {
-   <b>if</b> (bit_index &gt;= <a href="bit_vector.md#0x1_bit_vector_length">length</a>(bitvector)) {
-       <b>false</b>
-   } <b>else</b> {
-       bitvector.bit_field[bit_index]
-   }
 }
 </code></pre>
 

@@ -130,7 +130,6 @@ fn module(
         mut structs,
         functions: nfunctions,
         constants: nconstants,
-        spec_dependencies,
     } = mdef;
     context.current_module = Some(ident);
     context.current_package = package_name;
@@ -159,7 +158,6 @@ fn module(
         structs,
         constants,
         functions,
-        spec_dependencies,
     };
     // get the list of new friends and reset the list.
     let new_friends = std::mem::take(&mut context.new_friends);
@@ -428,7 +426,6 @@ mod check_valid_constant {
             //*****************************************
             // Invalid cases
             //*****************************************
-            E::Spec(_, _) => "Spec blocks are",
             E::BorrowLocal(_, _) => REFERENCE_CASE,
             E::ModuleCall(call) => {
                 exp(context, &call.arguments);
@@ -1456,16 +1453,6 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
                 rhs.clone(),
             );
             (rhs.clone(), TE::Annotate(el, Box::new(rhs)))
-        }
-        NE::Spec(u, used_locals) => {
-            let used_local_types = used_locals
-                .into_iter()
-                .map(|v| {
-                    let ty = context.get_local_type(&v);
-                    (v, ty)
-                })
-                .collect();
-            (sp(eloc, Type_::Unit), TE::Spec(u, used_local_types))
         }
         NE::UnresolvedError => {
             assert!(context.env.has_errors());

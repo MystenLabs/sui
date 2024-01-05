@@ -10,7 +10,7 @@ use crate::{
         aliases::{
             AliasEntry, AliasMap, AliasMapBuilder, AliasSet, ParserExplicitUseFun, UseFunsBuilder,
         },
-        ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_, SpecId},
+        ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_},
         byte_string, hex_string, legacy_aliases,
     },
     parser::ast::{
@@ -52,8 +52,6 @@ struct Context<'env, 'map> {
     address: Option<Address>,
     is_source_definition: bool,
     current_package: Option<Symbol>,
-    in_spec_context: bool,
-    exp_specs: BTreeMap<SpecId, E::SpecBlock>,
     // Cached warning filters for all available prefixes. Used by non-source defs
     // and dependency packages
     all_filter_alls: WarningFilters,
@@ -83,8 +81,6 @@ impl<'env, 'map> Context<'env, 'map> {
             address: None,
             is_source_definition: false,
             current_package: None,
-            in_spec_context: false,
-            exp_specs: BTreeMap::new(),
             all_filter_alls,
             path_expander: None,
         }
@@ -196,19 +192,15 @@ impl<'env, 'map> Context<'env, 'map> {
             .name_access_chain_to_module_ident(inner_context, chain)
     }
 
-    pub fn bind_exp_spec(&mut self, spec_block: P::SpecBlock) -> (SpecId, BTreeSet<Name>) {
-        let len = self.exp_specs.len();
-        let id = SpecId::new(len);
-        let espec_block = spec(self, spec_block);
-        let mut unbound_names = BTreeSet::new();
-        unbound_names_spec_block(&mut unbound_names, &espec_block);
-        self.exp_specs.insert(id, espec_block);
-
-        (id, unbound_names)
-    }
-
-    pub fn extract_exp_specs(&mut self) -> BTreeMap<SpecId, E::SpecBlock> {
-        std::mem::take(&mut self.exp_specs)
+    pub fn spec_deprecated(&mut self, loc: Loc, is_error: bool) {
+        self.env().add_diag(diag!(
+            if is_error {
+                Uncategorized::DeprecatedSpecItem
+            } else {
+                Uncategorized::DeprecatedWillBeRemoved
+            },
+            (loc, "Specification blocks are deprecated")
+        ));
     }
 }
 
@@ -649,7 +641,6 @@ fn module_(
     let mut functions = UniqueMap::new();
     let mut constants = UniqueMap::new();
     let mut structs = UniqueMap::new();
-    let mut specs = vec![];
     for member in members {
         match member {
             P::ModuleMember::Use(_) => unreachable!(),
@@ -667,7 +658,7 @@ fn module_(
             }
             P::ModuleMember::Constant(c) => constant(context, &mut constants, c),
             P::ModuleMember::Struct(s) => struct_def(context, &mut structs, s),
-            P::ModuleMember::Spec(s) => specs.push(spec(context, s)),
+            P::ModuleMember::Spec(s) => context.spec_deprecated(s.loc, /* is_error */ false),
         }
     }
     let mut use_funs = use_funs(context, use_funs_builder);
@@ -685,7 +676,6 @@ fn module_(
         structs,
         constants,
         functions,
-        specs,
         warning_filter,
     };
     context.env().pop_warning_filter_scope();
@@ -2259,7 +2249,6 @@ fn friend(
 }
 
 fn friend_(context: &mut Context, pfriend_decl: P::FriendDecl) -> Option<(ModuleIdent, E::Friend)> {
-    assert!(context.exp_specs.is_empty());
     let P::FriendDecl {
         attributes: pattributes,
         loc,
@@ -2290,7 +2279,6 @@ fn constant_(
     index: usize,
     pconstant: P::Constant,
 ) -> (ConstantName, E::Constant) {
-    assert!(context.exp_specs.is_empty());
     let P::Constant {
         attributes: pattributes,
         loc,
@@ -2305,7 +2293,6 @@ fn constant_(
         .add_warning_filter_scope(warning_filter.clone());
     let signature = type_(context, psignature);
     let value = exp_(context, pvalue);
-    let _specs = context.extract_exp_specs();
     let constant = E::Constant {
         warning_filter,
         index,
@@ -2349,7 +2336,6 @@ fn function_(
         signature: psignature,
         body: pbody,
     } = pfunction;
-    assert!(context.exp_specs.is_empty());
     let attributes = flatten_attributes(context, AttributePosition::Function, pattributes);
     let warning_filter = warning_filter(context, &attributes);
     context
@@ -2358,7 +2344,6 @@ fn function_(
     let visibility = visibility(pvisibility);
     let signature = function_signature(context, psignature);
     let body = function_body(context, pbody);
-    let specs = context.extract_exp_specs();
     if let Some((m, use_funs_builder)) = module_and_use_funs {
         let implicit = E::ImplicitUseFunCandidate {
             loc: name.loc(),
@@ -2380,7 +2365,6 @@ fn function_(
         entry,
         signature,
         body,
-        specs,
     };
     context.pop_alias_scope(None);
     context.env().pop_warning_filter_scope();
@@ -2430,240 +2414,6 @@ fn function_body(context: &mut Context, sp!(loc, pbody_): P::FunctionBody) -> E:
         PF::Defined(seq) => EF::Defined(sequence(context, loc, seq)),
     };
     sp(loc, body_)
-}
-
-//**************************************************************************************************
-// Specification Blocks
-//**************************************************************************************************
-
-fn spec(context: &mut Context, sp!(loc, pspec): P::SpecBlock) -> E::SpecBlock {
-    let P::SpecBlock_ {
-        attributes: pattributes,
-        target,
-        uses: puses,
-        members: pmembers,
-    } = pspec;
-
-    let attributes = flatten_attributes(context, AttributePosition::Spec, pattributes);
-    context.in_spec_context = true;
-    let (new_scope, use_funs_builder) = uses(context, puses);
-    // Use funs not supported in specs
-    for use_fun in use_funs_builder.explicit {
-        let msg = "'use fun' declarations are not supported in spec blocks";
-        context
-            .env()
-            .add_diag(diag!(Declarations::InvalidUseFun, (use_fun.loc, msg)))
-    }
-    context.push_alias_scope(new_scope);
-
-    let members = pmembers
-        .into_iter()
-        .map(|m| spec_member(context, m))
-        .collect();
-
-    context.pop_alias_scope(None);
-    context.in_spec_context = false;
-
-    sp(
-        loc,
-        E::SpecBlock_ {
-            attributes,
-            target: spec_target(context, target),
-            members,
-        },
-    )
-}
-
-fn spec_target(context: &mut Context, sp!(loc, pt): P::SpecBlockTarget) -> E::SpecBlockTarget {
-    use E::SpecBlockTarget_ as ET;
-    use P::SpecBlockTarget_ as PT;
-    let et = match pt {
-        PT::Code => ET::Code,
-        PT::Module => ET::Module,
-        PT::Schema(name, type_params) => ET::Schema(name, type_parameters(context, type_params)),
-        PT::Member(name, signature_opt) => ET::Member(
-            name,
-            signature_opt.map(|s| {
-                let signature = function_signature(context, *s);
-                context.pop_alias_scope(None);
-                Box::new(signature)
-            }),
-        ),
-    };
-    sp(loc, et)
-}
-
-fn spec_condition_kind(
-    context: &mut Context,
-    sp!(loc, kind): P::SpecConditionKind,
-) -> (E::SpecConditionKind, bool) {
-    let (kind_, introduced_new_alias_scope) = match kind {
-        P::SpecConditionKind_::Assert => (E::SpecConditionKind_::Assert, false),
-        P::SpecConditionKind_::Assume => (E::SpecConditionKind_::Assume, false),
-        P::SpecConditionKind_::Decreases => (E::SpecConditionKind_::Decreases, false),
-        P::SpecConditionKind_::AbortsIf => (E::SpecConditionKind_::AbortsIf, false),
-        P::SpecConditionKind_::AbortsWith => (E::SpecConditionKind_::AbortsWith, false),
-        P::SpecConditionKind_::SucceedsIf => (E::SpecConditionKind_::SucceedsIf, false),
-        P::SpecConditionKind_::Modifies => (E::SpecConditionKind_::Modifies, false),
-        P::SpecConditionKind_::Emits => (E::SpecConditionKind_::Emits, false),
-        P::SpecConditionKind_::Ensures => (E::SpecConditionKind_::Ensures, false),
-        P::SpecConditionKind_::Requires => (E::SpecConditionKind_::Requires, false),
-        P::SpecConditionKind_::Invariant(pty_params) => {
-            let ety_params = type_parameters(context, pty_params);
-            context.push_type_parameters(ety_params.iter().map(|(name, _)| name));
-            (E::SpecConditionKind_::Invariant(ety_params), true)
-        }
-        P::SpecConditionKind_::InvariantUpdate(pty_params) => {
-            let ety_params = type_parameters(context, pty_params);
-            context.push_type_parameters(ety_params.iter().map(|(name, _)| name));
-            (E::SpecConditionKind_::InvariantUpdate(ety_params), true)
-        }
-        P::SpecConditionKind_::Axiom(pty_params) => {
-            let ety_params = type_parameters(context, pty_params);
-            context.push_type_parameters(ety_params.iter().map(|(name, _)| name));
-            (E::SpecConditionKind_::Axiom(ety_params), true)
-        }
-    };
-    (sp(loc, kind_), introduced_new_alias_scope)
-}
-
-fn spec_member(context: &mut Context, sp!(loc, pm): P::SpecBlockMember) -> E::SpecBlockMember {
-    use E::SpecBlockMember_ as EM;
-    use P::SpecBlockMember_ as PM;
-    let em = match pm {
-        PM::Condition {
-            kind: pkind,
-            properties: pproperties,
-            exp,
-            additional_exps,
-        } => {
-            let (kind, should_pop_alias_scope) = spec_condition_kind(context, pkind);
-            let properties = pproperties
-                .into_iter()
-                .map(|p| pragma_property(context, p))
-                .collect();
-            let exp = exp_(context, exp);
-            let additional_exps = additional_exps
-                .into_iter()
-                .map(|e| exp_(context, e))
-                .collect();
-            if should_pop_alias_scope {
-                context.pop_alias_scope(None);
-            }
-            EM::Condition {
-                kind,
-                properties,
-                exp,
-                additional_exps,
-            }
-        }
-        PM::Function {
-            name,
-            uninterpreted,
-            signature,
-            body,
-        } => {
-            let signature = function_signature(context, signature);
-            let body = function_body(context, body);
-            context.pop_alias_scope(None);
-            EM::Function {
-                uninterpreted,
-                name,
-                signature,
-                body,
-            }
-        }
-        PM::Variable {
-            is_global,
-            name,
-            type_parameters: pty_params,
-            type_: t,
-            init,
-        } => {
-            let type_parameters = type_parameters(context, pty_params);
-            context.push_type_parameters(type_parameters.iter().map(|(name, _)| name));
-            let t = type_(context, t);
-            let i = init.map(|e| exp_(context, e));
-            context.pop_alias_scope(None);
-            EM::Variable {
-                is_global,
-                name,
-                type_parameters,
-                type_: t,
-                init: i,
-            }
-        }
-        PM::Update { lhs, rhs } => {
-            let lhs = exp_(context, lhs);
-            let rhs = exp_(context, rhs);
-            EM::Update { lhs, rhs }
-        }
-
-        PM::Let {
-            name,
-            post_state: old,
-            def: pdef,
-        } => {
-            let def = exp_(context, pdef);
-            EM::Let {
-                name,
-                post_state: old,
-                def,
-            }
-        }
-        PM::Include {
-            properties: pproperties,
-            exp: pexp,
-        } => {
-            let properties = pproperties
-                .into_iter()
-                .map(|p| pragma_property(context, p))
-                .collect();
-            EM::Include {
-                properties,
-                exp: exp_(context, pexp),
-            }
-        }
-        PM::Apply {
-            exp: pexp,
-            patterns,
-            exclusion_patterns,
-        } => EM::Apply {
-            exp: exp_(context, pexp),
-            patterns,
-            exclusion_patterns,
-        },
-        PM::Pragma {
-            properties: pproperties,
-        } => {
-            let properties = pproperties
-                .into_iter()
-                .map(|p| pragma_property(context, p))
-                .collect();
-            EM::Pragma { properties }
-        }
-    };
-    sp(loc, em)
-}
-
-fn pragma_property(context: &mut Context, sp!(loc, pp_): P::PragmaProperty) -> E::PragmaProperty {
-    let P::PragmaProperty_ {
-        name,
-        value: pv_opt,
-    } = pp_;
-    let value = pv_opt.and_then(|pv| pragma_value(context, pv));
-    sp(loc, E::PragmaProperty_ { name, value })
-}
-
-fn pragma_value(context: &mut Context, pv: P::PragmaValue) -> Option<E::PragmaValue> {
-    match pv {
-        P::PragmaValue::Literal(v) => {
-            value(&mut context.defn_context, v).map(E::PragmaValue::Literal)
-        }
-        P::PragmaValue::Ident(ma) => context
-            .name_access_chain_to_module_access(Access::Term, ma)
-            .map(E::PragmaValue::Ident),
-    }
 }
 
 //**************************************************************************************************
@@ -2729,18 +2479,10 @@ fn type_(context: &mut Context, sp!(loc, pt_): P::Type) -> E::Type {
             }
         }
         PT::Ref(mut_, inner) => ET::Ref(mut_, Box::new(type_(context, *inner))),
-        PT::Fun(args, result) => {
-            if context.in_spec_context {
-                let args = types(context, args);
-                let result = type_(context, *result);
-                ET::Fun(args, Box::new(result))
-            } else {
-                context.env().add_diag(diag!(
-                    Syntax::SpecContextRestricted,
-                    (loc, "`|_|_` function type only allowed in specifications")
-                ));
-                ET::UnresolvedError
-            }
+        PT::Fun(_, _) => {
+            // TODO these will be used later by macros
+            context.spec_deprecated(loc, /* is_error */ true);
+            ET::UnresolvedError
         }
     };
     sp(loc, t_)
@@ -2841,15 +2583,12 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
                 EE::UnresolvedError
             }
         },
-        PE::Name(_, Some(_)) if !context.in_spec_context => {
-            context.env().add_diag(diag!(
-                Syntax::SpecContextRestricted,
-                (
-                    loc,
-                    "Expected name to be followed by a brace-enclosed list of field expressions \
-                     or a parenthesized list of arguments for a function call",
-                )
-            ));
+        PE::Name(_, Some(_)) => {
+            let msg = "Expected name to be followed by a brace-enclosed list of field expressions \
+                or a parenthesized list of arguments for a function call";
+            context
+                .env()
+                .add_diag(diag!(NameResolution::NamePositionMismatch, (loc, msg)));
             EE::UnresolvedError
         }
         PE::Name(pn, ptys_opt) => {
@@ -2915,48 +2654,10 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
         }
         PE::NamedBlock(name, seq) => EE::NamedBlock(name, sequence(context, loc, seq)),
         PE::Block(seq) => EE::Block(sequence(context, loc, seq)),
-        PE::Lambda(pbs, pe) => {
-            if !context.in_spec_context {
-                context.env().add_diag(diag!(
-                    Syntax::SpecContextRestricted,
-                    (loc, "lambda expression only allowed in specifications"),
-                ));
-                EE::UnresolvedError
-            } else {
-                let bs_opt = bind_list(context, pbs);
-                let e = exp_(context, *pe);
-                match bs_opt {
-                    Some(bs) => EE::Lambda(bs, Box::new(e)),
-                    None => {
-                        assert!(context.env().has_errors());
-                        EE::UnresolvedError
-                    }
-                }
-            }
-        }
-        PE::Quant(k, prs, ptrs, pc, pe) => {
-            if !context.in_spec_context {
-                context.env().add_diag(diag!(
-                    Syntax::SpecContextRestricted,
-                    (loc, "quantifer expression only allowed in specifications")
-                ));
-                EE::UnresolvedError
-            } else {
-                let rs_opt = bind_with_range_list(context, prs);
-                let rtrs = ptrs
-                    .into_iter()
-                    .map(|trs| trs.into_iter().map(|tr| exp_(context, tr)).collect())
-                    .collect();
-                let rc = pc.map(|c| Box::new(exp_(context, *c)));
-                let re = exp_(context, *pe);
-                match rs_opt {
-                    Some(rs) => EE::Quant(k, rs, rtrs, rc, Box::new(re)),
-                    None => {
-                        assert!(context.env().has_errors());
-                        EE::UnresolvedError
-                    }
-                }
-            }
+        PE::Lambda(..) | PE::Quant(..) => {
+            // TODO lambdas will be used later by macros
+            context.spec_deprecated(loc, /* is_error */ true);
+            EE::UnresolvedError
         }
         PE::ExpList(pes) => {
             assert!(pes.len() > 1);
@@ -2994,14 +2695,8 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
         PE::Continue(name) => EE::Continue(name),
         PE::Dereference(pe) => EE::Dereference(exp(context, *pe)),
         PE::UnaryExp(op, pe) => EE::UnaryExp(op, exp(context, *pe)),
-        PE::BinopExp(_pl, op, _pr) if op.value.is_spec_only() && !context.in_spec_context => {
-            let msg = format!(
-                "`{}` operator only allowed in specifications",
-                op.value.symbol()
-            );
-            context
-                .env()
-                .add_diag(diag!(Syntax::SpecContextRestricted, (loc, msg)));
+        PE::BinopExp(_pl, op, _pr) if op.value.is_spec_only() => {
+            context.spec_deprecated(loc, /* is_error */ true);
             EE::UnresolvedError
         }
         e_ @ PE::BinopExp(..) => {
@@ -3042,17 +2737,9 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
             Some(edotted) => {
                 let pkg = context.current_package;
                 context.env().check_feature(FeatureGate::DotCall, pkg, loc);
-                if context.in_spec_context {
-                    let msg = "method syntax is not supported in specifications";
-                    context
-                        .env()
-                        .add_diag(diag!(Syntax::SpecContextRestricted, (loc, msg)));
-                    EE::UnresolvedError
-                } else {
-                    let tys_opt = optional_types(context, ptys_opt);
-                    let ers = sp(rloc, exps(context, prs));
-                    EE::MethodCall(Box::new(edotted), n, tys_opt, ers)
-                }
+                let tys_opt = optional_types(context, ptys_opt);
+                let ers = sp(rloc, exps(context, prs));
+                EE::MethodCall(Box::new(edotted), n, tys_opt, ers)
             }
             None => {
                 assert!(context.env().has_errors());
@@ -3060,30 +2747,17 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
             }
         },
         PE::Cast(e, ty) => EE::Cast(exp(context, *e), type_(context, ty)),
-        PE::Index(e, i) => {
-            if context.in_spec_context {
-                EE::Index(exp(context, *e), exp(context, *i))
-            } else {
-                let msg = "`_[_]` index operator only allowed in specifications";
-                context
-                    .env()
-                    .add_diag(diag!(Syntax::SpecContextRestricted, (loc, msg)));
-                EE::UnresolvedError
-            }
-        }
-        PE::Annotate(e, ty) => EE::Annotate(exp(context, *e), type_(context, ty)),
-        PE::Spec(_) if context.in_spec_context => {
-            context.env().add_diag(diag!(
-                Syntax::SpecContextRestricted,
-                (loc, "'spec' blocks cannot be used inside of a spec context",)
-            ));
+        PE::Index(..) => {
+            // TODO index syntax will be added
+            context.spec_deprecated(loc, /* is_error */ true);
             EE::UnresolvedError
         }
-        PE::Spec(spec_block) => {
-            let (spec_id, unbound_names) = context.bind_exp_spec(spec_block);
-            EE::Spec(spec_id, unbound_names)
+        PE::Annotate(e, ty) => EE::Annotate(exp(context, *e), type_(context, ty)),
+        PE::Spec(_) => {
+            context.spec_deprecated(loc, /* is_error */ false);
+            EE::Unit { trailing: false }
         }
-        PE::UnresolvedError => panic!("ICE error should have been thrown"),
+        PE::UnresolvedError => EE::UnresolvedError,
     };
     sp(loc, e_)
 }
@@ -3309,21 +2983,6 @@ fn bind_list(context: &mut Context, sp!(loc, pbs_): P::BindList) -> Option<E::LV
     Some(sp(loc, bs_?))
 }
 
-fn bind_with_range_list(
-    context: &mut Context,
-    sp!(loc, prs_): P::BindWithRangeList,
-) -> Option<E::LValueWithRangeList> {
-    let rs_: Option<Vec<E::LValueWithRange>> = prs_
-        .into_iter()
-        .map(|sp!(loc, (pb, pr))| -> Option<E::LValueWithRange> {
-            let r = exp_(context, pr);
-            let b = bind(context, pb)?;
-            Some(sp(loc, (b, r)))
-        })
-        .collect();
-    Some(sp(loc, rs_?))
-}
-
 fn bind(context: &mut Context, sp!(loc, pb_): P::Bind) -> Option<E::LValue> {
     use E::LValue_ as EL;
     use P::Bind_ as PB;
@@ -3394,9 +3053,6 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
     use E::ModuleAccess_ as M;
     use P::Exp_ as PE;
     match e_ {
-        PE::Name(name, ptys_opt) if context.in_spec_context => {
-            spec_assign_name(context, loc, name, ptys_opt)
-        }
         PE::Name(name, ptys_opt) => {
             let resolved_name =
                 context.name_access_chain_to_module_access(Access::Term, name.clone());
@@ -3463,28 +3119,6 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
     }
 }
 
-fn spec_assign_name(
-    context: &mut Context,
-    loc: Loc,
-    name: P::NameAccessChain,
-    ptys_opt: Option<Vec<P::Type>>,
-) -> Option<E::LValue> {
-    use E::LValue_ as EL;
-    use E::ModuleAccess_ as M;
-    let resolved_name = context.name_access_chain_to_module_access(Access::Term, name);
-    match resolved_name {
-        Some(sp!(_, name @ M::Name(_))) => {
-            let tys_opt = optional_types(context, ptys_opt);
-            Some(sp(loc, EL::Var(None, sp(loc, name), tys_opt)))
-        }
-        Some(sp!(_, access @ M::ModuleAccess(_, _))) => {
-            let tys_opt = optional_types(context, ptys_opt);
-            Some(sp(loc, EL::Var(None, sp(loc, access), tys_opt)))
-        }
-        None => None,
-    }
-}
-
 fn assign_unpack_fields(
     context: &mut Context,
     loc: Loc,
@@ -3517,232 +3151,6 @@ fn mutability(context: &mut Context, loc: Loc, pmut: Mutability) -> Mutability {
         // without let mut enabled, all locals are mutable and do not need the annotation
         None => Some(loc),
     }
-}
-
-//**************************************************************************************************
-// Unbound names
-//**************************************************************************************************
-
-fn unbound_names_spec_block(unbound: &mut BTreeSet<Name>, sp!(_, sb_): &E::SpecBlock) {
-    sb_.members
-        .iter()
-        .for_each(|member| unbound_names_spec_block_member(unbound, member))
-}
-
-fn unbound_names_spec_block_member(unbound: &mut BTreeSet<Name>, sp!(_, m_): &E::SpecBlockMember) {
-    use E::SpecBlockMember_ as M;
-    match &m_ {
-        M::Condition {
-            exp,
-            additional_exps,
-            ..
-        } => {
-            unbound_names_exp(unbound, exp);
-            additional_exps
-                .iter()
-                .for_each(|e| unbound_names_exp(unbound, e));
-        }
-        // No unbound names
-        // And will error in the Move prover
-        M::Function { .. }
-        | M::Variable { .. }
-        | M::Update { .. }
-        | M::Let { .. }
-        | M::Include { .. }
-        | M::Apply { .. }
-        | M::Pragma { .. } => (),
-    }
-}
-
-fn unbound_names_exp(unbound: &mut BTreeSet<Name>, sp!(_, e_): &E::Exp) {
-    use E::Exp_ as EE;
-    match e_ {
-        EE::Value(_)
-        | EE::UnresolvedError
-        | EE::Name(sp!(_, E::ModuleAccess_::ModuleAccess(..)), _)
-        | EE::Unit { .. } => (),
-        EE::Name(sp!(_, E::ModuleAccess_::Name(n)), _) => {
-            unbound.insert(*n);
-        }
-        EE::Call(_, _, _, sp!(_, es_)) | EE::Vector(_, _, sp!(_, es_)) => {
-            unbound_names_exps(unbound, es_)
-        }
-        EE::MethodCall(ed, _, _, sp!(_, es_)) => {
-            unbound_names_dotted(unbound, ed);
-            unbound_names_exps(unbound, es_)
-        }
-        EE::Pack(_, _, es) => unbound_names_exps(unbound, es.iter().map(|(_, _, (_, e))| e)),
-        EE::IfElse(econd, et, ef) => {
-            unbound_names_exp(unbound, ef);
-            unbound_names_exp(unbound, et);
-            unbound_names_exp(unbound, econd)
-        }
-        EE::While(econd, name, eloop) => {
-            unbound_names_exp(unbound, eloop);
-            name.map(|name| unbound_names_labeled(unbound, &name));
-            unbound_names_exp(unbound, econd)
-        }
-        EE::Loop(name, eloop) => {
-            unbound_names_exp(unbound, eloop);
-            name.map(|name| unbound_names_labeled(unbound, &name));
-        }
-        EE::NamedBlock(name, seq) => {
-            unbound_names_sequence(unbound, seq);
-            unbound_names_labeled(unbound, name);
-        }
-        EE::Block(seq) => unbound_names_sequence(unbound, seq),
-        EE::Lambda(ls, er) => {
-            unbound_names_exp(unbound, er);
-            // remove anything in `ls`
-            unbound_names_binds(unbound, ls);
-        }
-        EE::Quant(_, rs, trs, cr_opt, er) => {
-            unbound_names_exp(unbound, er);
-            if let Some(cr) = cr_opt {
-                unbound_names_exp(unbound, cr);
-            }
-            for tr in trs {
-                unbound_names_exps(unbound, tr);
-            }
-            // remove anything in `rs`
-            unbound_names_binds_with_range(unbound, rs);
-        }
-        EE::Assign(ls, er) => {
-            unbound_names_exp(unbound, er);
-            // remove anything in `ls`
-            unbound_names_assigns(unbound, ls);
-        }
-        EE::Return(name, e) | EE::Break(name, e) => {
-            unbound_names_exp(unbound, e);
-            name.map(|name| unbound_names_label_use(unbound, &name));
-        }
-        EE::Continue(name) => {
-            name.map(|name| unbound_names_label_use(unbound, &name));
-        }
-        EE::Abort(e)
-        | EE::Dereference(e)
-        | EE::UnaryExp(_, e)
-        | EE::Cast(e, _)
-        | EE::Annotate(e, _) => unbound_names_exp(unbound, e),
-        EE::FieldMutate(ed, er) => {
-            unbound_names_exp(unbound, er);
-            unbound_names_dotted(unbound, ed)
-        }
-        EE::Mutate(el, er) | EE::BinopExp(el, _, er) => {
-            unbound_names_exp(unbound, er);
-            unbound_names_exp(unbound, el)
-        }
-        EE::ExpList(es) => unbound_names_exps(unbound, es),
-        EE::ExpDotted(_, ed) => unbound_names_dotted(unbound, ed),
-        EE::Index(el, ei) => {
-            unbound_names_exp(unbound, ei);
-            unbound_names_exp(unbound, el)
-        }
-
-        EE::Spec(_, unbound_names) => unbound.extend(unbound_names.iter().cloned()),
-    }
-}
-
-fn unbound_names_exps<'a>(unbound: &mut BTreeSet<Name>, es: impl IntoIterator<Item = &'a E::Exp>) {
-    es.into_iter().for_each(|e| unbound_names_exp(unbound, e))
-}
-
-fn unbound_names_sequence(unbound: &mut BTreeSet<Name>, seq: &E::Sequence) {
-    seq.1
-        .iter()
-        .rev()
-        .for_each(|s| unbound_names_sequence_item(unbound, s))
-}
-
-fn unbound_names_sequence_item(unbound: &mut BTreeSet<Name>, sp!(_, es_): &E::SequenceItem) {
-    use E::SequenceItem_ as ES;
-    match es_ {
-        ES::Seq(e) => unbound_names_exp(unbound, e),
-        ES::Declare(ls, _) => unbound_names_binds(unbound, ls),
-        ES::Bind(ls, er) => {
-            unbound_names_exp(unbound, er);
-            // remove anything in `ls`
-            unbound_names_binds(unbound, ls);
-        }
-    }
-}
-
-fn unbound_names_binds(unbound: &mut BTreeSet<Name>, sp!(_, ls_): &E::LValueList) {
-    ls_.iter()
-        .rev()
-        .for_each(|l| unbound_names_bind(unbound, l))
-}
-
-fn unbound_names_binds_with_range(
-    unbound: &mut BTreeSet<Name>,
-    sp!(_, rs_): &E::LValueWithRangeList,
-) {
-    rs_.iter().rev().for_each(|sp!(_, (b, r))| {
-        unbound_names_bind(unbound, b);
-        unbound_names_exp(unbound, r)
-    })
-}
-
-fn unbound_names_bind(unbound: &mut BTreeSet<Name>, sp!(_, l_): &E::LValue) {
-    use E::LValue_ as EL;
-    match l_ {
-        EL::Var(_, sp!(_, E::ModuleAccess_::Name(n)), _) => {
-            unbound.remove(n);
-        }
-        EL::Var(_, sp!(_, E::ModuleAccess_::ModuleAccess(..)), _) => {
-            // Qualified vars are not considered in unbound set.
-        }
-        EL::Unpack(_, _, efields) => match efields {
-            E::FieldBindings::Named(efields) => efields
-                .iter()
-                .for_each(|(_, _, (_, l))| unbound_names_bind(unbound, l)),
-            E::FieldBindings::Positional(lvals) => {
-                lvals.iter().for_each(|l| unbound_names_bind(unbound, l))
-            }
-        },
-    }
-}
-
-fn unbound_names_assigns(unbound: &mut BTreeSet<Name>, sp!(_, ls_): &E::LValueList) {
-    ls_.iter()
-        .rev()
-        .for_each(|l| unbound_names_assign(unbound, l))
-}
-
-fn unbound_names_assign(unbound: &mut BTreeSet<Name>, sp!(_, l_): &E::LValue) {
-    use E::LValue_ as EL;
-    match l_ {
-        EL::Var(_, sp!(_, E::ModuleAccess_::Name(n)), _) => {
-            unbound.insert(*n);
-        }
-        EL::Var(_, sp!(_, E::ModuleAccess_::ModuleAccess(..)), _) => {
-            // Qualified vars are not considered in unbound set.
-        }
-        EL::Unpack(_, _, efields) => match efields {
-            E::FieldBindings::Named(efields) => efields
-                .iter()
-                .for_each(|(_, _, (_, l))| unbound_names_assign(unbound, l)),
-            E::FieldBindings::Positional(lvals) => {
-                lvals.iter().for_each(|l| unbound_names_assign(unbound, l))
-            }
-        },
-    }
-}
-
-fn unbound_names_dotted(unbound: &mut BTreeSet<Name>, sp!(_, edot_): &E::ExpDotted) {
-    use E::ExpDotted_ as ED;
-    match edot_ {
-        ED::Exp(e) => unbound_names_exp(unbound, e),
-        ED::Dot(d, _) => unbound_names_dotted(unbound, d),
-    }
-}
-
-fn unbound_names_label_use(unbound: &mut BTreeSet<Name>, label: &P::BlockLabel) {
-    unbound.insert(label.0);
-}
-
-fn unbound_names_labeled(unbound: &mut BTreeSet<Name>, label: &P::BlockLabel) {
-    unbound.remove(&label.0);
 }
 
 //**************************************************************************************************

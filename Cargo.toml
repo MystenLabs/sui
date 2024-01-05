@@ -38,7 +38,6 @@ exclude = [
     "external-crates/move/crates/move-package",
     "external-crates/move/crates/move-proc-macros",
     "external-crates/move/crates/move-prover",
-    "external-crates/move/crates/move-prover-boogie-backend",
     "external-crates/move/crates/move-prover-test-utils",
     "external-crates/move/crates/move-read-write-set-types",
     "external-crates/move/crates/move-stackless-bytecode",
@@ -54,9 +53,7 @@ exclude = [
     "external-crates/move/crates/move-vm-test-utils",
     "external-crates/move/crates/move-vm-transactional-tests",
     "external-crates/move/crates/move-vm-types",
-    "external-crates/move/crates/prover-mutation",
     "external-crates/move/crates/serializer-tests",
-    "external-crates/move/crates/spec-flatten",
     "external-crates/move/crates/test-generation",
     "external-crates/move/move-execution/next-vm/crates/move-bytecode-verifier",
     "external-crates/move/move-execution/next-vm/crates/move-stdlib",
@@ -537,7 +534,6 @@ move-command-line-common = { path = "external-crates/move/crates/move-command-li
 move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }
 move-ir-types = { path = "external-crates/move/crates/move-ir-types" }
 move-prover = { path = "external-crates/move/crates/move-prover" }
-move-prover-boogie-backend = { path = "external-crates/move/crates/move-prover-boogie-backend" }
 move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }

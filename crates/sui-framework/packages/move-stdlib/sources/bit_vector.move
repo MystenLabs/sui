@@ -23,33 +23,15 @@ module std::bit_vector {
         assert!(length < MAX_SIZE, ELENGTH);
         let counter = 0;
         let bit_field = vector::empty();
-        while ({spec {
-            invariant counter <= length;
-            invariant len(bit_field) == counter;
-        };
-            (counter < length)}) {
+        while (counter < length) {
             vector::push_back(&mut bit_field, false);
             counter = counter + 1;
-        };
-        spec {
-            assert counter == length;
-            assert len(bit_field) == length;
         };
 
         BitVector {
             length,
             bit_field,
         }
-    }
-    spec new {
-        include NewAbortsIf;
-        ensures result.length == length;
-        ensures len(result.bit_field) == length;
-    }
-    spec schema NewAbortsIf {
-        length: u64;
-        aborts_if length <= 0 with ELENGTH;
-        aborts_if length >= MAX_SIZE with ELENGTH;
     }
 
     /// Set the bit at `bit_index` in the `bitvector` regardless of its previous state.
@@ -58,30 +40,12 @@ module std::bit_vector {
         let x = vector::borrow_mut(&mut bitvector.bit_field, bit_index);
         *x = true;
     }
-    spec set {
-        include SetAbortsIf;
-        ensures bitvector.bit_field[bit_index];
-    }
-    spec schema SetAbortsIf {
-        bitvector: BitVector;
-        bit_index: u64;
-        aborts_if bit_index >= length(bitvector) with EINDEX;
-    }
 
     /// Unset the bit at `bit_index` in the `bitvector` regardless of its previous state.
     public fun unset(bitvector: &mut BitVector, bit_index: u64) {
         assert!(bit_index < vector::length(&bitvector.bit_field), EINDEX);
         let x = vector::borrow_mut(&mut bitvector.bit_field, bit_index);
         *x = false;
-    }
-    spec set {
-        include UnsetAbortsIf;
-        ensures bitvector.bit_field[bit_index];
-    }
-    spec schema UnsetAbortsIf {
-        bitvector: BitVector;
-        bit_index: u64;
-        aborts_if bit_index >= length(bitvector) with EINDEX;
     }
 
     /// Shift the `bitvector` left by `amount`. If `amount` is greater than the
@@ -118,22 +82,6 @@ module std::bit_vector {
     public fun is_index_set(bitvector: &BitVector, bit_index: u64): bool {
         assert!(bit_index < vector::length(&bitvector.bit_field), EINDEX);
         *vector::borrow(&bitvector.bit_field, bit_index)
-    }
-    spec is_index_set {
-        include IsIndexSetAbortsIf;
-        ensures result == bitvector.bit_field[bit_index];
-    }
-    spec schema IsIndexSetAbortsIf {
-        bitvector: BitVector;
-        bit_index: u64;
-        aborts_if bit_index >= length(bitvector) with EINDEX;
-    }
-    spec fun spec_is_index_set(bitvector: BitVector, bit_index: u64): bool {
-        if (bit_index >= length(bitvector)) {
-            false
-        } else {
-            bitvector.bit_field[bit_index]
-        }
     }
 
     /// Return the length (number of usable bits) of this bitvector
