@@ -660,19 +660,19 @@ pub enum SuiClientCommands {
 }
 
 /// The ProgrammableTransactionBlock structure used in the CLI ptb command
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Default)]
 pub struct PTB {
     /// The path to the file containing the PTBs
-    #[clap(long, num_args(1))]
-    file: Option<String>,
+    #[clap(long, num_args(1), required = false)]
+    file: Vec<String>,
     /// An input for the PTB, defined as the variable name and value, e.g: --input recipient 0x321
     #[clap(long, num_args(1..3))]
     assign: Vec<String>,
     /// The object ID of the gas coin
-    #[clap(long)]
-    gas: Option<String>,
+    #[clap(long, required = false)]
+    gas: String,
     /// The gas budget to be used to execute this PTB
-    #[clap(long)]
+    #[clap(long, required = true)]
     gas_budget: String,
     /// Given n-values of the same type, it constructs a vector.
     /// For non objects or an empty vector, the type tag must be specified.
@@ -706,15 +706,27 @@ pub struct PTB {
     #[clap(long)]
     warn_shadows: bool,
     /// Pick gas budget strategy if multiple gas-budgets are provided.
-    #[clap(long, value_enum, required = false)]
-    pick_gas_budget: PTBGas,
+    #[clap(long)]
+    pick_gas_budget: Option<PTBGas>,
 }
 
-#[derive(clap::ValueEnum, Clone, Debug, Serialize)]
+#[derive(clap::ValueEnum, Clone, Debug, Serialize, Default)]
 enum PTBGas {
     MIN,
+    #[default]
     MAX,
     SUM,
+}
+
+impl Display for PTBGas {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let r = match self {
+            PTBGas::MIN => "min",
+            PTBGas::MAX => "max",
+            PTBGas::SUM => "sum",
+        };
+        write!(f, "{}", r.to_string())
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -723,12 +735,20 @@ pub struct PTBCommand {
     pub values: Vec<String>,
 }
 
+// #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+// pub enum Value {
+//     Bool(bool),
+//     String(String),
+//     Gas(PTBGas),
+// }
+
 impl PTB {
     /// Get the passed arguments for this PTB and construct
     /// a map where the key is the command index,
     /// and the value is the name of the command and the values passed
-    /// This is ordered as per how it is given at the command line
+    /// This is ordered as per how these args are given at the command line
     pub fn from_matches(
+        &self,
         matches: &ArgMatches,
     ) -> Result<BTreeMap<usize, PTBCommand>, anyhow::Error> {
         let mut order = BTreeMap::<usize, PTBCommand>::new();
@@ -737,39 +757,99 @@ impl PTB {
                 continue;
             }
 
-            // we need to skip the json and preview as these are handled in the execute fn
-            // TODO: do we want these as part of PTB command?
-            if arg_name.as_str() == "json"
-                || arg_name.as_str() == "preview"
-                || arg_name.as_str() == "pick_gas_budget"
-                || arg_name.as_str() == "warn_shadows"
-            {
+            // we need to skip the json as this is handled in the execute fn
+            if arg_name.as_str() == "json" {
                 continue;
             }
 
-            let values: ValuesRef<'_, String> = matches
-                .get_many(arg_name.as_str())
-                .ok_or_else(|| anyhow!("Cannot parse the args for the PTB"))?;
+            // handle PTBGas manually
+            // TODO can we do better? The issue is that we need the order (basically, indices_of)
+            // and the values can be either bool, String, or PTBGas
+            if arg_name.as_str() == "pick_gas_budget" {
+                let values: ValuesRef<'_, PTBGas> = matches
+                    .get_many(arg_name.as_str())
+                    .ok_or_else(|| anyhow!("Cannot parse the args for the PTB"))?;
 
-            for (value, index) in values.zip(
-                matches
-                    .indices_of(arg_name.as_str())
-                    .expect("id came from matches"),
-            ) {
-                order.insert(
-                    index,
-                    PTBCommand {
-                        name: arg_name.to_string(),
-                        values: vec![value.to_string()],
-                    },
-                );
+                for (value, index) in values.zip(
+                    matches
+                        .indices_of(arg_name.as_str())
+                        .expect("id came from matches"),
+                ) {
+                    order.insert(
+                        index,
+                        PTBCommand {
+                            name: arg_name.to_string(),
+                            values: vec![value.to_string()],
+                        },
+                    );
+                }
+                continue;
+            }
+            // handle bools manually
+            // TODO can we do better? The issue is that we need the order (basically, indices_of)
+            // and the values can be either bool, String, or PTBGas
+            if arg_name.as_str() == "preview" || arg_name.as_str() == "warn_shadows" {
+                let values: ValuesRef<'_, bool> = matches
+                    .get_many(arg_name.as_str())
+                    .ok_or_else(|| anyhow!("Cannot parse the args for the PTB"))?;
+
+                for (value, index) in values.zip(
+                    matches
+                        .indices_of(arg_name.as_str())
+                        .expect("id came from matches"),
+                ) {
+                    order.insert(
+                        index,
+                        PTBCommand {
+                            name: arg_name.to_string(),
+                            values: vec![value.to_string()],
+                        },
+                    );
+                }
+            } else {
+                let values: ValuesRef<'_, String> = matches
+                    .get_many(arg_name.as_str())
+                    .ok_or_else(|| anyhow!("Cannot parse the args for the PTB"))?;
+
+                for (value, index) in values.zip(
+                    matches
+                        .indices_of(arg_name.as_str())
+                        .expect("id came from matches"),
+                ) {
+                    order.insert(
+                        index,
+                        PTBCommand {
+                            name: arg_name.to_string(),
+                            values: vec![value.to_string()],
+                        },
+                    );
+                }
             }
         }
-        Ok(PTB::build_ptb_for_parsing(order))
+        Ok(self.build_ptb_for_parsing(order)?)
     }
 
+    // fn insert_value<T>(&self, values: ValuesRef<'_, T>) {
+    //     for (value, index) in values.zip(
+    //         matches
+    //             .indices_of(arg_name.as_str())
+    //             .expect("id came from matches"),
+    //     ) {
+    //         order.insert(
+    //             index,
+    //             PTBCommand {
+    //                 name: arg_name.to_string(),
+    //                 values: vec![value],
+    //             },
+    //         );
+    //     }
+    // }
+
     /// Builds a sequential list of ptb commands that should be fed into the parser
-    pub fn build_ptb_for_parsing(ptb: BTreeMap<usize, PTBCommand>) -> BTreeMap<usize, PTBCommand> {
+    pub fn build_ptb_for_parsing(
+        &self,
+        ptb: BTreeMap<usize, PTBCommand>,
+    ) -> Result<BTreeMap<usize, PTBCommand>, anyhow::Error> {
         // the ptb input is a list of commands  and values, where the key is the index
         // of that value / command as it appearead in the args list on the CLI.
         // A command can have multiple values, and these values will appear sequential
@@ -782,6 +862,14 @@ impl PTB {
         let mut cmd_idx = 0;
 
         for (idx, val) in ptb.iter() {
+            // these bool commands do not take any values
+            // so handle them separately
+            if val.name == "preview" || val.name == "warn-shadows" {
+                cmd_idx += 1;
+                output.insert(cmd_idx, val.clone());
+                continue;
+            }
+
             // the current value is for the current command we're building
             // so add it to the output's value at key cmd_idx
             if idx == &(curr_idx + 1) {
@@ -792,27 +880,103 @@ impl PTB {
                     .extend(val.values.clone());
                 curr_idx += 1;
             } else {
+                // we have a new command, so insert the value and increment curr_idx
                 cmd_idx += 1;
-                output.insert(cmd_idx, val.clone());
                 curr_idx = *idx;
+                // check if the command is a file inclusion, as we need to sequentially
+                // insert that in the array of PTBCommands
+                if val.name == "file" {
+                    let new_index = self.resolve_file(val.values.clone(), cmd_idx, &mut output)?;
+                    cmd_idx = new_index;
+                } else {
+                    output.insert(cmd_idx, val.clone());
+                }
             }
         }
-        output
+        Ok(output)
     }
 
-    pub async fn execute(matches: ArgMatches) -> Result<(), anyhow::Error> {
+    /// Resolve the passed file into the existing array of PTB commands (output)
+    /// It will flatly include the list of PTBCommands from the given file
+    /// into the existing data holding the PTBs, and return the new index for the
+    /// next command
+    fn resolve_file(
+        &self,
+        filename: Vec<String>,
+        start_index: usize,
+        output: &mut BTreeMap<usize, PTBCommand>,
+    ) -> Result<usize, anyhow::Error> {
+        if filename.len() != 1 {
+            return Err(anyhow!("The --file options should only pass one filename"));
+        }
+        let filename = filename.get(0).unwrap();
+        let file_path = std::path::Path::new(filename);
+        if !file_path.exists() {
+            return Err(anyhow!("File {filename} does not exist"));
+        }
+
+        let file_content = std::fs::read_to_string(file_path)?;
+
+        // do not allow for circular inclusion of files
+        // e.g., sui client ptb --file a.ptb, and then have --file a.ptb in a.ptb file.
+        if file_content.contains(&format!("--file {filename}")) {
+            return Err(anyhow!(
+                "Cannot have circular file inclusions. It appears that {filename} self includes itself."
+            ));
+        }
+
+        let lines = file_content
+            .lines()
+            .flat_map(|x| x.split_whitespace())
+            .collect::<Vec<_>>();
+
+        // in a file the first arg will not be the binary's name, so exclude it
+        let input = PTB::command().no_binary_name(true);
+        // .arg(Arg::new("--gas-budget").required(false));
+        // TODO do not require --gas-budget to exist in files???
+        // the issue is that we could pass a --gas-budget from the CLI and then a --file
+        // and in the file there is no --gas-budget. For now, --gas-budget is always required
+        // so we might want to figure out the best way to handle this case
+        let args = input.get_matches_from(lines);
+        let ptb_commands = self.from_matches(&args)?;
+        let len_cmds = ptb_commands.len();
+
+        // add a pseudo command to tag where does the file include start and end
+        // this helps with returning errors as we need to point in which file, this occurs
+        output.insert(
+            start_index,
+            PTBCommand {
+                name: format!("file_start_{filename}"),
+                values: vec![start_index.to_string()],
+            },
+        );
+        for (k, v) in ptb_commands.into_iter() {
+            output.insert(start_index + k, v);
+        }
+
+        // end of file inclusion
+        output.insert(
+            start_index + len_cmds + 1,
+            PTBCommand {
+                name: format!("file_end_{filename}"),
+                values: vec![(len_cmds + 2).to_string()],
+            },
+        );
+
+        Ok(start_index + len_cmds + 1)
+    }
+
+    pub async fn execute(self, matches: ArgMatches) -> Result<(), anyhow::Error> {
         let ptb_args_matches = matches
             .subcommand_matches("client")
             .ok_or_else(|| anyhow!("Expected the client command but got a different command"))?
             .subcommand_matches("ptb")
             .ok_or_else(|| anyhow!("Expected the ptb subcommand but got a different command"))?;
-        let preview = ptb_args_matches.get_flag("preview");
         let json = ptb_args_matches.get_flag("json");
-        let warn_shadows = ptb_args_matches.get_flag("warn_shadows");
-        let pick_gas_budget = ptb_args_matches.get_one::<PTBGas>("pick_gas_budget");
-
-        let commands = PTB::from_matches(ptb_args_matches)?;
-        println!("{commands:?}");
+        let commands = self.from_matches(ptb_args_matches)?;
+        for (k, v) in commands.iter() {
+            println!("{k}: {v:?}");
+        }
 
         let result = SuiClientCommandResult::PTB(PTBResult {
             result: "ptb".to_string(),
