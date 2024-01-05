@@ -407,10 +407,11 @@ mod test {
         let finished = Arc::new(AtomicBool::new(false));
         let finished_clone = finished.clone();
         let _handle = tokio::task::spawn(async move {
+            info!("Running from version {starting_version} to version {max_ver}");
             for version in starting_version..=max_ver {
-                info!("Targeting protocol version: {}", version);
+                info!("Targeting protocol version: {version}");
                 test_cluster.wait_for_all_nodes_upgrade_to(version).await;
-                info!("All nodes are at protocol version: {}", version);
+                info!("All nodes are at protocol version: {version}");
                 // Let all nodes run for a few epochs at this version.
                 tokio::time::sleep(Duration::from_secs(50)).await;
                 if version == max_ver {
@@ -439,12 +440,13 @@ mod test {
                 for package in new_framework_ref {
                     framework_injection::set_override(*package.id(), package.modules().clone());
                 }
-                info!("Framework injected");
+                info!("Framework injected for next_version {next_version}");
                 test_cluster
                     .update_validator_supported_versions(
                         SupportedProtocolVersions::new_for_testing(starting_version, next_version),
                     )
                     .await;
+                info!("Updated validator supported versions to include next_version {next_version}")
             }
             finished_clone.store(true, Ordering::SeqCst);
         });
