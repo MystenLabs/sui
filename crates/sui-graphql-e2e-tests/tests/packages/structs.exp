@@ -33,7 +33,7 @@ Response: {
                         "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
                         "module": "object",
                         "type": "UID",
-                        "type_parameters": []
+                        "typeParameters": []
                       }
                     }
                   }
@@ -50,7 +50,7 @@ Response: {
                         "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
                         "module": "balance",
                         "type": "Balance",
-                        "type_parameters": [
+                        "typeParameters": [
                           {
                             "typeParameter": 0
                           }
@@ -296,7 +296,7 @@ Response: {
                                     "package": "0x5b4048d5feccd5da11502967e637f53420746735757e54d68bf45269be3c0356",
                                     "module": "m",
                                     "type": "S",
-                                    "type_parameters": []
+                                    "typeParameters": []
                                   }
                                 }
                               }

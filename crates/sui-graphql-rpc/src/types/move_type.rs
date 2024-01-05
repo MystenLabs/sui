@@ -74,6 +74,7 @@ pub(crate) enum MoveTypeSignature {
         module: String,
         #[serde(rename = "type")]
         type_: String,
+        #[serde(rename = "typeParameters")]
         type_parameters: Vec<MoveTypeSignature>,
     },
 }
