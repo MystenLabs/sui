@@ -95,6 +95,7 @@ import type {
 } from '../client/types/params.js';
 import { normalizeStructTag, normalizeSuiAddress, parseStructTag } from '../utils/sui-types.js';
 import type {
+	ObjectFilter,
 	QueryEventsQueryVariables,
 	Rpc_Move_Function_FieldsFragment,
 	Rpc_Move_Module_FieldsFragment,
@@ -468,6 +469,39 @@ export class GraphQLSuiClient extends SuiClient {
 	}
 
 	override async getOwnedObjects(input: GetOwnedObjectsParams): Promise<PaginatedObjectsResponse> {
+		const filter: ObjectFilter | null | undefined = input.filter && {
+			objectIds:
+				'ObjectIds' in input.filter
+					? input.filter.ObjectIds
+					: 'ObjectId' in input.filter
+					? [input.filter.ObjectId]
+					: undefined,
+			type: 'StructType' in input.filter ? input.filter.StructType : undefined,
+			owner:
+				'ObjectOwner' in input.filter
+					? input.filter.ObjectOwner
+					: 'AddressOwner' in input.filter
+					? input.filter.AddressOwner
+					: undefined,
+		};
+
+		const unsupportedFilters = [
+			'MatchAll',
+			'MatchAny',
+			'MatchNone',
+			'Package',
+			'MoveModule',
+			'Version',
+		];
+
+		if (input.filter) {
+			for (const unsupportedFilter of unsupportedFilters) {
+				if (unsupportedFilter in input.filter) {
+					throw new Error(`Filter ${unsupportedFilter} is not supported in GraphQL API`);
+				}
+			}
+		}
+
 		const { nodes: objects, pageInfo } = await this.#graphqlQuery(
 			{
 				query: GetOwnedObjectsDocument,
@@ -481,6 +515,7 @@ export class GraphQLSuiClient extends SuiClient {
 					showPreviousTransaction: input.options?.showPreviousTransaction,
 					showStorageRebate: input.options?.showStorageRebate,
 					showType: input.options?.showType,
+					filter,
 				},
 			},
 			(data) => data.address?.objectConnection,
