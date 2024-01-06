@@ -682,7 +682,12 @@ fn tail(
             if arms_unreachable {
                 None
             } else {
-                Some(bound_exp)
+                Some(maybe_freeze(
+                    context,
+                    block,
+                    expected_type.cloned(),
+                    bound_exp,
+                ))
             }
         }
         // While loops can't yield values, so we treat them as statements with no binders.
@@ -701,7 +706,7 @@ fn tail(
                 // need to swap the implicit unit out for a trailing unit in tail position
                 trailing_unit_exp(eloc)
             } else {
-                bound_exp
+                maybe_freeze(context, block, expected_type.cloned(), bound_exp)
             };
             context.record_named_block_binders(name, binders);
             context.record_named_block_type(name, out_type.clone());
@@ -733,7 +738,7 @@ fn tail(
                 // need to swap the implicit unit out for a trailing unit in tail position
                 trailing_unit_exp(eloc)
             } else {
-                bound_exp
+                maybe_freeze(context, block, expected_type.cloned(), bound_exp)
             };
             context.record_named_block_binders(name, binders.clone());
             context.record_named_block_type(name, out_type.clone());
@@ -751,7 +756,7 @@ fn tail(
                 result
             })
         }
-        E::Block(seq) => tail_block(context, block, Some(&out_type), seq),
+        E::Block(seq) => tail_block(context, block, expected_type, seq),
 
         // -----------------------------------------------------------------------------------------
         //  statements that need to be hoisted out
