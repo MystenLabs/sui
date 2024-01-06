@@ -202,6 +202,7 @@ impl<'a> BytecodeSourceVerifier<'a> {
 
         let mut errors = Vec::new();
         for ((address, module), (package, local_module)) in local_modules {
+            println!("checking {} - {}", address, module);
             let Some(on_chain_module) = on_chain_modules.remove(&(address, module)) else {
                 errors.push(SourceVerificationError::OnChainDependencyNotFound { package, module });
                 continue;

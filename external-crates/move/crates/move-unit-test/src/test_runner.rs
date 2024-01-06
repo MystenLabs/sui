@@ -14,6 +14,7 @@ use codespan_reporting::{
     term::termcolor::{ColorChoice, StandardStream},
 };
 use colored::*;
+use move_binary_format::access::ModuleAccess;
 
 use move_binary_format::{errors::VMResult, file_format::CompiledModule};
 use move_bytecode_utils::Modules;
@@ -44,8 +45,15 @@ use move_vm_test_utils::{
 };
 #[cfg(debug_assertions)]
 use move_vm_types::gas::GasMeter;
+use petgraph::prelude::DiGraphMap;
 use rayon::prelude::*;
-use std::{collections::BTreeMap, io::Write, marker::Send, sync::Mutex, time::Instant};
+use std::{
+    collections::{BTreeMap, HashMap},
+    io::Write,
+    marker::Send,
+    sync::Mutex,
+    time::Instant,
+};
 
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 
@@ -73,12 +81,17 @@ fn setup_test_storage<'a>(
     modules: impl Iterator<Item = &'a CompiledModule>,
 ) -> Result<InMemoryStorage> {
     let mut storage = InMemoryStorage::new();
-    let modules = Modules::new(modules);
+    //    let modules = modules.into_iter().cloned().collect::<Vec<_>>();
+    //    let modules = topo_sort_modules(modules);
+    // for module in modules {
+    //
+    let modules = Modules::new(modules); // XXX 4
     for module in modules
-        .compute_dependency_graph()
+        .compute_dependency_graph() // XXX
         .compute_topological_order()?
     {
         let module_id = module.self_id();
+        println!("[x] adding module_id {} in setup_test_storage (external-crates/move/crates/move-unit-test/src/)", module_id);
         let mut module_bytes = Vec::new();
         module.serialize(&mut module_bytes)?;
         storage.publish_or_overwrite_module(module_id, module_bytes);
@@ -106,8 +119,16 @@ impl TestRunner {
             .values()
             .map(|(filepath, _)| filepath.to_string())
             .collect();
+        // module_info has the map of module ids to compiled modules...
         let modules = tests.module_info.values().map(|info| &info.module);
-        let starting_storage_state = setup_test_storage(modules)?;
+        println!("[6] test_runner needs all modules included (external-crates/move/crates/move-unit-test/src/test_runner.rs)");
+        /*
+            for m in modules.clone() {
+                println!("[x] {}", m.name());
+        }
+        */
+        // we need ingest all modules here somehow, from deps.
+        let starting_storage_state = setup_test_storage(modules)?; // XXX 3 modules from somewhere end up getting passed to `Modules::new(...)` which computes graph
         let native_function_table = native_function_table.unwrap_or_else(|| {
             move_stdlib::natives::all_natives(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
@@ -497,5 +518,38 @@ impl SharedTestingConfig {
         let output = TestOutput { test_plan, writer };
 
         self.exec_module_tests_move_vm_and_stackless_vm(test_plan, &output)
+    }
+}
+
+// Sorts modules in topological order by dependency. Panics if there's a cycle.
+fn topo_sort_modules(modules: Vec<CompiledModule>) -> Vec<CompiledModule> {
+    let mut module_id_idx_map = HashMap::new();
+    let mut idx_module_map = HashMap::new();
+    for (i, m) in modules.into_iter().enumerate() {
+        if module_id_idx_map.insert(m.self_id(), i) != None {
+            panic!("Duplicate module found")
+        };
+        idx_module_map.insert(i, m);
+    }
+
+    let mut graph: DiGraphMap<usize, usize> = DiGraphMap::new();
+    for i in 0..idx_module_map.len() {
+        graph.add_node(i);
+    }
+
+    for (i, m) in idx_module_map.iter() {
+        for dep in m.immediate_dependencies() {
+            if let Some(j) = module_id_idx_map.get(&dep) {
+                graph.add_edge(*i, *j, 0);
+            }
+        }
+    }
+
+    match petgraph::algo::toposort(&graph, None) {
+        Err(_) => panic!("Circular dependency detected"),
+        Ok(ordered_idxs) => ordered_idxs
+            .into_iter()
+            .map(|idx| idx_module_map.remove(&idx).unwrap())
+            .collect(),
     }
 }

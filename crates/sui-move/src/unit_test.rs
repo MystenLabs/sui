@@ -50,6 +50,10 @@ impl Test {
         }
         // find manifest file directory from a given path or (if missing) from current dir
         let rerooted_path = base::reroot_path(path)?;
+        println!(
+            "[1] path {:#?} (sui/crates/sui-move/src/unit_test.rs)",
+            rerooted_path
+        );
         let unit_test_config = self.test.unit_test_config();
         run_move_unit_tests(
             rerooted_path,

@@ -4,6 +4,7 @@
 
 use crate::{
     compilation::package_layout::CompiledPackageLayout,
+    lock_file::{self, schema::ToolchainVersion},
     resolution::resolution_graph::{Package, Renaming, ResolvedGraph, ResolvedTable},
     source_package::{
         layout::{SourcePackageLayout, REFERENCE_TEMPLATE_FILENAME},
@@ -20,8 +21,8 @@ use move_bytecode_utils::Modules;
 use move_command_line_common::{
     env::get_bytecode_version_from_env,
     files::{
-        extension_equals, find_filenames, try_exists, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,
-        SOURCE_MAP_EXTENSION,
+        extension_equals, find_filenames, find_move_filenames, try_exists, MOVE_COMPILED_EXTENSION,
+        MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
     },
 };
 use move_compiler::{
@@ -38,8 +39,12 @@ use move_symbol_pool::Symbol;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
+    ffi::OsStr,
+    fs::{self, File},
     io::Write,
+    os::unix::prelude::PermissionsExt,
     path::{Path, PathBuf},
+    process::Command,
 };
 
 #[derive(Debug, Clone)]
@@ -140,6 +145,8 @@ impl OnDiskCompiledPackage {
         let (buf, build_path) = if try_exists(p)? && extension_equals(p, "yaml") {
             (std::fs::read(p)?, p.parent().unwrap().parent().unwrap())
         } else {
+            let _p = p.join(CompiledPackageLayout::BuildInfo.path());
+            println!("from_path else {:#?}", _p);
             (
                 std::fs::read(p.join(CompiledPackageLayout::BuildInfo.path()))?,
                 p.parent().unwrap(),
@@ -452,6 +459,7 @@ impl CompiledPackage {
             &resolved_package,
             transitive_dependencies,
         )?;
+
         let flags = resolution_graph.build_options.compiler_flags();
         // Partition deps_package according whether src is available
         let (src_deps, bytecode_deps): (Vec<_>, Vec<_>) = deps_package_paths
@@ -472,8 +480,10 @@ impl CompiledPackage {
             }
         }
 
-        // invoke the compiler
-        let mut paths = src_deps;
+        let (deps_for_current_compiler, deps_for_prior_compiler) =
+            partition_deps_by_toolchain(src_deps.clone())?;
+
+        let mut paths = deps_for_current_compiler;
         paths.push(sources_package_paths.clone());
 
         let lint = !resolution_graph.build_options.no_lint;
@@ -482,9 +492,14 @@ impl CompiledPackage {
             .default_flavor
             .map_or(false, |f| f == Flavor::Sui);
 
-        let mut compiler = Compiler::from_package_paths(paths, bytecode_deps)
+        let mut built_deps = vec![];
+        built_deps.extend(deps_for_prior_compiler);
+        built_deps.extend(bytecode_deps);
+        // invoke the compiler
+        let mut compiler = Compiler::from_package_paths(paths, built_deps.clone())
             .unwrap()
             .set_flags(flags);
+
         if lint && sui_mode {
             let (filter_attr_name, filters) = known_filters();
             compiler = compiler
@@ -492,6 +507,9 @@ impl CompiledPackage {
                 .add_custom_known_filters(filters, filter_attr_name);
         }
         let (file_map, all_compiled_units) = compiler_driver(compiler)?;
+        // IDEA: add prebuilt to all_compiled_units here. what does it achieve tho? it will save to deps, but i don't know that that helps in any material way. it could help be a place to find the deps, and then insert them into the resolution graph.
+        // all_compiled_units.push();
+        //
         let mut root_compiled_units = vec![];
         let mut deps_compiled_units = vec![];
         for annot_unit in all_compiled_units {
@@ -504,8 +522,89 @@ impl CompiledPackage {
             if package_name == root_package_name {
                 root_compiled_units.push(unit)
             } else {
+                // IDEA / NEEDED: add built_deps / prebuilt deps here to save
+                // println!("[&] triggered: appending {package_name}::{} for deps_compiled_units (not expected) for precompiled but desired", unit.unit.name);
                 deps_compiled_units.push((package_name, unit))
             }
+        }
+
+        /*
+        // absence of no-lint means we can't deser
+                for _prebuilt in built_deps {
+                    // println!("prebuilt {:#?}", _prebuilt);
+                    let _package_dir = PathBuf::from(_prebuilt.paths[0].as_str());
+                    let _package_dir = SourcePackageLayout::try_find_root(&_package_dir).unwrap();
+                    // let _package_dir = fs::canonicalize(_package_dir).unwrap();
+                    let dep_name = _prebuilt.name.unwrap().0;
+                    println!("dep_name {}", dep_name);
+                    let _package_dir = _package_dir.join("build").join(dep_name.as_str());
+                    println!("package_dir: {:#?}", _package_dir);
+                    let on_disk_dep = OnDiskCompiledPackage::from_path(&_package_dir).unwrap();
+                    let _dep_package = on_disk_dep.into_compiled_package().unwrap();
+                    println!("_dep_package: {:#?}", _dep_package);
+                    let _compiled = _dep_package.root_compiled_units;
+                    for unit in _compiled {
+                        println!(
+                            "Adding (\"MoveStdlib\", {}::{})",
+                            unit.unit.address, unit.unit.name
+                        );
+                        deps_compiled_units.push(("MoveStdlib".into(), unit));
+                    }
+            }
+            */
+
+        // populating this will expose it to source verification and ... OnDiskCompiledPackage retrieving with into_compiled_package. important.
+        // let mut compiled_unit_paths = vec![];
+
+        for _prebuilt in built_deps {
+            // println!("have prebuilt dep {:#?}", _prebuilt);
+
+            /*
+               let paths: Vec<_> = prebuilt
+                   .paths
+                   .into_iter()
+                   .map(|path| PathBuf::from(path.as_str()))
+                   .collect();
+               println!("paths {:#?}", paths);
+            */
+
+            // chop this: let package_dir = "./../move-stdlib/sources/address.move" from
+            //            let _package_dir = PathBuf::from(prebuilt.paths[0].as_str());
+            //	                let package_dir = PathBuf::from("./../move-stdlib/build/MoveStdlib");
+
+            let _package_dir = PathBuf::from(_prebuilt.paths[0].as_str());
+            let _package_dir = SourcePackageLayout::try_find_root(&_package_dir).unwrap();
+            // let _package_dir = fs::canonicalize(_package_dir).unwrap();
+            let dep_name = _prebuilt.name.unwrap().0;
+            println!("dep_name {}", dep_name);
+            let _package_dir = _package_dir.join("build").join(dep_name.as_str());
+            println!("package_dir: {:#?}", _package_dir);
+            let module_path = _package_dir.join(CompiledPackageLayout::CompiledModules.path());
+            println!("module path {:#?}", module_path);
+
+            let mut compiled_unit_paths = vec![];
+            compiled_unit_paths.push(module_path);
+            let compiled_units = find_filenames(&compiled_unit_paths, |path| {
+                extension_equals(path, MOVE_COMPILED_EXTENSION)
+            });
+            // println!("compiled_units {:#?}", compiled_units);
+            for bytecode_path in compiled_units.unwrap() {
+                // println!("adding dep_name {} and unit {:#?}", dep_name, bytecode_path);
+                let decoded = decode_ffs(_package_dir.clone(), dep_name, &bytecode_path)?;
+                deps_compiled_units.push((dep_name, decoded));
+            }
+
+            /*
+                let compiled_units = find_filenames(&compiled_unit_paths, |path| {
+                    extension_equals(path, MOVE_COMPILED_EXTENSION)
+                });
+                println!("compiled_units {:#?}", compiled_units);
+                let dep_name = prebuilt.name.unwrap().0;
+                for bytecode_path in compiled_units.unwrap() {
+                    println!("adding dep_name {} and unit {:#?}", dep_name, bytecode_path);
+                    // deps_compiled_units.push((dep_name, self.decode_unit(dep_name, &bytecode_path)?))
+            }
+            */
         }
 
         let mut compiled_docs = None;
@@ -785,4 +884,180 @@ pub(crate) fn make_source_and_deps_for_compiler(
         named_address_map: root_named_addrs,
     };
     Ok((source_package_paths, deps_package_paths))
+}
+
+/// partitions `deps` by whether we need to compile dependent packages with a
+/// prior toolchain (which we find by looking at Move.lock contents) or
+/// whether we can compile them with the current binary.
+pub fn partition_deps_by_toolchain(
+    deps: Vec<PackagePaths>,
+) -> Result<(Vec<PackagePaths>, Vec<PackagePaths>)> {
+    let mut deps_for_current_compiler = vec![];
+    let mut deps_for_prior_compiler = vec![];
+    for dep in deps {
+        let a_source_path = dep.paths[0].as_str();
+        let root = SourcePackageLayout::try_find_root(Path::new(a_source_path))?;
+        let lock_file = root.join("Move.lock");
+        if !lock_file.exists() {
+            // Q: Behavior to pick when package has no lock file. Right now we choose the current compiler (we could use the "legacy" one instead).
+            deps_for_current_compiler.push(dep);
+            continue;
+        }
+
+        let mut lock_file = File::open(lock_file)?;
+        let toolchain_version = lock_file::schema::ToolchainVersion::read(&mut lock_file)?;
+        match toolchain_version {
+            None => {
+                // Q: Behavior to pick when package has no [move.toolchain-version] info. Right now we choose the current compiler (we could use the "legacy" one instead).
+                deps_for_current_compiler.push(dep)
+            }
+            Some(ToolchainVersion {
+                compiler_version, ..
+            }) if compiler_version == env!("CARGO_PKG_VERSION") => {
+                // This dependency requires the same compiler version we're on.
+                deps_for_current_compiler.push(dep)
+            }
+            Some(toolchain_version) => {
+                println!(
+                    "[3] compiler_version {} does not match env version {} (external-crates/move/crates/move-package/src/compilation/compiled_package.rs)",
+                    toolchain_version.compiler_version,
+                    env!("CARGO_PKG_VERSION")
+                );
+                // Compile and mark that we compiled this dep with a prior compiler.
+                download_and_compile(root, toolchain_version)?;
+                deps_for_prior_compiler.push(dep)
+            }
+        }
+    }
+    Ok((deps_for_current_compiler, deps_for_prior_compiler))
+}
+
+fn download_and_compile(
+    root: PathBuf,
+    ToolchainVersion {
+        compiler_version,
+        edition,
+        flavor,
+    }: ToolchainVersion,
+) -> Result<()> {
+    let binaries_path = std::env::var("TOOLCHAIN_BINARIES")?; // E.g., ~/.move/binaries
+    let dest_dir = Path::new(binaries_path.as_str());
+    let dest_version = dest_dir.join(compiler_version.clone());
+    let platform = "macos-arm64"; // Hardcoded platform: reviewer please ignore this for now.
+    let dest_binary = dest_version.join(format!("target/release/sui-{}", platform));
+    let dest_binary_os = OsStr::new(dest_binary.as_path());
+
+    if !dest_binary.exists() {
+        // Download if binary does not exist.
+        let url = format!("https://github.com/MystenLabs/sui/releases/download/mainnet-v{}/sui-mainnet-v{}-{}.tgz", compiler_version, compiler_version, platform);
+        let release_url = OsStr::new(url.as_str());
+        let dest_tarball = dest_version.join(format!("{}.tgz", compiler_version));
+
+        println!(
+            "[+] curl -L --create-dirs -o {} {}",
+            dest_tarball.display(),
+            url,
+        );
+        let _result = Command::new("curl")
+            .args([
+                OsStr::new("-L"),
+                OsStr::new("--create-dirs"),
+                OsStr::new("-o"),
+                OsStr::new(dest_tarball.as_path()),
+                OsStr::new(release_url),
+            ])
+            .output()
+            .expect("failed to download");
+
+        println!(
+            "[+] tar -xzf {} -C {}",
+            dest_tarball.display(),
+            dest_version.display()
+        );
+        let _result = Command::new("tar")
+            .args([
+                OsStr::new("-xzf"),
+                OsStr::new(dest_tarball.as_path()),
+                OsStr::new("-C"),
+                OsStr::new(dest_version.as_path()),
+            ])
+            .output()
+            .expect("failed to untar");
+
+        let mut perms = fs::metadata(dest_binary_os)?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(dest_binary_os, perms)?;
+    }
+
+    println!(
+        "[3] sui move build --default-move-edition {} --default-move-flavor {} -p {} (external-crates/move/crates/move-package/src/compilation/compiled_package.rs)",
+        edition.to_string().as_str(),
+        flavor.to_string().as_str(),
+        root.display()
+    );
+    let _result = Command::new(dest_binary_os)
+        .args([
+            OsStr::new("move"),
+            OsStr::new("build"),
+            OsStr::new("--default-move-edition"),
+            OsStr::new(edition.to_string().as_str()),
+            OsStr::new("--default-move-flavor"),
+            OsStr::new(flavor.to_string().as_str()),
+            OsStr::new("-p"),
+            OsStr::new(root.as_path()),
+            // OsStr::new("--test"), // XXX this should only be for tests. also we should not add test modules when publishing /verifying.
+        ])
+        .output()
+        .expect("failed to build package");
+    Ok(())
+}
+
+fn decode_ffs(
+    root_path: PathBuf,
+    package_name: Symbol,
+    bytecode_path_str: &str,
+) -> Result<CompiledUnitWithSource> {
+    let package_name_opt = Some(package_name);
+    let bytecode_path = Path::new(bytecode_path_str);
+    let path_to_file = CompiledPackageLayout::path_to_file_after_category(bytecode_path);
+    let bytecode_bytes = std::fs::read(bytecode_path)?;
+    let source_map = source_map_from_file(
+        &root_path
+            .join(CompiledPackageLayout::SourceMaps.path())
+            .join(&path_to_file)
+            .with_extension(SOURCE_MAP_EXTENSION),
+    )?;
+    let source_path = &root_path
+        .join(CompiledPackageLayout::Sources.path())
+        .join(path_to_file)
+        .with_extension(MOVE_EXTENSION);
+    ensure!(
+        source_path.is_file(),
+        "Error decoding package: {}. \
+            Unable to find corresponding source file for '{}' in package {}",
+        "hmmmmm",
+        bytecode_path_str,
+        package_name
+    );
+    let module = CompiledModule::deserialize_with_defaults(&bytecode_bytes)?;
+    let (address_bytes, module_name) = {
+        let id = module.self_id();
+        let parsed_addr = NumericalAddress::new(
+            id.address().into_bytes(),
+            move_compiler::shared::NumberFormat::Hex,
+        );
+        let module_name = FileName::from(id.name().as_str());
+        (parsed_addr, module_name)
+    };
+    let unit = NamedCompiledModule {
+        package_name: package_name_opt,
+        address: address_bytes,
+        name: module_name,
+        module,
+        source_map,
+    };
+    Ok(CompiledUnitWithSource {
+        unit,
+        source_path: source_path.clone(),
+    })
 }

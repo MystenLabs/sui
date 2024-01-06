@@ -13,11 +13,12 @@ use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{
     self,
     diagnostics::{self},
-    shared::{self, NumericalAddress},
+    shared::{self, NumericalAddress, PackagePaths},
     unit_test::{self, TestPlan},
     Compiler, Flags, PASS_CFGIR,
 };
 use move_core_types::language_storage::ModuleId;
+use move_package::compilation::compiled_package;
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use move_vm_test_utils::gas_schedule::CostTable;
 use std::{
@@ -142,11 +143,52 @@ impl UnitTestingConfig {
         source_files: Vec<String>,
         deps: Vec<String>,
     ) -> Option<TestPlan> {
+        println!("[2] compile test plan");
         let addresses =
             verify_and_create_named_address_mapping(self.named_address_values.clone()).ok()?;
         let flags = Flags::testing();
+
+        let source_files: Vec<move_symbol_pool::Symbol> =
+            source_files.into_iter().map(|x| x.into()).collect();
+        let mut new_addresses = BTreeMap::new();
+        for (x, y) in addresses.clone() {
+            new_addresses
+                .insert(move_symbol_pool::Symbol::from(x), y)
+                .unwrap();
+        }
+
+        //
+        let targets: Vec<PackagePaths> = vec![PackagePaths {
+            name: None,
+            paths: source_files,
+            named_address_map: new_addresses.clone(),
+        }];
+        let deps = vec![PackagePaths {
+            name: None,
+            paths: deps,
+            named_address_map: addresses,
+        }];
+        let (deps_for_current_compiler, deps_for_prior_compiler) =
+            compiled_package::partition_deps_by_toolchain(targets.clone())
+                .expect("partition failed");
+        println!("printing target partition...");
+        for x in deps_for_current_compiler.clone() {
+            println!("[root] {:#?}", x.name);
+        }
+        for x in deps_for_prior_compiler.clone() {
+            println!("[prev] {:#?}", x.name);
+        }
+
+        // XXX fix deps thing let mut deps = deps_for_prior_compiler.extend(deps);
+        let compiler =
+            Compiler::from_package_paths(deps_for_current_compiler, deps_for_prior_compiler)
+                .unwrap();
+
+        //
+
         let (files, comments_and_compiler_res) =
-            Compiler::from_files(source_files, deps, addresses)
+        // Compiler::from_files(source_files, deps, addresses)
+	    compiler
                 .set_flags(flags)
                 .run::<PASS_CFGIR>()
                 .unwrap();
@@ -166,11 +208,12 @@ impl UnitTestingConfig {
 
     /// Build a test plan from a unit test config
     pub fn build_test_plan(&self) -> Option<TestPlan> {
+        println!("[1] build test plan");
         let deps = self.dep_files.clone();
 
         let TestPlan {
             files, module_info, ..
-        } = self.compile_to_test_plan(deps.clone(), vec![])?;
+        } = self.compile_to_test_plan(deps.clone(), vec![])?; // XXX this compiles deps, we should just be able to include
 
         let mut test_plan = self.compile_to_test_plan(self.source_files.clone(), deps)?;
         test_plan.module_info.extend(module_info);
@@ -187,6 +230,14 @@ impl UnitTestingConfig {
         cost_table: Option<CostTable>,
         writer: W,
     ) -> Result<(W, bool)> {
+        println!(
+            "[5] run_and_report_unit_tests, we have test_plan.module_info (external-crates/move/crates/move-unit-test/src/lib.rs)"
+        );
+        /*
+            for (k, _v) in test_plan.module_info.clone() {
+                println!("[_] module: {}", k.name());
+        }
+        */
         let shared_writer = Mutex::new(writer);
 
         if self.list {
@@ -205,6 +256,7 @@ impl UnitTestingConfig {
 
         writeln!(shared_writer.lock().unwrap(), "Running Move unit tests")?;
         let mut test_runner = TestRunner::new(
+            // XXX 2. test_plan.module_info contains compiled modules as module_info, but not all those we need to include
             self.gas_limit.unwrap_or(DEFAULT_EXECUTION_BOUND),
             self.num_threads,
             self.check_stackless_vm,

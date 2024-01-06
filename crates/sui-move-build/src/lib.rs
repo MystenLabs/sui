@@ -4,7 +4,7 @@
 extern crate move_ir_types;
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     io::Write,
     path::{Path, PathBuf},
     str::FromStr,
@@ -42,6 +42,7 @@ use move_package::{
     resolution::resolution_graph::Package, source_package::parsed_manifest::CustomDepInfo,
 };
 use move_symbol_pool::Symbol;
+use petgraph::prelude::DiGraphMap;
 use serde_reflection::Registry;
 use sui_types::{
     base_types::ObjectID,
@@ -66,6 +67,8 @@ pub struct CompiledPackage {
     pub dependency_ids: PackageDependencies,
     /// Path to the Move package (i.e., where the Move.toml file is)
     pub path: PathBuf,
+    /// Bytecode of already-compiled package dependencies
+    pub bytecode_deps: BTreeMap<ModuleId, CompiledModule>,
 }
 
 /// Wrapper around the core Move `BuildConfig` with some Sui-specific info
@@ -223,6 +226,38 @@ pub fn build_from_resolution_graph(
 ) -> SuiResult<CompiledPackage> {
     let (published_at, dependency_ids) = gather_published_ids(&resolution_graph);
 
+    // collect bytecode dependencies of `CompiledPackage` for later resolution (e.g., testing)
+    let mut bytecode_deps = BTreeMap::new();
+    for (name, _) in resolution_graph.graph.package_table.iter() {
+        let paths = resolution_graph.get_package(*name).get_bytecodes().unwrap();
+        for path in paths {
+            let bytes = std::fs::read(path.to_string()).map_err(|error| {
+                SuiError::ModuleDeserializationFailure {
+                    error: format!(
+                        "Failed to deserialize bytecode dependency {} module {}: {:?}",
+                        name, path, error
+                    ),
+                }
+            })?;
+            let module =
+                CompiledModule::deserialize_with_defaults(bytes.as_ref()).map_err(|error| {
+                    SuiError::ModuleDeserializationFailure {
+                        error: format!(
+                            "Failed to deserialize bytecode dependency {} module {}: {:?}",
+                            name, path, error
+                        ),
+                    }
+                })?;
+            /*
+                println!(
+                    "[*] Persisting bytecode dep {name} with id {}",
+                    module.self_id()
+            );
+            */
+            bytecode_deps.insert(module.self_id(), module);
+        }
+    }
+
     let result = if print_diags_to_stderr {
         BuildConfig::compile_package(resolution_graph, &mut std::io::stderr())
     } else {
@@ -255,6 +290,7 @@ pub fn build_from_resolution_graph(
         published_at,
         dependency_ids,
         path,
+        bytecode_deps,
     })
 }
 
@@ -300,36 +336,23 @@ impl CompiledPackage {
         &self,
         with_unpublished_deps: bool,
     ) -> Vec<CompiledModule> {
-        let all_modules = self.package.all_modules_map();
-        let graph = all_modules.compute_dependency_graph();
-
-        // SAFETY: package built successfully
-        let modules = graph.compute_topological_order().unwrap();
-
         if with_unpublished_deps {
             // For each transitive dependent module, if they are not to be published, they must have
             // a non-zero address (meaning they are already published on-chain).
-            modules
-                .filter(|module| module.address() == &AccountAddress::ZERO)
-                .cloned()
-                .collect()
+            let modules = self
+                .package
+                .all_modules_map()
+                .iter_modules_owned()
+                .into_iter()
+                .filter(|m| m.address() == &AccountAddress::ZERO)
+                .collect::<Vec<_>>();
+            topo_sort_modules(modules)
         } else {
             // Collect all module IDs from the current package to be published (module names are not
             // sufficient as we may have modules with the same names in user code and in Sui
             // framework which would result in the latter being pulled into a set of modules to be
             // published).
-            let self_modules: HashSet<_> = self
-                .package
-                .root_modules_map()
-                .iter_modules()
-                .iter()
-                .map(|m| m.self_id())
-                .collect();
-
-            modules
-                .filter(|module| self_modules.contains(&module.self_id()))
-                .cloned()
-                .collect()
+            topo_sort_modules(self.get_modules().cloned().collect())
         }
     }
 
@@ -721,4 +744,37 @@ pub fn check_invalid_dependencies(invalid: &BTreeMap<Symbol, String>) -> Result<
     Err(SuiError::ModulePublishFailure {
         error: error_messages.join("\n"),
     })
+}
+
+// Sorts modules in topological order by dependency. Panics if there's a cycle.
+fn topo_sort_modules(modules: Vec<CompiledModule>) -> Vec<CompiledModule> {
+    let mut module_id_idx_map = HashMap::new();
+    let mut idx_module_map = HashMap::new();
+    for (i, m) in modules.into_iter().enumerate() {
+        if module_id_idx_map.insert(m.self_id(), i) != None {
+            panic!("Duplicate module found")
+        };
+        idx_module_map.insert(i, m);
+    }
+
+    let mut graph: DiGraphMap<usize, usize> = DiGraphMap::new();
+    for i in 0..idx_module_map.len() {
+        graph.add_node(i);
+    }
+
+    for (i, m) in idx_module_map.iter() {
+        for dep in m.immediate_dependencies() {
+            if let Some(j) = module_id_idx_map.get(&dep) {
+                graph.add_edge(*i, *j, 0);
+            }
+        }
+    }
+
+    match petgraph::algo::toposort(&graph, None) {
+        Err(_) => panic!("Circular dependency detected"),
+        Ok(ordered_idxs) => ordered_idxs
+            .into_iter()
+            .map(|idx| idx_module_map.remove(&idx).unwrap())
+            .collect(),
+    }
 }

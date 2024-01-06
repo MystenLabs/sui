@@ -89,6 +89,11 @@ impl TestPlan {
             .map(|unit| (unit.named_module.module.self_id(), unit.named_module))
             .collect();
 
+        println!("[?] TestPlan::new, inject here? (external-crates/move/crates/move-compiler/src/unit_test/mod.rs)");
+        // INJECT PRECOMPILED HERE. USE INDEXED_PACKAGE_PATHS on deps field of compiled to get dep path and then ingest. But I can't access deps...
+        // (1) get .mv with `dep_source_paths = dep_package.get_bytecodes().unwrap();`
+        // (2) Deserialize and inject.
+
         Self {
             files,
             module_tests,
