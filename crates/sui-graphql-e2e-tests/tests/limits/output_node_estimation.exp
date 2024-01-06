@@ -1,6 +1,27 @@
-processed 13 tasks
+processed 14 tasks
 
-task 1 'run-graphql'. lines 6-16:
+task 1 'run-graphql'. lines 6-14:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "pageInfo": {
+        "hasPreviousPage": false
+      }
+    }
+  },
+  "extensions": {
+    "usage": {
+      "inputNodes": 3,
+      "outputNodes": 3,
+      "depth": 3,
+      "variables": 0,
+      "fragments": 0,
+      "queryPayload": 141
+    }
+  }
+}
+
+task 2 'run-graphql'. lines 16-26:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -25,7 +46,7 @@ Response: {
   }
 }
 
-task 2 'run-graphql'. lines 18-32:
+task 3 'run-graphql'. lines 28-42:
 Response: {
   "data": {
     "checkpoints": {
@@ -56,7 +77,7 @@ Response: {
   }
 }
 
-task 3 'run-graphql'. lines 34-55:
+task 4 'run-graphql'. lines 44-65:
 Response: {
   "data": {
     "checkpoints": {
@@ -96,7 +117,7 @@ Response: {
   }
 }
 
-task 4 'run-graphql'. lines 57-78:
+task 5 'run-graphql'. lines 67-88:
 Response: {
   "data": {
     "checkpoints": {
@@ -130,7 +151,7 @@ Response: {
   }
 }
 
-task 5 'run-graphql'. lines 80-90:
+task 6 'run-graphql'. lines 90-100:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -155,7 +176,7 @@ Response: {
   }
 }
 
-task 6 'run-graphql'. lines 92-102:
+task 7 'run-graphql'. lines 102-112:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -180,7 +201,7 @@ Response: {
   }
 }
 
-task 7 'run-graphql'. lines 104-132:
+task 8 'run-graphql'. lines 114-142:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -207,7 +228,7 @@ Response: {
   }
 }
 
-task 8 'run-graphql'. lines 134-160:
+task 9 'run-graphql'. lines 144-170:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -232,7 +253,7 @@ Response: {
   }
 }
 
-task 9 'run-graphql'. lines 162-211:
+task 10 'run-graphql'. lines 172-221:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -262,7 +283,7 @@ Response: {
   }
 }
 
-task 10 'run-graphql'. lines 213-238:
+task 11 'run-graphql'. lines 223-248:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -288,7 +309,7 @@ Response: {
   }
 }
 
-task 11 'run-graphql'. lines 240-250:
+task 12 'run-graphql'. lines 250-260:
 Response: {
   "data": null,
   "extensions": {
@@ -320,7 +341,7 @@ Response: {
   ]
 }
 
-task 12 'run-graphql'. lines 252-262:
+task 13 'run-graphql'. lines 262-272:
 Response: {
   "data": null,
   "extensions": {

@@ -4,6 +4,16 @@
 //# init --addresses A=0x42 --simulator
 
 //# run-graphql --show-usage
+# pageInfo does not inherit connection's weights
+{
+  transactionBlockConnection(first: 20) {
+    pageInfo {
+      hasPreviousPage
+    }
+  }
+}
+
+//# run-graphql --show-usage
 # if connection does not have 'first' or 'last' set, use default_page_size (20)
 {
   transactionBlockConnection {
