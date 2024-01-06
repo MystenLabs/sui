@@ -1,5 +1,14 @@
 # @mysten/create-dapp
 
+## 0.2.1
+
+### Patch Changes
+
+- 9ac0a4ec01: Add extensions to all sdk import paths
+- Updated dependencies [9ac0a4ec01]
+  - @mysten/sui.js@0.49.1
+  - @mysten/dapp-kit@0.11.1
+
 ## 0.2.0
 
 ### Minor Changes

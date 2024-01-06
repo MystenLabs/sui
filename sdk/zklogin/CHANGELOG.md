@@ -1,5 +1,13 @@
 # @mysten/zklogin
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [9ac0a4ec01]
+  - @mysten/sui.js@0.49.1
+  - @mysten/bcs@0.10.1
+
 ## 0.4.0
 
 ### Minor Changes
