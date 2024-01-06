@@ -65,7 +65,6 @@ pub struct TelemetryConfig {
     /// Optional Prometheus registry - if present, all enabled span latencies are measured
     pub prom_registry: Option<prometheus::Registry>,
     pub sample_rate: f64,
-    pub target_prefix: Option<String>,
     /// Add directive to include trace logs with provided target
     pub trace_target: Option<String>,
 }
@@ -258,7 +257,6 @@ impl TelemetryConfig {
             crash_on_panic: false,
             prom_registry: None,
             sample_rate: 1.0,
-            target_prefix: None,
             trace_target: None,
         }
     }
@@ -293,10 +291,6 @@ impl TelemetryConfig {
         self
     }
 
-    pub fn with_target_prefix(mut self, prefix: &str) -> Self {
-        self.target_prefix = Some(prefix.to_owned());
-        self
-    }
     pub fn with_trace_target(mut self, target: &str) -> Self {
         self.trace_target = Some(target.to_owned());
         self
@@ -332,10 +326,6 @@ impl TelemetryConfig {
             self.sample_rate = sample_rate.parse().expect("Cannot parse SAMPLE_RATE");
         }
 
-        if let Ok(target_prefix) = env::var("TARGET_PREFIX") {
-            self.target_prefix = Some(target_prefix);
-        }
-
         self
     }
 
@@ -349,9 +339,7 @@ impl TelemetryConfig {
         // fit with the span creation needs for distributed tracing and other span-based tools.
         let mut directives = config.log_string.unwrap_or_else(|| "info".into());
         if let Some(target) = config.trace_target {
-            directives.push_str(&",");
-            directives.push_str(&target);
-            directives.push_str(&"=trace");
+            directives.push_str(&format!(",{}=trace", target));
         }
         let env_filter =
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(directives));
