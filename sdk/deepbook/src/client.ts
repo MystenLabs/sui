@@ -1,19 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	getFullnodeUrl,
-	OrderArguments,
-	PaginatedEvents,
-	PaginationArguments,
-	SuiClient,
-} from '@mysten/sui.js/client';
-import {
+import type { OrderArguments, PaginatedEvents, PaginationArguments } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
+import type {
 	TransactionArgument,
-	TransactionBlock,
 	TransactionObjectInput,
 	TransactionResult,
 } from '@mysten/sui.js/transactions';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 import {
 	normalizeStructTag,
 	normalizeSuiAddress,
@@ -22,17 +17,15 @@ import {
 	SUI_CLOCK_OBJECT_ID,
 } from '@mysten/sui.js/utils';
 
-import {
-	bcs,
+import type {
 	Level2BookStatusPoint,
-	LimitOrderType,
 	MarketPrice,
 	Order,
 	PaginatedPoolSummary,
 	PoolSummary,
-	SelfMatchingPreventionStyle,
 	UserPosition,
-} from './types';
+} from './types/index.js';
+import { bcs, LimitOrderType, SelfMatchingPreventionStyle } from './types/index.js';
 import {
 	CREATION_FEE,
 	MODULE_CLOB,
@@ -40,7 +33,7 @@ import {
 	NORMALIZED_SUI_COIN_TYPE,
 	ORDER_DEFAULT_EXPIRATION_IN_MS,
 	PACKAGE_ID,
-} from './utils';
+} from './utils/index.js';
 
 const DUMMY_ADDRESS = normalizeSuiAddress('0x0');
 

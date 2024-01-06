@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type RuleResolvingParams } from '../../types';
-import { lock } from '../kiosk';
+import type { RuleResolvingParams } from '../../types/index.js';
+import { lock } from '../kiosk.js';
 
 /**
  * A helper to resolve the royalty rule.

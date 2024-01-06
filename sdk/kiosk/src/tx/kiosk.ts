@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { bcs } from '@mysten/sui.js/bcs';
-import {
+import type {
 	TransactionArgument,
 	TransactionBlock,
 	TransactionObjectArgument,
 } from '@mysten/sui.js/transactions';
 
-import { KIOSK_MODULE, KIOSK_TYPE, ObjectArgument } from '../types';
+import type { ObjectArgument } from '../types/index.js';
+import { KIOSK_MODULE, KIOSK_TYPE } from '../types/index.js';
 
 /**
  * Create a new shared Kiosk and returns the [kiosk, kioskOwnerCap] tuple.

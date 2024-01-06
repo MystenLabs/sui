@@ -1,23 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { TransactionObjectArgument, type TransactionBlock } from '@mysten/sui.js/transactions';
+import type { TransactionBlock, TransactionObjectArgument } from '@mysten/sui.js/transactions';
 
 import {
 	attachFloorPriceRuleTx,
 	attachKioskLockRuleTx,
 	attachPersonalKioskRuleTx,
 	attachRoyaltyRuleTx,
-} from '../tx/rules/attach';
+} from '../tx/rules/attach.js';
 import {
 	createTransferPolicy,
 	createTransferPolicyWithoutSharing,
 	removeTransferPolicyRule,
 	shareTransferPolicy,
 	withdrawFromPolicy,
-} from '../tx/transfer-policy';
-import { TransferPolicyCap, type ObjectArgument } from '../types';
-import { KioskClient } from './kiosk-client';
+} from '../tx/transfer-policy.js';
+import type { ObjectArgument, TransferPolicyCap } from '../types/index.js';
+import type { KioskClient } from './kiosk-client.js';
 
 export type TransferPolicyBaseParams = {
 	type: string;

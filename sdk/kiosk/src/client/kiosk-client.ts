@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiClient } from '@mysten/sui.js/client';
+import type { SuiClient } from '@mysten/sui.js/client';
 
 import {
 	FLOOR_PRICE_RULE_ADDRESS,
@@ -10,22 +10,21 @@ import {
 	PERSONAL_KIOSK_RULE_ADDRESS,
 	ROYALTY_RULE_ADDRESS,
 	rules,
-	type BaseRulePackageIds,
-	type TransferPolicyRule,
-} from '../constants';
-import { fetchKiosk, fetchKioskExtension, getOwnedKiosks } from '../query/kiosk';
+} from '../constants.js';
+import type { BaseRulePackageIds, TransferPolicyRule } from '../constants.js';
+import { fetchKiosk, fetchKioskExtension, getOwnedKiosks } from '../query/kiosk.js';
 import {
 	queryOwnedTransferPolicies,
 	queryTransferPolicy,
 	queryTransferPolicyCapsByType,
-} from '../query/transfer-policy';
-import {
-	Network,
-	type FetchKioskOptions,
-	type KioskClientOptions,
-	type KioskData,
-	type OwnedKiosks,
-} from '../types';
+} from '../query/transfer-policy.js';
+import { Network } from '../types/index.js';
+import type {
+	FetchKioskOptions,
+	KioskClientOptions,
+	KioskData,
+	OwnedKiosks,
+} from '../types/index.js';
 
 /**
  * A Client that allows you to interact with kiosk.

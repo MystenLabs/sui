@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiClient } from '@mysten/sui.js/client';
+import type { SuiClient } from '@mysten/sui.js/client';
 
-import { DataFields, NameObject, NetworkType, SuiNSContract } from './types/objects';
-import { DEVNET_JSON_FILE, GCS_URL, TESTNET_JSON_FILE } from './utils/constants';
-import { camelCase, parseObjectDataResponse, parseRegistryResponse } from './utils/parser';
-import { getAvatar, getOwner } from './utils/queries';
+import type { DataFields, NameObject, NetworkType, SuiNSContract } from './types/objects.js';
+import { DEVNET_JSON_FILE, GCS_URL, TESTNET_JSON_FILE } from './utils/constants.js';
+import { camelCase, parseObjectDataResponse, parseRegistryResponse } from './utils/parser.js';
+import { getAvatar, getOwner } from './utils/queries.js';
 
 export const AVATAR_NOT_OWNED = 'AVATAR_NOT_OWNED';
 
