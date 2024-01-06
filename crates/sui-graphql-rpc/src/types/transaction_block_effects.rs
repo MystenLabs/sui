@@ -181,7 +181,14 @@ impl TransactionBlockEffects {
                         .edges
                         .push(Edge::new(c.encode_cursor(), unchanged_shared_object));
                 }
-                Err(_) => continue, // Drop failures
+                Err(_) => {
+                    let (object_id, sequence_number) = input_shared_objects[*c].id_and_version();
+                    Err(Error::Internal(format!(
+                        "Shared object {} at version {} was unexpectedly mutated",
+                        object_id, sequence_number
+                    )))
+                    .extend()?
+                }
             }
         }
 
