@@ -946,8 +946,8 @@ impl PTB {
         output.insert(
             start_index,
             PTBCommand {
-                name: format!("file_start_{filename}"),
-                values: vec![start_index.to_string()],
+                name: format!("file-include-start"),
+                values: vec![filename.to_string()],
             },
         );
         for (k, v) in ptb_commands.into_iter() {
@@ -958,8 +958,8 @@ impl PTB {
         output.insert(
             start_index + len_cmds + 1,
             PTBCommand {
-                name: format!("file_end_{filename}"),
-                values: vec![(len_cmds + 2).to_string()],
+                name: format!("file-include-end"),
+                values: vec![filename.to_string()],
             },
         );
 
