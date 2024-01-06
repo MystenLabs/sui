@@ -32,13 +32,13 @@ impl Validator {
         registry: Registry,
     ) -> Self {
         info!("Boot validator with authority index {}", own_index);
-        let context = Arc::new(Context {
+        let context = Arc::new(Context::new(
             own_index,
             committee,
             parameters,
             protocol_config,
-            metrics: initialise_metrics(registry),
-        });
+            initialise_metrics(registry),
+        ));
         let start_time = Instant::now();
 
         Self {

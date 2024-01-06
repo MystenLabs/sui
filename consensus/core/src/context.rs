@@ -23,3 +23,22 @@ pub(crate) struct Context {
     /// Metrics of this authority.
     pub metrics: Arc<Metrics>,
 }
+
+impl Context {
+    #[allow(dead_code)]
+    pub(crate) fn new(
+        own_index: AuthorityIndex,
+        committee: Committee,
+        parameters: Parameters,
+        protocol_config: ProtocolConfig,
+        metrics: Arc<Metrics>,
+    ) -> Self {
+        Self {
+            own_index,
+            committee,
+            parameters,
+            protocol_config,
+            metrics,
+        }
+    }
+}
