@@ -3,6 +3,7 @@
 
 use clap::*;
 use colored::Colorize;
+use sui::client_commands::SuiClientCommands::ReplayTransaction;
 use sui::sui_commands::SuiCommand;
 use sui_types::exit_main;
 use tracing::debug;
@@ -45,13 +46,27 @@ async fn main() {
 
     let args = Args::parse();
     let _guard = match args.command {
-        SuiCommand::Console { .. }
-        | SuiCommand::Client { .. }
-        | SuiCommand::KeyTool { .. }
-        | SuiCommand::Move { .. } => telemetry_subscribers::TelemetryConfig::new()
-            .with_log_level("error")
-            .with_env()
-            .init(),
+        SuiCommand::Console { .. } | SuiCommand::KeyTool { .. } | SuiCommand::Move { .. } => {
+            telemetry_subscribers::TelemetryConfig::new()
+                .with_log_level("error")
+                .with_env()
+                .init()
+        }
+        SuiCommand::Client {
+            cmd: Some(ReplayTransaction { gas_info, .. }),
+            ..
+        } => {
+            if gas_info {
+                telemetry_subscribers::TelemetryConfig::new()
+                    .with_trace_target("replay")
+                    .with_env()
+                    .init()
+            } else {
+                telemetry_subscribers::TelemetryConfig::new()
+                    .with_env()
+                    .init()
+            }
+        }
         _ => telemetry_subscribers::TelemetryConfig::new()
             .with_env()
             .init(),

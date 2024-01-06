@@ -66,6 +66,8 @@ pub struct TelemetryConfig {
     pub prom_registry: Option<prometheus::Registry>,
     pub sample_rate: f64,
     pub target_prefix: Option<String>,
+    /// Add directive to include trace logs with provided target
+    pub trace_target: Option<String>,
 }
 
 #[must_use]
@@ -257,6 +259,7 @@ impl TelemetryConfig {
             prom_registry: None,
             sample_rate: 1.0,
             target_prefix: None,
+            trace_target: None,
         }
     }
 
@@ -292,6 +295,10 @@ impl TelemetryConfig {
 
     pub fn with_target_prefix(mut self, prefix: &str) -> Self {
         self.target_prefix = Some(prefix.to_owned());
+        self
+    }
+    pub fn with_trace_target(mut self, target: &str) -> Self {
+        self.trace_target = Some(target.to_owned());
         self
     }
 
@@ -340,9 +347,14 @@ impl TelemetryConfig {
         // NOTE: we don't want to use this to filter all layers.  That causes problems for layers with
         // different filtering needs, including tokio-console/console-subscriber, and it also doesn't
         // fit with the span creation needs for distributed tracing and other span-based tools.
-        let log_level = config.log_string.unwrap_or_else(|| "info".into());
+        let mut directives = config.log_string.unwrap_or_else(|| "info".into());
+        if let Some(target) = config.trace_target {
+            directives.push_str(&",");
+            directives.push_str(&target);
+            directives.push_str(&"=trace");
+        }
         let env_filter =
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(directives));
         let (log_filter, reload_handle) = reload::Layer::new(env_filter);
         let log_filter_handle = FilterHandle(reload_handle);
 
