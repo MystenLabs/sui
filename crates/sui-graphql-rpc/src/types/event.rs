@@ -85,7 +85,8 @@ impl Event {
         if address.as_slice() != NativeSuiAddress::ZERO.as_ref() {
             return Ok(Some(Address { address }));
         }
-        return Ok(None);
+
+        Ok(None)
     }
 
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
