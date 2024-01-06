@@ -1,0 +1,90 @@
+---
+id: object-owner
+title: ObjectOwner
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+The object's owner type: Immutable, Shared, Parent, or Address.
+
+
+```graphql
+union ObjectOwner = Immutable | Shared | Parent | AddressOwner
+```
+
+
+
+
+### Possible types
+
+#### [<code style={{ fontWeight: 'normal' }}>ObjectOwner.<b>Immutable</b></code>](/references/sui-api/graphql/reference/objects/immutable) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> An immutable object is an object that can't be mutated, transferred, or deleted.
+> Immutable objects have no owner, so anyone can use them.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ObjectOwner.<b>Shared</b></code>](/references/sui-api/graphql/reference/objects/shared) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> A shared object is an object that is shared using the 0x2::transfer::share_object function.
+> Unlike owned objects, once an object is shared, it stays mutable and is accesssible by anyone.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ObjectOwner.<b>Parent</b></code>](/references/sui-api/graphql/reference/objects/parent) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> If the object's owner is a Parent, this object is part of a dynamic field (it is the value of
+> the dynamic field, or the intermediate Field object itself). Also note that if the owner
+> is a parent, then it's guaranteed to be an object.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ObjectOwner.<b>AddressOwner</b></code>](/references/sui-api/graphql/reference/objects/address-owner) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> An address-owned object is owned by a specific 32-byte address that is
+> either an account address (derived from a particular signature scheme) or
+> an object ID. An address-owned object is accessible only to its owner and no others.
+> 
+
+
+
+### Member Of
+
+[`Object`](/references/sui-api/graphql/reference/objects/object)  <Badge class="badge badge--secondary" text="object"/>
+

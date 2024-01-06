@@ -47,7 +47,12 @@ type MoveTypeLayout =
   | "bool"
   | "u8" | "u16" | ... | "u256"
   | &#x007B; vector: MoveTypeLayout &#x007D;
-  | &#x007B; struct: [&#x007B; name: string, layout: MoveTypeLayout &#x007D;] &#x007D;
+  | &#x007B;
+      struct: &#x007B;
+        type: string,
+        fields: [&#x007B; name: string, layout: MoveTypeLayout &#x007D;],
+      &#x007D;
+    &#x007D;
 
 
 ```graphql

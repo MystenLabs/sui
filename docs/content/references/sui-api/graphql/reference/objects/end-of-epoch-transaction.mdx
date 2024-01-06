@@ -47,7 +47,7 @@ optional transactions to run at the end of the epoch.
 
 ```graphql
 type EndOfEpochTransaction {
-  transactionConnection(
+  transactions(
     first: Int
     before: String
     last: Int
@@ -61,29 +61,29 @@ type EndOfEpochTransaction {
 
 ### Fields
 
-#### [<code style={{ fontWeight: 'normal' }}>EndOfEpochTransaction.<b>transactionConnection</b></code>](#)<Bullet />[`EndOfEpochTransactionKindConnection!`](/references/sui-api/graphql/reference/objects/end-of-epoch-transaction-kind-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+#### [<code style={{ fontWeight: 'normal' }}>EndOfEpochTransaction.<b>transactions</b></code>](#)<Bullet />[`EndOfEpochTransactionKindConnection!`](/references/sui-api/graphql/reference/objects/end-of-epoch-transaction-kind-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
 > The list of system transactions that are allowed to run at the end of the epoch.
-> ##### [<code style={{ fontWeight: 'normal' }}>EndOfEpochTransaction.transactionConnection.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> ##### [<code style={{ fontWeight: 'normal' }}>EndOfEpochTransaction.transactions.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
 > 
 
-##### [<code style={{ fontWeight: 'normal' }}>EndOfEpochTransaction.transactionConnection.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+##### [<code style={{ fontWeight: 'normal' }}>EndOfEpochTransaction.transactions.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
 > 
 
-##### [<code style={{ fontWeight: 'normal' }}>EndOfEpochTransaction.transactionConnection.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+##### [<code style={{ fontWeight: 'normal' }}>EndOfEpochTransaction.transactions.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
 > 
 
-##### [<code style={{ fontWeight: 'normal' }}>EndOfEpochTransaction.transactionConnection.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+##### [<code style={{ fontWeight: 'normal' }}>EndOfEpochTransaction.transactions.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 

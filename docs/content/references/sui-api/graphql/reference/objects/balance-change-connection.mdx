@@ -1,0 +1,82 @@
+---
+id: balance-change-connection
+title: BalanceChangeConnection
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+No description
+
+
+```graphql
+type BalanceChangeConnection {
+  pageInfo: PageInfo!
+  edges: [BalanceChangeEdge!]!
+  nodes: [BalanceChange!]!
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>BalanceChangeConnection.<b>pageInfo</b></code>](#)<Bullet />[`PageInfo!`](/references/sui-api/graphql/reference/objects/page-info) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Information to aid in pagination.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>BalanceChangeConnection.<b>edges</b></code>](#)<Bullet />[`[BalanceChangeEdge!]!`](/references/sui-api/graphql/reference/objects/balance-change-edge) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> A list of edges.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>BalanceChangeConnection.<b>nodes</b></code>](#)<Bullet />[`[BalanceChange!]!`](/references/sui-api/graphql/reference/objects/balance-change) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> A list of nodes.
+> 
+
+
+
+### Member Of
+
+[`TransactionBlockEffects`](/references/sui-api/graphql/reference/objects/transaction-block-effects)  <Badge class="badge badge--secondary" text="object"/>
+

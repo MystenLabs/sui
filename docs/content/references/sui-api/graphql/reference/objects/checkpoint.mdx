@@ -47,13 +47,12 @@ No description
 type Checkpoint {
   digest: String!
   sequenceNumber: Int!
-  timestamp: DateTime
-  validatorSignature: Base64
+  timestamp: DateTime!
+  validatorSignatures: Base64!
   previousCheckpointDigest: String
   liveObjectSetDigest: String
   networkTotalTransactions: Int
   rollingGasSummary: GasCostSummary
-  endOfEpoch: EndOfEpochData
   epoch: Epoch
   transactionBlockConnection(
     first: Int
@@ -73,28 +72,30 @@ type Checkpoint {
 #### [<code style={{ fontWeight: 'normal' }}>Checkpoint.<b>digest</b></code>](#)<Bullet />[`String!`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
-> A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58.
-> This hash can be used to verify checkpoint contents by checking signatures against the committee,
+> A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58. This
+> hash can be used to verify checkpoint contents by checking signatures against the committee,
 > Hashing contents to match digest, and checking that the previous checkpoint digest matches.
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>Checkpoint.<b>sequenceNumber</b></code>](#)<Bullet />[`Int!`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
-> This checkpoint's position in the total order of finalized checkpoints, agreed upon by consensus.
+> This checkpoint's position in the total order of finalized checkpoints, agreed upon by
+> consensus.
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>Checkpoint.<b>timestamp</b></code>](#)<Bullet />[`DateTime`](/references/sui-api/graphql/reference/scalars/date-time) <Badge class="badge badge--secondary" text="scalar"/> 
+#### [<code style={{ fontWeight: 'normal' }}>Checkpoint.<b>timestamp</b></code>](#)<Bullet />[`DateTime!`](/references/sui-api/graphql/reference/scalars/date-time) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > The timestamp at which the checkpoint is agreed to have happened according to consensus.
 > Transactions that access time in this checkpoint will observe this timestamp.
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>Checkpoint.<b>validatorSignature</b></code>](#)<Bullet />[`Base64`](/references/sui-api/graphql/reference/scalars/base-64) <Badge class="badge badge--secondary" text="scalar"/> 
+#### [<code style={{ fontWeight: 'normal' }}>Checkpoint.<b>validatorSignatures</b></code>](#)<Bullet />[`Base64!`](/references/sui-api/graphql/reference/scalars/base-64) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
-> This is an aggregation of signatures from a quorum of validators for the checkpoint proposal.
+> This is an aggregation of signatures from a quorum of validators for the checkpoint
+> proposal.
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>Checkpoint.<b>previousCheckpointDigest</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
@@ -106,42 +107,34 @@ type Checkpoint {
 #### [<code style={{ fontWeight: 'normal' }}>Checkpoint.<b>liveObjectSetDigest</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
-> This is a commitment by the committee at the end of epoch
-> on the contents of the live object set at that time.
-> This can be used to verify state snapshots.
+> A commitment by the committee at the end of epoch on the contents of the live object set at
+> that time. This can be used to verify state snapshots.
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>Checkpoint.<b>networkTotalTransactions</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
-> Tracks the total number of transaction blocks in the network at the time of the checkpoint.
+> The total number of transaction blocks in the network by the end of this checkpoint.
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>Checkpoint.<b>rollingGasSummary</b></code>](#)<Bullet />[`GasCostSummary`](/references/sui-api/graphql/reference/objects/gas-cost-summary) <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
-> The computation and storage cost, storage rebate, and nonrefundable storage fee accumulated
-> during this epoch, up to and including this checkpoint.
-> These values increase monotonically across checkpoints in the same epoch.
-> 
-
-#### [<code style={{ fontWeight: 'normal' }}>Checkpoint.<b>endOfEpoch</b></code>](#)<Bullet />[`EndOfEpochData`](/references/sui-api/graphql/reference/objects/end-of-epoch-data) <Badge class="badge badge--secondary" text="object"/> 
-> 
-> 
-> End of epoch data is only available on the final checkpoint of an epoch.
-> This field provides information on the new committee and protocol version for the next epoch.
+> The computation cost, storage cost, storage rebate, and non-refundable storage fee
+> accumulated during this epoch, up to and including this checkpoint. These values increase
+> monotonically across checkpoints in the same epoch, and reset on epoch boundaries.
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>Checkpoint.<b>epoch</b></code>](#)<Bullet />[`Epoch`](/references/sui-api/graphql/reference/objects/epoch) <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
-> 
+> The epoch this checkpoint is part of.
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>Checkpoint.<b>transactionBlockConnection</b></code>](#)<Bullet />[`TransactionBlockConnection`](/references/sui-api/graphql/reference/objects/transaction-block-connection) <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
-> 
+> Transactions in this checkpoint.
 > ##### [<code style={{ fontWeight: 'normal' }}>Checkpoint.transactionBlockConnection.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 

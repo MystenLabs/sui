@@ -71,6 +71,7 @@ type Validator {
   nextEpochCommissionRate: Int
   atRisk: Int
   reportRecords: [Address!]
+  apy: Int
 }
 ```
 
@@ -239,6 +240,13 @@ type Validator {
 > 
 > 
 > The addresses of other validators this validator has reported.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>apy</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The APY of this validator in basis points.
+> To get the APY in percentage, divide by 100.
 > 
 
 

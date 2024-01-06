@@ -49,14 +49,14 @@ This transaction kind is deprecated in favour of `EndOfEpochTransaction`.
 
 ```graphql
 type ChangeEpochTransaction {
-  epoch: Epoch!
+  epoch: Epoch
   protocolVersion: Int!
   storageCharge: BigInt!
   computationCharge: BigInt!
   storageRebate: BigInt!
   nonRefundableStorageFee: BigInt!
-  startTimestamp: DateTime
-  systemPackageConnection(
+  startTimestamp: DateTime!
+  systemPackages(
     first: Int
     after: String
     last: Int
@@ -70,7 +70,7 @@ type ChangeEpochTransaction {
 
 ### Fields
 
-#### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.<b>epoch</b></code>](#)<Bullet />[`Epoch!`](/references/sui-api/graphql/reference/objects/epoch) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+#### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.<b>epoch</b></code>](#)<Bullet />[`Epoch`](/references/sui-api/graphql/reference/objects/epoch) <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
 > The next (to become) epoch.
@@ -107,37 +107,37 @@ type ChangeEpochTransaction {
 > the relevant objects are cleaned up (in MIST).
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.<b>startTimestamp</b></code>](#)<Bullet />[`DateTime`](/references/sui-api/graphql/reference/scalars/date-time) <Badge class="badge badge--secondary" text="scalar"/> 
+#### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.<b>startTimestamp</b></code>](#)<Bullet />[`DateTime!`](/references/sui-api/graphql/reference/scalars/date-time) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > Time at which the next epoch will start.
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.<b>systemPackageConnection</b></code>](#)<Bullet />[`MovePackageConnection!`](/references/sui-api/graphql/reference/objects/move-package-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+#### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.<b>systemPackages</b></code>](#)<Bullet />[`MovePackageConnection!`](/references/sui-api/graphql/reference/objects/move-package-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
 > System packages (specifically framework and move stdlib) that are written before the new
 > epoch starts, to upgrade them on-chain. Validators write these packages out when running the
 > transaction.
-> ##### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.systemPackageConnection.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> ##### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.systemPackages.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
 > 
 
-##### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.systemPackageConnection.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+##### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.systemPackages.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
 > 
 
-##### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.systemPackageConnection.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+##### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.systemPackages.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
 > 
 
-##### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.systemPackageConnection.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+##### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.systemPackages.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 

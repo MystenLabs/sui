@@ -45,19 +45,39 @@ No description
 
 ```graphql
 type TransactionBlockEffects {
-  transactionBlock: TransactionBlock!
+  transactionBlock: TransactionBlock
   status: ExecutionStatus
   lamportVersion: Int!
   errors: String
-  dependencies: [TransactionBlock!]
+  dependencies(
+    first: Int
+    after: String
+    last: Int
+    before: String
+  ): TransactionBlockConnection!
   gasEffects: GasEffects
-  unchangedSharedObjects: [UnchangedSharedObject!]
-  objectChanges: [ObjectChange!]
-  balanceChanges: [BalanceChange!]
+  unchangedSharedObjects(
+    first: Int
+    after: String
+    last: Int
+    before: String
+  ): UnchangedSharedObjectConnection!
+  objectChanges(
+    first: Int
+    after: String
+    last: Int
+    before: String
+  ): ObjectChangeConnection!
+  balanceChanges(
+    first: Int
+    after: String
+    last: Int
+    before: String
+  ): BalanceChangeConnection!
   timestamp: DateTime
   epoch: Epoch
   checkpoint: Checkpoint
-  bcs: Base64
+  bcs: Base64!
 }
 ```
 
@@ -66,7 +86,7 @@ type TransactionBlockEffects {
 
 ### Fields
 
-#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.<b>transactionBlock</b></code>](#)<Bullet />[`TransactionBlock!`](/references/sui-api/graphql/reference/objects/transaction-block) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.<b>transactionBlock</b></code>](#)<Bullet />[`TransactionBlock`](/references/sui-api/graphql/reference/objects/transaction-block) <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
 > The transaction that ran to produce these effects.
@@ -91,10 +111,32 @@ type TransactionBlockEffects {
 > The reason for a transaction failure, if it did fail.
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.<b>dependencies</b></code>](#)<Bullet />[`[TransactionBlock!]`](/references/sui-api/graphql/reference/objects/transaction-block) <Badge class="badge badge--secondary" text="list"/> <Badge class="badge badge--secondary" text="object"/> 
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.<b>dependencies</b></code>](#)<Bullet />[`TransactionBlockConnection!`](/references/sui-api/graphql/reference/objects/transaction-block-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
 > Transactions whose outputs this transaction depends upon.
+> ##### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.dependencies.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.dependencies.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.dependencies.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.dependencies.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.<b>gasEffects</b></code>](#)<Bullet />[`GasEffects`](/references/sui-api/graphql/reference/objects/gas-effects) <Badge class="badge badge--secondary" text="object"/> 
@@ -103,23 +145,89 @@ type TransactionBlockEffects {
 > Effects to the gas object.
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.<b>unchangedSharedObjects</b></code>](#)<Bullet />[`[UnchangedSharedObject!]`](/references/sui-api/graphql/reference/unions/unchanged-shared-object) <Badge class="badge badge--secondary" text="list"/> <Badge class="badge badge--secondary" text="union"/> 
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.<b>unchangedSharedObjects</b></code>](#)<Bullet />[`UnchangedSharedObjectConnection!`](/references/sui-api/graphql/reference/objects/unchanged-shared-object-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
 > Shared objects that are referenced by but not changed by this transaction.
+> ##### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.unchangedSharedObjects.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.<b>objectChanges</b></code>](#)<Bullet />[`[ObjectChange!]`](/references/sui-api/graphql/reference/objects/object-change) <Badge class="badge badge--secondary" text="list"/> <Badge class="badge badge--secondary" text="object"/> 
+##### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.unchangedSharedObjects.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.unchangedSharedObjects.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.unchangedSharedObjects.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.<b>objectChanges</b></code>](#)<Bullet />[`ObjectChangeConnection!`](/references/sui-api/graphql/reference/objects/object-change-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
 > The effect this transaction had on objects on-chain.
+> ##### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.objectChanges.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.<b>balanceChanges</b></code>](#)<Bullet />[`[BalanceChange!]`](/references/sui-api/graphql/reference/objects/balance-change) <Badge class="badge badge--secondary" text="list"/> <Badge class="badge badge--secondary" text="object"/> 
+##### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.objectChanges.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.objectChanges.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.objectChanges.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.<b>balanceChanges</b></code>](#)<Bullet />[`BalanceChangeConnection!`](/references/sui-api/graphql/reference/objects/balance-change-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
 > The effect this transaction had on the balances (sum of coin values per coin type) of
 > addresses and objects.
+> ##### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.balanceChanges.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.balanceChanges.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.balanceChanges.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.balanceChanges.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.<b>timestamp</b></code>](#)<Bullet />[`DateTime`](/references/sui-api/graphql/reference/scalars/date-time) <Badge class="badge badge--secondary" text="scalar"/> 
@@ -140,7 +248,7 @@ type TransactionBlockEffects {
 > The checkpoint this transaction was finalized in.
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.<b>bcs</b></code>](#)<Bullet />[`Base64`](/references/sui-api/graphql/reference/scalars/base-64) <Badge class="badge badge--secondary" text="scalar"/> 
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.<b>bcs</b></code>](#)<Bullet />[`Base64!`](/references/sui-api/graphql/reference/scalars/base-64) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > Base64 encoded bcs serialization of the on-chain transaction effects.

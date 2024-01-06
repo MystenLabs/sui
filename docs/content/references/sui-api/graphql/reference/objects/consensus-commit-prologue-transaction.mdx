@@ -46,9 +46,9 @@ the current value of the clock, based on the timestamp from consensus.
 
 ```graphql
 type ConsensusCommitPrologueTransaction {
-  epoch: Epoch!
+  epoch: Epoch
   round: Int!
-  commitTimestamp: DateTime
+  commitTimestamp: DateTime!
   consensusCommitDigest: String
 }
 ```
@@ -58,7 +58,7 @@ type ConsensusCommitPrologueTransaction {
 
 ### Fields
 
-#### [<code style={{ fontWeight: 'normal' }}>ConsensusCommitPrologueTransaction.<b>epoch</b></code>](#)<Bullet />[`Epoch!`](/references/sui-api/graphql/reference/objects/epoch) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+#### [<code style={{ fontWeight: 'normal' }}>ConsensusCommitPrologueTransaction.<b>epoch</b></code>](#)<Bullet />[`Epoch`](/references/sui-api/graphql/reference/objects/epoch) <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
 > Epoch of the commit prologue transaction.
@@ -70,7 +70,7 @@ type ConsensusCommitPrologueTransaction {
 > Consensus round of the commit.
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>ConsensusCommitPrologueTransaction.<b>commitTimestamp</b></code>](#)<Bullet />[`DateTime`](/references/sui-api/graphql/reference/scalars/date-time) <Badge class="badge badge--secondary" text="scalar"/> 
+#### [<code style={{ fontWeight: 'normal' }}>ConsensusCommitPrologueTransaction.<b>commitTimestamp</b></code>](#)<Bullet />[`DateTime!`](/references/sui-api/graphql/reference/scalars/date-time) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > Unix timestamp from consensus.

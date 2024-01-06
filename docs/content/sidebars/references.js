@@ -29,7 +29,6 @@ const references = [
    	},
 			 items: [
 			 'references/sui-api/graphql/overview',
-			 'references/sui-api/graphql/examples',
 			 'references/sui-api/graphql/guides',
 			 {
          type: 'category',

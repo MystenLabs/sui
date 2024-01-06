@@ -1,6 +1,6 @@
 ---
-id: end-of-epoch-data
-title: EndOfEpochData
+id: immutable
+title: Immutable
 hide_table_of_contents: false
 ---
 
@@ -40,13 +40,13 @@ export const Details = ({ dataOpen, dataClose, children, startOpen = false }) =>
 
 
 
-No description
+An immutable object is an object that can't be mutated, transferred, or deleted.
+Immutable objects have no owner, so anyone can use them.
 
 
 ```graphql
-type EndOfEpochData {
-  newCommittee: [CommitteeMember!]
-  nextProtocolVersion: Int
+type Immutable {
+  _: Boolean
 }
 ```
 
@@ -55,13 +55,7 @@ type EndOfEpochData {
 
 ### Fields
 
-#### [<code style={{ fontWeight: 'normal' }}>EndOfEpochData.<b>newCommittee</b></code>](#)<Bullet />[`[CommitteeMember!]`](/references/sui-api/graphql/reference/objects/committee-member) <Badge class="badge badge--secondary" text="list"/> <Badge class="badge badge--secondary" text="object"/> 
-> 
-> 
-> 
-> 
-
-#### [<code style={{ fontWeight: 'normal' }}>EndOfEpochData.<b>nextProtocolVersion</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+#### [<code style={{ fontWeight: 'normal' }}>Immutable.<b>_</b></code>](#)<Bullet />[`Boolean`](/references/sui-api/graphql/reference/scalars/boolean) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
@@ -69,7 +63,7 @@ type EndOfEpochData {
 
 
 
-### Member Of
+### Implemented By
 
-[`Checkpoint`](/references/sui-api/graphql/reference/objects/checkpoint)  <Badge class="badge badge--secondary" text="object"/>
+[`ObjectOwner`](/references/sui-api/graphql/reference/unions/object-owner)  <Badge class="badge badge--secondary" text="union"/>
 

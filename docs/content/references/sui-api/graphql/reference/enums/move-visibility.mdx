@@ -40,7 +40,8 @@ export const Details = ({ dataOpen, dataClose, children, startOpen = false }) =>
 
 
 
-No description
+The visibility modifier describes which modules can access this module member.
+By default, a module member can be called only within the same module.
 
 
 ```graphql
@@ -59,19 +60,20 @@ enum MoveVisibility {
 #### [<code style={{ fontWeight: 'normal' }}>MoveVisibility.<b>PUBLIC</b></code>](#)  
 > 
 > 
-> 
+> A public member can be accessed by any module.
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>MoveVisibility.<b>PRIVATE</b></code>](#)  
 > 
 > 
-> 
+> A private member can be accessed in the module it is defined in.
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>MoveVisibility.<b>FRIEND</b></code>](#)  
 > 
 > 
-> 
+> A friend member can be accessed in the module it is defined in and any other module in
+> its package that is explicitly specified in its friend list.
 > 
 
 

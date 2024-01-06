@@ -1,0 +1,70 @@
+---
+id: parent
+title: Parent
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+If the object's owner is a Parent, this object is part of a dynamic field (it is the value of
+the dynamic field, or the intermediate Field object itself). Also note that if the owner
+is a parent, then it's guaranteed to be an object.
+
+
+```graphql
+type Parent {
+  parent: Object
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>Parent.<b>parent</b></code>](#)<Bullet />[`Object`](/references/sui-api/graphql/reference/objects/object) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> 
+> 
+
+
+
+### Implemented By
+
+[`ObjectOwner`](/references/sui-api/graphql/reference/unions/object-owner)  <Badge class="badge badge--secondary" text="union"/>
+

@@ -48,6 +48,7 @@ type MoveType {
   repr: String!
   signature: MoveTypeSignature!
   layout: MoveTypeLayout!
+  abilities: [MoveAbility!]!
 }
 ```
 
@@ -72,6 +73,12 @@ type MoveType {
 > 
 > 
 > Structured representation of the "shape" of values that match this type.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveType.<b>abilities</b></code>](#)<Bullet />[`[MoveAbility!]!`](/references/sui-api/graphql/reference/enums/move-ability) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="enum"/> 
+> 
+> 
+> The abilities this concrete type has.
 > 
 
 

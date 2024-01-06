@@ -51,6 +51,12 @@ type TransactionBlock {
   kind: TransactionBlockKind
   signatures: [Base64!]
   effects: TransactionBlockEffects
+  events(
+    first: Int
+    after: String
+    last: Int
+    before: String
+  ): EventConnection!
   expiration: Epoch
   bcs: Base64
 }
@@ -88,7 +94,7 @@ type TransactionBlock {
 #### [<code style={{ fontWeight: 'normal' }}>TransactionBlock.<b>kind</b></code>](#)<Bullet />[`TransactionBlockKind`](/references/sui-api/graphql/reference/unions/transaction-block-kind) <Badge class="badge badge--secondary" text="union"/> 
 > 
 > 
-> The type of this transaction as well as the commmands and/or parameters comprising the
+> The type of this transaction as well as the commands and/or parameters comprising the
 > transaction of this kind.
 > 
 
@@ -103,6 +109,34 @@ type TransactionBlock {
 > 
 > 
 > The effects field captures the results to the chain of executing this transaction.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlock.<b>events</b></code>](#)<Bullet />[`EventConnection!`](/references/sui-api/graphql/reference/objects/event-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Events emitted by this transaction block.
+> ##### [<code style={{ fontWeight: 'normal' }}>TransactionBlock.events.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>TransactionBlock.events.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>TransactionBlock.events.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>TransactionBlock.events.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>TransactionBlock.<b>expiration</b></code>](#)<Bullet />[`Epoch`](/references/sui-api/graphql/reference/objects/epoch) <Badge class="badge badge--secondary" text="object"/> 

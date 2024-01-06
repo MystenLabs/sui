@@ -1,6 +1,6 @@
 ---
-id: committee-member
-title: CommitteeMember
+id: suins-registration-edge
+title: SuinsRegistrationEdge
 hide_table_of_contents: false
 ---
 
@@ -40,13 +40,13 @@ export const Details = ({ dataOpen, dataClose, children, startOpen = false }) =>
 
 
 
-No description
+An edge in a connection.
 
 
 ```graphql
-type CommitteeMember {
-  authorityName: String
-  stakeUnit: Int
+type SuinsRegistrationEdge {
+  node: SuinsRegistration!
+  cursor: String!
 }
 ```
 
@@ -55,21 +55,21 @@ type CommitteeMember {
 
 ### Fields
 
-#### [<code style={{ fontWeight: 'normal' }}>CommitteeMember.<b>authorityName</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+#### [<code style={{ fontWeight: 'normal' }}>SuinsRegistrationEdge.<b>node</b></code>](#)<Bullet />[`SuinsRegistration!`](/references/sui-api/graphql/reference/objects/suins-registration) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
-> 
+> The item at the end of the edge
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>CommitteeMember.<b>stakeUnit</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+#### [<code style={{ fontWeight: 'normal' }}>SuinsRegistrationEdge.<b>cursor</b></code>](#)<Bullet />[`String!`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
-> 
+> A cursor for use in pagination
 > 
 
 
 
 ### Member Of
 
-[`EndOfEpochData`](/references/sui-api/graphql/reference/objects/end-of-epoch-data)  <Badge class="badge badge--secondary" text="object"/>
+[`SuinsRegistrationConnection`](/references/sui-api/graphql/reference/objects/suins-registration-connection)  <Badge class="badge badge--secondary" text="object"/>
 

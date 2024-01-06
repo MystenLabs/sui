@@ -1,6 +1,6 @@
 ---
-id: latest-sui-system-state
-title: latestSuiSystemState
+id: unchanged-shared-object-edge
+title: UnchangedSharedObjectEdge
 hide_table_of_contents: false
 ---
 
@@ -40,24 +40,36 @@ export const Details = ({ dataOpen, dataClose, children, startOpen = false }) =>
 
 
 
-No description
+An edge in a connection.
 
 
 ```graphql
-latestSuiSystemState: SuiSystemStateSummary!
+type UnchangedSharedObjectEdge {
+  node: UnchangedSharedObject!
+  cursor: String!
+}
 ```
 
 
 
 
-### Type
+### Fields
 
-#### [`SuiSystemStateSummary`](/references/sui-api/graphql/reference/objects/sui-system-state-summary) <Badge class="badge badge--secondary" text="object"/> 
+#### [<code style={{ fontWeight: 'normal' }}>UnchangedSharedObjectEdge.<b>node</b></code>](#)<Bullet />[`UnchangedSharedObject!`](/references/sui-api/graphql/reference/unions/unchanged-shared-object) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="union"/> 
 > 
 > 
-> Aspects that affect the running of the system that are managed by the validators either
-> directly, or through system transactions.
+> The item at the end of the edge
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>UnchangedSharedObjectEdge.<b>cursor</b></code>](#)<Bullet />[`String!`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> A cursor for use in pagination
 > 
 
 
+
+### Member Of
+
+[`UnchangedSharedObjectConnection`](/references/sui-api/graphql/reference/objects/unchanged-shared-object-connection)  <Badge class="badge badge--secondary" text="object"/>
 

@@ -1,6 +1,6 @@
 ---
-id: checkpoint-connection
-title: checkpointConnection
+id: events
+title: events
 hide_table_of_contents: false
 ---
 
@@ -44,12 +44,13 @@ No description
 
 
 ```graphql
-checkpointConnection(
+events(
   first: Int
   after: String
   last: Int
   before: String
-): CheckpointConnection
+  filter: EventFilter
+): EventConnection!
 ```
 
 
@@ -57,25 +58,31 @@ checkpointConnection(
 
 ### Arguments
 
-#### [<code style={{ fontWeight: 'normal' }}>checkpointConnection.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+#### [<code style={{ fontWeight: 'normal' }}>events.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>checkpointConnection.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+#### [<code style={{ fontWeight: 'normal' }}>events.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>checkpointConnection.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+#### [<code style={{ fontWeight: 'normal' }}>events.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>checkpointConnection.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+#### [<code style={{ fontWeight: 'normal' }}>events.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>events.<b>filter</b></code>](#)<Bullet />[`EventFilter`](/references/sui-api/graphql/reference/inputs/event-filter) <Badge class="badge badge--secondary" text="input"/> 
 > 
 > 
 > 
@@ -83,7 +90,7 @@ checkpointConnection(
 
 ### Type
 
-#### [`CheckpointConnection`](/references/sui-api/graphql/reference/objects/checkpoint-connection) <Badge class="badge badge--secondary" text="object"/> 
+#### [`EventConnection`](/references/sui-api/graphql/reference/objects/event-connection) <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
 > 

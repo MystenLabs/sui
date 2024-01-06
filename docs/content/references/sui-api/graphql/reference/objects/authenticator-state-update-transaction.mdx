@@ -45,9 +45,9 @@ System transaction for updating the on-chain state used by zkLogin.
 
 ```graphql
 type AuthenticatorStateUpdateTransaction {
-  epoch: Epoch!
+  epoch: Epoch
   round: Int!
-  newActiveJwkConnection(
+  newActiveJwks(
     first: Int
     after: String
     last: Int
@@ -62,7 +62,7 @@ type AuthenticatorStateUpdateTransaction {
 
 ### Fields
 
-#### [<code style={{ fontWeight: 'normal' }}>AuthenticatorStateUpdateTransaction.<b>epoch</b></code>](#)<Bullet />[`Epoch!`](/references/sui-api/graphql/reference/objects/epoch) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+#### [<code style={{ fontWeight: 'normal' }}>AuthenticatorStateUpdateTransaction.<b>epoch</b></code>](#)<Bullet />[`Epoch`](/references/sui-api/graphql/reference/objects/epoch) <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
 > Epoch of the authenticator state update transaction.
@@ -74,29 +74,29 @@ type AuthenticatorStateUpdateTransaction {
 > Consensus round of the authenticator state update.
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>AuthenticatorStateUpdateTransaction.<b>newActiveJwkConnection</b></code>](#)<Bullet />[`ActiveJwkConnection!`](/references/sui-api/graphql/reference/objects/active-jwk-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+#### [<code style={{ fontWeight: 'normal' }}>AuthenticatorStateUpdateTransaction.<b>newActiveJwks</b></code>](#)<Bullet />[`ActiveJwkConnection!`](/references/sui-api/graphql/reference/objects/active-jwk-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
 > Newly active JWKs (JSON Web Keys).
-> ##### [<code style={{ fontWeight: 'normal' }}>AuthenticatorStateUpdateTransaction.newActiveJwkConnection.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> ##### [<code style={{ fontWeight: 'normal' }}>AuthenticatorStateUpdateTransaction.newActiveJwks.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
 > 
 
-##### [<code style={{ fontWeight: 'normal' }}>AuthenticatorStateUpdateTransaction.newActiveJwkConnection.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+##### [<code style={{ fontWeight: 'normal' }}>AuthenticatorStateUpdateTransaction.newActiveJwks.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
 > 
 
-##### [<code style={{ fontWeight: 'normal' }}>AuthenticatorStateUpdateTransaction.newActiveJwkConnection.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+##### [<code style={{ fontWeight: 'normal' }}>AuthenticatorStateUpdateTransaction.newActiveJwks.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
 > 
 
-##### [<code style={{ fontWeight: 'normal' }}>AuthenticatorStateUpdateTransaction.newActiveJwkConnection.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+##### [<code style={{ fontWeight: 'normal' }}>AuthenticatorStateUpdateTransaction.newActiveJwks.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 

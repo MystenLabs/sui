@@ -45,7 +45,7 @@ System transaction to update the source of on-chain randomness.
 
 ```graphql
 type RandomnessStateUpdateTransaction {
-  epoch: Epoch!
+  epoch: Epoch
   randomnessRound: Int!
   randomBytes: Base64!
   randomnessObjInitialSharedVersion: Int!
@@ -57,7 +57,7 @@ type RandomnessStateUpdateTransaction {
 
 ### Fields
 
-#### [<code style={{ fontWeight: 'normal' }}>RandomnessStateUpdateTransaction.<b>epoch</b></code>](#)<Bullet />[`Epoch!`](/references/sui-api/graphql/reference/objects/epoch) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+#### [<code style={{ fontWeight: 'normal' }}>RandomnessStateUpdateTransaction.<b>epoch</b></code>](#)<Bullet />[`Epoch`](/references/sui-api/graphql/reference/objects/epoch) <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
 > Epoch of the randomness state update transaction.

@@ -46,7 +46,7 @@ No description
 ```graphql
 type Event {
   sendingModule: MoveModule
-  senders: [Address!]
+  sender: Address
   timestamp: DateTime
   type: MoveType!
   bcs: Base64!
@@ -70,10 +70,10 @@ type Event {
 > the sending module would be A::m1.
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>Event.<b>senders</b></code>](#)<Bullet />[`[Address!]`](/references/sui-api/graphql/reference/objects/address) <Badge class="badge badge--secondary" text="list"/> <Badge class="badge badge--secondary" text="object"/> 
+#### [<code style={{ fontWeight: 'normal' }}>Event.<b>sender</b></code>](#)<Bullet />[`Address`](/references/sui-api/graphql/reference/objects/address) <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
-> Addresses of the senders of the event
+> Address of the sender of the event
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>Event.<b>timestamp</b></code>](#)<Bullet />[`DateTime`](/references/sui-api/graphql/reference/scalars/date-time) <Badge class="badge badge--secondary" text="scalar"/> 
@@ -105,7 +105,7 @@ type Event {
 > 
 > Representation of a Move value in JSON, where:
 > 
-> - Addresses and UIDs are represented in canonical form, as JSON strings.
+> - Addresses, IDs, and UIDs are represented in canonical form, as JSON strings.
 > - Bools are represented by JSON boolean literals.
 > - u8, u16, and u32 are represented as JSON numbers.
 > - u64, u128, and u256 are represented as JSON strings.

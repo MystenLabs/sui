@@ -1,0 +1,75 @@
+---
+id: suins-registration
+title: SuinsRegistration
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+No description
+
+
+```graphql
+type SuinsRegistration {
+  domain: String!
+  asMoveObject: MoveObject!
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>SuinsRegistration.<b>domain</b></code>](#)<Bullet />[`String!`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Domain name of the SuinsRegistration object
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SuinsRegistration.<b>asMoveObject</b></code>](#)<Bullet />[`MoveObject!`](/references/sui-api/graphql/reference/objects/move-object) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Convert the SuinsRegistration object into a Move object
+> 
+
+
+
+### Member Of
+
+[`SuinsRegistrationConnection`](/references/sui-api/graphql/reference/objects/suins-registration-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`SuinsRegistrationEdge`](/references/sui-api/graphql/reference/objects/suins-registration-edge)  <Badge class="badge badge--secondary" text="object"/>
+

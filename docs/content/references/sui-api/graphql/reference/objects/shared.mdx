@@ -1,6 +1,6 @@
 ---
-id: object-kind
-title: ObjectKind
+id: shared
+title: Shared
 hide_table_of_contents: false
 ---
 
@@ -40,42 +40,22 @@ export const Details = ({ dataOpen, dataClose, children, startOpen = false }) =>
 
 
 
-No description
+A shared object is an object that is shared using the 0x2::transfer::share_object function.
+Unlike owned objects, once an object is shared, it stays mutable and is accesssible by anyone.
 
 
 ```graphql
-enum ObjectKind {
-  OWNED
-  CHILD
-  SHARED
-  IMMUTABLE
+type Shared {
+  initialSharedVersion: Int!
 }
 ```
 
 
 
 
-### Values
+### Fields
 
-#### [<code style={{ fontWeight: 'normal' }}>ObjectKind.<b>OWNED</b></code>](#)  
-> 
-> 
-> 
-> 
-
-#### [<code style={{ fontWeight: 'normal' }}>ObjectKind.<b>CHILD</b></code>](#)  
-> 
-> 
-> 
-> 
-
-#### [<code style={{ fontWeight: 'normal' }}>ObjectKind.<b>SHARED</b></code>](#)  
-> 
-> 
-> 
-> 
-
-#### [<code style={{ fontWeight: 'normal' }}>ObjectKind.<b>IMMUTABLE</b></code>](#)  
+#### [<code style={{ fontWeight: 'normal' }}>Shared.<b>initialSharedVersion</b></code>](#)<Bullet />[`Int!`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
@@ -83,7 +63,7 @@ enum ObjectKind {
 
 
 
-### Member Of
+### Implemented By
 
-[`Object`](/references/sui-api/graphql/reference/objects/object)  <Badge class="badge badge--secondary" text="object"/>
+[`ObjectOwner`](/references/sui-api/graphql/reference/unions/object-owner)  <Badge class="badge badge--secondary" text="union"/>
 

@@ -13,24 +13,30 @@ For an introduction to GraphQL, see [GitHub's Introduction to GraphQL](https://d
 GraphQL offers an introspection-like service that allows you to query for the schema that is loaded by a service instance. The [official documentation](https://graphql.org/learn/introspection/) provides an overview on introspection.
 
 ## Querying the service
-Use the following approaches to interact with GraphQL for Sui. 
+Use the following approaches to interact with the Sui GraphQL RPC service. 
 
 ### Interactive online IDE
-Use the interactive online IDE to query the GraphQL service. There are two services available, one for [mainnet](https://rpc.mainnet.mystenlabs.com/graphql) and one for [testnet](https://rpc.testnet.mystenlabs.com/graphql).
+The interactive online IDE is a great resource for learning how to interact with GraphQL service. It is available for [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql). Note that the IDE offers features such as auto-completion (use Ctrl-Space or just start typing), multi-tabs, and more.
 
+
+:::info
+
+Both [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql) services are rate-limited to keep network throughput optimized.
+
+:::
 
 ### cURL like querying
 
 Include the `query` information in the `data` parameter of the cURL call to query the endpoint using REST:
 ```shell
 # basic query
-curl -X POST https://graphql-beta.mainnet.sui.io \
+curl -X POST https://sui-mainnet.mystenlabs.com/graphql \
      --header "Content-Type: application/json" \
      --data '{
           "query": "query { epoch { referenceGasPrice } }"
      }'
 # query with variables
-curl -X POST https://graphql-beta.mainnet.sui.io \
+curl -X POST https://sui-mainnet.mystenlabs.com/graphql \
      --header "Content-Type: application/json" \
      --data '{
   "query": "query ($epochID: Int!) { epoch(id: $epochID) { referenceGasPrice } }",
@@ -40,7 +46,7 @@ curl -X POST https://graphql-beta.mainnet.sui.io \
 }'
 ```
 
-### Working with variables
+### Working with variables in GraphQL
 
 Variables are a powerful way for passing different object IDs, Digests, Sui addresses, and other kinds of data for full flexibility. The following is an example for querying the reference gas price for epoch `100`, by passing the epoch as a variable:
 
@@ -73,8 +79,50 @@ When working with the online GraphQL IDE, paste the variables' values in the `Va
 
 :::
 
+### Headers
+
+The service accepts as input for each request the following header(s):
+* `x-sui-rpc-version` to specify which RPC version to use (note that this is currently not available)
+* `x-sui-rpc-show-usage` will return the query complexity information. 
+
+By default, each request will return the service's version in the response header: `x-sui-rpc-version`.
+
+```
+curl -v -X POST https://graphql-beta.mainnet.sui.io \
+     --header 'x-sui-rpc-show-usage: true' \
+     --header 'Content-Type: application/json' \
+     --data '{
+          "query": "query { epoch { referenceGasPrice } }"
+     }'
+```
+
+The response for the request above will look similary to the following:
+```
+[...]
+x-sui-rpc-version: 0.1.0
+[...]
+{
+  "data": {
+    "epoch": {
+      "referenceGasPrice": "750"
+    }
+  },
+  "extensions": {
+    "usage": {
+      "nodes": 2,
+      "depth": 2,
+      "variables": 0,
+      "fragments": 0,
+      "query_payload": 37
+    }
+  }
+}
+```
+
 ### Multiple data in one query
-The previous JSON RPC format required multiple queries for more complex data retrieval. With GraphQL, you can specify the fields you need and get that information in one single query. For example, the following query retrieves the first 20 transaction blocks (and the sender's address, the gas object used to pay, the gas price, and budget) after a specific one, at epoch `97`. Previously, in JSON RPC, this required multiple steps.
+The RPC service previous to GraphQL required multiple queries for more complex data retrieval. Now, with GraphQL you can specify the fields you need and get that information in one single query. 
+
+For example, the following query retrieves the first 20 transaction blocks (along with the sender's address, the gas object used to pay for the transaction, the gas price, and the gas budget) after a specific one, at epoch `97`. Previously, in JSON RPC, this required multiple steps.
 
 ```graphql
 # Fetch the first 20 transactions after 231220100 for epoch 97
@@ -111,12 +159,76 @@ The previous JSON RPC format required multiple queries for more complex data ret
   
 ```
 
+### Fragments
+
+Fragments are reusable units that can be included in the queries as needed. The official [docs](https://graphql.org/learn/queries/#fragments) contain more information about fragments. Below you can find an advanced example of how fragments are used for querying a dynamic field of an owner.
+
+```graphql
+fragment DynamicFieldValueSelection on DynamicFieldValue {
+  ... on MoveValue {
+    type {
+      repr
+    }
+    data
+    __typename
+  }
+  ... on MoveObject {
+    hasPublicTransfer
+    contents {
+      type {
+        repr
+      }
+      data
+    }
+    __typename
+  }
+}
+
+fragment DynamicFieldNameSelection on MoveValue {
+  type {
+    repr
+  }
+  data
+  bcs
+}
+
+fragment DynamicFieldSelect on DynamicField {
+  name {
+    ...DynamicFieldNameSelection
+  }
+  value {
+    ...DynamicFieldValueSelection
+  }
+}
+
+query DynamicField {
+  object(
+    address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
+  ) {
+    dynamicField(
+      name: {
+        type: "0x2::kiosk::Listing",
+        bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1VhfwA",
+      }
+    ) {
+      ...DynamicFieldSelect
+    }
+  }
+}
+```
+
 
 ## Migrating guides
-The following sections highlight the steps necessary for you to take to migrate your codebase to leverage GraphQL queries on Sui.
-### From JSON RPC API
+The following sections highlight the steps necessary for you to take to migrate your codebase to leverage the Sui GraphQL RPC.
 
-The JSON RPC API provided several individual endpoints to get specific data (for example, `get_totalTransactionBlocks`). While this can be achieved similarly with GraphQL, it is more powerful to determine the data you need in one query that involves multiple aspects (for example, transactions, balance, coins), execute that query, and get the results. This guide showcases how to use GraphQL instead of JSON RPC on a few original endpoints.
+### From JSON RPC API & examples
+
+The former JSON RPC API provided several individual endpoints to get specific data (for example, `get_totalTransactionBlocks`). While this can be achieved similarly with GraphQL, it is more powerful to determine the data you need in one query that involves multiple aspects (for example, transactions, balance, coins), execute that query, and get the results. This guide showcases how to use GraphQL instead of JSON RPC on a few original endpoints.
+
+:::info
+
+While a one-on-one mapping from JSON RPC to GraphQL is most likely possible, we recommend avoiding that route and instead model your queries to leverage the full power of GraphQL.
+:::
 
 
 #### Example 1: Get total transaction blocks
@@ -206,7 +318,7 @@ The goal is to get the transaction block by its digest.
 </Tabs>
 
 #### Example 3: Get coin objects owned by an address
-The goal is to return all `Coin<coin_type>` objects an address owns.
+The goal is to return all `Coin<0x2::sui::SUI>` objects an address owns.
 
 <Tabs groupId="migrating-json-rpc">
 
@@ -258,11 +370,11 @@ The cursor is now passed in the `after` (or `before`) fields on the connection, 
 </TabItem>
 </Tabs>
 
-### Support in TS SDK
+### Typescript SDK
 TBD
 
-### Support in Rust SDK
+### Rust SDK
 TBD
 
 ### Writing your own queries
-A good start for writing your own queries is either by browsing the [Examples](./examples) page, or going through the [TS SDK implementation](https://github.com/MystenLabs/sui/tree/main/sdk/typescript/src/graphql/queries).
+A good start for writing your own queries is either by browsing the [examples](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples) folder or referring to the [Typescript SDK implementation](https://github.com/MystenLabs/sui/tree/main/sdk/typescript/src/graphql/queries).
