@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::{register_histogram_with_registry, Histogram, Registry};
 use std::sync::Arc;
+
+use prometheus::{register_histogram_with_registry, Histogram, Registry};
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.4,
@@ -10,7 +11,7 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
     12.5, 15., 17.5, 20., 25., 30., 60., 90., 120., 180., 300.,
 ];
 
-pub struct Metrics {
+pub(crate) struct Metrics {
     pub node_metrics: NodeMetrics,
 }
 
@@ -20,7 +21,7 @@ pub(crate) fn initialise_metrics(registry: Registry) -> Arc<Metrics> {
     Arc::new(Metrics { node_metrics })
 }
 
-pub struct NodeMetrics {
+pub(crate) struct NodeMetrics {
     pub uptime: Histogram,
 }
 
