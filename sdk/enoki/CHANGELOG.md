@@ -1,5 +1,17 @@
 # @mysten/enoki
 
+## 0.1.0
+
+### Minor Changes
+
+- e5f9e3ba21: Replace tsup based build to fix issues with esm/cjs dual publishing
+
+### Patch Changes
+
+- Updated dependencies [e5f9e3ba21]
+  - @mysten/sui.js@0.49.0
+  - @mysten/zklogin@0.4.0
+
 ## 0.0.8
 
 ### Patch Changes

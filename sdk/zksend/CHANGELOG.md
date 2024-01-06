@@ -1,5 +1,16 @@
 # @mysten/zksend
 
+## 0.1.0
+
+### Minor Changes
+
+- e5f9e3ba21: Replace tsup based build to fix issues with esm/cjs dual publishing
+
+### Patch Changes
+
+- Updated dependencies [e5f9e3ba21]
+  - @mysten/wallet-standard@0.10.0
+
 ## 0.0.3
 
 ### Patch Changes
