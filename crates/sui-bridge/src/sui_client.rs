@@ -200,7 +200,6 @@ where
                 BridgeError::InternalError(format!("Can't get bridge committee: {e}"))
             })?;
         let mut authorities = vec![];
-
         // TODO: move this to MoveTypeBridgeCommittee
         for member in move_type_bridge_committee.members.contents {
             let MoveTypeCommitteeMember {
