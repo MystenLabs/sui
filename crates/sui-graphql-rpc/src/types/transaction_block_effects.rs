@@ -9,7 +9,6 @@ use async_graphql::{
 use either::Either;
 use sui_indexer::models_v2::transactions::StoredTransaction;
 use sui_types::{
-    digests::TransactionDigest,
     effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
     execution_status::ExecutionStatus as NativeExecutionStatus,
     transaction::TransactionData as NativeTransactionData,
@@ -120,12 +119,15 @@ impl TransactionBlockEffects {
             return Ok(connection);
         };
 
-        let indices: Vec<CDependencies> = cs.map(|c| c).collect();
-        let lookups: Vec<TransactionDigest> = indices.iter().map(|i| dependencies[**i]).collect();
+        let indices: Vec<CDependencies> = cs.collect();
+
+        let (Some(fst), Some(lst)) = (indices.first(), indices.last()) else {
+            return Ok(connection);
+        };
 
         let transactions = ctx
             .data_unchecked::<PgManager>()
-            .fetch_txs_by_digests(&lookups)
+            .fetch_txs_by_digests(&dependencies[**fst..=**lst])
             .await
             .extend()?;
 
@@ -162,8 +164,6 @@ impl TransactionBlockEffects {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let mut connection = Connection::new(false, false);
 
-        // TODO: this iterates through its shared_objects field and collects.
-        // We can consider doing that collection here so we don't double dip.
         let input_shared_objects = self.native.input_shared_objects();
 
         let Some((prev, next, cs)) = page.paginate_indices(input_shared_objects.len()) else {
@@ -200,8 +200,6 @@ impl TransactionBlockEffects {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let mut connection = Connection::new(false, false);
 
-        // TODO: this function iterates through created, mutated, etc. fields and collects into one array
-        // We can consider doing that collection here so we don't double dip.
         let object_changes = self.native.object_changes();
 
         let Some((prev, next, cs)) = page.paginate_indices(object_changes.len()) else {
@@ -213,7 +211,7 @@ impl TransactionBlockEffects {
 
         for c in cs {
             let object_change = ObjectChange {
-                native: object_changes[*c],
+                native: object_changes[*c].clone(),
             };
 
             connection
