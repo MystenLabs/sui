@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { useRecognizedCoins } from '_app/hooks/deepbook';
+import { Button } from '_app/shared/ButtonUI';
 import { InputWithActionButton } from '_app/shared/InputWithAction';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
@@ -28,12 +29,18 @@ export function ToAssetSection({
 	slippageErrorString,
 	baseCoinType,
 	quoteCoinType,
+	loading,
+	refetch,
+	error,
 }: {
 	activeCoinType: string | null;
 	balanceChanges: BalanceChange[];
 	slippageErrorString: string;
 	baseCoinType: string;
 	quoteCoinType: string;
+	loading: boolean;
+	refetch: () => void;
+	error: Error | null;
 }) {
 	const coinsMap = useDeepBookContext().configs.coinsMap;
 	const recognizedCoins = useRecognizedCoins();
@@ -104,13 +111,15 @@ export function ToAssetSection({
 
 			<InputWithActionButton
 				name="output-amount"
-				type="number"
 				disabled
 				noBorder={!isValid}
 				placeholder="--"
 				value={toAssetAmountAsNum || '--'}
+				loading={loading}
+				loadingText="Calculating..."
 				suffix={
-					!!toAssetAmountAsNum && (
+					!!toAssetAmountAsNum &&
+					!loading && (
 						<Text variant="body" weight="semibold" color="steel">
 							{toAssetSymbol}
 						</Text>
@@ -141,6 +150,18 @@ export function ToAssetSection({
 					/>
 				</div>
 			) : null}
+
+			{error && (
+				<div className="flex flex-col gap-4">
+					<Alert>
+						<Text variant="pBody" weight="semibold">
+							Calculation failed
+						</Text>
+						<Text variant="pBodySmall">{error.message || 'An error has occurred, try again.'}</Text>
+					</Alert>
+					<Button text="Recalculate" onClick={refetch} />
+				</div>
+			)}
 		</div>
 	);
 }
