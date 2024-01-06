@@ -166,7 +166,7 @@ module Test::M2 {
 //# run-graphql
 {
   eventConnection(
-    filter: {sender: "@{A}"", eventType: "@{Test}::M1::EventA"}
+    filter: {sender: "@{A}", eventType: "@{Test}::M1::EventA"}
   ) {
     nodes {
       sendingModule {
