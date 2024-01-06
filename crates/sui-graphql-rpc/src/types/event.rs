@@ -4,6 +4,7 @@
 use async_graphql::*;
 use sui_indexer::models_v2::events::StoredEvent;
 use sui_indexer::models_v2::transactions::StoredTransaction;
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::event::Event as NativeEvent;
 use sui_types::{parse_sui_struct_tag, TypeTag};
 
@@ -71,8 +72,8 @@ impl Event {
             .extend()
     }
 
-    /// Addresses of the senders of the event
-    async fn senders(&self) -> Result<Option<Address>> {
+    /// Address of the sender of the event
+    async fn sender(&self) -> Result<Option<Address>> {
         let Some(Some(sender)) = self.stored.senders.first() else {
             return Ok(None);
         };
@@ -81,7 +82,10 @@ impl Event {
             .map_err(|e| Error::Internal(format!("Failed to deserialize address: {e}")))
             .extend()?;
 
-        Ok(Some(Address { address }))
+        if address.as_slice() != NativeSuiAddress::ZERO.as_ref() {
+            return Ok(Some(Address { address }));
+        }
+        return Ok(None);
     }
 
     /// UTC timestamp in milliseconds since epoch (1/1/1970)

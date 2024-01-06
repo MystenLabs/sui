@@ -53,11 +53,9 @@ Response: {
           "type": {
             "repr": "0x52a2986f3c7d2f12dccb6d48877bbbe18a09e368dc4a270094ea4eeaa021f7d3::M1::EventA"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "0"
           },
@@ -70,11 +68,9 @@ Response: {
           "type": {
             "repr": "0x52a2986f3c7d2f12dccb6d48877bbbe18a09e368dc4a270094ea4eeaa021f7d3::M1::EventB<0x52a2986f3c7d2f12dccb6d48877bbbe18a09e368dc4a270094ea4eeaa021f7d3::M1::Object>"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "1"
           },
@@ -87,11 +83,9 @@ Response: {
           "type": {
             "repr": "0x52a2986f3c7d2f12dccb6d48877bbbe18a09e368dc4a270094ea4eeaa021f7d3::M2::EventA"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "2"
           },
@@ -104,11 +98,9 @@ Response: {
           "type": {
             "repr": "0x52a2986f3c7d2f12dccb6d48877bbbe18a09e368dc4a270094ea4eeaa021f7d3::M2::EventB<0x52a2986f3c7d2f12dccb6d48877bbbe18a09e368dc4a270094ea4eeaa021f7d3::M2::Object>"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "3"
           },
@@ -131,11 +123,9 @@ Response: {
           "type": {
             "repr": "0x52a2986f3c7d2f12dccb6d48877bbbe18a09e368dc4a270094ea4eeaa021f7d3::M1::EventA"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "0"
           },
@@ -148,11 +138,9 @@ Response: {
           "type": {
             "repr": "0x52a2986f3c7d2f12dccb6d48877bbbe18a09e368dc4a270094ea4eeaa021f7d3::M1::EventB<0x52a2986f3c7d2f12dccb6d48877bbbe18a09e368dc4a270094ea4eeaa021f7d3::M1::Object>"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "1"
           },
@@ -165,11 +153,9 @@ Response: {
           "type": {
             "repr": "0x52a2986f3c7d2f12dccb6d48877bbbe18a09e368dc4a270094ea4eeaa021f7d3::M2::EventA"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "2"
           },
@@ -182,11 +168,9 @@ Response: {
           "type": {
             "repr": "0x52a2986f3c7d2f12dccb6d48877bbbe18a09e368dc4a270094ea4eeaa021f7d3::M2::EventB<0x52a2986f3c7d2f12dccb6d48877bbbe18a09e368dc4a270094ea4eeaa021f7d3::M2::Object>"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "3"
           },
@@ -209,11 +193,9 @@ Response: {
           "type": {
             "repr": "0x52a2986f3c7d2f12dccb6d48877bbbe18a09e368dc4a270094ea4eeaa021f7d3::M1::EventA"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "0"
           },
@@ -226,11 +208,9 @@ Response: {
           "type": {
             "repr": "0x52a2986f3c7d2f12dccb6d48877bbbe18a09e368dc4a270094ea4eeaa021f7d3::M1::EventB<0x52a2986f3c7d2f12dccb6d48877bbbe18a09e368dc4a270094ea4eeaa021f7d3::M1::Object>"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "1"
           },
@@ -243,9 +223,11 @@ Response: {
 
 task 12 'run-graphql'. lines 166-185:
 Response: {
-  "data": {
-    "eventConnection": {
-      "nodes": [
+  "data": null,
+  "errors": [
+    {
+      "message": " --> 3:90\n  |\n3 |     filter: {sender: \"0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e\"\", eventType: \"0x4b4d63f32254c457bec65b04df4d83b0b88e04f6443f977f63ac4c9fd672d099::M1::EventA\"}\n  |                                                                                          ^---\n  |\n  = expected name",
+      "locations": [
         {
           "sendingModule": {
             "name": "M1"
@@ -265,7 +247,7 @@ Response: {
         }
       ]
     }
-  }
+  ]
 }
 
 task 13 'run-graphql'. lines 187-206:
@@ -280,11 +262,9 @@ Response: {
           "type": {
             "repr": "0x52a2986f3c7d2f12dccb6d48877bbbe18a09e368dc4a270094ea4eeaa021f7d3::M1::EventB<0x52a2986f3c7d2f12dccb6d48877bbbe18a09e368dc4a270094ea4eeaa021f7d3::M1::Object>"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "1"
           },

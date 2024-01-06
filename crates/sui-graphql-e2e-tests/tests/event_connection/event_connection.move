@@ -112,7 +112,7 @@ module Test::M2 {
       type {
         repr
       }
-      senders {
+      sender {
         address
       }
       json
@@ -133,7 +133,7 @@ module Test::M2 {
       type {
         repr
       }
-      senders {
+      sender {
         address
       }
       json
@@ -154,7 +154,7 @@ module Test::M2 {
       type {
         repr
       }
-      senders {
+      sender {
         address
       }
       json
@@ -175,7 +175,7 @@ module Test::M2 {
       type {
         repr
       }
-      senders {
+      sender {
         address
       }
       json
@@ -196,7 +196,7 @@ module Test::M2 {
       type {
         repr
       }
-      senders {
+      sender {
         address
       }
       json
@@ -217,7 +217,7 @@ module Test::M2 {
       type {
         repr
       }
-      senders {
+      sender {
         address
       }
       json
@@ -238,7 +238,7 @@ module Test::M2 {
       type {
         repr
       }
-      senders {
+      sender {
         address
       }
       json
@@ -259,7 +259,7 @@ module Test::M2 {
       type {
         repr
       }
-      senders {
+      sender {
         address
       }
       json

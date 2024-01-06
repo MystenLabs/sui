@@ -28,11 +28,9 @@ Response: {
           "type": {
             "repr": "0x937d602eeaadcd617458c3e785e14d636fc247217b2fcc175e30c298d51a8f4b::M1::EventA"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "2"
           },
@@ -55,11 +53,9 @@ Response: {
           "type": {
             "repr": "0x937d602eeaadcd617458c3e785e14d636fc247217b2fcc175e30c298d51a8f4b::M1::EventA"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "2"
           },
@@ -100,11 +96,9 @@ Response: {
           "type": {
             "repr": "0x937d602eeaadcd617458c3e785e14d636fc247217b2fcc175e30c298d51a8f4b::M1::EventA"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "2"
           },
