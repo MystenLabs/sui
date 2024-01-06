@@ -23,9 +23,6 @@ query getLatestSuiSystemState {
 			decreaseRate
 			distributionCounter
 			periodLength
-			# stakeSubsidyStartEpoch
-			# stakingPoolMappingsId
-			# stakingPoolMappingsSize
 		}
 
 		storageFund {
@@ -41,6 +38,7 @@ query getLatestSuiSystemState {
 			validatorLowStakeThreshold
 			validatorLowStakeGracePeriod
 			validatorVeryLowStakeThreshold
+			stakeSubsidyStartEpoch
 		}
 		protocolConfigs {
 			protocolVersion
@@ -50,15 +48,17 @@ query getLatestSuiSystemState {
 				...RPC_VALIDATOR_FIELDS
 			}
 
-			# atRiskValidators (missing number of epochs)
-			# inactivePoolsId
 			inactivePoolsSize
-			# pendingActiveValidatorsId
 			pendingActiveValidatorsSize
-			# validatorCandidatesId
+			stakePoolMappingsSize
 			validatorCandidatesSize
 			pendingRemovals
 			totalStake
+
+			# inactivePoolsId
+			# validatorCandidatesId
+			# pendingActiveValidatorsId
+			# stakingPoolMappingsId
 		}
 	}
 }

@@ -7,17 +7,16 @@ query resolveNameServiceAddress($name: String!) {
 	}
 }
 
-query resolveNameServiceNames(
-	$address: SuiAddress! #, $limit: Int, # $cursor: String
-) {
+query resolveNameServiceNames($address: SuiAddress!, $limit: Int, $cursor: String) {
 	address(address: $address) {
-		defaultNameServiceName
-		# nameServiceConnection(first: $limit, after: $cursor) {
-		# 	pageInfo {
-		# 		hasNextPage
-		# 		endCursor
-		# 	}
-		# 	nodes
-		# }
+		suinsRegistrations(first: $limit, after: $cursor) {
+			pageInfo {
+				hasNextPage
+				endCursor
+			}
+			nodes {
+				domain
+			}
+		}
 	}
 }

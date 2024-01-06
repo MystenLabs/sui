@@ -131,6 +131,7 @@ import {
 	GetTotalSupplyDocument,
 	GetTotalTransactionBlocksDocument,
 	GetTransactionBlockDocument,
+	GetValidatorsApyDocument,
 	MultiGetObjectsDocument,
 	MultiGetTransactionBlocksDocument,
 	QueryEventsDocument,
@@ -745,7 +746,9 @@ export class GraphQLSuiClient extends SuiClient {
 			activeValidators: systemState.validatorSet?.activeValidators?.map(
 				mapGraphQlValidatorToRpcValidator,
 			)!,
-			atRiskValidators: [], // TODO;
+			atRiskValidators: systemState.validatorSet?.activeValidators
+				?.filter((validator) => validator.atRisk)
+				.map((validator) => [validator.address.address!, validator.atRisk!.toString()])!,
 			epoch: String(systemState.epochId),
 			epochDurationMs: String(
 				new Date(systemState.endTimestamp).getTime() -
@@ -758,7 +761,7 @@ export class GraphQLSuiClient extends SuiClient {
 			minValidatorJoiningStake: String(systemState.systemParameters?.minValidatorJoiningStake),
 			pendingActiveValidatorsId: 'TODO',
 			pendingActiveValidatorsSize: String(systemState.validatorSet?.pendingActiveValidatorsSize),
-			pendingRemovals: [], // TODO;
+			pendingRemovals: systemState.validatorSet?.pendingRemovals?.map((idx) => String(idx)) ?? [],
 			protocolVersion: String(systemState.protocolConfigs?.protocolVersion),
 			referenceGasPrice: String(systemState.referenceGasPrice),
 			safeMode: systemState.safeMode?.enabled!,
@@ -775,9 +778,9 @@ export class GraphQLSuiClient extends SuiClient {
 			stakeSubsidyDecreaseRate: systemState.systemStakeSubsidy?.decreaseRate!,
 			stakeSubsidyDistributionCounter: String(systemState.systemStakeSubsidy?.distributionCounter),
 			stakeSubsidyPeriodLength: String(systemState.systemStakeSubsidy?.periodLength),
-			stakeSubsidyStartEpoch: 'TODO',
+			stakeSubsidyStartEpoch: String(systemState.systemParameters?.stakeSubsidyStartEpoch),
 			stakingPoolMappingsId: 'TODO',
-			stakingPoolMappingsSize: 'TODO',
+			stakingPoolMappingsSize: String(systemState.validatorSet?.stakePoolMappingsSize),
 			storageFundNonRefundableBalance: String(systemState.storageFund?.nonRefundableBalance),
 			storageFundTotalObjectStorageRebates: String(
 				systemState.storageFund?.totalObjectStorageRebates,
@@ -920,9 +923,17 @@ export class GraphQLSuiClient extends SuiClient {
 
 		return {
 			data: {
-				content: field.value.contents?.json, // TODO: requires formatting
+				content: {
+					dataType: 'moveObject' as const,
+					fields: moveDataToRpcContent(
+						field.value.contents?.data!,
+						field.value?.contents?.type.layout!,
+					) as MoveStruct,
+					hasPublicTransfer: field.value.hasPublicTransfer!,
+					type: toShortTypeString(field.value.contents?.type.repr!),
+				},
 				digest: field.value.asObject.digest,
-				display: {}, // TODO
+				display: formatDisplay(field.value.asObject),
 				objectId: field.value.asObject.address,
 				type: toShortTypeString(field.value.contents?.type.repr),
 				version: field.value.asObject.version as unknown as string, // RPC types are wrong here
@@ -1128,7 +1139,20 @@ export class GraphQLSuiClient extends SuiClient {
 	}
 
 	override async getValidatorsApy(): Promise<ValidatorsApy> {
-		throw new Error('Method not implemented.');
+		const epoch = await this.#graphqlQuery(
+			{
+				query: GetValidatorsApyDocument,
+			},
+			(data) => data.epoch,
+		);
+
+		return {
+			epoch: String(epoch.epochId),
+			apys: epoch.validatorSet?.activeValidators?.map((validator) => ({
+				address: validator.address.address!,
+				apy: (validator.apy ? validator.apy / 100 : null) as number,
+			}))!,
+		};
 	}
 
 	override async getChainIdentifier(): Promise<string> {
@@ -1217,11 +1241,10 @@ export class GraphQLSuiClient extends SuiClient {
 			(data) => data.address,
 		);
 
-		// TODO currently only defaultNameServiceName is supported
 		return {
 			hasNextPage: false,
 			nextCursor: null,
-			data: address.defaultNameServiceName ? [address.defaultNameServiceName] : [],
+			data: address.suinsRegistrations?.nodes.map((node) => node.domain) ?? [],
 		};
 	}
 }
@@ -1251,23 +1274,6 @@ function mapGraphQLObjectToRpcObject(
 	object: Rpc_Object_FieldsFragment,
 	options: { showBcs?: boolean | null } = {},
 ): NonNullable<SuiObjectResponse['data']> {
-	let display: DisplayFieldsResponse = {
-		data: null,
-		error: null,
-	};
-
-	if (object.display) {
-		object.display.forEach((displayItem) => {
-			if (displayItem.error) {
-				display!.error = displayItem.error as never;
-			} else if (displayItem.value != null) {
-				if (!display!.data) {
-					display!.data = {};
-				}
-				display!.data[displayItem.key] = displayItem.value;
-			}
-		});
-	}
 	return {
 		bcs: options?.showBcs
 			? {
@@ -1288,7 +1294,7 @@ function mapGraphQLObjectToRpcObject(
 			type: toShortTypeString(object.asMoveObject?.contents?.type.repr!),
 		},
 		digest: object.digest,
-		display,
+		display: formatDisplay(object),
 		objectId: object.objectId,
 		owner: object.owner?.asObject
 			? {
@@ -1308,6 +1314,30 @@ function mapGraphQLTransactionBlockToRpcTransactionBlock(
 	transactionBlock: Rpc_Transaction_FieldsFragment,
 	options?: SuiTransactionBlockResponseOptions | null,
 ): SuiTransactionBlockResponse {
+	const deletedChanges = transactionBlock.effects?.objectChanges
+		?.filter((change) => change?.idDeleted === true)
+		.map((change) => ({
+			digest: change?.inputState?.digest!,
+			version: String(change?.inputState?.version),
+			objectId: change?.inputState?.address,
+		}));
+	const createdChanges = transactionBlock.effects?.objectChanges
+		?.filter((change) => change?.idCreated === true)
+		.map((change) => ({
+			owner: change?.outputState?.owner?.asObject
+				? {
+						ObjectOwner: change?.outputState?.owner?.asObject.address,
+				  }
+				: {
+						AddressOwner: change?.outputState?.owner?.asAddress?.address,
+				  },
+			reference: {
+				digest: change?.outputState?.digest!,
+				version: change?.outputState?.version as unknown as string, // RPC type is wrong here
+				objectId: change?.outputState?.address,
+			},
+		}));
+
 	return {
 		balanceChanges: transactionBlock.effects?.balanceChanges?.map((balanceChange) => ({
 			amount: balanceChange?.amount,
@@ -1320,35 +1350,12 @@ function mapGraphQLTransactionBlockToRpcTransactionBlock(
 		})),
 		checkpoint: transactionBlock.effects?.checkpoint?.sequenceNumber.toString(),
 		timestampMs: new Date(transactionBlock.effects?.timestamp).getTime().toString(),
-		confirmedLocalExecution: false, // Not supported in GraphQL
 		digest: transactionBlock.digest,
 		effects: options?.showEffects
 			? {
-					created: transactionBlock.effects?.objectChanges
-						?.filter((change) => change?.idCreated === true)
-						.map((change) => ({
-							owner: change?.outputState?.owner?.asObject
-								? {
-										ObjectOwner: change?.outputState?.owner?.asObject.address,
-								  }
-								: {
-										AddressOwner: change?.outputState?.owner?.asAddress?.address,
-								  },
-							reference: {
-								digest: change?.outputState?.digest!,
-								version: change?.outputState?.version?.toString()!,
-								objectId: change?.outputState?.address,
-							},
-						})),
-					deleted: transactionBlock.effects?.objectChanges
-						?.filter((change) => change?.idDeleted === true)
-						.map((change) => ({
-							digest: change?.inputState?.digest!,
-							version: String(change?.inputState?.version),
-							objectId: change?.inputState?.address,
-						})),
+					...(createdChanges?.length ? { created: createdChanges } : {}),
+					...(deletedChanges?.length ? { deleted: deletedChanges } : {}),
 					dependencies: transactionBlock.effects?.dependencies?.map((dep) => dep?.digest!),
-					eventsDigest: transactionBlock.digest, // TODO check this is the correct digest
 					executedEpoch: String(transactionBlock.effects?.executedEpoch?.epochId),
 					gasObject: {
 						owner: transactionBlock.effects?.gasEffects?.gasObject?.owner?.asObject
@@ -1362,7 +1369,8 @@ function mapGraphQLTransactionBlockToRpcTransactionBlock(
 							  },
 						reference: {
 							digest: transactionBlock.effects?.gasEffects?.gasObject?.digest!,
-							version: transactionBlock.effects?.gasEffects?.gasObject?.version.toString()!,
+							version: transactionBlock.effects?.gasEffects?.gasObject
+								?.version as unknown as string, // RPC type is wrong here
 							objectId: transactionBlock.effects?.gasEffects?.gasObject?.address,
 						},
 					},
@@ -1374,10 +1382,12 @@ function mapGraphQLTransactionBlockToRpcTransactionBlock(
 						storageRebate: transactionBlock.effects?.gasEffects?.gasSummary?.storageRebate,
 					},
 					messageVersion: 'v1' as const,
-					modifiedAtVersions: transactionBlock.effects?.objectChanges?.map((change) => ({
-						objectId: change?.inputState?.address,
-						sequenceNumber: String(change?.inputState?.version),
-					})),
+					modifiedAtVersions: transactionBlock.effects?.objectChanges
+						?.filter((change) => !change?.idCreated && !change?.idDeleted)
+						?.map((change) => ({
+							objectId: change?.inputState?.address,
+							sequenceNumber: String(change?.inputState?.version),
+						})),
 					mutated: transactionBlock.effects?.objectChanges
 						?.filter((change) => !change?.idCreated && !change?.idDeleted)
 						?.map((change) => ({
@@ -1388,59 +1398,78 @@ function mapGraphQLTransactionBlockToRpcTransactionBlock(
 								  },
 							reference: {
 								digest: change?.outputState?.digest!,
-								version: String(change?.outputState?.version),
+								version: change?.outputState?.version as unknown as string,
 								objectId: change?.outputState?.address,
 							},
 						})),
 
-					sharedObjects: [], // TODO
 					status: { status: transactionBlock.effects?.status?.toLowerCase() } as ExecutionStatus,
 					transactionDigest: transactionBlock.digest,
-					unwrapped: [], // TODO
-					unwrappedThenDeleted: [], // TODO
-					wrapped: [], // TODO
+					// sharedObjects: [], // TODO
+					// unwrapped: [], // TODO
+					// unwrappedThenDeleted: [], // TODO
+					// wrapped: [], // TODO
 			  }
 			: undefined,
-		errors: [], // TODO
-		events: options?.showEvents ? [] : undefined, // TODO
+		// errors: [], // TODO
+		events: options?.showEvents
+			? transactionBlock.events?.nodes.map((event) => ({
+					bcs: event.bcs,
+					id: 'TODO' as never, // TODO: turn id into an object
+					packageId: event.sendingModule?.package.asObject?.address!,
+					parsedJson: event.json ? JSON.parse(event.json) : undefined,
+					sender: event.senders?.[0]?.address,
+					timestampMs: new Date(event.timestamp).getTime().toString(),
+					transactionModule: 'TODO',
+					type: toShortTypeString(event.type?.repr)!,
+			  })) ?? []
+			: undefined,
 		rawTransaction: options?.showRawInput ? transactionBlock.rawTransaction : undefined,
 		transaction: options?.showInput &&
 			transactionBlock.rawTransaction && {
 				data: bcs.SenderSignedData.parse(fromB64(transactionBlock.rawTransaction))[0].intentMessage
 					.value.V1,
 			},
-
 		objectChanges: options?.showObjectChanges
-			? transactionBlock.effects?.objectChanges?.map((change) =>
-					change?.idDeleted
-						? {
-								digest: change?.inputState?.digest!,
-								objectId: change?.inputState?.address,
-								owner: change?.inputState?.owner?.asObject
-									? { ObjectOwner: change?.inputState?.owner?.asObject.address }
-									: { AddressOwner: change?.inputState?.owner?.asAddress?.address },
-								objectType: toShortTypeString(
-									change?.inputState?.asMoveObject?.contents?.type.repr,
-								),
-								sender: transactionBlock.sender?.address!,
-								type: 'deleted',
-								version: change?.inputState?.version.toString()!,
-						  }
-						: {
-								digest: change?.outputState?.digest!,
-								objectId: change?.outputState?.address,
-								owner: change?.outputState?.owner?.asObject
-									? { ObjectOwner: change?.outputState?.owner?.asObject.address }
-									: { AddressOwner: change?.outputState?.owner?.asAddress?.address },
-								objectType: toShortTypeString(
-									change?.outputState?.asMoveObject?.contents?.type.repr,
-								),
-								previousVersion: change?.inputState?.version.toString()!,
-								sender: transactionBlock.sender?.address,
-								type: change?.idCreated ? 'created' : 'mutated',
-								version: change?.outputState?.version.toString()!,
-						  },
-			  )
+			? transactionBlock.effects?.objectChanges
+					?.map((change) =>
+						change?.idDeleted
+							? {
+									digest: change?.inputState?.digest!,
+									objectId: change?.inputState?.address,
+									owner: change?.inputState?.owner?.asObject
+										? { ObjectOwner: change?.inputState?.owner?.asObject.address }
+										: { AddressOwner: change?.inputState?.owner?.asAddress?.address },
+									objectType: toShortTypeString(
+										change?.inputState?.asMoveObject?.contents?.type.repr,
+									),
+									sender: transactionBlock.sender?.address!,
+									type: 'deleted' as const,
+									version: change?.inputState?.version.toString()!,
+							  }
+							: {
+									digest: change?.outputState?.digest!,
+									objectId: change?.outputState?.address,
+									owner: change?.outputState?.owner?.asObject
+										? { ObjectOwner: change?.outputState?.owner?.asObject.address }
+										: { AddressOwner: change?.outputState?.owner?.asAddress?.address },
+									objectType: toShortTypeString(
+										change?.outputState?.asMoveObject?.contents?.type.repr,
+									),
+									previousVersion: change?.inputState?.version.toString()!,
+									sender: transactionBlock.sender?.address,
+									type: change?.idCreated ? ('created' as const) : ('mutated' as const),
+									version: change?.outputState?.version.toString()!,
+							  },
+					)
+					.sort((a, b) => {
+						if (a.type === 'created' && b.type === 'deleted') {
+							return -1;
+						} else if (a.type === 'deleted' && b.type === 'created') {
+							return 1;
+						}
+						return 0;
+					})
 			: undefined,
 	};
 }
@@ -1768,4 +1797,34 @@ function mapNormalizedMoveModule(
 		structs,
 		exposedFunctions,
 	};
+}
+
+function formatDisplay(object: {
+	display?:
+		| {
+				key: string;
+				value?: string | null | undefined;
+				error?: string | null | undefined;
+		  }[]
+		| null;
+}) {
+	let display: DisplayFieldsResponse = {
+		data: null,
+		error: null,
+	};
+
+	if (object.display) {
+		object.display.forEach((displayItem) => {
+			if (displayItem.error) {
+				display!.error = displayItem.error as never;
+			} else if (displayItem.value != null) {
+				if (!display!.data) {
+					display!.data = {};
+				}
+				display!.data[displayItem.key] = displayItem.value;
+			}
+		});
+	}
+
+	return display;
 }

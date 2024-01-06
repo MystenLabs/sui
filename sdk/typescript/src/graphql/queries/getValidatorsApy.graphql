@@ -1,0 +1,13 @@
+query getValidatorsApy {
+	epoch {
+		epochId
+		validatorSet {
+			activeValidators {
+				address {
+					address
+				}
+				apy
+			}
+		}
+	}
+}

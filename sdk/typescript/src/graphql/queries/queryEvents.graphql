@@ -21,23 +21,27 @@ query queryEvents(
 			startCursor
 		}
 		nodes {
-			sendingModule {
-				package {
-					asObject {
-						address
-					}
-				}
-				name
-			}
-			senders {
-				address
-			}
-			type {
-				repr
-			}
-			json
-			bcs
-			timestamp
+			...RPC_EVENTS_FIELDS
 		}
 	}
+}
+
+fragment RPC_EVENTS_FIELDS on Event {
+	sendingModule {
+		package {
+			asObject {
+				address
+			}
+		}
+		name
+	}
+	senders {
+		address
+	}
+	type {
+		repr
+	}
+	json
+	bcs
+	timestamp
 }

@@ -13,15 +13,22 @@ query getDynamicFieldObject($parentId: SuiAddress!, $name: DynamicFieldName!) {
 				__typename
 				... on MoveObject {
 					contents {
-						json
+						data
 						type {
+							layout
 							repr
 						}
 					}
+					hasPublicTransfer
 					asObject {
 						address
 						digest
 						version
+						display {
+							key
+							value
+							error
+						}
 					}
 				}
 			}
