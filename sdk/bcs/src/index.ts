@@ -13,13 +13,15 @@
 
 import { fromB58, toB58 } from './b58.js';
 import { fromB64, toB64 } from './b64.js';
-import { BcsType, BcsTypeOptions, isSerializedBcs, SerializedBcs } from './bcs-type.js';
+import type { BcsTypeOptions } from './bcs-type.js';
+import { BcsType, isSerializedBcs, SerializedBcs } from './bcs-type.js';
 import { bcs } from './bcs.js';
 import { fromHEX, toHEX } from './hex.js';
 import { BcsReader } from './reader.js';
-import { type InferBcsInput, type InferBcsType } from './types.js';
+import type { InferBcsInput, InferBcsType } from './types.js';
 import { decodeStr, encodeStr, splitGenericParameters } from './utils.js';
-import { BcsWriter, BcsWriterOptions } from './writer.js';
+import type { BcsWriterOptions } from './writer.js';
+import { BcsWriter } from './writer.js';
 
 export * from './legacy-registry.js';
 
