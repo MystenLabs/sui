@@ -681,7 +681,7 @@
 >      type {
 >        repr
 >      }
->      senders {
+>      sender {
 >        address
 >      }
 >      timestamp
@@ -740,7 +740,7 @@
 >      type {
 >        repr
 >      }
->      senders {
+>      sender {
 >        address
 >      }
 >      timestamp
