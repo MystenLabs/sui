@@ -224,20 +224,14 @@ impl BridgeAction {
                 // Add nonce
                 bytes.extend_from_slice(&e.nonce.to_le_bytes());
                 // Add source chain id
-                bytes.push(BridgeChainId::SuiTestnet as u8);
-                // Add source tx id length
-                bytes.push(SUI_TX_DIGEST_LENGTH as u8);
-                // Add source tx id
-                bytes.extend_from_slice(a.sui_tx_digest.as_ref());
-                // Add source tx event index
-                bytes.extend_from_slice(&a.sui_tx_event_index.to_le_bytes());
+                bytes.push(e.sui_chain_id as u8);
 
                 // Add source address length
                 bytes.push(SUI_ADDRESS_LENGTH as u8);
                 // Add source address
                 bytes.extend_from_slice(&e.sui_address.to_vec());
                 // Add dest chain id
-                bytes.push(BridgeChainId::EthSepolia as u8);
+                bytes.push(e.eth_chain_id as u8);
                 // Add dest address length
                 bytes.push(EthAddress::len_bytes() as u8);
                 // Add dest address
@@ -249,12 +243,34 @@ impl BridgeAction {
                 // Add token amount
                 bytes.extend_from_slice(&e.amount.to_le_bytes());
             }
-            BridgeAction::EthToSuiBridgeAction(e) =>
-            // TODO add formats for other events
-            {
-                // This is just placeholder for testing. We need actual abis to encode this.
-                bytes.extend_from_slice(bcs::to_bytes(e).unwrap().as_slice());
-            }
+            BridgeAction::EthToSuiBridgeAction(a) => {
+                let e = &a.eth_bridge_event;
+                // Add message type
+                bytes.push(BridgeActionType::TokenTransfer as u8);
+                // Add message version
+                bytes.push(TOKEN_TRANSFER_MESSAGE_VERSION);
+                // Add nonce
+                bytes.extend_from_slice(&e.nonce.to_le_bytes());
+                // Add source chain id
+                bytes.push(e.eth_chain_id as u8);
+
+                // Add source address length
+                bytes.push(EthAddress::len_bytes() as u8);
+                // Add source address
+                bytes.extend_from_slice(e.eth_address.as_bytes());
+                // Add dest chain id
+                bytes.push(e.sui_chain_id as u8);
+                // Add dest address length
+                bytes.push(SUI_ADDRESS_LENGTH as u8);
+                // Add dest address
+                bytes.extend_from_slice(&e.sui_address.to_vec());
+
+                // Add token id
+                bytes.push(e.token_id as u8);
+
+                // Add token amount
+                bytes.extend_from_slice(&e.amount.to_le_bytes());
+            } // TODO add formats for other events
         }
         bytes
     }
@@ -327,12 +343,13 @@ pub struct EthLog {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use crate::{test_utils::get_test_authority_and_key, types::TokenId};
-    use ethers::types::Address as EthAddress;
-    use fastcrypto::traits::KeyPair;
+    use ethers::types::{Address as EthAddress, TxHash};
+    use fastcrypto::encoding::Hex;
+    use fastcrypto::hash::HashFunction;
+    use fastcrypto::{encoding::Encoding, traits::KeyPair};
     use prometheus::Registry;
+    use std::{collections::HashSet, str::FromStr};
     use sui_types::{
         base_types::{SuiAddress, TransactionDigest},
         crypto::get_key_pair,
@@ -378,9 +395,6 @@ mod tests {
         let message_version = vec![TOKEN_TRANSFER_MESSAGE_VERSION]; // len: 1
         let nonce_bytes = nonce.to_le_bytes().to_vec(); // len: 8
         let source_chain_id_bytes = vec![sui_chain_id as u8]; // len: 1
-        let source_tx_digest_length_bytes = vec![SUI_TX_DIGEST_LENGTH as u8]; // len: 1
-        let source_tx_digest_bytes = sui_tx_digest.inner().to_vec(); // len: 32
-        let source_event_index_bytes = sui_tx_event_index.to_le_bytes().to_vec(); // len: 2
 
         let sui_address_length_bytes = vec![SUI_ADDRESS_LENGTH as u8]; // len: 1
         let sui_address_bytes = sui_address.to_vec(); // len: 32
@@ -397,9 +411,6 @@ mod tests {
         combined_bytes.extend_from_slice(&message_version);
         combined_bytes.extend_from_slice(&nonce_bytes);
         combined_bytes.extend_from_slice(&source_chain_id_bytes);
-        combined_bytes.extend_from_slice(&source_tx_digest_length_bytes);
-        combined_bytes.extend_from_slice(&source_tx_digest_bytes);
-        combined_bytes.extend_from_slice(&source_event_index_bytes);
         combined_bytes.extend_from_slice(&sui_address_length_bytes);
         combined_bytes.extend_from_slice(&sui_address_bytes);
         combined_bytes.extend_from_slice(&dest_chain_id_bytes);
@@ -414,9 +425,109 @@ mod tests {
         // TODO: for each action type add a test to assert the length
         assert_eq!(
             combined_bytes.len(),
-            18 + 1 + 1 + 8 + 1 + 1 + 32 + 2 + 1 + 32 + 1 + 20 + 1 + 1 + 8
+            18 + 1 + 1 + 8 + 1 + 1 + 32 + 1 + 20 + 1 + 1 + 8
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_bridge_message_encoding_regression_emitted_sui_to_eth_token_bridge_v1(
+    ) -> anyhow::Result<()> {
+        telemetry_subscribers::init_for_testing();
+        let registry = Registry::new();
+        mysten_metrics::init_metrics(&registry);
+        let sui_tx_digest = TransactionDigest::random();
+        let sui_tx_event_index = 1u16;
+
+        let nonce = 10u64;
+        let sui_chain_id = BridgeChainId::SuiTestnet;
+        let eth_chain_id = BridgeChainId::EthSepolia;
+        let sui_address = SuiAddress::from_str(
+            "0x0000000000000000000000000000000000000000000000000000000000000064",
+        )
+        .unwrap();
+        let eth_address =
+            EthAddress::from_str("0x00000000000000000000000000000000000000c8").unwrap();
+        let token_id = TokenId::USDC;
+        let amount = 12345;
+
+        let sui_bridge_event = EmittedSuiToEthTokenBridgeV1 {
+            nonce,
+            sui_chain_id,
+            eth_chain_id,
+            sui_address,
+            eth_address,
+            token_id,
+            amount,
+        };
+        let encoded_bytes = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
+            sui_tx_digest,
+            sui_tx_event_index,
+            sui_bridge_event,
+        })
+        .to_bytes();
+
+        assert_eq!(
+            encoded_bytes,
+            Hex::decode("5355495f4252494447455f4d45535341474500010a00000000000000012000000000000000000000000000000000000000000000000000000000000000640b1400000000000000000000000000000000000000c8033930000000000000").unwrap(),
         );
 
+        let hash = Keccak256::digest(encoded_bytes).digest;
+        assert_eq!(
+            hash.to_vec(),
+            Hex::decode("1f308fdc0a7e73701370bf1ecbac91cc0605a2be000c52431c4f9546545ead5b")
+                .unwrap(),
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_bridge_message_encoding_regression_eth_to_sui_token_bridge_v1() -> anyhow::Result<()> {
+        telemetry_subscribers::init_for_testing();
+        let registry = Registry::new();
+        mysten_metrics::init_metrics(&registry);
+        let eth_tx_hash = TxHash::random();
+        let eth_event_index = 1u16;
+
+        let nonce = 10u64;
+        let sui_chain_id = BridgeChainId::SuiTestnet;
+        let eth_chain_id = BridgeChainId::EthSepolia;
+        let sui_address = SuiAddress::from_str(
+            "0x0000000000000000000000000000000000000000000000000000000000000064",
+        )
+        .unwrap();
+        let eth_address =
+            EthAddress::from_str("0x00000000000000000000000000000000000000c8").unwrap();
+        let token_id = TokenId::USDC;
+        let amount = 12345;
+
+        let eth_bridge_event = EthToSuiTokenBridgeV1 {
+            nonce,
+            sui_chain_id,
+            eth_chain_id,
+            sui_address,
+            eth_address,
+            token_id,
+            amount,
+        };
+        let encoded_bytes = BridgeAction::EthToSuiBridgeAction(EthToSuiBridgeAction {
+            eth_tx_hash,
+            eth_event_index,
+            eth_bridge_event,
+        })
+        .to_bytes();
+
+        assert_eq!(
+            encoded_bytes,
+            Hex::decode("5355495f4252494447455f4d45535341474500010a000000000000000b1400000000000000000000000000000000000000c801200000000000000000000000000000000000000000000000000000000000000064033930000000000000").unwrap(),
+        );
+
+        let hash = Keccak256::digest(encoded_bytes).digest;
+        assert_eq!(
+            hash.to_vec(),
+            Hex::decode("e9ea9aef6729a3274ebb77acb835039f71a8910e90eb14a2c479bf5901159cc5")
+                .unwrap(),
+        );
         Ok(())
     }
 
