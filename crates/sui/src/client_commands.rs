@@ -66,7 +66,7 @@ use tabled::{
         Modify as TableModify, Panel as TablePanel, Style as TableStyle,
     },
 };
-use tracing::info;
+use tracing::{info, trace};
 
 use crate::key_identity::{get_identity_address, KeyIdentity};
 
@@ -618,6 +618,10 @@ pub enum SuiClientCommands {
         /// The digest of the transaction to replay
         #[arg(long, short)]
         tx_digest: String,
+
+        /// Log extra gas-related information
+        #[arg(long, short)]
+        gas_info: bool,
     },
 
     /// Replay transactions listed in a file.
@@ -655,7 +659,10 @@ impl SuiClientCommands {
         context: &mut WalletContext,
     ) -> Result<SuiClientCommandResult, anyhow::Error> {
         let ret = Ok(match self {
-            SuiClientCommands::ReplayTransaction { tx_digest } => {
+            SuiClientCommands::ReplayTransaction {
+                tx_digest,
+                gas_info: _,
+            } => {
                 let cmd = ReplayToolCommand::ReplayTransaction {
                     tx_digest,
                     show_effects: true,
@@ -663,6 +670,7 @@ impl SuiClientCommands {
                     executor_version_override: None,
                     protocol_version_override: None,
                 };
+
                 let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
                     sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
