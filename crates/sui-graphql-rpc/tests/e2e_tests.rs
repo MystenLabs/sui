@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(feature = "pg_integration")]
+// #[cfg(feature = "pg_integration")]
 mod tests {
     use rand::rngs::StdRng;
     use rand::SeedableRng;
@@ -136,6 +136,7 @@ mod tests {
 
         let usage = res.usage().unwrap().unwrap();
         assert_eq!(*usage.get("inputNodes").unwrap(), 1);
+        assert_eq!(*usage.get("outputNodes").unwrap(), 1);
         assert_eq!(*usage.get("depth").unwrap(), 1);
         assert_eq!(*usage.get("variables").unwrap(), 0);
         assert_eq!(*usage.get("fragments").unwrap(), 0);

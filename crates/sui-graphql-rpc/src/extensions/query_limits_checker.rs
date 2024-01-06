@@ -238,7 +238,7 @@ impl QueryLimitsChecker {
                 parent_node_count: 1,
             });
             cost.input_nodes += 1;
-            check_limits(limits, &cost, Some(selection.pos))?;
+            check_limits(limits, cost, Some(selection.pos))?;
         }
 
         // Track the number of nodes at first level if any
@@ -247,7 +247,7 @@ impl QueryLimitsChecker {
         while !que.is_empty() {
             // Signifies the start of a new level
             cost.depth += 1;
-            check_limits(limits, &cost, None)?;
+            check_limits(limits, cost, None)?;
             while level_len > 0 {
                 // Ok to unwrap since we checked for empty queue
                 // and level_len > 0
@@ -274,7 +274,7 @@ impl QueryLimitsChecker {
                                 parent_node_count: current_count,
                             });
                             cost.input_nodes += 1;
-                            check_limits(limits, &cost, Some(field_sel.pos))?;
+                            check_limits(limits, cost, Some(field_sel.pos))?;
                         }
                     }
 
@@ -301,7 +301,7 @@ impl QueryLimitsChecker {
                                 parent_node_count,
                             });
                             cost.input_nodes += 1;
-                            check_limits(limits, &cost, Some(selection.pos))?;
+                            check_limits(limits, cost, Some(selection.pos))?;
                         }
                     }
 
@@ -313,7 +313,7 @@ impl QueryLimitsChecker {
                                 parent_node_count,
                             });
                             cost.input_nodes += 1;
-                            check_limits(limits, &cost, Some(selection.pos))?;
+                            check_limits(limits, cost, Some(selection.pos))?;
                         }
                     }
                 }
