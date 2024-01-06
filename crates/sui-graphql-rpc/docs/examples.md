@@ -1625,22 +1625,26 @@
 >          }
 >        }
 >        balanceChanges {
->          owner {
->            address
->            balance(type: "0x2::sui::SUI") {
->              totalBalance
+>          nodes {
+>            owner {
+>              address
+>              balance(type: "0x2::sui::SUI") {
+>                totalBalance
+>              }
 >            }
->          }
->          amount
->          coinType {
->            repr
->            signature
->            layout
+>            amount
+>            coinType {
+>              repr
+>              signature
+>              layout
+>            }
 >          }
 >        }
 >        dependencies {
->          sender {
->            address
+>          nodes {
+>            sender {
+>              address
+>            }
 >          }
 >        }
 >      }

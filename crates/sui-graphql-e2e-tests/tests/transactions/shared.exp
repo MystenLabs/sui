@@ -20,7 +20,7 @@ gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 
 task 5 'create-checkpoint'. lines 38-38:
 Checkpoint created: 1
 
-task 6 'run-graphql'. lines 40-85:
+task 6 'run-graphql'. lines 40-88:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -45,7 +45,9 @@ Response: {
           },
           "effects": {
             "status": "SUCCESS",
-            "unchangedSharedObjects": []
+            "unchangedSharedObjects": {
+              "nodes": []
+            }
           }
         },
         {
@@ -63,7 +65,9 @@ Response: {
           },
           "effects": {
             "status": "SUCCESS",
-            "unchangedSharedObjects": []
+            "unchangedSharedObjects": {
+              "nodes": []
+            }
           }
         },
         {
@@ -81,15 +85,17 @@ Response: {
           },
           "effects": {
             "status": "SUCCESS",
-            "unchangedSharedObjects": [
-              {
-                "__typename": "SharedObjectRead",
-                "address": "0xcd86658e39502bcf2306e162a77d4e7d252900a15f80287997b013d25a3f23e5",
-                "version": 2,
-                "digest": "9CELqQqgcLmj7a4wajr3fNQhqDWJvEbxC7uiVHUyGbgg",
-                "object": null
-              }
-            ]
+            "unchangedSharedObjects": {
+              "nodes": [
+                {
+                  "__typename": "SharedObjectRead",
+                  "address": "0xcd86658e39502bcf2306e162a77d4e7d252900a15f80287997b013d25a3f23e5",
+                  "version": 2,
+                  "digest": "9CELqQqgcLmj7a4wajr3fNQhqDWJvEbxC7uiVHUyGbgg",
+                  "object": null
+                }
+              ]
+            }
           }
         }
       ]

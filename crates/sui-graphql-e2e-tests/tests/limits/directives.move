@@ -30,9 +30,11 @@ fragment Modules on Object  @deprecated {
         nodes {
             effects {
                 objectChanges {
+                  nodes {
                     outputState {
                         ...Modules
                     }
+                  }
                 }
             }
         }

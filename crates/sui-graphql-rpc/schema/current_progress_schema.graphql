@@ -180,6 +180,35 @@ type BalanceChange {
 	amount: BigInt
 }
 
+type BalanceChangeConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [BalanceChangeEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [BalanceChange!]!
+}
+
+"""
+An edge in a connection.
+"""
+type BalanceChangeEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: BalanceChange!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 type BalanceConnection {
 	"""
 	Information to aid in pagination.
@@ -1523,6 +1552,35 @@ type ObjectChange {
 	idDeleted: Boolean
 }
 
+type ObjectChangeConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ObjectChangeEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [ObjectChange!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ObjectChangeEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: ObjectChange!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 type ObjectConnection {
 	"""
 	Information to aid in pagination.
@@ -2465,7 +2523,7 @@ type TransactionBlockEffects {
 	"""
 	Transactions whose outputs this transaction depends upon.
 	"""
-	dependencies: [TransactionBlock!]
+	dependencies(first: Int, after: String, last: Int, before: String): TransactionBlockConnection!
 	"""
 	Effects to the gas object.
 	"""
@@ -2473,16 +2531,16 @@ type TransactionBlockEffects {
 	"""
 	Shared objects that are referenced by but not changed by this transaction.
 	"""
-	unchangedSharedObjects: [UnchangedSharedObject!]
+	unchangedSharedObjects(first: Int, after: String, last: Int, before: String): UnchangedSharedObjectConnection!
 	"""
 	The effect this transaction had on objects on-chain.
 	"""
-	objectChanges: [ObjectChange!]
+	objectChanges(first: Int, after: String, last: Int, before: String): ObjectChangeConnection!
 	"""
 	The effect this transaction had on the balances (sum of coin values per coin type) of
 	addresses and objects.
 	"""
-	balanceChanges: [BalanceChange!]
+	balanceChanges(first: Int, after: String, last: Int, before: String): BalanceChangeConnection!
 	"""
 	Timestamp corresponding to the checkpoint this transaction was finalized in.
 	"""
@@ -2596,6 +2654,35 @@ the shared object as input, consensus must schedule it and pick the version that
 used.
 """
 union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete
+
+type UnchangedSharedObjectConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [UnchangedSharedObjectEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [UnchangedSharedObject!]!
+}
+
+"""
+An edge in a connection.
+"""
+type UnchangedSharedObjectEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: UnchangedSharedObject!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
 
 """
 Upgrades a Move Package.

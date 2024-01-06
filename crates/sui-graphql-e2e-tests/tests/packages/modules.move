@@ -53,8 +53,10 @@ fragment Modules on Object {
         nodes {
             effects {
                 objectChanges {
-                    outputState {
-                        ...Modules
+                    nodes {
+                        outputState {
+                            ...Modules
+                        }
                     }
                 }
             }
@@ -90,8 +92,10 @@ fragment Modules on Object {
         nodes {
             effects {
                 objectChanges {
-                    outputState {
-                        ...Modules
+                    nodes {
+                        outputState {
+                            ...Modules
+                        }
                     }
                 }
             }
@@ -130,8 +134,10 @@ fragment Modules on Object {
         nodes {
             effects {
                 objectChanges {
-                    outputState {
-                        ...Modules
+                    nodes {
+                        outputState {
+                            ...Modules
+                        }
                     }
                 }
             }

@@ -90,8 +90,10 @@ fragment Structs on Object {
         nodes {
             effects {
                 objectChanges {
-                    outputState {
-                        ...Structs
+                    nodes {
+                        outputState {
+                            ...Structs
+                        }
                     }
                 }
             }
@@ -157,8 +159,10 @@ fragment Structs on Object {
         nodes {
             effects {
                 objectChanges {
-                    outputState {
-                        ...Structs
+                    nodes {
+                        outputState {
+                            ...Structs
+                        }
                     }
                 }
             }
@@ -192,8 +196,10 @@ fragment Structs on Object {
         nodes {
             effects {
                 objectChanges {
-                    outputState {
-                        ...Structs
+                    nodes {
+                        outputState {
+                            ...Structs
+                        }
                     }
                 }
             }

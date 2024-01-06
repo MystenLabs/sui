@@ -55,21 +55,27 @@
                 status
                 errors
                 lamportVersion
-                dependencies { digest }
+                dependencies {
+                    nodes { digest }
+                }
 
                 balanceChanges {
-                    owner { address }
-                    amount
-                    coinType { repr }
+                    nodes {
+                        owner { address }
+                        amount
+                        coinType { repr }
+                    }
                 }
 
                 objectChanges {
-                    address
+                    nodes {
+                        address
 
-                    idCreated
-                    idDeleted
+                        idCreated
+                        idDeleted
 
-                    outputState { address digest }
+                        outputState { address digest }
+                    }
                 }
 
                 gasEffects {
@@ -130,21 +136,27 @@
                 status
                 errors
                 lamportVersion
-                dependencies { digest }
+                dependencies {
+                    nodes { digest }
+                }
 
                 balanceChanges {
-                    owner { address }
-                    amount
-                    coinType { repr }
+                    nodes {
+                        owner { address }
+                        amount
+                        coinType { repr }
+                    }
                 }
 
                 objectChanges {
-                    address
+                    nodes {
+                        address
 
-                    idCreated
-                    idDeleted
+                        idCreated
+                        idDeleted
 
-                    outputState { address digest }
+                        outputState { address digest }
+                    }
                 }
 
                 gasEffects {
@@ -217,21 +229,27 @@
                 status
                 errors
                 lamportVersion
-                dependencies { digest }
+                dependencies {
+                    nodes { digest }
+                }
 
                 balanceChanges {
-                    owner { address }
-                    amount
-                    coinType { repr }
+                    nodes {
+                        owner { address }
+                        amount
+                        coinType { repr }
+                    }
                 }
 
                 objectChanges {
-                    address
+                    nodes {
+                        address
 
-                    idCreated
-                    idDeleted
+                        idCreated
+                        idDeleted
 
-                    outputState { address digest }
+                        outputState { address digest }
+                    }
                 }
 
                 gasEffects {
