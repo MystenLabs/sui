@@ -68,29 +68,40 @@ pub(crate) struct ObjectKey {
     version: u64,
 }
 
+/// The object's owner type: Immutable, Shared, Parent, or Address.
 #[derive(Union, Clone)]
-pub enum ObjectOwnerNew {
+pub enum ObjectOwner {
     Immutable(Immutable),
     Shared(Shared),
     Parent(Parent),
     Address(AddressOwner),
 }
 
+/// An immutable object is an object that can't be mutated, transferred, or deleted.
+/// Immutable objects have no owner, so anyone can use them.
 #[derive(SimpleObject, Clone)]
 pub struct Immutable {
+    #[graphql(name = "_")]
     dummy: Option<bool>,
 }
 
+/// A shared object is an object that is shared using the 0x2::transfer::share_object function
+/// and is accessible to everyone.
+/// Unlike owned objects, anyone can access shared objects on the network.
 #[derive(SimpleObject, Clone)]
 pub struct Shared {
     initial_shared_version: u64,
 }
 
+/// The parent of this object
 #[derive(SimpleObject, Clone)]
 pub struct Parent {
     parent: Option<Object>,
 }
 
+/// An address-owned object is owned by a specific 32-byte address that is
+/// either an account address (derived from a particular signature scheme) or
+/// an object ID. An address-owned object is accessible only to its owner and no others.
 #[derive(SimpleObject, Clone)]
 pub struct AddressOwner {
     owner: Option<Owner>,
@@ -187,36 +198,34 @@ impl Object {
     }
 
     /// The owner type of this Object.
+    /// The owner can be one of the following types: Immutable, Shared, Parent, Address
     /// Immutable and Shared Objects do not have owners.
-    async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwnerNew> {
+    async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwner> {
         use NativeOwner as O;
 
-        if self.native.owner.is_child_object() {
-            let parent = match self.native.owner.get_owner_address().ok() {
-                Some(addr) => ctx
-                    .data_unchecked::<PgManager>()
-                    .fetch_obj(addr.into(), None)
-                    .await
-                    .ok()
-                    .flatten(),
-                None => None,
-            };
-            return Some(ObjectOwnerNew::Parent(Parent { parent }));
-        }
-
         match self.native.owner {
-            O::AddressOwner(address) | O::ObjectOwner(address) => {
+            O::AddressOwner(address) => {
                 let address = SuiAddress::from(address);
-                Some(ObjectOwnerNew::Address(AddressOwner {
+                Some(ObjectOwner::Address(AddressOwner {
                     owner: Some(Owner { address }),
                 }))
             }
+            O::Immutable => Some(ObjectOwner::Immutable(Immutable { dummy: None })),
+            O::ObjectOwner(address) => {
+                let parent = ctx
+                    .data_unchecked::<PgManager>()
+                    .fetch_obj(address.into(), None)
+                    .await
+                    .ok()
+                    .flatten();
+
+                return Some(ObjectOwner::Parent(Parent { parent }));
+            }
             O::Shared {
                 initial_shared_version,
-            } => Some(ObjectOwnerNew::Shared(Shared {
+            } => Some(ObjectOwner::Shared(Shared {
                 initial_shared_version: initial_shared_version.value(),
             })),
-            O::Immutable => Some(ObjectOwnerNew::Immutable(Immutable { dummy: Some(true) })),
         }
     }
 

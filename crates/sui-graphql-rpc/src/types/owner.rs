@@ -88,7 +88,7 @@ use sui_types::dynamic_field::DynamicFieldType;
     )
 )]
 #[derive(Clone, Debug)]
-pub(crate) enum ObjectOwner {
+pub(crate) enum IOwner {
     Address(Address),
     Owner(Owner),
     Object(Object),

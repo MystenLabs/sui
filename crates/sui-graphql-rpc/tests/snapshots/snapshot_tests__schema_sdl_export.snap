@@ -62,7 +62,7 @@ type ActiveJwkEdge {
 	cursor: String!
 }
 
-type Address implements ObjectOwner {
+type Address implements Iowner {
 	"""
 	Similar behavior to the `transactionBlockConnection` in Query but
 	supports additional `AddressTransactionBlockRelationship` filter
@@ -99,6 +99,11 @@ type Address implements ObjectOwner {
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
+"""
+An address-owned object is owned by a specific 32-byte address that is
+either an account address (derived from a particular signature scheme) or
+an object ID. An address-owned object is accessible only to its owner and no others.
+"""
 type AddressOwner {
 	owner: Owner
 }
@@ -910,8 +915,12 @@ type GenesisTransaction {
 }
 
 
+"""
+An immutable object is an object that can't be mutated, transferred, or deleted.
+Immutable objects have no owner, so anyone can use them.
+"""
 type Immutable {
-	dummy: Boolean
+	_: Boolean
 }
 
 """
@@ -924,6 +933,20 @@ type Input {
 	ix: Int!
 }
 
+
+interface Iowner {
+	address: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String): Balance
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
+	defaultNameServiceName: String
+	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
+	dynamicField(name: DynamicFieldName!): DynamicField
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+}
 
 """
 Arbitrary JSON data.
@@ -1437,7 +1460,7 @@ type Mutation {
 	executeTransactionBlock(txBytes: String!, signatures: [String!]!): ExecutionResult!
 }
 
-type Object implements ObjectOwner {
+type Object implements Iowner {
 	version: Int!
 	"""
 	32-byte hash that identifies the object's current contents, encoded as a Base58 string.
@@ -1464,9 +1487,10 @@ type Object implements ObjectOwner {
 	previousTransactionBlock: TransactionBlock
 	"""
 	The owner type of this Object.
+	The owner can be one of the following types: Immutable, Shared, Parent, Address
 	Immutable and Shared Objects do not have owners.
 	"""
-	owner: ObjectOwnerNew
+	owner: ObjectOwner
 	"""
 	Attempts to convert the object into a MoveObject
 	"""
@@ -1648,21 +1672,10 @@ input ObjectKey {
 	version: Int!
 }
 
-interface ObjectOwner {
-	address: SuiAddress!
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
-	balance(type: String): Balance
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
-	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
-	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
-	defaultNameServiceName: String
-	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
-	dynamicField(name: DynamicFieldName!): DynamicField
-	dynamicObjectField(name: DynamicFieldName!): DynamicField
-	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
-}
-
-union ObjectOwnerNew = Immutable | Shared | Parent | AddressOwner
+"""
+The object's owner type: Immutable, Shared, Parent, or Address.
+"""
+union ObjectOwner = Immutable | Shared | Parent | AddressOwner
 
 """
 Represents types that could contain references or free type parameters.  Such types can appear
@@ -1727,7 +1740,7 @@ type OwnedOrImmutable {
 	object: Object
 }
 
-type Owner implements ObjectOwner {
+type Owner implements Iowner {
 	asAddress: Address
 	asObject: Object
 	address: SuiAddress!
@@ -1795,6 +1808,9 @@ type PageInfo {
 	endCursor: String
 }
 
+"""
+The parent of this object
+"""
 type Parent {
 	parent: Object
 }
@@ -2132,6 +2148,11 @@ type ServiceConfig {
 	maxMoveValueDepth: Int!
 }
 
+"""
+A shared object is an object that is shared using the 0x2::transfer::share_object function
+and is accessible to everyone.
+Unlike owned objects, anyone can access shared objects on the network.
+"""
 type Shared {
 	initialSharedVersion: Int!
 }
