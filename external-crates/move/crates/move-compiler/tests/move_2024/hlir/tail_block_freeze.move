@@ -34,5 +34,8 @@ module a::m {
         }
     }
 
+    fun t5(s: &mut S): &S {
+        if (true) { s } else { s }
+    }
 
 }
