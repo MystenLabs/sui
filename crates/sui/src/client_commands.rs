@@ -66,7 +66,7 @@ use tabled::{
         Modify as TableModify, Panel as TablePanel, Style as TableStyle,
     },
 };
-use tracing::{info, trace};
+use tracing::info;
 
 use crate::key_identity::{get_identity_address, KeyIdentity};
 

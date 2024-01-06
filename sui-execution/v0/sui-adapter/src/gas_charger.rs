@@ -271,6 +271,16 @@ pub mod checked {
             temporary_store.ensure_gas_and_input_mutated(self);
             temporary_store.collect_storage_and_rebate(self);
 
+            match &self.gas_status {
+                SuiGasStatus::V2(s) => {
+                    s.log_for_replay();
+                }
+            };
+            if self.smashed_gas_coin.is_some() {
+                #[skip_checked_arithmetic]
+                trace!(target: "replay", "Gas smashing has occurred for this transaction");
+            }
+
             // system transactions (None smashed_gas_coin)  do not have gas and so do not charge
             // for storage, however they track storage values to check for conservation rules
             if let Some(gas_object_id) = self.smashed_gas_coin {
