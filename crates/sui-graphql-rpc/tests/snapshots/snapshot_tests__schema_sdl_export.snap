@@ -716,7 +716,7 @@ type Event {
 	"""
 	Addresses of the senders of the event
 	"""
-	senders: [Address!]
+	senders: Address
 	"""
 	UTC timestamp in milliseconds since epoch (1/1/1970)
 	"""

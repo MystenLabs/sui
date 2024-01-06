@@ -72,16 +72,16 @@ impl Event {
     }
 
     /// Addresses of the senders of the event
-    async fn senders(&self) -> Result<Option<Vec<Address>>> {
-        let mut addrs = Vec::with_capacity(self.stored.senders.len());
-        for sender in &self.stored.senders {
-            let Some(sender) = &sender else { continue };
-            let address = SuiAddress::from_bytes(sender)
-                .map_err(|e| Error::Internal(format!("Failed to deserialize address: {e}")))
-                .extend()?;
-            addrs.push(Address { address });
-        }
-        Ok(Some(addrs))
+    async fn senders(&self) -> Result<Option<Address>> {
+        let Some(Some(sender)) = self.stored.senders.first() else {
+            return Ok(None);
+        };
+
+        let address = SuiAddress::from_bytes(sender)
+            .map_err(|e| Error::Internal(format!("Failed to deserialize address: {e}")))
+            .extend()?;
+
+        Ok(Some(Address { address }))
     }
 
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
