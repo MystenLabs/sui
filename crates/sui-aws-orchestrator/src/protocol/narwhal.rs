@@ -22,7 +22,7 @@ const BASE_PORT: usize = 5000;
 
 #[derive(Serialize, Deserialize, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NarwhalBenchmarkType {
-    /// The size of each transaciton in bytes
+    /// The size of each transaction in bytes
     size: usize,
 }
 

@@ -217,7 +217,7 @@ pub(crate) struct MoveCallEntry {
     pub(crate) function: String,
 }
 
-// A Move package. Pacakge id and MovePackage object bytes
+// A Move package. Package id and MovePackage object bytes
 #[derive(Serialize, Clone, SerializeParquet)]
 pub(crate) struct MovePackageEntry {
     // indexes

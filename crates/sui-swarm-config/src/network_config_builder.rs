@@ -21,7 +21,7 @@ pub enum CommitteeConfig {
     Size(NonZeroUsize),
     Validators(Vec<ValidatorGenesisConfig>),
     AccountKeys(Vec<AccountKeyPair>),
-    /// Indicates that a committee should be deterministically generated, useing the provided rng
+    /// Indicates that a committee should be deterministically generated, using the provided rng
     /// as a source of randomness as well as generating deterministic network port information.
     Deterministic((NonZeroUsize, Option<Vec<AccountKeyPair>>)),
 }
