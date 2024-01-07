@@ -17,6 +17,8 @@ pub enum BridgeError {
     NoBridgeEventsInTxPosition,
     // Found BridgeEvent but not BridgeAction
     BridgeEventNotActionable,
+    // Failure to serialize bridge event parameters
+    BridgeEventParameterSerializationError(String),
     // Internal Bridge error
     InternalError(String),
     // Authority signature duplication
