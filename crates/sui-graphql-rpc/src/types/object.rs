@@ -87,7 +87,8 @@ pub struct Immutable {
 
 /// A shared object is an object that is shared using the 0x2::transfer::share_object function
 /// and is accessible to everyone.
-/// Unlike owned objects, anyone can access shared objects on the network.
+/// Unlike owned objects, once an object is shared, it stays mutable and can be accessed by anyone.
+/// Note that despite all published packages and modules in Sui being shared, they are immutable objects.
 #[derive(SimpleObject, Clone)]
 pub struct Shared {
     initial_shared_version: u64,

@@ -88,6 +88,7 @@ use sui_types::dynamic_field::DynamicFieldType;
     )
 )]
 #[derive(Clone, Debug)]
+#[graphql(name = "IOwner")]
 pub(crate) enum IOwner {
     Address(Address),
     Owner(Owner),

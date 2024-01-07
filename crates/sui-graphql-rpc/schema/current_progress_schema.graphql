@@ -58,7 +58,7 @@ type ActiveJwkEdge {
 	cursor: String!
 }
 
-type Address implements Iowner {
+type Address implements IOwner {
 	"""
 	Similar behavior to the `transactionBlockConnection` in Query but
 	supports additional `AddressTransactionBlockRelationship` filter
@@ -911,6 +911,20 @@ type GenesisTransaction {
 }
 
 
+interface IOwner {
+	address: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String): Balance
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
+	defaultNameServiceName: String
+	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
+	dynamicField(name: DynamicFieldName!): DynamicField
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+}
+
 """
 An immutable object is an object that can't be mutated, transferred, or deleted.
 Immutable objects have no owner, so anyone can use them.
@@ -929,20 +943,6 @@ type Input {
 	ix: Int!
 }
 
-
-interface Iowner {
-	address: SuiAddress!
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
-	balance(type: String): Balance
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
-	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
-	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
-	defaultNameServiceName: String
-	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
-	dynamicField(name: DynamicFieldName!): DynamicField
-	dynamicObjectField(name: DynamicFieldName!): DynamicField
-	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
-}
 
 """
 Arbitrary JSON data.
@@ -1456,7 +1456,7 @@ type Mutation {
 	executeTransactionBlock(txBytes: String!, signatures: [String!]!): ExecutionResult!
 }
 
-type Object implements Iowner {
+type Object implements IOwner {
 	version: Int!
 	"""
 	32-byte hash that identifies the object's current contents, encoded as a Base58 string.
@@ -1736,7 +1736,7 @@ type OwnedOrImmutable {
 	object: Object
 }
 
-type Owner implements Iowner {
+type Owner implements IOwner {
 	asAddress: Address
 	asObject: Object
 	address: SuiAddress!
@@ -2147,7 +2147,8 @@ type ServiceConfig {
 """
 A shared object is an object that is shared using the 0x2::transfer::share_object function
 and is accessible to everyone.
-Unlike owned objects, anyone can access shared objects on the network.
+Unlike owned objects, once an object is shared, it stays mutable and can be accessed by anyone.
+Note that despite all published packages and modules in Sui being shared, they are immutable objects.
 """
 type Shared {
 	initialSharedVersion: Int!
