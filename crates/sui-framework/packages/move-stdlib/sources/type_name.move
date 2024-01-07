@@ -79,6 +79,25 @@ module std::type_name {
         ascii::string(module_name)
     }
 
+    /// Get the struct type
+    public fun get_struct(self: &TypeName): String {
+        let module_name_len = ascii::length(&get_module(self));
+
+        // Starts after address and module name and a double colon: `<module_name>::`
+        let i = address::length() * 2 + module_name_len + 4;
+        let str_bytes = ascii::as_bytes(&self.name);
+        let total_len = vector::length(str_bytes);
+        let struct_name = vector[];
+
+        while (i < total_len) {
+            let char = vector::borrow(str_bytes, i);
+            vector::push_back(&mut struct_name, *char);
+            i = i + 1;
+        };
+
+        ascii::string(struct_name)
+    }
+
     /// Convert `self` into its inner String
     public fun into_string(self: TypeName): String {
         self.name

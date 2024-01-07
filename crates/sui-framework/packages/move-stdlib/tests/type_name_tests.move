@@ -6,7 +6,7 @@
 // note: intentionally using 0xa here to test non-0x1 module addresses
 module 0xA::type_name_tests {
     #[test_only]
-    use std::type_name::{get, into_string};
+    use std::type_name::{get, into_string, get_struct};
     #[test_only]
     use std::ascii::string;
 
@@ -36,6 +36,15 @@ module 0xA::type_name_tests {
     }
 
     // Note: these tests assume a 32 byte address length
+    #[test]
+    fun test_get_struct() {
+        assert!(get_struct(&get<TestStruct>()) == string(b"TestStruct"), 0);
+        assert!(get_struct(&get<std::ascii::String>()) == string(b"String"), 0);
+        assert!(get_struct(&get<std::option::Option<u64>>()) == string(b"Option<u64>"), 0);
+        assert!(get_struct(&get<std::string::String>()) == string(b"String"), 0);
+    }
+
+    // Note: these tesqts assume a 32 byte address length
     #[test]
     fun test_generics() {
         assert!(into_string(get<TestGenerics<std::string::String>>()) == string(b"000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestGenerics<0000000000000000000000000000000000000000000000000000000000000001::string::String>"), 0);
