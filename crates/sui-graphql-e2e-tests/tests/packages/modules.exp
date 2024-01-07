@@ -19,25 +19,25 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x2e2997b0d2f91d6e920dba2ea7a5c869d480946c8a3f87cda03cfd0ef86fe78d",
+                    "address": "0xcbeb6c82fe3fb23d08ca310fe0aa623056883edfc7b959a4cd64e4ae7e931417",
                     "asMovePackage": {
                       "module": {
                         "name": "m",
                         "package": {
                           "asObject": {
-                            "address": "0x2e2997b0d2f91d6e920dba2ea7a5c869d480946c8a3f87cda03cfd0ef86fe78d"
+                            "address": "0xcbeb6c82fe3fb23d08ca310fe0aa623056883edfc7b959a4cd64e4ae7e931417"
                           }
                         },
                         "fileFormatVersion": 6,
-                        "bytes": "oRzrCwYAAAAIAQAGAgYKAxARBCEEBSUfB0QiCGZADKYBMAAFAQMBBgEADAEAAQIBAgAABAABAQIAAgIBAAEHBQEBAAIEAAYCAwYLAAEJAAEDAQYLAAEIAQABCQABBgsAAQkAAQgBBENvaW4DU1VJA2JhcgRjb2luA2ZvbwFtA3N1aQV2YWx1ZS4pl7DS+R1ukg26LqelyGnUgJRsij+HzaA8/Q74b+eNAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAQAAAwULATgACwAWAgEBAAADCAYqAAAAAAAAAAoAOAEGKwAAAAAAAAALADgBGAIA",
-                        "disassembly": "// Move bytecode v6\nmodule 2e2997b0d2f91d6e920dba2ea7a5c869d480946c8a3f87cda03cfd0ef86fe78d.m {\nuse 0000000000000000000000000000000000000000000000000000000000000002::coin;\nuse 0000000000000000000000000000000000000000000000000000000000000002::sui;\n\n\n\n\npublic foo<Ty0: drop>(Arg0: u64, Arg1: &Coin<Ty0>): u64 {\nB0:\n\t0: MoveLoc[1](Arg1: &Coin<Ty0>)\n\t1: Call coin::value<Ty0>(&Coin<Ty0>): u64\n\t2: MoveLoc[0](Arg0: u64)\n\t3: Add\n\t4: Ret\n}\npublic bar(Arg0: &Coin<SUI>): u64 {\nB0:\n\t0: LdU64(42)\n\t1: CopyLoc[0](Arg0: &Coin<SUI>)\n\t2: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t3: LdU64(43)\n\t4: MoveLoc[0](Arg0: &Coin<SUI>)\n\t5: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t6: Mul\n\t7: Ret\n}\n}"
+                        "bytes": "oRzrCwYAAAAIAQAGAgYKAxARBCEEBSUfB0QiCGZADKYBMAAFAQMBBgEADAEAAQIBAgAABAABAQIAAgIBAAEHBQEBAAIEAAYCAwYLAAEJAAEDAQYLAAEIAQABCQABBgsAAQkAAQgBBENvaW4DU1VJA2JhcgRjb2luA2ZvbwFtA3N1aQV2YWx1ZcvrbIL+P7I9CMoxD+CqYjBWiD7fx7lZpM1k5K5+kxQXAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAQAAAwULATgACwAWAgEBAAADCAYqAAAAAAAAAAoAOAEGKwAAAAAAAAALADgBGAIA",
+                        "disassembly": "// Move bytecode v6\nmodule cbeb6c82fe3fb23d08ca310fe0aa623056883edfc7b959a4cd64e4ae7e931417.m {\nuse 0000000000000000000000000000000000000000000000000000000000000002::coin;\nuse 0000000000000000000000000000000000000000000000000000000000000002::sui;\n\n\n\n\npublic foo<Ty0: drop>(Arg0: u64, Arg1: &Coin<Ty0>): u64 {\nB0:\n\t0: MoveLoc[1](Arg1: &Coin<Ty0>)\n\t1: Call coin::value<Ty0>(&Coin<Ty0>): u64\n\t2: MoveLoc[0](Arg0: u64)\n\t3: Add\n\t4: Ret\n}\npublic bar(Arg0: &Coin<SUI>): u64 {\nB0:\n\t0: LdU64(42)\n\t1: CopyLoc[0](Arg0: &Coin<SUI>)\n\t2: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t3: LdU64(43)\n\t4: MoveLoc[0](Arg0: &Coin<SUI>)\n\t5: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t6: Mul\n\t7: Ret\n}\n}"
                       }
                     }
                   }
                 },
                 {
                   "outputState": {
-                    "address": "0xeea300ef57f3012e53106a884ee9f7412fc31798cf6b2bc779182474d3c3a9a1",
+                    "address": "0xe73a03902c59761b617b9317d9f616af795a7e2886d51d462346f8119dd426e6",
                     "asMovePackage": null
                   }
                 }
@@ -61,7 +61,7 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x2e2997b0d2f91d6e920dba2ea7a5c869d480946c8a3f87cda03cfd0ef86fe78d",
+                    "address": "0xcbeb6c82fe3fb23d08ca310fe0aa623056883edfc7b959a4cd64e4ae7e931417",
                     "asMovePackage": {
                       "all": {
                         "edges": [
@@ -134,7 +134,7 @@ Response: {
                 },
                 {
                   "outputState": {
-                    "address": "0xeea300ef57f3012e53106a884ee9f7412fc31798cf6b2bc779182474d3c3a9a1",
+                    "address": "0xe73a03902c59761b617b9317d9f616af795a7e2886d51d462346f8119dd426e6",
                     "asMovePackage": null
                   }
                 }
@@ -158,7 +158,7 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x2e2997b0d2f91d6e920dba2ea7a5c869d480946c8a3f87cda03cfd0ef86fe78d",
+                    "address": "0xcbeb6c82fe3fb23d08ca310fe0aa623056883edfc7b959a4cd64e4ae7e931417",
                     "asMovePackage": {
                       "prefix": {
                         "edges": [
@@ -273,7 +273,7 @@ Response: {
                 },
                 {
                   "outputState": {
-                    "address": "0xeea300ef57f3012e53106a884ee9f7412fc31798cf6b2bc779182474d3c3a9a1",
+                    "address": "0xe73a03902c59761b617b9317d9f616af795a7e2886d51d462346f8119dd426e6",
                     "asMovePackage": null
                   }
                 }

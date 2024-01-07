@@ -11,7 +11,7 @@ Response: {
   "data": {
     "epoch": {
       "protocolConfigs": {
-        "protocolVersion": 33,
+        "protocolVersion": 34,
         "randomBeacon": {
           "value": true
         }
@@ -28,7 +28,7 @@ Response: {
           "json": {
             "id": "0x0000000000000000000000000000000000000000000000000000000000000008",
             "inner": {
-              "id": "0x5939918be7458f2d4162d63cb6aadf34df162ed8b2b672776efa41eedf84961b",
+              "id": "0x598f291ccc58fcd31753bcc12496c10a3ad4505a080fcb346bb4964fc5a77ea9",
               "version": "1"
             }
           }
@@ -62,6 +62,10 @@ Response: {
     }
   }
 }
+
+task 4 'set-random-state'. lines 49-50:
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::random::update_randomness_state (function index 3) at offset 54, Abort Code: 2
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("random") }, function: 3, instruction: 54, function_name: Some("update_randomness_state") }, 2) at command Some(0)
 
 task 5 'create-checkpoint'. lines 52-52:
 Checkpoint created: 3
