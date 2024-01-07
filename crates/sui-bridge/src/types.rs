@@ -3,7 +3,9 @@
 
 use crate::abi::EthToSuiTokenBridgeV1;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
-use crate::crypto::{BridgeAuthorityPublicKey, BridgeAuthoritySignInfo, BridgeAuthoritySignature};
+use crate::crypto::{
+    BridgeAuthorityPublicKey, BridgeAuthorityRecoverableSignature, BridgeAuthoritySignInfo,
+};
 use crate::error::{BridgeError, BridgeResult};
 use crate::events::EmittedSuiToEthTokenBridgeV1;
 use ethers::types::Address as EthAddress;
@@ -296,7 +298,7 @@ impl BridgeActionDigest {
 
 #[derive(Debug)]
 pub struct BridgeCommitteeValiditySignInfo {
-    pub signatures: BTreeMap<BridgeAuthorityPublicKeyBytes, BridgeAuthoritySignature>,
+    pub signatures: BTreeMap<BridgeAuthorityPublicKeyBytes, BridgeAuthorityRecoverableSignature>,
 }
 
 pub type SignedBridgeAction = Envelope<BridgeAction, BridgeAuthoritySignInfo>;
