@@ -10,12 +10,13 @@ use anyhow::bail;
 use move_command_line_common::parser::Token;
 use move_core_types::identifier;
 
-#[derive(Eq, PartialEq, Debug, Clone, Copy)]
+#[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
 pub enum CommandToken {
     TransferObjects,
     SplitCoins,
     MergeCoins,
     MakeMoveVec,
+    MoveCall,
     Publish,
     Upgrade,
     Assign,
@@ -23,19 +24,26 @@ pub enum CommandToken {
     WarnShadows,
     Preview,
     PickGasBudget,
+    GasBudget,
+    FileStart,
+    FileEnd,
 }
 
-pub const TRANSFER_OBJECTS: &str = "transfer-objects";
-pub const SPLIT_COINS: &str = "split-coins";
-pub const MERGE_COINS: &str = "merge-coins";
-pub const MAKE_MOVE_VEC: &str = "make-move-vec";
+pub const TRANSFER_OBJECTS: &str = "transfer_objects";
+pub const SPLIT_COINS: &str = "split_coins";
+pub const MERGE_COINS: &str = "merge_coins";
+pub const MAKE_MOVE_VEC: &str = "make_move_vec";
+pub const MOVE_CALL: &str = "move_call";
 pub const PUBLISH: &str = "publish";
 pub const UPGRADE: &str = "upgrade";
 pub const ASSIGN: &str = "assign";
 pub const FILE: &str = "file";
 pub const PREVIEW: &str = "preview";
 pub const WARN_SHADOWS: &str = "warn_shadows";
-pub const PICK_GAS_BUDGET: &str = "pick-gas-budget";
+pub const PICK_GAS_BUDGET: &str = "pick_gas_budget";
+pub const GAS_BUDGET: &str = "gas_budget";
+pub const FILE_START: &str = "file-include-start";
+pub const FILE_END: &str = "file-include-end";
 
 impl Display for CommandToken {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -44,6 +52,7 @@ impl Display for CommandToken {
             CommandToken::SplitCoins => SPLIT_COINS,
             CommandToken::MergeCoins => MERGE_COINS,
             CommandToken::MakeMoveVec => MAKE_MOVE_VEC,
+            CommandToken::MoveCall => MOVE_CALL,
             CommandToken::Publish => PUBLISH,
             CommandToken::Upgrade => UPGRADE,
             CommandToken::Assign => ASSIGN,
@@ -51,6 +60,9 @@ impl Display for CommandToken {
             CommandToken::Preview => PREVIEW,
             CommandToken::WarnShadows => WARN_SHADOWS,
             CommandToken::PickGasBudget => PICK_GAS_BUDGET,
+            CommandToken::GasBudget => GAS_BUDGET,
+            CommandToken::FileStart => FILE_START,
+            CommandToken::FileEnd => FILE_END,
         };
         fmt::Display::fmt(s, f)
     }
@@ -65,6 +77,7 @@ impl FromStr for CommandToken {
             SPLIT_COINS => Ok(CommandToken::SplitCoins),
             MERGE_COINS => Ok(CommandToken::MergeCoins),
             MAKE_MOVE_VEC => Ok(CommandToken::MakeMoveVec),
+            MOVE_CALL => Ok(CommandToken::MoveCall),
             PUBLISH => Ok(CommandToken::Publish),
             UPGRADE => Ok(CommandToken::Upgrade),
             ASSIGN => Ok(CommandToken::Assign),
@@ -72,6 +85,9 @@ impl FromStr for CommandToken {
             PREVIEW => Ok(CommandToken::Preview),
             WARN_SHADOWS => Ok(CommandToken::WarnShadows),
             PICK_GAS_BUDGET => Ok(CommandToken::PickGasBudget),
+            GAS_BUDGET => Ok(CommandToken::GasBudget),
+            FILE_START => Ok(CommandToken::FileStart),
+            FILE_END => Ok(CommandToken::FileEnd),
             _ => bail!("Invalid command token: {}", s),
         }
     }
@@ -109,6 +125,10 @@ impl CommandToken {
                 types: Arity::Exact(1),
                 args: Arity::Exact(1),
             },
+            CommandToken::MoveCall => CommandArity {
+                types: Arity::Range(0, 1),
+                args: Arity::Variable,
+            },
             CommandToken::Publish => CommandArity {
                 types: Arity::Exact(0),
                 args: Arity::Exact(1),
@@ -137,6 +157,18 @@ impl CommandToken {
                 types: Arity::Exact(0),
                 args: Arity::Exact(1),
             },
+            CommandToken::GasBudget => CommandArity {
+                types: Arity::Exact(0),
+                args: Arity::Exact(1),
+            },
+            CommandToken::FileStart => CommandArity {
+                types: Arity::Exact(0),
+                args: Arity::Exact(1),
+            },
+            CommandToken::FileEnd => CommandArity {
+                types: Arity::Exact(0),
+                args: Arity::Exact(1),
+            },
         }
     }
 }
@@ -151,6 +183,7 @@ mod tests {
             SPLIT_COINS,
             MERGE_COINS,
             MAKE_MOVE_VEC,
+            MOVE_CALL,
             PUBLISH,
             UPGRADE,
             ASSIGN,
@@ -158,6 +191,9 @@ mod tests {
             PREVIEW,
             WARN_SHADOWS,
             PICK_GAS_BUDGET,
+            GAS_BUDGET,
+            FILE_START,
+            FILE_END,
         ];
 
         for s in &command_strs {

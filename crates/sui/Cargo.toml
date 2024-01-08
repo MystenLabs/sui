@@ -34,6 +34,7 @@ num-bigint.workspace = true
 regex.workspace = true
 reqwest.workspace = true
 im.workspace = true
+async-recursion.workspace = true
 
 sui-config.workspace = true
 sui-execution = { path = "../../sui-execution" }
@@ -51,6 +52,8 @@ sui-move-build.workspace = true
 sui-protocol-config.workspace = true
 shared-crypto.workspace = true
 sui-replay.workspace = true
+sui-transaction-builder.workspace = true
+move-binary-format.workspace = true
 
 fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true
