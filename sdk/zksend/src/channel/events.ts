@@ -2,20 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { Output } from 'valibot';
-import { literal, object, optional, string, union, uuid } from 'valibot';
+import { literal, object, string, union, uuid } from 'valibot';
 
 export type ZkSendSignPersonalMessageResponse = Output<typeof ZkSendSignPersonalMessageResponse>;
-
-export const ZkSendRequest = object({
-	id: string([uuid()]),
-	data: optional(string()),
-});
-
-export type ZkSendRequest = Output<typeof ZkSendRequest>;
-
-export const ZkSendReadyResponse = object({
-	type: literal('ready'),
-});
 
 export const ZkSendRejectResponse = object({
 	type: literal('reject'),
@@ -52,11 +41,7 @@ export const ZkSendResolveResponse = object({
 
 export type ZkSendResolveResponse = Output<typeof ZkSendResolveResponse>;
 
-export const ZkSendResponsePayload = union([
-	ZkSendReadyResponse,
-	ZkSendRejectResponse,
-	ZkSendResolveResponse,
-]);
+export const ZkSendResponsePayload = union([ZkSendRejectResponse, ZkSendResolveResponse]);
 export type ZkSendResponsePayload = Output<typeof ZkSendResponsePayload>;
 
 export const ZkSendResponse = object({
