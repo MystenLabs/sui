@@ -1,0 +1,4 @@
+migrate
+> diff -s expected_migration.patch migration.patch
+> diff -r -s sources migration_sources
+

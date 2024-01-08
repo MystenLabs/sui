@@ -22,6 +22,7 @@ const KEEP_TMP: &str = "KEEP";
 
 const TEST_EXT: &str = "unit_test";
 const UNUSED_EXT: &str = "unused";
+const MIGRATION_EXT: &str = "migration";
 
 const LINTER_DIR: &str = "linter";
 const SUI_MODE_DIR: &str = "sui_mode";
@@ -96,6 +97,36 @@ fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_sta
         )?;
     }
 
+    // A test is marked that it should also be compiled in migration mode by having a
+    // `path.migration` file.
+    if path.with_extension(MIGRATION_EXT).exists() {
+        let migration_exp_path = format!(
+            "{}.{}.{}",
+            path.with_extension("").to_string_lossy(),
+            MIGRATION_EXT,
+            EXP_EXT
+        );
+        let migration_out_path = format!(
+            "{}.{}.{}",
+            path.with_extension("").to_string_lossy(),
+            MIGRATION_EXT,
+            OUT_EXT
+        );
+        let mut config = config.clone();
+        config
+            .warning_filter
+            .union(&WarningFilters::unused_warnings_filter_for_test());
+        run_test_inner(
+            path,
+            Path::new(&migration_exp_path),
+            Path::new(&migration_out_path),
+            Flags::testing(),
+            config,
+            lint,
+            true,
+        )?;
+    }
+
     // A cross-module unused case that should run without unused warnings suppression
     if path.with_extension(UNUSED_EXT).exists() {
         let unused_exp_path = format!(
@@ -139,6 +170,19 @@ pub fn run_test(
     default_config: PackageConfig,
     lint: bool,
 ) -> anyhow::Result<()> {
+    run_test_inner(path, exp_path, out_path, flags, default_config, lint, false)
+}
+
+// Runs all tests under the test/testsuite directory.
+pub fn run_test_inner(
+    path: &Path,
+    exp_path: &Path,
+    out_path: &Path,
+    flags: Flags,
+    default_config: PackageConfig,
+    lint: bool,
+    migration_mode: bool,
+) -> anyhow::Result<()> {
     let targets: Vec<String> = vec![path.to_str().unwrap().to_owned()];
     let named_address_map = default_testing_addresses(default_config.flavor);
     let deps = vec![PackagePaths {
@@ -146,8 +190,15 @@ pub fn run_test(
         paths: move_stdlib::move_stdlib_files(),
         named_address_map: named_address_map.clone(),
     }];
+    let name = if migration_mode {
+        let mut config = default_config.clone();
+        config.edition = Edition::E2024_MIGRATION;
+        Some(("test".into(), config))
+    } else {
+        None
+    };
     let targets = vec![PackagePaths {
-        name: None,
+        name,
         paths: targets,
         named_address_map,
     }];
@@ -171,7 +222,11 @@ pub fn run_test(
 
     let has_diags = !diags.is_empty();
     let diag_buffer = if has_diags {
-        report_diagnostics_to_buffer(&files, diags)
+        if migration_mode {
+            report_migration_to_buffer(&files, diags)
+        } else {
+            report_diagnostics_to_buffer(&files, diags)
+        }
     } else {
         vec![]
     };

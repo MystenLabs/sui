@@ -11,6 +11,7 @@ use crate::{
         codes::{Severity, WarningFilter},
         *,
     },
+    editions::Edition,
     expansion, hlir, interface_generator, naming, parser,
     parser::{comments::*, *},
     shared::{
@@ -299,7 +300,22 @@ impl<'a> Compiler<'a> {
             SteppedCompiler::new_at_parser(compilation_env, pre_compiled_lib, pprog)
                 .run::<TARGET>()
                 .map(|compiler| (comments, compiler));
+
         Ok((source_text, res))
+    }
+
+    pub fn generate_migration_patch(
+        mut self,
+        root_module: &Symbol,
+    ) -> anyhow::Result<(FilesSourceText, Option<Migration>)> {
+        self.package_configs.get_mut(root_module).unwrap().edition = Edition::E2024_MIGRATION;
+        let (files, res) = self.run::<PASS_COMPILATION>()?;
+        if let Err(diags) = res {
+            let migration = generate_migration_diff(&files, &diags);
+            Ok((files, migration))
+        } else {
+            Ok((files, None))
+        }
     }
 
     pub fn check(self) -> anyhow::Result<(FilesSourceText, Result<(), Diagnostics>)> {
