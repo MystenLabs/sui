@@ -85,8 +85,6 @@ pub enum ArgumentToken {
     Result,
     // gas
     Gas,
-    // filename
-    // Filename,
     Void,
 }
 
@@ -180,7 +178,7 @@ impl Token for ArgumentToken {
             ',' => (Self::Comma, 1),
             ':' if matches!(chars.peek(), Some(':')) => (Self::ColonColon, 2),
             ':' => (Self::Colon, 1),
-            '"' =>  {
+            '"' => {
                 let end_quote_byte_offset = match s[1..].find('"') {
                     Some(o) => o,
                     None => bail!("Unexpected end of string before end quote: {}", s),
@@ -194,7 +192,7 @@ impl Token for ArgumentToken {
                 }
                 (Self::DoubleQuote, len)
             }
-            '\'' =>  {
+            '\'' => {
                 let end_quote_byte_offset = match s[1..].find('\'') {
                     Some(o) => o,
                     None => bail!("Unexpected end of string before end quote: {}", s),

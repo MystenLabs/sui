@@ -771,7 +771,7 @@ impl TransactionBuilder {
     }
 
     // TODO: we should add retrial to reduce the transaction building error rate
-    async fn get_object_ref(&self, object_id: ObjectID) -> anyhow::Result<ObjectRef> {
+    pub async fn get_object_ref(&self, object_id: ObjectID) -> anyhow::Result<ObjectRef> {
         self.get_object_ref_and_type(object_id)
             .await
             .map(|(oref, _)| oref)
