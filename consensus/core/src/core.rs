@@ -35,6 +35,16 @@ impl Core {
         vec![]
     }
 
+    /// Force creating a new block for the dictated round. This is used when a leader timeout occurs.
+    pub fn force_new_block(&mut self, round: Round) -> Option<Block> {
+        if self.last_proposed_round() < round {
+            self.context.metrics.node_metrics.leader_timeout_total.inc();
+            self.try_new_block(true)
+        } else {
+            None
+        }
+    }
+
     /// Attempts to propose a new block for the next round. If a block has already proposed for latest
     /// or earlier round, then no block is created and None is returned.
     pub(crate) fn try_new_block(&mut self, force_new_block: bool) -> Option<Block> {

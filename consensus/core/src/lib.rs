@@ -8,6 +8,7 @@ mod context;
 mod core;
 mod dag_state;
 mod error;
+mod core_thread;
 mod metrics;
 mod stake_aggregator;
 mod storage;
