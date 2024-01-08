@@ -14,7 +14,7 @@ module sui::object {
     friend sui::transfer;
     friend sui::authenticator_state;
     friend sui::random;
-    friend sui::freezer;
+    friend sui::deny_list;
 
     #[test_only]
     friend sui::test_scenario;
@@ -31,7 +31,8 @@ module sui::object {
     /// The hardcoded ID for the singleton Random Object.
     const SUI_RANDOM_ID: address = @0x8;
 
-    const SUI_DENY_LIST_OBJECT_ID: address = @0x404;
+    /// The hardcoded ID for the singleton Deny list.
+    const SUI_DENY_LIST_OBJECT_ID: address = @0x403;
 
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 0;

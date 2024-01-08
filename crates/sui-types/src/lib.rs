@@ -123,9 +123,9 @@ pub const SUI_RANDOMNESS_STATE_ADDRESS: AccountAddress = address_from_single_byt
 pub const SUI_RANDOMNESS_STATE_OBJECT_ID: ObjectID =
     ObjectID::from_address(SUI_RANDOMNESS_STATE_ADDRESS);
 
-/// 0x404: hardcode object ID for the singleton freezer object.
-pub const SUI_FREEZER_ADDRESS: AccountAddress = freezer_addr();
-pub const SUI_FREEZER_OBJECT_ID: ObjectID = ObjectID::from_address(SUI_FREEZER_ADDRESS);
+/// 0x403: hardcode object ID for the singleton DenyList object.
+pub const SUI_DENY_LIST_ADDRESS: AccountAddress = deny_list_addr();
+pub const SUI_DENY_LIST_OBJECT_ID: ObjectID = ObjectID::from_address(SUI_DENY_LIST_ADDRESS);
 
 /// Return `true` if `addr` is a special system package that can be upgraded at epoch boundaries.
 /// All new system package ID's must be added here.
@@ -150,11 +150,11 @@ const fn deepbook_addr() -> AccountAddress {
     AccountAddress::new(addr)
 }
 
-/// return 0x0...404
-const fn freezer_addr() -> AccountAddress {
+/// return 0x0...403
+const fn deny_list_addr() -> AccountAddress {
     let mut addr = [0u8; AccountAddress::LENGTH];
     addr[AccountAddress::LENGTH - 2] = 4;
-    addr[AccountAddress::LENGTH - 1] = 4;
+    addr[AccountAddress::LENGTH - 1] = 3;
     AccountAddress::new(addr)
 }
 

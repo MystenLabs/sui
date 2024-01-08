@@ -12,7 +12,7 @@ module sui::coin_tests {
     use sui::tx_context;
     use std::string;
     use std::ascii;
-    use sui::freezer;
+    use sui::deny_list;
 
     struct COIN_TESTS has drop {}
 
@@ -85,14 +85,14 @@ module sui::coin_tests {
     }
 
     #[test]
-    fun frozen_coins() {
+    fun deny_list() {
         let scenario = test_scenario::begin(@0);
         let test = &mut scenario;
-        freezer::create_for_test(test_scenario::ctx(test));
+        deny_list::create_for_test(test_scenario::ctx(test));
         test_scenario::next_tx(test, TEST_ADDR);
 
         let witness = COIN_TESTS {};
-        let (treasury, freeze_cap, metadata) = coin::create_freezable_currency(
+        let (treasury, deny_cap, metadata) = coin::create_currency_with_deny_list(
             witness,
             6,
             b"COIN_TESTS",
@@ -106,32 +106,32 @@ module sui::coin_tests {
         {
             // test freezing an address
             test_scenario::next_tx(test, TEST_ADDR);
-            let freezer: freezer::Freezer = test_scenario::take_shared(test);
-            assert!(!coin::address_is_frozen<COIN_TESTS>(&freezer, @1), 0);
-            coin::freeze_address(&mut freezer, &mut freeze_cap, @1, test_scenario::ctx(test));
-            assert!(coin::address_is_frozen<COIN_TESTS>(&freezer, @1), 0);
-            coin::unfreeze_address(&mut freezer, &mut freeze_cap, @1, test_scenario::ctx(test));
-            assert!(!coin::address_is_frozen<COIN_TESTS>(&freezer, @1), 0);
-            test_scenario::return_shared(freezer);
+            let deny_list: deny_list::DenyList = test_scenario::take_shared(test);
+            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @1), 0);
+            coin::deny_list_add(&mut deny_list, &mut deny_cap, @1, test_scenario::ctx(test));
+            assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @1), 0);
+            coin::deny_list_remove(&mut deny_list, &mut deny_cap, @1, test_scenario::ctx(test));
+            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @1), 0);
+            test_scenario::return_shared(deny_list);
         };
         {
             // test freezing an address over multiple "transactions"
             test_scenario::next_tx(test, TEST_ADDR);
-            let freezer: freezer::Freezer = test_scenario::take_shared(test);
-            assert!(!coin::address_is_frozen<COIN_TESTS>(&freezer, @1), 0);
-            assert!(!coin::address_is_frozen<COIN_TESTS>(&freezer, @2), 0);
-            coin::freeze_address(&mut freezer, &mut freeze_cap, @2, test_scenario::ctx(test));
-            assert!(coin::address_is_frozen<COIN_TESTS>(&freezer, @2), 0);
-            test_scenario::return_shared(freezer);
+            let deny_list: deny_list::DenyList = test_scenario::take_shared(test);
+            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @1), 0);
+            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @2), 0);
+            coin::deny_list_add(&mut deny_list, &mut deny_cap, @2, test_scenario::ctx(test));
+            assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @2), 0);
+            test_scenario::return_shared(deny_list);
 
             test_scenario::next_tx(test, TEST_ADDR);
-            let freezer: freezer::Freezer = test_scenario::take_shared(test);
-            assert!(coin::address_is_frozen<COIN_TESTS>(&freezer, @2), 0);
-            coin::unfreeze_address(&mut freezer, &mut freeze_cap, @2, test_scenario::ctx(test));
-            assert!(!coin::address_is_frozen<COIN_TESTS>(&freezer, @2), 0);
-            test_scenario::return_shared(freezer);
+            let deny_list: deny_list::DenyList = test_scenario::take_shared(test);
+            assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @2), 0);
+            coin::deny_list_remove(&mut deny_list, &mut deny_cap, @2, test_scenario::ctx(test));
+            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @2), 0);
+            test_scenario::return_shared(deny_list);
         };
-        transfer::public_freeze_object(freeze_cap);
+        transfer::public_freeze_object(deny_cap);
         test_scenario::end(scenario);
     }
 

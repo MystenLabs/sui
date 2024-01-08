@@ -10,11 +10,12 @@ module sui::coin {
     use std::option::{Self, Option};
     use sui::balance::{Self, Balance, Supply};
     use sui::tx_context::TxContext;
-    use sui::object::{Self, UID, ID};
+    use sui::object::{Self, UID};
     use sui::transfer;
     use sui::url::{Self, Url};
     use std::vector;
-    use sui::freezer::{Self, Freezer};
+    use sui::deny_list::{Self, DenyList};
+    use std::type_name;
 
     /// A type passed to create_supply is not a one-time witness.
     const EBadWitness: u64 = 0;
@@ -57,9 +58,8 @@ module sui::coin {
 
     /// Capability allowing the bearer to freeze addresses, preventing those addresses from
     /// interacting with the coin as an input to a transaction.
-    struct FreezeCap<phantom T> has key, store {
+    struct DenyCap<phantom T> has key, store {
         id: UID,
-        package: ID,
     }
 
     // === Supply <-> TreasuryCap morphing and accessors  ===
@@ -218,8 +218,8 @@ module sui::coin {
 
     /// This creates a new currency, via `create_currency`, but with an extra capability that
     /// allows for specific addresses to have their coins frozen. Those addresses will not
-    /// be able to interact with the coin
-    public fun create_freezable_currency<T: drop>(
+    /// be able to interact with the coin as input objects
+    public fun create_currency_with_deny_list<T: drop>(
         witness: T,
         decimals: u8,
         symbol: vector<u8>,
@@ -227,7 +227,7 @@ module sui::coin {
         description: vector<u8>,
         icon_url: Option<Url>,
         ctx: &mut TxContext
-    ): (TreasuryCap<T>, FreezeCap<T>, CoinMetadata<T>) {
+    ): (TreasuryCap<T>, DenyCap<T>, CoinMetadata<T>) {
         let (treasury_cap, metadata) = create_currency(
             witness,
             decimals,
@@ -237,18 +237,10 @@ module sui::coin {
             icon_url,
             ctx
         );
-        let package = {
-            let type_name = std::type_name::get_with_original_ids<T>();
-            let package_addr = sui::address::from_ascii_bytes(
-                ascii::as_bytes(&std::type_name::get_address(&type_name))
-            );
-            object::id_from_address(package_addr)
-        };
-        let freeze_cap = FreezeCap {
+        let deny_cap = DenyCap {
             id: object::new(ctx),
-            package,
         };
-        (treasury_cap, freeze_cap, metadata)
+        (treasury_cap, deny_cap, metadata)
     }
 
     /// Create a coin worth `value`. and increase the total supply
@@ -279,61 +271,54 @@ module sui::coin {
         balance::decrease_supply(&mut cap.total_supply, balance)
     }
 
-    /// The index into the freezers vector for the `sui::coin::Coin` type.
-    const FREEZER_COIN_INDEX: u64 = 0; // TODO public(package) const
+    /// The index into the deny list vector for the `sui::coin::Coin` type.
+    const DENY_LIST_COIN_INDEX: u64 = 0; // TODO public(package) const
 
-    /// Freezes the given address, preventing it
-    /// from interacting with the coin as an input to a transaction.
-    public fun freeze_address<T>(
-       freezer: &mut Freezer,
-       freeze_cap: &mut FreezeCap<T>,
+    /// Adds the given address to the deny list, preventing it
+    /// from interacting with the specified coin type as an input to a transaction.
+    public fun deny_list_add<T>(
+       deny_list: &mut DenyList,
+       _deny_cap: &mut DenyCap<T>,
        addr: address,
        _ctx: &mut TxContext
     ) {
-        freezer::freeze_address(
-            freezer,
-            FREEZER_COIN_INDEX,
-            freeze_cap.package,
+        deny_list::add(
+            deny_list,
+            DENY_LIST_COIN_INDEX,
+            type_name::into_string(type_name::get_with_original_ids<T>()),
             addr,
         )
     }
 
-    /// Removes a previously frozen address from the freeze list.
-    /// Aborts with `ENotFrozen` if the address is not frozen.
-    public fun unfreeze_address<T>(
-       freezer: &mut Freezer,
-       freeze_cap: &mut FreezeCap<T>,
+    /// Removes an address from the deny list.
+    /// Aborts with `ENotFrozen` if the address is not already in the list.
+    public fun deny_list_remove<T>(
+       deny_list: &mut DenyList,
+       _deny_cap: &mut DenyCap<T>,
        addr: address,
        _ctx: &mut TxContext
     ) {
-        freezer::unfreeze_address(
-            freezer,
-            FREEZER_COIN_INDEX,
-            freeze_cap.package,
+        deny_list::remove(
+            deny_list,
+            DENY_LIST_COIN_INDEX,
+            type_name::into_string(type_name::get_with_original_ids<T>()),
             addr,
         )
     }
 
-    /// Returns true iff the given address is frozen for the given coin type. It will
+    /// Returns true iff the given address is denied for the given coin type. It will
     /// return false if given a non-coin type.
-    public fun address_is_frozen<T>(
-       freezer: &Freezer,
+    public fun deny_list_contains<T>(
+       freezer: &DenyList,
        addr: address,
     ): bool {
-        let coin_package = {
-            let type_name = std::type_name::get_with_original_ids<T>();
-            // return false if it does not have a package
-            if (std::type_name::is_primitive(&type_name)) return false;
+        let name = type_name::get_with_original_ids<T>();
+        if (type_name::is_primitive(&name)) return false;
 
-            let package_addr = sui::address::from_ascii_bytes(
-                ascii::as_bytes(&std::type_name::get_address(&type_name))
-            );
-            object::id_from_address(package_addr)
-        };
-        freezer::address_is_frozen(
+        deny_list::contains(
             freezer,
-            FREEZER_COIN_INDEX,
-            coin_package,
+            DENY_LIST_COIN_INDEX,
+            type_name::into_string(name),
             addr,
         )
     }
