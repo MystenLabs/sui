@@ -51,14 +51,15 @@ pub fn program(
     } = prog;
     let mut context = Context::new(compilation_env, pre_compiled_lib, info);
 
-    // we extract module use funs into the module info context
-    let mut modules = modules(&mut context, nmodules);
+    let nmodules_with_macros = translate_macros(&mut context, nmodules);
+    let mut modules = modules(&mut context, nmodules_with_macros);
 
     assert!(context.constraints.is_empty());
     dependency_ordering::program(context.env, &mut modules);
     recursive_structs::modules(context.env, &modules);
     infinite_instantiations::modules(context.env, &modules);
     let mut prog = T::Program_ { modules };
+    // we extract module use funs into the module info context
     let module_use_funs = context
         .modules
         .modules
@@ -76,13 +77,56 @@ pub fn program(
     }
 }
 
-fn modules(
+fn translate_macros(
     context: &mut Context,
     modules: UniqueMap<ModuleIdent, N::ModuleDefinition>,
+) -> UniqueMap<ModuleIdent, (N::ModuleDefinition, UniqueMap<FunctionName, T::Function>)> {
+    let mut all_macro_definitions = UniqueMap::new();
+    let mut modules_with_macros = modules.map(|ident, mut mdef| {
+        assert!(context.current_package.is_none());
+        assert!(context.new_friends.is_empty());
+        context.current_module = Some(ident);
+        context.current_package = mdef.package_name;
+        context
+            .env
+            .add_warning_filter_scope(mdef.warning_filter.clone());
+        context.add_use_funs_scope(mdef.use_funs.clone());
+
+        let mut translated_macros = UniqueMap::new();
+        let mut macro_definitions = UniqueMap::new();
+        let functions = std::mem::take(&mut mdef.functions);
+
+        for (name, f) in functions {
+            if f.macro_.is_some() {
+                let (tf, body_opt) = macro_(context, name, f);
+                translated_macros.add(name, tf).unwrap();
+                if let Some(body) = body_opt {
+                    macro_definitions.add(name, body);
+                }
+            } else {
+                mdef.functions.add(name, f).unwrap();
+            }
+        }
+        assert!(context.constraints.is_empty());
+        context.current_package = None;
+        // macros themselves don't add friends since they do not exist at runtime
+        context.new_friends = BTreeSet::new();
+        context.pop_use_funs_scope();
+        context.env.pop_warning_filter_scope();
+        all_macro_definitions.add(ident, macro_definitions);
+        (mdef, translated_macros)
+    });
+    context.set_macros(all_macro_definitions);
+    modules_with_macros
+}
+
+fn modules(
+    context: &mut Context,
+    modules: UniqueMap<ModuleIdent, (N::ModuleDefinition, UniqueMap<FunctionName, T::Function>)>,
 ) -> UniqueMap<ModuleIdent, T::ModuleDefinition> {
     let mut all_new_friends = BTreeMap::new();
-    let mut typed_modules = modules.map(|ident, mdef| {
-        let (typed_mdef, new_friends) = module(context, ident, mdef);
+    let mut typed_modules = modules.map(|ident, (mdef, translated_macros)| {
+        let (typed_mdef, new_friends) = module(context, ident, mdef, translated_macros);
         for (pub_package_module, loc) in new_friends {
             let friend = Friend {
                 attributes: UniqueMap::new(),
@@ -116,8 +160,10 @@ fn module(
     context: &mut Context,
     ident: ModuleIdent,
     mdef: N::ModuleDefinition,
+    translated_macros: UniqueMap<FunctionName, T::Function>,
 ) -> (T::ModuleDefinition, BTreeSet<(ModuleIdent, Loc)>) {
     assert!(context.current_package.is_none());
+    assert!(context.new_friends.is_empty());
 
     let N::ModuleDefinition {
         loc,
@@ -128,7 +174,7 @@ fn module(
         use_funs,
         friends,
         mut structs,
-        functions: nfunctions,
+        functions: mut nfunctions,
         constants: nconstants,
     } = mdef;
     context.current_module = Some(ident);
@@ -139,6 +185,10 @@ fn module(
         .iter_mut()
         .for_each(|(_, _, s)| struct_def(context, s));
     process_attributes(context, &attributes);
+    let mut functions = translated_macros;
+    for (name, f) in nfunctions {
+        functions.add(name, function(context, name, f)).unwrap();
+    }
     let constants = nconstants.map(|name, c| constant(context, name, c));
     let functions = nfunctions.map(|name, f| function(context, name, f));
     assert!(context.constraints.is_empty());
@@ -168,6 +218,31 @@ fn module(
 // Functions
 //**************************************************************************************************
 
+fn macro_(
+    context: &mut Context,
+    name: FunctionName,
+    f: N::Function,
+) -> (T::Function, Option<N::Sequence>) {
+    let num_err_before = context
+        .env
+        .count_diags_at_or_above_severity(Severity::NonblockingError);
+    let body = match &f.body.value {
+        N::FunctionBody_::Defined(seq) => Some(seq.clone()),
+        N::FunctionBody_::Native => None,
+    };
+    let translated = function(context, name, f);
+    let num_err_after = context
+        .env
+        .count_diags_at_or_above_severity(Severity::NonblockingError);
+    let body = if num_err_before == num_err_after {
+        body
+    } else {
+        assert!(num_err_after > num_err_before);
+        None
+    };
+    (translated, body)
+}
+
 fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Function {
     let N::Function {
         warning_filter,
@@ -175,6 +250,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
         attributes,
         visibility,
         entry,
+        macro_,
         mut signature,
         body: n_body,
     } = f;
@@ -191,7 +267,12 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     function_signature(context, &signature);
     expand::function_signature(context, &mut signature);
 
-    let body = function_body(context, n_body);
+    let sp!(bloc, body_) = function_body(context, n_body);
+    let body_ = if macro_.is_some() {
+        T::FunctionBody_::Macro
+    } else {
+        body_
+    };
     unused_let_muts(context);
     context.current_function = None;
     context.env.pop_warning_filter_scope();
@@ -201,8 +282,9 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
         attributes,
         visibility,
         entry,
+        macro_,
         signature,
-        body,
+        body: sp(bloc, body_),
     }
 }
 
@@ -710,6 +792,17 @@ fn visit_type_params(
                 }
             }
         },
+        Type_::Fun(args, result) => {
+            for ty in args {
+                visit_type_params(context, ty, ParamPos::NonPhantom(NonPhantomPos::TypeArg), f)
+            }
+            visit_type_params(
+                context,
+                result,
+                ParamPos::NonPhantom(NonPhantomPos::TypeArg),
+                f,
+            )
+        }
         Type_::Var(_) | Type_::Anything | Type_::UnresolvedError => {}
         Type_::Unit => {}
     }
@@ -770,6 +863,9 @@ fn has_unresolved_error_type(ty: &Type) -> bool {
         Type_::UnresolvedError => true,
         Type_::Ref(_, ty) => has_unresolved_error_type(ty),
         Type_::Apply(_, _, ty_args) => ty_args.iter().any(has_unresolved_error_type),
+        Type_::Fun(args, result) => {
+            args.iter().any(has_unresolved_error_type) || has_unresolved_error_type(result)
+        }
         Type_::Param(_) | Type_::Var(_) | Type_::Anything | Type_::Unit => false,
     }
 }
@@ -820,6 +916,37 @@ fn typing_error<T: ToString, F: FnOnce() -> T>(
                     "Found expression list of length {}: {}. It is not compatible with the other \
                      type of length {}.",
                     n2, t2_str, n1
+                )
+            };
+
+            diag!(
+                TypeSafety::JoinError,
+                (loc, msg),
+                (loc1, msg1),
+                (loc2, msg2)
+            )
+        }
+        FunArityMismatch(a1, t1, a2, t2) => {
+            let loc1 = core::best_loc(subst, &t1);
+            let loc2 = core::best_loc(subst, &t2);
+            let t1_str = core::error_format(&t1, subst);
+            let t2_str = core::error_format(&t2, subst);
+            let msg1 = if from_subtype {
+                format!("Given lambda with {} arguments: {}", a1, t1_str)
+            } else {
+                format!(
+                    "Found a lambda type with {} arguments: {}. It is not compatible with the \
+                     other type with {} arguments.",
+                    a1, t1_str, a2
+                )
+            };
+            let msg2 = if from_subtype {
+                format!("Expected a lambda with {} arguments: {}", a2, t2_str)
+            } else {
+                format!(
+                    "Found a lambda type with {} arguments: {}. It is not compatible with the \
+                     other type with {} arguments.",
+                    a2, t2_str, a1
                 )
             };
 

@@ -656,8 +656,8 @@ impl Type_ {
             Type_::Unit => Some(AbilitySet::collection(loc)),
             Type_::Ref(_, _) => Some(AbilitySet::references(loc)),
             Type_::Anything | Type_::UnresolvedError => Some(AbilitySet::all(loc)),
+            Type_::Fun(_, _) => Some(AbilitySet::functions(loc)),
             Type_::Var(_) => None,
-            Type_::Fun(_, _) => None,
         }
     }
 
@@ -668,8 +668,8 @@ impl Type_ {
             Type_::Unit => Some(AbilitySet::COLLECTION.contains(&ability)),
             Type_::Ref(_, _) => Some(AbilitySet::REFERENCES.contains(&ability)),
             Type_::Anything | Type_::UnresolvedError => Some(true),
+            Type_::Fun(_, _) => Some(AbilitySet::FUNCTIONS.contains(&ability)),
             Type_::Var(_) => None,
-            Type_::Fun(_, _) => None,
         }
     }
 }

@@ -54,12 +54,15 @@ pub struct Local {
 
 pub struct Context<'env> {
     pub modules: NamingProgramInfo,
+    macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     pub env: &'env mut CompilationEnv,
 
     use_funs: Vec<UseFunsScope>,
     pub current_package: Option<Symbol>,
     pub current_module: Option<ModuleIdent>,
     pub current_function: Option<FunctionName>,
+    pub in_macro_function: bool,
+    max_variable_color: u16,
     pub return_type: Option<Type>,
     locals: UniqueMap<Var, Local>,
 
@@ -76,6 +79,14 @@ pub struct Context<'env> {
     /// collects all used module members (functions and constants) but it's a superset of these in
     /// that it may contain other identifiers that do not in fact represent a function or a constant
     pub used_module_members: BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
+}
+
+pub struct ResolvedFunctionType {
+    pub declared: Loc,
+    pub macro_: Option<Loc>,
+    pub ty_args: Vec<Type>,
+    pub params: Vec<(Var, Type)>,
+    pub return_: Type,
 }
 
 impl UseFunsScope {
@@ -124,15 +135,26 @@ impl<'env> Context<'env> {
             current_package: None,
             current_module: None,
             current_function: None,
+            in_macro_function: false,
+            max_variable_color: 0,
             return_type: None,
             constraints: vec![],
             locals: UniqueMap::new(),
             modules: info,
+            macros: UniqueMap::new(),
             named_block_map: BTreeMap::new(),
             env,
             new_friends: BTreeSet::new(),
             used_module_members: BTreeMap::new(),
         }
+    }
+
+    pub fn set_macros(
+        &mut self,
+        macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
+    ) {
+        debug_assert!(self.macros.is_empty());
+        self.macros = macros;
     }
 
     pub fn add_use_funs_scope(&mut self, new_scope: N::UseFuns) {
@@ -208,6 +230,8 @@ impl<'env> Context<'env> {
         self.subst = Subst::empty();
         self.constraints = Constraints::new();
         self.current_function = None;
+        self.in_macro_function = false;
+        self.max_variable_color = 0;
     }
 
     pub fn error_type(&mut self, loc: Loc) -> Type {
@@ -514,6 +538,13 @@ fn error_format_impl_(b_: &Type_, subst: &Subst, nested: bool) -> String {
             };
             format!("{}{}", n, tys_str)
         }
+        Fun(args, result) => {
+            format!(
+                "|{}|{}",
+                format_comma(args.iter().map(|t| error_format_nested(t, subst))),
+                error_format_nested(result, subst)
+            )
+        }
         Param(tp) => tp.user_specified_name.value.to_string(),
         Ref(mut_, ty) => format!(
             "&{}{}",
@@ -572,6 +603,7 @@ pub fn infer_abilities<const INFO_PASS: bool>(
             }))
             .unwrap()
         }
+        T::Fun(_, _) => AbilitySet::functions(loc),
     }
 }
 
@@ -602,6 +634,7 @@ fn debug_abilities_info(context: &Context, ty: &Type) -> (Option<Loc>, AbilitySe
             context.struct_declared_abilities(m, n).clone(),
             ty_args.clone(),
         ),
+        T::Fun(_, _) => (None, AbilitySet::functions(loc), vec![]),
     }
 }
 
@@ -783,14 +816,7 @@ pub fn make_method_call_type(
     tn: &TypeName,
     method: Name,
     ty_args_opt: Option<Vec<Type>>,
-) -> Option<(
-    Loc,
-    ModuleIdent,
-    FunctionName,
-    Vec<Type>,
-    Vec<(Var, Type)>,
-    Type,
-)> {
+) -> Option<(ModuleIdent, FunctionName, ResolvedFunctionType)> {
     let target_function_opt = context.find_method_and_mark_used(tn, method);
     // try to find a function in the defining module for errors
     let Some((target_m, target_f)) = target_function_opt else {
@@ -858,10 +884,9 @@ pub fn make_method_call_type(
         return None;
     };
 
-    let (defined_loc, ty_args, params, return_ty) =
-        make_function_type(context, loc, &target_m, &target_f, ty_args_opt);
+    let function_ty = make_function_type(context, loc, &target_m, &target_f, ty_args_opt);
 
-    Some((defined_loc, target_m, target_f, ty_args, params, return_ty))
+    Some((target_m, target_f, function_ty))
 }
 
 pub fn make_function_type(
@@ -870,7 +895,7 @@ pub fn make_function_type(
     m: &ModuleIdent,
     f: &FunctionName,
     ty_args_opt: Option<Vec<Type>>,
-) -> (Loc, Vec<Type>, Vec<(Var, Type)>, Type) {
+) -> ResolvedFunctionType {
     let in_current_module = match &context.current_module {
         Some(current) => m == current,
         None => false,
@@ -914,6 +939,9 @@ pub fn make_function_type(
     let public_for_testing =
         public_testing_visibility(context.env, context.current_package, f, finfo.entry);
     let is_testing_context = context.is_testing_context();
+    if true {
+        todo!("Check macro visibility persistence")
+    }
     match finfo.visibility {
         _ if is_testing_context && public_for_testing.is_some() => (),
         Visibility::Internal if in_current_module => (),
@@ -980,7 +1008,13 @@ pub fn make_function_type(
         }
         Visibility::Public(_) => (),
     };
-    (defined_loc, ty_args, params, return_ty)
+    ResolvedFunctionType {
+        declared: defined_loc,
+        macro_: finfo.macro_,
+        ty_args,
+        params,
+        return_: return_ty,
+    }
 }
 
 pub enum PublicForTesting {
@@ -1252,7 +1286,7 @@ fn solve_base_type_constraint(context: &mut Context, loc: Loc, msg: String, ty: 
                 (tyloc, tmsg)
             ))
         }
-        UnresolvedError | Anything | Param(_) | Apply(_, _, _) => (),
+        UnresolvedError | Anything | Param(_) | Apply(_, _, _) | Fun(_, _) => (),
     }
 }
 
@@ -1273,7 +1307,7 @@ fn solve_single_type_constraint(context: &mut Context, loc: Loc, msg: String, ty
                 (tyloc, tmsg)
             ))
         }
-        UnresolvedError | Anything | Ref(_, _) | Param(_) | Apply(_, _, _) => (),
+        UnresolvedError | Anything | Ref(_, _) | Param(_) | Apply(_, _, _) | Fun(_, _) => (),
     }
 }
 
@@ -1347,6 +1381,11 @@ pub fn subst_tparams(subst: &TParamSubst, sp!(loc, t_): Type) -> Type {
                 .collect();
             sp(loc, Apply(k, n, ftys))
         }
+        Fun(args, result) => {
+            let ftys = args.into_iter().map(|t| subst_tparams(subst, t)).collect();
+            let fres = Box::new(subst_tparams(subst, *result));
+            sp(loc, Fun(ftys, fres))
+        }
     }
 }
 
@@ -1366,6 +1405,11 @@ pub fn ready_tvars(subst: &Subst, sp!(loc, t_): Type) -> Type {
                 None => sp(loc, Var(last_var)),
                 Some(t) => ready_tvars(subst, t.clone()),
             }
+        }
+        Fun(args, result) => {
+            let args = args.into_iter().map(|t| ready_tvars(subst, t)).collect();
+            let result = Box::new(ready_tvars(subst, *result));
+            sp(loc, Fun(args, result))
         }
     }
 }
@@ -1388,6 +1432,10 @@ pub fn instantiate(context: &mut Context, sp!(loc, t_): Type) -> Type {
         Apply(abilities_opt, n, ty_args) => {
             instantiate_apply(context, loc, abilities_opt, n, ty_args)
         }
+        Fun(args, result) => Fun(
+            args.into_iter().map(|t| instantiate(context, t)).collect(),
+            Box::new(instantiate(context, *result)),
+        ),
         x @ Param(_) => x,
         Var(_) => panic!("ICE instantiate type variable"),
     };
@@ -1535,6 +1583,7 @@ pub enum TypingError {
     SubtypeError(Box<Type>, Box<Type>),
     Incompatible(Box<Type>, Box<Type>),
     ArityMismatch(usize, Box<Type>, usize, Box<Type>),
+    FunArityMismatch(usize, Box<Type>, usize, Box<Type>),
     RecursiveType(Loc),
 }
 
@@ -1615,6 +1664,21 @@ fn join_impl(
             );
             let (subst, tys) = join_impl_types(subst, case, tys1, tys2)?;
             Ok((subst, sp(*loc, Apply(k2.clone(), n2.clone(), tys))))
+        }
+        (sp!(_, Fun(a1, _)), sp!(_, Fun(a2, _))) if a1.len() != a2.len() => {
+            Err(TypingError::FunArityMismatch(
+                a1.len(),
+                Box::new(lhs.clone()),
+                a2.len(),
+                Box::new(rhs.clone()),
+            ))
+        }
+        (sp!(_, Fun(a1, r1)), sp!(loc, Fun(a2, r2))) => {
+            // TODO this is going to likely lead to some strange error locations/messages
+            // since the RHS in subtyping is currently assumed to be an annotation
+            let (subst, args) = join_impl_types(subst, case, a2, a1)?;
+            let (subst, result) = join_impl(subst, case, r1, r2)?;
+            Ok((subst, sp(*loc, Fun(args, Box::new(result)))))
         }
         (sp!(loc1, Var(id1)), sp!(loc2, Var(id2))) => {
             if *id1 == *id2 {
@@ -1762,6 +1826,13 @@ fn join_bind_tvar(subst: &mut Subst, loc: Loc, tvar: TVar, ty: Type) -> Result<b
                 .iter()
                 .rev()
                 .for_each(|inner| used_tvars(used, inner)),
+            T::Fun(inner_args, inner_ret) => {
+                inner_args
+                    .iter()
+                    .rev()
+                    .for_each(|inner| used_tvars(used, inner));
+                used_tvars(used, inner_ret)
+            }
             T::Unit | T::Param(_) | T::Anything | T::UnresolvedError => (),
         }
     }

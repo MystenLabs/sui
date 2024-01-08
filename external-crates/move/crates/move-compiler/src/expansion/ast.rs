@@ -584,6 +584,8 @@ impl AbilitySet {
     pub const SIGNER: [Ability_; 1] = [Ability_::Drop];
     /// Abilities for vector<_>, note they are predicated on the type argument
     pub const COLLECTION: [Ability_; 3] = [Ability_::Copy, Ability_::Drop, Ability_::Store];
+    /// Abilities for functions
+    pub const FUNCTIONS: [Ability_; 0] = [];
 
     pub fn empty() -> Self {
         AbilitySet(UniqueSet::new())
@@ -649,23 +651,27 @@ impl AbilitySet {
     }
 
     pub fn all(loc: Loc) -> Self {
-        Self::from_abilities_(loc, Self::ALL.to_vec()).unwrap()
+        Self::from_abilities_(loc, Self::ALL).unwrap()
     }
 
     pub fn primitives(loc: Loc) -> Self {
-        Self::from_abilities_(loc, Self::PRIMITIVES.to_vec()).unwrap()
+        Self::from_abilities_(loc, Self::PRIMITIVES).unwrap()
     }
 
     pub fn references(loc: Loc) -> Self {
-        Self::from_abilities_(loc, Self::REFERENCES.to_vec()).unwrap()
+        Self::from_abilities_(loc, Self::REFERENCES).unwrap()
     }
 
     pub fn signer(loc: Loc) -> Self {
-        Self::from_abilities_(loc, Self::SIGNER.to_vec()).unwrap()
+        Self::from_abilities_(loc, Self::SIGNER).unwrap()
     }
 
     pub fn collection(loc: Loc) -> Self {
-        Self::from_abilities_(loc, Self::COLLECTION.to_vec()).unwrap()
+        Self::from_abilities_(loc, Self::COLLECTION).unwrap()
+    }
+
+    pub fn functions(loc: Loc) -> Self {
+        Self::from_abilities_(loc, Self::COLLECTION).unwrap()
     }
 }
 

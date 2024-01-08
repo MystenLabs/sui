@@ -8,7 +8,10 @@ use crate::{
     naming::ast::{
         BlockLabel, FunctionSignature, Neighbor, StructDefinition, Type, TypeName_, Type_, Var,
     },
-    parser::ast::{BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER},
+    parser::ast::{
+        BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER,
+        MACRO_MODIFIER, NATIVE_MODIFIER,
+    },
     shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap},
 };
 use move_ir_types::location::*;
@@ -64,6 +67,7 @@ pub struct ModuleDefinition {
 pub enum FunctionBody_ {
     Defined(Sequence),
     Native,
+    Macro,
 }
 pub type FunctionBody = Spanned<FunctionBody_>;
 
@@ -75,6 +79,7 @@ pub struct Function {
     pub attributes: Attributes,
     pub visibility: Visibility,
     pub entry: Option<Loc>,
+    pub macro_: Option<Loc>,
     pub signature: FunctionSignature,
     pub body: FunctionBody,
 }
@@ -167,6 +172,7 @@ pub enum UnannotatedExp_ {
     },
     NamedBlock(BlockLabel, Sequence),
     Block(Sequence),
+    Lambda(LValueList, Box<Exp>),
     Assign(LValueList, Vec<Option<Type>>, Box<Exp>),
     Mutate(Box<Exp>, Box<Exp>),
     Return(Box<Exp>),
@@ -341,6 +347,7 @@ impl AstDebug for (FunctionName, &Function) {
                 attributes,
                 visibility,
                 entry,
+                macro_,
                 signature,
                 body,
             },
@@ -351,14 +358,17 @@ impl AstDebug for (FunctionName, &Function) {
         if entry.is_some() {
             w.write(&format!("{} ", ENTRY_MODIFIER));
         }
+        if macro_.is_some() {
+            w.write(&format!("{} ", MACRO_MODIFIER));
+        }
         if let FunctionBody_::Native = &body.value {
-            w.write("native ");
+            w.write(&format!("{} ", NATIVE_MODIFIER));
         }
         w.write(&format!("fun#{index} {name}"));
         signature.ast_debug(w);
         match &body.value {
             FunctionBody_::Defined(body) => body.ast_debug(w),
-            FunctionBody_::Native => w.writeln(";"),
+            FunctionBody_::Native | FunctionBody_::Macro => w.writeln(";"),
         }
     }
 }
@@ -525,6 +535,12 @@ impl AstDebug for UnannotatedExp_ {
                 seq.ast_debug(w)
             }
             E::Block(seq) => seq.ast_debug(w),
+            E::Lambda(sp!(_, bs), e) => {
+                w.write("|");
+                bs.ast_debug(w);
+                w.write("|");
+                e.ast_debug(w);
+            }
             E::ExpList(es) => {
                 w.write("(");
                 w.comma(es, |w, e| e.ast_debug(w));

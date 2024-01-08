@@ -15,7 +15,7 @@ use crate::{
     },
     parser::ast::{
         self as P, Ability, BlockLabel, ConstantName, Field, FieldBindings, FunctionName,
-        ModuleName, Mutability, StructName, Var, ENTRY_MODIFIER, MACRO_MODIFIER,
+        ModuleName, Mutability, StructName, Var, ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
     },
     shared::{known_attributes::AttributePosition, unique_map::UniqueMap, *},
     FullyCompiledProgram,
@@ -646,7 +646,7 @@ fn module_(
             P::ModuleMember::Use(_) => unreachable!(),
             P::ModuleMember::Friend(f) => friend(context, &mut friends, f),
             P::ModuleMember::Function(mut f) => {
-                if !context.is_source_definition {
+                if !context.is_source_definition && f.macro_.is_none() {
                     f.body.value = P::FunctionBody_::Native
                 }
                 function(
@@ -2352,6 +2352,18 @@ fn function_(
         context.env().add_diag(diag!(
             Declarations::InvalidFunction,
             (entry_loc, e_msg),
+            (macro_loc, m_msg),
+        ));
+    }
+    if let (Some(macro_loc), sp!(native_loc, P::FunctionBody_::Native)) = (macro_, &pbody) {
+        let n_msg = format!(
+            "Invalid function declaration. \
+            '{NATIVE_MODIFIER}' functions cannot be '{MACRO_MODIFIER}'",
+        );
+        let m_msg = format!("Function declared as '{MACRO_MODIFIER}' here");
+        context.env().add_diag(diag!(
+            Declarations::InvalidFunction,
+            (*native_loc, n_msg),
             (macro_loc, m_msg),
         ));
     }
