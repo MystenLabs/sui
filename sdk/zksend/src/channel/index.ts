@@ -4,7 +4,7 @@
 import { safeParse } from 'valibot';
 
 import { withResolvers } from '../utils/withResolvers.js';
-import type { ZkSendRequestType, ZkSendResponsePayload } from './events.js';
+import type { ZkSendRequestTypes, ZkSendResponsePayload, ZkSendResponseTypes } from './events.js';
 import { ZkSendResponse } from './events.js';
 
 const DEFAULT_ZKSEND_ORIGIN = 'https://zksend.com';
@@ -19,11 +19,11 @@ export class ZkSendPopup {
 		this.#origin = origin;
 	}
 
-	async createRequest<T extends keyof ZkSendRequestType>(
+	async createRequest<T extends keyof ZkSendResponseTypes>(
 		type: T,
-		data?: string,
-	): Promise<ZkSendRequestType[T]> {
-		const { promise, resolve, reject } = withResolvers<ZkSendRequestType[T]>();
+		data: ZkSendRequestTypes[T],
+	): Promise<ZkSendResponseTypes[T]> {
+		const { promise, resolve, reject } = withResolvers<ZkSendResponseTypes[T]>();
 
 		let popup: Window | null = null;
 
@@ -39,7 +39,7 @@ export class ZkSendPopup {
 			if (output.payload.type === 'reject') {
 				reject(new Error('TODO: Better error message'));
 			} else if (output.payload.type === 'resolve') {
-				resolve(output.payload.data as ZkSendRequestType[T]);
+				resolve(output.payload.data as ZkSendResponseTypes[T]);
 			}
 		};
 
@@ -54,7 +54,7 @@ export class ZkSendPopup {
 			`${origin}/dapp/${type}?${new URLSearchParams({
 				id: this.#id,
 				origin: this.#origin,
-			})}${data ? `#${data}` : ''}`,
+			})}${data ? `#${new URLSearchParams(data)}` : ''}`,
 		);
 
 		if (!popup) {

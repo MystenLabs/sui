@@ -22,7 +22,20 @@ export const ZkSendSignPersonalMessageResponse = object({
 	signature: string(),
 });
 
-export type ZkSendRequestType = {
+export interface ZkSendRequestTypes extends Record<string, Record<string, string>> {
+	// eslint-disable-next-line @typescript-eslint/ban-types
+	connect: {};
+	'sign-transaction-block': {
+		bytes: string;
+		address: string;
+	};
+	'sign-personal-message': {
+		bytes: string;
+		address: string;
+	};
+}
+
+export type ZkSendResponseTypes = {
 	connect: Output<typeof ZdSendConnectResponse>;
 	'sign-transaction-block': Output<typeof ZkSendSignTransactionBlockResponse>;
 	'sign-personal-message': Output<typeof ZkSendSignPersonalMessageResponse>;

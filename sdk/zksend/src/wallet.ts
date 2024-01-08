@@ -90,8 +90,8 @@ export class ZkSendWallet implements Wallet {
 		this.#client = suiClient;
 	}
 
-	#signTransactionBlock: SuiSignTransactionBlockMethod = async ({ transactionBlock }) => {
-		transactionBlock.setSenderIfNotSet(this.#accounts[0].address);
+	#signTransactionBlock: SuiSignTransactionBlockMethod = async ({ transactionBlock, account }) => {
+		transactionBlock.setSenderIfNotSet(account.address);
 
 		const bytes = toB64(
 			await transactionBlock.build({
@@ -100,7 +100,10 @@ export class ZkSendWallet implements Wallet {
 		);
 
 		const popup = new ZkSendPopup();
-		const response = await popup.createRequest('sign-transaction-block', bytes);
+		const response = await popup.createRequest('sign-transaction-block', {
+			bytes,
+			address: account.address,
+		});
 
 		return {
 			transactionBlockBytes: bytes,
@@ -108,10 +111,13 @@ export class ZkSendWallet implements Wallet {
 		};
 	};
 
-	#signPersonalMessage: SuiSignPersonalMessageMethod = async ({ message }) => {
+	#signPersonalMessage: SuiSignPersonalMessageMethod = async ({ message, account }) => {
 		const bytes = toB64(bcs.vector(bcs.u8()).serialize(message).toBytes());
 		const popup = new ZkSendPopup();
-		const response = await popup.createRequest('sign-personal-message', bytes);
+		const response = await popup.createRequest('sign-personal-message', {
+			bytes,
+			address: account.address,
+		});
 
 		return {
 			bytes,
@@ -156,7 +162,7 @@ export class ZkSendWallet implements Wallet {
 		}
 
 		const popup = new ZkSendPopup();
-		const response = await popup.createRequest('connect');
+		const response = await popup.createRequest('connect', {});
 		if (!('address' in response)) {
 			throw new Error('Unexpected response');
 		}
