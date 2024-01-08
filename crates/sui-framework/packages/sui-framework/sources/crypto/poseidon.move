@@ -13,6 +13,9 @@ module sui::poseidon {
     /// Error if an empty vector is passed as input.
     const EEmptyInput: u64 = 1;
 
+    /// The field size for BN254 curve.
+    const BN254_MAX: u256 = 21888242871839275222246405745257275088548364400416034343698204186575808495617u256;
+
     /// @param data: Vector of BN254 field elements to hash.
     ///
     /// Hash the inputs using poseidon_bn254 and returns a BN254 field element.
@@ -24,7 +27,7 @@ module sui::poseidon {
         assert!(l > 0, EEmptyInput);
         while (i < l) {
             let field_element = vector::borrow(data, i);
-            assert!(*field_element < 21888242871839275222246405745257275088548364400416034343698204186575808495617u256, ENonCanonicalInput);
+            assert!(*field_element < BN254_MAX, ENonCanonicalInput);
             vector::push_back(&mut b, bcs::to_bytes(vector::borrow(data, i)));
             i = i + 1;
         };
