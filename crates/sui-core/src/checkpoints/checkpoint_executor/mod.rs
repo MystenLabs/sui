@@ -195,18 +195,14 @@ impl CheckpointExecutor {
                 return StopReason::EpochComplete;
             }
 
-            // dont schedule checkpoints > RunWithRange::Checkpoint
-            if run_with_range == RunWithRange::None
-                || run_with_range.is_checkpoint_leq(next_to_schedule)
-            {
-                self.schedule_synced_checkpoints(
-                    &mut pending,
-                    // next_to_schedule will be updated to the next checkpoint to schedule.
-                    // This makes sure we don't re-schedule the same checkpoint multiple times.
-                    &mut next_to_schedule,
-                    epoch_store.clone(),
-                );
-            }
+            self.schedule_synced_checkpoints(
+                &mut pending,
+                // next_to_schedule will be updated to the next checkpoint to schedule.
+                // This makes sure we don't re-schedule the same checkpoint multiple times.
+                &mut next_to_schedule,
+                epoch_store.clone(),
+                run_with_range,
+            );
 
             self.metrics
                 .checkpoint_exec_inflight
@@ -329,6 +325,7 @@ impl CheckpointExecutor {
         pending: &mut CheckpointExecutionBuffer,
         next_to_schedule: &mut CheckpointSequenceNumber,
         epoch_store: Arc<AuthorityPerEpochStore>,
+        run_with_range: RunWithRange,
     ) {
         let Some(latest_synced_checkpoint) = self
             .checkpoint_store
@@ -355,9 +352,19 @@ impl CheckpointExecutor {
             if checkpoint.epoch() > epoch_store.epoch() {
                 return;
             }
-
-            self.schedule_checkpoint(checkpoint, pending, epoch_store.clone());
-            *next_to_schedule += 1;
+            match run_with_range {
+                RunWithRange::Checkpoint(seq) if *next_to_schedule > seq => {
+                    debug!(
+                        "RunWithRange Checkpoint {} is set, not scheduling checkpoint {}",
+                        seq, *next_to_schedule
+                    );
+                    return;
+                }
+                _ => {
+                    self.schedule_checkpoint(checkpoint, pending, epoch_store.clone());
+                    *next_to_schedule += 1;
+                }
+            }
         }
     }
 

@@ -963,7 +963,7 @@ mod tests {
 }
 
 // RunWithRange is used to specify the ending epoch/checkpoint to process.
-// this is intended for use with disaster recoery debugging and verification workflows, never in normal operations
+// this is intended for use with disaster recovery debugging and verification workflows, never in normal operations
 #[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub enum RunWithRange {
     Epoch(EpochId),
@@ -972,18 +972,12 @@ pub enum RunWithRange {
 }
 
 impl RunWithRange {
-    // checks if we have hit a condition specified by run_with_range enum type
-    pub fn matches_epoch(&self, epoch_id: EpochId) -> bool {
-        matches!(self, RunWithRange::Epoch(e) if *e == epoch_id)
-    }
+    // is epoch_id > RunWithRange::Epoch
     pub fn is_epoch_gt(&self, epoch_id: EpochId) -> bool {
         matches!(self, RunWithRange::Epoch(e) if epoch_id > *e)
     }
 
     pub fn matches_checkpoint(&self, seq_num: CheckpointSequenceNumber) -> bool {
         matches!(self, RunWithRange::Checkpoint(seq) if *seq == seq_num)
-    }
-    pub fn is_checkpoint_leq(&self, seq_num: CheckpointSequenceNumber) -> bool {
-        matches!(self, RunWithRange::Checkpoint(seq) if seq_num <= *seq)
     }
 }

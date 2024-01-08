@@ -1374,19 +1374,12 @@ async fn transfer_coin(
 #[sim_test]
 async fn test_full_node_run_with_range_checkpoint() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
-    let want_run_with_range = RunWithRange::Checkpoint(2);
+    let want_run_with_range = RunWithRange::Checkpoint(5);
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10_000)
-        // This will also do aggressive pruning and compaction of the snapshot
-        .with_enable_db_checkpoints_fullnodes()
         .with_fullnode_run_with_range(want_run_with_range)
         .build()
         .await;
-
-    let _checkpoint_path = test_cluster
-        .fullnode_handle
-        .sui_node
-        .with(|node| node.db_checkpoint_path());
 
     // wait for node to signal that we reached and processed our desired epoch
     let got_run_with_range = test_cluster
@@ -1407,55 +1400,12 @@ async fn test_full_node_run_with_range_checkpoint() -> Result<(), anyhow::Error>
 #[sim_test]
 async fn test_full_node_run_with_range_epoch() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
-    let want_run_with_range = RunWithRange::Epoch(1);
+    let want_run_with_range = RunWithRange::Epoch(3);
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10_000)
-        // This will also do aggressive pruning and compaction of the snapshot
         .with_fullnode_run_with_range(want_run_with_range)
         .build()
         .await;
-
-    /*
-        let config = test_cluster
-            .fullnode_config_builder()
-            .with_run_with_range(want_run_with_range)
-            .build(&mut OsRng, test_cluster.swarm.config());
-
-        // Spin up a new full node restored from the snapshot taken at the end of epoch 1
-        let node = test_cluster
-            .start_fullnode_from_config(config)
-            .await
-            .sui_node;
-    */
-    /*
-        let node = test_cluster.fullnode_handle.sui_node.clone();
-        let mut count = 0;
-        loop {
-            info!(
-                "current_epoch_for_testing_output = {}",
-                node.with(|node| node.current_epoch_for_testing())
-            );
-            // Ensure this full node is able to transition to the next epoch
-            if node.with(|node| node.current_epoch_for_testing()) >= 1 {
-                break;
-            }
-            sleep(Duration::from_millis(500)).await;
-            count += 1;
-            if count > 20 {
-                break;
-            }
-        }
-    */
-    /*
-    let mut shutdown_channel_rx = node.with(|node| node.subscribe_to_shutdown_channel());
-    let msg = shutdown_channel_rx.recv().await;
-    match msg {
-        Ok(run_with_range) => info!("gotem {:?}", run_with_range),
-        Err(e) => {
-            info!("failed recv from sui-node shutdown channel: {}", e);
-        }
-    };
-    */
 
     // wait for node to signal that we reached and processed our desired epoch
     let got_run_with_range = test_cluster
