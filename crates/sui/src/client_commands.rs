@@ -17,6 +17,8 @@ use fastcrypto::{
     traits::ToFromBytes,
 };
 
+use crate::ptb_parser::{build_ptb::PTBBuilder, parser::ParsedPTBCommand};
+
 use json_to_table::json_to_table;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
@@ -42,9 +44,11 @@ use sui_move_build::{
     gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies, PublishedAtError,
 };
 use sui_replay::ReplayToolCommand;
-use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
-use sui_sdk::SuiClient;
+use sui_sdk::{
+    apis::ReadApi,
+    sui_client_config::{SuiClientConfig, SuiEnv},
+};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     crypto::SignatureScheme,
@@ -978,6 +982,27 @@ impl PTB {
             println!("{k}: {v:?}");
         }
 
+        let config_path = sui_config::sui_config_dir()?.join(sui_config::SUI_CLIENT_CONFIG);
+        // prompt_if_no_config(&config_path, true).await?;
+        let mut context = WalletContext::new(&config_path, None, None).await?;
+        let mut parsed = vec![];
+
+        for command in &commands {
+            let p = ParsedPTBCommand::parse(command.1)?;
+            println!("{:#?}", p);
+            parsed.push(p);
+        }
+
+        let client = context.get_client().await?;
+        let mut builder = PTBBuilder::new(client.read_api());
+
+        for p in parsed.into_iter() {
+            builder.handle_command(p).await?;
+        }
+
+        let (ptb, budget, should_preview) = builder.finish()?;
+        println!("---------\nPTB\n---------\n{:#?}", ptb);
+
         let result = SuiClientCommandResult::PTB(PTBResult {
             result: "ptb".to_string(),
         });
@@ -1082,56 +1107,17 @@ impl SuiClientCommands {
                 let sender = sender.unwrap_or(context.active_address()?);
 
                 let client = context.get_client().await?;
-                let (dependencies, compiled_modules, compiled_package, package_id) =
-                    compile_package(
-                        &client,
+
+                let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy) =
+                    upgrade_package(
+                        client.read_api(),
                         build_config,
                         package_path,
+                        upgrade_capability,
                         with_unpublished_dependencies,
                         skip_dependency_verification,
                     )
                     .await?;
-
-                let package_id = package_id.map_err(|e| match e {
-                    PublishedAtError::NotPresent => {
-                        anyhow!("No 'published-at' field in manifest for package to be upgraded.")
-                    }
-                    PublishedAtError::Invalid(v) => anyhow!(
-                        "Invalid 'published-at' field in manifest of package to be upgraded. \
-                         Expected an on-chain address, but found: {v:?}"
-                    ),
-                })?;
-
-                let resp = context
-                    .get_client()
-                    .await?
-                    .read_api()
-                    .get_object_with_options(
-                        upgrade_capability,
-                        SuiObjectDataOptions::default().with_bcs().with_owner(),
-                    )
-                    .await?;
-
-                let Some(data) = resp.data else {
-                    return Err(anyhow!(
-                        "Could not find upgrade capability at {upgrade_capability}"
-                    ));
-                };
-
-                let upgrade_cap: UpgradeCap = data
-                    .bcs
-                    .ok_or_else(|| {
-                        anyhow!("Fetch upgrade capability object but no data was returned")
-                    })?
-                    .try_as_move()
-                    .ok_or_else(|| anyhow!("Upgrade capability is not a Move Object"))?
-                    .deserialize()?;
-                // We keep the existing policy -- no fancy policies or changing the upgrade
-                // policy at the moment. To change the policy you can call a Move function in the
-                // `package` module to change this policy.
-                let upgrade_policy = upgrade_cap.policy;
-                let package_digest =
-                    compiled_package.get_package_digest(with_unpublished_dependencies);
 
                 let data = client
                     .transaction_builder()
@@ -1185,7 +1171,7 @@ impl SuiClientCommands {
 
                 let client = context.get_client().await?;
                 let (dependencies, compiled_modules, _, _) = compile_package(
-                    &client,
+                    client.read_api(),
                     build_config,
                     package_path,
                     with_unpublished_dependencies,
@@ -1753,8 +1739,69 @@ fn compile_package_simple(
     )?)
 }
 
-async fn compile_package(
-    client: &SuiClient,
+pub(crate) async fn upgrade_package(
+    read_api: &ReadApi,
+    build_config: MoveBuildConfig,
+    package_path: PathBuf,
+    upgrade_capability: ObjectID,
+    with_unpublished_dependencies: bool,
+    skip_dependency_verification: bool,
+) -> Result<(ObjectID, Vec<Vec<u8>>, PackageDependencies, [u8; 32], u8), anyhow::Error> {
+    let (dependencies, compiled_modules, compiled_package, package_id) = compile_package(
+        read_api,
+        build_config,
+        package_path,
+        with_unpublished_dependencies,
+        skip_dependency_verification,
+    )
+    .await?;
+
+    let package_id = package_id.map_err(|e| match e {
+        PublishedAtError::NotPresent => {
+            anyhow!("No 'published-at' field in manifest for package to be upgraded.")
+        }
+        PublishedAtError::Invalid(v) => anyhow!(
+            "Invalid 'published-at' field in manifest of package to be upgraded. \
+                         Expected an on-chain address, but found: {v:?}"
+        ),
+    })?;
+
+    let resp = read_api
+        .get_object_with_options(
+            upgrade_capability,
+            SuiObjectDataOptions::default().with_bcs().with_owner(),
+        )
+        .await?;
+
+    let Some(data) = resp.data else {
+        return Err(anyhow!(
+            "Could not find upgrade capability at {upgrade_capability}"
+        ));
+    };
+
+    let upgrade_cap: UpgradeCap = data
+        .bcs
+        .ok_or_else(|| anyhow!("Fetch upgrade capability object but no data was returned"))?
+        .try_as_move()
+        .ok_or_else(|| anyhow!("Upgrade capability is not a Move Object"))?
+        .deserialize()?;
+    // We keep the existing policy -- no fancy policies or changing the upgrade
+    // policy at the moment. To change the policy you can call a Move function in the
+    // `package` module to change this policy.
+    let upgrade_policy = upgrade_cap.policy;
+    let package_digest = compiled_package.get_package_digest(with_unpublished_dependencies);
+
+    Ok((
+        package_id,
+        compiled_modules,
+        dependencies,
+        package_digest,
+        upgrade_policy,
+    ))
+}
+
+pub(crate) async fn compile_package(
+    read_api: &ReadApi,
     build_config: MoveBuildConfig,
     package_path: PathBuf,
     with_unpublished_dependencies: bool,
@@ -1805,7 +1852,7 @@ async fn compile_package(
     }
     let compiled_modules = compiled_package.get_package_bytes(with_unpublished_dependencies);
     if !skip_dependency_verification {
-        let verifier = BytecodeSourceVerifier::new(client.read_api());
+        let verifier = BytecodeSourceVerifier::new(read_api);
         if let Err(e) = verifier.verify_package_deps(&compiled_package).await {
             return Err(SuiError::ModulePublishFailure {
                 error: format!(

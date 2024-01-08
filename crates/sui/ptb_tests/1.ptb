@@ -1,0 +1,40 @@
+sui client ptb --gas-budget 1000 --assign A "@0x1" --transfer-objects A "[@0x1,@0x2,@0x3]"
+
+sui client ptb --gas-budget 1000 --assign A "@0x1" --assign B @0x2 --assign C @0x3 --transfer-objects A "[A,B,C]" --assign G
+
+sui client ptb --gas-budget 1000 --make-move-vec "<u64>" "[1,2,3,4]"
+
+sui client ptb --gas-budget 1000 --make-move-vec "<0x1::a::b>" "[@0x1,@0x2]"
+
+sui client ptb --gas-budget 1000 --make-move-vec "<address>" "[@0x1,@0x2]"
+
+sui client ptb --gas-budget 10000 --split-coins @0x1 "[1,2,3]"
+
+sui client ptb --gas-budget 10000 --split-coins @0x1 "[1,2,3]" --merge-coins @0x1 "[@0x1,@0x2]"
+
+sui client ptb --gas-budget 10000 --split-coins @0x1 "[1,2,3]" --merge-coins @0x1 "[@0x1,@0x2]" --pick-gas-budget min
+
+sui client ptb --gas-budget 10000 --split-coins @0x1 "[1,2,3]" --merge-coins @0x1 "[@0x1,@0x2]" --pick-gas-budget max
+
+sui client ptb --gas-budget 10000 --split-coins @0x1 "[1,2,3]" --merge-coins @0x1 "[@0x1,@0x2]" --pick-gas-budget sum
+
+sui client ptb --gas-budget 1000 --make-move-vec "<vector<address>>" "[vector[@0x1],vector[@0x2]]"
+
+# This should be an error -- array inside an array
+sui client ptb --gas-budget 1000 --make-move-vec "<vector<address>>" "[[@0x1],[@0x2]]"
+
+sui client ptb --gas-budget 1000 --make-move-vec "<std::option::Option<u64>>" "[none,none]"
+
+sui client ptb --gas-budget 1000 --make-move-vec "<std::option::Option<u64>>" "[none,none]"
+
+sui client ptb --gas-budget 1000 --make-move-vec "<std::option::Option<u64>>" "[none,some(1)]"
+
+ sui client ptb --gas-budget 1000 --make-move-vec "<std::option::Option<u64>>" "[none,some(some(1))]"
+
+ sui client ptb --assign "a" none --make-move-vec "<0x1::option::Option<u64>>" "[a]" --move-call "0x1::option::is_none" "<u64>" a --gas-budget 1000
+
+ sui client ptb --assign "a" none --move-call "0x1::option::is_none" "<u64>" none --gas-budget 1000
+
+ sui client ptb --assign "a" none --move-call "0x1::option::is_none" "<u64>" a --gas-budget 1000
+
+ sui client ptb --assign "a" @0xf3ecaddd15877e590d66a1181381efda4f49607a29bdfd8b4205cfdfa9b09afc --move-call "0x2::coin::destroy_zero" "<0x2::sui::SUI>" a --gas-budget 1000

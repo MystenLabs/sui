@@ -159,7 +159,7 @@ pub fn parse_sui_type_tag(s: &str) -> anyhow::Result<TypeTag> {
     ParsedType::parse(s)?.into_type_tag(&resolve_address)
 }
 
-fn resolve_address(addr: &str) -> Option<AccountAddress> {
+pub fn resolve_address(addr: &str) -> Option<AccountAddress> {
     match addr {
         "deepbook" => Some(DEEPBOOK_ADDRESS),
         "std" => Some(MOVE_STDLIB_ADDRESS),
