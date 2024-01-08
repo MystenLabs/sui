@@ -104,10 +104,25 @@ type AddressOwner {
 	owner: Owner
 }
 
+"""
+The possible relationship types for a transaction block: sign, sent, received, or paid.
+"""
 enum AddressTransactionBlockRelationship {
+	"""
+	Transactions this address has signed
+	"""
 	SIGN
+	"""
+	Transactions that transferred objects from this address
+	"""
 	SENT
+	"""
+	Transactions that received objects into this address
+	"""
 	RECV
+	"""
+	Transactions that were paid for by this address
+	"""
 	PAID
 }
 
@@ -811,8 +826,17 @@ type ExecutionResult {
 	digest: String!
 }
 
+"""
+The execution status of this transaction block: success or failure.
+"""
 enum ExecutionStatus {
+	"""
+	The transaction block was successfully executed
+	"""
 	SUCCESS
+	"""
+	The transaction block could not be executed
+	"""
 	FAILURE
 }
 
@@ -1002,10 +1026,25 @@ type MergeCoinsTransaction {
 	coins: [TransactionArgument!]!
 }
 
+"""
+The basic four abilities for a move object
+"""
 enum MoveAbility {
+	"""
+	Allows values of types with this ability to be copied.
+	"""
 	COPY
+	"""
+	Allows values of types with this ability to be popped/dropped.
+	"""
 	DROP
+	"""
+	Allows the type to serve as a key for global storage operations.
+	"""
 	KEY
+	"""
+	Allows values of types with this ability to exist inside a struct in global storage.
+	"""
 	STORE
 }
 
@@ -1441,9 +1480,27 @@ type MoveValue {
 	json: JSON!
 }
 
+"""
+Module functions, by default, can only be called within the same module.
+These internal (sometimes called private) functions cannot be called from
+other modules or from scripts.
+"""
 enum MoveVisibility {
+	"""
+	A public function can be called by any function defined in any module or script.
+	"""
 	PUBLIC
+	"""
+	A private function can only be called from the module where it was defined.
+	"""
 	PRIVATE
+	"""
+	The friend visibility modifier is a more restricted form of the public modifier
+	to give more control about where a function can be used. A public(friend) function
+	can be called by:
+	1) other functions defined in the same module, or
+	2) functions defined in modules which are explicitly specified in the friend list.
+	"""
 	FRIEND
 }
 
@@ -2239,6 +2296,9 @@ type SplitCoinsTransaction {
 	amounts: [TransactionArgument!]!
 }
 
+"""
+The stake's possible status: active, pending, or unstaked.
+"""
 enum StakeStatus {
 	"""
 	The stake object is active in a staking pool and it is generating rewards
@@ -2611,10 +2671,23 @@ input TransactionBlockFilter {
 	transactionIds: [String!]
 }
 
+"""
+The kind of transaction blocks that exist.
+"""
 union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransactionBlock | AuthenticatorStateUpdateTransaction | RandomnessStateUpdateTransaction | EndOfEpochTransaction
 
+"""
+The kind of transaction block: a system transaction or a programmable transaction.
+"""
 enum TransactionBlockKindInput {
+	"""
+	A system transaction can be one of several types of transactions.
+	See [unions/transaction-block-kind] for more details.
+	"""
 	SYSTEM_TX
+	"""
+	A user submitted transaction block
+	"""
 	PROGRAMMABLE_TX
 }
 

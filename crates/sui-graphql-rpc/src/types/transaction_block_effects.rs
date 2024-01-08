@@ -37,9 +37,12 @@ pub(crate) struct TransactionBlockEffects {
     pub native: NativeTransactionEffects,
 }
 
+/// The execution status of this transaction block: success or failure.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub enum ExecutionStatus {
+    /// The transaction block was successfully executed
     Success,
+    /// The transaction block could not be executed
     Failure,
 }
 

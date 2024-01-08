@@ -20,6 +20,7 @@ pub(crate) mod genesis;
 pub(crate) mod programmable;
 pub(crate) mod randomness_state_update;
 
+/// The kind of transaction blocks that exist.
 #[derive(Union, PartialEq, Clone, Eq)]
 pub(crate) enum TransactionBlockKind {
     ConsensusCommitPrologue(ConsensusCommitPrologueTransaction),

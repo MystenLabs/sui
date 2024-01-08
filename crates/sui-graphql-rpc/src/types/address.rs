@@ -23,11 +23,16 @@ pub(crate) struct Address {
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
+/// The possible relationship types for a transaction block: sign, sent, received, or paid.
 pub(crate) enum AddressTransactionBlockRelationship {
-    Sign, // Transactions this address has signed
-    Sent, // Transactions that transferred objects from this address
-    Recv, // Transactions that received objects into this address
-    Paid, // Transactions that were paid for by this address
+    /// Transactions this address has signed
+    Sign,
+    /// Transactions that transferred objects from this address
+    Sent,
+    /// Transactions that received objects into this address
+    Recv,
+    /// Transactions that were paid for by this address
+    Paid,
 }
 
 #[Object]
