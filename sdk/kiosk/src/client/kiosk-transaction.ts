@@ -286,7 +286,7 @@ export class KioskTransaction {
 
 	 * @param itemType The type `T` of the item
 	 * @param item The ID or Transaction Argument of the item
-	 * @param itemId The ID of the item - Deprecated: This function accepts transaction arguments too, not plain ID.
+	 * @param itemId The ID of the item - Deprecated: Use `item` instead.
 	 * @param policy The Policy ID or Transaction Argument for item T
 	 */
 	lock({
