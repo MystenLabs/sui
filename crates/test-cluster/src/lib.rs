@@ -301,7 +301,7 @@ impl TestCluster {
                         Ok(run_with_range) => run_with_range,
                         Err(e) => {
                             error!("failed recv from sui-node shutdown channel: {}", e);
-                            return RunWithRange::None
+                            RunWithRange::None
                         },
                     }
                 },
