@@ -40,14 +40,6 @@ pub(crate) struct Object {
     pub native: NativeObject,
 }
 
-#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
-pub(crate) enum ObjectKind {
-    Owned,
-    Child,
-    Shared,
-    Immutable,
-}
-
 #[derive(InputObject, Default, Clone)]
 pub(crate) struct ObjectFilter {
     /// This field is used to specify the type of objects that should be included in the query
@@ -74,6 +66,47 @@ pub(crate) struct ObjectFilter {
 pub(crate) struct ObjectKey {
     object_id: SuiAddress,
     version: u64,
+}
+
+/// The object's owner type: Immutable, Shared, Parent, or Address.
+#[derive(Union, Clone)]
+pub enum ObjectOwner {
+    Immutable(Immutable),
+    Shared(Shared),
+    Parent(Parent),
+    Address(AddressOwner),
+}
+
+/// An immutable object is an object that can't be mutated, transferred, or deleted.
+/// Immutable objects have no owner, so anyone can use them.
+#[derive(SimpleObject, Clone)]
+pub struct Immutable {
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
+}
+
+/// A shared object is an object that is shared using the 0x2::transfer::share_object function
+/// and is accessible to everyone.
+/// Unlike owned objects, once an object is shared, it stays mutable and can be accessed by anyone,
+/// unless it is made immutable. An example of immutable shared objects are all published packages
+/// and modules on Sui.
+#[derive(SimpleObject, Clone)]
+pub struct Shared {
+    initial_shared_version: u64,
+}
+
+/// The parent of this object
+#[derive(SimpleObject, Clone)]
+pub struct Parent {
+    parent: Option<Object>,
+}
+
+/// An address-owned object is owned by a specific 32-byte address that is
+/// either an account address (derived from a particular signature scheme) or
+/// an object ID. An address-owned object is accessible only to its owner and no others.
+#[derive(SimpleObject, Clone)]
+pub struct AddressOwner {
+    owner: Option<Owner>,
 }
 
 #[Object]
@@ -166,29 +199,36 @@ impl Object {
             .extend()
     }
 
-    /// Objects can either be immutable, shared, owned by an address,
-    /// or are child objects (part of a dynamic field)
-    async fn kind(&self) -> Option<ObjectKind> {
+    /// The owner type of this Object.
+    /// The owner can be one of the following types: Immutable, Shared, Parent, Address
+    /// Immutable and Shared Objects do not have owners.
+    async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwner> {
         use NativeOwner as O;
-        use ObjectKind as K;
-        Some(match self.native.owner {
-            O::AddressOwner(_) => K::Owned,
-            O::ObjectOwner(_) => K::Child,
-            O::Shared { .. } => K::Shared,
-            O::Immutable => K::Immutable,
-        })
-    }
 
-    /// The Address or Object that owns this Object.  Immutable and Shared Objects do not have
-    /// owners.
-    async fn owner(&self) -> Option<Owner> {
-        use NativeOwner as O;
-        let (O::AddressOwner(address) | O::ObjectOwner(address)) = self.native.owner else {
-            return None;
-        };
+        match self.native.owner {
+            O::AddressOwner(address) => {
+                let address = SuiAddress::from(address);
+                Some(ObjectOwner::Address(AddressOwner {
+                    owner: Some(Owner { address }),
+                }))
+            }
+            O::Immutable => Some(ObjectOwner::Immutable(Immutable { dummy: None })),
+            O::ObjectOwner(address) => {
+                let parent = ctx
+                    .data_unchecked::<PgManager>()
+                    .fetch_obj(address.into(), None)
+                    .await
+                    .ok()
+                    .flatten();
 
-        let address = SuiAddress::from(address);
-        Some(Owner { address })
+                return Some(ObjectOwner::Parent(Parent { parent }));
+            }
+            O::Shared {
+                initial_shared_version,
+            } => Some(ObjectOwner::Shared(Shared {
+                initial_shared_version: initial_shared_version.value(),
+            })),
+        }
     }
 
     /// Attempts to convert the object into a MoveObject

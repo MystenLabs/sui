@@ -7,11 +7,25 @@
     digest
     storageRebate
     owner {
-      defaultNameServiceName
+      __typename
+      ... on Shared {
+        initialSharedVersion
+      }
+      __typename
+      ... on Parent {
+        parent {
+          address
+        }
+      }
+      __typename
+      ... on AddressOwner {
+        owner {
+          address
+        }
+      }
     }
     previousTransactionBlock {
       digest
     }
-    kind
   }
 }

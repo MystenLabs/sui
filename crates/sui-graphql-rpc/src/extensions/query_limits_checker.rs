@@ -12,6 +12,7 @@ use async_graphql::extensions::NextParseQuery;
 use async_graphql::extensions::NextRequest;
 use async_graphql::parser::types::Directive;
 use async_graphql::parser::types::ExecutableDocument;
+use async_graphql::parser::types::Field;
 use async_graphql::parser::types::FragmentDefinition;
 use async_graphql::parser::types::Selection;
 use async_graphql::parser::types::SelectionSet;
@@ -21,11 +22,13 @@ use async_graphql::Pos;
 use async_graphql::Positioned;
 use async_graphql::Response;
 use async_graphql::ServerResult;
+use async_graphql::Value;
 use async_graphql::Variables;
 use async_graphql::{
     extensions::{Extension, ExtensionContext, ExtensionFactory},
     ServerError,
 };
+use async_graphql_value::Value as GqlValue;
 use axum::headers;
 use axum::http::HeaderName;
 use axum::http::HeaderValue;
@@ -42,7 +45,8 @@ pub(crate) struct ShowUsage;
 
 #[derive(Clone, Debug, Default)]
 struct ValidationRes {
-    num_nodes: u32,
+    input_nodes: u32,
+    output_nodes: u64,
     depth: u32,
     num_variables: u32,
     num_fragments: u32,
@@ -53,6 +57,8 @@ struct ValidationRes {
 pub(crate) struct QueryLimitsChecker {
     validation_result: Mutex<Option<ValidationRes>>,
 }
+
+pub(crate) const CONNECTION_FIELDS: [&str; 2] = ["edges", "nodes"];
 
 impl headers::Header for ShowUsage {
     fn name() -> &'static HeaderName {
@@ -81,7 +87,8 @@ impl ExtensionFactory for QueryLimitsChecker {
 
 #[derive(Debug)]
 struct ComponentCost {
-    pub num_nodes: u32,
+    pub input_nodes: u32,
+    pub output_nodes: u64,
     pub depth: u32,
 }
 
@@ -90,7 +97,8 @@ impl std::ops::Add for ComponentCost {
 
     fn add(self, rhs: Self) -> Self::Output {
         Self {
-            num_nodes: self.num_nodes + rhs.num_nodes,
+            input_nodes: self.input_nodes + rhs.input_nodes,
+            output_nodes: self.output_nodes + rhs.output_nodes,
             depth: self.depth + rhs.depth,
         }
     }
@@ -105,7 +113,8 @@ impl Extension for QueryLimitsChecker {
             resp.extension(
                 "usage",
                 value! ({
-                    "nodes": validation_result.num_nodes,
+                    "inputNodes": validation_result.input_nodes,
+                    "outputNodes": validation_result.output_nodes,
                     "depth": validation_result.depth,
                     "variables": validation_result.num_variables,
                     "fragments": validation_result.num_fragments,
@@ -147,10 +156,12 @@ impl Extension for QueryLimitsChecker {
 
         let mut running_costs = ComponentCost {
             depth: 0,
-            num_nodes: 0,
+            input_nodes: 0,
+            output_nodes: 0,
         };
         let mut max_depth_seen = 0;
 
+        // An operation is a query, mutation or subscription consisting of a set of selections
         for (count, (_name, oper)) in doc.operations.iter().enumerate() {
             let sel_set = &oper.node.selection_set;
 
@@ -168,13 +179,20 @@ impl Extension for QueryLimitsChecker {
             }
 
             running_costs.depth = 0;
-            self.analyze_selection_set(&cfg.limits, &doc.fragments, sel_set, &mut running_costs)?;
+            self.analyze_selection_set(
+                &cfg.limits,
+                &doc.fragments,
+                sel_set,
+                &mut running_costs,
+                variables,
+            )?;
             max_depth_seen = max_depth_seen.max(running_costs.depth);
         }
 
         if ctx.data_opt::<ShowUsage>().is_some() {
             *self.validation_result.lock().await = Some(ValidationRes {
-                num_nodes: running_costs.num_nodes,
+                input_nodes: running_costs.input_nodes,
+                output_nodes: running_costs.output_nodes,
                 depth: running_costs.depth,
                 query_payload: query.len() as u32,
                 num_variables: variables.len() as u32,
@@ -182,7 +200,12 @@ impl Extension for QueryLimitsChecker {
             });
         }
         if let Some(metrics) = ctx.data_opt::<Arc<RequestMetrics>>() {
-            metrics.num_nodes.observe(running_costs.num_nodes as f64);
+            metrics
+                .input_nodes
+                .observe(running_costs.input_nodes as f64);
+            metrics
+                .output_nodes
+                .observe(running_costs.output_nodes as f64);
             metrics.query_depth.observe(running_costs.depth as f64);
             metrics.query_payload_size.observe(query.len() as f64);
         }
@@ -191,22 +214,31 @@ impl Extension for QueryLimitsChecker {
 }
 
 impl QueryLimitsChecker {
+    /// Parse the selected fields in one operation and check if it conforms to configured limits.
     fn analyze_selection_set(
         &self,
         limits: &Limits,
         fragment_defs: &HashMap<Name, Positioned<FragmentDefinition>>,
         sel_set: &Positioned<SelectionSet>,
         cost: &mut ComponentCost,
+        variables: &Variables,
     ) -> ServerResult<()> {
         // Use BFS to analyze the query and count the number of nodes and the depth of the query
+        struct ToVisit<'s> {
+            selection: &'s Positioned<Selection>,
+            parent_node_count: u64,
+        }
 
         // Queue to store the nodes at each level
         let mut que = VecDeque::new();
 
-        for top_level_sel in sel_set.node.items.iter() {
-            que.push_back(top_level_sel);
-            cost.num_nodes += 1;
-            check_limits(limits, cost.num_nodes, cost.depth, Some(top_level_sel.pos))?;
+        for selection in sel_set.node.items.iter() {
+            que.push_back(ToVisit {
+                selection,
+                parent_node_count: 1,
+            });
+            cost.input_nodes += 1;
+            check_limits(limits, cost, Some(selection.pos))?;
         }
 
         // Track the number of nodes at first level if any
@@ -215,21 +247,37 @@ impl QueryLimitsChecker {
         while !que.is_empty() {
             // Signifies the start of a new level
             cost.depth += 1;
-            check_limits(limits, cost.num_nodes, cost.depth, None)?;
+            check_limits(limits, cost, None)?;
             while level_len > 0 {
                 // Ok to unwrap since we checked for empty queue
                 // and level_len > 0
-                let curr_sel = que.pop_front().unwrap();
+                let ToVisit {
+                    selection,
+                    parent_node_count,
+                } = que.pop_front().unwrap();
 
-                match &curr_sel.node {
+                match &selection.node {
                     Selection::Field(f) => {
                         check_directives(&f.node.directives)?;
+
+                        let current_count = estimate_output_nodes_for_curr_node(
+                            f,
+                            variables,
+                            limits.default_page_size,
+                        ) * parent_node_count;
+
+                        cost.output_nodes += current_count;
+
                         for field_sel in f.node.selection_set.node.items.iter() {
-                            que.push_back(field_sel);
-                            cost.num_nodes += 1;
-                            check_limits(limits, cost.num_nodes, cost.depth, Some(field_sel.pos))?;
+                            que.push_back(ToVisit {
+                                selection: field_sel,
+                                parent_node_count: current_count,
+                            });
+                            cost.input_nodes += 1;
+                            check_limits(limits, cost, Some(field_sel.pos))?;
                         }
                     }
+
                     Selection::FragmentSpread(fs) => {
                         let frag_name = &fs.node.fragment_name.node;
                         let frag_def = fragment_defs.get(frag_name).ok_or_else(|| {
@@ -247,23 +295,25 @@ impl QueryLimitsChecker {
                         // Ideally web should cache the costs of fragments we've seen before
                         // Will do as enhancement
                         check_directives(&frag_def.node.directives)?;
-                        for frag_sel in frag_def.node.selection_set.node.items.iter() {
-                            que.push_back(frag_sel);
-                            cost.num_nodes += 1;
-                            check_limits(limits, cost.num_nodes, cost.depth, Some(frag_sel.pos))?;
+                        for selection in frag_def.node.selection_set.node.items.iter() {
+                            que.push_back(ToVisit {
+                                selection,
+                                parent_node_count,
+                            });
+                            cost.input_nodes += 1;
+                            check_limits(limits, cost, Some(selection.pos))?;
                         }
                     }
+
                     Selection::InlineFragment(fs) => {
                         check_directives(&fs.node.directives)?;
-                        for in_frag_sel in fs.node.selection_set.node.items.iter() {
-                            que.push_back(in_frag_sel);
-                            cost.num_nodes += 1;
-                            check_limits(
-                                limits,
-                                cost.num_nodes,
-                                cost.depth,
-                                Some(in_frag_sel.pos),
-                            )?;
+                        for selection in fs.node.selection_set.node.items.iter() {
+                            que.push_back(ToVisit {
+                                selection,
+                                parent_node_count,
+                            });
+                            cost.input_nodes += 1;
+                            check_limits(limits, cost, Some(selection.pos))?;
                         }
                     }
                 }
@@ -271,12 +321,13 @@ impl QueryLimitsChecker {
             }
             level_len = que.len();
         }
+
         Ok(())
     }
 }
 
-fn check_limits(limits: &Limits, nodes: u32, depth: u32, pos: Option<Pos>) -> ServerResult<()> {
-    if nodes > limits.max_query_nodes {
+fn check_limits(limits: &Limits, cost: &ComponentCost, pos: Option<Pos>) -> ServerResult<()> {
+    if cost.input_nodes > limits.max_query_nodes {
         return Err(ServerError::new(
             format!(
                 "Query has too many nodes. The maximum allowed is {}",
@@ -286,11 +337,21 @@ fn check_limits(limits: &Limits, nodes: u32, depth: u32, pos: Option<Pos>) -> Se
         ));
     }
 
-    if depth > limits.max_query_depth {
+    if cost.depth > limits.max_query_depth {
         return Err(ServerError::new(
             format!(
                 "Query has too many levels of nesting. The maximum allowed is {}",
                 limits.max_query_depth
+            ),
+            pos,
+        ));
+    }
+
+    if cost.output_nodes > limits.max_output_nodes {
+        return Err(ServerError::new(
+            format!(
+                "Query will result in too many output nodes. The maximum allowed is {}, estimated {}",
+                limits.max_output_nodes, cost.output_nodes
             ),
             pos,
         ));
@@ -326,4 +387,51 @@ fn check_directives(directives: &[Positioned<Directive>]) -> ServerResult<()> {
         }
     }
     Ok(())
+}
+
+/// Given a node, estimate the number of output nodes it will produce.
+fn estimate_output_nodes_for_curr_node(
+    f: &Positioned<Field>,
+    variables: &Variables,
+    default_page_size: u64,
+) -> u64 {
+    if !is_connection(f) {
+        1
+    } else {
+        // If the args 'first' or 'last' is set, then we should use that as the count
+        let first_arg = f.node.get_argument("first");
+        let last_arg = f.node.get_argument("last");
+
+        extract_limit(first_arg, variables)
+            .or_else(|| extract_limit(last_arg, variables))
+            .unwrap_or(default_page_size)
+    }
+}
+
+/// Try to extract a u64 value from the given argument, or return None on failure.
+fn extract_limit(value: Option<&Positioned<GqlValue>>, variables: &Variables) -> Option<u64> {
+    if let GqlValue::Variable(var) = &value?.node {
+        return match variables.get(var) {
+            Some(Value::Number(num)) => num.as_u64(),
+            _ => None,
+        };
+    }
+
+    let GqlValue::Number(value) = &value?.node else {
+        return None;
+    };
+    value.as_u64()
+}
+
+/// Checks if the given field is a connection field by whether it has 'edges' or 'nodes' selected.
+/// This should typically not require checking more than the first element of the selection set
+fn is_connection(f: &Positioned<Field>) -> bool {
+    for field_sel in f.node.selection_set.node.items.iter() {
+        if let Selection::Field(field) = &field_sel.node {
+            if CONNECTION_FIELDS.contains(&field.node.name.node.as_str()) {
+                return true;
+            }
+        }
+    }
+    false
 }

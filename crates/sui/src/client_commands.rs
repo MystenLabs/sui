@@ -120,8 +120,11 @@ pub enum SuiClientCommands {
     ActiveEnv,
     /// Obtain the Addresses managed by the client.
     #[clap(name = "addresses")]
-    Addresses,
-
+    Addresses {
+        /// Sort by alias instead of address
+        #[clap(long, short = 's')]
+        sort_by_alias: bool,
+    },
     /// Call Move function
     #[clap(name = "call")]
     Call {
@@ -615,6 +618,10 @@ pub enum SuiClientCommands {
         /// The digest of the transaction to replay
         #[arg(long, short)]
         tx_digest: String,
+
+        /// Log extra gas-related information
+        #[arg(long, short)]
+        gas_info: bool,
     },
 
     /// Replay transactions listed in a file.
@@ -652,7 +659,10 @@ impl SuiClientCommands {
         context: &mut WalletContext,
     ) -> Result<SuiClientCommandResult, anyhow::Error> {
         let ret = Ok(match self {
-            SuiClientCommands::ReplayTransaction { tx_digest } => {
+            SuiClientCommands::ReplayTransaction {
+                tx_digest,
+                gas_info: _,
+            } => {
                 let cmd = ReplayToolCommand::ReplayTransaction {
                     tx_digest,
                     show_effects: true,
@@ -660,6 +670,7 @@ impl SuiClientCommands {
                     executor_version_override: None,
                     protocol_version_override: None,
                 };
+
                 let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
                     sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
@@ -695,15 +706,18 @@ impl SuiClientCommands {
                     sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
                 SuiClientCommandResult::ReplayCheckpoints
             }
-            SuiClientCommands::Addresses => {
+            SuiClientCommands::Addresses { sort_by_alias } => {
                 let active_address = context.active_address()?;
-                let addresses = context
+                let mut addresses: Vec<(String, SuiAddress)> = context
                     .config
                     .keystore
                     .addresses_with_alias()
                     .into_iter()
                     .map(|(address, alias)| (alias.alias.to_string(), *address))
                     .collect();
+                if sort_by_alias {
+                    addresses.sort();
+                }
 
                 let output = AddressesOutput {
                     active_address,

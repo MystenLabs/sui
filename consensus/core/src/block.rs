@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use enum_dispatch::enum_dispatch;
 use std::{
     cell::OnceCell,
     fmt,
@@ -23,6 +24,7 @@ pub type BlockTimestampMs = u64;
 /// Well behaved validators produce at most one block per round, but malicious validators can
 /// equivocate.
 #[derive(Clone, Deserialize, Serialize)]
+#[enum_dispatch(BlockAPI)]
 pub enum Block {
     V1(BlockV1),
 }
@@ -37,6 +39,7 @@ impl fastcrypto::hash::Hash<{ DIGEST_LENGTH }> for Block {
     }
 }
 
+#[enum_dispatch]
 pub trait BlockAPI {
     fn reference(&self) -> BlockRef;
     fn digest(&self) -> BlockDigest;
@@ -98,6 +101,17 @@ pub struct BlockRef {
     pub round: Round,
     pub author: AuthorityIndex,
     pub digest: BlockDigest,
+}
+
+impl BlockRef {
+    #[cfg(test)]
+    pub fn new_test(author: AuthorityIndex, round: Round, digest: BlockDigest) -> Self {
+        Self {
+            round,
+            author,
+            digest,
+        }
+    }
 }
 
 impl Hash for BlockRef {

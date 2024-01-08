@@ -530,7 +530,6 @@
 >          asObject {
 >            storageRebate
 >            bcs
->            kind
 >          }
 >          hasPublicTransfer
 >        }
@@ -789,12 +788,26 @@
 >    digest
 >    storageRebate
 >    owner {
->      defaultNameServiceName
+>      __typename
+>      ... on Shared {
+>        initialSharedVersion
+>      }
+>      __typename
+>      ... on Parent {
+>        parent {
+>          address
+>        }
+>      }
+>      __typename
+>      ... on AddressOwner {
+>        owner {
+>          address
+>        }
+>      }
 >    }
 >    previousTransactionBlock {
 >      digest
 >    }
->    kind
 >  }
 >}</pre>
 
@@ -815,7 +828,24 @@
 >    edges {
 >      node {
 >        storageRebate
->        kind
+>        owner {
+>          __typename
+>          ... on Shared {
+>            initialSharedVersion
+>          }
+>          __typename
+>          ... on Parent {
+>            parent {
+>              address
+>            }
+>          }
+>          __typename
+>          ... on AddressOwner {
+>            owner {
+>              address
+>            }
+>          }
+>        }
 >      }
 >    }
 >  }
@@ -872,7 +902,24 @@
 >    edges {
 >      node {
 >        storageRebate
->        kind
+>        owner {
+>          __typename
+>          ... on Shared {
+>            initialSharedVersion
+>          }
+>          __typename
+>          ... on Parent {
+>            parent {
+>              address
+>            }
+>          }
+>          __typename
+>          ... on AddressOwner {
+>            owner {
+>              address
+>            }
+>          }
+>        }
 >      }
 >    }
 >  }
@@ -1608,7 +1655,24 @@
 >    address: "0x0bba1e7d907dc2832edfc3bf4468b6deacd9a2df435a35b17e640e135d2d5ddc"
 >  ) {
 >    version
->    kind
+>    owner {
+>      __typename
+>      ... on Shared {
+>        initialSharedVersion
+>      }
+>      __typename
+>      ... on Parent {
+>        parent {
+>          address
+>        }
+>      }
+>      __typename
+>      ... on AddressOwner {
+>        owner {
+>          address
+>        }
+>      }
+>    }
 >    previousTransactionBlock {
 >      effects {
 >        status

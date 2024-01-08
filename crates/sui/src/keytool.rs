@@ -116,7 +116,11 @@ pub enum KeyToolCommand {
     },
     /// List all keys by its Sui address, Base64 encoded public key, key scheme name in
     /// sui.keystore.
-    List,
+    List {
+        /// Sort by alias
+        #[clap(long, short = 's')]
+        sort_by_alias: bool,
+    },
     /// This reads the content at the provided file path. The accepted format can be
     /// [enum SuiKeyPair] (Base64 encoded of 33-byte `flag || privkey`) or `type AuthorityKeyPair`
     /// (Base64 encoded `privkey`). This prints out the account keypair as Base64 encoded `flag || privkey`,
@@ -291,7 +295,7 @@ pub struct DecodedMultiSigOutput {
     transaction_result: String,
 }
 
-#[derive(Serialize)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Key {
     alias: Option<String>,
@@ -576,8 +580,8 @@ impl KeyToolCommand {
                 }
             }
 
-            KeyToolCommand::List => {
-                let keys = keystore
+            KeyToolCommand::List { sort_by_alias } => {
+                let mut keys = keystore
                     .keys()
                     .into_iter()
                     .map(|pk| {
@@ -585,7 +589,10 @@ impl KeyToolCommand {
                         key.alias = keystore.get_alias_by_address(&key.sui_address).ok();
                         key
                     })
-                    .collect();
+                    .collect::<Vec<Key>>();
+                if sort_by_alias {
+                    keys.sort_unstable();
+                }
                 CommandOutput::List(keys)
             }
 

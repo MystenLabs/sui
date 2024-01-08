@@ -58,16 +58,16 @@ impl Committee {
 
     pub fn new_for_test(
         epoch: Epoch,
-        num_of_authorities: usize,
+        authorities_stake: Vec<Stake>,
     ) -> (Self, Vec<(NetworkKeyPair, ProtocolKeyPair)>) {
         let mut authorities = vec![];
         let mut key_pairs = vec![];
         let mut rng = StdRng::from_seed([9; 32]);
-        for i in 1..=num_of_authorities {
+        for (i, stake) in authorities_stake.into_iter().enumerate() {
             let network_keypair = NetworkKeyPair::generate(&mut rng);
             let protocol_keypair = ProtocolKeyPair::generate(&mut rng);
             authorities.push(Authority {
-                stake: i as Stake,
+                stake,
                 address: Multiaddr::empty(),
                 hostname: format!("test_host {i}").to_string(),
                 network_key: network_keypair.public().clone(),
@@ -96,6 +96,16 @@ impl Committee {
 
     pub fn validity_threshold(&self) -> Stake {
         self.validity_threshold
+    }
+
+    /// Returns true if the provided stake has reached quorum (2f+1)
+    pub fn reached_quorum(&self, stake: Stake) -> bool {
+        stake >= self.quorum_threshold()
+    }
+
+    /// Returns true if the provided stake has reached validity (f+1)
+    pub fn reached_validity(&self, stake: Stake) -> bool {
+        stake >= self.validity_threshold()
     }
 
     pub fn stake(&self, authority_index: AuthorityIndex) -> Stake {
@@ -151,6 +161,12 @@ impl AuthorityIndex {
     }
 }
 
+impl AuthorityIndex {
+    pub fn new_for_test(index: u32) -> Self {
+        Self(index)
+    }
+}
+
 impl Display for AuthorityIndex {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.0.to_string().as_str())
@@ -166,7 +182,8 @@ mod tests {
         // GIVEN
         let epoch = 100;
         let num_of_authorities = 9;
-        let (committee, _) = Committee::new_for_test(epoch, num_of_authorities);
+        let authority_stakes = (1..=9).map(|s| s as Stake).collect();
+        let (committee, _) = Committee::new_for_test(epoch, authority_stakes);
 
         // THEN make sure the output Committee fields are populated correctly.
         assert_eq!(committee.size(), num_of_authorities);
