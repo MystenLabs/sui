@@ -212,7 +212,7 @@ pub fn parse_sui_type_tag(s: &str) -> anyhow::Result<TypeTag> {
 }
 
 /// Resolve well-known named addresses into numeric addresses.
-fn resolve_address(addr: &str) -> Option<AccountAddress> {
+pub fn resolve_address(addr: &str) -> Option<AccountAddress> {
     match addr {
         "deepbook" => Some(DEEPBOOK_ADDRESS),
         "std" => Some(MOVE_STDLIB_ADDRESS),
