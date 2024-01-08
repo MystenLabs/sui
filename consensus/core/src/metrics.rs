@@ -21,8 +21,14 @@ pub(crate) fn initialise_metrics(registry: Registry) -> Arc<Metrics> {
     Arc::new(Metrics { node_metrics })
 }
 
+#[cfg(test)]
+pub(crate) fn test_metrics() -> Arc<Metrics> {
+    initialise_metrics(Registry::new())
+}
+
 pub(crate) struct NodeMetrics {
     pub uptime: Histogram,
+    pub quorum_receive_latency: Histogram,
 }
 
 impl NodeMetrics {
@@ -33,6 +39,12 @@ impl NodeMetrics {
                 "Total node uptime",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
+            )
+            .unwrap(),
+            quorum_receive_latency: register_histogram_with_registry!(
+                "quorum_receive_latency",
+                "The time it took to receive a new round quorum of blocks",
+                registry
             )
             .unwrap(),
         }
