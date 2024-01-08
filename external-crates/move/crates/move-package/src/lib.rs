@@ -102,6 +102,10 @@ pub struct BuildConfig {
     /// If `true`, disable linters
     #[clap(long, global = true)]
     pub no_lint: bool,
+
+    #[clap(skip)]
+    /// A field specifying this compiler version, derived from sui-move crate version.
+    pub compiler_version: Option<String>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]

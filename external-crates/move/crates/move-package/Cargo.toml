@@ -20,6 +20,7 @@ serde_yaml.workspace = true
 tempfile.workspace = true
 sha2.workspace = true
 regex.workspace = true
+tracing.workspace = true
 treeline.workspace = true
 once_cell.workspace = true
 named-lock.workspace = true

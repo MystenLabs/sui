@@ -70,6 +70,8 @@ use tracing::info;
 
 use crate::key_identity::{get_identity_address, KeyIdentity};
 
+const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 macro_rules! serialize_or_execute {
     ($tx_data:expr, $serialize_unsigned:expr, $serialize_signed:expr, $context:expr, $result_variant:ident) => {{
         assert!(
@@ -723,7 +725,7 @@ impl SuiClientCommands {
             SuiClientCommands::Upgrade {
                 package_path,
                 upgrade_capability,
-                build_config,
+                mut build_config,
                 gas,
                 gas_budget,
                 skip_dependency_verification,
@@ -731,6 +733,7 @@ impl SuiClientCommands {
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
             } => {
+                build_config.compiler_version = Some(CARGO_PKG_VERSION.into());
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
 
@@ -811,13 +814,14 @@ impl SuiClientCommands {
             SuiClientCommands::Publish {
                 package_path,
                 gas,
-                build_config,
+                mut build_config,
                 gas_budget,
                 skip_dependency_verification,
                 with_unpublished_dependencies,
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
             } => {
+                build_config.compiler_version = Some(CARGO_PKG_VERSION.into());
                 if build_config.test_mode {
                     return Err(SuiError::ModulePublishFailure {
                         error:
@@ -867,8 +871,9 @@ impl SuiClientCommands {
 
             SuiClientCommands::VerifyBytecodeMeter {
                 package_path,
-                build_config,
+                mut build_config,
             } => {
+                build_config.compiler_version = Some(CARGO_PKG_VERSION.into());
                 let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
                 let registry = &Registry::new();
                 let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));

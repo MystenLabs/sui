@@ -127,6 +127,7 @@ ResolvedGraph {
         warnings_are_errors: false,
         additional_named_addresses: {},
         no_lint: false,
+        compiler_version: None,
     },
     package_table: {
         "A": Package {

@@ -4,6 +4,7 @@
 
 use crate::{
     compilation::package_layout::CompiledPackageLayout,
+    compilation::versioned_compilation::partition_deps_by_toolchain,
     resolution::resolution_graph::{Package, Renaming, ResolvedGraph, ResolvedTable},
     source_package::{
         layout::{SourcePackageLayout, REFERENCE_TEMPLATE_FILENAME},
@@ -454,7 +455,7 @@ impl CompiledPackage {
         )?;
         let flags = resolution_graph.build_options.compiler_flags();
         // Partition deps_package according whether src is available
-        let (src_deps, bytecode_deps): (Vec<_>, Vec<_>) = deps_package_paths
+        let (src_deps, mut bytecode_deps): (Vec<_>, Vec<_>) = deps_package_paths
             .clone()
             .into_iter()
             .partition_map(|(p, b)| match b {
@@ -472,8 +473,18 @@ impl CompiledPackage {
             }
         }
 
-        // invoke the compiler
-        let mut paths = src_deps;
+        let mut paths;
+        if std::env::var("VERIFIED_SOURCE_BUILD").is_err() {
+            paths = src_deps;
+        } else {
+            let (deps_for_current_compiler, deps_for_prior_compiler) = partition_deps_by_toolchain(
+                src_deps.clone(),
+                resolution_graph.build_options.compiler_version.clone(),
+                w,
+            )?;
+            paths = deps_for_current_compiler;
+            bytecode_deps.extend(deps_for_prior_compiler.clone());
+        }
         paths.push(sources_package_paths.clone());
 
         let lint = !resolution_graph.build_options.no_lint;
@@ -482,6 +493,7 @@ impl CompiledPackage {
             .default_flavor
             .map_or(false, |f| f == Flavor::Sui);
 
+        // invoke the compiler
         let mut compiler = Compiler::from_package_paths(paths, bytecode_deps)
             .unwrap()
             .set_flags(flags);

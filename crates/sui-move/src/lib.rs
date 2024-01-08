@@ -38,11 +38,14 @@ pub struct Calib {
     summarize: bool,
 }
 
+const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub fn execute_move_command(
     package_path: Option<PathBuf>,
     mut build_config: BuildConfig,
     command: Command,
 ) -> anyhow::Result<()> {
+    build_config.compiler_version = Some(CARGO_PKG_VERSION.into());
     if let Some(err_msg) = set_sui_flavor(&mut build_config) {
         anyhow::bail!(err_msg);
     }
