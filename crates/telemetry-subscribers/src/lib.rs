@@ -66,7 +66,7 @@ pub struct TelemetryConfig {
     pub prom_registry: Option<prometheus::Registry>,
     pub sample_rate: f64,
     /// Add directive to include trace logs with provided target
-    pub trace_target: Option<String>,
+    pub trace_target: Option<Vec<String>>,
 }
 
 #[must_use]
@@ -292,7 +292,11 @@ impl TelemetryConfig {
     }
 
     pub fn with_trace_target(mut self, target: &str) -> Self {
-        self.trace_target = Some(target.to_owned());
+        match self.trace_target {
+            Some(ref mut v) => v.push(target.to_owned()),
+            None => self.trace_target = Some(vec![target.to_owned()]),
+        };
+
         self
     }
 
@@ -338,8 +342,10 @@ impl TelemetryConfig {
         // different filtering needs, including tokio-console/console-subscriber, and it also doesn't
         // fit with the span creation needs for distributed tracing and other span-based tools.
         let mut directives = config.log_string.unwrap_or_else(|| "info".into());
-        if let Some(target) = config.trace_target {
-            directives.push_str(&format!(",{}=trace", target));
+        if let Some(targets) = config.trace_target {
+            for target in targets {
+                directives.push_str(&format!(",{}=trace", target));
+            }
         }
         let env_filter =
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(directives));
