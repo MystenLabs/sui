@@ -2,33 +2,30 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::block::{BlockRef, Round};
-use crate::metrics::Metrics;
+use crate::context::Context;
 use crate::stake_aggregator::{QuorumThreshold, StakeAggregator};
-use consensus_config::Committee;
 use std::cmp::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 
 #[allow(unused)]
 
-pub struct ThresholdClock {
+pub(crate) struct ThresholdClock {
     aggregator: StakeAggregator<QuorumThreshold>,
     round: Round,
     last_quorum_ts: Instant,
-    metrics: Arc<Metrics>,
-    committee: Arc<Committee>,
+    context: Arc<Context>,
 }
 
 #[allow(unused)]
 
 impl ThresholdClock {
-    pub fn new(round: Round, metrics: Arc<Metrics>, committee: Arc<Committee>) -> Self {
+    pub(crate) fn new(round: Round, context: Arc<Context>) -> Self {
         Self {
             aggregator: StakeAggregator::new(),
             round,
             last_quorum_ts: Instant::now(),
-            metrics,
-            committee,
+            context,
         }
     }
 
@@ -43,18 +40,19 @@ impl ThresholdClock {
             // If we processed block for round r, we also have stored 2f+1 blocks from r-1
             Ordering::Greater => {
                 self.aggregator.clear();
-                self.aggregator.add(block.author, &self.committee);
+                self.aggregator.add(block.author, &self.context.committee);
                 self.round = block.round;
             }
             Ordering::Equal => {
-                if self.aggregator.add(block.author, &self.committee) {
+                if self.aggregator.add(block.author, &self.context.committee) {
                     self.aggregator.clear();
                     // We have seen 2f+1 blocks for current round, advance
                     self.round = block.round + 1;
 
                     // now record the time of receipt from last quorum
                     let now = Instant::now();
-                    self.metrics
+                    self.context
+                        .metrics
                         .node_metrics
                         .quorum_receive_latency
                         .observe(now.duration_since(self.last_quorum_ts).as_secs_f64());
@@ -74,13 +72,22 @@ mod tests {
     use super::*;
     use crate::block::BlockDigest;
     use crate::metrics::test_metrics;
-    use consensus_config::AuthorityIndex;
+    use consensus_config::Committee;
+    use consensus_config::{AuthorityIndex, Parameters};
+    use sui_protocol_config::ProtocolConfig;
 
     #[test]
     fn test_threshold_clock() {
-        let committee = Arc::new(Committee::new_for_test(0, vec![1, 1, 1, 1]).0);
+        let committee = Committee::new_for_test(0, vec![1, 1, 1, 1]).0;
         let metrics = test_metrics();
-        let mut aggregator = ThresholdClock::new(0, metrics, committee);
+        let context = Arc::new(Context::new(
+            AuthorityIndex::new_for_test(0),
+            committee,
+            Parameters::default(),
+            ProtocolConfig::get_for_min_version(),
+            metrics,
+        ));
+        let mut aggregator = ThresholdClock::new(0, context);
 
         aggregator.add_block(BlockRef::new_test(
             AuthorityIndex::new_for_test(0),

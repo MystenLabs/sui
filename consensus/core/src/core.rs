@@ -2,27 +2,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::block::{Block, BlockAPI, BlockRef, BlockV1, Round};
-use crate::metrics::Metrics;
+use crate::context::Context;
 use crate::threshold_clock::ThresholdClock;
-use consensus_config::Committee;
 use mysten_metrics::monitored_scope;
 use std::sync::Arc;
 
-#[allow(unused)]
-pub struct Core {
-    metrics: Arc<Metrics>,
+#[allow(dead_code)]
+pub(crate) struct Core {
+    context: Arc<Context>,
     threshold_clock: ThresholdClock,
     last_own_block: Block,
 }
 
-#[allow(unused)]
+#[allow(dead_code)]
 impl Core {
-    pub fn new(metrics: Arc<Metrics>, committee: Arc<Committee>) -> Self {
+    pub(crate) fn new(context: Arc<Context>) -> Self {
         // TODO: restore the threshold clock round based on the last quorum data in storage when crash/recover
-        let threshold_clock = ThresholdClock::new(0, metrics.clone(), committee);
+        let threshold_clock = ThresholdClock::new(0, context.clone());
 
         Self {
-            metrics,
+            context,
             threshold_clock,
             last_own_block: Block::V1(BlockV1::default()), // TODO: restore on crash/recovery
         }
@@ -30,7 +29,7 @@ impl Core {
 
     /// Processes the provided blocks and accepts them if possible when their causal history exists.
     /// The method returns the references of parents that are unknown and need to be fetched.
-    pub fn add_blocks(&mut self, _blocks: Vec<Block>) -> Vec<BlockRef> {
+    pub(crate) fn add_blocks(&mut self, _blocks: Vec<Block>) -> Vec<BlockRef> {
         let _scope = monitored_scope("Core::add_blocks");
 
         vec![]
@@ -38,7 +37,7 @@ impl Core {
 
     /// Attempts to propose a new block for the next round. If a block has already proposed for latest
     /// or earlier round, then no block is created and None is returned.
-    pub fn try_new_block(&mut self, force_new_block: bool) -> Option<Block> {
+    pub(crate) fn try_new_block(&mut self, force_new_block: bool) -> Option<Block> {
         let _scope = monitored_scope("Core::try_new_block");
 
         let clock_round = self.threshold_clock.get_round();
@@ -69,14 +68,24 @@ impl Core {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::metrics::initialise_metrics;
-    use prometheus::Registry;
+    use crate::metrics::test_metrics;
+    use consensus_config::Committee;
+    use consensus_config::{AuthorityIndex, Parameters};
+    use sui_protocol_config::ProtocolConfig;
 
     #[test]
     fn test_core() {
         let (committee, _) = Committee::new_for_test(0, vec![1, 1, 1, 1]);
-        let metrics = initialise_metrics(Registry::new());
-        let core = Core::new(metrics, Arc::new(committee));
+        let metrics = test_metrics();
+        let context = Arc::new(Context::new(
+            AuthorityIndex::new_for_test(0),
+            committee,
+            Parameters::default(),
+            ProtocolConfig::get_for_min_version(),
+            metrics,
+        ));
+
+        let core = Core::new(context);
 
         assert_eq!(core.last_proposed_round(), 0);
     }

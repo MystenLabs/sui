@@ -56,7 +56,6 @@ impl Committee {
         }
     }
 
-    #[cfg(test)]
     pub fn new_for_test(
         epoch: Epoch,
         authorities_stake: Vec<Stake>,
@@ -163,7 +162,6 @@ impl AuthorityIndex {
 }
 
 impl AuthorityIndex {
-    #[cfg(test)]
     pub fn new_for_test(index: u32) -> Self {
         Self(index)
     }
