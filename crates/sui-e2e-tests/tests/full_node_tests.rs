@@ -1374,7 +1374,7 @@ async fn transfer_coin(
 #[sim_test]
 async fn test_full_node_run_with_range_checkpoint() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
-    let want_run_with_range = RunWithRange::Checkpoint(5);
+    let want_run_with_range = Some(RunWithRange::Checkpoint(5));
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10_000)
         .with_fullnode_run_with_range(want_run_with_range)
@@ -1400,7 +1400,7 @@ async fn test_full_node_run_with_range_checkpoint() -> Result<(), anyhow::Error>
 #[sim_test]
 async fn test_full_node_run_with_range_epoch() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
-    let want_run_with_range = RunWithRange::Epoch(3);
+    let want_run_with_range = Some(RunWithRange::Epoch(3));
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10_000)
         .with_fullnode_run_with_range(want_run_with_range)

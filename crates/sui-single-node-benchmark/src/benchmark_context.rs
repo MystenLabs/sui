@@ -13,7 +13,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Arc;
-use sui_config::node::RunWithRange;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_grpc::HandleTransactionResponse;
@@ -321,7 +320,7 @@ impl BenchmarkContext {
         let start_time = std::time::Instant::now();
         info!("Starting checkpoint execution. You can now attach a profiler");
         checkpoint_executor
-            .run_epoch(validator.get_epoch_store().clone(), RunWithRange::None)
+            .run_epoch(validator.get_epoch_store().clone(), None)
             .await;
         let elapsed = start_time.elapsed().as_millis() as f64 / 1000f64;
         info!(

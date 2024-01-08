@@ -130,19 +130,19 @@ impl CheckpointExecutor {
     pub async fn run_epoch(
         &mut self,
         epoch_store: Arc<AuthorityPerEpochStore>,
-        run_with_range: RunWithRange,
+        run_with_range: Option<RunWithRange>,
     ) -> StopReason {
         // check if we want to run this epoch based on RunWithRange condition value
         // we want to be inclusive of the defined RunWithRangeEpoch::Epoch
         // i.e Epoch(N) means we will execute epoch N and stop when reaching N+1
-        if run_with_range.is_epoch_gt(epoch_store.epoch()) {
+        if run_with_range.map_or(false, |rwr| rwr.is_epoch_gt(epoch_store.epoch())) {
             info!(
                 "RunWithRange condition satisfied at {:?}, run_epoch={:?}",
                 run_with_range,
                 epoch_store.epoch()
             );
             return StopReason::RunWithRangeCondition;
-        }
+        };
 
         debug!(
             "Checkpoint executor running for epoch {}",
@@ -227,15 +227,13 @@ impl CheckpointExecutor {
                         now_transaction_num = current_transaction_num;
                     }
                      // we want to be inclusive of checkpoints in RunWithRange::Checkpoint type
-                    if run_with_range.matches_checkpoint(checkpoint.sequence_number) {
+                    if run_with_range.map_or(false, |rwr| rwr.matches_checkpoint(checkpoint.sequence_number)) {
                         info!(
                             "RunWithRange condition satisifed after checkpoint sequence number {:?}",
                             checkpoint.sequence_number
                         );
                         return StopReason::RunWithRangeCondition;
                     }
-
-
                 }
                 // Check for newly synced checkpoints from StateSync.
                 received = self.mailbox.recv() => match received {
@@ -325,7 +323,7 @@ impl CheckpointExecutor {
         pending: &mut CheckpointExecutionBuffer,
         next_to_schedule: &mut CheckpointSequenceNumber,
         epoch_store: Arc<AuthorityPerEpochStore>,
-        run_with_range: RunWithRange,
+        run_with_range: Option<RunWithRange>,
     ) {
         let Some(latest_synced_checkpoint) = self
             .checkpoint_store
@@ -353,7 +351,7 @@ impl CheckpointExecutor {
                 return;
             }
             match run_with_range {
-                RunWithRange::Checkpoint(seq) if *next_to_schedule > seq => {
+                Some(RunWithRange::Checkpoint(seq)) if *next_to_schedule > seq => {
                     debug!(
                         "RunWithRange Checkpoint {} is set, not scheduling checkpoint {}",
                         seq, *next_to_schedule

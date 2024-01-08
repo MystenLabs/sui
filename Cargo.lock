@@ -12792,7 +12792,6 @@ dependencies = [
  "strum 0.24.1",
  "strum_macros 0.24.3",
  "sui-config",
- "sui-core",
  "sui-json-rpc-types",
  "sui-keys",
  "sui-move-build",

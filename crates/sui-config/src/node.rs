@@ -166,8 +166,8 @@ pub struct NodeConfig {
     #[serde(default = "default_overload_threshold_config")]
     pub overload_threshold_config: OverloadThresholdConfig,
 
-    #[serde(default = "default_run_with_range")]
-    pub run_with_range: RunWithRange,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_with_range: Option<RunWithRange>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -233,10 +233,6 @@ fn default_key_pair() -> KeyPairWithPath {
 fn default_metrics_address() -> SocketAddr {
     use std::net::{IpAddr, Ipv4Addr};
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9184)
-}
-
-pub fn default_run_with_range() -> RunWithRange {
-    RunWithRange::None
 }
 
 pub fn default_admin_interface_port() -> u16 {
@@ -968,7 +964,6 @@ mod tests {
 pub enum RunWithRange {
     Epoch(EpochId),
     Checkpoint(CheckpointSequenceNumber),
-    None,
 }
 
 impl RunWithRange {

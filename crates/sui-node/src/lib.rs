@@ -232,7 +232,7 @@ pub struct SuiNode {
     _kv_store_uploader_handle: Option<oneshot::Sender<()>>,
 
     // Channel to allow signaling upstream to shutdown sui-node
-    shutdown_channel_tx: broadcast::Sender<RunWithRange>,
+    shutdown_channel_tx: broadcast::Sender<Option<RunWithRange>>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -635,7 +635,7 @@ impl SuiNode {
         let (end_of_epoch_channel, end_of_epoch_receiver) =
             broadcast::channel(config.end_of_epoch_broadcast_channel_capacity);
 
-        let transaction_orchestrator = if is_full_node && run_with_range == RunWithRange::None {
+        let transaction_orchestrator = if is_full_node && run_with_range.is_none() {
             Some(Arc::new(
                 TransactiondOrchestrator::new_with_network_clients(
                     state.clone(),
@@ -706,7 +706,7 @@ impl SuiNode {
         };
 
         // setup shutdown channel
-        let (shutdown_channel, _) = broadcast::channel::<RunWithRange>(1);
+        let (shutdown_channel, _) = broadcast::channel::<Option<RunWithRange>>(1);
 
         let node = Self {
             config,
@@ -748,7 +748,7 @@ impl SuiNode {
         self.end_of_epoch_channel.subscribe()
     }
 
-    pub fn subscribe_to_shutdown_channel(&self) -> broadcast::Receiver<RunWithRange> {
+    pub fn subscribe_to_shutdown_channel(&self) -> broadcast::Receiver<Option<RunWithRange>> {
         self.shutdown_channel_tx.subscribe()
     }
 
@@ -1763,7 +1763,8 @@ pub fn build_http_server(
         ))?;
 
         // if run_with_range is enabled we want to prevent any transactions
-        if config.run_with_range == RunWithRange::None {
+        // run_with_range = None is normal operating conditions
+        if config.run_with_range.is_none() {
             server.register_module(TransactionBuilderApi::new(state.clone()))?;
         }
         server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;

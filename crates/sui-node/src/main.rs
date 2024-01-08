@@ -69,13 +69,16 @@ fn main() {
     );
     config.supported_protocol_versions = Some(SupportedProtocolVersions::SYSTEM_DEFAULT);
 
-    // TODO: Discuss with @William if this is what we want. effectively ALWAYs be writing to the
-    // config, or should we not write to the config if flags are not present?
+    // match run_with_range args
+    // this means that we always modify the config used to start the node
+    // for run_with_range. i.e if this is set in the config, it is ignored. only the cli args
+    // enable/disable run_with_range
     match (args.run_with_range_epoch, args.run_with_range_checkpoint) {
-        (None, Some(checkpoint)) => config.run_with_range = RunWithRange::Checkpoint(checkpoint),
-        (Some(epoch), None) => config.run_with_range = RunWithRange::Epoch(epoch),
-        _ => config.run_with_range = RunWithRange::None, // not sure if we want this or simply do
-                                                         // nothing ()
+        (None, Some(checkpoint)) => {
+            config.run_with_range = Some(RunWithRange::Checkpoint(checkpoint))
+        }
+        (Some(epoch), None) => config.run_with_range = Some(RunWithRange::Epoch(epoch)),
+        _ => config.run_with_range = None,
     };
 
     let runtimes = SuiRuntimes::new(&config);
@@ -123,7 +126,7 @@ fn main() {
     let rpc_runtime = runtimes.json_rpc.handle().clone();
 
     // let sui-node signal main to shutdown runtimes
-    let (runtime_shutdown_tx, runtime_shutdown_rx) = broadcast::channel(1);
+    let (runtime_shutdown_tx, runtime_shutdown_rx) = broadcast::channel::<()>(1);
 
     runtimes.sui_node.spawn(async move {
         match sui_node::SuiNode::start_async(&config, registry_service, Some(rpc_runtime)).await {
@@ -142,10 +145,10 @@ fn main() {
         let mut shutdown_rx = node.subscribe_to_shutdown_channel();
 
         // when we get a shutdown signal from sui-node, forward it on to the runtime_shutdown_channel here in
-        // main to signal runtimes t oall shutdown.
+        // main to signal runtimes to all shutdown.
         tokio::select! {
-           run_with_range = shutdown_rx.recv() => {
-                runtime_shutdown_tx.send(run_with_range).expect("failed to forwad shutdown signal from sui-node to sui-node main");
+           _ = shutdown_rx.recv() => {
+                runtime_shutdown_tx.send(()).expect("failed to forward shutdown signal from sui-node to sui-node main");
             }
         }
         // TODO: Do we want to provide a way for the node to gracefully shutdown?
@@ -199,11 +202,7 @@ fn main() {
 }
 
 #[cfg(not(unix))]
-async fn wait_termination(
-    mut shutdown_rx: tokio::sync::broadcast::Receiver<
-        Result<RunWithRange, tokio::sync::broadcast::error::RecvError>,
-    >,
-) {
+async fn wait_termination(mut shutdown_rx: tokio::sync::broadcast::Receiver<()>) {
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {},
         _ = shutdown_rx.recv() => {},
@@ -211,11 +210,7 @@ async fn wait_termination(
 }
 
 #[cfg(unix)]
-async fn wait_termination(
-    mut shutdown_rx: tokio::sync::broadcast::Receiver<
-        Result<RunWithRange, tokio::sync::broadcast::error::RecvError>,
-    >,
-) {
+async fn wait_termination(mut shutdown_rx: tokio::sync::broadcast::Receiver<()>) {
     use futures::FutureExt;
     use tokio::signal::unix::*;
 

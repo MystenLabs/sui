@@ -46,7 +46,7 @@ pub struct SwarmBuilder<R = OsRng> {
     num_unpruned_validators: Option<usize>,
     overload_threshold_config: Option<OverloadThresholdConfig>,
     data_ingestion_dir: Option<PathBuf>,
-    fullnode_run_with_range: RunWithRange,
+    fullnode_run_with_range: Option<RunWithRange>,
 }
 
 impl SwarmBuilder {
@@ -69,7 +69,7 @@ impl SwarmBuilder {
             num_unpruned_validators: None,
             overload_threshold_config: None,
             data_ingestion_dir: None,
-            fullnode_run_with_range: RunWithRange::None,
+            fullnode_run_with_range: None,
         }
     }
 }
@@ -230,8 +230,10 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
-    pub fn with_fullnode_run_with_range(mut self, run_with_range: RunWithRange) -> Self {
-        self.fullnode_run_with_range = run_with_range;
+    pub fn with_fullnode_run_with_range(mut self, run_with_range: Option<RunWithRange>) -> Self {
+        if let Some(run_with_range) = run_with_range {
+            self.fullnode_run_with_range = Some(run_with_range);
+        }
         self
     }
 

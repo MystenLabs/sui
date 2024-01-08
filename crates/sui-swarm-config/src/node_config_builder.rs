@@ -189,7 +189,7 @@ impl ValidatorConfigBuilder {
                 .unwrap_or(3600),
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
             overload_threshold_config: self.overload_threshold_config.unwrap_or_default(),
-            run_with_range: RunWithRange::None,
+            run_with_range: None,
         }
     }
 
@@ -312,8 +312,10 @@ impl FullnodeConfigBuilder {
         self
     }
 
-    pub fn with_run_with_range(mut self, run_with_range: RunWithRange) -> Self {
-        self.run_with_range = Some(run_with_range);
+    pub fn with_run_with_range(mut self, run_with_range: Option<RunWithRange>) -> Self {
+        if let Some(run_with_range) = run_with_range {
+            self.run_with_range = Some(run_with_range);
+        }
         self
     }
 
@@ -433,7 +435,7 @@ impl FullnodeConfigBuilder {
             jwk_fetch_interval_seconds: 3600,
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
             overload_threshold_config: Default::default(),
-            run_with_range: self.run_with_range.unwrap_or(RunWithRange::None),
+            run_with_range: self.run_with_range,
         }
     }
 }

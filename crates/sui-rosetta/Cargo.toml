@@ -30,7 +30,6 @@ tempfile.workspace = true
 fastcrypto.workspace = true
 sui-swarm-config.workspace = true
 sui-types.workspace = true
-sui-core.workspace = true
 sui-sdk.workspace = true
 sui-node.workspace = true
 sui-config.workspace = true
