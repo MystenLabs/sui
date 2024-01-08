@@ -530,7 +530,6 @@
 >          asObject {
 >            storageRebate
 >            bcs
->            owner
 >          }
 >          hasPublicTransfer
 >        }
@@ -791,7 +790,7 @@
 >    owner {
 >      __typename
 >      ... on Shared {
->        initial_shared_version
+>        initialSharedVersion
 >      }
 >      __typename
 >      ... on Parent {
@@ -832,7 +831,7 @@
 >        owner {
 >          __typename
 >          ... on Shared {
->            initial_shared_version
+>            initialSharedVersion
 >          }
 >          __typename
 >          ... on Parent {
@@ -906,7 +905,7 @@
 >        owner {
 >          __typename
 >          ... on Shared {
->            initial_shared_version
+>            initialSharedVersion
 >          }
 >          __typename
 >          ... on Parent {
@@ -1659,7 +1658,7 @@
 >    owner {
 >      __typename
 >      ... on Shared {
->        initial_shared_version
+>        initialSharedVersion
 >      }
 >      __typename
 >      ... on Parent {
