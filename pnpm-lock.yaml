@@ -1754,6 +1754,9 @@ importers:
       '@mysten/build-scripts':
         specifier: workspace:*
         version: link:../build-scripts
+      '@mysten/sui.js':
+        specifier: workspace:*
+        version: link:../typescript
       '@types/node':
         specifier: ^20.4.2
         version: 20.4.2

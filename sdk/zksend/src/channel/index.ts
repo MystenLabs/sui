@@ -1,17 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { atom, WritableAtom } from 'nanostores';
+import type { WritableAtom } from 'nanostores';
+import { atom } from 'nanostores';
 import { parse, safeParse } from 'valibot';
 
-import { withResolvers } from '../utils/withResolvers';
-import {
-	ZkSendRequest,
-	ZkSendRequestType,
-	ZkSendResolveResponse,
-	ZkSendResponse,
-	ZkSendResponsePayload,
-} from './events';
+import { withResolvers } from '../utils/withResolvers.js';
+import type { ZkSendRequestType, ZkSendResponsePayload } from './events.js';
+import { ZkSendRequest, ZkSendResponse } from './events.js';
 
 const DEFAULT_ZKSEND_ORIGIN = 'https://zksend.com';
 
@@ -25,11 +21,11 @@ export class ZkSendPopup {
 		this.#origin = origin;
 	}
 
-	async createRequest(
-		type: ZkSendRequestType,
+	async createRequest<T extends keyof ZkSendRequestType>(
+		type: T,
 		partialRequest: Omit<ZkSendRequest, 'id' | 'origin'>,
-	): Promise<ZkSendResolveResponse['data']> {
-		const { promise, resolve, reject } = withResolvers<ZkSendResolveResponse['data']>();
+	): Promise<ZkSendRequestType[T]> {
+		const { promise, resolve, reject } = withResolvers<ZkSendRequestType[T]>();
 
 		const request = parse(ZkSendRequest, {
 			id: this.#id,
@@ -50,7 +46,7 @@ export class ZkSendPopup {
 			if (output.payload.type === 'reject') {
 				reject(new Error('TODO: Better error message'));
 			} else if (output.payload.type === 'resolve') {
-				resolve(output.payload.data);
+				resolve(output.payload.data as ZkSendRequestType[T]);
 			} else if (output.payload.type === 'ready') {
 				if (!popup) {
 					throw new Error('TODO: Better error message');
@@ -68,7 +64,7 @@ export class ZkSendPopup {
 		window.addEventListener('message', listener);
 
 		popup = window.open(
-			`${origin}/dapp/${type}?${new URLSearchParams({ id: this.#id, origin: this.#origin })}`,
+			`${origin}/dapp/${type}#${new URLSearchParams({ id: this.#id, origin: this.#origin })}`,
 		);
 
 		if (!popup) {

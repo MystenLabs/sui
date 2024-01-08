@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	getWallets,
-	ReadonlyWalletAccount,
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
+import { bcs } from '@mysten/sui.js/src/bcs/index.js';
+import type {
 	StandardConnectFeature,
 	StandardConnectMethod,
 	StandardDisconnectFeature,
@@ -11,12 +11,18 @@ import {
 	StandardEventsFeature,
 	StandardEventsListeners,
 	StandardEventsOnMethod,
-	SUI_MAINNET_CHAIN,
+	SuiSignPersonalMessageFeature,
+	SuiSignPersonalMessageMethod,
+	SuiSignTransactionBlockFeature,
+	SuiSignTransactionBlockMethod,
 	Wallet,
 } from '@mysten/wallet-standard';
-import mitt, { Emitter } from 'mitt';
+import { getWallets, ReadonlyWalletAccount, SUI_MAINNET_CHAIN } from '@mysten/wallet-standard';
+import type { Emitter } from 'mitt';
+import mitt from 'mitt';
 
-import { ZkSendPopup } from './channel';
+import { toB64 } from '../../bcs/src/b64.js';
+import { ZkSendPopup } from './channel/index.js';
 
 type WalletEventsMap = {
 	[E in keyof StandardEventsListeners]: Parameters<StandardEventsListeners[E]>[0];
@@ -27,6 +33,7 @@ const ZKSEND_RECENT_ADDRESS_KEY = 'zksend:recentAddress';
 export class ZkSendWallet implements Wallet {
 	#events: Emitter<WalletEventsMap>;
 	#accounts: ReadonlyWalletAccount[];
+	#client: SuiClient;
 
 	get name() {
 		return 'zkSend';
@@ -48,8 +55,11 @@ export class ZkSendWallet implements Wallet {
 		return this.#accounts;
 	}
 
-	get features(): StandardConnectFeature & StandardDisconnectFeature & StandardEventsFeature {
-		// & SuiSignTransactionBlockFeature
+	get features(): StandardConnectFeature &
+		StandardDisconnectFeature &
+		StandardEventsFeature &
+		SuiSignTransactionBlockFeature &
+		SuiSignPersonalMessageFeature {
 		return {
 			'standard:connect': {
 				version: '1.0.0',
@@ -63,24 +73,55 @@ export class ZkSendWallet implements Wallet {
 				version: '1.0.0',
 				on: this.#on,
 			},
-			// 'sui:signTransactionBlock': {
-			// 	version: '1.0.0',
-			// 	signTransactionBlock: this.#signTransactionBlock,
-			// },
-			// TODO: Support signing personal messages:
-			// 'sui:signPersonalMessage': {
-			// 	version: '1.0.0',
-			// 	signPersonalMessage: this.#signPersonalMessage,
-			// },
+			'sui:signTransactionBlock': {
+				version: '1.0.0',
+				signTransactionBlock: this.#signTransactionBlock,
+			},
+			'sui:signPersonalMessage': {
+				version: '1.0.0',
+				signPersonalMessage: this.#signPersonalMessage,
+			},
 		};
 	}
 
-	constructor() {
+	constructor(suiClient: SuiClient) {
 		this.#accounts = [];
 		this.#events = mitt();
+		this.#client = suiClient;
 	}
 
-	// #signTransactionBlock = () => {};
+	#signTransactionBlock: SuiSignTransactionBlockMethod = async ({ transactionBlock }) => {
+		transactionBlock.setSenderIfNotSet(this.#accounts[0].address);
+
+		const bytes = toB64(
+			await transactionBlock.build({
+				client: this.#client,
+			}),
+		);
+
+		const popup = new ZkSendPopup();
+		const response = await popup.createRequest('sign-transaction-block', {
+			data: bytes,
+		});
+
+		return {
+			transactionBlockBytes: bytes,
+			signature: response.signature,
+		};
+	};
+
+	#signPersonalMessage: SuiSignPersonalMessageMethod = async ({ message }) => {
+		const bytes = toB64(bcs.vector(bcs.u8()).serialize(message).toBytes());
+		const popup = new ZkSendPopup();
+		const response = await popup.createRequest('sign-personal-message', {
+			data: bytes,
+		});
+
+		return {
+			bytes,
+			signature: response.signature,
+		};
+	};
 
 	#on: StandardEventsOnMethod = (event, listener) => {
 		this.#events.on(event, listener);
@@ -137,6 +178,7 @@ export class ZkSendWallet implements Wallet {
 
 export function registerZkSendWallet() {
 	const wallets = getWallets();
+	const client = new SuiClient({ url: getFullnodeUrl('mainnet') });
 
-	return wallets.register(new ZkSendWallet());
+	return wallets.register(new ZkSendWallet(client));
 }
