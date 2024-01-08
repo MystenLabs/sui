@@ -13118,7 +13118,6 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "sui-config",
- "sui-core",
  "sui-node",
  "sui-protocol-config",
  "sui-simulator",
