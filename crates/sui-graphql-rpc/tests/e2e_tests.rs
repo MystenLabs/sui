@@ -135,7 +135,8 @@ mod tests {
         assert!(res.errors().is_empty());
 
         let usage = res.usage().unwrap().unwrap();
-        assert_eq!(*usage.get("nodes").unwrap(), 1);
+        assert_eq!(*usage.get("inputNodes").unwrap(), 1);
+        assert_eq!(*usage.get("outputNodes").unwrap(), 1);
         assert_eq!(*usage.get("depth").unwrap(), 1);
         assert_eq!(*usage.get("variables").unwrap(), 0);
         assert_eq!(*usage.get("fragments").unwrap(), 0);

@@ -655,17 +655,21 @@ pub mod tests {
             .build_schema();
         let _ = schema.execute("{ chainIdentifier }").await;
 
-        assert_eq!(metrics2.num_nodes.get_sample_count(), 1);
+        assert_eq!(metrics2.input_nodes.get_sample_count(), 1);
+        assert_eq!(metrics2.output_nodes.get_sample_count(), 1);
         assert_eq!(metrics2.query_depth.get_sample_count(), 1);
-        assert_eq!(metrics2.num_nodes.get_sample_sum(), 1.);
+        assert_eq!(metrics2.input_nodes.get_sample_sum(), 1.);
+        assert_eq!(metrics2.output_nodes.get_sample_sum(), 1.);
         assert_eq!(metrics2.query_depth.get_sample_sum(), 1.);
 
         let _ = schema
             .execute("{ chainIdentifier protocolConfig { configs { value key }} }")
             .await;
-        assert_eq!(metrics2.num_nodes.get_sample_count(), 2);
+        assert_eq!(metrics2.input_nodes.get_sample_count(), 2);
+        assert_eq!(metrics2.output_nodes.get_sample_count(), 2);
         assert_eq!(metrics2.query_depth.get_sample_count(), 2);
-        assert_eq!(metrics2.num_nodes.get_sample_sum(), 2. + 4.);
+        assert_eq!(metrics2.input_nodes.get_sample_sum(), 2. + 4.);
+        assert_eq!(metrics2.output_nodes.get_sample_sum(), 2. + 4.);
         assert_eq!(metrics2.query_depth.get_sample_sum(), 1. + 3.);
     }
 }

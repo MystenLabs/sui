@@ -48,6 +48,7 @@ mod tests {
         cluster: &ExecutorCluster,
         group: &ExampleQueryGroup,
         max_nodes: &mut u64,
+        max_output_nodes: &mut u64,
         max_depth: &mut u64,
         max_payload: &mut u64,
     ) -> Vec<String> {
@@ -73,8 +74,14 @@ mod tests {
                     .expect("Usage fetch should succeed")
                     .unwrap_or_else(|| panic!("Usage should be present for query: {}", query.name));
 
-                let nodes = *usage.get("nodes").unwrap_or_else(|| {
+                let nodes = *usage.get("inputNodes").unwrap_or_else(|| {
                     panic!("Node usage should be present for query: {}", query.name)
+                });
+                let output_nodes = *usage.get("outputNodes").unwrap_or_else(|| {
+                    panic!(
+                        "Output node usage should be present for query: {}",
+                        query.name
+                    )
                 });
                 let depth = *usage.get("depth").unwrap_or_else(|| {
                     panic!("Depth usage should be present for query: {}", query.name)
@@ -83,6 +90,7 @@ mod tests {
                     panic!("Payload usage should be present for query: {}", query.name)
                 });
                 *max_nodes = max(*max_nodes, nodes);
+                *max_output_nodes = max(*max_output_nodes, output_nodes);
                 *max_depth = max(*max_depth, depth);
                 *max_payload = max(*max_payload, payload);
             }
@@ -95,7 +103,7 @@ mod tests {
     async fn test_single_all_examples_structure_valid() {
         let rng = StdRng::from_seed([12; 32]);
         let mut sim = Simulacrum::new_with_rng(rng);
-        let (mut max_nodes, mut max_depth, mut max_payload) = (0, 0, 0);
+        let (mut max_nodes, mut max_output_nodes, mut max_depth, mut max_payload) = (0, 0, 0, 0);
 
         sim.create_checkpoint();
 
@@ -116,6 +124,7 @@ mod tests {
                 &cluster,
                 &group,
                 &mut max_nodes,
+                &mut max_output_nodes,
                 &mut max_depth,
                 &mut max_payload,
             )
@@ -130,6 +139,12 @@ mod tests {
             "Max nodes {} exceeds default limit {}",
             max_nodes,
             default_config.max_query_nodes
+        );
+        assert!(
+            max_output_nodes <= default_config.max_output_nodes,
+            "Max output nodes {} exceeds default limit {}",
+            max_output_nodes,
+            default_config.max_output_nodes
         );
         assert!(
             max_depth <= default_config.max_query_depth as u64,
@@ -152,7 +167,7 @@ mod tests {
     async fn test_bad_examples_fail() {
         let rng = StdRng::from_seed([12; 32]);
         let mut sim = Simulacrum::new_with_rng(rng);
-        let (mut max_nodes, mut max_depth, mut max_payload) = (0, 0, 0);
+        let (mut max_nodes, mut max_output_nodes, mut max_depth, mut max_payload) = (0, 0, 0, 0);
 
         sim.create_checkpoint();
 
@@ -170,6 +185,7 @@ mod tests {
             &cluster,
             &bad_examples,
             &mut max_nodes,
+            &mut max_output_nodes,
             &mut max_depth,
             &mut max_payload,
         )
