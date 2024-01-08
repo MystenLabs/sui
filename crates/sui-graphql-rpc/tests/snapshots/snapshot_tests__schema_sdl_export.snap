@@ -122,6 +122,9 @@ enum AddressTransactionBlockRelationship {
 	RECV
 }
 
+"""
+System transaction for creating the on-chain state used by zkLogin.
+"""
 type AuthenticatorStateCreateTransaction {
 	"""
 	A workaround to define an empty variant of a GraphQL union.
@@ -162,11 +165,17 @@ type AuthenticatorStateUpdateTransaction {
 	authenticatorObjInitialSharedVersion: Int!
 }
 
+"""
+Range of checkpoints that the RPC is guaranteed to produce a consistent response for.
+"""
 type AvailableRange {
 	first: Checkpoint
 	last: Checkpoint
 }
 
+"""
+The total balance for a particular coin type.
+"""
 type Balance {
 	"""
 	Coin type for the balance, such as 0x2::sui::SUI
@@ -258,6 +267,9 @@ type BalanceEdge {
 	cursor: String!
 }
 
+"""
+String containing a Base64-encoded binary data.
+"""
 scalar Base64
 
 """
@@ -311,6 +323,10 @@ type ChangeEpochTransaction {
 	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection!
 }
 
+"""
+Checkpoints contain finalized transactions and are used for node synchronization
+and global transaction ordering.
+"""
 type Checkpoint {
 	"""
 	A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58. This
@@ -399,6 +415,9 @@ input CheckpointId {
 	sequenceNumber: Int
 }
 
+"""
+The general Coin type.
+"""
 type Coin {
 	"""
 	Balance of the coin object
@@ -764,7 +783,13 @@ type Event {
 	UTC timestamp in milliseconds since epoch (1/1/1970)
 	"""
 	timestamp: DateTime
+	"""
+	The value's move type
+	"""
 	type: MoveType!
+	"""
+	The BCS representation of this value Base64 encoded
+	"""
 	bcs: Base64!
 	"""
 	Structured contents of a Move value.
@@ -840,6 +865,9 @@ input EventFilter {
 	eventType: String
 }
 
+"""
+The result of an execution, including errors that occurred during said exeuction.
+"""
 type ExecutionResult {
 	"""
 	The errors field captures any errors that occurred during execution
@@ -909,6 +937,9 @@ type GasCoin {
 	_: Boolean
 }
 
+"""
+The summary of the gas cost.
+"""
 type GasCostSummary {
 	"""
 	Gas paid for executing this transaction (in MIST).
@@ -931,11 +962,17 @@ type GasCostSummary {
 	nonRefundableStorageFee: BigInt
 }
 
+"""
+The gas effects (cost summary, gas object id, etc.)
+"""
 type GasEffects {
 	gasObject: Object
 	gasSummary: GasCostSummary
 }
 
+"""
+The metadata for the gas that is required to build the gas object for used in a transaction.
+"""
 type GasInput {
 	"""
 	Address of the owner of the gas object(s) used
@@ -1119,6 +1156,9 @@ type MoveData =
 """
 scalar MoveData
 
+"""
+Description of a field, defined in a Move type.
+"""
 type MoveField {
 	name: String!
 	type: OpenMoveType
@@ -1273,6 +1313,9 @@ type MoveModuleEdge {
 	cursor: String!
 }
 
+"""
+The representation of an object as a Move Object.
+"""
 type MoveObject {
 	"""
 	Displays the contents of the MoveObject in a JSON string and through graphql types.  Also
@@ -1305,6 +1348,9 @@ type MoveObject {
 	asCoinMetadata: CoinMetadata
 }
 
+"""
+The representation of a move package.
+"""
 type MovePackage {
 	"""
 	A representation of the module called `name` in this package, including the
@@ -1482,7 +1528,13 @@ type MoveTypeSignature =
 scalar MoveTypeSignature
 
 type MoveValue {
+	"""
+	The value's move type
+	"""
 	type: MoveType!
+	"""
+	The BCS representation of this value Base64 encoded
+	"""
 	bcs: Base64!
 	"""
 	Structured contents of a Move value.
@@ -1525,6 +1577,9 @@ enum MoveVisibility {
 	FRIEND
 }
 
+"""
+Mutations are used to write to the Sui network.
+"""
 type Mutation {
 	"""
 	Execute a transaction, committing its effects on chain.
@@ -1541,6 +1596,20 @@ type Mutation {
 	executeTransactionBlock(txBytes: String!, signatures: [String!]!): ExecutionResult!
 }
 
+"""
+The basic unit of storage in Sui is object. In contrast to many other blockchains,
+where storage is centered around address and each address contains a key-value store,
+Sui's storage is centered around objects. Sui objects have one of the following primary states:
+
+Immutable - the object cannot be modified.
+Mutable - the object can be changed.
+
+Further, mutable objects are divided into these categories:
+
+Owned - the object can be modified only by its owner.
+Shared - the object can be modified by anyone.
+Immutable objects do not need this distinction because they have no owner.
+"""
 type Object implements IOwner {
 	version: Int!
 	"""
@@ -1592,7 +1661,8 @@ type Object implements IOwner {
 	"""
 	balance(type: String): Balance
 	"""
-	The balances of all coin types owned by the object. Coins of the same type are grouped together into one Balance.
+	The balances of all coin types owned by the object.
+	Coins of the same type are grouped together into one Balance.
 	"""
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
@@ -1820,12 +1890,33 @@ type OwnedOrImmutable {
 	object: Object
 }
 
+"""
+The basic unit of storage in Sui is object. In contrast to many other blockchains,
+where storage is centered around address and each address contains a key-value store,
+Sui's storage is centered around objects. Sui objects have one of the following primary states:
+
+Immutable - the object cannot be modified.
+Mutable - the object can be changed.
+
+Further, mutable objects are divided into these categories:
+
+Owned - the object can be modified only by its owner.
+Shared - the object can be modified by anyone.
+Immutable objects do not need this distinction because they have no owner.
+"""
 type Owner implements IOwner {
 	asAddress: Address
 	asObject: Object
 	address: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	"""
+	The coin's balance
+	"""
 	balance(type: String): Balance
+	"""
+	The balances of all coin types owned by the object.
+	Coins of the same type are grouped together into one Balance.
+	"""
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
 	The coin objects for the given address or object.
@@ -2034,7 +2125,14 @@ type Query {
 	"""
 	serviceConfig: ServiceConfig!
 	owner(address: SuiAddress!): Owner
+	"""
+	The object corresponding to the given address at the (optionally) given version.
+	When no version is given, the latest version is returned.
+	"""
 	object(address: SuiAddress!, version: Int): Object
+	"""
+	The address objects corresponding to this address.
+	"""
 	address(address: SuiAddress!): Address
 	"""
 	Fetch a structured representation of a concrete type, including its layout information.
@@ -2061,19 +2159,28 @@ type Query {
 	(e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	"""
+	The checkpoints that exist in the network.
+	"""
 	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
 	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection!
+	"""
+	The objects that exist in the network.
+	"""
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	"""
 	Fetch the protocol config by protocol version (defaults to the latest protocol
-	version known to the GraphQL)
+	version known to the GraphQL).
 	"""
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
 	"""
-	Resolves the owner address of the provided domain name
+	Resolves the owner address of the provided domain name.
 	"""
 	resolveNameServiceAddress(name: String!): Address
+	"""
+	The coin metadata associated with the given coin ype.
+	"""
 	coinMetadata(coinType: String!): CoinMetadata
 }
 
@@ -2160,6 +2267,10 @@ type SafeMode {
 	gasSummary: GasCostSummary
 }
 
+"""
+Service configuration that holds information about enabled features,
+service limits, and any other useful service-related metadata.
+"""
 type ServiceConfig {
 	"""
 	Check whether `feature` is enabled on this GraphQL service.
@@ -2322,21 +2433,21 @@ The stake's possible status: active, pending, or unstaked.
 """
 enum StakeStatus {
 	"""
-	The stake object is active in a staking pool and it is generating rewards
+	The stake object is active in a staking pool and it is generating rewards.
 	"""
 	ACTIVE
 	"""
-	The stake awaits to join a staking pool in the next epoch
+	The stake awaits to join a staking pool in the next epoch.
 	"""
 	PENDING
 	"""
-	The stake is no longer active in any staking pool
+	The stake is no longer active in any staking pool.
 	"""
 	UNSTAKED
 }
 
 """
-Parameters related to subsiding staking rewards
+Parameters that control the distribution of the stake subsidy.
 """
 type StakeSubsidy {
 	"""
@@ -2365,17 +2476,20 @@ type StakeSubsidy {
 	decreaseRate: Int
 }
 
+"""
+Represents a 0x3::staking_pool::StakedSui Move object on-chain.
+"""
 type StakedSui {
 	"""
 	A stake can be pending, active, or unstaked
 	"""
 	status: StakeStatus!
 	"""
-	The epoch at which this stake became active
+	The epoch at which this stake became active.
 	"""
 	activatedEpoch: Epoch
 	"""
-	The epoch at which this object was requested to join a stake pool
+	The epoch at which this object was requested to join a stake pool.
 	"""
 	requestedEpoch: Epoch
 	"""
@@ -2618,6 +2732,9 @@ type TransactionBlockEdge {
 	cursor: String!
 }
 
+"""
+The effects representing the result of executing a transaction block.
+"""
 type TransactionBlockEffects {
 	"""
 	The transaction that ran to produce these effects.
@@ -2834,6 +2951,9 @@ type UpgradeTransaction {
 	upgradeTicket: TransactionArgument!
 }
 
+"""
+All the fields relevant and associated with a validator.
+"""
 type Validator {
 	"""
 	Validator's address.
@@ -2952,6 +3072,9 @@ type Validator {
 	apy: Int
 }
 
+"""
+The credentials related fields associated with a validator.
+"""
 type ValidatorCredentials {
 	protocolPubKey: Base64
 	networkPubKey: Base64

@@ -29,6 +29,7 @@ pub(crate) struct MoveObject {
 
 pub(crate) struct MoveObjectDowncastError;
 
+/// The representation of an object as a Move Object.
 #[Object]
 impl MoveObject {
     /// Displays the contents of the MoveObject in a JSON string and through graphql types.  Also

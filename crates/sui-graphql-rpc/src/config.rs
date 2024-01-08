@@ -191,6 +191,8 @@ impl ServiceConfig {
     }
 }
 
+/// Service configuration that holds information about enabled features,
+/// service limits, and any other useful service-related metadata.
 #[Object]
 impl ServiceConfig {
     /// Check whether `feature` is enabled on this GraphQL service.

@@ -100,6 +100,18 @@ pub(crate) struct Owner {
     pub address: SuiAddress,
 }
 
+/// The basic unit of storage in Sui is object. In contrast to many other blockchains,
+/// where storage is centered around address and each address contains a key-value store,
+/// Sui's storage is centered around objects. Sui objects have one of the following primary states:
+///
+///    Immutable - the object cannot be modified.
+///    Mutable - the object can be changed.
+///
+/// Further, mutable objects are divided into these categories:
+///
+///    Owned - the object can be modified only by its owner.
+///    Shared - the object can be modified by anyone.
+/// Immutable objects do not need this distinction because they have no owner.
 #[Object]
 impl Owner {
     async fn as_address(&self) -> Option<Address> {
@@ -136,6 +148,7 @@ impl Owner {
             .extend()
     }
 
+    /// The coin's balance
     pub async fn balance(
         &self,
         ctx: &Context<'_>,
@@ -147,6 +160,8 @@ impl Owner {
             .extend()
     }
 
+    /// The balances of all coin types owned by the object.
+    /// Coins of the same type are grouped together into one Balance.
     pub async fn balance_connection(
         &self,
         ctx: &Context<'_>,

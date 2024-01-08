@@ -18,6 +18,7 @@ use super::{
     transaction_block::{self, TransactionBlock, TransactionBlockFilter},
 };
 
+/// The 32-byte address that is an account address (corresponding to a public key).
 #[derive(Clone, Debug, PartialEq, Eq, Copy)]
 pub(crate) struct Address {
     pub address: SuiAddress,

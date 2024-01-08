@@ -4,6 +4,7 @@
 use super::{big_int::BigInt, move_type::MoveType};
 use async_graphql::*;
 
+/// The total balance for a particular coin type.
 #[derive(Clone, Debug, SimpleObject)]
 pub(crate) struct Balance {
     /// Coin type for the balance, such as 0x2::sui::SUI

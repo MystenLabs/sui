@@ -23,6 +23,7 @@ pub(crate) struct AuthenticatorStateUpdateTransaction(
 
 pub(crate) type CActiveJwk = Cursor<usize>;
 
+/// The active JSON Web Key representing a set of public keys for an OpenID provider
 struct ActiveJwk(NativeActiveJwk);
 
 /// System transaction for updating the on-chain state used by zkLogin.

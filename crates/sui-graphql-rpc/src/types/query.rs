@@ -67,6 +67,8 @@ impl Query {
         Some(Owner { address })
     }
 
+    /// The object corresponding to the given address at the (optionally) given version.
+    /// When no version is given, the latest version is returned.
     async fn object(
         &self,
         ctx: &Context<'_>,
@@ -78,6 +80,7 @@ impl Query {
             .extend()
     }
 
+    /// The address objects corresponding to this address.
     async fn address(&self, address: SuiAddress) -> Option<Address> {
         Some(Address { address })
     }
@@ -139,6 +142,7 @@ impl Query {
             .extend()
     }
 
+    /// The checkpoints that exist in the network.
     async fn checkpoints(
         &self,
         ctx: &Context<'_>,
@@ -183,6 +187,7 @@ impl Query {
             .extend()
     }
 
+    /// The objects that exist in the network.
     async fn object_connection(
         &self,
         ctx: &Context<'_>,
@@ -199,7 +204,7 @@ impl Query {
     }
 
     /// Fetch the protocol config by protocol version (defaults to the latest protocol
-    /// version known to the GraphQL)
+    /// version known to the GraphQL).
     async fn protocol_config(
         &self,
         ctx: &Context<'_>,
@@ -210,7 +215,7 @@ impl Query {
             .extend()
     }
 
-    /// Resolves the owner address of the provided domain name
+    /// Resolves the owner address of the provided domain name.
     async fn resolve_name_service_address(
         &self,
         ctx: &Context<'_>,
@@ -222,6 +227,7 @@ impl Query {
             .extend()
     }
 
+    /// The coin metadata associated with the given coin ype.
     async fn coin_metadata(
         &self,
         ctx: &Context<'_>,

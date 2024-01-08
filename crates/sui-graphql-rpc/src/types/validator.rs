@@ -18,6 +18,7 @@ pub(crate) struct Validator {
     pub report_records: Option<Vec<Address>>,
 }
 
+/// All the fields relevant and associated with a validator.
 #[Object]
 impl Validator {
     /// Validator's address.

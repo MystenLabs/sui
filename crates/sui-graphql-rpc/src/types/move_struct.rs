@@ -27,6 +27,7 @@ pub(crate) struct MoveStructTypeParameter {
     is_phantom: bool,
 }
 
+/// Description of a field, defined in a Move type.
 #[derive(SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct MoveField {

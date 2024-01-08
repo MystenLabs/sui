@@ -21,6 +21,7 @@ pub(crate) enum CoinDowncastError {
     Bcs(bcs::Error),
 }
 
+/// The general Coin type.
 #[Object]
 impl Coin {
     /// Balance of the coin object
