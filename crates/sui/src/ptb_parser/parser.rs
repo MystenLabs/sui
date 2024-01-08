@@ -3,18 +3,57 @@
 
 use std::{borrow::BorrowMut, marker::PhantomData, str::FromStr};
 
-use crate::ptb_parser::command_token::{
-    MAKE_MOVE_VEC, MERGE_COINS, PUBLISH, SPLIT_COINS, TRANSFER_OBJECTS, UPGRADE,
-};
+use crate::client_commands::PTBCommand;
 use move_command_line_common::{
     address::NumericalAddress,
     parser::{parse_u128, parse_u16, parse_u256, parse_u32, parse_u64, parse_u8, Parser, Token},
     types::{ParsedType, TypeToken},
 };
-use move_core_types::identifier::Identifier;
+use move_core_types::{identifier::Identifier, runtime_value::MoveValue};
 
 use crate::ptb_parser::argument_token::ArgumentToken;
 use anyhow::{anyhow, bail, Context, Result};
+
+use super::command_token::CommandToken;
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ParsedPTBCommand<T> {
+    pub name: CommandToken,
+    pub args: Vec<T>,
+}
+
+impl ParsedPTBCommand<Argument> {
+    pub fn parse(cmd: &PTBCommand) -> Result<Self> {
+        let name = CommandToken::from_str(&cmd.name)?;
+        match name {
+            CommandToken::FileEnd
+            | CommandToken::FileStart
+            | CommandToken::Publish
+            | CommandToken::Upgrade => {
+                if cmd.values.len() != 1 {
+                    bail!(
+                        "Invalid command -- expected 1 argument, got {}",
+                        cmd.values.len()
+                    );
+                }
+                return Ok(Self {
+                    name,
+                    args: vec![Argument::String(cmd.values[0].clone())],
+                });
+            }
+            _ => (),
+        }
+        let args = cmd
+            .values
+            .iter()
+            .map(|v| Argument::parse_values(&v))
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .collect();
+        Ok(Self { name, args })
+    }
+}
 
 pub struct ValueParser<
     'a,
@@ -52,13 +91,62 @@ pub enum Argument {
 impl Argument {
     pub fn parse_values(s: &str) -> Result<Vec<Self>> {
         let tokens: Vec<_> = ArgumentToken::tokenize(s)?;
-        println!("tokens: {:?}", tokens);
         let mut parser = ValueParser::new(tokens);
         let res = parser.parse_arguments()?;
         if let Ok((_, contents)) = parser.inner().advance_any() {
             bail!("Expected end of token stream. Got: {}", contents)
         }
         Ok(res)
+    }
+
+    pub fn is_lifted(&self) -> bool {
+        match self {
+            Argument::Bool(_)
+            | Argument::U8(_)
+            | Argument::U16(_)
+            | Argument::U32(_)
+            | Argument::U64(_)
+            | Argument::U128(_)
+            | Argument::U256(_)
+            | Argument::Identifier(_)
+            | Argument::Address(_)
+            | Argument::String(_)
+            | Argument::Vector(_)
+            | Argument::Option(_) => true,
+            Argument::ModuleAccess { .. } | Argument::TyArgs(_) | Argument::Array(_) => false,
+        }
+    }
+
+    pub fn into_move_value_opt(&self) -> Result<MoveValue> {
+        Ok(match self {
+            Argument::Bool(b) => MoveValue::Bool(*b),
+            Argument::U8(u) => MoveValue::U8(*u),
+            Argument::U16(u) => MoveValue::U16(*u),
+            Argument::U32(u) => MoveValue::U32(*u),
+            Argument::U64(u) => MoveValue::U64(*u),
+            Argument::U128(u) => MoveValue::U128(*u),
+            Argument::U256(u) => MoveValue::U256(*u),
+            Argument::Address(a) => MoveValue::Address(a.into_inner()),
+            Argument::Vector(vs) => MoveValue::Vector(
+                vs.iter()
+                    .map(|v| v.into_move_value_opt())
+                    .collect::<Result<Vec<_>>>()?,
+            ),
+            Argument::String(s) => {
+                MoveValue::Vector(s.bytes().into_iter().map(MoveValue::U8).collect::<Vec<_>>())
+            }
+            Argument::Option(o) => {
+                if let Some(v) = o {
+                    MoveValue::Vector(vec![v.as_ref().into_move_value_opt()?])
+                } else {
+                    MoveValue::Vector(vec![])
+                }
+            }
+            Argument::Identifier(_)
+            | Argument::Array(_)
+            | Argument::ModuleAccess { .. }
+            | Argument::TyArgs(_) => bail!("Cannot convert {:?} to MoveValue", self),
+        })
     }
 }
 
