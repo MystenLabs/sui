@@ -27,3 +27,9 @@ module examples::mycoin {
 ```
 
 The `Coin<T>` is a generic implementation of a coin on Sui. The owner of the `TreasuryCap` gets control over the minting and burning of coins. Further transactions can be sent directly to the `sui::coin::Coin` with `TreasuryCap` object as authorization.
+
+## Freeze coin
+
+You can create a coin and specify a list of addresses that are denied from using it. You can update the list of addresses, as needed. The network updates the list of denied addresses quickly, without having to form a consensus. 
+Defines the `Freezer` type. The `Freezer` shared object is used to restrict access to instances
+/// of certain core types from being used as inputs by specified "frozen" addresses.
