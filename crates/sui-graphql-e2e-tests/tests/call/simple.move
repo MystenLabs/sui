@@ -88,7 +88,9 @@ module Test::M1 {
         node {
           address
           digest
-          kind
+          owner {
+            __typename
+          }
         }
       }
     }
@@ -103,7 +105,9 @@ module Test::M1 {
         node {
           address
           digest
-          kind
+          owner {
+            __typename
+          }
         }
       }
     }
@@ -114,7 +118,9 @@ module Test::M1 {
         node {
           address
           digest
-          kind
+          owner {
+            __typename
+          }
         }
       }
     }
@@ -126,9 +132,8 @@ module Test::M1 {
         node {
           address
           digest
-          kind
-            owner {
-            address
+          owner {
+            __typename
           }
         }
       }
@@ -138,7 +143,12 @@ module Test::M1 {
   object(address: $obj_2_0) {
     version
     owner {
-      address
+      __typename
+      ... on AddressOwner {
+        owner {
+          address
+        }
+      }
     }
   }
 

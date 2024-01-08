@@ -103,7 +103,7 @@ CheckpointSummary { epoch: 6, seq: 11, content_digest: D3oWLCcqoa1D15gxzvMaDemNN
 task 17 'advance-epoch'. lines 78-81:
 Epoch advanced: 6
 
-task 18 'run-graphql'. lines 83-96:
+task 18 'run-graphql'. lines 83-98:
 Response: {
   "data": {
     "address": {
@@ -113,7 +113,9 @@ Response: {
             "node": {
               "address": "0x8b0e0310a07085ad13f91adb49a9ee30b002c2074addc4b0487f7195d44e928a",
               "digest": "85b8jVWZrQNAaJ7suXm8w8cdDbq85tkQRo4CGrY5cS4H",
-              "kind": "OWNED"
+              "owner": {
+                "__typename": "AddressOwner"
+              }
             }
           }
         ]
@@ -122,7 +124,7 @@ Response: {
   }
 }
 
-task 19 'run-graphql'. lines 98-145:
+task 19 'run-graphql'. lines 100-155:
 Response: {
   "data": {
     "address": {
@@ -137,7 +139,9 @@ Response: {
             "node": {
               "address": "0x8b0e0310a07085ad13f91adb49a9ee30b002c2074addc4b0487f7195d44e928a",
               "digest": "85b8jVWZrQNAaJ7suXm8w8cdDbq85tkQRo4CGrY5cS4H",
-              "kind": "OWNED"
+              "owner": {
+                "__typename": "AddressOwner"
+              }
             }
           }
         ]
@@ -150,9 +154,8 @@ Response: {
             "node": {
               "address": "0x511fd9ce0b6943a3968d0d5cc377322cd0118433f65dcb51e9d1727d771047f0",
               "digest": "HMRSJr7gKNHC1nYbt8nBsXxdiJ1wnoHZuMRN1DA3jhXo",
-              "kind": "OWNED",
               "owner": {
-                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+                "__typename": "AddressOwner"
               }
             }
           },
@@ -160,9 +163,8 @@ Response: {
             "node": {
               "address": "0x7827de2a83a6b4ac36d2ac1764ad0f811308521407a5b72ae69559dda2cd2058",
               "digest": "DMMSd4mQuDW3VnySiLcZQzwX9zK6SKPnKJ17NwVBHuzz",
-              "kind": "OWNED",
               "owner": {
-                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+                "__typename": "AddressOwner"
               }
             }
           },
@@ -170,9 +172,8 @@ Response: {
             "node": {
               "address": "0x936681de92a7306429f56748932bfbf17e199363edafa8ab973cd2e203c0c384",
               "digest": "D3ybZDPxmpsbm5Ufr5sRmfHzYW8eSRDtyVUsGjqGyrQu",
-              "kind": "OWNED",
               "owner": {
-                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+                "__typename": "AddressOwner"
               }
             }
           },
@@ -180,9 +181,8 @@ Response: {
             "node": {
               "address": "0xc9234d34e6067dc9ef92cbc2480dee6776e9884eba8fbda5c3f01f4fe96195ed",
               "digest": "4wBDM7bxAQvBf51jftjwCx7rdeZ2zcBbgvW2P6rkxokW",
-              "kind": "OWNED",
               "owner": {
-                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+                "__typename": "AddressOwner"
               }
             }
           },
@@ -190,9 +190,8 @@ Response: {
             "node": {
               "address": "0xd92d2142638f7d211143788ea1ad6e51185869bc4469f744aabd4f29e05ee5f2",
               "digest": "5tdgwqrvoKVcRcyNzKo8Usz2MtPCok2oV3G3ncaxWH4c",
-              "kind": "OWNED",
               "owner": {
-                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+                "__typename": "AddressOwner"
               }
             }
           },
@@ -200,9 +199,8 @@ Response: {
             "node": {
               "address": "0xfe3f0fecd990aa6e3be0409a7f22fca7b45b98d9003f9f5d27d08f90cd39441b",
               "digest": "3zkW5RrBhsdMphKHbeGP5jJB498ZfKwMH563SZGC94JA",
-              "kind": "OWNED",
               "owner": {
-                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+                "__typename": "AddressOwner"
               }
             }
           }
@@ -212,13 +210,16 @@ Response: {
     "object": {
       "version": 3,
       "owner": {
-        "address": "0x0000000000000000000000000000000000000000000000000000000000000042"
+        "__typename": "AddressOwner",
+        "owner": {
+          "address": "0x0000000000000000000000000000000000000000000000000000000000000042"
+        }
       }
     }
   }
 }
 
-task 20 'view-graphql-variables'. lines 148-149:
+task 20 'view-graphql-variables'. lines 158-159:
 Name: A
 Type: SuiAddress!
 Value: "0x42"
@@ -315,7 +316,7 @@ Name: validator_0_opt
 Type: SuiAddress
 Value: "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
 
-task 21 'run-graphql'. lines 152-166:
+task 21 'run-graphql'. lines 162-176:
 Response: {
   "data": {
     "epoch": {
@@ -335,7 +336,7 @@ Response: {
   }
 }
 
-task 22 'run-graphql'. lines 168-174:
+task 22 'run-graphql'. lines 178-184:
 Response: {
   "data": {
     "epoch": {
@@ -344,17 +345,17 @@ Response: {
   }
 }
 
-task 23 'run'. lines 176-176:
+task 23 'run'. lines 186-186:
 created: object(23,0)
 mutated: object(0,1)
 gas summary: computation_cost: 999000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 24 'run'. lines 178-178:
+task 24 'run'. lines 188-188:
 created: object(24,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 25 'run'. lines 180-180:
+task 25 'run'. lines 190-190:
 created: object(25,0)
 mutated: object(0,1)
 gas summary: computation_cost: 235000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
