@@ -9,7 +9,7 @@
 /// - address - sequence of X bytes
 /// - bool - byte with 0 or 1
 /// - u8 - a single u8 byte
-/// - u64 / u128 - LE bytes
+/// - u64 / u128 / u256 - LE bytes
 /// - vector - ULEB128 length + LEN elements
 /// - option - first byte bool: None (0) or Some (1), then value
 ///
@@ -126,6 +126,20 @@ module sui::bcs {
         while (i < 128) {
             let byte = (v::pop_back(&mut bcs.bytes) as u128);
             value = value + (byte << i);
+            i = i + 8;
+        };
+
+        value
+    }
+
+    /// Read `u256` value from bcs-serialized bytes.
+    public fun peel_u256(bcs: &mut BCS): u256 {
+        assert!(v::length(&bcs.bytes) >= 32, EOutOfRange);
+
+        let (value, i) = (0u256, 0u16);
+        while (i < 256) {
+            let byte = (v::pop_back(&mut bcs.bytes) as u256);
+            value = value + (byte << (i as u8));
             i = i + 8;
         };
 
