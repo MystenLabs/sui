@@ -20,7 +20,7 @@ use super::{
     event::{Event, EventFilter},
     move_type::MoveType,
     object::{Object, ObjectFilter},
-    owner::{ObjectOwner, Owner},
+    owner::Owner,
     protocol_config::ProtocolConfigs,
     sui_address::SuiAddress,
     transaction_block::{TransactionBlock, TransactionBlockFilter},
@@ -63,8 +63,8 @@ impl Query {
     // dryRunTransactionBlock
     // coinMetadata
 
-    async fn owner(&self, address: SuiAddress) -> Option<ObjectOwner> {
-        Some(ObjectOwner::Owner(Owner { address }))
+    async fn owner(&self, address: SuiAddress) -> Option<Owner> {
+        Some(Owner { address })
     }
 
     async fn object(
