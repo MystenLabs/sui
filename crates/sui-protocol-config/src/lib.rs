@@ -1715,8 +1715,6 @@ impl ProtocolConfig {
 
                     // enable nw cert v2 on mainnet
                     cfg.feature_flags.narwhal_certificate_v2 = true;
-
-                    cfg.feature_flags.enable_effects_v2 = true;
                 }
                 33 => {
                     cfg.feature_flags.hardened_otw_check = true;
