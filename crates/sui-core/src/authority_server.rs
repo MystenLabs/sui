@@ -11,12 +11,11 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
     IntCounterVec, Registry,
 };
-use std::{io, sync::Arc};
+use std::{io, net::SocketAddr, sync::Arc, time::SystemTime};
 use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::effects::TransactionEvents;
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::messages_grpc::{
     HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
@@ -25,6 +24,7 @@ use sui_types::messages_grpc::{
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{effects::TransactionEffectsAPI, message_envelope::Message};
+use sui_types::{effects::TransactionEvents, traffic_control::PolicyConfig};
 use sui_types::{error::*, transaction::*};
 use sui_types::{
     fp_ensure,
@@ -34,13 +34,16 @@ use sui_types::{
 };
 use tap::TapFallible;
 use tokio::task::JoinHandle;
-use tracing::{error_span, info, Instrument};
+use tracing::{error, error_span, info, Instrument};
 
 use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::{
     authority::AuthorityState,
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
+    traffic_controller::TrafficController,
 };
+use sui_types::traffic_control::TrafficTally;
+use tonic::transport::server::TcpConnectInfo;
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
@@ -126,6 +129,9 @@ impl AuthorityServer {
                 state: self.state,
                 consensus_adapter: self.consensus_adapter,
                 metrics: self.metrics.clone(),
+                traffic_controller: Arc::new(
+                    TrafficController::spawn(PolicyConfig::default()).await,
+                ),
             }))
             .bind(&address)
             .await
@@ -241,18 +247,21 @@ pub struct ValidatorService {
     state: Arc<AuthorityState>,
     consensus_adapter: Arc<ConsensusAdapter>,
     metrics: Arc<ValidatorServiceMetrics>,
+    traffic_controller: Arc<TrafficController>,
 }
 
 impl ValidatorService {
-    pub fn new(
+    pub async fn new(
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
         metrics: Arc<ValidatorServiceMetrics>,
+        traffic_control_config: PolicyConfig,
     ) -> Self {
         Self {
             state,
             consensus_adapter,
             metrics,
+            traffic_controller: Arc::new(TrafficController::spawn(traffic_control_config).await),
         }
     }
 
@@ -264,26 +273,28 @@ impl ValidatorService {
         &self,
         cert: CertifiedTransaction,
     ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
-        self.handle_certificate_v2(tonic::Request::new(cert)).await
+        let request = make_tonic_request_for_testing(cert);
+        self.handle_certificate_v2(request).await
     }
 
-    pub async fn handle_transaction_for_testing(
+    pub async fn handle_transaction_for_benchmarking(
         &self,
         transaction: Transaction,
     ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
-        self.transaction(tonic::Request::new(transaction)).await
+        let request = make_tonic_request_for_testing(transaction);
+        self.transaction(request).await
     }
 
     async fn handle_transaction(
-        self,
+        &self,
         request: tonic::Request<Transaction>,
     ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
         let Self {
             state,
             consensus_adapter,
             metrics,
-        } = self;
-
+            traffic_controller: _,
+        } = self.clone();
         let transaction = request.into_inner();
 
         let epoch_store = state.load_epoch_store_one_call_per_task();
@@ -520,22 +531,15 @@ impl ValidatorService {
     }
 }
 
-#[async_trait]
-impl Validator for ValidatorService {
-    async fn transaction(
+impl ValidatorService {
+    async fn transaction_impl(
         &self,
         request: tonic::Request<Transaction>,
     ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
-        let validator_service = self.clone();
-
-        // Spawns a task which handles the transaction. The task will unconditionally continue
-        // processing in the event that the client connection is dropped.
-        spawn_monitored_task!(validator_service.handle_transaction(request))
-            .await
-            .unwrap()
+        self.handle_transaction(request).await
     }
 
-    async fn submit_certificate(
+    async fn submit_certificate_impl(
         &self,
         request: tonic::Request<CertifiedTransaction>,
     ) -> Result<tonic::Response<SubmitCertificateResponse>, tonic::Status> {
@@ -549,7 +553,7 @@ impl Validator for ValidatorService {
             .map(|executed| tonic::Response::new(SubmitCertificateResponse { executed }))
     }
 
-    async fn handle_certificate_v2(
+    async fn handle_certificate_v2_impl(
         &self,
         request: tonic::Request<CertifiedTransaction>,
     ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
@@ -569,51 +573,43 @@ impl Validator for ValidatorService {
             })
     }
 
-    async fn object_info(
+    async fn object_info_impl(
         &self,
         request: tonic::Request<ObjectInfoRequest>,
     ) -> Result<tonic::Response<ObjectInfoResponse>, tonic::Status> {
         let request = request.into_inner();
-
         let response = self.state.handle_object_info_request(request).await?;
-
         Ok(tonic::Response::new(response))
     }
 
-    async fn transaction_info(
+    async fn transaction_info_impl(
         &self,
         request: tonic::Request<TransactionInfoRequest>,
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
         let request = request.into_inner();
-
         let response = self.state.handle_transaction_info_request(request).await?;
-
         Ok(tonic::Response::new(response))
     }
 
-    async fn checkpoint(
+    async fn checkpoint_impl(
         &self,
         request: tonic::Request<CheckpointRequest>,
     ) -> Result<tonic::Response<CheckpointResponse>, tonic::Status> {
         let request = request.into_inner();
-
         let response = self.state.handle_checkpoint_request(&request)?;
-
-        return Ok(tonic::Response::new(response));
+        Ok(tonic::Response::new(response))
     }
 
-    async fn checkpoint_v2(
+    async fn checkpoint_v2_impl(
         &self,
         request: tonic::Request<CheckpointRequestV2>,
     ) -> Result<tonic::Response<CheckpointResponseV2>, tonic::Status> {
         let request = request.into_inner();
-
         let response = self.state.handle_checkpoint_request_v2(&request)?;
-
-        return Ok(tonic::Response::new(response));
+        Ok(tonic::Response::new(response))
     }
 
-    async fn get_system_state_object(
+    async fn get_system_state_object_impl(
         &self,
         _request: tonic::Request<SystemStateRequest>,
     ) -> Result<tonic::Response<SuiSystemState>, tonic::Status> {
@@ -622,6 +618,193 @@ impl Validator for ValidatorService {
             .get_cache_reader()
             .get_sui_system_state_object_unsafe()?;
 
-        return Ok(tonic::Response::new(response));
+        Ok(tonic::Response::new(response))
+    }
+
+    async fn handle_traffic_req(
+        &self,
+        connection_ip: Option<SocketAddr>,
+        proxy_ip: Option<SocketAddr>,
+    ) -> Result<(), tonic::Status> {
+        if !self.traffic_controller.check(connection_ip, proxy_ip).await {
+            // Entity in blocklist
+            Err(tonic::Status::resource_exhausted("Too many requests"))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn handle_traffic_resp<T>(
+        &self,
+        connection_ip: Option<SocketAddr>,
+        proxy_ip: Option<SocketAddr>,
+        response: &Result<tonic::Response<T>, tonic::Status>,
+    ) {
+        let result: SuiResult = if let Err(status) = response {
+            Err(SuiError::from(status.clone()))
+        } else {
+            Ok(())
+        };
+
+        self.traffic_controller.tally(TrafficTally {
+            connection_ip,
+            proxy_ip,
+            result,
+            timestamp: SystemTime::now(),
+        });
+    }
+}
+
+fn make_tonic_request_for_testing<T>(message: T) -> tonic::Request<T> {
+    // simulate a TCP connection, which would have added extensions to
+    // the request object that would be used downstream
+    let mut request = tonic::Request::new(message);
+    let tcp_connect_info = TcpConnectInfo {
+        local_addr: None,
+        remote_addr: Some(SocketAddr::new([127, 0, 0, 1].into(), 0)),
+    };
+    request.extensions_mut().insert(tcp_connect_info);
+    request
+}
+
+/// Implements generic pre- and post-processing. Since this is on the critical
+/// path, any heavy lifting should be done in a separate non-blocking task
+/// unless it is necessary to override the return value.
+#[macro_export]
+macro_rules! handle_with_decoration {
+    ($self:ident, $func_name:ident, $request:ident) => {{
+        // extract IP info. Note that in addition to extracting the client IP from
+        // the request header, we also get the remote address in case we need to
+        // throttle a fullnode, or an end user is running a local quorum driver.
+        let connection_ip: Option<SocketAddr> = $request.remote_addr();
+
+        // This should never happen except perhaps in simtest or some other non-standard
+        // environment. If we are seeing this, we should investigate
+        // TODO: add metric here
+        if connection_ip.is_none() {
+            if cfg!(all(test, not(msim))) {
+                panic!("Failed to get remote address from request");
+            } else {
+                // We will hit this case if the IO type used does not
+                // implement Connected or when using a unix domain socket.
+                // TODO: once we have confirmed that no legitimate traffic
+                // is hitting this case, we should reject such requests that
+                // hit this case.
+                // TODO(william) add metric here
+                error!("Failed to get remote address from request");
+            }
+        }
+
+        let proxy_ip: Option<SocketAddr> =
+            if let Some(op) = $request.metadata().get("x-forwarded-for") {
+                match op.to_str() {
+                    Ok(ip) => match ip.parse() {
+                        Ok(ret) => Some(ret),
+                        Err(e) => {
+                            // TODO(william) add metric here
+                            error!("Failed to parse x-forwarded-for header value to SocketAddr: {:?}", e);
+                            return Err(tonic::Status::internal("Failed to parse tonic request metadata"));
+                        }
+                    },
+                    Err(e) => {
+                        // TODO(william) add metric here
+                        // TODO: once we have confirmed that no legitimate traffic
+                        // is hitting this case, we should reject such requests that
+                        // hit this case.
+                        error!("Invalid UTF-8 in x-forwarded-for header: {:?}", e);
+                        return Err(tonic::Status::internal("Invalid tonic request metadata"));
+                    }
+                }
+            } else {
+                // TODO(william) add metric here
+                None
+            };
+
+        // check if either IP is blocked, in which case return early
+        $self.handle_traffic_req(connection_ip, proxy_ip).await?;
+        // handle request
+        let response = $self.$func_name($request).await;
+        // handle response tallying
+        $self.handle_traffic_resp(connection_ip, proxy_ip, &response);
+        response
+    }};
+}
+
+#[async_trait]
+impl Validator for ValidatorService {
+    async fn transaction(
+        &self,
+        request: tonic::Request<Transaction>,
+    ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
+        let validator_service = self.clone();
+
+        // Spawns a task which handles the transaction. The task will unconditionally continue
+        // processing in the event that the client connection is dropped.
+        spawn_monitored_task!(async move {
+            // NB: traffic tally wrapping handled within the task rather than on task exit
+            // to prevent an attacker from subverting traffic control by severing the connection
+            handle_with_decoration!(validator_service, transaction_impl, request)
+        })
+        .await
+        .unwrap()
+    }
+
+    async fn submit_certificate(
+        &self,
+        request: tonic::Request<CertifiedTransaction>,
+    ) -> Result<tonic::Response<SubmitCertificateResponse>, tonic::Status> {
+        let validator_service = self.clone();
+
+        // Spawns a task which handles the certificate. The task will unconditionally continue
+        // processing in the event that the client connection is dropped.
+        spawn_monitored_task!(async move {
+            // NB: traffic tally wrapping handled within the task rather than on task exit
+            // to prevent an attacker from subverting traffic control by severing the connection.
+            handle_with_decoration!(validator_service, submit_certificate_impl, request)
+        })
+        .await
+        .unwrap()
+    }
+
+    async fn handle_certificate_v2(
+        &self,
+        request: tonic::Request<CertifiedTransaction>,
+    ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
+        handle_with_decoration!(self, handle_certificate_v2_impl, request)
+    }
+
+    async fn object_info(
+        &self,
+        request: tonic::Request<ObjectInfoRequest>,
+    ) -> Result<tonic::Response<ObjectInfoResponse>, tonic::Status> {
+        handle_with_decoration!(self, object_info_impl, request)
+    }
+
+    async fn transaction_info(
+        &self,
+        request: tonic::Request<TransactionInfoRequest>,
+    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+        handle_with_decoration!(self, transaction_info_impl, request)
+    }
+
+    async fn checkpoint(
+        &self,
+        request: tonic::Request<CheckpointRequest>,
+    ) -> Result<tonic::Response<CheckpointResponse>, tonic::Status> {
+        handle_with_decoration!(self, checkpoint_impl, request)
+    }
+
+    async fn checkpoint_v2(
+        &self,
+        request: tonic::Request<CheckpointRequestV2>,
+    ) -> Result<tonic::Response<CheckpointResponseV2>, tonic::Status> {
+        handle_with_decoration!(self, checkpoint_v2_impl, request)
+    }
+
+    async fn get_system_state_object(
+        &self,
+        request: tonic::Request<SystemStateRequest>,
+    ) -> Result<tonic::Response<SuiSystemState>, tonic::Status> {
+        handle_with_decoration!(self, get_system_state_object_impl, request)
     }
 }

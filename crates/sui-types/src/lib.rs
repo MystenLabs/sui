@@ -74,6 +74,7 @@ pub mod signature;
 pub mod storage;
 pub mod sui_serde;
 pub mod sui_system_state;
+pub mod traffic_control;
 pub mod transaction;
 pub mod transfer;
 pub mod type_resolver;

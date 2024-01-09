@@ -25,6 +25,7 @@ use crate::transaction_manager::MAX_PER_OBJECT_QUEUE_LENGTH;
 use sui_types::error::SuiError;
 
 use std::collections::BTreeSet;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -37,6 +38,7 @@ use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::SuiResult;
 use sui_types::object::{Object, Owner};
+use sui_types::traffic_control::PolicyConfig;
 use sui_types::transaction::CertifiedTransaction;
 use sui_types::transaction::{
     Transaction, VerifiedCertificate, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
@@ -448,13 +450,19 @@ async fn test_execution_with_dependencies() {
         .unwrap();
 }
 
+fn make_socket_addr() -> std::net::SocketAddr {
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0)
+}
+
 async fn try_sign_on_first_three_authorities(
     authority_clients: &[Arc<SafeClient<LocalAuthorityClient>>],
     committee: &Committee,
     txn: &Transaction,
 ) -> SuiResult<VerifiedCertificate> {
     for client in authority_clients.iter().take(3) {
-        client.handle_transaction(txn.clone()).await?;
+        client
+            .handle_transaction(txn.clone(), Some(make_socket_addr()))
+            .await?;
     }
     extract_cert(authority_clients, committee, txn.digest())
         .await
@@ -510,7 +518,7 @@ async fn test_per_object_overload() {
 
     // Signing and executing this transaction on the last authority should succeed.
     authority_clients[3]
-        .handle_transaction(create_counter_txn.clone())
+        .handle_transaction(create_counter_txn.clone(), Some(make_socket_addr()))
         .await
         .unwrap();
     send_consensus(&authorities[3], &create_counter_cert).await;
@@ -636,7 +644,7 @@ async fn test_txn_age_overload() {
 
     // Signing and executing this transaction on the last authority should succeed.
     authority_clients[3]
-        .handle_transaction(create_counter_txn.clone())
+        .handle_transaction(create_counter_txn.clone(), Some(make_socket_addr()))
         .await
         .unwrap();
     send_consensus(&authorities[3], &create_counter_cert).await;
@@ -748,11 +756,15 @@ async fn test_authority_txn_signing_pushback() {
         ConsensusAdapterMetrics::new_test(),
         epoch_store.protocol_config().clone(),
     ));
-    let validator_service = Arc::new(ValidatorService::new(
-        authority_state.clone(),
-        consensus_adapter,
-        Arc::new(ValidatorServiceMetrics::new_for_tests()),
-    ));
+    let validator_service = Arc::new(
+        ValidatorService::new(
+            authority_state.clone(),
+            consensus_adapter,
+            Arc::new(ValidatorServiceMetrics::new_for_tests()),
+            PolicyConfig::default(),
+        )
+        .await,
+    );
 
     // Manually make the authority into overload state and reject 100% of traffic.
     authority_state.overload_info.set_overload(100);
@@ -770,7 +782,7 @@ async fn test_authority_txn_signing_pushback() {
 
     // Txn shouldn't get signed with ValidatorOverloadedRetryAfter error.
     let response = validator_service
-        .handle_transaction_for_testing(tx.clone())
+        .handle_transaction_for_benchmarking(tx.clone())
         .await;
     assert!(matches!(
         SuiError::from(response.err().unwrap()),
@@ -789,7 +801,7 @@ async fn test_authority_txn_signing_pushback() {
     // it should still pushback the transaction.
     assert!(matches!(
         validator_service
-            .handle_transaction_for_testing(tx.clone())
+            .handle_transaction_for_benchmarking(tx.clone())
             .await
             .err()
             .unwrap()
@@ -810,7 +822,7 @@ async fn test_authority_txn_signing_pushback() {
     );
     assert!(matches!(
         validator_service
-            .handle_transaction_for_testing(tx2)
+            .handle_transaction_for_benchmarking(tx2)
             .await
             .err()
             .unwrap()
@@ -823,7 +835,7 @@ async fn test_authority_txn_signing_pushback() {
 
     // Re-send the first transaction, now the transaction can be successfully signed.
     let response = validator_service
-        .handle_transaction_for_testing(tx.clone())
+        .handle_transaction_for_benchmarking(tx.clone())
         .await;
     assert!(response.is_ok());
     assert_eq!(
@@ -877,11 +889,15 @@ async fn test_authority_txn_execution_pushback() {
         ConsensusAdapterMetrics::new_test(),
         epoch_store.protocol_config().clone(),
     ));
-    let validator_service = Arc::new(ValidatorService::new(
-        authority_state.clone(),
-        consensus_adapter,
-        Arc::new(ValidatorServiceMetrics::new_for_tests()),
-    ));
+    let validator_service = Arc::new(
+        ValidatorService::new(
+            authority_state.clone(),
+            consensus_adapter,
+            Arc::new(ValidatorServiceMetrics::new_for_tests()),
+            PolicyConfig::default(),
+        )
+        .await,
+    );
 
     // Manually make the authority into overload state and reject 100% of traffic.
     authority_state.overload_info.set_overload(100);
@@ -899,7 +915,7 @@ async fn test_authority_txn_execution_pushback() {
 
     // Ask validator to sign the transaction and then create a certificate.
     let response = validator_service
-        .handle_transaction_for_testing(tx.clone())
+        .handle_transaction_for_benchmarking(tx.clone())
         .await
         .unwrap()
         .into_inner();
