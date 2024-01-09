@@ -97,7 +97,7 @@ async fn test_publish_primitive() {
         .sign_secure(&sender, &data, Intent::sui_transaction())
         .unwrap();
 
-    let tx = Transaction::from_data(data.clone(), Intent::sui_transaction(), vec![signature]);
+    let tx = Transaction::from_data(data.clone(), vec![signature]);
 
     let result = client
         .quorum_driver_api()
@@ -202,7 +202,7 @@ async fn test_publish_complex_value() {
         .sign_secure(&sender, &data, Intent::sui_transaction())
         .unwrap();
 
-    let tx = Transaction::from_data(data.clone(), Intent::sui_transaction(), vec![signature]);
+    let tx = Transaction::from_data(data.clone(), vec![signature]);
 
     let result = client
         .quorum_driver_api()
@@ -298,7 +298,7 @@ async fn test_consume_oracle_data() {
             .sign_secure(&sender, &data, Intent::sui_transaction())
             .unwrap();
 
-        let tx = Transaction::from_data(data.clone(), Intent::sui_transaction(), vec![signature]);
+        let tx = Transaction::from_data(data.clone(), vec![signature]);
 
         let result = client
             .quorum_driver_api()
@@ -397,7 +397,7 @@ async fn test_consume_oracle_data() {
         .sign_secure(&sender, &data, Intent::sui_transaction())
         .unwrap();
 
-    let tx = Transaction::from_data(data.clone(), Intent::sui_transaction(), vec![signature]);
+    let tx = Transaction::from_data(data.clone(), vec![signature]);
 
     let result = client
         .quorum_driver_api()
@@ -485,7 +485,7 @@ async fn publish_package(
         .sign_secure(&sender, &data, Intent::sui_transaction())
         .unwrap();
 
-    let tx = Transaction::from_data(data.clone(), Intent::sui_transaction(), vec![signature]);
+    let tx = Transaction::from_data(data.clone(), vec![signature]);
 
     let result = client
         .quorum_driver_api()
@@ -556,7 +556,7 @@ async fn create_oracle(
     let signature = keystore
         .sign_secure(&sender, &data, Intent::sui_transaction())
         .unwrap();
-    let tx = Transaction::from_data(data.clone(), Intent::sui_transaction(), vec![signature]);
+    let tx = Transaction::from_data(data.clone(), vec![signature]);
     let result = client
         .quorum_driver_api()
         .execute_transaction_block(
