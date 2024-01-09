@@ -1563,9 +1563,9 @@ dependencies = [
 
 [[package]]
 name = "bcs"
-version = "0.1.4"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b06b4c1f053002b70e7084ac944c77d58d5d92b2110dbc5e852735e00ad3ccc"
+checksum = "85b6598a2f5d564fb7855dc6b06fd1c38cff5a72bd8b863a4d021938497b440a"
 dependencies = [
  "serde",
  "thiserror",
@@ -12542,15 +12542,20 @@ dependencies = [
  "bcs",
  "chrono",
  "clap",
+ "dirs 4.0.0",
  "jsonpath_lib",
  "mysten-metrics",
  "once_cell",
  "prometheus",
+ "rand 0.8.5",
  "reqwest",
  "serde",
  "serde_json",
+ "shared-crypto",
  "sui-config",
  "sui-json-rpc-types",
+ "sui-keys",
+ "sui-move-build",
  "sui-sdk",
  "sui-types",
  "tap",
