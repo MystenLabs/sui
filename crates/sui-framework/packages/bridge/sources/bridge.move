@@ -213,8 +213,11 @@ module bridge::bridge {
         let target_chain = message::token_target_chain(&token_payload);
         // ensure target chain is matches self.chain_id
         assert!(target_chain == inner.chain_id, EUnexpectedChainID);
+
         // Ensure route is valid
+        // TODO: add unit tests
         assert!(chain_ids::is_valid_route(source_chain, target_chain), EInvalidBridgeRoute);
+
         // get owner address
         let owner = address::from_bytes(message::token_target_address(&token_payload));
         // check token type
