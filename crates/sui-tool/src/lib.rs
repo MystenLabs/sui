@@ -1025,7 +1025,6 @@ pub async fn download_db_snapshot(
     let epoch_manifest_contents =
         String::from_utf8(remote_store.get_bytes(&manifest_file).await?.to_vec())
             .map_err(|err| anyhow!("Error parsing {}/MANIFEST from bytes: {}", epoch_path, err))?;
-    println!("{}", epoch_manifest_contents);
 
     let epoch_manifest =
         PerEpochManifest::deserialize_from_newline_delimited(&epoch_manifest_contents);
@@ -1034,7 +1033,7 @@ pub async fn download_db_snapshot(
 
     let mut files: Vec<String> = vec![];
     files.extend(store_entries.filter_by_prefix("store/perpetual").lines);
-    files.extend(store_entries.filter_by_prefix("store/epochs").lines);
+    files.extend(epoch_manifest.filter_by_prefix("epochs").lines);
     files.extend(epoch_manifest.filter_by_prefix("checkpoints").lines);
     if !skip_indexes {
         files.extend(epoch_manifest.filter_by_prefix("indexes").lines)
@@ -1071,7 +1070,7 @@ pub async fn download_db_snapshot(
                     copy_file(&file_path, &file_path, &remote_store, &local_store).await?;
                     Ok::<(::object_store::path::Path, usize), anyhow::Error>((
                         file_path.clone(),
-                        1234, // hack, need to decide if we want to keep the size estimate or not
+                        1, // hack, need to decide if we want to keep the size estimate or not
                     ))
                 }
             })
