@@ -36,7 +36,7 @@ use sui_types::error::{SuiError, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::message_envelope::Message;
 use sui_types::messages_grpc::TransactionInfoRequest;
-use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
+use sui_types::object::{MoveObject, Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
@@ -672,15 +672,15 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
         }
         other => panic!("Failed to get SuiEvent, but {:?}", other),
     };
-    let type_tag = parse_struct_tag(&struct_tag_str).unwrap();
-    let expected_parsed_event = Event::move_event_to_move_struct(
-        &type_tag,
-        &bcs,
+    let struct_tag = parse_struct_tag(&struct_tag_str).unwrap();
+    let layout = MoveObject::get_layout_from_struct_tag(
+        struct_tag.clone(),
         &**node.state().epoch_store_for_testing().module_cache(),
-    )
-    .unwrap();
+    )?;
+
+    let expected_parsed_event = Event::move_event_to_move_struct(&bcs, layout).unwrap();
     let (_, expected_parsed_event) =
-        type_and_fields_from_move_struct(&type_tag, expected_parsed_event);
+        type_and_fields_from_move_struct(&struct_tag, expected_parsed_event);
     let expected_event = SuiEvent {
         id: EventID {
             tx_digest: digest,
@@ -689,7 +689,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
         package_id,
         transaction_module: ident_str!("devnet_nft").into(),
         sender,
-        type_: type_tag,
+        type_: struct_tag,
         parsed_json: expected_parsed_event.to_json_value(),
         bcs,
         timestamp_ms: None,

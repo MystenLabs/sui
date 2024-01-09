@@ -887,12 +887,13 @@ impl ReadApiServer for ReadApi {
                 .into_iter()
                 .enumerate()
                 .map(|(seq, e)| {
+                    let layout = store.executor().type_layout_resolver(Box::new(state.get_db())).get_annotated_layout(&e.type_)?;
                     SuiEvent::try_from(
                         e,
                         *effect.transaction_digest(),
                         seq as u64,
                         None,
-                        store.module_cache(),
+                        layout,
                     )
                 })
                 .collect::<Result<Vec<_>, _>>()
@@ -1068,20 +1069,15 @@ fn to_sui_transaction_events(
     tx_digest: TransactionDigest,
     events: TransactionEvents,
 ) -> Result<SuiTransactionBlockEvents, Error> {
+    let epoch_store = fullnode_api.state.load_epoch_store_one_call_per_task();
+    let mut layout_resolver = epoch_store
+        .executor()
+        .type_layout_resolver(Box::new(fullnode_api.state.get_db()));
     Ok(SuiTransactionBlockEvents::try_from(
         events,
         tx_digest,
         None,
-        // threading the epoch_store through this API does not
-        // seem possible, so we just read it from the state and fetch
-        // the module cache out of it.
-        // Notice that no matter what module cache we get things
-        // should work
-        fullnode_api
-            .state
-            .load_epoch_store_one_call_per_task()
-            .module_cache()
-            .as_ref(),
+        layout_resolver.as_mut(),
     )?)
 }
 
