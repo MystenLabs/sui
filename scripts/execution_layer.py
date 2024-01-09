@@ -158,6 +158,8 @@ def do_cut(args):
     with open(Path() / "sui-execution" / "src" / "lib.rs", mode="w") as lib:
         generate_lib(lib)
 
+    add_hakari_exclusions(args.feature)
+
     run(["cargo", "hakari", "generate"])
 
 
@@ -444,6 +446,22 @@ def generate_impls(feature, copy):
         for line in orig:
             line = re.sub(r"^use (.*)_latest::", rf"use \1_{feature.replace('-', '_')}::", line)
             copy.write(line)
+
+
+def add_hakari_exclusions(feature):
+    hakari_path = Path() / ".config" / "hakari.toml"
+
+    appended = False
+
+    with open(hakari_path, "r") as hakari_in_file:
+        buf = hakari_in_file.readlines()
+
+    with open(hakari_path, "w") as hakari_out_file:
+        for line in buf:
+            if line == "third-party = [\n" and not appended:
+                line += "    { name = \"move-vm-runtime-" + feature + "\", path = \"external-crates/move/move-execution/" + feature + "/crates/move-vm-runtime\" },\n"
+                appended = True
+            hakari_out_file.write(line)
 
 
 def generate_lib(output_file: TextIO):
