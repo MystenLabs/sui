@@ -36,11 +36,6 @@ pub(crate) const EXPLAIN_COSTING_LOG_TARGET: &str = "gql-explain-costing";
 pub(crate) struct PgQueryBuilder;
 
 impl GenericQueryBuilder<Pg> for PgQueryBuilder {
-    fn get_tx_by_digest(digest: Vec<u8>) -> transactions::BoxedQuery<'static, Pg> {
-        transactions::dsl::transactions
-            .filter(transactions::dsl::transaction_digest.eq(digest))
-            .into_boxed()
-    }
     fn get_obj(address: Vec<u8>, version: Option<i64>) -> objects::BoxedQuery<'static, Pg> {
         let mut query = objects::dsl::objects.into_boxed();
         query = query.filter(objects::dsl::object_id.eq(address));

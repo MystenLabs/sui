@@ -139,14 +139,6 @@ impl PgManager {
 
 /// Implement methods to query db and return StoredData
 impl PgManager {
-    async fn get_tx(&self, digest: Vec<u8>) -> Result<Option<StoredTransaction>, Error> {
-        self.run_query_async_with_cost(
-            move || Ok(QueryBuilder::get_tx_by_digest(digest.clone())),
-            |query| move |conn| query.get_result::<StoredTransaction>(conn).optional(),
-        )
-        .await
-    }
-
     async fn get_obj(
         &self,
         address: Vec<u8>,
@@ -480,16 +472,6 @@ impl PgManager {
         } else {
             Ok(PageLimit::First(self.limits.default_page_size as i64))
         }
-    }
-
-    pub(crate) async fn fetch_tx(
-        &self,
-        digest: &Digest,
-    ) -> Result<Option<TransactionBlock>, Error> {
-        self.get_tx(digest.to_vec())
-            .await?
-            .map(TransactionBlock::try_from)
-            .transpose()
     }
 
     /// Retrieve the validator APYs
