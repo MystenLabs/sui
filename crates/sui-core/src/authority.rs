@@ -14,7 +14,6 @@ use fastcrypto::hash::MultisetHash;
 use futures::stream::FuturesUnordered;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
-use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::ModuleId;
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
@@ -41,7 +40,7 @@ use std::{
 };
 use sui_config::node::{OverloadThresholdConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
-use sui_types::execution::DynamicallyLoadedObjectMetadata;
+use sui_types::type_resolver::LayoutResolver;
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
@@ -90,7 +89,8 @@ use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::inner_temporary_store::{
-    InnerTemporaryStore, ObjectMap, TemporaryModuleResolver, TxCoins, WrittenObjects,
+    InnerTemporaryStore, ObjectMap, TemporaryModuleResolver, TemporaryPackageStore, TxCoins,
+    WrittenObjects,
 };
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
@@ -1527,6 +1527,13 @@ impl AuthorityState {
         let module_cache =
             TemporaryModuleResolver::new(&inner_temp_store, epoch_store.module_cache().clone());
 
+        let mut layout_resolver =
+            epoch_store
+                .executor()
+                .type_layout_resolver(Box::new(TemporaryPackageStore::new(
+                    &inner_temp_store,
+                    self.database.clone(),
+                )));
         // Returning empty vector here because we recalculate changes in the rpc layer.
         let object_changes = Vec::new();
 
@@ -1571,7 +1578,7 @@ impl AuthorityState {
                     inner_temp_store.events.clone(),
                     tx_digest,
                     None,
-                    &module_cache,
+                    layout_resolver.as_mut(),
                 )?,
                 object_changes,
                 balance_changes,
@@ -1676,14 +1683,16 @@ impl AuthorityState {
             transaction_digest,
         );
 
-        let module_cache =
-            TemporaryModuleResolver::new(&inner_temp_store, epoch_store.module_cache().clone());
+        let package_store = TemporaryPackageStore::new(&inner_temp_store, self.database.clone());
+        let mut layout_resolver = epoch_store
+            .executor()
+            .type_layout_resolver(Box::new(package_store));
 
         DevInspectResults::new(
             effects,
             inner_temp_store.events.clone(),
             execution_result,
-            &module_cache,
+            layout_resolver.as_mut(),
         )
     }
 
@@ -1709,11 +1718,10 @@ impl AuthorityState {
         timestamp_ms: u64,
         tx_coins: Option<TxCoins>,
         written: &WrittenObjects,
-        module_resolver: &impl GetModule,
-        loaded_child_objects: &BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
+        inner_temporary_store: &InnerTemporaryStore,
     ) -> SuiResult<u64> {
         let changes = self
-            .process_object_index(effects, written, module_resolver)
+            .process_object_index(effects, written, inner_temporary_store)
             .tap_err(|e| warn!(tx_digest=?digest, "Failed to process object index, index_tx is skipped: {e}"))?;
 
         indexes
@@ -1742,7 +1750,7 @@ impl AuthorityState {
                 digest,
                 timestamp_ms,
                 tx_coins,
-                loaded_child_objects,
+                &inner_temporary_store.loaded_runtime_objects,
             )
             .await
     }
@@ -1782,8 +1790,16 @@ impl AuthorityState {
         &self,
         effects: &TransactionEffects,
         written: &WrittenObjects,
-        module_resolver: &impl GetModule,
+        inner_temporary_store: &InnerTemporaryStore,
     ) -> SuiResult<ObjectIndexChanges> {
+        let epoch_store = self.load_epoch_store_one_call_per_task();
+        let mut layout_resolver =
+            epoch_store
+                .executor()
+                .type_layout_resolver(Box::new(TemporaryPackageStore::new(
+                    inner_temporary_store,
+                    self.database.clone(),
+                )));
         let modified_at_version = effects
             .modified_at_versions()
             .into_iter()
@@ -1867,11 +1883,12 @@ impl AuthorityState {
                     assert_eq!(new_object.version(), oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}", tx_digest, id, new_object.version(), oref.1);
 
                     let Some(df_info) = self
-                        .try_create_dynamic_field_info(new_object, written, module_resolver)
+                        .try_create_dynamic_field_info(new_object, written, layout_resolver.as_mut())
                         .unwrap_or_else(|e| {
                             error!("try_create_dynamic_field_info should not fail, {}, new_object={:?}", e, new_object);
                             None
-                        })
+                        }
+                    )
                         else {
                             // Skip indexing for non dynamic field objects.
                             continue;
@@ -1894,7 +1911,7 @@ impl AuthorityState {
         &self,
         o: &Object,
         written: &WrittenObjects,
-        resolver: &impl GetModule,
+        resolver: &mut dyn LayoutResolver,
     ) -> SuiResult<Option<DynamicFieldInfo>> {
         // Skip if not a move object
         let Some(move_object) = o.data.try_as_move().cloned() else {
@@ -1904,7 +1921,9 @@ impl AuthorityState {
         if !move_object.type_().is_dynamic_field() {
             return Ok(None);
         }
-        let move_struct = move_object.to_move_struct_with_resolver(resolver)?;
+
+        let layout = resolver.get_annotated_layout(&move_object.type_().clone().into())?;
+        let move_struct = move_object.to_move_struct(&layout)?;
 
         let (name_value, type_, object_id) =
             DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;
@@ -1984,9 +2003,6 @@ impl AuthorityState {
         let timestamp_ms = Self::unixtime_now_ms();
         let events = &inner_temporary_store.events;
         let written = &inner_temporary_store.written;
-        let module_resolver =
-            TemporaryModuleResolver::new(inner_temporary_store, epoch_store.module_cache().clone());
-
         let tx_coins =
             self.fullnode_only_get_tx_coins_for_indexing(inner_temporary_store, epoch_store);
 
@@ -2002,8 +2018,7 @@ impl AuthorityState {
                     timestamp_ms,
                     tx_coins,
                     written,
-                    &module_resolver,
-                    &inner_temporary_store.loaded_runtime_objects,
+                    inner_temporary_store,
                 )
                 .await
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
@@ -2011,18 +2026,16 @@ impl AuthorityState {
                 .expect("Indexing tx should not fail");
 
             let effects: SuiTransactionBlockEffects = effects.clone().try_into()?;
+            let events = self.make_transaction_block_events(
+                events.clone(),
+                *tx_digest,
+                timestamp_ms,
+                epoch_store,
+                inner_temporary_store,
+            )?;
             // Emit events
             self.subscription_handler
-                .process_tx(
-                    certificate.data().transaction_data(),
-                    &effects,
-                    &SuiTransactionBlockEvents::try_from(
-                        events.clone(),
-                        *tx_digest,
-                        Some(timestamp_ms),
-                        &module_resolver,
-                    )?,
-                )
+                .process_tx(certificate.data().transaction_data(), &effects, &events)
                 .await
                 .tap_ok(|_| {
                     self.metrics
@@ -2041,6 +2054,29 @@ impl AuthorityState {
                 .inc_by(events.data.len() as u64);
         };
         Ok(())
+    }
+
+    fn make_transaction_block_events(
+        &self,
+        transaction_events: TransactionEvents,
+        digest: TransactionDigest,
+        timestamp_ms: u64,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        inner_temporary_store: &InnerTemporaryStore,
+    ) -> SuiResult<SuiTransactionBlockEvents> {
+        let mut layout_resolver =
+            epoch_store
+                .executor()
+                .type_layout_resolver(Box::new(TemporaryPackageStore::new(
+                    inner_temporary_store,
+                    self.database.clone(),
+                )));
+        SuiTransactionBlockEvents::try_from(
+            transaction_events,
+            digest,
+            Some(timestamp_ms),
+            layout_resolver.as_mut(),
+        )
     }
 
     pub fn unixtime_now_ms() -> u64 {
@@ -2105,7 +2141,7 @@ impl AuthorityState {
                 self.load_epoch_store_one_call_per_task()
                     .executor()
                     .type_layout_resolver(Box::new(self.database.as_ref()))
-                    .get_annotated_layout(move_obj)?,
+                    .get_annotated_layout(&move_obj.type_().clone().into())?,
             )
         } else {
             None
@@ -2361,6 +2397,9 @@ impl AuthorityState {
 
         let mut new_owners = vec![];
         let mut new_dynamic_fields = vec![];
+        let mut layout_resolver = epoch_store
+            .executor()
+            .type_layout_resolver(Box::new(self.database.as_ref()));
         for o in genesis_objects.iter() {
             match o.owner {
                 Owner::AddressOwner(addr) => new_owners.push((
@@ -2372,7 +2411,7 @@ impl AuthorityState {
                     let Some(info) = self.try_create_dynamic_field_info(
                         o,
                         &BTreeMap::new(),
-                        epoch_store.module_cache(),
+                        layout_resolver.as_mut(),
                     )?
                     else {
                         continue;
@@ -2949,7 +2988,7 @@ impl AuthorityState {
                 self.load_epoch_store_one_call_per_task()
                     .executor()
                     .type_layout_resolver(Box::new(self.database.as_ref()))
-                    .get_annotated_layout(object)
+                    .get_annotated_layout(&object.type_().clone().into())
             })
             .transpose()?;
         Ok(layout)
@@ -3489,6 +3528,10 @@ impl AuthorityState {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
+        let epoch_store = self.load_epoch_store_one_call_per_task();
+        let mut layout_resolver = epoch_store
+            .executor()
+            .type_layout_resolver(Box::new(self.database.as_ref()));
         let mut events = vec![];
         for (e, tx_digest, event_seq, timestamp) in stored_events.into_iter() {
             events.push(SuiEvent::try_from(
@@ -3496,7 +3539,7 @@ impl AuthorityState {
                 tx_digest,
                 event_seq as u64,
                 Some(timestamp),
-                &**self.epoch_store.load().module_cache(),
+                layout_resolver.get_annotated_layout(&e.type_)?,
             )?)
         }
         Ok(events)
