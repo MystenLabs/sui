@@ -16,7 +16,6 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::effects::TransactionEvents;
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::messages_grpc::{
     HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
@@ -26,6 +25,7 @@ use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 use sui_types::{effects::TransactionEffectsAPI, message_envelope::Message};
+use sui_types::{effects::TransactionEvents, traffic_control::ServiceResponse};
 use sui_types::{error::*, transaction::*};
 use sui_types::{
     fp_ensure,
@@ -37,13 +37,16 @@ use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tracing::{error, error_span, info, Instrument};
 
-use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::{
     authority::AuthorityState,
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
+    traffic_controller::policies::TrafficTally,
     traffic_controller::TrafficController,
 };
-use sui_types::traffic_control::TrafficTally;
+use crate::{
+    consensus_adapter::ConnectionMonitorStatusForTests,
+    traffic_controller::metrics::TrafficControllerMetrics,
+};
 use tonic::transport::server::TcpConnectInfo;
 
 #[cfg(test)]
@@ -130,9 +133,7 @@ impl AuthorityServer {
                 state: self.state,
                 consensus_adapter: self.consensus_adapter,
                 metrics: self.metrics.clone(),
-                traffic_controller: Arc::new(
-                    TrafficController::spawn(PolicyConfig::default(), None).await,
-                ),
+                traffic_controller: None,
             }))
             .bind(&address)
             .await
@@ -248,24 +249,29 @@ pub struct ValidatorService {
     state: Arc<AuthorityState>,
     consensus_adapter: Arc<ConsensusAdapter>,
     metrics: Arc<ValidatorServiceMetrics>,
-    traffic_controller: Arc<TrafficController>,
+    traffic_controller: Option<Arc<TrafficController>>,
 }
 
 impl ValidatorService {
-    pub async fn new(
+    pub fn new(
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
-        metrics: Arc<ValidatorServiceMetrics>,
-        policy_config: PolicyConfig,
+        validator_metrics: Arc<ValidatorServiceMetrics>,
+        traffic_controller_metrics: TrafficControllerMetrics,
+        policy_config: Option<PolicyConfig>,
         firewall_config: Option<RemoteFirewallConfig>,
     ) -> Self {
         Self {
             state,
             consensus_adapter,
-            metrics,
-            traffic_controller: Arc::new(
-                TrafficController::spawn(policy_config, firewall_config).await,
-            ),
+            metrics: validator_metrics,
+            traffic_controller: policy_config.map(|policy| {
+                Arc::new(TrafficController::spawn(
+                    policy,
+                    firewall_config,
+                    traffic_controller_metrics,
+                ))
+            }),
         }
     }
 
@@ -630,9 +636,13 @@ impl ValidatorService {
         connection_ip: Option<SocketAddr>,
         proxy_ip: Option<SocketAddr>,
     ) -> Result<(), tonic::Status> {
-        if !self.traffic_controller.check(connection_ip, proxy_ip).await {
-            // Entity in blocklist
-            Err(tonic::Status::resource_exhausted("Too many requests"))
+        if let Some(traffic_controller) = &self.traffic_controller {
+            if !traffic_controller.check(connection_ip, proxy_ip).await {
+                // Entity in blocklist
+                Err(tonic::Status::from_error(SuiError::TooManyRequests.into()))
+            } else {
+                Ok(())
+            }
         } else {
             Ok(())
         }
@@ -650,12 +660,14 @@ impl ValidatorService {
             Ok(())
         };
 
-        self.traffic_controller.tally(TrafficTally {
-            connection_ip,
-            proxy_ip,
-            result,
-            timestamp: SystemTime::now(),
-        });
+        if let Some(traffic_controller) = self.traffic_controller.clone() {
+            traffic_controller.tally(TrafficTally {
+                connection_ip: connection_ip.map(|ip| ip.ip()),
+                proxy_ip: proxy_ip.map(|ip| ip.ip()),
+                result: ServiceResponse::Validator(result),
+                timestamp: SystemTime::now(),
+            })
+        }
     }
 }
 

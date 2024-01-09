@@ -29,6 +29,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use itertools::Itertools;
 use sui_config::node::AuthorityOverloadConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -38,7 +39,6 @@ use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::SuiResult;
 use sui_types::object::{Object, Owner};
-use sui_types::traffic_control::PolicyConfig;
 use sui_types::transaction::CertifiedTransaction;
 use sui_types::transaction::{
     Transaction, VerifiedCertificate, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
@@ -756,16 +756,14 @@ async fn test_authority_txn_signing_pushback() {
         ConsensusAdapterMetrics::new_test(),
         epoch_store.protocol_config().clone(),
     ));
-    let validator_service = Arc::new(
-        ValidatorService::new(
-            authority_state.clone(),
-            consensus_adapter,
-            Arc::new(ValidatorServiceMetrics::new_for_tests()),
-            PolicyConfig::default(),
-            None,
-        )
-        .await,
-    );
+    let validator_service = Arc::new(ValidatorService::new(
+        authority_state.clone(),
+        consensus_adapter,
+        Arc::new(ValidatorServiceMetrics::new_for_tests()),
+        TrafficControllerMetrics::new_for_tests(),
+        None,
+        None,
+    ));
 
     // Manually make the authority into overload state and reject 100% of traffic.
     authority_state.overload_info.set_overload(100);
@@ -890,16 +888,14 @@ async fn test_authority_txn_execution_pushback() {
         ConsensusAdapterMetrics::new_test(),
         epoch_store.protocol_config().clone(),
     ));
-    let validator_service = Arc::new(
-        ValidatorService::new(
-            authority_state.clone(),
-            consensus_adapter,
-            Arc::new(ValidatorServiceMetrics::new_for_tests()),
-            PolicyConfig::default(),
-            None,
-        )
-        .await,
-    );
+    let validator_service = Arc::new(ValidatorService::new(
+        authority_state.clone(),
+        consensus_adapter,
+        Arc::new(ValidatorServiceMetrics::new_for_tests()),
+        TrafficControllerMetrics::new_for_tests(),
+        None,
+        None,
+    ));
 
     // Manually make the authority into overload state and reject 100% of traffic.
     authority_state.overload_info.set_overload(100);

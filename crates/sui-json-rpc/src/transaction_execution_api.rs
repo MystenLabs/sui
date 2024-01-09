@@ -310,7 +310,6 @@ impl WriteApiServer for TransactionExecutionApi {
         unimplemented!("Use monitored_execute_transaction_block instead")
     }
 
-    #[instrument(skip(self))]
     async fn monitored_execute_transaction_block(
         &self,
         tx_bytes: Base64,

@@ -25,6 +25,7 @@ futures.workspace = true
 im.workspace = true
 indexmap.workspace = true
 itertools.workspace = true
+jsonrpsee.workspace = true
 lru.workspace = true
 mockall.workspace = true
 num_cpus.workspace = true
