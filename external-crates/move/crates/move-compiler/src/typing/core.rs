@@ -393,8 +393,12 @@ impl<'env> Context<'env> {
         self.modules.struct_type_parameters(m, n)
     }
 
-    fn function_info(&self, m: &ModuleIdent, n: &FunctionName) -> &FunctionInfo {
+    pub fn function_info(&self, m: &ModuleIdent, n: &FunctionName) -> &FunctionInfo {
         self.modules.function_info(m, n)
+    }
+
+    pub fn macro_body(&self, m: &ModuleIdent, n: &FunctionName) -> Option<&N::Sequence> {
+        self.macros.get(m)?.get(n)
     }
 
     fn constant_info(&mut self, m: &ModuleIdent, n: &ConstantName) -> &ConstantInfo {
@@ -415,6 +419,11 @@ impl<'env> Context<'env> {
 
     pub fn named_block_type_opt(&self, name: BlockLabel) -> Option<Type> {
         self.named_block_map.get(&name).cloned()
+    }
+
+    pub fn next_variable_color(&mut self) -> u16 {
+        self.max_variable_color += 1;
+        self.max_variable_color
     }
 }
 

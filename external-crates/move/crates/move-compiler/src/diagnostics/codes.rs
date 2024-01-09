@@ -264,6 +264,10 @@ codes!(
         InvalidCopyOp: { msg: "invalid 'copy' usage", severity: NonblockingError },
         InvalidMoveOp: { msg: "invalid 'move' usage", severity: NonblockingError },
         ImplicitConstantCopy: { msg: "implicit copy of a constant", severity: Warning },
+        InvalidCallTarget: { msg: "invalid function call", severity: BlockingError },
+        UnexpectedFunctionType: { msg: "invalid usage of lambda type", severity: BlockingError },
+        UnexpectedLambda: { msg: "invalid usage of lambda", severity: BlockingError },
+        CannotExpandMacro: { msg: "unable to expand macro function", severity: BlockingError },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [

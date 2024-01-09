@@ -1383,33 +1383,40 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
 //      NameExp =
 //          <NameAccessChain> <OptionalTypeArgs> "{" Comma<ExpField> "}"
 //          | <NameAccessChain> <OptionalTypeArgs> "(" Comma<Exp> ")"
-//          | <NameAccessChain> "!" "(" Comma<Exp> ")"
+//          | <NameAccessChain> "!" <OptionalTypeArgs> "(" Comma<Exp> ")"
 //          | <NameAccessChain> <OptionalTypeArgs>
 fn parse_name_exp(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
     let name = parse_name_access_chain(context, || {
         panic!("parse_name_exp with something other than a ModuleAccess")
     })?;
 
-    // There's an ambiguity if the name is followed by a '<'. If there is no whitespace
-    // after the name, treat it as the start of a list of type arguments. Otherwise
-    // assume that the '<' is a boolean operator.
-    let mut tys = None;
-    if context.tokens.peek() == Tok::Exclaim {
-        // TODO(macro) handle type arguments
+    let is_macro = if let Tok::Exclaim = context.tokens.peek() {
         context.tokens.advance()?;
-        let is_macro = true;
-        let rhs = parse_call_args(context)?;
-        return Ok(Exp_::Call(name, is_macro, tys, rhs));
-    }
-    let start_loc = context.tokens.start_loc();
+        true
+    } else {
+        false
+    };
 
-    if context.tokens.peek() == Tok::Less && name.loc.end() as usize == start_loc {
+    // There's an ambiguity if the name is followed by a '<'.
+    // If there is no whitespace after the name or if a macro call has been started,
+    //   treat it as the start of a list of type arguments.
+    // Otherwise, assume that the '<' is a boolean operator.
+    let mut tys = None;
+    let start_loc = context.tokens.start_loc();
+    if context.tokens.peek() == Tok::Less && (name.loc.end() as usize == start_loc || is_macro) {
         let loc = make_loc(context.tokens.file_hash(), start_loc, start_loc);
         tys = parse_optional_type_args(context)
             .map_err(|diag| add_type_args_ambiguity_label(loc, diag))?;
     }
 
     match context.tokens.peek() {
+        _ if is_macro => {
+            // if in a macro, we must have a call
+            consume_token(context.tokens, Tok::LParen);
+            let rhs = parse_call_args(context)?;
+            Ok(Exp_::Call(name, is_macro, tys, rhs))
+        }
+
         // Pack: "{" Comma<ExpField> "}"
         Tok::LBrace => {
             let fs = parse_comma_list(
@@ -1423,10 +1430,10 @@ fn parse_name_exp(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
         }
 
         // Call: "(" Comma<Exp> ")"
-        Tok::Exclaim | Tok::LParen => {
-            let is_macro = false;
+        Tok::LParen => {
+            debug_assert!(!is_macro);
             let rhs = parse_call_args(context)?;
-            Ok(Exp_::Call(name, is_macro, tys, rhs))
+            Ok(Exp_::Call(name, false, tys, rhs))
         }
 
         // Other name reference...
@@ -1763,6 +1770,12 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                         let n = parse_identifier(context)?;
                         if is_start_of_call_after_function_name(context, &n) {
                             let call_start = context.tokens.start_loc();
+                            let is_macro = if let Tok::Exclaim = context.tokens.peek() {
+                                context.tokens.advance()?;
+                                true
+                            } else {
+                                false
+                            };
                             let mut tys = None;
                             if context.tokens.peek() == Tok::Less
                                 && n.loc.end() as usize == call_start
@@ -1773,7 +1786,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                                     .map_err(|diag| add_type_args_ambiguity_label(loc, diag))?;
                             }
                             let args = parse_call_args(context)?;
-                            Exp_::DotCall(Box::new(lhs), n, tys, args)
+                            Exp_::DotCall(Box::new(lhs), n, is_macro, tys, args)
                         } else {
                             Exp_::Dot(Box::new(lhs), n)
                         }
@@ -1799,10 +1812,11 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
 // to determine if we should parse the type arguments and args following a name. Otherwise, we will
 // parse a field access
 fn is_start_of_call_after_function_name(context: &Context, n: &Name) -> bool {
-    // TODO(macro) consider macro Tok::Exlaim
     let call_start = context.tokens.start_loc();
     let peeked = context.tokens.peek();
-    (peeked == Tok::Less && n.loc.end() as usize == call_start) || peeked == Tok::LParen
+    (peeked == Tok::Less && n.loc.end() as usize == call_start)
+        || peeked == Tok::LParen
+        || peeked == Tok::Exclaim
 }
 
 // Lookahead to determine whether this is a quantifier. This matches

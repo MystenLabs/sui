@@ -291,10 +291,17 @@ pub enum Exp_ {
     ModuleCall(
         ModuleIdent,
         FunctionName,
+        /* is_macro */ bool,
         Option<Vec<Type>>,
         Spanned<Vec<Exp>>,
     ),
-    MethodCall(ExpDotted, Name, Option<Vec<Type>>, Spanned<Vec<Exp>>),
+    MethodCall(
+        ExpDotted,
+        Name,
+        /* is_macro */ bool,
+        Option<Vec<Type>>,
+        Spanned<Vec<Exp>>,
+    ),
     VarCall(Var, Spanned<Vec<Exp>>),
     Builtin(BuiltinFunction, Spanned<Vec<Exp>>),
     Vector(Loc, Option<Type>, Spanned<Vec<Exp>>),
@@ -370,6 +377,15 @@ impl TName for Var {
 //**************************************************************************************************
 // impls
 //**************************************************************************************************
+
+impl UseFuns {
+    pub fn new() -> Self {
+        Self {
+            resolved: BTreeMap::new(),
+            implicit_candidates: UniqueMap::new(),
+        }
+    }
+}
 
 static BUILTIN_TYPE_ALL_NAMES: Lazy<BTreeSet<Symbol>> = Lazy::new(|| {
     [
@@ -1179,8 +1195,11 @@ impl AstDebug for Exp_ {
             E::Value(v) => v.ast_debug(w),
             E::Var(v) => v.ast_debug(w),
             E::Constant(m, c) => w.write(&format!("{}::{}", m, c)),
-            E::ModuleCall(m, f, tys_opt, sp!(_, rhs)) => {
+            E::ModuleCall(m, f, is_macro, tys_opt, sp!(_, rhs)) => {
                 w.write(&format!("{}::{}", m, f));
+                if *is_macro {
+                    w.write("!");
+                }
                 if let Some(ss) = tys_opt {
                     w.write("<");
                     ss.ast_debug(w);
@@ -1190,9 +1209,12 @@ impl AstDebug for Exp_ {
                 w.comma(rhs, |w, e| e.ast_debug(w));
                 w.write(")");
             }
-            E::MethodCall(e, f, tys_opt, sp!(_, rhs)) => {
+            E::MethodCall(e, f, is_macro, tys_opt, sp!(_, rhs)) => {
                 e.ast_debug(w);
                 w.write(&format!(".{}", f));
+                if *is_macro {
+                    w.write("!");
+                }
                 if let Some(ss) = tys_opt {
                     w.write("<");
                     ss.ast_debug(w);

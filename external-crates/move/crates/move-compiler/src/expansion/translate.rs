@@ -2770,19 +2770,21 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
                 EE::UnresolvedError
             }
         },
-        PE::DotCall(pdotted, n, ptys_opt, sp!(rloc, prs)) => match exp_dotted(context, *pdotted) {
-            Some(edotted) => {
-                let pkg = context.current_package;
-                context.env().check_feature(FeatureGate::DotCall, pkg, loc);
-                let tys_opt = optional_types(context, ptys_opt);
-                let ers = sp(rloc, exps(context, prs));
-                EE::MethodCall(Box::new(edotted), n, tys_opt, ers)
+        PE::DotCall(pdotted, n, is_macro, ptys_opt, sp!(rloc, prs)) => {
+            match exp_dotted(context, *pdotted) {
+                Some(edotted) => {
+                    let pkg = context.current_package;
+                    context.env().check_feature(FeatureGate::DotCall, pkg, loc);
+                    let tys_opt = optional_types(context, ptys_opt);
+                    let ers = sp(rloc, exps(context, prs));
+                    EE::MethodCall(Box::new(edotted), n, is_macro, tys_opt, ers)
+                }
+                None => {
+                    assert!(context.env().has_errors());
+                    EE::UnresolvedError
+                }
             }
-            None => {
-                assert!(context.env().has_errors());
-                EE::UnresolvedError
-            }
-        },
+        }
         PE::Cast(e, ty) => EE::Cast(exp(context, *e), type_(context, ty)),
         PE::Index(..) => {
             // TODO index syntax will be added

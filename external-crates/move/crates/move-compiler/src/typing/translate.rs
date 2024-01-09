@@ -14,7 +14,7 @@ use crate::{
         AttributeName_, AttributeValue_, Attribute_, Attributes, DottedUsage, Fields, Friend,
         ModuleAccess_, ModuleIdent, ModuleIdent_, Value_, Visibility,
     },
-    naming::ast::{self as N, BlockLabel, TParam, TParamID, Type, TypeName_, Type_},
+    naming::ast::{self as N, BlockLabel, TParam, TParamID, Type, TypeName_, Type_, Var},
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_,
     },
@@ -28,7 +28,7 @@ use crate::{
     sui_mode,
     typing::{
         ast as T,
-        core::{public_testing_visibility, PublicForTesting},
+        core::{public_testing_visibility, InstantiatedFunctionType, PublicForTesting},
         dependency_ordering,
     },
     FullyCompiledProgram,
@@ -518,6 +518,7 @@ mod check_valid_constant {
                 s = format!("'{}' is", b);
                 &s
             }
+            E::UnvisitedLambda(_) | E::Lambda(_, _) => "lambda expressions are",
             E::IfElse(eb, et, ef) => {
                 exp(context, eb);
                 exp(context, et);
@@ -1174,6 +1175,38 @@ fn sequence_type(seq: &T::Sequence) -> &Type {
     }
 }
 
+fn lambda(
+    context: &mut Context,
+    loc: Loc,
+    args: N::LValueList,
+    body: N::Exp,
+) -> (N::Type, T::UnannotatedExp_) {
+    let arg_tys: Vec<Type> = args
+        .value
+        .iter()
+        .map(|sp!(aloc, _)| core::make_tvar(context, *aloc))
+        .collect();
+    let arg_ty_annot = match args.value.len() {
+        0 => sp(loc, Type_::Unit),
+        1 => sp(loc, arg_tys[0].value.clone()),
+        _ => Type_::multiple(loc, arg_tys.clone()),
+    };
+    let args = bind_list(context, args, Some(arg_ty_annot));
+    let ret_ty = core::make_tvar(context, body.loc);
+    // TODO the body should really be type checked after the call is checked
+    // this will be more important once there are receiver/method calls
+    let body = exp_(context, body);
+    join(
+        context,
+        loc,
+        || "ICE jointing with tvar should not fail",
+        ret_ty.clone(),
+        body.ty.clone(),
+    );
+    let ty = sp(loc, N::Type_::Fun(arg_tys, Box::new(ret_ty)));
+    (ty, T::UnannotatedExp_::Lambda(args, Box::new(body)))
+}
+
 fn exp_vec(context: &mut Context, es: Vec<N::Exp>) -> Vec<T::Exp> {
     es.into_iter().map(|e| exp_(context, e)).collect()
 }
@@ -1226,7 +1259,7 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             let ty = context.get_local_type(&var);
             (ty, TE::Use(var))
         }
-        NE::MethodCall(ndotted, f, ty_args_opt, sp!(argloc, nargs_)) => {
+        NE::MethodCall(ndotted, f, is_macro, ty_args_opt, sp!(argloc, nargs_)) => {
             let (edotted, last_ty) = exp_dotted(context, None, ndotted);
             let args = exp_vec(context, nargs_);
             let ty_call_opt = method_call(
@@ -1235,6 +1268,7 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
                 edotted,
                 last_ty,
                 f,
+                is_macro,
                 ty_args_opt,
                 argloc,
                 args,
@@ -1247,9 +1281,13 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
                 Some(ty_call) => ty_call,
             }
         }
-        NE::ModuleCall(m, f, ty_args_opt, sp!(argloc, nargs_)) => {
+        NE::ModuleCall(m, f, is_macro, ty_args_opt, sp!(argloc, nargs_)) => {
             let args = exp_vec(context, nargs_);
-            module_call(context, eloc, m, f, ty_args_opt, argloc, args)
+            module_call(context, eloc, m, f, is_macro, ty_args_opt, argloc, args)
+        }
+        NE::VarCall(var, sp!(argloc, nargs_)) => {
+            let args = exp_vec(context, nargs_);
+            var_call(context, eloc, var, argloc, args)
         }
         NE::Builtin(b, sp!(argloc, nargs_)) => {
             let args = exp_vec(context, nargs_);
@@ -1323,6 +1361,11 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             let seq = sequence(context, nseq);
             (sequence_type(&seq).clone(), TE::Block(seq))
         }
+
+        NE::Lambda(args, body) => (
+            core::make_tvar(context, eloc),
+            TE::UnvisitedLambda(Some((args, body))),
+        ),
 
         NE::Assign(na, nr) => {
             let er = exp(context, nr);
@@ -2278,12 +2321,45 @@ impl crate::shared::ast_debug::AstDebug for ExpDotted_ {
 // Calls
 //**************************************************************************************************
 
+fn var_call(
+    context: &mut Context,
+    loc: Loc,
+    var: Var,
+    argloc: Loc,
+    args: Vec<T::Exp>,
+) -> (Type, T::UnannotatedExp_) {
+    let fn_ty = context.get_local_type(&var);
+    let (fn_arg_tys, fn_result_ty) = match core::unfold_type(&context.subst, fn_ty.clone()).value {
+        Type_::Fun(args, result) => (args, result),
+        Type_::UnresolvedError => {
+            assert!(context.env.has_errors());
+            return (context.error_type(loc), T::UnannotatedExp_::UnresolvedError);
+        }
+        _ => {
+            let ty_str = core::error_format(&fn_ty, &context.subst);
+            let msg = format!("Expected a lambda type type but found {}", ty_str);
+            context
+                .env
+                .add_diag(diag!(TypeSafety::JoinError, (var.loc, msg)));
+            return (context.error_type(loc), T::UnannotatedExp_::UnresolvedError);
+        }
+    };
+    let msg = || format!("Invalid call of '{}'", var.value.name);
+    let given = args.into_iter().map(|e| e.ty).collect();
+    // make arg types for arity checking
+    make_arg_types(context, loc, msg, fn_arg_tys.len(), argloc, given);
+    // we always return an error for the expression, since VarCall is only valid inside of macros,
+    // whose bodies will be discarded. But we need a valid type to keep sanity checking the macro
+    (*fn_result_ty, T::UnannotatedExp_::UnresolvedError)
+}
+
 fn method_call(
     context: &mut Context,
     loc: Loc,
     mut edotted: ExpDotted,
     edotted_ty: Type,
     method: Name,
+    is_macro_call: bool,
     ty_args_opt: Option<Vec<Type>>,
     argloc: Loc,
     mut args: Vec<T::Exp>,
@@ -2300,7 +2376,7 @@ fn method_call(
                 Ty::Anything => {
                     "Unable to infer type for method call. Try annotating this type".to_owned()
                 }
-                Ty::Unit | Ty::Apply(_, sp!(_, TN::Multiple(_)), _) => {
+                Ty::Unit | Ty::Apply(_, sp!(_, TN::Multiple(_)), _) | Ty::Fun(_, _) => {
                     let tsubst = core::error_format_(t, &context.subst);
                     format!(
                         "Method calls are only supported on single types. \
@@ -2329,10 +2405,10 @@ fn method_call(
             return None;
         }
     };
-    let (_defined_loc, m, f, targs, parameters, ret_ty) =
+    let (m, f, fty) =
         core::make_method_call_type(context, loc, &edotted_ty, tn, method, ty_args_opt)?;
 
-    let first_arg = match &parameters[0].1.value {
+    let first_arg = match &fty.params[0].1.value {
         Ty::Ref(mut_, _) => {
             // add a borrow if needed
             let mut cur = &mut edotted;
@@ -2355,8 +2431,19 @@ fn method_call(
         _ => exp_dotted_to_owned_value(context, DottedUsage::Use, loc, edotted, edotted_ty),
     };
     args.insert(0, first_arg);
-    let call = module_call_impl(context, loc, m, f, targs, parameters, argloc, args);
-    Some((ret_ty, TE::ModuleCall(Box::new(call))))
+    let (call, ret_ty) =
+        module_call_impl(context, loc, m, f, is_macro_call, fty, argloc, args.clone());
+    if is_macro_call {
+        match macro_expand::call(context, loc, m, f, ty_args_opt, sp(argloc, args)) {
+            None => None,
+            Some(expanded) => {
+                let e = exp_(context, expanded);
+                Some((e.ty, e.exp.value))
+            }
+        }
+    } else {
+        Some((ret_ty, TE::ModuleCall(Box::new(call))))
+    }
 }
 
 fn edotted_ty_base(ty: &Type) -> &Type {
@@ -2365,7 +2452,8 @@ fn edotted_ty_base(ty: &Type) -> &Type {
         | Type_::Param(_)
         | Type_::Anything
         | Type_::UnresolvedError
-        | Type_::Apply(_, _, _) => ty,
+        | Type_::Apply(_, _, _)
+        | Type_::Fun(_, _) => ty,
         Type_::Ref(_, inner) => inner,
         Type_::Var(_) => panic!("ICE unfolding failed"),
     }
@@ -2376,14 +2464,25 @@ fn module_call(
     loc: Loc,
     m: ModuleIdent,
     f: FunctionName,
+    is_macro_call: bool,
     ty_args_opt: Option<Vec<Type>>,
     argloc: Loc,
     args: Vec<T::Exp>,
 ) -> (Type, T::UnannotatedExp_) {
-    let (_, ty_args, parameters, ret_ty) =
-        core::make_function_type(context, loc, &m, &f, ty_args_opt);
-    let call = module_call_impl(context, loc, m, f, ty_args, parameters, argloc, args);
-    (ret_ty, T::UnannotatedExp_::ModuleCall(Box::new(call)))
+    let fty = core::make_function_type(context, loc, &m, &f, ty_args_opt);
+    let (call, ret_ty) =
+        module_call_impl(context, loc, m, f, is_macro_call, fty, argloc, args.clone());
+    if is_macro_call {
+        match macro_expand::call(context, loc, m, f, ty_args_opt, sp(argloc, args)) {
+            None => (context.error_type(loc), T::UnannotatedExp_::UnresolvedError),
+            Some(expanded) => {
+                let e = exp_(context, expanded);
+                (e.ty, e.exp.value)
+            }
+        }
+    } else {
+        (ret_ty, T::UnannotatedExp_::ModuleCall(Box::new(call)))
+    }
 }
 
 fn module_call_impl(
@@ -2391,11 +2490,43 @@ fn module_call_impl(
     loc: Loc,
     m: ModuleIdent,
     f: FunctionName,
-    ty_args: Vec<Type>,
-    parameters: Vec<(N::Var, Type)>,
+    is_macro_call: bool,
+    fty: InstantiatedFunctionType,
     argloc: Loc,
-    args: Vec<T::Exp>,
-) -> T::ModuleCall {
+    mut args: Vec<T::Exp>,
+) -> (T::ModuleCall, Type) {
+    let InstantiatedFunctionType {
+        declared,
+        macro_,
+        ty_args,
+        params: parameters,
+        return_,
+    } = fty;
+    let decl_is_macro = macro_.is_some();
+    if is_macro_call != decl_is_macro {
+        let decl_loc = macro_.unwrap_or(declared);
+        let call_msg = if decl_is_macro {
+            format!(
+                "'{f}' is a macro function and must be called with a `!`. \
+                Try replacing '{f}' with '{f}!'"
+            )
+        } else {
+            format!(
+                "'{f}' is not a macro function and cannot be called with a `!`. \
+                Try replacing '{f}!' with '{f}'"
+            )
+        };
+        let decl_msg = if decl_is_macro {
+            "Declared a normal (non-macro) function here"
+        } else {
+            "Declared a macro function here"
+        };
+        context.env.add_diag(diag!(
+            TypeSafety::InvalidCallTarget,
+            (loc, call_msg),
+            (decl_loc, decl_msg),
+        ));
+    }
     let (arguments, arg_tys) = call_args(
         context,
         loc,
@@ -2415,6 +2546,9 @@ fn module_call_impl(
         subtype(context, loc, msg, arg_ty, param_ty);
     }
     let params_ty_list = parameters.into_iter().map(|(_, ty)| ty).collect();
+    if is_macro_call {
+        args.iter_mut().for_each(|arg| solve_lambdas(context, arg));
+    }
     let call = T::ModuleCall {
         module: m,
         name: f,
@@ -2427,7 +2561,7 @@ fn module_call_impl(
         .entry(m.value)
         .or_default()
         .insert(f.value());
-    call
+    (call, return_)
 }
 
 fn builtin_call(
@@ -2589,6 +2723,106 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
         given.pop();
     }
     given
+}
+
+//**************************************************************************************************
+// Lambdas
+//**************************************************************************************************
+
+fn solve_lambdas(context: &mut Context, e: &mut T::Exp) {
+    use T::UnannotatedExp_ as E;
+
+    match &mut e.exp.value {
+        E::Use(_)
+        | E::Value(_)
+        | E::Unit { .. }
+        | E::Value(_)
+        | E::Constant(_, _)
+        | E::Move { .. }
+        | E::Copy { .. }
+        | E::BorrowLocal(_, _)
+        | E::Continue(_)
+        | E::UnresolvedError => (),
+
+        // don't need to recurse into calls since their lambdas are already solved
+        E::ModuleCall(_) | E::Builtin(_, _) => (),
+
+        E::Vector(_vec_loc, _n, _ty_arg, args) => {
+            solve_lambdas(context, args);
+        }
+
+        E::IfElse(eb, et, ef) => {
+            solve_lambdas(context, eb);
+            solve_lambdas(context, et);
+            solve_lambdas(context, ef);
+        }
+        E::While(eb, _, eloop) => {
+            solve_lambdas(context, eb);
+            solve_lambdas(context, eloop);
+        }
+        E::Loop { body: eloop, .. } => solve_lambdas(context, eloop),
+        E::NamedBlock(_, seq) | E::Block(seq) => solve_lambdas_seq(context, seq),
+        E::Assign(_assigns, _tys, er) => {
+            solve_lambdas(context, er);
+        }
+
+        E::Return(er)
+        | E::Abort(er)
+        | E::Give(_, er)
+        | E::Dereference(er)
+        | E::UnaryExp(_, er)
+        | E::Borrow(_, er, _)
+        | E::TempBorrow(_, er) => solve_lambdas(context, er),
+        E::Mutate(el, er) => {
+            solve_lambdas(context, el);
+            solve_lambdas(context, er)
+        }
+        E::BinopExp(el, _, _operand_ty, er) => {
+            solve_lambdas(context, el);
+            solve_lambdas(context, er);
+        }
+
+        E::Pack(_, _, _bs, fields) => {
+            for (_, _, (_, (_bt, fe))) in fields.iter_mut() {
+                solve_lambdas(context, fe)
+            }
+        }
+        E::ExpList(el) => solve_lambdas_exp_list(context, el),
+        E::Cast(el, _rhs_ty) | E::Annotate(el, _rhs_ty) => {
+            solve_lambdas(context, el);
+        }
+
+        // already expanded
+        E::Lambda(_, _) => (),
+
+        // expand
+        E::UnvisitedLambda(lambda_opt) => {
+            let (args, body) = lambda_opt.take().unwrap();
+            let (solved_ty, solved_e) = lambda(context, e.exp.loc, args, *body);
+            e.ty = solved_ty;
+            e.exp.value = solved_e;
+        }
+    }
+}
+
+fn solve_lambdas_seq(context: &mut Context, seq: &mut T::Sequence) {
+    use T::SequenceItem_ as SI;
+    for item in seq {
+        match &mut item.value {
+            SI::Seq(e) => solve_lambdas(context, e),
+            SI::Declare(_binds) => (),
+            SI::Bind(_binds, _ty, e) => solve_lambdas(context, e),
+        }
+    }
+}
+
+fn solve_lambdas_exp_list(context: &mut Context, is: &mut [T::ExpListItem]) {
+    for i in is {
+        match i {
+            T::ExpListItem::Single(e, _ty) => solve_lambdas(context, e),
+            T::ExpListItem::Splat(_loc, e, _tys) => solve_lambdas(context, e),
+        }
+    }
 }
 
 //**************************************************************************************************

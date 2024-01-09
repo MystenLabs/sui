@@ -1447,28 +1447,34 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
         EE::Cast(e, t) => NE::Cast(exp(context, *e), type_(context, t)),
         EE::Annotate(e, t) => NE::Annotate(exp(context, *e), type_(context, t)),
 
-        EE::Call(sp!(mloc, ma_), true, tys_opt, rhs) => {
-            use E::ModuleAccess_ as EA;
-            use N::BuiltinFunction_ as BF;
-            assert!(tys_opt.is_none(), "ICE macros do not have type arguments");
-            let nes = call_args(context, rhs);
-            match ma_ {
-                EA::Name(n) if n.value.as_str() == BF::ASSERT_MACRO => {
-                    NE::Builtin(sp(mloc, BF::Assert(true)), nes)
-                }
-                ma_ => {
-                    context.env.add_diag(diag!(
-                        NameResolution::UnboundMacro,
-                        (mloc, format!("Unbound macro '{}'", ma_)),
-                    ));
-                    NE::UnresolvedError
-                }
-            }
-        }
-        EE::Call(ma, false, tys_opt, rhs) if context.resolves_to_struct(&ma) => {
+        // EE::Call(sp!(mloc, ma_), true, tys_opt, rhs) => {
+        //     use E::ModuleAccess_ as EA;
+        //     use N::BuiltinFunction_ as BF;
+        //     assert!(tys_opt.is_none(), "ICE macros do not have type arguments");
+        //     let nes = call_args(context, rhs);
+        //     match ma_ {
+        //         EA::Name(n) if n.value.as_str() == BF::ASSERT_MACRO => {
+        //             NE::Builtin(sp(mloc, BF::Assert(true)), nes)
+        //         }
+        //         ma_ => {
+        //             context.env.add_diag(diag!(
+        //                 NameResolution::UnboundMacro,
+        //                 (mloc, format!("Unbound macro '{}'", ma_)),
+        //             ));
+        //             NE::UnresolvedError
+        //         }
+        //     }
+        // }
+        EE::Call(ma, is_macro, tys_opt, rhs) if context.resolves_to_struct(&ma) => {
             context
                 .env
                 .check_feature(FeatureGate::PositionalFields, context.current_package, eloc);
+            if is_macro {
+                let msg = "Unexpected macro invocation. Structs cannot be invoked as macros";
+                context
+                    .env
+                    .add_diag(diag!(NameResolution::PositionalCallMismatch, (eloc, msg)));
+            }
             let nes = call_args(context, rhs);
             match context.resolve_struct_name(eloc, "construction", ma, tys_opt) {
                 None => {
@@ -1498,27 +1504,53 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                 }
             }
         }
-        EE::Call(ma, false, tys_opt, rhs) => {
+        EE::Call(ma, is_macro, tys_opt, rhs) => {
+            use N::BuiltinFunction_ as BF;
             let ty_args = tys_opt.map(|tys| types(context, tys));
             let nes = call_args(context, rhs);
             match resolve_function(context, eloc, ma, ty_args) {
-                ResolvedFunction::Builtin(f) => NE::Builtin(f, nes),
+                ResolvedFunction::Builtin(sp!(bloc, BF::Assert(_))) => {
+                    NE::Builtin(sp(bloc, BF::Assert(is_macro)), nes)
+                }
+                ResolvedFunction::Builtin(bf @ sp!(_, BF::Freeze(_))) => {
+                    if is_macro {
+                        let msg = format!(
+                            "Unexpected macro invocation. '{}' cannot be invoked as a \
+                                   macro",
+                            bf.value.display_name()
+                        );
+                        context
+                            .env
+                            .add_diag(diag!(TypeSafety::InvalidCallTarget, (eloc, msg)));
+                    }
+                    NE::Builtin(bf, nes)
+                }
+
                 ResolvedFunction::Module(mf) => {
                     let ResolvedModuleFunction {
                         module,
                         function,
                         ty_args,
                     } = *mf;
-                    NE::ModuleCall(module, function, ty_args, nes)
+                    NE::ModuleCall(module, function, is_macro, ty_args, nes)
                 }
-                ResolvedFunction::Var(v) => NE::VarCall(v, nes),
+                ResolvedFunction::Var(v) => {
+                    if is_macro {
+                        let msg = "Unexpected macro invocation. Variables cannot be invoked as a \
+                            macro";
+                        context
+                            .env
+                            .add_diag(diag!(TypeSafety::InvalidCallTarget, (eloc, msg)));
+                    }
+                    NE::VarCall(v, nes)
+                }
                 ResolvedFunction::Unbound => {
                     assert!(context.env.has_errors());
                     NE::UnresolvedError
                 }
             }
         }
-        EE::MethodCall(edot, n, tys_opt, rhs) => match dotted(context, *edot) {
+        EE::MethodCall(edot, n, is_macro, tys_opt, rhs) => match dotted(context, *edot) {
             None => {
                 assert!(context.env.has_errors());
                 NE::UnresolvedError
@@ -1526,7 +1558,7 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
             Some(d) => {
                 let ty_args = tys_opt.map(|tys| types(context, tys));
                 let nes = call_args(context, rhs);
-                NE::MethodCall(d, n, ty_args, nes)
+                NE::MethodCall(d, n, is_macro, ty_args, nes)
             }
         },
         EE::Vector(vec_loc, tys_opt, rhs) => {
@@ -2012,14 +2044,14 @@ fn remove_unused_bindings_exp(
         }
         N::Exp_::Builtin(_, sp!(_, es))
         | N::Exp_::Vector(_, _, sp!(_, es))
-        | N::Exp_::ModuleCall(_, _, _, sp!(_, es))
+        | N::Exp_::ModuleCall(_, _, _, _, sp!(_, es))
         | N::Exp_::VarCall(_, sp!(_, es))
         | N::Exp_::ExpList(es) => {
             for e in es {
                 remove_unused_bindings_exp(context, used, e)
             }
         }
-        N::Exp_::MethodCall(ed, _, _, sp!(_, es)) => {
+        N::Exp_::MethodCall(ed, _, _, _, sp!(_, es)) => {
             remove_unused_bindings_exp_dotted(context, used, ed);
             for e in es {
                 remove_unused_bindings_exp(context, used, e)

@@ -315,7 +315,8 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
         | N::Exp_::Cast(e, _)
         | N::Exp_::Assign(_, e)
         | N::Exp_::Loop(_, e)
-        | N::Exp_::Annotate(e, _) => exp(context, e),
+        | N::Exp_::Annotate(e, _)
+        | N::Exp_::Lambda(_, e) => exp(context, e),
         N::Exp_::IfElse(econd, et, ef) => {
             exp(context, econd);
             exp(context, et);
@@ -342,13 +343,14 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
         }
         N::Exp_::Builtin(_, sp!(_, es))
         | N::Exp_::Vector(_, _, sp!(_, es))
-        | N::Exp_::ModuleCall(_, _, _, sp!(_, es))
+        | N::Exp_::ModuleCall(_, _, _, _, sp!(_, es))
+        | N::Exp_::VarCall(_, sp!(_, es))
         | N::Exp_::ExpList(es) => {
             for e in es {
                 exp(context, e)
             }
         }
-        N::Exp_::MethodCall(ed, _, _, sp!(_, es)) => {
+        N::Exp_::MethodCall(ed, _, _, _, sp!(_, es)) => {
             exp_dotted(context, ed);
             for e in es {
                 exp(context, e)
