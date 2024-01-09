@@ -710,9 +710,9 @@ type Event {
 	"""
 	sendingModule: MoveModule
 	"""
-	Addresses of the senders of the event
+	Address of the sender of the event
 	"""
-	senders: [Address!]
+	sender: Address
 	"""
 	UTC timestamp in milliseconds since epoch (1/1/1970)
 	"""
