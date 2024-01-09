@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{NetworkKeyPair, NetworkPublicKey, ProtocolKeyPair, ProtocolPublicKey};
+
 use fastcrypto::traits::KeyPair;
 use std::{
     fmt::{Display, Formatter},
@@ -8,11 +10,9 @@ use std::{
 };
 
 use multiaddr::Multiaddr;
-use rand::rngs::StdRng;
-use rand::SeedableRng;
+use rand::{prelude::SliceRandom, rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
-
-use crate::{NetworkKeyPair, NetworkPublicKey, ProtocolKeyPair, ProtocolPublicKey};
+use std::fmt::{Display, Formatter};
 
 /// Committee of the consensus protocol is updated each epoch.
 pub type Epoch = u64;
@@ -128,6 +128,53 @@ impl Committee {
 
     pub fn size(&self) -> usize {
         self.authorities.len()
+    }
+
+    pub fn elect_leader(&self, round: u32, leader_offset: u32) -> AuthorityIndex {
+        cfg_if::cfg_if! {
+            // TODO: we need to differentiate the leader strategy in tests, so for
+            // some type of testing (ex sim tests) we can use the staked approach.
+            if #[cfg(test)] {
+                AuthorityIndex((round + leader_offset) % self.authorities.len() as u32)
+            } else {
+                self.elect_leader_stake_based(round, leader_offset)
+            }
+        }
+    }
+
+    pub fn elect_leader_stake_based(&self, round: u32, offset: u32) -> AuthorityIndex {
+        assert!((offset as usize) < self.authorities.len());
+
+        // TODO: this needs to be removed.
+        // if genesis, always return index 0
+        if round == 0 {
+            return AuthorityIndex(0);
+        }
+
+        // To ensure that we elect different leaders for the same round (using
+        // different offset) we are using the round number as seed to shuffle in
+        // a weighted way the results, but skip based on the offset.
+        // TODO: use a cache in case this proves to be computationally expensive
+        let mut seed_bytes = [0u8; 32];
+        seed_bytes[32 - 8..].copy_from_slice(&(round).to_le_bytes());
+        let mut rng = StdRng::from_seed(seed_bytes);
+
+        let choices = self
+            .authorities
+            .iter()
+            .enumerate()
+            .map(|(index, authority)| (AuthorityIndex(index as u32), authority.stake as f32))
+            .collect::<Vec<_>>();
+
+        let leader_index = *choices
+            .choose_multiple_weighted(&mut rng, self.authorities.len(), |item| item.1)
+            .expect("Weighted choice error: stake values incorrect!")
+            .skip(offset as usize)
+            .map(|(index, _)| index)
+            .next()
+            .unwrap();
+
+        leader_index
     }
 }
 

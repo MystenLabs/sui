@@ -1,20 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{
+    types::{AuthorityRound, Round},
+    utils::format_authority_index,
+};
+
 use enum_dispatch::enum_dispatch;
+use fastcrypto::hash::{Digest, HashFunction};
+use serde::{Deserialize, Serialize};
 use std::{
     cell::OnceCell,
     fmt,
     hash::{Hash, Hasher},
 };
 
-use fastcrypto::hash::{Digest, HashFunction};
-use serde::{Deserialize, Serialize};
-
 use consensus_config::{AuthorityIndex, DefaultHashFunction, NetworkKeySignature, DIGEST_LENGTH};
-
-/// Round number of a block.
-pub type Round = u32;
 
 /// Block proposal timestamp in milliseconds.
 pub type BlockTimestampMs = u64;
@@ -36,6 +37,31 @@ impl fastcrypto::hash::Hash<{ DIGEST_LENGTH }> for Block {
         match self {
             Block::V1(block) => block.digest(),
         }
+    }
+}
+
+impl PartialEq for Block {
+    fn eq(&self, other: &Self) -> bool {
+        self.reference() == other.reference()
+    }
+}
+
+impl Eq for Block {}
+
+impl fmt::Debug for Block {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl fmt::Display for Block {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:[", self.reference())?;
+        for ancestor in self.ancestors() {
+            write!(f, "{},", ancestor)?;
+        }
+        write!(f, "]")
+        // TODO: add printing of transactions.
     }
 }
 
@@ -103,6 +129,7 @@ pub struct BlockRef {
     pub digest: BlockDigest,
 }
 
+#[allow(unused)]
 impl BlockRef {
     #[cfg(test)]
     pub fn new_test(author: AuthorityIndex, round: Round, digest: BlockDigest) -> Self {
@@ -112,11 +139,45 @@ impl BlockRef {
             digest,
         }
     }
+
+    pub fn round(&self) -> Round {
+        self.round
+    }
+
+    pub fn author(&self) -> AuthorityIndex {
+        self.author
+    }
+
+    pub fn digest(&self) -> BlockDigest {
+        self.digest
+    }
+}
+
+impl From<BlockRef> for AuthorityRound {
+    fn from(value: BlockRef) -> Self {
+        AuthorityRound::new(value.author, value.round)
+    }
 }
 
 impl Hash for BlockRef {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write(&self.digest.0[..8]);
+    }
+}
+
+impl fmt::Debug for BlockRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl fmt::Display for BlockRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.author.value() < 26 {
+            write!(f, "{}{}", format_authority_index(self.author), self.round)
+        } else {
+            write!(f, "[{:02}]{}", self.author, self.round)
+        }
     }
 }
 

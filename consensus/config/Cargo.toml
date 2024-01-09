@@ -12,6 +12,7 @@ multiaddr.workspace = true
 rand.workspace = true
 serde.workspace = true
 shared-crypto.workspace = true
+cfg-if.workspace = true
 
 workspace-hack.workspace = true
 
