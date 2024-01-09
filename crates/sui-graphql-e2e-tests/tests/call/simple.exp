@@ -173,8 +173,6 @@ Response: {
             "node": {
               "address": "0x70b0306d8719c66f62345c456c589b4de5ec7446378143f0ffa4b40746bd5a05",
               "digest": "Cm3wcAuptz6kn1ybsGGziZDKYapM2DjbaFeeHUBL4Ck7",
-              "address": "0x936681de92a7306429f56748932bfbf17e199363edafa8ab973cd2e203c0c384",
-              "digest": "D3ybZDPxmpsbm5Ufr5sRmfHzYW8eSRDtyVUsGjqGyrQu",
               "owner": {
                 "__typename": "AddressOwner"
               }
@@ -184,7 +182,6 @@ Response: {
             "node": {
               "address": "0xa64e7b17a325d1b8410a5c4a9bc6a5c56a0564772a93afb9e674359b4c5a3ffd",
               "digest": "BoecJqjcGJENP23tZTtWXk5C9vX7m2u41VkKmTbqnD49",
-              "kind": "OWNED",
               "owner": {
                 "__typename": "AddressOwner"
               }
@@ -194,7 +191,6 @@ Response: {
             "node": {
               "address": "0xbe96e1f20f66a1907c59b9a2d466d9fb623b91aab82ad328eb829220475444e7",
               "digest": "CnQwphLUqQqmTJSRovBbSw2vU38UhPtNxaAr3UGXxLb9",
-              "kind": "OWNED",
               "owner": {
                 "__typename": "AddressOwner"
               }
