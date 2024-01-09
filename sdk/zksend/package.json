@@ -41,15 +41,12 @@
 	"homepage": "https://github.com/mystenlabs/sui#readme",
 	"devDependencies": {
 		"@mysten/build-scripts": "workspace:*",
-		"@mysten/sui.js": "workspace:*",
 		"@types/node": "^20.4.2",
 		"typescript": "^5.1.6",
 		"vitest": "^0.33.0"
 	},
-	"peerDependencies": {
-		"@mysten/sui.js": ">0.49.1"
-	},
 	"dependencies": {
+		"@mysten/sui.js": "workspace:*",
 		"@mysten/wallet-standard": "workspace:*",
 		"mitt": "^3.0.1",
 		"nanostores": "^0.9.3",

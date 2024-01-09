@@ -37,7 +37,7 @@ export const ZkSendSignPersonalMessageRequest = object({
 	bytes: string(),
 	address: string(),
 });
-const ZkSendRequestData = union([
+export const ZkSendRequestData = union([
 	ZkSendConnectRequest,
 	ZkSendSignTransactionBlockRequest,
 	ZkSendSignPersonalMessageRequest,

@@ -82,17 +82,12 @@ export class ZkSendPopup {
 export class ZkSendHost {
 	#request: Output<typeof ZkSendRequest>;
 
-	requestType: string;
-	name: string;
-
 	constructor(request: Output<typeof ZkSendRequest>) {
 		if (typeof window === 'undefined' || !window.opener) {
 			throw new Error('TODO: Better error message');
 		}
 
 		this.#request = request;
-		this.requestType = request.type;
-		this.name = request.name;
 	}
 
 	static fromUrl(url: string = window.location.href) {
@@ -111,6 +106,10 @@ export class ZkSendHost {
 		}
 
 		return new ZkSendHost(request.output);
+	}
+
+	getRequestData() {
+		return this.#request;
 	}
 
 	sendMessage(payload: ZkSendResponsePayload) {
