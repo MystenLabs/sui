@@ -3,6 +3,7 @@
 
 import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 import { bcs } from '@mysten/sui.js/src/bcs/index.js';
+import { toB64 } from '@mysten/sui.js/utils';
 import type {
 	StandardConnectFeature,
 	StandardConnectMethod,
@@ -21,7 +22,6 @@ import { getWallets, ReadonlyWalletAccount, SUI_MAINNET_CHAIN } from '@mysten/wa
 import type { Emitter } from 'mitt';
 import mitt from 'mitt';
 
-import { toB64 } from '../../bcs/src/b64.js';
 import { ZkSendPopup } from './channel/index.js';
 
 type WalletEventsMap = {
@@ -34,6 +34,7 @@ export class ZkSendWallet implements Wallet {
 	#events: Emitter<WalletEventsMap>;
 	#accounts: ReadonlyWalletAccount[];
 	#client: SuiClient;
+	#name: string;
 
 	get name() {
 		return 'zkSend';
@@ -84,10 +85,11 @@ export class ZkSendWallet implements Wallet {
 		};
 	}
 
-	constructor(suiClient: SuiClient) {
+	constructor(suiClient: SuiClient, name: string) {
 		this.#accounts = [];
 		this.#events = mitt();
 		this.#client = suiClient;
+		this.#name = name;
 	}
 
 	#signTransactionBlock: SuiSignTransactionBlockMethod = async ({ transactionBlock, account }) => {
@@ -99,7 +101,7 @@ export class ZkSendWallet implements Wallet {
 			}),
 		);
 
-		const popup = new ZkSendPopup();
+		const popup = new ZkSendPopup({ name: this.#name });
 		const response = await popup.createRequest('sign-transaction-block', {
 			bytes,
 			address: account.address,
@@ -113,7 +115,7 @@ export class ZkSendWallet implements Wallet {
 
 	#signPersonalMessage: SuiSignPersonalMessageMethod = async ({ message, account }) => {
 		const bytes = toB64(bcs.vector(bcs.u8()).serialize(message).toBytes());
-		const popup = new ZkSendPopup();
+		const popup = new ZkSendPopup({ name: this.#name });
 		const response = await popup.createRequest('sign-personal-message', {
 			bytes,
 			address: account.address,
@@ -136,7 +138,7 @@ export class ZkSendWallet implements Wallet {
 				new ReadonlyWalletAccount({
 					address,
 					chains: [SUI_MAINNET_CHAIN],
-					features: ['sui:signTransactionBlock'],
+					features: ['sui:signTransactionBlock', 'sui:signPersonalMessage'],
 					// NOTE: zkSend doesn't support getting public keys, and zkLogin accounts don't have meaningful public keys anyway
 					publicKey: new Uint8Array(),
 				}),
@@ -161,7 +163,7 @@ export class ZkSendWallet implements Wallet {
 			return { accounts: this.accounts };
 		}
 
-		const popup = new ZkSendPopup();
+		const popup = new ZkSendPopup({ name: this.#name });
 		const response = await popup.createRequest('connect', {});
 		if (!('address' in response)) {
 			throw new Error('Unexpected response');
@@ -178,9 +180,9 @@ export class ZkSendWallet implements Wallet {
 	};
 }
 
-export function registerZkSendWallet() {
+export function registerZkSendWallet(name: string) {
 	const wallets = getWallets();
 	const client = new SuiClient({ url: getFullnodeUrl('mainnet') });
 
-	return wallets.register(new ZkSendWallet(client));
+	return wallets.register(new ZkSendWallet(client, name));
 }

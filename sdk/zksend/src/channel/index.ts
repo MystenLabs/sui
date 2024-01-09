@@ -1,22 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { Output } from 'valibot';
 import { safeParse } from 'valibot';
 
 import { withResolvers } from '../utils/withResolvers.js';
 import type { ZkSendRequestTypes, ZkSendResponsePayload, ZkSendResponseTypes } from './events.js';
-import { ZkSendResponse } from './events.js';
+import { ZkSendRequest, ZkSendResponse } from './events.js';
 
 const DEFAULT_ZKSEND_ORIGIN = 'https://zksend.com';
+
+interface ZkSendPopupOptions {
+	origin?: string;
+	name: string;
+}
 
 export class ZkSendPopup {
 	#id: string;
 	#origin: string;
+	#name: string;
+
 	#close?: () => void;
 
-	constructor(origin = DEFAULT_ZKSEND_ORIGIN) {
+	constructor({ origin = DEFAULT_ZKSEND_ORIGIN, name }: ZkSendPopupOptions) {
 		this.#id = crypto.randomUUID();
 		this.#origin = origin;
+		this.#name = name;
 	}
 
 	async createRequest<T extends keyof ZkSendResponseTypes>(
@@ -51,9 +60,10 @@ export class ZkSendPopup {
 		window.addEventListener('message', listener);
 
 		popup = window.open(
-			`${origin}/dapp/${type}?${new URLSearchParams({
+			`${this.#origin}/dapp/${type}?${new URLSearchParams({
 				id: this.#id,
-				origin: this.#origin,
+				origin: window.origin,
+				name: this.#name,
 			})}${data ? `#${new URLSearchParams(data)}` : ''}`,
 		);
 
@@ -70,26 +80,47 @@ export class ZkSendPopup {
 }
 
 export class ZkSendHost {
-	#id: string;
-	#origin: string;
+	#request: Output<typeof ZkSendRequest>;
 
-	constructor(id: string, origin: string) {
+	requestType: string;
+	name: string;
+
+	constructor(request: Output<typeof ZkSendRequest>) {
 		if (typeof window === 'undefined' || !window.opener) {
 			throw new Error('TODO: Better error message');
 		}
 
-		this.#id = id;
-		this.#origin = origin;
+		this.#request = request;
+		this.requestType = request.type;
+		this.name = request.name;
+	}
+
+	static fromUrl(url: string = window.location.href) {
+		const parsed = new URL(url);
+
+		const request = safeParse(ZkSendRequest, {
+			id: parsed.searchParams.get('id'),
+			origin: parsed.searchParams.get('origin'),
+			name: parsed.searchParams.get('name'),
+			type: parsed.pathname.split('/').pop(),
+			data: parsed.hash ? Object.fromEntries(new URLSearchParams(parsed.hash.slice(1))) : {},
+		});
+
+		if (request.issues) {
+			throw new Error('TODO: Better error message');
+		}
+
+		return new ZkSendHost(request.output);
 	}
 
 	sendMessage(payload: ZkSendResponsePayload) {
 		window.opener.postMessage(
 			{
-				id: this.#id,
+				id: this.#request.id,
 				source: 'zksend-channel',
 				payload,
 			} satisfies ZkSendResponse,
-			this.#origin,
+			this.#request.origin,
 		);
 	}
 }

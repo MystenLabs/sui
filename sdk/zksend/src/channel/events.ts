@@ -22,17 +22,39 @@ export const ZkSendSignPersonalMessageResponse = object({
 	signature: string(),
 });
 
+export const ZkSendRequestType = union([
+	literal('connect'),
+	literal('sign-transaction-block'),
+	literal('sign-personal-message'),
+]);
+
+export const ZkSendConnectRequest = object({});
+export const ZkSendSignTransactionBlockRequest = object({
+	bytes: string(),
+	address: string(),
+});
+export const ZkSendSignPersonalMessageRequest = object({
+	bytes: string(),
+	address: string(),
+});
+const ZkSendRequestData = union([
+	ZkSendConnectRequest,
+	ZkSendSignTransactionBlockRequest,
+	ZkSendSignPersonalMessageRequest,
+]);
+
+export const ZkSendRequest = object({
+	id: string([uuid()]),
+	origin: string(),
+	name: string(),
+	type: ZkSendRequestType,
+	data: ZkSendRequestData,
+});
 export interface ZkSendRequestTypes extends Record<string, Record<string, string>> {
 	// eslint-disable-next-line @typescript-eslint/ban-types
-	connect: {};
-	'sign-transaction-block': {
-		bytes: string;
-		address: string;
-	};
-	'sign-personal-message': {
-		bytes: string;
-		address: string;
-	};
+	connect: Output<typeof ZkSendConnectRequest>;
+	'sign-transaction-block': Output<typeof ZkSendSignTransactionBlockRequest>;
+	'sign-personal-message': Output<typeof ZkSendSignPersonalMessageRequest>;
 }
 
 export type ZkSendResponseTypes = {
