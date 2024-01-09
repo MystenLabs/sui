@@ -8,6 +8,7 @@ use prometheus::{
 
 #[derive(Clone)]
 pub struct TrafficControllerMetrics {
+    pub tallies: IntCounter,
     pub connection_ip_blocklist_len: IntGauge,
     pub proxy_ip_blocklist_len: IntGauge,
     pub requests_blocked_at_protocol: IntCounter,
@@ -18,6 +19,8 @@ pub struct TrafficControllerMetrics {
 impl TrafficControllerMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
+            tallies: register_int_counter_with_registry!("tallies", "Number of tallies", registry)
+                .unwrap(),
             connection_ip_blocklist_len: register_int_gauge_with_registry!(
                 "connection_ip_blocklist_len",
                 // make the below a multiline string

@@ -9,7 +9,7 @@ use jsonrpsee::{
     core::{client::ClientT, RpcResult},
     rpc_params,
 };
-use sui_core::traffic_controller::nodefw_test_server::NodeFwTestServer;
+use sui_core::traffic_controller::{nodefw_test_server::NodeFwTestServer, TrafficController};
 use sui_json_rpc_types::{
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
@@ -115,6 +115,8 @@ async fn test_validator_traffic_control_spam_delegated() -> Result<(), anyhow::E
         delegate_spam_blocking: true,
         delegate_error_blocking: false,
         destination_port: 8080,
+        killswitch_path: tempfile::tempdir().unwrap().into_path(),
+        killswitch_timeout: 10,
     };
     let network_config = ConfigBuilder::new_with_temp_dir()
         .with_policy_config(Some(policy_config))
@@ -143,6 +145,8 @@ async fn test_fullnode_traffic_control_spam_delegated() -> Result<(), anyhow::Er
         delegate_spam_blocking: true,
         delegate_error_blocking: false,
         destination_port: 9000,
+        killswitch_path: tempfile::tempdir().unwrap().into_path(),
+        killswitch_timeout: 10,
     };
     let test_cluster = TestClusterBuilder::new()
         .with_fullnode_policy_config(Some(policy_config))
@@ -150,6 +154,46 @@ async fn test_fullnode_traffic_control_spam_delegated() -> Result<(), anyhow::Er
         .build()
         .await;
     assert_traffic_control_spam_delegated(test_cluster, n as usize, 65000).await
+}
+
+#[tokio::test]
+async fn test_traffic_control_dead_mans_switch() -> Result<(), anyhow::Error> {
+    let n = 10;
+    let policy_config = PolicyConfig {
+        connection_blocklist_ttl_sec: 3,
+        spam_policy_type: PolicyType::TestNConnIP(n - 1),
+        channel_capacity: 100,
+        ..Default::default()
+    };
+
+    // sink all traffic to trigger dead mans switch
+    let killswitch_path = tempfile::tempdir().unwrap().into_path();
+    let killswitch_file = killswitch_path.join("__KILLSWITCH__");
+    assert!(
+        !killswitch_file.exists(),
+        "Expected killswitch file to not yet exist"
+    );
+
+    let firewall_config = RemoteFirewallConfig {
+        remote_fw_url: String::from("http://127.0.0.1:65000"),
+        delegate_spam_blocking: true,
+        delegate_error_blocking: false,
+        destination_port: 9000,
+        killswitch_path: killswitch_path.clone(),
+        killswitch_timeout: 10,
+    };
+
+    // NOTE: we need to hold onto this tc handle to ensure we don't inadvertently close
+    // the receive channel (this would cause traffic controller to exit the loop and thus
+    // we will never engage the dead mans switch)
+    let _tc = TrafficController::spawn_for_test(policy_config, Some(firewall_config));
+    for _ in 0..10 {
+        if killswitch_file.exists() {
+            return Ok(());
+        }
+        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+    }
+    panic!("Expected killswitch file to exist");
 }
 
 async fn assert_traffic_control_ok(mut test_cluster: TestCluster) -> Result<(), anyhow::Error> {

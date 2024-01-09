@@ -8,9 +8,10 @@ pub mod policies;
 
 use dashmap::DashMap;
 use prometheus::IntGauge;
+use std::fs::File;
+use std::io::Write;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
-use tracing::info;
 
 use self::metrics::TrafficControllerMetrics;
 use crate::traffic_controller::nodefw_client::{BlockAddress, BlockAddresses, NodeFWClient};
@@ -25,7 +26,7 @@ use sui_types::error::SuiError;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig, ServiceResponse};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
-use tracing::{debug, warn};
+use tracing::{debug, error, info, warn};
 
 type BlocklistT = Arc<DashMap<IpAddr, SystemTime>>;
 
@@ -65,8 +66,8 @@ impl Debug for TrafficController {
 impl TrafficController {
     pub fn spawn(
         policy_config: PolicyConfig,
-        fw_config: Option<RemoteFirewallConfig>,
         metrics: TrafficControllerMetrics,
+        fw_config: Option<RemoteFirewallConfig>,
     ) -> Self {
         let metrics = Arc::new(metrics);
         let (tx, rx) = mpsc::channel(policy_config.channel_capacity);
@@ -87,6 +88,14 @@ impl TrafficController {
             metrics
         ));
         ret
+    }
+
+    pub fn spawn_for_test(
+        policy_config: PolicyConfig,
+        fw_config: Option<RemoteFirewallConfig>,
+    ) -> Self {
+        let metrics = TrafficControllerMetrics::new(&prometheus::Registry::new());
+        Self::spawn(policy_config, metrics, fw_config)
     }
 
     pub fn tally(&self, tally: TrafficTally) {
@@ -206,40 +215,60 @@ async fn run_tally_loop(
         None
     };
 
+    let timeout = fw_config
+        .as_ref()
+        .map(|fw_config| fw_config.killswitch_timeout)
+        .unwrap_or(300);
+
     loop {
         tokio::select! {
-            received = receiver.recv() => match received {
-                Some(tally) => {
-                    if let Err(err) = handle_spam_tally(
-                        &mut spam_policy,
-                        &policy_config,
-                        &node_fw_client,
-                        &fw_config,
-                        tally.clone(),
-                        spam_blocklists.clone(),
-                        metrics.clone(),
-                    )
-                    .await {
-                        warn!("Error handling spam tally: {}", err);
-                    }
+            received = receiver.recv() => {
+                metrics.tallies.inc();
+                match received {
+                    Some(tally) => {
+                        if let Err(err) = handle_spam_tally(
+                            &mut spam_policy,
+                            &policy_config,
+                            &node_fw_client,
+                            &fw_config,
+                            tally.clone(),
+                            spam_blocklists.clone(),
+                            metrics.clone(),
+                        )
+                        .await {
+                            warn!("Error handling spam tally: {}", err);
+                        }
 
-                    if let Err(err) = handle_error_tally(
-                        &mut error_policy,
-                        &policy_config,
-                        &node_fw_client,
-                        &fw_config,
-                        tally,
-                        error_blocklists.clone(),
-                        metrics.clone(),
-                    )
-                    .await {
-                        warn!("Error handling error tally: {}", err);
+                        if let Err(err) = handle_error_tally(
+                            &mut error_policy,
+                            &policy_config,
+                            &node_fw_client,
+                            &fw_config,
+                            tally,
+                            error_blocklists.clone(),
+                            metrics.clone(),
+                        )
+                        .await {
+                            warn!("Error handling error tally: {}", err);
+                        }
+                    }
+                    None => {
+                        info!("TrafficController tally channel closed by all senders");
+                        return;
                     }
                 }
-                None => {
-                    info!("TrafficController tally channel closed by all senders");
-                    return;
-                },
+            }
+            // Dead man's switch - if we suspect something is sinking all traffic to node, disable nodefw
+            _ = tokio::time::sleep(tokio::time::Duration::from_secs(timeout)) => {
+                if let Some(fw_config) = &fw_config {
+                    if fw_config.delegate_spam_blocking || fw_config.delegate_error_blocking {
+                        error!("No traffic tallies received in {} seconds! Disabling BPF.", fw_config.killswitch_timeout);
+                        let killswitch_path = fw_config.killswitch_path.join("__KILLSWITCH__");
+                        let mut file = File::create(killswitch_path).expect("Failed to create nodefw killswitch file");
+                        file.write_all(b"disable").expect("Failed to write to nodefw killswitch file");
+                        file.flush().expect("Failed to flush nodefw killswitch file");
+                    }
+                }
             }
         }
     }

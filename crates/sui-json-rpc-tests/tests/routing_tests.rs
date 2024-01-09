@@ -137,6 +137,9 @@ async fn test_disable_routing() {
 //     let mut builder = JsonRpcServerBuilder::new(
 //          "1.5", &Registry::new(), None, None,
 //     );
+//     let mut builder = JsonRpcServerBuilder::new(
+//          "1.5", &Registry::new(), None, None,
+//     );
 //     builder.register_module(TestApiModule).unwrap();
 
 //     let port = get_available_port("0.0.0.0");

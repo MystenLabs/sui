@@ -60,8 +60,8 @@ impl<L> JsonRpcService<L> {
             traffic_controller: policy_config.map(|policy| {
                 Arc::new(TrafficController::spawn(
                     policy,
-                    remote_fw_config,
                     traffic_controller_metrics,
+                    remote_fw_config,
                 ))
             }),
         }

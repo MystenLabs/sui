@@ -6,7 +6,9 @@ use core::hash::Hash;
 use jsonrpsee::core::server::helpers::MethodResponse;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::fmt::Debug;
+use std::{fmt::Debug, path::PathBuf};
+
+const TRAFFIC_SINK_TIMEOUT_SEC: u64 = 300;
 
 #[derive(Clone, Debug)]
 pub enum ServiceResponse {
@@ -50,7 +52,7 @@ impl ServiceResponse {
 }
 
 #[serde_as]
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct RemoteFirewallConfig {
     pub remote_fw_url: String,
@@ -59,6 +61,15 @@ pub struct RemoteFirewallConfig {
     pub delegate_spam_blocking: bool,
     #[serde(default)]
     pub delegate_error_blocking: bool,
+    pub killswitch_path: PathBuf,
+    /// Time in secs, after which no registered ingress traffic
+    /// will trigger dead mans switch to disable any firewalls
+    #[serde(default = "default_killswitch_timeout")]
+    pub killswitch_timeout: u64,
+}
+
+fn default_killswitch_timeout() -> u64 {
+    TRAFFIC_SINK_TIMEOUT_SEC
 }
 
 // Serializable representation of policy types, used in config
