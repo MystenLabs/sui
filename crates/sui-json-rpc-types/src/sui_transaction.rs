@@ -31,7 +31,7 @@ use sui_types::error::{ExecutionError, SuiError, SuiResult};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::object::Owner;
+use sui_types::object::{MoveObject, Owner};
 use sui_types::parse_sui_type_tag;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::signature::GenericSignature;
@@ -45,6 +45,7 @@ use sui_types::transaction::{
     InputObjectKind, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction, SenderSignedData,
     TransactionData, TransactionDataAPI, TransactionKind, VersionedProtocolMessage,
 };
+use sui_types::type_resolver::LayoutResolver;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use tabled::{
     builder::Builder as TableBuilder,
@@ -959,6 +960,26 @@ impl SuiTransactionBlockEvents {
         events: TransactionEvents,
         tx_digest: TransactionDigest,
         timestamp_ms: Option<u64>,
+        resolver: &mut dyn LayoutResolver,
+    ) -> SuiResult<Self> {
+        Ok(Self {
+            data: events
+                .data
+                .into_iter()
+                .enumerate()
+                .map(|(seq, event)| {
+                    let layout = resolver.get_annotated_layout(&event.type_)?;
+                    SuiEvent::try_from(event, tx_digest, seq as u64, timestamp_ms, layout)
+                })
+                .collect::<Result<_, _>>()?,
+        })
+    }
+
+    // TODO: this is only called from the indexer. Remove this once indexer moves to its own resolver.
+    pub fn try_from_using_module_resolver(
+        events: TransactionEvents,
+        tx_digest: TransactionDigest,
+        timestamp_ms: Option<u64>,
         resolver: &impl GetModule,
     ) -> SuiResult<Self> {
         Ok(Self {
@@ -967,7 +988,9 @@ impl SuiTransactionBlockEvents {
                 .into_iter()
                 .enumerate()
                 .map(|(seq, event)| {
-                    SuiEvent::try_from(event, tx_digest, seq as u64, timestamp_ms, resolver)
+                    let layout =
+                        MoveObject::get_layout_from_struct_tag(event.type_.clone(), resolver)?;
+                    SuiEvent::try_from(event, tx_digest, seq as u64, timestamp_ms, layout)
                 })
                 .collect::<Result<_, _>>()?,
         })
@@ -1038,7 +1061,7 @@ impl DevInspectResults {
         effects: TransactionEffects,
         events: TransactionEvents,
         return_values: Result<Vec<ExecutionResult>, ExecutionError>,
-        resolver: &impl GetModule,
+        resolver: &mut dyn LayoutResolver,
     ) -> SuiResult<Self> {
         let tx_digest = *effects.transaction_digest();
         let mut error = None;

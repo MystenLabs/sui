@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::encoding::{Base58, Base64};
-use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use mysten_metrics::monitored_scope;
@@ -99,7 +99,7 @@ impl SuiEvent {
         tx_digest: TransactionDigest,
         event_seq: u64,
         timestamp_ms: Option<u64>,
-        resolver: &impl GetModule,
+        layout: MoveStructLayout,
     ) -> SuiResult<Self> {
         let Event {
             package_id,
@@ -111,7 +111,7 @@ impl SuiEvent {
 
         let bcs = contents.to_vec();
 
-        let move_struct = Event::move_event_to_move_struct(&type_, &contents, resolver)?;
+        let move_struct = Event::move_event_to_move_struct(&contents, layout)?;
         let (type_, field) = type_and_fields_from_move_struct(&type_, move_struct);
 
         Ok(SuiEvent {
