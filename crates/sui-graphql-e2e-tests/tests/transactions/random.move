@@ -46,7 +46,7 @@
 }
 
 
-//# set-random-state --randomness-round 1 --random-bytes SGVsbG8gU3Vp --randomness-initial-version 2
+//# set-random-state --randomness-round 0 --random-bytes SGVsbG8gU3Vp --randomness-initial-version 2
 # Set the contents of the randomness object
 
 //# create-checkpoint

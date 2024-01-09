@@ -11,7 +11,7 @@ Response: {
   "data": {
     "epoch": {
       "protocolConfigs": {
-        "protocolVersion": 33,
+        "protocolVersion": 34,
         "randomBeacon": {
           "value": true
         }
@@ -28,7 +28,7 @@ Response: {
           "json": {
             "id": "0x0000000000000000000000000000000000000000000000000000000000000008",
             "inner": {
-              "id": "0x5939918be7458f2d4162d63cb6aadf34df162ed8b2b672776efa41eedf84961b",
+              "id": "0x598f291ccc58fcd31753bcc12496c10a3ad4505a080fcb346bb4964fc5a77ea9",
               "version": "1"
             }
           }
@@ -77,7 +77,7 @@ Response: {
             "epoch": {
               "epochId": 0
             },
-            "randomnessRound": 1,
+            "randomnessRound": 0,
             "randomBytes": "SGVsbG8gU3Vp",
             "randomnessObjInitialSharedVersion": 2
           }
