@@ -308,6 +308,10 @@ impl ModuleId {
         key
     }
 
+    pub fn to_canonical_string(&self, with_prefix: bool) -> String {
+        self.to_canonical_display(with_prefix).to_string()
+    }
+
     /// Proxy type for overriding `ModuleId`'s display implementation, to use a canonical form
     /// (full-width addresses), with an optional "0x" prefix (controlled by the `with_prefix` flag).
     pub fn to_canonical_display(&self, with_prefix: bool) -> impl Display + '_ {
