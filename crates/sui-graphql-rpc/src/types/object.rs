@@ -86,16 +86,16 @@ pub struct Immutable {
 }
 
 /// A shared object is an object that is shared using the 0x2::transfer::share_object function
-/// and is accessible to everyone.
-/// Unlike owned objects, once an object is shared, it stays mutable and can be accessed by anyone,
-/// unless it is made immutable. An example of immutable shared objects are all published packages
-/// and modules on Sui.
+/// and is accessible to everyone. There are two types of shared objects: mutable and immutable.
+/// Unlike owned objects, once an object is shared, it stays mutable and can be accessed by anyone.
+/// An example of immutable shared objects are all published packages and modules on Sui.
 #[derive(SimpleObject, Clone)]
 pub struct Shared {
     initial_shared_version: u64,
 }
 
-/// The parent of this object
+/// The parent of this object.
+/// If the object's owner is a Parent, this object is part of a dynamic field (it is the value of the dynamic field, or the intermediate Field object itself).
 #[derive(SimpleObject, Clone)]
 pub struct Parent {
     parent: Option<Object>,
@@ -199,8 +199,7 @@ impl Object {
             .extend()
     }
 
-    /// The owner type of this Object.
-    /// The owner can be one of the following types: Immutable, Shared, Parent, Address
+    /// The owner type of this object: Immutable, Shared, Parent, Address
     /// Immutable and Shared Objects do not have owners.
     async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwner> {
         use NativeOwner as O;
