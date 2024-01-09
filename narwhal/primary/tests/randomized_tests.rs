@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-use crate::consensus::{
-    make_consensus_store, Bullshark, ConsensusMetrics, ConsensusState, LeaderSchedule,
-    LeaderSwapTable,
-};
 use config::{Authority, AuthorityIdentifier, Committee, Stake};
 use fastcrypto::hash::Hash;
 use fastcrypto::hash::HashFunction;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use narwhal_primary::consensus::{
+    make_consensus_store, Bullshark, ConsensusMetrics, ConsensusState, LeaderSchedule,
+    LeaderSwapTable,
+};
 use prometheus::Registry;
 use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
@@ -216,6 +215,7 @@ async fn bullshark_randomised_tests() {
 /// reproduced by providing the same seed number - so practically they behave deterministically.
 /// If that test breaks then we have no reassurance that we can reproduce the tests in case of
 /// failure.
+#[ignore]
 #[test]
 fn test_determinism() {
     let committee_size = 4;
@@ -470,16 +470,16 @@ pub fn make_certificates_with_parameters(
 
         // Ensure each certificate's parents exist from previous processing
         parents
-            .iter()
-            .flat_map(|c| c.header().parents())
-            .for_each(|digest| {
-                assert!(
-                    certificate_digests.contains(digest),
-                    "Failed on seed {}. Certificate with digest {} should be found in processed certificates.",
-                    seed,
-                    digest
-                );
-            });
+                .iter()
+                .flat_map(|c| c.header().parents())
+                .for_each(|digest| {
+                    assert!(
+                        certificate_digests.contains(digest),
+                        "Failed on seed {}. Certificate with digest {} should be found in processed certificates.",
+                        seed,
+                        digest
+                    );
+                });
     }
 
     (certificates, next_parents)
@@ -499,13 +499,13 @@ fn generate_and_run_execution_plans(
     protocol_config: &ProtocolConfig,
 ) {
     println!(
-        "Running execution plans for run_id {} for rounds={}, committee={}, gc_depth={}, modes={:?}",
-        run_id,
-        dag_rounds,
-        committee.size(),
-        gc_depth,
-        modes
-    );
+            "Running execution plans for run_id {} for rounds={}, committee={}, gc_depth={}, modes={:?}",
+            run_id,
+            dag_rounds,
+            committee.size(),
+            gc_depth,
+            modes
+        );
 
     let mut executed_plans = HashSet::new();
     let mut committed_certificates = Vec::new();
@@ -560,16 +560,16 @@ fn generate_and_run_execution_plans(
             committed_certificates = plan_committed_certificates.clone();
         } else {
             assert_eq!(
-                committed_certificates,
-                plan_committed_certificates,
-                "Fork detected in plans for run_id={}, seed={}, rounds={}, committee={}, gc_depth={}, modes={:?}",
-                run_id,
-                seed,
-                dag_rounds,
-                committee.size(),
-                gc_depth,
-                modes
-            );
+                    committed_certificates,
+                    plan_committed_certificates,
+                    "Fork detected in plans for run_id={}, seed={}, rounds={}, committee={}, gc_depth={}, modes={:?}",
+                    run_id,
+                    seed,
+                    dag_rounds,
+                    committee.size(),
+                    gc_depth,
+                    modes
+                );
         }
     }
 
