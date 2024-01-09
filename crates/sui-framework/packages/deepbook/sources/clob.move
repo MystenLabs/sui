@@ -137,7 +137,7 @@ module deepbook::clob {
         // Orders that are submitted earlier has lower order ids.
         // 64 bits are sufficient for order ids whereas 32 bits are not.
         // Assuming a maximum TPS of 100K/s of Sui chain, it would take (1<<63) / 100000 / 3600 / 24 / 365 = 2924712 years to reach the full capacity.
-        // The highest bit of the order id is used to denote the order tyep, 0 for bid, 1 for ask.
+        // The highest bit of the order id is used to denote the order type, 0 for bid, 1 for ask.
         order_id: u64,
         // Only used for limit orders.
         price: u64,
@@ -772,11 +772,11 @@ module deepbook::clob {
         // We first retrieve the PriceLevel with the lowest price by calling min_leaf on the asks Critbit Tree.
         // We then match the market order by iterating through open orders on that price level in ascending order of the order id.
         // Open orders that are being filled are removed from the order book.
-        // We stop the iteration untill all quantities are filled.
+        // We stop the iteration until all quantities are filled.
         // If the total quantity of open orders at the lowest price level is not large enough to fully fill the market order,
         // we move on to the next price level by calling next_leaf on the asks Critbit Tree and repeat the same procedure.
         // Continue iterating over the price levels in ascending order until the market order is completely filled.
-        // If ther market order cannot be completely filled even after consuming all the open ask orders,
+        // If their market order cannot be completely filled even after consuming all the open ask orders,
         // the unfilled quantity will be cancelled.
         // Market ask order follows similar procedure.
         // The difference is that market ask order is matched against the open bid orders.
@@ -1303,7 +1303,7 @@ module deepbook::clob {
         (price_vec, depth_vec)
     }
 
-    /// internal func to retrive single depth of a tick price
+    /// internal func to retrieve single depth of a tick price
     fun get_level2_book_status(
         open_orders: &CritbitTree<TickLevel>,
         price: u64,

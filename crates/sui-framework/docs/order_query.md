@@ -19,7 +19,7 @@
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
-<b>use</b> <a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table">0x2::linked_table</a>;
+<b>use</b> <a href="">0x2::linked_table</a>;
 <b>use</b> <a href="clob_v2.md#0xdee9_clob_v2">0xdee9::clob_v2</a>;
 <b>use</b> <a href="critbit.md#0xdee9_critbit">0xdee9::critbit</a>;
 </code></pre>
@@ -252,7 +252,7 @@
 
         <b>let</b> next_order_key = <b>if</b> (<a href="_is_some">option::is_some</a>(&start_order_id)) {
             <b>let</b> key = <a href="_destroy_some">option::destroy_some</a>(start_order_id);
-            <b>if</b> (!<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_contains">linked_table::contains</a>(open_orders, key)) {
+            <b>if</b> (!<a href="_contains">linked_table::contains</a>(open_orders, key)) {
                 <b>let</b> (next_leaf, _) = <b>if</b> (ascending) {
                     <a href="critbit.md#0xdee9_critbit_next_leaf">critbit::next_leaf</a>(ticks, tick_level_key)
                 }<b>else</b> {
@@ -264,19 +264,19 @@
             start_order_id = <a href="_none">option::none</a>();
             some(key)
         }<b>else</b> {
-            *<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_front">linked_table::front</a>(open_orders)
+            *<a href="_front">linked_table::front</a>(open_orders)
         };
 
         <b>while</b> (<a href="_is_some">option::is_some</a>(&next_order_key) && <a href="_length">vector::length</a>(&orders) &lt; <a href="order_query.md#0xdee9_order_query_PAGE_LIMIT">PAGE_LIMIT</a> + 1) {
             <b>let</b> key = <a href="_destroy_some">option::destroy_some</a>(next_order_key);
-            <b>let</b> order = <a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_borrow">linked_table::borrow</a>(open_orders, key);
+            <b>let</b> order = <a href="_borrow">linked_table::borrow</a>(open_orders, key);
 
             // <b>if</b> the order id is greater than max_id, we end the iteration for this tick level.
             <b>if</b> (<a href="_is_some">option::is_some</a>(&max_id) && key &gt; <a href="_destroy_some">option::destroy_some</a>(max_id)) {
-                <b>break</b>;
+                <b>break</b>
             };
 
-            next_order_key = *<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_next">linked_table::next</a>(open_orders, key);
+            next_order_key = *<a href="_next">linked_table::next</a>(open_orders, key);
 
             // <b>if</b> expire timestamp is set, and <b>if</b> the order is expired, we skip it.
             <b>if</b> (<a href="_is_none">option::is_none</a>(&min_expire_timestamp) ||

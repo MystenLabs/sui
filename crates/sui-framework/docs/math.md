@@ -1,32 +1,65 @@
 
-<a name="0x2_math"></a>
+<a name="0xdee9_math"></a>
 
-# Module `0x2::math`
-
-Basic math for nicer programmability
+# Module `0xdee9::math`
 
 
--  [Function `max`](#0x2_math_max)
--  [Function `min`](#0x2_math_min)
--  [Function `diff`](#0x2_math_diff)
--  [Function `pow`](#0x2_math_pow)
--  [Function `sqrt`](#0x2_math_sqrt)
--  [Function `sqrt_u128`](#0x2_math_sqrt_u128)
--  [Function `divide_and_round_up`](#0x2_math_divide_and_round_up)
+
+-  [Constants](#@Constants_0)
+-  [Function `unsafe_mul`](#0xdee9_math_unsafe_mul)
+-  [Function `unsafe_mul_round`](#0xdee9_math_unsafe_mul_round)
+-  [Function `mul`](#0xdee9_math_mul)
+-  [Function `mul_round`](#0xdee9_math_mul_round)
+-  [Function `unsafe_div`](#0xdee9_math_unsafe_div)
+-  [Function `unsafe_div_round`](#0xdee9_math_unsafe_div_round)
+-  [Function `div_round`](#0xdee9_math_div_round)
+-  [Function `count_leading_zeros`](#0xdee9_math_count_leading_zeros)
 
 
 <pre><code></code></pre>
 
 
 
-<a name="0x2_math_max"></a>
+<a name="@Constants_0"></a>
 
-## Function `max`
-
-Return the larger of <code>x</code> and <code>y</code>
+## Constants
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_max">max</a>(x: u64, y: u64): u64
+<a name="0xdee9_math_EUnderflow"></a>
+
+
+
+<pre><code><b>const</b> <a href="math.md#0xdee9_math_EUnderflow">EUnderflow</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="0xdee9_math_FLOAT_SCALING"></a>
+
+scaling setting for float
+
+
+<pre><code><b>const</b> <a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a>: u64 = 1000000000;
+</code></pre>
+
+
+
+<a name="0xdee9_math_FLOAT_SCALING_U128"></a>
+
+
+
+<pre><code><b>const</b> <a href="math.md#0xdee9_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a>: u128 = 1000000000;
+</code></pre>
+
+
+
+<a name="0xdee9_math_unsafe_mul"></a>
+
+## Function `unsafe_mul`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul">unsafe_mul</a>(x: u64, y: u64): u64
 </code></pre>
 
 
@@ -35,12 +68,9 @@ Return the larger of <code>x</code> and <code>y</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_max">max</a>(x: u64, y: u64): u64 {
-    <b>if</b> (x &gt; y) {
-        x
-    } <b>else</b> {
-        y
-    }
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul">unsafe_mul</a>(x: u64, y: u64): u64 {
+    <b>let</b> (_, result) = <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x, y);
+    result
 }
 </code></pre>
 
@@ -48,14 +78,13 @@ Return the larger of <code>x</code> and <code>y</code>
 
 </details>
 
-<a name="0x2_math_min"></a>
+<a name="0xdee9_math_unsafe_mul_round"></a>
 
-## Function `min`
-
-Return the smaller of <code>x</code> and <code>y</code>
+## Function `unsafe_mul_round`
 
 
-<pre><code><b>public</b> <b>fun</b> <b>min</b>(x: u64, y: u64): u64
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x: u64, y: u64): (bool, u64)
 </code></pre>
 
 
@@ -64,140 +93,12 @@ Return the smaller of <code>x</code> and <code>y</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <b>min</b>(x: u64, y: u64): u64 {
-    <b>if</b> (x &lt; y) {
-        x
-    } <b>else</b> {
-        y
-    }
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_math_diff"></a>
-
-## Function `diff`
-
-Return the absolute value of x - y
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_diff">diff</a>(x: u64, y: u64): u64
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_diff">diff</a>(x: u64, y: u64): u64 {
-    <b>if</b> (x &gt; y) {
-        x - y
-    } <b>else</b> {
-        y - x
-    }
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_math_pow"></a>
-
-## Function `pow`
-
-Return the value of a base raised to a power
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_pow">pow</a>(base: u64, exponent: u8): u64
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_pow">pow</a>(base: u64, exponent: u8): u64 {
-    <b>let</b> res = 1;
-    <b>while</b> (exponent &gt;= 1) {
-        <b>if</b> (exponent % 2 == 0) {
-            base = base * base;
-            exponent = exponent / 2;
-        } <b>else</b> {
-            res = res * base;
-            exponent = exponent - 1;
-        }
-    };
-
-    res
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_math_sqrt"></a>
-
-## Function `sqrt`
-
-Get a nearest lower integer Square Root for <code>x</code>. Given that this
-function can only operate with integers, it is impossible
-to get perfect (or precise) integer square root for some numbers.
-
-Example:
-```
-math::sqrt(9) => 3
-math::sqrt(8) => 2 // the nearest lower square root is 4;
-```
-
-In integer math, one of the possible ways to get results with more
-precision is to use higher values or temporarily multiply the
-value by some bigger number. Ideally if this is a square of 10 or 100.
-
-Example:
-```
-math::sqrt(8) => 2;
-math::sqrt(8 * 10000) => 282;
-// now we can use this value as if it was 2.82;
-// but to get the actual result, this value needs
-// to be divided by 100 (because sqrt(10000)).
-
-
-math::sqrt(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)
-```
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_sqrt">sqrt</a>(x: u64): u64
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_sqrt">sqrt</a>(x: u64): u64 {
-    <b>let</b> bit = 1u128 &lt;&lt; 64;
-    <b>let</b> res = 0u128;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x: u64, y: u64): (bool, u64) {
     <b>let</b> x = (x <b>as</b> u128);
-
-    <b>while</b> (bit != 0) {
-        <b>if</b> (x &gt;= res + bit) {
-            x = x - (res + bit);
-            res = (res &gt;&gt; 1) + bit;
-        } <b>else</b> {
-            res = res &gt;&gt; 1;
-        };
-        bit = bit &gt;&gt; 2;
-    };
-
-    (res <b>as</b> u64)
+    <b>let</b> y = (y <b>as</b> u128);
+    <b>let</b> is_round_down = <b>true</b>;
+    <b>if</b> ((x * y) % <a href="math.md#0xdee9_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a> == 0) is_round_down = <b>false</b>;
+    (is_round_down, ((x * y / <a href="math.md#0xdee9_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a>) <b>as</b> u64))
 }
 </code></pre>
 
@@ -205,38 +106,13 @@ math::sqrt(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)
 
 </details>
 
-<a name="0x2_math_sqrt_u128"></a>
+<a name="0xdee9_math_mul"></a>
 
-## Function `sqrt_u128`
-
-Similar to math::sqrt, but for u128 numbers. Get a nearest lower integer Square Root for <code>x</code>. Given that this
-function can only operate with integers, it is impossible
-to get perfect (or precise) integer square root for some numbers.
-
-Example:
-```
-math::sqrt_u128(9) => 3
-math::sqrt_u128(8) => 2 // the nearest lower square root is 4;
-```
-
-In integer math, one of the possible ways to get results with more
-precision is to use higher values or temporarily multiply the
-value by some bigger number. Ideally if this is a square of 10 or 100.
-
-Example:
-```
-math::sqrt_u128(8) => 2;
-math::sqrt_u128(8 * 10000) => 282;
-// now we can use this value as if it was 2.82;
-// but to get the actual result, this value needs
-// to be divided by 100 (because sqrt_u128(10000)).
+## Function `mul`
 
 
-math::sqrt_u128(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)
-```
 
-
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_sqrt_u128">sqrt_u128</a>(x: u128): u128
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_mul">mul</a>(x: u64, y: u64): u64
 </code></pre>
 
 
@@ -245,22 +121,10 @@ math::sqrt_u128(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_sqrt_u128">sqrt_u128</a>(x: u128): u128 {
-    <b>let</b> bit = 1u256 &lt;&lt; 128;
-    <b>let</b> res = 0u256;
-    <b>let</b> x = (x <b>as</b> u256);
-
-    <b>while</b> (bit != 0) {
-        <b>if</b> (x &gt;= res + bit) {
-            x = x - (res + bit);
-            res = (res &gt;&gt; 1) + bit;
-        } <b>else</b> {
-            res = res &gt;&gt; 1;
-        };
-        bit = bit &gt;&gt; 2;
-    };
-
-    (res <b>as</b> u128)
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_mul">mul</a>(x: u64, y: u64): u64 {
+    <b>let</b> (_, result) = <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x, y);
+    <b>assert</b>!(result &gt; 0, <a href="math.md#0xdee9_math_EUnderflow">EUnderflow</a>);
+    result
 }
 </code></pre>
 
@@ -268,14 +132,13 @@ math::sqrt_u128(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)
 
 </details>
 
-<a name="0x2_math_divide_and_round_up"></a>
+<a name="0xdee9_math_mul_round"></a>
 
-## Function `divide_and_round_up`
-
-Calculate x / y, but round up the result.
+## Function `mul_round`
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_divide_and_round_up">divide_and_round_up</a>(x: u64, y: u64): u64
+
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_mul_round">mul_round</a>(x: u64, y: u64): (bool, u64)
 </code></pre>
 
 
@@ -284,11 +147,151 @@ Calculate x / y, but round up the result.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="math.md#0x2_math_divide_and_round_up">divide_and_round_up</a>(x: u64, y: u64): u64 {
-    <b>if</b> (x % y == 0) {
-        x / y
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_mul_round">mul_round</a>(x: u64, y: u64): (bool, u64) {
+    <b>let</b> (is_round_down, result) = <a href="math.md#0xdee9_math_unsafe_mul_round">unsafe_mul_round</a>(x, y);
+    <b>assert</b>!(result &gt; 0, <a href="math.md#0xdee9_math_EUnderflow">EUnderflow</a>);
+    (is_round_down, result)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_math_unsafe_div"></a>
+
+## Function `unsafe_div`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div">unsafe_div</a>(x: u64, y: u64): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div">unsafe_div</a>(x: u64, y: u64): u64 {
+    <b>let</b> (_, result) = <a href="math.md#0xdee9_math_unsafe_div_round">unsafe_div_round</a>(x, y);
+    result
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_math_unsafe_div_round"></a>
+
+## Function `unsafe_div_round`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div_round">unsafe_div_round</a>(x: u64, y: u64): (bool, u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_unsafe_div_round">unsafe_div_round</a>(x: u64, y: u64): (bool, u64) {
+    <b>let</b> x = (x <b>as</b> u128);
+    <b>let</b> y = (y <b>as</b> u128);
+    <b>let</b> is_round_down = <b>true</b>;
+    <b>if</b> ((x * (<a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a> <b>as</b> u128) % y) == 0) is_round_down = <b>false</b>;
+    (is_round_down, ((x * (<a href="math.md#0xdee9_math_FLOAT_SCALING">FLOAT_SCALING</a> <b>as</b> u128) / y) <b>as</b> u64))
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_math_div_round"></a>
+
+## Function `div_round`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_div_round">div_round</a>(x: u64, y: u64): (bool, u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="math.md#0xdee9_math_div_round">div_round</a>(x: u64, y: u64): (bool, u64) {
+    <b>let</b> (is_round_down, result) = <a href="math.md#0xdee9_math_unsafe_div_round">unsafe_div_round</a>(x, y);
+    <b>assert</b>!(result &gt; 0, <a href="math.md#0xdee9_math_EUnderflow">EUnderflow</a>);
+    (is_round_down, result)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_math_count_leading_zeros"></a>
+
+## Function `count_leading_zeros`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_count_leading_zeros">count_leading_zeros</a>(x: u128): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="math.md#0xdee9_math_count_leading_zeros">count_leading_zeros</a>(x: u128): u8 {
+    <b>if</b> (x == 0) {
+        128
     } <b>else</b> {
-        x / y + 1
+        <b>let</b> n: u8 = 0;
+        <b>if</b> (x & 0xFFFFFFFFFFFFFFFF0000000000000000 == 0) {
+            // x's higher 64 is all zero, shift the lower part over
+            x = x &lt;&lt; 64;
+            n = n + 64;
+        };
+        <b>if</b> (x & 0xFFFFFFFF000000000000000000000000 == 0) {
+            // x's higher 32 is all zero, shift the lower part over
+            x = x &lt;&lt; 32;
+            n = n + 32;
+        };
+        <b>if</b> (x & 0xFFFF0000000000000000000000000000 == 0) {
+            // x's higher 16 is all zero, shift the lower part over
+            x = x &lt;&lt; 16;
+            n = n + 16;
+        };
+        <b>if</b> (x & 0xFF000000000000000000000000000000 == 0) {
+            // x's higher 8 is all zero, shift the lower part over
+            x = x &lt;&lt; 8;
+            n = n + 8;
+        };
+        <b>if</b> (x & 0xF0000000000000000000000000000000 == 0) {
+            // x's higher 4 is all zero, shift the lower part over
+            x = x &lt;&lt; 4;
+            n = n + 4;
+        };
+        <b>if</b> (x & 0xC0000000000000000000000000000000 == 0) {
+            // x's higher 2 is all zero, shift the lower part over
+            x = x &lt;&lt; 2;
+            n = n + 2;
+        };
+        <b>if</b> (x & 0x80000000000000000000000000000000 == 0) {
+            n = n + 1;
+        };
+
+        n
     }
 }
 </code></pre>
