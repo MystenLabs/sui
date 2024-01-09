@@ -655,6 +655,7 @@ impl TransactionManager {
         inner.maybe_shrink_capacity();
     }
 
+    #[instrument(level = "trace", skip_all)]
     fn objects_available_locked(
         &self,
         inner: &mut Inner,

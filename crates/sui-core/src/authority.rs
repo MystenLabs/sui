@@ -1212,6 +1212,7 @@ impl AuthorityState {
         Ok((effects, execution_error_opt))
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn commit_certificate(
         &self,
         certificate: &VerifiedExecutableTransaction,

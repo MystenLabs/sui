@@ -1118,6 +1118,7 @@ impl AuthorityPerEpochStore {
     }
 
     /// Deletes one pending certificate.
+    #[instrument(level = "trace", skip_all)]
     pub fn remove_pending_execution(&self, digest: &TransactionDigest) -> SuiResult<()> {
         self.tables()?.pending_execution.remove(digest)?;
         Ok(())
