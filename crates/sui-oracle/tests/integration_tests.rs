@@ -221,8 +221,7 @@ async fn test_publish_complex_value() {
 async fn test_consume_oracle_data() {
     let (client, keystore, sender) = init_test_client().await;
     // publish package if not exists
-    let Some(package) = option_env!("package_id")
-        .map(|s| ObjectID::from_str(s).unwrap()) else {
+    let Some(package) = option_env!("package_id").map(|s| ObjectID::from_str(s).unwrap()) else {
         panic!("package_id not set");
     };
 
@@ -574,7 +573,12 @@ async fn create_oracle(
         result.effects.unwrap().status()
     );
     let simple_oracle = result.object_changes.unwrap().iter().find(|change| matches!(change, ObjectChange::Created {object_type,..} if object_type.name.as_str() == "SimpleOracle")).unwrap().clone();
-    let ObjectChange::Created { object_id: simple_oracle_id, version, .. } = simple_oracle else {
+    let ObjectChange::Created {
+        object_id: simple_oracle_id,
+        version,
+        ..
+    } = simple_oracle
+    else {
         panic!("Expected created object change")
     };
 
