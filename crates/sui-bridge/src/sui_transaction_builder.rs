@@ -22,7 +22,7 @@ use crate::{
 // bridge dynamic field object id (not 0x9 or dynamic field wrapper) and update
 // along with software upgrades.
 // Or do we always retrieve from 0x9? We can figure this out before the first uggrade.
-fn get_bridge_package_id() -> &'static ObjectID {
+pub fn get_bridge_package_id() -> &'static ObjectID {
     static BRIDGE_PACKAGE_ID: OnceCell<ObjectID> = OnceCell::new();
     BRIDGE_PACKAGE_ID.get_or_init(|| match std::env::var("BRIDGE_PACKAGE_ID") {
         Ok(id) => {

@@ -92,7 +92,7 @@ impl BridgeRequestHandlerTrait for BridgeRequestHandler {
             .map_err(|_e| BridgeError::InvalidTxHash)?;
         let bridge_action = self
             .sui_client
-            .get_bridge_action_by_tx_digest_and_event_idx(&tx_digest, event_idx)
+            .get_bridge_action_by_tx_digest_and_event_idx_maybe(&tx_digest, event_idx)
             .await?;
         info!(action_digest=?bridge_action.digest(), "Retrieved matched Bridge Action: {:?}", bridge_action);
         let sig = BridgeAuthoritySignInfo::new(&bridge_action, &self.signer);

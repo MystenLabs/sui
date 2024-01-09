@@ -35,7 +35,7 @@ pub struct EmittedSuiToEthTokenBridgeV1 {
 }
 
 const EMITTED_SUI_TO_ETH_TOKEN_BRIDGE_V1_STUCT_TAG: &str =
-    "0x01::SuiToEthTokenBridge::SuiToEthTokenBridge";
+    "0x0b::SuiToEthTokenBridge::SuiToEthTokenBridge";
 
 crate::declare_events!(
     // TODO: Placeholder, use right struct tag

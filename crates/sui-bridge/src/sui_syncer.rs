@@ -163,7 +163,9 @@ mod tests {
         assert_no_more_events(interval, &mut events_rx).await;
 
         // Module Foo has new events
-        let event_1: SuiEvent = SuiEvent::random_for_testing();
+        let mut event_1: SuiEvent = SuiEvent::random_for_testing();
+        event_1.type_.address = PACKAGE_ID.into();
+        event_1.type_.module = module_foo.clone();
         let module_foo_events_1: sui_json_rpc_types::Page<SuiEvent, EventID> = EventPage {
             data: vec![event_1.clone(), event_1.clone()],
             next_cursor: None,
@@ -191,7 +193,9 @@ mod tests {
         assert_no_more_events(interval, &mut events_rx).await;
 
         // Module Bar has new events
-        let event_2: SuiEvent = SuiEvent::random_for_testing();
+        let mut event_2: SuiEvent = SuiEvent::random_for_testing();
+        event_2.type_.address = PACKAGE_ID.into();
+        event_2.type_.module = module_bar.clone();
         let module_bar_events_1 = EventPage {
             data: vec![event_2.clone()],
             next_cursor: None,
