@@ -268,7 +268,6 @@ module bridge::bridge {
         assert!(target_chain == inner.chain_id, EUnexpectedChainID);
 
         // TODO: why do we check validity of the route here? what if inconsistency?
-
         // Ensure route is valid
         // TODO: add unit tests
         assert!(chain_ids::is_valid_route(source_chain, target_chain), EInvalidBridgeRoute);
