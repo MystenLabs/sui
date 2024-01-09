@@ -14,6 +14,8 @@ use axum::Json;
 use ethers::types::TxHash;
 use sui_sdk::SuiClient as SuiSdkClient;
 use sui_types::digests::TransactionDigest;
+use tracing::info;
+use tracing::instrument;
 
 #[async_trait]
 pub trait BridgeRequestHandlerTrait {
@@ -57,17 +59,20 @@ impl BridgeRequestHandler {
 
 #[async_trait]
 impl BridgeRequestHandlerTrait for BridgeRequestHandler {
+    #[instrument(level = "info", skip(self))]
     async fn handle_eth_tx_hash(
         &self,
         tx_hash_hex: String,
         event_idx: u16,
     ) -> Result<Json<SignedBridgeAction>, BridgeError> {
+        info!("Received handle eth tx request");
         // TODO add caching and avoid simalutaneous requests
         let tx_hash = TxHash::from_str(&tx_hash_hex).map_err(|_| BridgeError::InvalidTxHash)?;
         let bridge_action = self
             .eth_client
             .get_finalized_bridge_action_maybe(tx_hash, event_idx)
             .await?;
+        info!(action_digest=?bridge_action.digest(), "Retrieved matched Bridge Action: {:?}", bridge_action);
         let sig = BridgeAuthoritySignInfo::new(&bridge_action, &self.signer);
         Ok(Json(SignedBridgeAction::new_from_data_and_sig(
             bridge_action,
@@ -75,11 +80,13 @@ impl BridgeRequestHandlerTrait for BridgeRequestHandler {
         )))
     }
 
+    #[instrument(level = "info", skip(self))]
     async fn handle_sui_tx_digest(
         &self,
         tx_digest_base58: String,
         event_idx: u16,
     ) -> Result<Json<SignedBridgeAction>, BridgeError> {
+        info!("Received handle sui tx request");
         // TODO add caching and avoid simultaneous requests
         let tx_digest = TransactionDigest::from_str(&tx_digest_base58)
             .map_err(|_e| BridgeError::InvalidTxHash)?;
@@ -87,6 +94,7 @@ impl BridgeRequestHandlerTrait for BridgeRequestHandler {
             .sui_client
             .get_bridge_action_by_tx_digest_and_event_idx(&tx_digest, event_idx)
             .await?;
+        info!(action_digest=?bridge_action.digest(), "Retrieved matched Bridge Action: {:?}", bridge_action);
         let sig = BridgeAuthoritySignInfo::new(&bridge_action, &self.signer);
         Ok(Json(SignedBridgeAction::new_from_data_and_sig(
             bridge_action,

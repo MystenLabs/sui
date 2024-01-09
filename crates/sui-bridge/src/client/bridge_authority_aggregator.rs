@@ -195,7 +195,7 @@ async fn request_sign_bridge_action_into_certification(
                         }
                     }
                     Err(e) => {
-                        info!(
+                        warn!(
                             "Failed to get signature from {:?}. Error: {:?}",
                             name.concise(),
                             e
