@@ -11,7 +11,7 @@ pub(crate) mod merge_spec_modules;
 pub(crate) mod syntax;
 
 use crate::{
-    diagnostics::{codes::Severity, Diagnostics, FilesSourceText},
+    diagnostics::{Diagnostics, FilesSourceText},
     parser::{self, ast::PackageDefinition, syntax::parse_file_string},
     shared::{CompilationEnv, IndexedPackagePath, NamedAddressMaps},
 };
@@ -32,7 +32,9 @@ pub(crate) fn parse_program(
     deps: Vec<IndexedPackagePath>,
 ) -> anyhow::Result<(
     FilesSourceText,
-    Result<(parser::ast::Program, CommentMap), Diagnostics>,
+    parser::ast::Program,
+    CommentMap,
+    Diagnostics,
 )> {
     fn find_move_filenames_with_address_mapping(
         paths_with_mapping: Vec<IndexedPackagePath>,
@@ -101,24 +103,12 @@ pub(crate) fn parse_program(
         diags.extend(ds);
     }
 
-    // TODO fix this so it works likes other passes and the handling of errors is done outside of
-    // this function
-    let env_result = compilation_env.check_diags_at_or_above_severity(Severity::BlockingError);
-    if let Err(env_diags) = env_result {
-        diags.extend(env_diags)
-    }
-
-    let res = if diags.is_empty() {
-        let pprog = parser::ast::Program {
-            named_address_maps,
-            source_definitions,
-            lib_definitions,
-        };
-        Ok((pprog, source_comments))
-    } else {
-        Err(diags)
+    let pprog = parser::ast::Program {
+        named_address_maps,
+        source_definitions,
+        lib_definitions,
     };
-    Ok((files, res))
+    Ok((files, pprog, source_comments, diags))
 }
 
 fn ensure_targets_deps_dont_intersect(
