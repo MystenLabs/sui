@@ -1,11 +1,18 @@
 use crate::{
+    compilation::package_layout::CompiledPackageLayout,
     lock_file::{self, schema::ToolchainVersion},
-    source_package::layout::SourcePackageLayout,
+    source_package::{layout::SourcePackageLayout, parsed_manifest::FileName},
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use colored::Colorize;
-use move_command_line_common::env::MOVE_HOME;
-use move_compiler::shared::PackagePaths;
+use move_binary_format::CompiledModule;
+use move_bytecode_source_map::utils::source_map_from_file;
+use move_command_line_common::{
+    address::NumericalAddress,
+    env::MOVE_HOME,
+    files::{MOVE_EXTENSION, SOURCE_MAP_EXTENSION},
+};
+use move_compiler::{compiled_unit::NamedCompiledModule, shared::PackagePaths};
 use move_symbol_pool::Symbol;
 
 use std::process::Command;
@@ -16,6 +23,8 @@ use std::{
     path::{Path, PathBuf},
 };
 use tracing::debug;
+
+use super::compiled_package::CompiledUnitWithSource;
 
 /// partitions `deps` by whether we need to compile dependent packages with a
 /// prior toolchain (which we find by looking at Move.lock contents) or
@@ -175,6 +184,52 @@ fn download_and_compile<W: Write>(
             anyhow!("failed to build package from compiler binary {compiler_version}: {e}",)
         })?;
     Ok(())
+}
+
+pub fn decode_bytecode_file(
+    root_path: PathBuf,
+    package_name: Symbol,
+    bytecode_path_str: &str,
+) -> Result<CompiledUnitWithSource> {
+    let package_name_opt = Some(package_name);
+    let bytecode_path = Path::new(bytecode_path_str);
+    let path_to_file = CompiledPackageLayout::path_to_file_after_category(bytecode_path);
+    let bytecode_bytes = std::fs::read(bytecode_path)?;
+    let source_map = source_map_from_file(
+        &root_path
+            .join(CompiledPackageLayout::SourceMaps.path())
+            .join(&path_to_file)
+            .with_extension(SOURCE_MAP_EXTENSION),
+    )?;
+    let source_path = &root_path
+        .join(CompiledPackageLayout::Sources.path())
+        .join(path_to_file)
+        .with_extension(MOVE_EXTENSION);
+    ensure!(
+        source_path.is_file(),
+        "Error decoding package: Unable to find corresponding source file for '{bytecode_path_str}' in package {package_name}"
+    );
+    let module = CompiledModule::deserialize_with_defaults(&bytecode_bytes)?;
+    let (address_bytes, module_name) = {
+        let id = module.self_id();
+        let parsed_addr = NumericalAddress::new(
+            id.address().into_bytes(),
+            move_compiler::shared::NumberFormat::Hex,
+        );
+        let module_name = FileName::from(id.name().as_str());
+        (parsed_addr, module_name)
+    };
+    let unit = NamedCompiledModule {
+        package_name: package_name_opt,
+        address: address_bytes,
+        name: module_name,
+        module,
+        source_map,
+    };
+    Ok(CompiledUnitWithSource {
+        unit,
+        source_path: source_path.clone(),
+    })
 }
 
 #[cfg(unix)]

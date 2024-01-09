@@ -4,7 +4,7 @@
 
 use crate::{
     compilation::package_layout::CompiledPackageLayout,
-    compilation::versioned_compilation::partition_deps_by_toolchain,
+    compilation::versioned_compilation::{decode_bytecode_file, partition_deps_by_toolchain},
     resolution::resolution_graph::{Package, Renaming, ResolvedGraph, ResolvedTable},
     source_package::{
         layout::{SourcePackageLayout, REFERENCE_TEMPLATE_FILENAME},
@@ -474,6 +474,7 @@ impl CompiledPackage {
         }
 
         let mut paths;
+        let mut prebuilt_deps = vec![];
         if std::env::var("VERIFIED_SOURCE_BUILD").is_err() {
             paths = src_deps;
         } else {
@@ -483,7 +484,8 @@ impl CompiledPackage {
                 w,
             )?;
             paths = deps_for_current_compiler;
-            bytecode_deps.extend(deps_for_prior_compiler.clone());
+            prebuilt_deps = deps_for_prior_compiler;
+            bytecode_deps.extend(prebuilt_deps.clone());
         }
         paths.push(sources_package_paths.clone());
 
@@ -517,6 +519,31 @@ impl CompiledPackage {
                 root_compiled_units.push(unit)
             } else {
                 deps_compiled_units.push((package_name, unit))
+            }
+        }
+
+        if std::env::var("VERIFIED_SOURCE_BUILD").is_ok() {
+            for prebuilt_dep in prebuilt_deps {
+                let package_dir = PathBuf::from(prebuilt_dep.paths[0].as_str());
+                let package_dir = SourcePackageLayout::try_find_root(&package_dir)?;
+                let package_dir = package_dir.join("build");
+                let dep_name = match prebuilt_dep.name {
+                    Some((name, _)) => name,
+                    None => "unnamed dependency".into(),
+                };
+                let module_path = package_dir
+                    .join(dep_name.as_str())
+                    .join(CompiledPackageLayout::CompiledModules.path());
+
+                let compiled_unit_paths = vec![module_path];
+                let compiled_units = find_filenames(&compiled_unit_paths, |path| {
+                    extension_equals(path, MOVE_COMPILED_EXTENSION)
+                });
+                for bytecode_path in compiled_units.unwrap() {
+                    let decoded =
+                        decode_bytecode_file(package_dir.clone(), dep_name, &bytecode_path)?;
+                    deps_compiled_units.push((dep_name, decoded));
+                }
             }
         }
 
