@@ -1,0 +1,47 @@
+[package]
+edition = "2021"
+name = "suiop-cli"
+authors = [
+  "Jk Jensen <jk@mystenlabs.com>",
+  "Mysten Labs <build@mystenlabs.com>",
+]
+license = "Apache-2.0"
+version = "0.1.5"
+publish = false
+
+[lib]
+name = "suioplib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "suiop"
+path = "src/main.rs"
+
+[dependencies]
+docker-api.workspace = true
+field_names.workspace = true
+prettytable-rs.workspace = true
+semver.workspace = true
+spinners.workspace = true
+serde_yaml.workspace = true
+strum.workspace = true
+tokio = { workspace = true, features = ["full"] }
+toml_edit.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true
+colored.workspace = true
+regex.workspace = true
+inquire.workspace = true
+reqwest = { workspace = true, features = [
+  "rustls-tls",
+  "json",
+], default-features = false }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+workspace-hack.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
