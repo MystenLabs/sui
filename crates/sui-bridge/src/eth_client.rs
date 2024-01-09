@@ -117,7 +117,8 @@ where
         Ok(number.as_u64())
     }
 
-    // TODO: this needs some pagination if the range is too big
+    // Note: query may fail if range is too big. Callsite is responsible
+    // for chunking the query.
     pub async fn get_events_in_range(
         &self,
         address: ethers::types::Address,
