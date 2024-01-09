@@ -38,6 +38,9 @@ module bridge::committee {
         bridge_pubkey_bytes: vector<u8>,
         /// Voting power
         voting_power: u64,
+        /// The HTTP REST URL the member's node listens to
+        /// it looks like b'https://127.0.0.1:9191'
+        http_rest_url: vector<u8>,
         /// If this member is blocklisted
         blocklisted: bool,
     }
@@ -53,6 +56,7 @@ module bridge::committee {
             sui_address: address::from_u256(1),
             bridge_pubkey_bytes,
             voting_power: 10,
+            http_rest_url: b"https://127.0.0.1:9191",
             blocklisted: false
         });
 
@@ -61,6 +65,7 @@ module bridge::committee {
             sui_address: address::from_u256(2),
             bridge_pubkey_bytes,
             voting_power: 10,
+            http_rest_url: b"https://127.0.0.1:9192",
             blocklisted: false
         });
 
@@ -186,6 +191,7 @@ module bridge::committee {
             sui_address: address::from_u256(1),
             bridge_pubkey_bytes,
             voting_power: 100,
+            http_rest_url: b"https://127.0.0.1:9191",
             blocklisted: false
         });
 
@@ -194,6 +200,7 @@ module bridge::committee {
             sui_address: address::from_u256(2),
             bridge_pubkey_bytes,
             voting_power: 100,
+            http_rest_url: b"https://127.0.0.1:9192",
             blocklisted: false
         });
 
