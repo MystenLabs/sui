@@ -44,8 +44,15 @@ module bridge::bridge {
     const FREEZE: u8 = 0;
     const UNFREEZE: u8 = 1;
 
-    struct BridgeEvent has copy, drop {
-        message: BridgeMessage,
+    struct TokenBridgeEvent has copy, drop {
+        message_type: u8,
+        seq_num: u64,
+        source_chain: u8,
+        sender_address: vector<u8>,
+        target_chain: u8,
+        target_address: vector<u8>,
+        token_type: u8,
+        amount: u64
     }
 
     struct BridgeRecord has store, drop {
@@ -154,16 +161,18 @@ module bridge::bridge {
         assert!(chain_ids::is_valid_route(inner.chain_id, target_chain), EInvalidBridgeRoute);
         assert!(!inner.frozen, EBridgeUnavailable);
         let bridge_seq_num = next_seq_num(inner, message_types::token());
-        // create bridge message
+        let token_id = treasury::token_id<T>();
+        let token_amount = balance::value(coin::balance(&token));
 
+        // create bridge message
         let message = message::create_token_bridge_message(
             inner.chain_id,
             bridge_seq_num,
             address::to_bytes(tx_context::sender(ctx)),
             target_chain,
             target_address,
-            treasury::token_id<T>(),
-            balance::value(coin::balance(&token))
+            token_id,
+            token_amount,
         );
 
         // burn / escrow token, unsupported coins will fail in this step
@@ -178,7 +187,16 @@ module bridge::bridge {
         });
 
         // emit event
-        emit(BridgeEvent { message });
+        emit(TokenBridgeEvent {
+            message_type: message_types::token(),
+            seq_num: bridge_seq_num,
+            source_chain: inner.chain_id,
+            sender_address: address::to_bytes(tx_context::sender(ctx)),
+            target_chain,
+            target_address,
+            token_type: token_id,
+            amount: token_amount,
+        });
     }
 
     // Record bridge message approvals in Sui, called by the bridge client

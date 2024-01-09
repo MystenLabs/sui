@@ -390,6 +390,15 @@ pub struct MoveTypeBridgeMessageKey {
     pub bridge_seq_num: u64,
 }
 
+/// Rust version of the Move message::BridgeMessage type.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MoveTypeBridgeMessage {
+    pub message_type: u8,
+    pub message_version: u8,
+    pub seq_num: u64,
+    pub source_chain: u8,
+}
+
 /////////////////////////// Move Types End //////////////////////////
 
 #[cfg(test)]
