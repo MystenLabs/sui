@@ -75,6 +75,7 @@ impl SingleValidator {
                 // to be configurable and introduce traffic control benchmarks to test
                 // against different policies
                 PolicyConfig::default(),
+                None, /* RemoteFirewallConfig */
             )
             .await,
         );

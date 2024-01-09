@@ -762,6 +762,7 @@ async fn test_authority_txn_signing_pushback() {
             consensus_adapter,
             Arc::new(ValidatorServiceMetrics::new_for_tests()),
             PolicyConfig::default(),
+            None,
         )
         .await,
     );
@@ -895,6 +896,7 @@ async fn test_authority_txn_execution_pushback() {
             consensus_adapter,
             Arc::new(ValidatorServiceMetrics::new_for_tests()),
             PolicyConfig::default(),
+            None,
         )
         .await,
     );
