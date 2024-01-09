@@ -121,10 +121,10 @@ module Test::M2 {
   }
 }
 
-//# run-graphql --variables A
+//# run-graphql --variables A Test
 {
   eventConnection(
-    filter: {sender: $A, eventType: "@{Test}"}
+    filter: {sender: $A, eventType: $Test}
   ) {
     nodes {
       sendingModule {
