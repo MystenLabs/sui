@@ -11,7 +11,6 @@ use super::object::deserialize_move_struct;
 use super::{
     base64::Base64, move_object::MoveObject, move_value::MoveValue, sui_address::SuiAddress,
 };
-use crate::context_data::db_data_provider::PgManager;
 use crate::context_data::package_cache::PackageCache;
 use crate::error::Error;
 use sui_types::object::Object as NativeObject;
@@ -90,9 +89,7 @@ impl DynamicField {
     /// in which case it is also accessible off-chain via its address.
     async fn value(&self, ctx: &Context<'_>) -> Result<Option<DynamicFieldValue>> {
         if self.df_kind == DynamicFieldType::DynamicObject {
-            let obj = ctx
-                .data_unchecked::<PgManager>()
-                .fetch_move_obj(self.df_object_id, None)
+            let obj = MoveObject::query(ctx.data_unchecked(), self.df_object_id, None)
                 .await
                 .extend()?;
             Ok(obj.map(DynamicFieldValue::MoveObject))

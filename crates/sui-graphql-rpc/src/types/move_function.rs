@@ -4,8 +4,7 @@
 use async_graphql::*;
 use sui_package_resolver::FunctionDef;
 
-use crate::context_data::db_data_provider::PgManager;
-use crate::error::Error;
+use crate::{data::Db, error::Error};
 
 use super::{
     move_module::MoveModule,
@@ -34,9 +33,7 @@ pub(crate) struct MoveFunctionTypeParameter {
 impl MoveFunction {
     /// The module this function was defined in.
     async fn module(&self, ctx: &Context<'_>) -> Result<MoveModule> {
-        let Some(module) = ctx
-            .data_unchecked::<PgManager>()
-            .fetch_move_module(self.package, &self.module)
+        let Some(module) = MoveModule::query(ctx.data_unchecked(), self.package, &self.module)
             .await
             .extend()?
         else {
@@ -110,5 +107,18 @@ impl MoveFunction {
             parameters,
             return_,
         }
+    }
+
+    pub(crate) async fn query(
+        db: &Db,
+        address: SuiAddress,
+        module: &str,
+        function: &str,
+    ) -> Result<Option<Self>, Error> {
+        let Some(module) = MoveModule::query(db, address, module).await? else {
+            return Ok(None);
+        };
+
+        module.function_impl(function.to_string())
     }
 }

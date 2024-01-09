@@ -8,7 +8,7 @@ use move_binary_format::binary_views::BinaryIndexedView;
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Loc;
 
-use crate::context_data::db_data_provider::PgManager;
+use crate::data::Db;
 use crate::error::Error;
 use sui_package_resolver::Module as ParsedMoveModule;
 
@@ -34,8 +34,7 @@ pub(crate) type CFunction = Cursor<String>;
 impl MoveModule {
     /// The package that this Move module was defined in
     async fn package(&self, ctx: &Context<'_>) -> Result<MovePackage> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_move_package(self.storage_id, None)
+        MovePackage::query(ctx.data_unchecked(), self.storage_id, None)
             .await
             .extend()?
             .ok_or_else(|| {
@@ -80,9 +79,7 @@ impl MoveModule {
         connection.has_next_page = next;
 
         let runtime_id = *bytecode.self_id().address();
-        let Some(package) = ctx
-            .data_unchecked::<PgManager>()
-            .fetch_move_package(self.storage_id, None)
+        let Some(package) = MovePackage::query(ctx.data_unchecked(), self.storage_id, None)
             .await
             .extend()?
         else {
@@ -288,5 +285,17 @@ impl MoveModule {
             name,
             def,
         )))
+    }
+
+    pub(crate) async fn query(
+        db: &Db,
+        address: SuiAddress,
+        name: &str,
+    ) -> Result<Option<Self>, Error> {
+        let Some(package) = MovePackage::query(db, address, None).await? else {
+            return Ok(None);
+        };
+
+        package.module_impl(name)
     }
 }

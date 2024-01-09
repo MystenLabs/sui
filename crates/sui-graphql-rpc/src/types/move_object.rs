@@ -6,8 +6,10 @@ use super::coin_metadata::{CoinMetadata, CoinMetadataDowncastError};
 use super::move_type::MoveType;
 use super::move_value::MoveValue;
 use super::stake::StakedSuiDowncastError;
+use super::sui_address::SuiAddress;
 use super::{coin::Coin, object::Object};
 use crate::context_data::package_cache::PackageCache;
+use crate::data::Db;
 use crate::error::Error;
 use crate::types::stake::StakedSui;
 use async_graphql::*;
@@ -88,6 +90,22 @@ impl MoveObject {
                 "Failed to deserialize coin metadata: {e}"
             ))),
         }
+    }
+}
+
+impl MoveObject {
+    pub(crate) async fn query(
+        db: &Db,
+        address: SuiAddress,
+        version: Option<u64>,
+    ) -> Result<Option<Self>, Error> {
+        let Some(object) = Object::query(db, address, version).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(MoveObject::try_from(&object).map_err(|_| {
+            Error::Internal(format!("{address} is not an object"))
+        })?))
     }
 }
 

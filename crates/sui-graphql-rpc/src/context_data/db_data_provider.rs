@@ -14,10 +14,7 @@ use crate::{
         digest::Digest,
         dynamic_field::{DynamicField, DynamicFieldName},
         event::{Event, EventFilter},
-        move_function::MoveFunction,
-        move_module::MoveModule,
         move_object::MoveObject,
-        move_package::MovePackage,
         move_type::MoveType,
         object::{Object, ObjectFilter},
         stake::StakedSui,
@@ -685,74 +682,6 @@ impl PgManager {
                 .map(TransactionBlock::try_from)
                 .collect::<Result<Vec<_>, _>>()?,
         ))
-    }
-
-    pub(crate) async fn fetch_obj(
-        &self,
-        address: SuiAddress,
-        version: Option<u64>,
-    ) -> Result<Option<Object>, Error> {
-        let address = address.into_vec();
-        let version = version.map(|v| v as i64);
-
-        let stored_obj = self.get_obj(address, version).await?;
-        stored_obj.map(Object::try_from).transpose()
-    }
-
-    pub(crate) async fn fetch_move_obj(
-        &self,
-        address: SuiAddress,
-        version: Option<u64>,
-    ) -> Result<Option<MoveObject>, Error> {
-        let Some(object) = self.fetch_obj(address, version).await? else {
-            return Ok(None);
-        };
-
-        Ok(Some(MoveObject::try_from(&object).map_err(|_| {
-            Error::Internal(format!("{address} is not an object"))
-        })?))
-    }
-
-    pub(crate) async fn fetch_move_package(
-        &self,
-        address: SuiAddress,
-        version: Option<u64>,
-    ) -> Result<Option<MovePackage>, Error> {
-        let Some(object) = self.fetch_obj(address, version).await? else {
-            return Ok(None);
-        };
-
-        Ok(Some(MovePackage::try_from(&object).map_err(|_| {
-            Error::Internal(format!("{address} is not a package"))
-        })?))
-    }
-
-    pub(crate) async fn fetch_move_module(
-        &self,
-        address: SuiAddress,
-        name: &str,
-    ) -> Result<Option<MoveModule>, Error> {
-        // Fetch the latest version of a package (this means that when we fetch a module from the
-        // system framework via one of its types, we will always get the latest version of that
-        // module).
-        let Some(package) = self.fetch_move_package(address, None).await? else {
-            return Ok(None);
-        };
-
-        package.module_impl(name)
-    }
-
-    pub(crate) async fn fetch_move_function(
-        &self,
-        address: SuiAddress,
-        module: &str,
-        function: &str,
-    ) -> Result<Option<MoveFunction>, Error> {
-        let Some(module) = self.fetch_move_module(address, module).await? else {
-            return Ok(None);
-        };
-
-        module.function_impl(function.to_string())
     }
 
     pub(crate) async fn fetch_owned_objs(
