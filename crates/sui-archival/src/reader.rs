@@ -25,7 +25,7 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointSequenceNumber,
     FullCheckpointContents as CheckpointContents, VerifiedCheckpoint, VerifiedCheckpointContents,
 };
-use sui_types::storage::{ReadStore, WriteStore};
+use sui_types::storage::{CheckpointHandler, ReadStore, WriteStore};
 use tokio::sync::oneshot::Sender;
 use tokio::sync::{oneshot, Mutex};
 use tracing::info;
@@ -362,9 +362,10 @@ impl ArchiveReader {
     /// checkpoint range. If latest available checkpoint in archive is older than the start of the
     /// input range then this call fails with an error otherwise we load as many checkpoints as
     /// possible until the end of the provided checkpoint range.
-    pub async fn read<S>(
+    pub async fn read<S, H>(
         &self,
         store: S,
+        mut checkpoint_handler: H,
         checkpoint_range: Range<CheckpointSequenceNumber>,
         txn_counter: Arc<AtomicU64>,
         checkpoint_counter: Arc<AtomicU64>,
@@ -373,6 +374,7 @@ impl ArchiveReader {
     where
         S: WriteStore + Clone,
         <S as ReadStore>::Error: std::error::Error,
+        H: CheckpointHandler + Send + Sync,
     {
         let manifest = self.manifest.lock().await.clone();
 
@@ -467,6 +469,7 @@ impl ArchiveReader {
                                 .archive_checkpoints_read
                                 .with_label_values(&[&self.bucket])
                                 .inc_by(1);
+                            checkpoint_handler.handle_checkpoint(verified_checkpoint.sequence_number)?;
                             Ok::<(), anyhow::Error>(())
                         })
                 });

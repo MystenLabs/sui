@@ -36,6 +36,8 @@ fastcrypto = { workspace = true, features = ["copy_key"] }
 mysten-metrics.workspace = true
 sui-analytics-indexer-derive.workspace = true
 sui-indexer.workspace = true
+sui-archival.workspace = true
+sui-config.workspace = true
 eyre.workspace = true
 rocksdb.workspace = true
 tempfile.workspace = true

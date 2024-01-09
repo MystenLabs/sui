@@ -30,6 +30,7 @@ use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 pub use write_store::WriteStore;
+use crate::messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint, VerifiedCheckpointContents};
 
 /// A potential input to a transaction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -514,4 +515,16 @@ pub trait GetSharedLocks: Send + Sync {
         &self,
         transaction_digest: &TransactionDigest,
     ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError>;
+}
+
+pub trait CheckpointHandler {
+    fn handle_checkpoint(&mut self, verified_checkpoint: VerifiedCheckpoint, verified_checkpoint_contents: VerifiedCheckpointContents) -> Result<(), SuiError>;
+}
+
+pub struct NoOpCheckpointHandler;
+
+impl CheckpointHandler for NoOpCheckpointHandler {
+    fn handle_checkpoint(&mut self, _verified_checkpoint: VerifiedCheckpoint, _verified_checkpoint_contents: VerifiedCheckpointContents) -> Result<(), SuiError> {
+        Ok(())
+    }
 }

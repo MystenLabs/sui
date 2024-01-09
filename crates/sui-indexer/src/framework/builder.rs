@@ -58,7 +58,6 @@ impl IndexerBuilder {
                     .channels
                     .with_label_values(&["checkpoint_tx_downloading"]),
             );
-
         // experimental rest api route is found at `/rest` on the same interface as the jsonrpc
         // service
         let rest_api_url = format!("{}/rest", self.rest_url.unwrap());

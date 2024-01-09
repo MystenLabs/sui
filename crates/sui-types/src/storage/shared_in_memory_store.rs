@@ -17,6 +17,7 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use tap::Pipe;
 use tracing::error;
+use crate::full_checkpoint_content::CheckpointData;
 
 #[derive(Clone, Debug, Default)]
 pub struct SharedInMemoryStore(Arc<std::sync::RwLock<InMemoryStore>>);

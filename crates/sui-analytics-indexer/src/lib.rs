@@ -18,7 +18,7 @@ use sui_rest_api::CheckpointData;
 use sui_storage::object_store::util::{
     find_all_dirs_with_epoch_prefix, find_all_files_with_epoch_prefix,
 };
-use sui_storage::object_store::ObjectStoreConfig;
+use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_types::base_types::EpochId;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
@@ -47,6 +47,7 @@ mod handlers;
 mod package_store;
 pub mod tables;
 mod writers;
+mod archive_tailer;
 
 const EPOCH_DIR_PREFIX: &str = "epoch_";
 const CHECKPOINT_DIR_PREFIX: &str = "checkpoints";
@@ -106,6 +107,12 @@ pub struct AnalyticsIndexerConfig {
         default_value = "/opt/sui/db/package_cache"
     )]
     pub package_cache_path: PathBuf,
+    // Remote object store where data gets written to
+    /// Archival bucket name. If not specified, defaults are
+    #[clap(long = "archive-bucket")]
+    archive_bucket: Option<String>,
+    #[clap(long = "archive-bucket-type", default_value = "s3")]
+    archive_bucket_type: ObjectStoreType,
 }
 
 #[derive(
