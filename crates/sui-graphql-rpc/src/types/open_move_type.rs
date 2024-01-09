@@ -12,33 +12,29 @@ pub(crate) struct OpenMoveType {
     signature: OpenMoveTypeSignature,
 }
 
-/// The basic four abilities for a move object
+/// Abilities are keywords in Sui Move that define how types behave at the compiler level.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum MoveAbility {
-    /// Allows values of types with this ability to be copied.
+    /// Enables values to be copied.
     Copy,
-    /// Allows values of types with this ability to be popped/dropped.
+    /// Enables values to be popped/dropped.
     Drop,
-    /// Allows the type to serve as a key for global storage operations.
+    /// Enables values to be held directly in global storage.
     Key,
-    /// Allows values of types with this ability to exist inside a struct in global storage.
+    /// Enables values to be held inside a struct in global storage.
     Store,
 }
 
-/// Module functions, by default, can only be called within the same module.
-/// These internal (sometimes called private) functions cannot be called from
-/// other modules or from scripts.
+/// The visibility modifier describes which modules can access this module member.
+/// A module member, by default, can only be called within the same module.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum MoveVisibility {
-    /// A public function can be called by any function defined in any module or script.
+    /// A public member can be accessed by any module.
     Public,
-    /// A private function can only be called from the module where it was defined.
+    /// A private member can be accessed in the module it is defined in.
     Private,
-    /// The friend visibility modifier is a more restricted form of the public modifier
-    /// to give more control about where a function can be used. A public(friend) function
-    /// can be called by:
-    /// 1) other functions defined in the same module, or
-    /// 2) functions defined in modules which are explicitly specified in the friend list.
+    /// A friend member can be accessed in the module it is defined in and any other module in
+    /// its package that is explicitly specified in its friend list.
     Friend,
 }
 

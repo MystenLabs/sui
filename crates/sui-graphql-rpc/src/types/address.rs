@@ -22,16 +22,16 @@ pub(crate) struct Address {
     pub address: SuiAddress,
 }
 
-#[derive(Enum, Copy, Clone, Eq, PartialEq)]
 /// The possible relationship types for a transaction block: sign, sent, received, or paid.
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum AddressTransactionBlockRelationship {
-    /// Transactions this address has signed
+    /// Transactions this address has signed either as a sender or as a sponsor
     Sign,
     /// Transactions that transferred objects from this address
     Sent,
-    /// Transactions that received objects into this address
+    /// Transactions that sent objects to this addres
     Recv,
-    /// Transactions that were paid for by this address
+    /// Transactions that were paid for by this address either as a sender or as a sponsor
     Paid,
 }
 

@@ -109,7 +109,7 @@ The possible relationship types for a transaction block: sign, sent, received, o
 """
 enum AddressTransactionBlockRelationship {
 	"""
-	Transactions this address has signed
+	Transactions this address has signed either as a sender or as a sponsor
 	"""
 	SIGN
 	"""
@@ -117,11 +117,11 @@ enum AddressTransactionBlockRelationship {
 	"""
 	SENT
 	"""
-	Transactions that received objects into this address
+	Transactions that sent objects to this addres
 	"""
 	RECV
 	"""
-	Transactions that were paid for by this address
+	Transactions that were paid for by this address either as a sender or as a sponsor
 	"""
 	PAID
 }
@@ -1027,23 +1027,23 @@ type MergeCoinsTransaction {
 }
 
 """
-The basic four abilities for a move object
+Abilities are keywords in Sui Move that define how types behave at the compiler level.
 """
 enum MoveAbility {
 	"""
-	Allows values of types with this ability to be copied.
+	Enables values to be copied.
 	"""
 	COPY
 	"""
-	Allows values of types with this ability to be popped/dropped.
+	Enables values to be popped/dropped.
 	"""
 	DROP
 	"""
-	Allows the type to serve as a key for global storage operations.
+	Enables values to be held directly in global storage.
 	"""
 	KEY
 	"""
-	Allows values of types with this ability to exist inside a struct in global storage.
+	Enables values to be held inside a struct in global storage.
 	"""
 	STORE
 }
@@ -1481,25 +1481,21 @@ type MoveValue {
 }
 
 """
-Module functions, by default, can only be called within the same module.
-These internal (sometimes called private) functions cannot be called from
-other modules or from scripts.
+The visibility modifier describes which modules can access this module member.
+A module member, by default, can only be called within the same module.
 """
 enum MoveVisibility {
 	"""
-	A public function can be called by any function defined in any module or script.
+	A public member can be accessed by any module.
 	"""
 	PUBLIC
 	"""
-	A private function can only be called from the module where it was defined.
+	A private member can be accessed in the module it is defined in.
 	"""
 	PRIVATE
 	"""
-	The friend visibility modifier is a more restricted form of the public modifier
-	to give more control about where a function can be used. A public(friend) function
-	can be called by:
-	1) other functions defined in the same module, or
-	2) functions defined in modules which are explicitly specified in the friend list.
+	A friend member can be accessed in the module it is defined in and any other module in
+	its package that is explicitly specified in its friend list.
 	"""
 	FRIEND
 }
@@ -2658,6 +2654,9 @@ input TransactionBlockFilter {
 	package: SuiAddress
 	module: String
 	function: String
+	"""
+	An input filter selecting for either system or programmable transactions.
+	"""
 	kind: TransactionBlockKindInput
 	afterCheckpoint: Int
 	atCheckpoint: Int
@@ -2672,12 +2671,12 @@ input TransactionBlockFilter {
 }
 
 """
-The kind of transaction blocks that exist.
+The kind of transaction block, either a programmable transaction or a system transaction.
 """
 union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransactionBlock | AuthenticatorStateUpdateTransaction | RandomnessStateUpdateTransaction | EndOfEpochTransaction
 
 """
-The kind of transaction block: a system transaction or a programmable transaction.
+An input filter selecting for either system or programmable transactions.
 """
 enum TransactionBlockKindInput {
 	"""
