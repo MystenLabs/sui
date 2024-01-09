@@ -1086,6 +1086,7 @@ impl AuthorityStore {
     }
 
     /// Acquires read locks for affected indirect objects
+    #[instrument(level = "trace", skip_all)]
     async fn acquire_read_locks_for_indirect_objects(
         &self,
         inner_temporary_store: &InnerTemporaryStore,
@@ -1111,6 +1112,7 @@ impl AuthorityStore {
     }
 
     /// Helper function for updating the objects and locks in the state
+    #[instrument(level = "trace", skip_all)]
     async fn update_objects_and_locks(
         &self,
         write_batch: &mut DBBatch,
