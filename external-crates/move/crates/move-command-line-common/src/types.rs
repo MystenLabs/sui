@@ -7,7 +7,7 @@ use anyhow::bail;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{self, Identifier},
-    language_storage::{StructTag, TypeTag},
+    language_storage::{ModuleId, StructTag, TypeTag},
 };
 
 use crate::{address::ParsedAddress, parser::Token};
@@ -24,9 +24,14 @@ pub enum TypeToken {
 }
 
 #[derive(Eq, PartialEq, Debug, Clone)]
-pub struct ParsedStructType {
+pub struct ParsedModuleId {
     pub address: ParsedAddress,
-    pub module: String,
+    pub name: String,
+}
+
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct ParsedStructType {
+    pub module: ParsedModuleId,
     pub name: String,
     pub type_args: Vec<ParsedType>,
 }
@@ -116,20 +121,31 @@ impl Token for TypeToken {
     }
 }
 
+impl ParsedModuleId {
+    pub fn into_module_id(
+        self,
+        mapping: &impl Fn(&str) -> Option<AccountAddress>,
+    ) -> anyhow::Result<ModuleId> {
+        Ok(ModuleId::new(
+            self.address.into_account_address(mapping)?,
+            Identifier::new(self.name)?,
+        ))
+    }
+}
+
 impl ParsedStructType {
     pub fn into_struct_tag(
         self,
         mapping: &impl Fn(&str) -> Option<AccountAddress>,
     ) -> anyhow::Result<StructTag> {
         let Self {
-            address,
             module,
             name,
             type_args,
         } = self;
         Ok(StructTag {
-            address: address.into_account_address(mapping)?,
-            module: Identifier::new(module)?,
+            address: module.address.into_account_address(mapping)?,
+            module: Identifier::new(module.name)?,
             name: Identifier::new(name)?,
             type_params: type_args
                 .into_iter()
