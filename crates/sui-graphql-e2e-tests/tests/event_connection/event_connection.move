@@ -100,10 +100,10 @@ module Test::M2 {
 
 //# create-checkpoint
 
-//# run-graphql
+//# run-graphql --variables A
 {
   eventConnection(
-    filter: {sender: "@{A}"}
+    filter: {sender: $A}
   ) {
     nodes {
       sendingModule {
@@ -121,10 +121,10 @@ module Test::M2 {
   }
 }
 
-//# run-graphql
+//# run-graphql --variables A
 {
   eventConnection(
-    filter: {sender: "@{A}", eventType: "@{Test}"}
+    filter: {sender: $A, eventType: "@{Test}"}
   ) {
     nodes {
       sendingModule {
@@ -142,10 +142,10 @@ module Test::M2 {
   }
 }
 
-//# run-graphql
+//# run-graphql --variables A
 {
   eventConnection(
-    filter: {sender: "@{A}", eventType: "@{Test}::M1"}
+    filter: {sender: $A, eventType: "@{Test}::M1"}
   ) {
     nodes {
       sendingModule {
@@ -163,10 +163,10 @@ module Test::M2 {
   }
 }
 
-//# run-graphql
+//# run-graphql --variables A
 {
   eventConnection(
-    filter: {sender: "@{A}", eventType: "@{Test}::M1::EventA"}
+    filter: {sender: $A, eventType: "@{Test}::M1::EventA"}
   ) {
     nodes {
       sendingModule {
@@ -184,10 +184,10 @@ module Test::M2 {
   }
 }
 
-//# run-graphql
+//# run-graphql --variables A
 {
   eventConnection(
-    filter: {sender: "@{A}", eventType: "@{Test}::M1::EventB"}
+    filter: {sender: $A, eventType: "@{Test}::M1::EventB"}
   ) {
     nodes {
       sendingModule {
@@ -205,10 +205,10 @@ module Test::M2 {
   }
 }
 
-//# run-graphql
+//# run-graphql --variables A
 {
   eventConnection(
-    filter: {sender: "@{A}", eventType: "@{Test}::M1::EventB<"}
+    filter: {sender: $A, eventType: "@{Test}::M1::EventB<"}
   ) {
     nodes {
       sendingModule {
@@ -226,10 +226,10 @@ module Test::M2 {
   }
 }
 
-//# run-graphql
+//# run-graphql --variables A
 {
   eventConnection(
-    filter: {sender: "@{A}", eventType: "::M1"}
+    filter: {sender: $A, eventType: "::M1"}
   ) {
     nodes {
       sendingModule {
@@ -247,10 +247,10 @@ module Test::M2 {
   }
 }
 
-//# run-graphql
+//# run-graphql --variables A
 {
   eventConnection(
-    filter: {sender: "@{A}", eventType: "@{Test}::"}
+    filter: {sender: $A, eventType: "@{Test}::"}
   ) {
     nodes {
       sendingModule {

@@ -82,11 +82,11 @@ impl Event {
             .map_err(|e| Error::Internal(format!("Failed to deserialize address: {e}")))
             .extend()?;
 
-        if address.as_slice() != NativeSuiAddress::ZERO.as_ref() {
-            return Ok(Some(Address { address }));
+        if address.as_slice() == NativeSuiAddress::ZERO.as_ref() {
+            return Ok(None);
         }
 
-        Ok(None)
+        Ok(Some(Address { address }))
     }
 
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
