@@ -30,9 +30,14 @@ pub struct ParsedModuleId {
 }
 
 #[derive(Eq, PartialEq, Debug, Clone)]
-pub struct ParsedStructType {
+pub struct ParsedFqName {
     pub module: ParsedModuleId,
     pub name: String,
+}
+
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct ParsedStructType {
+    pub fq_name: ParsedFqName,
     pub type_args: Vec<ParsedType>,
 }
 
@@ -133,20 +138,25 @@ impl ParsedModuleId {
     }
 }
 
+impl ParsedFqName {
+    pub fn into_fq_name(
+        self,
+        mapping: &impl Fn(&str) -> Option<AccountAddress>,
+    ) -> anyhow::Result<(ModuleId, String)> {
+        Ok((self.module.into_module_id(mapping)?, self.name))
+    }
+}
+
 impl ParsedStructType {
     pub fn into_struct_tag(
         self,
         mapping: &impl Fn(&str) -> Option<AccountAddress>,
     ) -> anyhow::Result<StructTag> {
-        let Self {
-            module,
-            name,
-            type_args,
-        } = self;
+        let Self { fq_name, type_args } = self;
         Ok(StructTag {
-            address: module.address.into_account_address(mapping)?,
-            module: Identifier::new(module.name)?,
-            name: Identifier::new(name)?,
+            address: fq_name.module.address.into_account_address(mapping)?,
+            module: Identifier::new(fq_name.module.name)?,
+            name: Identifier::new(fq_name.name)?,
             type_params: type_args
                 .into_iter()
                 .map(|t| t.into_type_tag(mapping))
