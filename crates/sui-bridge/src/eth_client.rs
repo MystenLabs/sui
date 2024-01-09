@@ -57,6 +57,7 @@ where
         Ok(())
     }
 
+    // TODO: need to fix this to assert address that emits the events
     pub async fn get_finalized_bridge_action_maybe(
         &self,
         tx_hash: TxHash,
