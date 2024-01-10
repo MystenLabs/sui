@@ -120,4 +120,11 @@ export class ZkSendHost {
 			this.#request.origin,
 		);
 	}
+
+	close(payload?: ZkSendResponsePayload) {
+		if (payload) {
+			this.sendMessage(payload);
+		}
+		window.close();
+	}
 }
