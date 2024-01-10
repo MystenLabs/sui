@@ -183,42 +183,37 @@ module bridge::bridge {
         let inner = load_inner_mut(self);
         let key = message::key(&message);
 
-        // TODO: use borrow mut
+        // verify signatures
+        committee::verify_signatures(&inner.committee, message, signatures);
 
         // retrieve pending message if source chain is Sui, the initial message must exist on chain.
         if (message::message_type(&message) == message_types::token() && message::source_chain(&message) == inner.chain_id) {
-            let record = linked_table::remove(&mut inner.bridge_records, key);
+            let record = linked_table::borrow_mut(&mut inner.bridge_records, key);
             assert!(record.message == message, EMalformedMessageError);
             assert!(!record.claimed, EInvariantSuiInitializedTokenTransferShouldNotBeClaimed);
 
             // If record already has verified signatures, it means the message has been approved.
-            // Then we push this message back to bridge_records and exit early.
+            // Then we exit early.
             if (option::is_some(&record.verified_signatures)) {
                 emit(TokenTransferAlreadyApproved { message_key: key });
-                linked_table::push_back(&mut inner.bridge_records, key, record);
                 return
-            }
+            };
+            // Store approval
+            record.verified_signatures = some(signatures)
+        } else {
+            // At this point, if this message is in bridge_records, we know it's already approved
+            // because we only add a message to bridge_records after verifying the signatures.
+            if (linked_table::contains(&inner.bridge_records, key)) {
+                emit(TokenTransferAlreadyApproved { message_key: key });
+                return
+            };
+            // Store message and approval
+            linked_table::push_back(&mut inner.bridge_records, key, BridgeRecord {
+                message,
+                verified_signatures: some(signatures),
+                claimed: false
+            });
         };
-
-        // At this point, if this message is in bridge_records, we know it's already approved
-        // because we only add a message to bridge_records after verifying the signatures.
-        if (linked_table::contains(&inner.bridge_records, key)) {
-            emit(TokenTransferAlreadyApproved { message_key: key });
-            return
-        };
-
-        // At this point, we know the message has not been approved, hence has not been claimed.
-        // verify signatures
-        committee::verify_signatures(&inner.committee, message, signatures);
-
-        // Critical: here we set `claimed` as false. It's vitally important to make sure
-        // the token transfer has not been claimed already.
-        // Store approval
-        linked_table::push_back(&mut inner.bridge_records, key, BridgeRecord {
-            message,
-            verified_signatures: some(signatures),
-            claimed: false
-        });
         emit(TokenTransferApproved { message_key: key });
     }
 
@@ -237,29 +232,20 @@ module bridge::bridge {
         };
         // TODO: use borrow mut
         // retrieve approved bridge message
-        let BridgeRecord {
-            message,
-            verified_signatures: signatures,
-            claimed
-        } = linked_table::remove(&mut inner.bridge_records, key);
+        let record = linked_table::borrow_mut(&mut inner.bridge_records, key);
         // ensure this is a token bridge message
-        assert!(message::message_type(&message) == message_types::token(), EUnexpectedMessageType);
+        assert!(message::message_type(&record.message) == message_types::token(), EUnexpectedMessageType);
         // Ensure it's signed
-        assert!(option::is_some(&signatures), EUnauthorisedClaim);
+        assert!(option::is_some(&record.verified_signatures), EUnauthorisedClaim);
 
         // extract token message
-        let token_payload = message::extract_token_bridge_payload(&message);
+        let token_payload = message::extract_token_bridge_payload(&record.message);
         // get owner address
         let owner = address::from_bytes(message::token_target_address(&token_payload));
 
         // If already claimed, exit early
-        if (claimed) {
+        if (record.claimed) {
             emit(TokenTransferAlreadyClaimed { message_key: key });
-            linked_table::push_back(&mut inner.bridge_records, key, BridgeRecord {
-                message,
-                verified_signatures: signatures,
-                claimed: true // <-- this is important
-            });
             return (option::none(), owner)
         };
 
@@ -279,11 +265,7 @@ module bridge::bridge {
         // claim from treasury
         let token = treasury::mint<T>(&mut inner.treasury, message::token_amount(&token_payload), ctx);
         // Record changes
-        linked_table::push_back(&mut inner.bridge_records, key, BridgeRecord {
-            message,
-            verified_signatures: signatures,
-            claimed: true
-        });
+        record.claimed = true;
         emit(TokenTransferClaimed { message_key: key });
         (option::some(token), owner)
     }
