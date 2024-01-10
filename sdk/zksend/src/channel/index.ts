@@ -8,7 +8,7 @@ import { withResolvers } from '../utils/withResolvers.js';
 import type { ZkSendRequestTypes, ZkSendResponsePayload, ZkSendResponseTypes } from './events.js';
 import { ZkSendRequest, ZkSendResponse } from './events.js';
 
-const DEFAULT_ZKSEND_ORIGIN = 'https://zksend.com';
+export const DEFAULT_ZKSEND_ORIGIN = 'https://zksend.com';
 
 interface ZkSendPopupOptions {
 	origin?: string;

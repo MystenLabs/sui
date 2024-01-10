@@ -22,7 +22,7 @@ import { getWallets, ReadonlyWalletAccount, SUI_MAINNET_CHAIN } from '@mysten/wa
 import type { Emitter } from 'mitt';
 import mitt from 'mitt';
 
-import { ZkSendPopup } from './channel/index.js';
+import { DEFAULT_ZKSEND_ORIGIN, ZkSendPopup } from './channel/index.js';
 
 type WalletEventsMap = {
 	[E in keyof StandardEventsListeners]: Parameters<StandardEventsListeners[E]>[0];
@@ -34,6 +34,7 @@ export class ZkSendWallet implements Wallet {
 	#events: Emitter<WalletEventsMap>;
 	#accounts: ReadonlyWalletAccount[];
 	#client: SuiClient;
+	#origin: string;
 	#name: string;
 
 	get name() {
@@ -85,10 +86,19 @@ export class ZkSendWallet implements Wallet {
 		};
 	}
 
-	constructor(suiClient: SuiClient, name: string) {
+	constructor({
+		client,
+		name,
+		origin = DEFAULT_ZKSEND_ORIGIN,
+	}: {
+		client: SuiClient;
+		origin?: string;
+		name: string;
+	}) {
 		this.#accounts = [];
 		this.#events = mitt();
-		this.#client = suiClient;
+		this.#client = client;
+		this.#origin = origin;
 		this.#name = name;
 	}
 
@@ -101,7 +111,7 @@ export class ZkSendWallet implements Wallet {
 			}),
 		);
 
-		const popup = new ZkSendPopup({ name: this.#name });
+		const popup = new ZkSendPopup({ name: this.#name, origin: this.#origin });
 		const response = await popup.createRequest('sign-transaction-block', {
 			bytes,
 			address: account.address,
@@ -115,7 +125,7 @@ export class ZkSendWallet implements Wallet {
 
 	#signPersonalMessage: SuiSignPersonalMessageMethod = async ({ message, account }) => {
 		const bytes = toB64(bcs.vector(bcs.u8()).serialize(message).toBytes());
-		const popup = new ZkSendPopup({ name: this.#name });
+		const popup = new ZkSendPopup({ name: this.#name, origin: this.#origin });
 		const response = await popup.createRequest('sign-personal-message', {
 			bytes,
 			address: account.address,
@@ -163,7 +173,7 @@ export class ZkSendWallet implements Wallet {
 			return { accounts: this.accounts };
 		}
 
-		const popup = new ZkSendPopup({ name: this.#name });
+		const popup = new ZkSendPopup({ name: this.#name, origin: this.#origin });
 		const response = await popup.createRequest('connect', {});
 		if (!('address' in response)) {
 			throw new Error('Unexpected response');
@@ -180,9 +190,16 @@ export class ZkSendWallet implements Wallet {
 	};
 }
 
-export function registerZkSendWallet(name: string) {
+export function registerZkSendWallet(
+	name: string,
+	{
+		origin,
+	}: {
+		origin?: string;
+	},
+) {
 	const wallets = getWallets();
 	const client = new SuiClient({ url: getFullnodeUrl('mainnet') });
 
-	return wallets.register(new ZkSendWallet(client, name));
+	return wallets.register(new ZkSendWallet({ client, name, origin }));
 }
