@@ -27,7 +27,7 @@ module deepbook::clob_v3 {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    use deepbook::critbit::{Self, CritbitTree, is_empty, borrow_mut_leaf_by_index, min_leaf, max_leaf, borrow_leaf_by_index, borrow_leaf_by_key, find_leaf, insert_leaf};
+    use deepbook::critbit::{Self, CritbitTree, is_empty, borrow_mut_leaf_by_index, min_leaf, remove_leaf_by_index, next_leaf, max_leaf, borrow_leaf_by_index, borrow_leaf_by_key, find_leaf, insert_leaf};
     use deepbook::custodian_v2::{Self as custodian, Custodian, AccountCap, mint_account_cap, account_owner};
     use deepbook::math::Self as clob_math;
     use deepbook::big_queue::{Self, BigQueue};
@@ -304,6 +304,16 @@ module deepbook::clob_v3 {
         order_id: u128
     ): (u64, u64) {
         (((order_id >> 64) as u64), (order_id as u64))
+    }
+
+    fun destroy_empty_level(level: TickLevel) {
+        let TickLevel {
+            price: _,
+            order_queue: order_queue,
+            count_elements_popped: _,
+            next_order_id: _,
+        } = level;
+        big_queue::destroy_empty(order_queue);
     }
 
     /// Check if the order exists in the queue and false if its already tombstoned
@@ -844,6 +854,11 @@ module deepbook::clob_v3 {
                     break
                 };
             };
+            if (big_queue::is_empty(&tick_level.order_queue)) {
+                (tick_price, _) = next_leaf(all_open_orders, tick_price);
+                destroy_empty_level(remove_leaf_by_index(all_open_orders, tick_index));
+                (_, tick_index) = find_leaf(all_open_orders, tick_price);
+            };
             if (terminate_loop) {
                 break
             };
@@ -983,6 +998,11 @@ module deepbook::clob_v3 {
                     break
                 };
             };
+            if (big_queue::is_empty(&tick_level.order_queue)) {
+                (tick_price, _) = next_leaf(all_open_orders, tick_price);
+                destroy_empty_level(remove_leaf_by_index(all_open_orders, tick_index));
+                (_, tick_index) = find_leaf(all_open_orders, tick_price);
+            };
             if (taker_base_quantity_remaining == 0) {
                 break
             };
@@ -1118,6 +1138,11 @@ module deepbook::clob_v3 {
                 if (balance::value(&base_balance_left) == 0) {
                     break
                 };
+            };
+            if (big_queue::is_empty(&tick_level.order_queue)) {
+                (tick_price, _) = next_leaf(all_open_orders, tick_price);
+                destroy_empty_level(remove_leaf_by_index(all_open_orders, tick_index));
+                (_, tick_index) = find_leaf(all_open_orders, tick_price);
             };
             if (balance::value(&base_balance_left) == 0) {
                 break
@@ -1542,7 +1567,9 @@ module deepbook::clob_v3 {
         let tick_level = borrow_leaf_by_index(open_orders, tick_index);
         assert!(contains_order(base_order_id, tick_level), EInvalidOrderId);
         let mut_tick_level = borrow_mut_leaf_by_index(open_orders, tick_index);
-        tombstone_order_in_queue(base_order_id, mut_tick_level, owner)
+        let order = tombstone_order_in_queue(base_order_id, mut_tick_level, owner);
+        assert!(order.owner == owner, EUnauthorizedCancel);
+        order
     }
 
     public fun cancel_all_orders<BaseAsset, QuoteAsset>(
@@ -2163,14 +2190,14 @@ module deepbook::clob_v3 {
         assert!(!tick_exists, E_NULL);
     }
 
-
-    // #[test_only]
+    #[test_only]
     public fun order_id_for_test(
         sequence_id: u64,
+        tick_level: u64,
         is_bid: bool
     ): u128 {
-        0
-        // return if (is_bid) { MIN_BID_ORDER_ID + sequence_id } else { MIN_ASK_ORDER_ID + sequence_id }
+        let base_order_id = if (is_bid) { MIN_BID_ORDER_ID + sequence_id } else { MIN_ASK_ORDER_ID + sequence_id };
+        ((tick_level as u128) << 64) + (base_order_id as u128)
     }
 
     #[test_only]
@@ -2335,7 +2362,7 @@ module deepbook::clob_v3 {
         is_tombstoned: bool
     ): Order {
         Order {
-            order_id: order_id_for_test(sequence_id, is_bid),
+            order_id: order_id_for_test(sequence_id, price, is_bid),
             client_order_id,
             price,
             original_quantity,
@@ -2361,7 +2388,7 @@ module deepbook::clob_v3 {
         is_tombstoned: bool
     ): Order {
         Order {
-            order_id: order_id_for_test(sequence_id, is_bid),
+            order_id: order_id_for_test(sequence_id, price, is_bid),
             client_order_id,
             price,
             original_quantity,
@@ -2405,14 +2432,14 @@ module deepbook::clob_v3 {
             order = remove_order(
                 &mut pool.bids,
                 borrow_mut(&mut pool.usr_open_orders, owner),
-                order_id_for_test(sequence_id, is_bid),
+                order_id_for_test(sequence_id, tick_index, is_bid),
                 owner
             )
         } else {
             order = remove_order(
                 &mut pool.asks,
                 borrow_mut(&mut pool.usr_open_orders, owner),
-                order_id_for_test(sequence_id, is_bid),
+                order_id_for_test(sequence_id, tick_index, is_bid),
                 owner
             )
         };
@@ -2851,7 +2878,7 @@ module deepbook::clob_v3 {
             assert!(base_filled == 0, E_NULL);
             assert!(quote_filled == 0, E_NULL);
             assert!(maker_injected, E_NULL);
-            assert!(maker_order_id == order_id_for_test(0, false), E_NULL);
+            assert!(maker_order_id == order_id_for_test(0, 10 * FLOAT_SCALING, false), E_NULL);
 
             // let (next_bid_order_id, next_ask_order_id, _, _) = get_pool_stat(&pool);
             // assert!(next_bid_order_id == order_id_for_test(3, true), 0);
@@ -2880,7 +2907,6 @@ module deepbook::clob_v3 {
                 account_cap_user
             );
             custodian::assert_user_balance<SUI>(&pool.base_custodian, account_cap_user, 900 * 100000000, 0);
-
             let (base_filled, quote_filled, maker_injected, _) = place_limit_order<SUI, USD>(
                 &mut pool,
                 CLIENT_ID_ALICE,
@@ -2894,6 +2920,8 @@ module deepbook::clob_v3 {
                 &account_cap,
                 test_scenario::ctx(&mut test)
             );
+            std::debug::print(&base_filled);
+            std::debug::print(&quote_filled);
             assert!(base_filled == 600 * 100000000, E_NULL);
             assert!(quote_filled == 2600 * 100000000, E_NULL);
             assert!(!maker_injected, E_NULL);
