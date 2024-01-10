@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 34
+version: 35
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -24,7 +24,6 @@ feature_flags:
   simplified_unwrap_then_delete: true
   upgraded_multisig_supported: true
   txn_base_cost_as_multiplier: true
-  shared_object_deletion: true
   narwhal_new_leader_election_schedule: true
   loaded_child_object_format: true
   enable_jwk_consensus_updates: true
@@ -36,7 +35,6 @@ feature_flags:
   narwhal_certificate_v2: true
   verify_legacy_zklogin_address: true
   recompute_has_public_transfer_in_execution: true
-  accept_zklogin_in_multisig: true
   hardened_otw_check: true
   allow_receiving_object_id: true
 max_tx_size_bytes: 131072
@@ -198,6 +196,8 @@ hash_blake2b256_data_cost_per_block: 2
 hash_keccak256_cost_base: 52
 hash_keccak256_data_cost_per_byte: 2
 hash_keccak256_data_cost_per_block: 2
+poseidon_bn254_cost_base: 260
+poseidon_bn254_cost_per_block: 10
 hmac_hmac_sha3_256_cost_base: 52
 hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
