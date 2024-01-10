@@ -50,8 +50,7 @@ async fn main() -> Result<(), anyhow::Error> {
     }
 
     let object = owned_objects
-        .data
-        .get(0)
+        .data.first()
         .unwrap_or_else(|| panic!("No object data for this address {}", active_address));
     let object_data = object
         .data

@@ -1091,8 +1091,7 @@ impl LocalExec {
         let mut tx_digest = *self
             .fetcher
             .get_checkpoint_txs(0)
-            .await?
-            .get(0)
+            .await?.first()
             .expect("Genesis TX must be in first checkpoint");
         // Somehow the genesis TX did not emit any event, but we know it was the start of version 1
         // So we need to manually add this range

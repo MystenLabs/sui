@@ -78,10 +78,10 @@ pub struct GasProfiler {
 #[cfg(debug_assertions)]
 impl GasProfiler {
     // Used by profiler viz tool
-    const OPEN_FRAME_IDENT: &str = "O";
-    const CLOSE_FRAME_IDENT: &str = "C";
+    const OPEN_FRAME_IDENT: &'static str = "O";
+    const CLOSE_FRAME_IDENT: &'static str = "C";
 
-    const TOP_LEVEL_FRAME_NAME: &str = "root";
+    const TOP_LEVEL_FRAME_NAME: &'static str = "root";
 
     pub fn init(config: &VMProfilerConfig, name: String, start_gas: u64) -> Self {
         let mut prof = GasProfiler {

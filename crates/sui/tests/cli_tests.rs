@@ -504,7 +504,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     // Try a bad argument: decimal
     let args_json = json!([0.3f32, address1]);
-    assert!(SuiJsonValue::new(args_json.as_array().unwrap().get(0).unwrap().clone()).is_err());
+    assert!(SuiJsonValue::new(args_json.as_array().unwrap().first().unwrap().clone()).is_err());
 
     // Try a bad argument: too few args
     let args_json = json!([300usize]);
@@ -1640,8 +1640,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
                 .effects
                 .as_ref()
                 .unwrap()
-                .mutated()
-                .get(0)
+                .mutated().first()
                 .unwrap()
                 .reference
                 .object_id,
@@ -1740,8 +1739,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
                 .effects
                 .as_ref()
                 .unwrap()
-                .mutated()
-                .get(0)
+                .mutated().first()
                 .unwrap()
                 .reference
                 .object_id,

@@ -918,17 +918,14 @@ pub fn initial_cost_schedule_for_unit_tests() -> move_vm_test_utils::gas_schedul
         instruction_tiers: table
             .instruction_tiers
             .into_iter()
-            .map(|(k, v)| (k, v))
             .collect(),
         stack_height_tiers: table
             .stack_height_tiers
             .into_iter()
-            .map(|(k, v)| (k, v))
             .collect(),
         stack_size_tiers: table
             .stack_size_tiers
             .into_iter()
-            .map(|(k, v)| (k, v))
             .collect(),
     }
 }

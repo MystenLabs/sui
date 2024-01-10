@@ -55,7 +55,7 @@ fn extract_struct_info(
             GeneralTableOptions::default()
         } else {
             GeneralTableOptions::OverrideFunction(
-                get_options_override_function(attrs.get(0).unwrap()).unwrap(),
+                get_options_override_function(attrs.first().unwrap()).unwrap(),
             )
         };
 
@@ -87,7 +87,7 @@ fn extract_struct_info(
     let (field_names, simple_field_type_names): (Vec<_>, Vec<_>) = field_info.into_iter().unzip();
 
     // Check for homogeneous types
-    if let Some(first) = simple_field_type_names.get(0) {
+    if let Some(first) = simple_field_type_names.first() {
         simple_field_type_names.iter().for_each(|q| {
             if q != first {
                 panic!("All struct members must be of same type");
@@ -103,7 +103,7 @@ fn extract_struct_info(
         field_names,
         inner_types,
         options,
-        simple_field_type_names.get(0).unwrap().clone(),
+        simple_field_type_names.first().unwrap().clone(),
     )
 }
 

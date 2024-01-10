@@ -2218,14 +2218,17 @@ impl Function {
         &self.type_parameters
     }
 
+    #[allow(unused)]
     pub(crate) fn local_types(&self) -> &[Type] {
         &self.local_types
     }
 
+    #[allow(unused)]
     pub(crate) fn return_types(&self) -> &[Type] {
         &self.return_types
     }
 
+    #[allow(unused)]
     pub(crate) fn parameter_types(&self) -> &[Type] {
         &self.parameter_types
     }

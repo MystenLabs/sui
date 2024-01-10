@@ -4611,8 +4611,7 @@ async fn make_test_transaction(
     let module = "object_basics";
     let function = "set_value";
 
-    let rgp = authorities
-        .get(0)
+    let rgp = authorities.first()
         .unwrap()
         .reference_gas_price_for_testing()
         .unwrap();

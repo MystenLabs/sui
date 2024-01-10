@@ -52,7 +52,7 @@ fn genesis_config_snapshot_matches() {
 fn populated_genesis_snapshot_matches() {
     let genesis_config = GenesisConfig::for_local_testing();
     let (_account_keys, allocations) = genesis_config
-        .generate_accounts(&mut StdRng::from_seed([0; 32]))
+        .generate_accounts(StdRng::from_seed([0; 32]))
         .unwrap();
     let mut rng = StdRng::from_seed([0; 32]);
     let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rng).1;

@@ -95,7 +95,7 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
 
     let context = &mut test_cluster.wallet;
 
-    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
+    let sender = context.config.keystore.addresses().first().cloned().unwrap();
     let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context).await;
 
     let response = increment_counter(
@@ -544,7 +544,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
             let (sender, object_to_split, gas_obj) = {
                 let context = &mut context.lock().await;
 
-                let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
+                let sender = context.config.keystore.addresses().first().cloned().unwrap();
 
                 let mut coins = context.gas_objects(sender).await.unwrap();
                 let object_to_split = coins.swap_remove(0).1.object_ref();
@@ -1223,7 +1223,7 @@ async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
 
     let context = &mut test_cluster.wallet;
 
-    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
+    let sender = context.config.keystore.addresses().first().cloned().unwrap();
 
     // TODO: this is publishing the wrong package - we should be publishing the one in `sui-core/src/unit_tests/data` instead.
     let package_ref = publish_basics_package(context).await;

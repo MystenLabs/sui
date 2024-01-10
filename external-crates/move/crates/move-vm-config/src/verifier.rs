@@ -56,8 +56,8 @@ impl Default for VerifierConfig {
             max_back_edges_per_function: None,
             max_back_edges_per_module: None,
             max_basic_blocks_in_script: None,
-            /// General metering for the verifier. This defaults to a bound which should align
-            /// with production, so all existing test cases apply it.
+            // General metering for the verifier. This defaults to a bound which should align
+            // with production, so all existing test cases apply it.
             max_per_fun_meter_units: Some(1000 * 8000),
             max_per_mod_meter_units: Some(1000 * 8000),
             max_constant_vector_len: Some(DEFAULT_MAX_CONSTANT_VECTOR_LEN),

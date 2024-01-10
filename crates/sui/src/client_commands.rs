@@ -1794,8 +1794,8 @@ async fn construct_move_call_transaction(
 
     let type_args = type_args
         .into_iter()
-        .map(|arg| arg.try_into())
-        .collect::<Result<Vec<_>, _>>()?;
+        .map(|arg| arg.into())
+        .collect::<Vec<_>>();
     let gas_owner = context.try_get_object_owner(&gas).await?;
     let sender = gas_owner.unwrap_or(context.active_address()?);
 

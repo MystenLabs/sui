@@ -22,8 +22,7 @@ async fn setup() -> (AuthorityAggregator<LocalAuthorityClient>, Transaction) {
     let gas_object = Object::with_owner_for_testing(sender);
     let (aggregator, authorities, genesis, _) =
         init_local_authorities(4, vec![gas_object.clone()]).await;
-    let rgp = authorities
-        .get(0)
+    let rgp = authorities.first()
         .unwrap()
         .reference_gas_price_for_testing()
         .unwrap();
@@ -214,8 +213,7 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
 
     let (aggregator, authorities, genesis, _) =
         init_local_authorities(4, gas_objects.clone()).await;
-    let rgp = authorities
-        .get(0)
+    let rgp = authorities.first()
         .unwrap()
         .reference_gas_price_for_testing()
         .unwrap();

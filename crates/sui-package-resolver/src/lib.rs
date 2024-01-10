@@ -922,7 +922,7 @@ impl<'l> ResolutionContext<'l> {
                 // is necessary to avoid errors when converting layouts into type tags.
                 let type_params = param_layouts
                     .iter()
-                    .map(|l| TypeTag::try_from(&l.0).unwrap())
+                    .map(|l| TypeTag::from(&l.0))
                     .collect();
 
                 let type_ = StructTag {
@@ -1023,7 +1023,7 @@ impl<'l> ResolutionContext<'l> {
                 // is necessary to avoid errors when converting layouts into type tags.
                 let type_params = param_layouts
                     .iter()
-                    .map(|l| TypeTag::try_from(&l.0).unwrap())
+                    .map(|l| TypeTag::from(&l.0))
                     .collect();
 
                 let type_ = StructTag {

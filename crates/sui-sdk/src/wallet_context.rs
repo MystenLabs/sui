@@ -88,7 +88,7 @@ impl WalletContext {
         self.config.active_address = Some(
             self.config
                 .active_address
-                .unwrap_or(*self.config.keystore.addresses().get(0).unwrap()),
+                .unwrap_or(*self.config.keystore.addresses().first().unwrap()),
         );
 
         Ok(self.config.active_address.unwrap())

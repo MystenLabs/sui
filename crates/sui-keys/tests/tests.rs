@@ -72,7 +72,7 @@ fn check_reading_aliases_file_correctly() {
 
     let new_keystore = Keystore::from(FileBasedKeystore::new(&keystore_path_keep).unwrap());
     let addresses = new_keystore.addresses_with_alias();
-    assert_eq!(kp.0, *addresses.get(0).unwrap().0)
+    assert_eq!(kp.0, *addresses.first().unwrap().0)
 }
 
 #[test]
