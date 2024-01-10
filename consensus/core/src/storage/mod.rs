@@ -10,8 +10,8 @@ pub(crate) trait Store {
     /// Loads last committed blocks, all uncommitted blocks and last commit from store.
     fn recover(&self) -> ConsensusResult<(Vec<VerifiedBlock>, Commit)>;
 
-    /// Writes additional uncommitted blocks and commits to store.
+    /// Writes blocks and consensus commits to store.
     fn write(&self, blocks: Vec<VerifiedBlock>, commits: Vec<Commit>) -> ConsensusResult<()>;
 
-    // TODO: add methods to read and scan blocks, to help other authorities catch up.
+    // TODO: add methods to read and scan blocks.
 }

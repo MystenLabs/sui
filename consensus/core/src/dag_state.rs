@@ -40,13 +40,13 @@ impl DagState {
         };
 
         for block in blocks {
-            state.add_block_internal(block);
+            state.add_block(block);
         }
 
         state
     }
 
-    pub(crate) fn add_block_internal(&mut self, block: VerifiedBlock) {
+    pub(crate) fn add_block(&mut self, block: VerifiedBlock) {
         let block_ref = block.block.reference();
         self.cached_refs[block_ref.author].insert(block_ref);
         self.cached_blocks.insert(block_ref, block);
