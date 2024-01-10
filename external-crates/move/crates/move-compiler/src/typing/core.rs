@@ -25,7 +25,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 // Context
 //**************************************************************************************************
 
-struct UseFunsScope {
+pub struct UseFunsScope {
     count: usize,
     use_funs: ResolvedUseFuns,
 }
@@ -223,6 +223,22 @@ impl<'env> Context<'env> {
             use_fun.used = true;
             Some(use_fun.target_function)
         })
+    }
+
+    pub fn pop_use_funs_scope_for_macros(&mut self) -> Option<UseFunsScope> {
+        let cur = self.use_funs.last_mut().unwrap();
+        if cur.count > 1 {
+            cur.count -= 1;
+            return None;
+        }
+        Some(self.use_funs.pop().unwrap())
+    }
+
+    pub fn add_use_funs_scope_after_macros(&mut self, scope: Option<UseFunsScope>) {
+        if let Some(scope) = scope {
+            assert_eq!(scope.count, 1);
+            self.use_funs.push(scope);
+        }
     }
 
     pub fn add_macro_call_return_type(&mut self, ty: Type) {
