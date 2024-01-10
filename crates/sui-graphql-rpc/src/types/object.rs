@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{connection::Connection, *};
+use diesel::{ExpressionMethods, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
 use sui_indexer::models_v2::objects::StoredObject;
+use sui_indexer::schema_v2::objects;
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_package_resolver::Resolver;
 use sui_types::dynamic_field::DynamicFieldType;
@@ -23,6 +25,7 @@ use super::{
 };
 use crate::context_data::db_data_provider::PgManager;
 use crate::context_data::package_cache::PackageCache;
+use crate::data::{Db, QueryExecutor};
 use crate::error::Error;
 use crate::types::base64::Base64;
 use sui_types::object::{
@@ -214,9 +217,7 @@ impl Object {
             }
             O::Immutable => Some(ObjectOwner::Immutable(Immutable { dummy: None })),
             O::ObjectOwner(address) => {
-                let parent = ctx
-                    .data_unchecked::<PgManager>()
-                    .fetch_obj(address.into(), None)
+                let parent = Object::query(ctx.data_unchecked(), address.into(), None)
                     .await
                     .ok()
                     .flatten();
@@ -412,6 +413,36 @@ impl Object {
             stored: None,
             native,
         }
+    }
+
+    pub(crate) async fn query(
+        db: &Db,
+        address: SuiAddress,
+        version: Option<u64>,
+    ) -> Result<Option<Self>, Error> {
+        use objects::dsl;
+
+        let address = address.into_vec();
+        let version = version.map(|v| v as i64);
+
+        let stored_obj: Option<StoredObject> = db
+            .optional(move || {
+                let mut query = dsl::objects
+                    .filter(dsl::object_id.eq(address.clone()))
+                    .limit(1)
+                    .into_boxed();
+
+                // TODO: leverage objects_history
+                if let Some(version) = version {
+                    query = query.filter(dsl::object_version.eq(version));
+                }
+
+                query
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))?;
+
+        stored_obj.map(Self::try_from).transpose()
     }
 }
 

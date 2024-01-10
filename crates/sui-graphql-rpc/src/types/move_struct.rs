@@ -4,7 +4,6 @@
 use async_graphql::*;
 use sui_package_resolver::StructDef;
 
-use crate::context_data::db_data_provider::PgManager;
 use crate::error::Error;
 
 use super::{
@@ -41,9 +40,7 @@ pub(crate) struct MoveField {
 impl MoveStruct {
     /// The module this struct was originally defined in.
     async fn module(&self, ctx: &Context<'_>) -> Result<MoveModule> {
-        let Some(module) = ctx
-            .data_unchecked::<PgManager>()
-            .fetch_move_module(self.defining_id, &self.module)
+        let Some(module) = MoveModule::query(ctx.data_unchecked(), self.defining_id, &self.module)
             .await
             .extend()?
         else {

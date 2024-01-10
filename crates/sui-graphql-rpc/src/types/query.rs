@@ -73,8 +73,7 @@ impl Query {
         address: SuiAddress,
         version: Option<u64>,
     ) -> Result<Option<Object>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_obj(address, version)
+        Object::query(ctx.data_unchecked(), address, version)
             .await
             .extend()
     }

@@ -10,8 +10,6 @@ use sui_types::{parse_sui_struct_tag, TypeTag};
 
 use crate::error::Error;
 
-use crate::context_data::db_data_provider::PgManager;
-
 use super::digest::Digest;
 use super::{
     address::Address, base64::Base64, date_time::DateTime, move_module::MoveModule,
@@ -66,8 +64,7 @@ impl Event {
         let sending_package = SuiAddress::from_bytes(&self.stored.package)
             .map_err(|e| Error::Internal(e.to_string()))
             .extend()?;
-        ctx.data_unchecked::<PgManager>()
-            .fetch_move_module(sending_package, &self.stored.module)
+        MoveModule::query(ctx.data_unchecked(), sending_package, &self.stored.module)
             .await
             .extend()
     }

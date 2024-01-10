@@ -6,6 +6,7 @@ use super::cursor::{Cursor, Page};
 use super::move_module::MoveModule;
 use super::object::Object;
 use super::sui_address::SuiAddress;
+use crate::data::Db;
 use crate::error::Error;
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
@@ -205,6 +206,20 @@ impl MovePackage {
                 "Unexpected error fetching module: {e}"
             ))),
         }
+    }
+
+    pub(crate) async fn query(
+        db: &Db,
+        address: SuiAddress,
+        version: Option<u64>,
+    ) -> Result<Option<Self>, Error> {
+        let Some(object) = Object::query(db, address, version).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(MovePackage::try_from(&object).map_err(|_| {
+            Error::Internal(format!("{address} is not a package"))
+        })?))
     }
 }
 
