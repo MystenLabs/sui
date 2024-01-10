@@ -288,6 +288,10 @@ fn type_(context: &mut Context, sp!(_, ty_): &N::Type) {
             types(context, tys);
         }
         T::Ref(_, t) => type_(context, t),
+        T::Fun(tys, t) => {
+            types(context, tys);
+            type_(context, t);
+        }
         T::Unit | T::Param(_) | T::Var(_) | T::Anything | T::UnresolvedError => (),
     }
 }
@@ -433,6 +437,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
         | E::Constant(..)
         | E::Continue(_)
         | E::BorrowLocal(..)
+        | E::Lambda(_, _)
         | E::UnresolvedError => (),
     }
 }

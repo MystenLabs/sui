@@ -482,7 +482,7 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         // -----------------------------------------------------------------------------------------
         // odds and ends
         // -----------------------------------------------------------------------------------------
-        E::Use(_) | E::UnresolvedError => None,
+        E::Use(_) | E::UnresolvedError | E::Lambda(_, _) => None,
     }
 }
 
@@ -639,6 +639,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         // odds and ends -- things we need to deal with but that don't do much
         // -----------------------------------------------------------------------------------------
         E::Use(_) => panic!("ICE unexpanded use"),
+        E::Lambda(_, _) => panic!("ICE unexpanded lambda"),
     }
 }
 

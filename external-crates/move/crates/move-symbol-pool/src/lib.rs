@@ -85,6 +85,8 @@ static_symbols!(
     "loop",
     "deny_list",
     "DenyList",
+    "lambda",
+    "macro",
 );
 
 /// The global, unique cache of strings.

@@ -1412,7 +1412,6 @@ fn parse_name_exp(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
     match context.tokens.peek() {
         _ if is_macro => {
             // if in a macro, we must have a call
-            consume_token(context.tokens, Tok::LParen);
             let rhs = parse_call_args(context)?;
             Ok(Exp_::Call(name, is_macro, tys, rhs))
         }

@@ -94,6 +94,15 @@ impl<'a> Context<'a> {
                 tys.iter()
                     .for_each(|t| Self::add_tparam_edges(acc, tparam, info.clone(), t))
             }
+            Fun(tys, t) => {
+                let info = EdgeInfo {
+                    edge: Edge::Nested,
+                    ..info
+                };
+                tys.iter()
+                    .for_each(|t| Self::add_tparam_edges(acc, tparam, info.clone(), t));
+                Self::add_tparam_edges(acc, tparam, info.clone(), t)
+            }
             Param(tp) => {
                 let tp_neighbors = acc.entry(tp.clone()).or_default();
                 match tp_neighbors.get(tparam) {
@@ -187,7 +196,7 @@ fn module<'a>(
 
 fn function_body(context: &mut Context, sp!(_, b_): &T::FunctionBody) {
     match b_ {
-        T::FunctionBody_::Native => (),
+        T::FunctionBody_::Native | T::FunctionBody_::Macro => (),
         T::FunctionBody_::Defined(es) => sequence(context, es),
     }
 }
@@ -220,6 +229,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
         | E::Copy { .. }
         | E::BorrowLocal(_, _)
         | E::Continue(_)
+        | E::Lambda(_, _)
         | E::UnresolvedError => (),
 
         E::ModuleCall(call) => {

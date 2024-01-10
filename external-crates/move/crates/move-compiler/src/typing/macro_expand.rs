@@ -32,7 +32,7 @@ pub(crate) fn call(
     call_loc: Loc,
     m: ModuleIdent,
     f: FunctionName,
-    type_args_opt: Option<Vec<N::Type>>,
+    type_args: Vec<N::Type>,
     sp!(_, args): Spanned<Vec<T::Exp>>,
 ) -> Option<ExpandedMacro> {
     let next_color = context.next_variable_color();
@@ -51,13 +51,6 @@ pub(crate) fn call(
                 return None;
             }
         };
-    let type_args = match type_args_opt {
-        Some(tys) => tys,
-        None => macro_type_params
-            .iter()
-            .map(|_| sp(call_loc, N::Type_::Anything))
-            .collect(),
-    };
 
     if macro_type_params.len() != type_args.len() || macro_params.len() != args.len() {
         assert!(context.env.has_errors());
@@ -108,8 +101,8 @@ pub(crate) fn call(
 
 fn recolor_macro(
     call_loc: Loc,
-    m: &ModuleIdent,
-    f: &FunctionName,
+    _m: &ModuleIdent,
+    _f: &FunctionName,
     macro_info: &FunctionInfo,
     macro_body: &N::Sequence,
     color: u16,
@@ -567,9 +560,14 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             let annot_args = sp(args_loc, N::Exp_::Annotate(Box::new(args), param_ty));
             let body_loc = lambda_body.loc;
             let annot_body = sp(body_loc, N::Exp_::Annotate(lambda_body, result_ty));
+            let labeled_seq = VecDeque::from([sp(body_loc, N::SequenceItem_::Seq(annot_body))]);
+            let labeled_body = sp(
+                body_loc,
+                N::Exp_::NamedBlock(return_label, (N::UseFuns::new(), labeled_seq)),
+            );
             let result = VecDeque::from([
                 sp(param_loc, N::SequenceItem_::Bind(lambda_params, annot_args)),
-                sp(body_loc, N::SequenceItem_::Seq(annot_body)),
+                sp(body_loc, N::SequenceItem_::Seq(labeled_body)),
             ]);
             *e_ = N::Exp_::Block((N::UseFuns::new(), result));
         }

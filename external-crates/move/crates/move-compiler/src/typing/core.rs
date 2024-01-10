@@ -962,6 +962,7 @@ pub fn make_function_type(
     let return_ty = subst_tparams(tparam_subst, finfo.signature.return_type.clone());
 
     let defined_loc = finfo.defined_loc;
+    let macro_ = finfo.macro_;
     let public_for_testing =
         public_testing_visibility(context.env, context.current_package, f, finfo.entry);
     let is_testing_context = context.is_testing_context();
@@ -1036,7 +1037,7 @@ pub fn make_function_type(
     };
     ResolvedFunctionType {
         declared: defined_loc,
-        macro_: finfo.macro_,
+        macro_,
         ty_args,
         params,
         return_: return_ty,

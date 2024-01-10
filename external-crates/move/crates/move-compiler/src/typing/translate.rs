@@ -82,7 +82,7 @@ fn translate_macros(
     modules: UniqueMap<ModuleIdent, N::ModuleDefinition>,
 ) -> UniqueMap<ModuleIdent, (N::ModuleDefinition, UniqueMap<FunctionName, T::Function>)> {
     let mut all_macro_definitions = UniqueMap::new();
-    let mut modules_with_macros = modules.map(|ident, mut mdef| {
+    let modules_with_macros = modules.map(|ident, mut mdef| {
         assert!(context.current_package.is_none());
         assert!(context.new_friends.is_empty());
         context.current_module = Some(ident);
@@ -101,7 +101,7 @@ fn translate_macros(
                 let (tf, body_opt) = macro_(context, name, f);
                 translated_macros.add(name, tf).unwrap();
                 if let Some(body) = body_opt {
-                    macro_definitions.add(name, body);
+                    macro_definitions.add(name, body).unwrap();
                 }
             } else {
                 mdef.functions.add(name, f).unwrap();
@@ -113,7 +113,7 @@ fn translate_macros(
         context.new_friends = BTreeSet::new();
         context.pop_use_funs_scope();
         context.env.pop_warning_filter_scope();
-        all_macro_definitions.add(ident, macro_definitions);
+        all_macro_definitions.add(ident, macro_definitions).unwrap();
         (mdef, translated_macros)
     });
     context.set_macros(all_macro_definitions);
@@ -174,7 +174,7 @@ fn module(
         use_funs,
         friends,
         mut structs,
-        functions: mut nfunctions,
+        functions: nfunctions,
         constants: nconstants,
     } = mdef;
     context.current_module = Some(ident);
@@ -185,12 +185,11 @@ fn module(
         .iter_mut()
         .for_each(|(_, _, s)| struct_def(context, s));
     process_attributes(context, &attributes);
+    let constants = nconstants.map(|name, c| constant(context, name, c));
     let mut functions = translated_macros;
     for (name, f) in nfunctions {
         functions.add(name, function(context, name, f)).unwrap();
     }
-    let constants = nconstants.map(|name, c| constant(context, name, c));
-    let functions = nfunctions.map(|name, f| function(context, name, f));
     assert!(context.constraints.is_empty());
     context.current_package = None;
     context.pop_use_funs_scope();
@@ -1202,9 +1201,9 @@ fn lambda(context: &mut Context, loc: Loc, expected_ty: Type, nlambda: N::Lambda
         1 => sp(loc, arg_tys[0].value.clone()),
         _ => Type_::multiple(loc, arg_tys.clone()),
     };
-    let args = bind_list(context, parameters, Some(arg_ty_annot));
+    bind_list(context, parameters, Some(arg_ty_annot));
     let ret_ty = core::make_tvar(context, body.loc);
-    let body = exp_(context, *body);
+    exp_(context, *body);
     if let Some(local_return_type) = context.named_block_type_opt(return_label) {
         join(
             context,
@@ -2457,7 +2456,7 @@ fn method_call(
             loc,
             m,
             f,
-            ty_args_opt,
+            call.type_arguments,
             sp(argloc, args),
         ))
     } else {
@@ -2492,7 +2491,7 @@ fn module_call(
     let (call, ret_ty) =
         module_call_impl(context, loc, m, f, is_macro_call, fty, argloc, args.clone());
     if is_macro_call {
-        expand_macro(context, loc, m, f, ty_args_opt, sp(argloc, args))
+        expand_macro(context, loc, m, f, call.type_arguments, sp(argloc, args))
     } else {
         (ret_ty, T::UnannotatedExp_::ModuleCall(Box::new(call)))
     }
@@ -2506,7 +2505,7 @@ fn module_call_impl(
     is_macro_call: bool,
     fty: InstantiatedFunctionType,
     argloc: Loc,
-    mut args: Vec<T::Exp>,
+    args: Vec<T::Exp>,
 ) -> (T::ModuleCall, Type) {
     let InstantiatedFunctionType {
         declared,
@@ -2540,7 +2539,7 @@ fn module_call_impl(
             (decl_loc, decl_msg),
         ));
     }
-    let (arguments, arg_tys) = call_args(
+    let (mut arguments, arg_tys) = call_args(
         context,
         loc,
         || format!("Invalid call of '{}::{}'", &m, &f),
@@ -2562,7 +2561,7 @@ fn module_call_impl(
     if decl_is_macro && context.in_macro_function {
         // sanity check lambdas inside of a macro since it won't get expanded
         context.add_macro_call_return_type(return_.clone());
-        args.iter_mut().for_each(|arg| solve_lambdas(context, arg));
+        solve_lambdas(context, &mut arguments);
         context.pop_macro_call_return_type();
     }
     let call = T::ModuleCall {
@@ -2746,14 +2745,14 @@ fn expand_macro(
     call_loc: Loc,
     m: ModuleIdent,
     f: FunctionName,
-    type_args_opt: Option<Vec<N::Type>>,
+    type_args: Vec<N::Type>,
     args: Spanned<Vec<T::Exp>>,
 ) -> (Type, T::UnannotatedExp_) {
     use T::SequenceItem_ as TS;
     use T::UnannotatedExp_ as TE;
 
     let argloc = args.loc;
-    match macro_expand::call(context, call_loc, m, f, type_args_opt, args) {
+    match macro_expand::call(context, call_loc, m, f, type_args, args) {
         None => {
             assert!(context.env.has_errors());
             (context.error_type(call_loc), TE::UnresolvedError)
@@ -2819,7 +2818,6 @@ fn solve_lambdas(context: &mut Context, e: &mut T::Exp) {
         E::Use(_)
         | E::Value(_)
         | E::Unit { .. }
-        | E::Value(_)
         | E::Constant(_, _)
         | E::Move { .. }
         | E::Copy { .. }
