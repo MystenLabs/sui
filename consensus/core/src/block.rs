@@ -165,7 +165,7 @@ impl SignedBlock {
     // TODO: add deserialization and verification.
 }
 
-/// Verfiied block allows access to its content.
+/// Verifiied block allows access to its content.
 #[allow(unused)]
 #[derive(Deserialize, Serialize)]
 pub(crate) struct VerifiedBlock {

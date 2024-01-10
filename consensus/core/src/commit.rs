@@ -10,11 +10,11 @@ use crate::block::BlockRef;
 #[allow(unused)]
 #[derive(Deserialize, Serialize)]
 pub(crate) struct Commit {
-    /// A reference to the anchor / leader of the commit.
-    pub anchor: BlockRef,
-    /// All committed blocks in the commit order.
+    /// Index of the commit.
+    /// First commit after genesis has an index of 1, then every next commit has an index incremented by 1.
+    pub index: u64,
+    /// A reference to the the commit leader.
+    pub leader: BlockRef,
+    /// Refs to committed blocks, in the commit order.
     pub blocks: Vec<BlockRef>,
-    /// Height of the commit.
-    /// First commit after genesis has a height of 1, then every next commit has a height incremented by 1.
-    pub height: u64,
 }
