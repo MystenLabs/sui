@@ -173,7 +173,7 @@ pub enum UnannotatedExp_ {
     },
     NamedBlock(BlockLabel, Sequence),
     Block(Sequence),
-    Lambda(/* visited */ bool, N::LValueList, Box<N::Exp>),
+    Lambda(/* visited */ bool, N::Lambda),
     Assign(LValueList, Vec<Option<Type>>, Box<Exp>),
     Mutate(Box<Exp>, Box<Exp>),
     Return(Box<Exp>),
@@ -536,16 +536,13 @@ impl AstDebug for UnannotatedExp_ {
                 seq.ast_debug(w)
             }
             E::Block(seq) => seq.ast_debug(w),
-            E::Lambda(visited, sp!(_, bs), e) => {
+            E::Lambda(visited, lambda) => {
                 if *visited {
                     w.write("visited#");
                 } else {
                     w.write("unvisited#");
                 }
-                w.write("|");
-                bs.ast_debug(w);
-                w.write("|");
-                e.ast_debug(w);
+                lambda.ast_debug(w);
             }
             E::ExpList(es) => {
                 w.write("(");

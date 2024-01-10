@@ -282,6 +282,14 @@ pub enum BuiltinFunction_ {
 pub type BuiltinFunction = Spanned<BuiltinFunction_>;
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct Lambda {
+    pub parameters: LValueList,
+    pub break_label: BlockLabel,
+    pub return_label: BlockLabel,
+    pub body: Box<Exp>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum Exp_ {
     Value(Value),
@@ -311,7 +319,7 @@ pub enum Exp_ {
     Loop(BlockLabel, Box<Exp>),
     NamedBlock(BlockLabel, Sequence),
     Block(Sequence),
-    Lambda(LValueList, Box<Exp>),
+    Lambda(Lambda),
 
     Assign(LValueList, Box<Exp>),
     FieldMutate(ExpDotted, Box<Exp>),
@@ -690,9 +698,12 @@ impl Type_ {
     }
 }
 
-impl Exp_ {
-    // base symbol to used when making names forunnamed loops
+impl BlockLabel {
+    // base symbol to used when making names for unnamed loops
     pub const LOOP_NAME_SYMBOL: Symbol = symbol!("loop");
+    // base symbol to used when making names for unnamed lambdas
+    pub const LAMBDA_NAME_SYMBOL: Symbol = symbol!("lambda");
+    pub const MACRO_RETURN_NAME_SYMBOL: Symbol = symbol!("macro");
 }
 
 impl Value_ {
@@ -1291,12 +1302,7 @@ impl AstDebug for Exp_ {
                 seq.ast_debug(w);
             }
             E::Block(seq) => seq.ast_debug(w),
-            E::Lambda(sp!(_, bs), e) => {
-                w.write("|");
-                bs.ast_debug(w);
-                w.write("|");
-                e.ast_debug(w);
-            }
+            E::Lambda(l) => l.ast_debug(w),
             E::ExpList(es) => {
                 w.write("(");
                 w.comma(es, |w, e| e.ast_debug(w));
@@ -1381,6 +1387,25 @@ impl AstDebug for Exp_ {
             }
             E::UnresolvedError => w.write("_|_"),
         }
+    }
+}
+
+impl AstDebug for Lambda {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let Lambda {
+            parameters: sp!(_, bs),
+            break_label,
+            return_label,
+            body: e,
+        } = self;
+        w.write("|");
+        bs.ast_debug(w);
+        w.write("|");
+        break_label.ast_debug(w);
+        w.write(" ");
+        return_label.ast_debug(w);
+        w.write(": ");
+        e.ast_debug(w);
     }
 }
 

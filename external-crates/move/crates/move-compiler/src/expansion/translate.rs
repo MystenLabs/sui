@@ -2683,9 +2683,9 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
         PE::Block(seq) => EE::Block(sequence(context, loc, seq)),
         PE::Lambda(pbs, pe) => {
             let bs_opt = bind_list(context, pbs);
-            let e = exp_(context, *pe);
+            let (name, e) = maybe_named_loop(context, loc, *pe);
             match bs_opt {
-                Some(bs) => EE::Lambda(bs, Box::new(e)),
+                Some(bs) => EE::Lambda(bs, name, e),
                 None => {
                     assert!(context.env().has_errors());
                     EE::UnresolvedError

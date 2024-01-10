@@ -316,7 +316,12 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
         | N::Exp_::Assign(_, e)
         | N::Exp_::Loop(_, e)
         | N::Exp_::Annotate(e, _)
-        | N::Exp_::Lambda(_, e) => exp(context, e),
+        | N::Exp_::Lambda(N::Lambda {
+            parameters: _,
+            break_label: _,
+            return_label: _,
+            body: e,
+        }) => exp(context, e),
         N::Exp_::IfElse(econd, et, ef) => {
             exp(context, econd);
             exp(context, et);

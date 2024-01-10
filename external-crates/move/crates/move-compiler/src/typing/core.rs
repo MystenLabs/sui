@@ -70,6 +70,7 @@ pub struct Context<'env> {
     pub constraints: Constraints,
 
     named_block_map: BTreeMap<BlockLabel, Type>,
+    macro_call_return_types: Vec<Type>,
 
     /// collects all friends that should be added over the course of 'public(package)' calls
     /// structured as (defining module, new friend, location) where `new friend` is usually the
@@ -143,6 +144,7 @@ impl<'env> Context<'env> {
             modules: info,
             macros: UniqueMap::new(),
             named_block_map: BTreeMap::new(),
+            macro_call_return_types: vec![],
             env,
             new_friends: BTreeSet::new(),
             used_module_members: BTreeMap::new(),
@@ -223,7 +225,22 @@ impl<'env> Context<'env> {
         })
     }
 
+    pub fn add_macro_call_return_type(&mut self, ty: Type) {
+        self.macro_call_return_types.push(ty)
+    }
+
+    pub fn pop_macro_call_return_type(&mut self) {
+        self.macro_call_return_types
+            .pop()
+            .expect("ICE macro call stack empty");
+    }
+
+    pub fn current_macro_call_return_type(&mut self) -> Option<Type> {
+        self.macro_call_return_types.last().cloned()
+    }
+
     pub fn reset_for_module_item(&mut self) {
+        self.macro_call_return_types = vec![];
         self.named_block_map = BTreeMap::new();
         self.return_type = None;
         self.locals = UniqueMap::new();

@@ -518,7 +518,7 @@ mod check_valid_constant {
                 s = format!("'{}' is", b);
                 &s
             }
-            E::Lambda(_, _, _) => "lambda expressions are",
+            E::Lambda(_, _) => "lambda expressions are",
             E::IfElse(eb, et, ef) => {
                 exp(context, eb);
                 exp(context, et);
@@ -1175,14 +1175,15 @@ fn sequence_type(seq: &T::Sequence) -> &Type {
     }
 }
 
-fn lambda(
-    context: &mut Context,
-    loc: Loc,
-    expected_ty: Type,
-    args: N::LValueList,
-    body: Box<N::Exp>,
-) {
-    let arg_tys: Vec<Type> = args
+// type checking lambda calls inside of a macro body, since they are not inlined
+fn lambda(context: &mut Context, loc: Loc, expected_ty: Type, nlambda: N::Lambda) {
+    let N::Lambda {
+        parameters,
+        break_label,
+        return_label,
+        body,
+    } = nlambda;
+    let arg_tys: Vec<Type> = parameters
         .value
         .iter()
         .map(|sp!(aloc, _)| core::make_tvar(context, *aloc))
@@ -1196,16 +1197,35 @@ fn lambda(
         actual_ty,
         expected_ty,
     );
-    let arg_ty_annot = match args.value.len() {
+    let arg_ty_annot = match parameters.value.len() {
         0 => sp(loc, Type_::Unit),
         1 => sp(loc, arg_tys[0].value.clone()),
         _ => Type_::multiple(loc, arg_tys.clone()),
     };
-    let args = bind_list(context, args, Some(arg_ty_annot));
+    let args = bind_list(context, parameters, Some(arg_ty_annot));
     let ret_ty = core::make_tvar(context, body.loc);
-    // TODO the body should really be type checked after the call is checked
-    // this will be more important once there are receiver/method calls
     let body = exp_(context, *body);
+    if let Some(local_return_type) = context.named_block_type_opt(return_label) {
+        join(
+            context,
+            loc,
+            || "Invalid lambda return type",
+            ret_ty,
+            local_return_type,
+        );
+    }
+    if let (Some(macro_break_type), Some(macro_return_type)) = (
+        context.named_block_type_opt(break_label),
+        context.current_macro_call_return_type(),
+    ) {
+        subtype(
+            context,
+            loc,
+            || "Invalid lambda break type",
+            macro_break_type,
+            macro_return_type,
+        );
+    }
 }
 
 fn exp_vec(context: &mut Context, es: Vec<N::Exp>) -> Vec<T::Exp> {
@@ -1363,10 +1383,7 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             (sequence_type(&seq).clone(), TE::Block(seq))
         }
 
-        NE::Lambda(args, body) => (
-            core::make_tvar(context, eloc),
-            TE::Lambda(false, args, body),
-        ),
+        NE::Lambda(lambda) => (core::make_tvar(context, eloc), TE::Lambda(false, lambda)),
 
         NE::Assign(na, nr) => {
             let er = exp(context, nr);
@@ -2542,9 +2559,11 @@ fn module_call_impl(
         subtype(context, loc, msg, arg_ty, param_ty);
     }
     let params_ty_list = parameters.into_iter().map(|(_, ty)| ty).collect();
-    if is_macro_call && context.in_macro_function {
+    if decl_is_macro && context.in_macro_function {
         // sanity check lambdas inside of a macro since it won't get expanded
+        context.add_macro_call_return_type(return_.clone());
         args.iter_mut().for_each(|arg| solve_lambdas(context, arg));
+        context.pop_macro_call_return_type();
     }
     let call = T::ModuleCall {
         module: m,
@@ -2777,10 +2796,13 @@ fn expand_macro(
             let es = T::exp(tys.clone(), sp(argloc, TE::ExpList(es)));
             let b = bind_list(context, sp(argloc, lvalues_), Some(tys));
             let lvalue_ty = lvalues_expected_types(context, &b);
-            let mut body = sequence(context, body);
-            body.push_front(sp(argloc, TS::Bind(b, lvalue_ty, Box::new(es))));
-            let ty = sequence_type(&body).clone();
-            let e_ = TE::Block(body);
+            let body = exp(context, Box::new(body));
+            let ty = body.ty.clone();
+            let seq = VecDeque::from([
+                sp(argloc, TS::Bind(b, lvalue_ty, Box::new(es))),
+                sp(body.exp.loc, TS::Seq(body)),
+            ]);
+            let e_ = TE::Block(seq);
             (ty, e_)
         }
     }
@@ -2854,13 +2876,13 @@ fn solve_lambdas(context: &mut Context, e: &mut T::Exp) {
         }
 
         // already expanded
-        E::Lambda(true, _, _) => (),
+        E::Lambda(true, _) => (),
 
         // expand
-        E::Lambda(visited, args, body) => {
+        E::Lambda(visited, nlambda) => {
             assert!(!*visited);
             *visited = true;
-            lambda(context, e.exp.loc, e.ty.clone(), args.clone(), body.clone());
+            lambda(context, e.exp.loc, e.ty.clone(), nlambda.clone());
         }
     }
 }

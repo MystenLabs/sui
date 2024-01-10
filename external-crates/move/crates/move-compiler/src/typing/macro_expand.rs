@@ -14,7 +14,7 @@ use crate::{
 use move_ir_types::location::*;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-type LambdaMap = BTreeMap<Var_, (N::LValueList, Type, Box<N::Exp>, Type)>;
+type LambdaMap = BTreeMap<Var_, (N::Lambda, Type, Type)>;
 
 struct Context<'a, 'b> {
     core: &'a mut core::Context<'b>,
@@ -24,7 +24,7 @@ struct Context<'a, 'b> {
 
 pub struct ExpandedMacro {
     pub argument_bindings: Vec<(Option<Loc>, Var, N::Type, T::Exp)>,
-    pub body: N::Sequence,
+    pub body: N::Exp,
 }
 
 pub(crate) fn call(
@@ -39,7 +39,7 @@ pub(crate) fn call(
     // If none, there is no body to expand, likely because of an error in the macro definition
     let macro_body = context.macro_body(&m, &f)?;
     let macro_info = context.function_info(&m, &f);
-    let (macro_type_params, macro_params, mut macro_body) =
+    let (macro_type_params, macro_params, mut macro_body, return_label) =
         match recolor_macro(call_loc, &m, &f, macro_info, macro_body, next_color) {
             Ok(res) => res,
             Err(None) => {
@@ -84,15 +84,25 @@ pub(crate) fn call(
             argument_bindings.push((mut_, param, param_ty, arg))
         }
     }
+    let mut break_labels: BTreeSet<_> = lambdas.values().map(|(l, _, _)| l.break_label).collect();
+    break_labels.insert(return_label);
     let mut context = Context {
         core: context,
         lambdas,
         tparam_subst,
     };
     seq(&mut context, &mut macro_body);
+    let mut wrapped_body = sp(call_loc, N::Exp_::Block(macro_body));
+    for label in break_labels {
+        let seq = (
+            N::UseFuns::new(),
+            VecDeque::from([sp(call_loc, N::SequenceItem_::Seq(wrapped_body))]),
+        );
+        wrapped_body = sp(call_loc, N::Exp_::NamedBlock(label, seq));
+    }
     Some(ExpandedMacro {
         argument_bindings,
-        body: macro_body,
+        body: wrapped_body,
     })
 }
 
@@ -103,8 +113,15 @@ fn recolor_macro(
     macro_info: &FunctionInfo,
     macro_body: &N::Sequence,
     color: u16,
-) -> Result<(Vec<TParamID>, Vec<(Option<Loc>, Var, N::Type)>, N::Sequence), Option<Box<Diagnostic>>>
-{
+) -> Result<
+    (
+        Vec<TParamID>,
+        Vec<(Option<Loc>, Var, N::Type)>,
+        N::Sequence,
+        BlockLabel,
+    ),
+    Option<Box<Diagnostic>>,
+> {
     let FunctionInfo {
         macro_, signature, ..
     } = macro_info;
@@ -118,7 +135,15 @@ fn recolor_macro(
         ..
     } = signature;
     let tparam_ids = type_parameters.iter().map(|t| t.id).collect();
-    let recolor = &mut Recolor::new(color);
+    let return_label = BlockLabel(sp(
+        call_loc,
+        N::Var_ {
+            name: N::BlockLabel::MACRO_RETURN_NAME_SYMBOL,
+            id: 0,
+            color,
+        },
+    ));
+    let recolor = &mut Recolor::new(color, Some(return_label));
     recolor.add_params(&parameters);
     let parameters = parameters
         .iter()
@@ -129,7 +154,7 @@ fn recolor_macro(
         recolor_seq(recolor, &mut body);
         body
     };
-    Ok((tparam_ids, parameters, body))
+    Ok((tparam_ids, parameters, body, return_label))
 }
 
 fn bind_lambda(
@@ -144,8 +169,8 @@ fn bind_lambda(
         T::UnannotatedExp_::Annotate(inner, _) => {
             bind_lambda(context, lambdas, param, *inner, param_ty, result_ty)
         }
-        T::UnannotatedExp_::Lambda(_, lvs, body) => {
-            lambdas.insert(param, (lvs, param_ty, body, result_ty));
+        T::UnannotatedExp_::Lambda(_, lambda) => {
+            lambdas.insert(param, (lambda, param_ty, result_ty));
             Some(())
         }
         _ => {
@@ -170,14 +195,16 @@ fn bind_lambda(
 // unique-ing of variables done by naming
 struct Recolor {
     color: u16,
+    return_label: Option<BlockLabel>,
     vars: BTreeSet<Var>,
     block_labels: BTreeSet<BlockLabel>,
 }
 
 impl Recolor {
-    pub fn new(color: u16) -> Self {
+    pub fn new(color: u16, return_label: Option<BlockLabel>) -> Self {
         Self {
             color,
+            return_label,
             vars: BTreeSet::new(),
             block_labels: BTreeSet::new(),
         }
@@ -215,6 +242,7 @@ impl Recolor {
 }
 
 fn recolor_var_owned(ctx: &mut Recolor, mut v: Var) -> Var {
+    assert!(ctx.vars.contains(&v));
     recolor_var(ctx, &mut v);
     v
 }
@@ -226,6 +254,12 @@ fn recolor_var(ctx: &mut Recolor, v: &mut Var) {
         return;
     }
     v.value.color = ctx.color;
+}
+
+fn recolor_block_label_owned(ctx: &mut Recolor, mut label: BlockLabel) -> BlockLabel {
+    assert!(ctx.block_labels.contains(&label));
+    recolor_block_label(ctx, &mut label);
+    label
 }
 
 fn recolor_block_label(ctx: &mut Recolor, label: &mut BlockLabel) {
@@ -280,8 +314,15 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
         N::Exp_::Unit { .. } | N::Exp_::UnresolvedError => (),
         N::Exp_::Var(var) => recolor_var(ctx, var),
         N::Exp_::Return(e) => {
-            todo!("set label for return");
-            recolor_exp(ctx, e)
+            recolor_exp(ctx, e);
+            if let Some(label) = ctx.return_label {
+                let N::Exp_::Return(e) =
+                    std::mem::replace(e_, /* dummy */ N::Exp_::UnresolvedError)
+                else {
+                    unreachable!()
+                };
+                *e_ = N::Exp_::Give(label, e)
+            }
         }
 
         N::Exp_::Abort(e)
@@ -300,16 +341,19 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
         }
         N::Exp_::Loop(name, e) => {
             ctx.add_block_label(*name);
+            recolor_block_label(ctx, name);
             recolor_exp(ctx, e)
         }
         N::Exp_::While(econd, name, ebody) => {
             ctx.add_block_label(*name);
+            recolor_block_label(ctx, name);
             recolor_exp(ctx, econd);
             recolor_exp(ctx, ebody)
         }
         N::Exp_::Block(s) => recolor_seq(ctx, s),
-        N::Exp_::NamedBlock(n, s) => {
-            ctx.add_block_label(*n);
+        N::Exp_::NamedBlock(name, s) => {
+            ctx.add_block_label(*name);
+            recolor_block_label(ctx, name);
             recolor_seq(ctx, s)
         }
         N::Exp_::FieldMutate(ed, e) => {
@@ -346,9 +390,18 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
             }
         }
 
-        N::Exp_::Lambda(lvalues, e) => {
-            recolor_lvalues(ctx, lvalues);
-            recolor_exp(ctx, e)
+        N::Exp_::Lambda(N::Lambda {
+            parameters,
+            break_label,
+            return_label,
+            body,
+        }) => {
+            ctx.add_block_label(*break_label);
+            ctx.add_block_label(*return_label);
+            recolor_lvalues(ctx, parameters);
+            recolor_block_label(ctx, break_label);
+            recolor_block_label(ctx, return_label);
+            recolor_exp(ctx, body)
         }
         N::Exp_::ExpDotted(_dotted_usage, ed) => recolor_exp_dotted(ctx, ed),
     }
@@ -474,7 +527,11 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             exps(context, es)
         }
         N::Exp_::ExpList(es) => exps(context, es),
-        N::Exp_::Lambda(lvs, e) => {
+        N::Exp_::Lambda(N::Lambda {
+            parameters: lvs,
+            body: e,
+            ..
+        }) => {
             lvalues(context, lvs);
             exp(context, e)
         }
@@ -482,11 +539,22 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
         N::Exp_::VarCall(v, sp!(_, es)) if context.lambdas.contains_key(&v.value) => {
             exps(context, es);
             // param_ty and result_ty have already been substituted
-            let (mut lambda_params, param_ty, mut lambda_body, result_ty) =
-                context.lambdas.get(&v.value).unwrap().clone();
+            let (
+                N::Lambda {
+                    parameters: mut lambda_params,
+                    break_label: _, // not used at this level
+                    return_label,
+                    body: mut lambda_body,
+                },
+                param_ty,
+                result_ty,
+            ) = context.lambdas.get(&v.value).unwrap().clone();
             // recolor in case the lambda is used more than once
             let next_color = context.core.next_variable_color();
-            let recolor = &mut Recolor::new(next_color);
+            let recolor = &mut Recolor::new(next_color, /* return already labeled */ None);
+            recolor.add_block_label(return_label);
+            recolor.add_lvalues(&lambda_params);
+            let return_label = recolor_block_label_owned(recolor, return_label);
             recolor_lvalues(recolor, &mut lambda_params);
             recolor_exp(recolor, &mut lambda_body);
             let param_loc = lambda_params.loc;

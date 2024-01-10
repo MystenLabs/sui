@@ -159,6 +159,7 @@ fn create_test_poison(mloc: Loc) -> P::ModuleMember {
         loc: mloc,
         visibility: P::Visibility::Internal,
         entry: Some(mloc), // it's a bit of a hack to avoid treating this function as unused
+        macro_: None,
         signature,
         name: P::FunctionName(sp(mloc, "unit_test_poison".into())),
         body: sp(

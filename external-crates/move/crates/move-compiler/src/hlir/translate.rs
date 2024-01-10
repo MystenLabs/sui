@@ -289,7 +289,13 @@ fn module(
     let structs = tstructs.map(|name, s| struct_def(context, name, s));
 
     let constants = tconstants.map(|name, c| constant(context, name, c));
-    let functions = tfunctions.map(|name, f| function(context, name, f));
+    let functions = tfunctions.filter_map(|name, f| {
+        if matches!(f.body.value, T::FunctionBody_::Macro) {
+            None
+        } else {
+            Some(function(context, name, f))
+        }
+    });
 
     gen_unused_warnings(context, is_source_module, &structs);
 
@@ -324,9 +330,11 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         attributes,
         visibility: evisibility,
         entry,
+        macro_,
         signature,
         body,
     } = f;
+    assert!(macro_.is_none(), "ICE macros filtered above");
     context.env.add_warning_filter_scope(warning_filter.clone());
     let signature = function_signature(context, signature);
     let body = function_body(context, &signature, body);
@@ -377,6 +385,7 @@ fn function_body(
             let (locals, body) = function_body_defined(context, sig, loc, seq);
             HB::Defined { locals, body }
         }
+        TB::Macro => unreachable!("ICE macros filtered above"),
     };
     sp(loc, b_)
 }
@@ -539,7 +548,7 @@ fn base_type(context: &Context, sp!(loc, nb_): N::Type) -> H::BaseType {
         NT::Param(tp) => HB::Param(tp),
         NT::UnresolvedError => HB::UnresolvedError,
         NT::Anything => HB::Unreachable,
-        NT::Ref(_, _) | NT::Unit => {
+        NT::Ref(_, _) | NT::Unit | NT::Fun(_, _) => {
             panic!(
                 "ICE type constraints failed {}:{}-{}",
                 loc.file_hash(),
@@ -1209,6 +1218,7 @@ fn value(
         // odds and ends -- things we need to deal with but that don't do much
         // -----------------------------------------------------------------------------------------
         E::Use(_) => panic!("ICE unexpanded use"),
+        E::Lambda(_, _) => panic!("ICE unexpanded lambda"),
 
         E::UnresolvedError => {
             assert!(context.env.has_errors());
@@ -1521,6 +1531,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         // odds and ends -- things we need to deal with but that don't do much
         // -----------------------------------------------------------------------------------------
         E::Use(_) => panic!("ICE unexpanded use"),
+        E::Lambda(_, _) => panic!("ICE unexpanded lambda"),
     }
 }
 
