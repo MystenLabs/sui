@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { decodeSuiPrivateKey } from '@mysten/sui.js/cryptography/keypair';
 import { hexToBytes } from '@noble/hashes/utils';
 import * as Yup from 'yup';
 import { z } from 'zod';
@@ -10,28 +11,16 @@ export const privateKeyValidation = z
 	.trim()
 	.nonempty('Private Key is a required field.')
 	.transform((privateKey, context) => {
-		const hexValue = privateKey.startsWith('0x') ? privateKey.slice(2) : privateKey;
-		let privateKeyBytes: Uint8Array | undefined;
-
 		try {
-			privateKeyBytes = hexToBytes(hexValue);
+			decodeSuiPrivateKey(privateKey);
 		} catch (error) {
 			context.addIssue({
 				code: 'custom',
-				message: 'Private Key must be a hexadecimal value. It may optionally begin with "0x".',
+				message: 'Private Key must be a Bech32 encoded 33-byte string',
 			});
 			return z.NEVER;
 		}
-
-		if (![32, 64].includes(privateKeyBytes.length)) {
-			context.addIssue({
-				code: 'custom',
-				message: 'Private Key must be either 32 or 64 bytes.',
-			});
-			return z.NEVER;
-		}
-
-		return hexValue;
+		return privateKey;
 	});
 
 /** @deprecated Prefer Zod over Yup for doing schema validation! */
