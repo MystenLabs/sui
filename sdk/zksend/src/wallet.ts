@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { bcs } from '@mysten/sui.js/bcs';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
-import { bcs } from '@mysten/sui.js/src/bcs/index.js';
 import { toB64 } from '@mysten/sui.js/utils';
 import type {
 	StandardConnectFeature,
