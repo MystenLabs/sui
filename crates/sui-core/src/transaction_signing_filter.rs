@@ -4,5 +4,3 @@
 #[cfg(test)]
 #[path = "unit_tests/transaction_deny_tests.rs"]
 mod transaction_deny_tests;
-
-

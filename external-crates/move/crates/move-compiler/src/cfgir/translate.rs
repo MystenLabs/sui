@@ -428,6 +428,7 @@ fn constant(
 const CANNOT_FOLD: &str =
     "Invalid expression in 'const'. This expression could not be evaluated to a value";
 
+#[allow(clippy::map_identity)]
 fn constant_(
     context: &mut Context,
     constant_values: &UniqueMap<ConstantName, Value>,
@@ -580,6 +581,7 @@ fn function(
     }
 }
 
+#[allow(clippy::map_identity)]
 fn function_body(
     context: &mut Context,
     module: ModuleIdent,

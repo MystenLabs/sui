@@ -59,6 +59,7 @@ impl BorrowInfo {
     }
 
     /// Gets the parents (together with the edges) of this node.
+    #[allow(clippy::map_identity)]
     fn get_incoming(&self, node: &BorrowNode) -> Vec<(&BorrowNode, &BorrowEdge)> {
         self.borrows_from
             .get(node)

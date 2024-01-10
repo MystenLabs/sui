@@ -209,7 +209,7 @@ impl<Loc: Copy, Lbl: Clone + Ord> PartialEq for BorrowEdge<Loc, Lbl> {
 
 impl<Loc: Copy, Lbl: Clone + Ord> Eq for BorrowEdge<Loc, Lbl> {}
 
-#[allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
+#[allow(clippy::non_canonical_partial_ord_impl)]
 impl<Loc: Copy, Lbl: Clone + Ord> PartialOrd for BorrowEdge<Loc, Lbl> {
     fn partial_cmp(&self, other: &BorrowEdge<Loc, Lbl>) -> Option<Ordering> {
         BorrowEdgeNoLoc::new(self).partial_cmp(&BorrowEdgeNoLoc::new(other))

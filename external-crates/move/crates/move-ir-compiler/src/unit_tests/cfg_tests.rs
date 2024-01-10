@@ -16,7 +16,7 @@ fn cfg_compile_script_ret() {
             return;
         } }
         ";
-    let code = compile_module_with_single_function(&text);
+    let code = compile_module_with_single_function(text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
     cfg.display();
     assert_eq!(cfg.blocks().len(), 1);
@@ -38,7 +38,7 @@ fn cfg_compile_script_let() {
             return;
         } }
         ";
-    let code = compile_module_with_single_function(&text);
+    let code = compile_module_with_single_function(text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
     assert_eq!(cfg.blocks().len(), 1);
     assert_eq!(cfg.num_blocks(), 1);
@@ -62,7 +62,7 @@ fn cfg_compile_if() {
             return;
         } }
         ";
-    let code = compile_module_with_single_function(&text);
+    let code = compile_module_with_single_function(text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
     assert_eq!(cfg.blocks().len(), 4);
     assert_eq!(cfg.num_blocks(), 4);
@@ -89,7 +89,7 @@ fn cfg_compile_if_else() {
             return;
         } }
         ";
-    let code = compile_module_with_single_function(&text);
+    let code = compile_module_with_single_function(text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
     assert_eq!(cfg.blocks().len(), 4);
     assert_eq!(cfg.num_blocks(), 4);
@@ -112,7 +112,7 @@ fn cfg_compile_if_else_with_else_return() {
             return;
         } }
         ";
-    let code = compile_module_with_single_function(&text);
+    let code = compile_module_with_single_function(text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
     assert_eq!(cfg.blocks().len(), 4);
     assert_eq!(cfg.num_blocks(), 4);
@@ -143,7 +143,7 @@ fn cfg_compile_nested_if() {
             return;
         } }
         ";
-    let code = compile_module_with_single_function(&text);
+    let code = compile_module_with_single_function(text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
     assert_eq!(cfg.blocks().len(), 7);
     assert_eq!(cfg.num_blocks(), 7);
@@ -166,7 +166,7 @@ fn cfg_compile_if_else_with_if_return() {
             return;
         } }
         ";
-    let code = compile_module_with_single_function(&text);
+    let code = compile_module_with_single_function(text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
     assert_eq!(cfg.blocks().len(), 4);
     assert_eq!(cfg.num_blocks(), 4);
@@ -189,7 +189,7 @@ fn cfg_compile_if_else_with_two_returns() {
             return;
         } }
         ";
-    let code = compile_module_with_single_function(&text);
+    let code = compile_module_with_single_function(text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
     assert_eq!(cfg.blocks().len(), 4);
     assert_eq!(cfg.num_blocks(), 4);
@@ -215,7 +215,7 @@ fn cfg_compile_if_else_with_else_abort() {
             abort 0;
         } }
         ";
-    let code = compile_module_with_single_function(&text);
+    let code = compile_module_with_single_function(text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
     cfg.display();
     assert_eq!(cfg.blocks().len(), 4);
@@ -239,7 +239,7 @@ fn cfg_compile_if_else_with_if_abort() {
             abort 0;
         } }
         ";
-    let code = compile_module_with_single_function(&text);
+    let code = compile_module_with_single_function(text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
     cfg.display();
     assert_eq!(cfg.blocks().len(), 4);
@@ -263,7 +263,7 @@ fn cfg_compile_if_else_with_two_aborts() {
             abort 0;
         } }
         ";
-    let code = compile_module_with_single_function(&text);
+    let code = compile_module_with_single_function(text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
     cfg.display();
     assert_eq!(cfg.blocks().len(), 4);

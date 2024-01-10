@@ -55,8 +55,8 @@ pub fn run_instruction(
             .iter()
             .any(|precondition| !precondition(&initial_state))
     };
-    assert_eq!(
-        unsatisfied_preconditions, false,
+    assert!(
+        !unsatisfied_preconditions,
         "preconditions of instruction not satisfied"
     );
     match summary.effects {

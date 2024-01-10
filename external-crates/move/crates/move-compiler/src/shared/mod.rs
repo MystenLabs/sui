@@ -188,6 +188,12 @@ impl NamedAddressMaps {
     }
 }
 
+impl Default for NamedAddressMaps {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PackagePaths<Path: Into<Symbol> = Symbol, NamedAddress: Into<Symbol> = Symbol> {
     pub name: Option<(Symbol, PackageConfig)>,

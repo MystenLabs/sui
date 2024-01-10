@@ -62,7 +62,8 @@ pub async fn setup_for_write() -> Result<(SuiClient, SuiAddress, SuiAddress), an
         .into_iter()
         .filter(|address| address != &active_address)
         .collect::<Vec<_>>();
-    let recipient = addresses.first()
+    let recipient = addresses
+        .first()
         .expect("Cannot get the recipient address needed for writing operations. Aborting");
 
     Ok((client, active_address, *recipient))

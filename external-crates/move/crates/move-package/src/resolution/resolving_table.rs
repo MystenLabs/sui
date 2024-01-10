@@ -30,6 +30,12 @@ enum Assignment {
     Linked(usize),
 }
 
+impl Default for ResolvingTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ResolvingTable {
     /// A fresh `ResolvingTable` with no bindings.
     pub fn new() -> ResolvingTable {

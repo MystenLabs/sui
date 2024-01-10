@@ -175,8 +175,7 @@ pub fn end_transaction(
     find_all_wrapped_objects(
         context,
         &mut all_wrapped,
-        object_runtime_ref
-            .all_active_child_objects(),
+        object_runtime_ref.all_active_child_objects(),
     );
     // mark as "incorrect" if a shared/imm object was wrapped or is a child object
     incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling

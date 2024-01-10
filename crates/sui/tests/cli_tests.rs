@@ -1640,7 +1640,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
                 .effects
                 .as_ref()
                 .unwrap()
-                .mutated().first()
+                .mutated()
+                .first()
                 .unwrap()
                 .reference
                 .object_id,
@@ -1739,7 +1740,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
                 .effects
                 .as_ref()
                 .unwrap()
-                .mutated().first()
+                .mutated()
+                .first()
                 .unwrap()
                 .reference
                 .object_id,

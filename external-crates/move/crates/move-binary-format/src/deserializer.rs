@@ -1583,21 +1583,33 @@ fn load_code(cursor: &mut VersionedCursor, code: &mut Vec<Bytecode>) -> BinaryLo
             Opcodes::CAST_U32 => Bytecode::CastU32,
             Opcodes::CAST_U256 => Bytecode::CastU256,
             // ******** DEPRECATED BYTECODES ********
-            Opcodes::EXISTS_DEPRECATED => Bytecode::ExistsDeprecated(load_struct_def_index(cursor)?),
-            Opcodes::EXISTS_GENERIC_DEPRECATED => Bytecode::ExistsGenericDeprecated(load_struct_def_inst_index(cursor)?),
-            Opcodes::MUT_BORROW_GLOBAL_DEPRECATED => Bytecode::MutBorrowGlobalDeprecated(load_struct_def_index(cursor)?),
+            Opcodes::EXISTS_DEPRECATED => {
+                Bytecode::ExistsDeprecated(load_struct_def_index(cursor)?)
+            }
+            Opcodes::EXISTS_GENERIC_DEPRECATED => {
+                Bytecode::ExistsGenericDeprecated(load_struct_def_inst_index(cursor)?)
+            }
+            Opcodes::MUT_BORROW_GLOBAL_DEPRECATED => {
+                Bytecode::MutBorrowGlobalDeprecated(load_struct_def_index(cursor)?)
+            }
             Opcodes::MUT_BORROW_GLOBAL_GENERIC_DEPRECATED => {
                 Bytecode::MutBorrowGlobalGenericDeprecated(load_struct_def_inst_index(cursor)?)
             }
-            Opcodes::IMM_BORROW_GLOBAL_DEPRECATED => Bytecode::ImmBorrowGlobalDeprecated(load_struct_def_index(cursor)?),
+            Opcodes::IMM_BORROW_GLOBAL_DEPRECATED => {
+                Bytecode::ImmBorrowGlobalDeprecated(load_struct_def_index(cursor)?)
+            }
             Opcodes::IMM_BORROW_GLOBAL_GENERIC_DEPRECATED => {
                 Bytecode::ImmBorrowGlobalGenericDeprecated(load_struct_def_inst_index(cursor)?)
             }
-            Opcodes::MOVE_FROM_DEPRECATED => Bytecode::MoveFromDeprecated(load_struct_def_index(cursor)?),
+            Opcodes::MOVE_FROM_DEPRECATED => {
+                Bytecode::MoveFromDeprecated(load_struct_def_index(cursor)?)
+            }
             Opcodes::MOVE_FROM_GENERIC_DEPRECATED => {
                 Bytecode::MoveFromGenericDeprecated(load_struct_def_inst_index(cursor)?)
             }
-            Opcodes::MOVE_TO_DEPRECATED => Bytecode::MoveToDeprecated(load_struct_def_index(cursor)?),
+            Opcodes::MOVE_TO_DEPRECATED => {
+                Bytecode::MoveToDeprecated(load_struct_def_index(cursor)?)
+            }
             Opcodes::MOVE_TO_GENERIC_DEPRECATED => {
                 Bytecode::MoveToGenericDeprecated(load_struct_def_inst_index(cursor)?)
             }

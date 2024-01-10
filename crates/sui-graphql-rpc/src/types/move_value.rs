@@ -124,9 +124,10 @@ impl MoveValue {
         // deserializing via `value::MoveValue` (but this is significantly more code).
         bcs::from_bytes_seed(&layout, &self.bcs.0[..]).map_err(|_| {
             let type_tag: TypeTag = (&layout).into();
-            Error::Internal(
-                format!("Failed to deserialize Move value for type: {}", type_tag)
-            )
+            Error::Internal(format!(
+                "Failed to deserialize Move value for type: {}",
+                type_tag
+            ))
         })
     }
 

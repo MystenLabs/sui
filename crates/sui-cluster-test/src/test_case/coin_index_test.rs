@@ -100,7 +100,8 @@ impl TestCaseImpl for CoinIndexTest {
         let validator_addr = ctx
             .get_latest_sui_system_state()
             .await
-            .active_validators.first()
+            .active_validators
+            .first()
             .unwrap()
             .sui_address;
         let txn = make_staking_transaction(ctx.get_wallet(), validator_addr).await;

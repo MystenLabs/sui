@@ -642,8 +642,7 @@ impl FullNodeProxy {
         let resp = sui_client.read_api().get_committee_info(None).await?;
         let epoch = resp.epoch;
         let committee_vec = resp.validators;
-        let committee_map =
-            BTreeMap::from_iter(committee_vec.into_iter());
+        let committee_map = BTreeMap::from_iter(committee_vec.into_iter());
         let committee =
             Committee::new_for_testing_with_normalized_voting_power(epoch, committee_map);
 
