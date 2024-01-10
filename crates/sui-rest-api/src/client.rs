@@ -23,15 +23,15 @@ impl Client {
 
     pub async fn get_latest_checkpoint(&self) -> Result<CertifiedCheckpointSummary> {
         let url = format!("{}/checkpoints", self.base_url);
-        let checkpoint = self
+
+        let response = self
             .inner
             .get(url)
             .header(reqwest::header::ACCEPT, crate::APPLICATION_JSON)
             .send()
-            .await?
-            .json()
             .await?;
-        Ok(checkpoint)
+
+        self.json(response).await
     }
 
     pub async fn get_full_checkpoint(
@@ -43,16 +43,14 @@ impl Client {
             self.base_url
         );
 
-        let bytes = self
+        let response = self
             .inner
             .get(url)
             .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
             .send()
-            .await?
-            .bytes()
             .await?;
 
-        bcs::from_bytes(&bytes).map_err(Into::into)
+        self.bcs(response).await
     }
 
     pub async fn get_checkpoint_summary(
@@ -61,31 +59,27 @@ impl Client {
     ) -> Result<CertifiedCheckpointSummary> {
         let url = format!("{}/checkpoints/{checkpoint_sequence_number}", self.base_url);
 
-        let checkpoint = self
+        let response = self
             .inner
             .get(url)
             .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
             .send()
-            .await?
-            .json()
             .await?;
 
-        Ok(checkpoint)
+        self.bcs(response).await
     }
 
     pub async fn get_object(&self, object_id: ObjectID) -> Result<Object> {
         let url = format!("{}/objects/{object_id}", self.base_url);
 
-        let bytes = self
+        let response = self
             .inner
             .get(url)
             .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
             .send()
-            .await?
-            .bytes()
             .await?;
 
-        bcs::from_bytes(&bytes).map_err(Into::into)
+        self.bcs(response).await
     }
 
     pub async fn get_object_with_version(
@@ -95,15 +89,37 @@ impl Client {
     ) -> Result<Object> {
         let url = format!("{}/objects/{object_id}/version/{version}", self.base_url);
 
-        let bytes = self
+        let response = self
             .inner
             .get(url)
             .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
             .send()
-            .await?
-            .bytes()
             .await?;
 
-        bcs::from_bytes(&bytes).map_err(Into::into)
+        self.bcs(response).await
+    }
+
+    fn check_response(&self, response: reqwest::Response) -> Result<reqwest::Response> {
+        if !response.status().is_success() {
+            let status = response.status();
+            return Err(anyhow::anyhow!("request failed with status {status}"));
+        }
+
+        Ok(response)
+    }
+
+    async fn json<T: serde::de::DeserializeOwned>(&self, response: reqwest::Response) -> Result<T> {
+        let response = self.check_response(response)?;
+
+        let json = response.json().await?;
+        Ok(json)
+    }
+
+    async fn bcs<T: serde::de::DeserializeOwned>(&self, response: reqwest::Response) -> Result<T> {
+        let response = self.check_response(response)?;
+
+        let bytes = response.bytes().await?;
+        let bcs = bcs::from_bytes(&bytes)?;
+        Ok(bcs)
     }
 }
