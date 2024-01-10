@@ -47,7 +47,7 @@ export class ZkSendLinkBuilder {
 		host = DEFAULT_ZK_SEND_LINK_OPTIONS.host,
 		path = DEFAULT_ZK_SEND_LINK_OPTIONS.path,
 		keypair = new Ed25519Keypair(),
-	}: ZkSendLinkBuilderOptions) {
+	}: ZkSendLinkBuilderOptions = {}) {
 		this.#host = host;
 		this.#path = path;
 		this.#keypair = keypair;
@@ -161,7 +161,7 @@ export class ZkSendLink {
 			objects?: string[];
 		},
 	) {
-		const normalizedAddress = normalizeStructTag(address);
+		const normalizedAddress = normalizeSuiAddress(address);
 		const txb = this.createClaimTransaction(normalizedAddress, options);
 
 		const dryRun = await this.#client.dryRunTransactionBlock({
@@ -218,6 +218,7 @@ export class ZkSendLink {
 	) {
 		const claimAll = !options?.coinTypes && !options?.objects;
 		const txb = new TransactionBlock();
+		txb.setSender(this.#keypair.toSuiAddress());
 		const coinTypes = new Set(
 			options?.coinTypes?.map((type) => normalizeStructTag(`0x2::coin::Coin<${type}>`)) ?? [],
 		);
@@ -264,7 +265,8 @@ export class ZkSendLink {
 				},
 			});
 
-			nextCursor = ownedObjects.nextCursor;
+			// RPC response returns cursor even if there are no more pages
+			nextCursor = ownedObjects.hasNextPage ? ownedObjects.nextCursor : null;
 			for (const object of ownedObjects.data) {
 				if (object.data) {
 					this.#ownedObjects.push({
