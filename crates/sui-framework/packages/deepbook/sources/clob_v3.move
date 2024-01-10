@@ -306,16 +306,25 @@ module deepbook::clob_v3 {
         (((order_id >> 64) as u64), (order_id as u64))
     }
 
-    /// Check if the order exists in the queue
+    /// Check if the order exists in the queue and false if its already tombstoned
     fun contains_order(
         base_order_id: u64,
         tick_level: &TickLevel
     ): bool {
         if (order_is_bid(base_order_id)) {
-            return base_order_id - tick_level.count_elements_popped > 0
+            let position = base_order_id - tick_level.count_elements_popped;
+            if (position > 0) {
+                let order = big_queue::nth(&tick_level.order_queue, position);
+                return !order.is_tombstoned
+            };
         } else {
-            return base_order_id - tick_level.count_elements_popped - MIN_ASK_ORDER_ID > 0
-        }
+            let position = base_order_id - tick_level.count_elements_popped - MIN_ASK_ORDER_ID;
+            if (position > 0) {
+                let order = big_queue::nth(&tick_level.order_queue, position);
+                return !order.is_tombstoned
+            };        
+        };
+        return false
     }
 
     /// Function to get an ask elements position in a queue
