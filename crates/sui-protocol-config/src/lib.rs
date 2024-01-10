@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 34;
+const MAX_PROTOCOL_VERSION: u64 = 35;
 
 // Record history of protocol version allocations here:
 //
@@ -103,6 +103,7 @@ const MAX_PROTOCOL_VERSION: u64 = 34;
 //             Enable shared object deletion in testnet.
 //             Enable effects v2 in mainnet.
 // Version 34: Framework changes for random beacon.
+// Version 35: Add poseidon hash function.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -829,10 +830,15 @@ pub struct ProtocolConfig {
     hash_blake2b256_cost_base: Option<u64>,
     hash_blake2b256_data_cost_per_byte: Option<u64>,
     hash_blake2b256_data_cost_per_block: Option<u64>,
+
     // hash::keccak256
     hash_keccak256_cost_base: Option<u64>,
     hash_keccak256_data_cost_per_byte: Option<u64>,
     hash_keccak256_data_cost_per_block: Option<u64>,
+
+    // poseidon::poseidon_bn254
+    poseidon_bn254_cost_base: Option<u64>,
+    poseidon_bn254_cost_per_block: Option<u64>,
 
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
@@ -1420,6 +1426,9 @@ impl ProtocolConfig {
             hash_keccak256_data_cost_per_byte: Some(2),
             hash_keccak256_data_cost_per_block: Some(2),
 
+            poseidon_bn254_cost_base: None,
+            poseidon_bn254_cost_per_block: None,
+
             // hmac::hmac_sha3_256
             hmac_hmac_sha3_256_cost_base: Some(52),
             hmac_hmac_sha3_256_input_cost_per_byte: Some(2),
@@ -1724,6 +1733,11 @@ impl ProtocolConfig {
                     cfg.feature_flags.enable_effects_v2 = true;
                 }
                 34 => {}
+                35 => {
+                    // Add costs for poseidon::poseidon_bn254
+                    cfg.poseidon_bn254_cost_base = Some(260);
+                    cfg.poseidon_bn254_cost_per_block = Some(10);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
