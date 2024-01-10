@@ -367,6 +367,10 @@ struct FeatureFlags {
     // If true allow calling receiving_object_id function
     #[serde(skip_serializing_if = "is_false")]
     allow_receiving_object_id: bool,
+
+    // Enable the poseidon hash function
+    #[serde(skip_serializing_if = "is_false")]
+    enable_poseidon: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1085,6 +1089,10 @@ impl ProtocolConfig {
     pub fn hardened_otw_check(&self) -> bool {
         self.feature_flags.hardened_otw_check
     }
+
+    pub fn enable_poseidon(&self) -> bool {
+        self.feature_flags.enable_poseidon
+    }
 }
 
 #[cfg(not(msim))]
@@ -1735,8 +1743,11 @@ impl ProtocolConfig {
                 34 => {}
                 35 => {
                     // Add costs for poseidon::poseidon_bn254
-                    cfg.poseidon_bn254_cost_base = Some(260);
-                    cfg.poseidon_bn254_cost_per_block = Some(10);
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_poseidon = true;
+                        cfg.poseidon_bn254_cost_base = Some(260);
+                        cfg.poseidon_bn254_cost_per_block = Some(10);
+                    }
                 }
                 // Use this template when making changes:
                 //
