@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { Output } from 'valibot';
-import { safeParse } from 'valibot';
+import { parse, safeParse } from 'valibot';
 
 import { withResolvers } from '../utils/withResolvers.js';
 import type { ZkSendRequestTypes, ZkSendResponsePayload, ZkSendResponseTypes } from './events.js';
@@ -46,7 +46,7 @@ export class ZkSendPopup {
 			window.removeEventListener('message', listener);
 
 			if (output.payload.type === 'reject') {
-				reject(new Error('TODO: Better error message'));
+				reject(new Error('User rejected the request'));
 			} else if (output.payload.type === 'resolve') {
 				resolve(output.payload.data as ZkSendResponseTypes[T]);
 			}
@@ -68,7 +68,7 @@ export class ZkSendPopup {
 		);
 
 		if (!popup) {
-			throw new Error('TODO: Better error message');
+			throw new Error('Failed to open zkSend window');
 		}
 
 		return promise;
@@ -84,7 +84,9 @@ export class ZkSendHost {
 
 	constructor(request: Output<typeof ZkSendRequest>) {
 		if (typeof window === 'undefined' || !window.opener) {
-			throw new Error('TODO: Better error message');
+			throw new Error(
+				'ZkSendHost can only be used in a window opened through `window.open`. `window.opener` is not available.',
+			);
 		}
 
 		this.#request = request;
@@ -93,7 +95,7 @@ export class ZkSendHost {
 	static fromUrl(url: string = window.location.href) {
 		const parsed = new URL(url);
 
-		const request = safeParse(ZkSendRequest, {
+		const request = parse(ZkSendRequest, {
 			id: parsed.searchParams.get('id'),
 			origin: parsed.searchParams.get('origin'),
 			name: parsed.searchParams.get('name'),
@@ -101,11 +103,7 @@ export class ZkSendHost {
 			data: parsed.hash ? Object.fromEntries(new URLSearchParams(parsed.hash.slice(1))) : {},
 		});
 
-		if (request.issues) {
-			throw new Error('TODO: Better error message');
-		}
-
-		return new ZkSendHost(request.output);
+		return new ZkSendHost(request);
 	}
 
 	getRequestData() {
