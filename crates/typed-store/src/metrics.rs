@@ -272,6 +272,9 @@ impl OperationMetrics {
                 "rocksdb_iter_bytes",
                 "Rocksdb iter size in bytes",
                 &["cf_name"],
+                prometheus::exponential_buckets(1.0, 4.0, 15)
+                    .unwrap()
+                    .to_vec(),
                 registry,
             )
             .unwrap(),
@@ -294,6 +297,9 @@ impl OperationMetrics {
                 "rocksdb_get_bytes",
                 "Rocksdb get call returned data size in bytes",
                 &["cf_name"],
+                prometheus::exponential_buckets(1.0, 4.0, 15)
+                    .unwrap()
+                    .to_vec(),
                 registry
             )
             .unwrap(),
@@ -309,6 +315,9 @@ impl OperationMetrics {
                 "rocksdb_multiget_bytes",
                 "Rocksdb multiget call returned data size in bytes",
                 &["cf_name"],
+                prometheus::exponential_buckets(1.0, 4.0, 15)
+                    .unwrap()
+                    .to_vec(),
                 registry,
             )
             .unwrap(),
@@ -324,6 +333,9 @@ impl OperationMetrics {
                 "rocksdb_put_bytes",
                 "Rocksdb put call puts data size in bytes",
                 &["cf_name"],
+                prometheus::exponential_buckets(1.0, 4.0, 15)
+                    .unwrap()
+                    .to_vec(),
                 registry,
             )
             .unwrap(),
@@ -354,6 +366,9 @@ impl OperationMetrics {
                 "rocksdb_batch_commit_bytes",
                 "Rocksdb schema batch commit size in bytes",
                 &["db_name"],
+                prometheus::exponential_buckets(1.0, 4.0, 15)
+                    .unwrap()
+                    .to_vec(),
                 registry,
             )
             .unwrap(),
