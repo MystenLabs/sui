@@ -160,7 +160,6 @@ pub fn mock_certified_checkpoint<'a>(
 }
 
 mod zk_login {
-    use fastcrypto::traits::EncodeDecodeBase64;
     use fastcrypto_zkp::bn254::{utils::big_int_str_to_bytes, zk_login::ZkLoginInputs};
     use shared_crypto::intent::PersonalMessage;
 
@@ -180,7 +179,7 @@ mod zk_login {
         let test_datum: Vec<TestData> = serde_json::from_reader(file).unwrap();
         let mut res = vec![];
         for test in test_datum {
-            let kp = SuiKeyPair::decode_base64(&test.kp).unwrap();
+            let kp = SuiKeyPair::decode(&test.kp).unwrap();
             let inputs =
                 ZkLoginInputs::from_json(&test.zklogin_inputs, &test.address_seed).unwrap();
             let pk_zklogin = PublicKey::from_zklogin_inputs(&inputs).unwrap();

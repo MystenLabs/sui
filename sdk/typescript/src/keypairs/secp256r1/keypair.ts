@@ -1,15 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toB64 } from '@mysten/bcs';
 import { secp256r1 } from '@noble/curves/p256';
 import { blake2b } from '@noble/hashes/blake2b';
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
 import { HDKey } from '@scure/bip32';
 
-import type { ExportedKeypair } from '../../cryptography/keypair.js';
-import { Keypair } from '../../cryptography/keypair.js';
+import { encodeSuiPrivateKey, Keypair } from '../../cryptography/keypair.js';
 import { isValidBIP32Path, mnemonicToSeed } from '../../cryptography/mnemonics.js';
 import type { PublicKey } from '../../cryptography/publickey.js';
 import type { SignatureScheme } from '../../cryptography/signature-scheme.js';
@@ -110,6 +108,13 @@ export class Secp256r1Keypair extends Keypair {
 		return new Secp256r1PublicKey(this.keypair.publicKey);
 	}
 
+	/**
+	 * The Bech32 secret key string for this Secp256r1 keypair
+	 */
+	getSecretKey(): string {
+		return encodeSuiPrivateKey(this.keypair.secretKey, this.getKeyScheme());
+	}
+
 	async sign(data: Uint8Array) {
 		return this.signData(data);
 	}
@@ -142,12 +147,5 @@ export class Secp256r1Keypair extends Keypair {
 		// We use HDKey which is hardcoded to use Secp256k1 but since we only need the 32 bytes for the private key it's okay to use here as well.
 		const privateKey = HDKey.fromMasterSeed(mnemonicToSeed(mnemonics)).derive(path).privateKey;
 		return Secp256r1Keypair.fromSecretKey(privateKey!);
-	}
-
-	export(): ExportedKeypair {
-		return {
-			schema: 'Secp256r1',
-			privateKey: toB64(this.keypair.secretKey),
-		};
 	}
 }
