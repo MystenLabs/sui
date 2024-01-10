@@ -80,9 +80,28 @@ To restore from a RocksDB snapshot, follow these steps:
 1. Download the snapshot for the epoch you want to restore to your local disk. There is one snapshot per epoch in s3 bucket.
 1. Place the snapshot into the directory that the `db-config` value points to in your fullnode.yaml file. For example, if the `db-config` value points to `/opt/sui/db/authorities_db/full_node_db` and you want to restore from epoch 10, then copy the snapshot to the directory with this command:
 
+   You can use the aws cli (provided you have credentials to associate with the download):
    `aws s3 cp s3://<BUCKET_NAME>/epoch_10 /opt/sui/db/authorities_db/full_node_db/live --recursive`.
    
-   Use `--no-sign-request` to bypass setting AWS credentials for the CLI.
+   An alternative is to use `sui-tool` to copy the files:
+   ```
+   sui-tool download-db-snapshot --epoch "<EPOCH-NUMBER>" \
+       --network <NETWORK> --snapshot-bucket <BUCKET-NAME> \
+       --snapshot-bucket-type <TYPE> --path <PATH-TO-NODE-DB> \
+       --num-parallel-downloads 50 \
+       --no-sign-request
+   ```
+   - `--epoch`: The epoch that you want to download, for example `200`. Mysten Labs hosted buckets will only keep the last 90 epochs.
+   - `--network`: Network to download snapshot for. Defaults to "mainnet".
+   - `--path`: Path to snapshot directory on local filesystem.
+   - `--no-sign-request`: If set, `--snapshot-bucket` and `--snapshot-bucket-type` are ignored, and Cloudflare R2 is used.
+   - `--snapshot-bucket`: Source snapshot bucket name, eg `mysten-mainnet-snapshots`.
+   - `--snapshot-bucket-type`: Snapshot bucket type. GCS and S3 currently supported.
+
+   The following environment variables are used if `--no-sign-request` is not set:
+   * *AWS*: `AWS_SNAPSHOT_ACCESS_KEY_ID`, `AWS_SNAPSHOT_SECRET_ACCESS_KEY`, `AWS_SNAPSHOT_REGION`
+   * *GCS*: `GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH`
+   * *AZURE*: `AZURE_SNAPSHOT_STORAGE_ACCOUNT`, `AZURE_SNAPSHOT_STORAGE_ACCESS_KEY`
 
 1. Make sure you update the ownership of the downloaded directory to the sui user (whichever linux user you run `sui-node` as)
    `sudo chown -R sui:sui  /opt/sui/db/authorities_db/full_node_db/live`.
@@ -104,17 +123,22 @@ The following steps can be used to restore a node from a Formal snapshot:
 1. If it's running, stop the node.
 2. Run the command:
    ```
-   sui-tool download-db-snapshot --epoch "<EPOCH-NUMBER>" --genesis "<PATH-TO-GENESIS-BLOB>" \
-        --formal --network <NETWORK> --snapshot-bucket <BUCKET-NAME> --snapshot-bucket-type <TYPE> --path <PATH-TO-NODE-DB> --num-parallel-downloads 50 --no-sign-request --snapshot-bucket-type=s3
+   sui-tool download-formal-snapshot --epoch "<EPOCH-NUMBER>" --genesis "<PATH-TO-GENESIS-BLOB>" \
+        --network <NETWORK> --snapshot-bucket <BUCKET-NAME> --snapshot-bucket-type <TYPE> \
+        --path <PATH-TO-NODE-DB> --num-parallel-downloads 50 --no-sign-request
    ```
    - `--epoch`: The epoch that you want to download, for example `200`. Mysten Labs hosted buckets will only keep the last 90 epochs. 
    - `--genesis`: The path to the location of the network's `genesis.blob`.
-   - `--formal`: If set, restore from formal (slim, DB agnostic) snapshot.
    - `--network`: Network to download snapshot for. Defaults to "mainnet".
+   - `--path`: Path to snapshot directory on local filesystem.
+   - `--no-sign-request`: If set, `--snapshot-bucket` and `--snapshot-bucket-type` are ignored, and Cloudflare R2 is used.
    - `--snapshot-bucket`: Source snapshot bucket name, eg `mysten-mainnet-snapshots`.
    - `--snapshot-bucket-type`: Snapshot bucket type. GCS and S3 currently supported.
-   - `--path`: Path to snapshot directory on local filesystem.
-   - `--no-sign-request`: If true, no authentication is needed for snapshot restores.
+
+   The following environment variables are used if `--no-sign-request` is not set:
+   * *AWS*: `AWS_SNAPSHOT_ACCESS_KEY_ID`, `AWS_SNAPSHOT_SECRET_ACCESS_KEY`, `AWS_SNAPSHOT_REGION`
+   * *GCS*: `GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH`
+   * *AZURE*: `AZURE_SNAPSHOT_STORAGE_ACCOUNT`, `AZURE_SNAPSHOT_STORAGE_ACCESS_KEY`
 
 
 ## Mysten Labs managed snapshots
