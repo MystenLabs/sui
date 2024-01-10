@@ -665,35 +665,71 @@ export class DeepBookClient {
 	 * @param poolId the pool id, eg: 0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4
 	 * @param lowerPrice lower price you want to query in the level2 book, eg: 18000000000. The number must be an integer float scaled by `FLOAT_SCALING_FACTOR`.
 	 * @param higherPrice higher price you want to query in the level2 book, eg: 20000000000. The number must be an integer float scaled by `FLOAT_SCALING_FACTOR`.
-	 * @param side { 'bid' | 'ask' } bid or ask side
+	 * @param side { 'bid' | 'ask' | 'both' } bid or ask or both sides.
 	 */
 	async getLevel2BookStatus(
 		poolId: string,
 		lowerPrice: bigint,
 		higherPrice: bigint,
-		side: 'bid' | 'ask',
-	): Promise<Level2BookStatusPoint[]> {
+		side: 'bid' | 'ask' | 'both',
+	): Promise<Level2BookStatusPoint[] | Level2BookStatusPoint[][]> {
 		const txb = new TransactionBlock();
-		txb.moveCall({
-			typeArguments: await this.getPoolTypeArgs(poolId),
-			target: `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_${side}_side`,
-			arguments: [
-				txb.object(poolId),
-				txb.pure.u64(lowerPrice),
-				txb.pure.u64(higherPrice),
-				txb.object(SUI_CLOCK_OBJECT_ID),
-			],
+		if (side === 'both') {
+			txb.moveCall({
+				typeArguments: await this.getPoolTypeArgs(poolId),
+				target: `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_bid_side`,
+				arguments: [
+					txb.object(poolId),
+					txb.pure.u64(lowerPrice),
+					txb.pure.u64(higherPrice),
+					txb.object(SUI_CLOCK_OBJECT_ID),
+				],
+			});
+			txb.moveCall({
+				typeArguments: await this.getPoolTypeArgs(poolId),
+				target: `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_ask_side`,
+				arguments: [
+					txb.object(poolId),
+					txb.pure.u64(lowerPrice),
+					txb.pure.u64(higherPrice),
+					txb.object(SUI_CLOCK_OBJECT_ID),
+				],
+			});
+		} else {
+			txb.moveCall({
+				typeArguments: await this.getPoolTypeArgs(poolId),
+				target: `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_${side}_side`,
+				arguments: [
+					txb.object(poolId),
+					txb.pure.u64(lowerPrice),
+					txb.pure.u64(higherPrice),
+					txb.object(SUI_CLOCK_OBJECT_ID),
+				],
+			});
+		}
+
+		const results = await this.suiClient.devInspectTransactionBlock({
+			transactionBlock: txb,
+			sender: this.currentAddress,
 		});
 
-		const results = (
-			await this.suiClient.devInspectTransactionBlock({
-				transactionBlock: txb,
-				sender: this.currentAddress,
-			})
-		).results![0].returnValues!.map(([bytes, _]) =>
-			bcs.de('vector<u64>', Uint8Array.from(bytes)).map((s: string) => BigInt(s)),
-		);
-		return results[0].map((price: bigint, i: number) => ({ price, depth: results[1][i] }));
+		if (side === 'both') {
+			const bidSide = results.results![0].returnValues!.map(([bytes, _]) =>
+				bcs.de('vector<u64>', Uint8Array.from(bytes)).map((s: string) => BigInt(s)),
+			);
+			const askSide = results.results![1].returnValues!.map(([bytes, _]) =>
+				bcs.de('vector<u64>', Uint8Array.from(bytes)).map((s: string) => BigInt(s)),
+			);
+			return [
+				bidSide[0].map((price: bigint, i: number) => ({ price, depth: bidSide[1][i] })),
+				askSide[0].map((price: bigint, i: number) => ({ price, depth: askSide[1][i] })),
+			];
+		} else {
+			const result = results.results![0].returnValues!.map(([bytes, _]) =>
+				bcs.de('vector<u64>', Uint8Array.from(bytes)).map((s: string) => BigInt(s)),
+			);
+			return result[0].map((price: bigint, i: number) => ({ price, depth: result[1][i] }));
+		}
 	}
 
 	#checkAccountCap(accountCap: string | undefined = undefined): string {
