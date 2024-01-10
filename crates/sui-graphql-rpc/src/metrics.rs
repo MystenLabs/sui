@@ -3,26 +3,76 @@
 
 use std::sync::Arc;
 
-use mysten_metrics::histogram::HistogramVec;
 use prometheus::{
     register_counter_vec_with_registry, register_counter_with_registry,
-    register_histogram_with_registry, register_int_counter_vec,
-    register_int_counter_vec_with_registry, Histogram, IntCounterVec, Registry,
+    register_histogram_vec_with_registry, register_histogram_with_registry,
+    register_int_counter_vec, register_int_counter_vec_with_registry, Histogram, HistogramVec,
+    IntCounterVec, Registry,
 };
 
-pub struct DBMetrics {
-    pub(crate) db_fetch_success_rate: IntCounterVec,
-    pub(crate) db_fetch_error_rate: IntCounterVec,
-    pub(crate) db_fetches_latency_ms: HistogramVec,
-    pub(crate) db_fetches_batch_size: HistogramVec,
+use crate::error::Error;
+
+#[derive(Clone)]
+pub(crate) struct Metrics {
+    pub db_metrics: Arc<DBMetrics>,
+    pub request_metrics: Arc<RequestMetrics>,
+    pub query_metrics: Arc<QueryMetrics>,
 }
 
-// const LATENCY_SEC_BUCKETS: &[f64] = &[
-// 0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
-// ];
+impl Metrics {
+    pub(crate) fn new(
+        db_metrics: DBMetrics,
+        request_metrics: RequestMetrics,
+        query_metrics: QueryMetrics,
+    ) -> Self {
+        Self {
+            db_metrics: Arc::new(db_metrics),
+            request_metrics: Arc::new(request_metrics),
+            query_metrics: Arc::new(query_metrics),
+        }
+    }
 
+    pub(crate) fn default_none() -> Option<Self> {
+        None
+    }
+
+    /// Updates the DB related metrics (latency, error, success)
+    pub(crate) fn observe_db_data(&self, db_latency: u64, succeeded: bool) {
+        self.db_metrics
+            .db_fetch_latency
+            .with_label_values(&["db", "latency"])
+            .observe(db_latency as f64);
+        if succeeded {
+            self.db_metrics
+                .db_fetch_success_rate
+                .with_label_values(&["db", "success_rate"])
+                .inc();
+        } else {
+            self.db_metrics
+                .db_fetch_error_rate
+                .with_label_values(&["db", "error_rate"])
+                .inc();
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct DBMetrics {
+    pub db_fetch_success_rate: IntCounterVec,
+    pub db_fetch_error_rate: IntCounterVec,
+    pub db_fetch_latency: HistogramVec,
+    pub db_fetch_batch_size: HistogramVec,
+}
+
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+];
+
+const BATCH_SIZE_BUCKETS: &[f64] = &[
+    1., 2., 4., 8., 12., 16., 24., 32., 48., 64., 96., 128., 256., 512., 1024.,
+];
 impl DBMetrics {
-    fn new(registry: &Registry) -> Self {
+    pub(crate) fn new(registry: &Registry) -> Self {
         Self {
             db_fetch_error_rate: register_int_counter_vec_with_registry!(
                 "db_fetch_error_rate",
@@ -41,31 +91,36 @@ impl DBMetrics {
             .unwrap(),
 
             // not sure if we want this histogram from metrics or the prometheus one
-            db_fetches_latency_ms: HistogramVec::new_in_registry(
-                "db_fetches_latency_ms",
-                "Latency of fetches from the db",
+            db_fetch_latency: register_histogram_vec_with_registry!(
+                "db_fetch_latency",
+                "Latency of DB requests",
                 &["db", "latency"],
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
 
-            db_fetches_batch_size: HistogramVec::new_in_registry(
-                "db_fetches_batch_size",
+            db_fetch_batch_size: register_histogram_vec_with_registry!(
+                "db_fetch_batch_size",
                 "Number of ids fetched per batch",
                 &["db", "batch_size"],
+                BATCH_SIZE_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
         }
     }
 }
 
-pub struct RequestMetrics {
-    pub(crate) input_nodes: Histogram,
-    pub(crate) output_nodes: Histogram,
-    pub(crate) query_depth: Histogram,
-    pub(crate) query_payload_size: Histogram,
-    pub(crate) query_payload_error: IntCounterVec,
-    pub(crate) _db_query_cost: Histogram,
-    pub(crate) query_validation_latency: HistogramVec,
+#[derive(Clone)]
+pub(crate) struct RequestMetrics {
+    pub input_nodes: Histogram,
+    pub output_nodes: Histogram,
+    pub query_depth: Histogram,
+    pub query_payload_size: Histogram,
+    pub query_payload_error: IntCounterVec,
+    pub _db_query_cost: Histogram,
+    pub query_validation_latency: HistogramVec,
 }
 
 // TODO: finetune buckets as we learn more about the distribution of queries
@@ -88,7 +143,7 @@ const DB_QUERY_COST_BUCKETS: &[f64] = &[
 ];
 
 impl RequestMetrics {
-    pub fn new(registry: &Registry) -> Self {
+    pub(crate) fn new(registry: &Registry) -> Self {
         Self {
             input_nodes: register_histogram_with_registry!(
                 "input_nodes",
@@ -132,39 +187,41 @@ impl RequestMetrics {
                 registry,
             )
             .unwrap(),
-            query_validation_latency: HistogramVec::new_in_registry(
+            query_validation_latency: register_histogram_vec_with_registry!(
                 "query_validation_latency",
                 "The time in ms to validate the query",
                 &["validation", "latency"],
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
         }
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct QueryMetrics {
-    pub(crate) total_queries: IntCounterVec,
-    pub(crate) total_address: IntCounterVec,
-    pub(crate) total_balance: IntCounterVec,
-    pub(crate) total_checkpoint: IntCounterVec,
-    pub(crate) total_chain_identifier: IntCounterVec,
-    pub(crate) total_coin: IntCounterVec,
-    pub(crate) total_epoch: IntCounterVec,
-    pub(crate) total_events: IntCounterVec,
-    pub(crate) total_move_obj: IntCounterVec,
-    pub(crate) total_move_package: IntCounterVec,
-    pub(crate) total_move_module: IntCounterVec,
-    pub(crate) total_move_function: IntCounterVec,
-    pub(crate) total_object: IntCounterVec,
-    pub(crate) total_protocol_configs: IntCounterVec,
-    pub(crate) total_service_config: IntCounterVec,
-    pub(crate) total_transactions: IntCounterVec,
+pub(crate) struct QueryMetrics {
+    pub total_queries: IntCounterVec,
+    pub total_address: IntCounterVec,
+    pub total_balance: IntCounterVec,
+    pub total_checkpoint: IntCounterVec,
+    pub total_chain_identifier: IntCounterVec,
+    pub total_coin: IntCounterVec,
+    pub total_epoch: IntCounterVec,
+    pub total_events: IntCounterVec,
+    pub total_move_obj: IntCounterVec,
+    pub total_move_package: IntCounterVec,
+    pub total_move_module: IntCounterVec,
+    pub total_move_function: IntCounterVec,
+    pub total_object: IntCounterVec,
+    pub total_protocol_configs: IntCounterVec,
+    pub total_service_config: IntCounterVec,
+    pub total_transactions: IntCounterVec,
 }
 
 impl QueryMetrics {
-    pub fn new(registry: &Registry) -> Arc<Self> {
-        Arc::new(Self {
+    pub(crate) fn new(registry: &Registry) -> Self {
+        Self {
             total_queries: register_int_counter_vec_with_registry!(
                 "total_queries",
                 "Total number of GraphQL queries",
@@ -278,6 +335,6 @@ impl QueryMetrics {
                 registry
             )
             .unwrap(),
-        })
+        }
     }
 }

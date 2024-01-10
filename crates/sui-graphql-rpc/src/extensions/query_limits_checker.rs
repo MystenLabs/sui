@@ -7,6 +7,7 @@ use crate::error::code;
 use crate::error::code::INTERNAL_SERVER_ERROR;
 use crate::error::graphql_error;
 use crate::error::graphql_error_at_pos;
+use crate::metrics::Metrics;
 use crate::metrics::RequestMetrics;
 use async_graphql::extensions::NextParseQuery;
 use async_graphql::extensions::NextRequest;
@@ -136,7 +137,6 @@ impl Extension for QueryLimitsChecker {
         variables: &Variables,
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
-        let instant = Instant::now();
         let cfg = ctx
             .data::<ServiceConfig>()
             .expect("No service config provided in schema data");
@@ -196,7 +196,6 @@ impl Extension for QueryLimitsChecker {
             )?;
             max_depth_seen = max_depth_seen.max(running_costs.depth);
         }
-        let elapsed = instant.elapsed();
 
         if ctx.data_opt::<ShowUsage>().is_some() {
             *self.validation_result.lock().await = Some(ValidationRes {

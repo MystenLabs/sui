@@ -4,6 +4,7 @@
 use crate::config::{MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD};
 use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
+use crate::metrics::{DBMetrics, Metrics, QueryMetrics};
 use crate::mutation::Mutation;
 use crate::{
     config::ServerConfig,
@@ -36,9 +37,8 @@ use http::Request;
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Body;
 use hyper::Server as HyperServer;
-use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::TracerProvider};
 use std::convert::Infallible;
-use std::{any::Any, net::SocketAddr, sync::Arc, time::Instant};
+use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::sync::OnceCell;
@@ -167,7 +167,31 @@ impl ServerBuilder {
             config.connection.db_pool_size,
         )
         .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
-        let db = Db::new(reader.clone(), config.service.limits);
+
+        // PROMETHEUS
+        let prom_addr: SocketAddr = format!(
+            "{}:{}",
+            config.connection.prom_url, config.connection.prom_port
+        )
+        .parse()
+        .map_err(|_| {
+            Error::Internal(format!(
+                "Failed to parse url {}, port {} into socket address",
+                config.connection.prom_url, config.connection.prom_port
+            ))
+        })?;
+        let registry_service = mysten_metrics::start_prometheus_server(prom_addr);
+        println!("Starting Prometheus HTTP endpoint at {}", prom_addr);
+        let registry = registry_service.default_registry();
+
+        // METRICS
+        let request_metrics = RequestMetrics::new(&registry);
+        let db_metrics = DBMetrics::new(&registry);
+        let query_metrics = QueryMetrics::new(&registry);
+        let metrics = Metrics::new(db_metrics, request_metrics, query_metrics);
+
+        // DB
+        let db = Db::new(reader.clone(), config.service.limits, Some(metrics.clone()));
         let pg_conn_pool = PgManager::new(reader.clone(), config.service.limits);
         let package_store = DbPackageStore(reader);
         let package_cache = PackageStoreWithLruCache::new(package_store);
@@ -188,23 +212,6 @@ impl ServerBuilder {
             None
         };
 
-        let prom_addr: SocketAddr = format!(
-            "{}:{}",
-            config.connection.prom_url, config.connection.prom_port
-        )
-        .parse()
-        .map_err(|_| {
-            Error::Internal(format!(
-                "Failed to parse url {}, port {} into socket address",
-                config.connection.prom_url, config.connection.prom_port
-            ))
-        })?;
-        let registry_service = mysten_metrics::start_prometheus_server(prom_addr);
-        println!("Starting Prometheus HTTP endpoint at {}", prom_addr);
-        let registry = registry_service.default_registry();
-
-        let metrics = RequestMetrics::new(&registry);
-
         builder = builder
             .context_data(config.service.clone())
             .context_data(db)
@@ -215,7 +222,7 @@ impl ServerBuilder {
             ))
             .context_data(sui_sdk_client)
             .context_data(name_service_config)
-            .context_data(Arc::new(metrics))
+            .context_data(metrics.request_metrics.clone())
             .context_data(config.clone());
 
         if config.internal_features.feature_gate {
@@ -377,7 +384,7 @@ pub mod tests {
             let mut cfg = ServiceConfig::default();
             cfg.limits.request_timeout_ms = timeout.as_millis() as u64;
 
-            let db = Db::new(reader.clone(), cfg.limits);
+            let db = Db::new(reader.clone(), cfg.limits, None);
             let pg_conn_pool = PgManager::new(reader, cfg.limits);
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(db)
@@ -428,7 +435,7 @@ pub mod tests {
                 },
                 ..Default::default()
             };
-            let db = Db::new(reader.clone(), service_config.limits);
+            let db = Db::new(reader.clone(), service_config.limits, None);
             let pg_conn_pool = PgManager::new(reader, service_config.limits);
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(db)
@@ -497,7 +504,7 @@ pub mod tests {
                 },
                 ..Default::default()
             };
-            let db = Db::new(reader.clone(), service_config.limits);
+            let db = Db::new(reader.clone(), service_config.limits, None);
             let pg_conn_pool = PgManager::new(reader, service_config.limits);
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(db)
@@ -566,7 +573,11 @@ pub mod tests {
         };
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-        let db = Db::new(reader.clone(), service_config.limits);
+        let db = Db::new(
+            reader.clone(),
+            service_config.limits,
+            Metrics::default_none(),
+        );
         let pg_conn_pool = PgManager::new(reader, service_config.limits);
         let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
             .context_data(db)
@@ -653,7 +664,11 @@ pub mod tests {
 
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-        let db = Db::new(reader.clone(), service_config.limits);
+        let db = Db::new(
+            reader.clone(),
+            service_config.limits,
+            Metrics::default_none(),
+        );
         let pg_conn_pool = PgManager::new(reader, service_config.limits);
         let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
             .context_data(db)
