@@ -814,21 +814,22 @@ impl<
                     } else if let SailfishMessage::ProposeExec(full_tx) = msg {
 
                         // JUST FOR TESTING --- COMMENT THIS OUT FOR REAL EXECUTION
-                        // num_tx += 1;
-                        // if num_tx == 1 {
-                        //     // Expose the start time as a metric. Should be done only once.
-                        //     worker_metrics.register_start_time();
-                        // }
-                        // self.update_metrics(&full_tx, &worker_metrics);
+                        // THIS JUST DEQUEUES THE TX AND DOES NOT EXECUTE IT
+                        num_tx += 1;
+                        if num_tx == 1 {
+                            // Expose the start time as a metric. Should be done only once.
+                            worker_metrics.register_start_time();
+                        }
+                        self.update_metrics(&full_tx, &worker_metrics);
 
                         // AND THEN UNCOMMENT THIS
-                        if full_tx.is_epoch_change() {
-                            // don't queue to manager, but store to epoch_change_tx
-                            epoch_change_tx = Some(full_tx);
-                        } else {
-                            manager.queue_tx(full_tx).await;
-                            // epoch_txs_semaphore += 1;
-                        }
+                        // if full_tx.is_epoch_change() {
+                        //     // don't queue to manager, but store to epoch_change_tx
+                        //     epoch_change_tx = Some(full_tx);
+                        // } else {
+                        //     manager.queue_tx(full_tx).await;
+                        //     // epoch_txs_semaphore += 1;
+                        // }
                     } else {
                         eprintln!("EW {} received unexpected message from: {:?}", my_id, msg);
                         panic!("unexpected message");
