@@ -121,6 +121,9 @@ pub enum KeyToolCommand {
     /// with `suiprivkey`. If the alias is provided, the private key for the given alias will be exported.
     Export {
         #[clap(long)]
+        address: KeyIdentity,
+    },
+        #[clap(long)]
         alias: Option<String>,
         address: Option<SuiAddress>,
     },
@@ -594,19 +597,9 @@ impl KeyToolCommand {
                     }
                 }
             }
-            KeyToolCommand::Export { alias, address } => {
-                let skp = match alias {
-                    Some(a) => {
-                        let address = keystore.get_address_by_alias(a)?;
-                        keystore.get_key(address)?
-                    }
-                    None => match address {
-                        Some(a) => keystore.get_key(&a)?,
-                        None => {
-                            return Err(anyhow!("Must provide either alias or address"));
-                        }
-                    },
-                };
+            KeyToolCommand::Export { address } => {
+                let address = get_identity_address_from_keystore(address, keystore)?;
+                let skp = keystore.get_key(&address)?;
                 let key = ExportedKey {
                     exported_private_key: skp
                         .encode()
