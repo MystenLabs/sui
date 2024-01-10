@@ -31,7 +31,7 @@ export function ExportAccountPage() {
 				password,
 				accountID: account.id,
 			});
-			return `0x${bytesToHex(fromB64(privateKey))}`;
+			return privateKey;
 		},
 	});
 	const navigate = useNavigate();
