@@ -116,7 +116,7 @@ module std::option {
     /// Destroys `t.` If `t` holds a value, return it. Returns `default` otherwise
     public fun destroy_with_default<Element: drop>(t: Option<Element>, default: Element): Element {
         let Option { vec } = t;
-        if (vector::is_empty(&mut vec)) default
+        if (vector::is_empty(&vec)) default
         else vector::pop_back(&mut vec)
     }
 

@@ -14,6 +14,6 @@ name = "MoveStdlib"
 source = { local = "../move-stdlib" }
 
 [move.toolchain-version]
-compiler-version = "1.16.0"
+compiler-version = "1.17.0"
 edition = "legacy"
 flavor = "sui"

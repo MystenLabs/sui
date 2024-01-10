@@ -36,7 +36,7 @@ Response: {
                 "edges": [
                   {
                     "node": {
-                      "amount": "5000"
+                      "amount": "1000"
                     },
                     "cursor": "MA"
                   },
@@ -48,19 +48,19 @@ Response: {
                   },
                   {
                     "node": {
-                      "amount": "4000"
+                      "amount": "2000"
                     },
                     "cursor": "Mg"
                   },
                   {
                     "node": {
-                      "amount": "1000"
+                      "amount": "5000"
                     },
                     "cursor": "Mw"
                   },
                   {
                     "node": {
-                      "amount": "2000"
+                      "amount": "4000"
                     },
                     "cursor": "NA"
                   },
@@ -98,13 +98,13 @@ Response: {
                 "edges": [
                   {
                     "node": {
-                      "amount": "1000"
+                      "amount": "5000"
                     },
                     "cursor": "Mw"
                   },
                   {
                     "node": {
-                      "amount": "2000"
+                      "amount": "4000"
                     },
                     "cursor": "NA"
                   }
@@ -136,7 +136,7 @@ Response: {
                 "edges": [
                   {
                     "node": {
-                      "amount": "5000"
+                      "amount": "1000"
                     },
                     "cursor": "MA"
                   },
@@ -148,7 +148,7 @@ Response: {
                   },
                   {
                     "node": {
-                      "amount": "4000"
+                      "amount": "2000"
                     },
                     "cursor": "Mg"
                   }
