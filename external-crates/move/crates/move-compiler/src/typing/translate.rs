@@ -29,7 +29,7 @@ use crate::{
     typing::{
         ast as T,
         core::{public_testing_visibility, InstantiatedFunctionType, PublicForTesting},
-        dependency_ordering,
+        dependency_ordering, macro_expand,
     },
     FullyCompiledProgram,
 };
@@ -518,7 +518,7 @@ mod check_valid_constant {
                 s = format!("'{}' is", b);
                 &s
             }
-            E::UnvisitedLambda(_) | E::Lambda(_, _) => "lambda expressions are",
+            E::Lambda(_, _, _) => "lambda expressions are",
             E::IfElse(eb, et, ef) => {
                 exp(context, eb);
                 exp(context, et);
@@ -1178,14 +1178,24 @@ fn sequence_type(seq: &T::Sequence) -> &Type {
 fn lambda(
     context: &mut Context,
     loc: Loc,
+    expected_ty: Type,
     args: N::LValueList,
-    body: N::Exp,
-) -> (N::Type, T::UnannotatedExp_) {
+    body: Box<N::Exp>,
+) {
     let arg_tys: Vec<Type> = args
         .value
         .iter()
         .map(|sp!(aloc, _)| core::make_tvar(context, *aloc))
         .collect();
+    let ret_ty = Box::new(core::make_tvar(context, loc));
+    let actual_ty = sp(loc, Type_::Fun(arg_tys.clone(), ret_ty));
+    join(
+        context,
+        loc,
+        || "Invalid lambda expression",
+        actual_ty,
+        expected_ty,
+    );
     let arg_ty_annot = match args.value.len() {
         0 => sp(loc, Type_::Unit),
         1 => sp(loc, arg_tys[0].value.clone()),
@@ -1195,16 +1205,7 @@ fn lambda(
     let ret_ty = core::make_tvar(context, body.loc);
     // TODO the body should really be type checked after the call is checked
     // this will be more important once there are receiver/method calls
-    let body = exp_(context, body);
-    join(
-        context,
-        loc,
-        || "ICE jointing with tvar should not fail",
-        ret_ty.clone(),
-        body.ty.clone(),
-    );
-    let ty = sp(loc, N::Type_::Fun(arg_tys, Box::new(ret_ty)));
-    (ty, T::UnannotatedExp_::Lambda(args, Box::new(body)))
+    let body = exp_(context, *body);
 }
 
 fn exp_vec(context: &mut Context, es: Vec<N::Exp>) -> Vec<T::Exp> {
@@ -1364,7 +1365,7 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
 
         NE::Lambda(args, body) => (
             core::make_tvar(context, eloc),
-            TE::UnvisitedLambda(Some((args, body))),
+            TE::Lambda(false, args, body),
         ),
 
         NE::Assign(na, nr) => {
@@ -2434,13 +2435,14 @@ fn method_call(
     let (call, ret_ty) =
         module_call_impl(context, loc, m, f, is_macro_call, fty, argloc, args.clone());
     if is_macro_call {
-        match macro_expand::call(context, loc, m, f, ty_args_opt, sp(argloc, args)) {
-            None => None,
-            Some(expanded) => {
-                let e = exp_(context, expanded);
-                Some((e.ty, e.exp.value))
-            }
-        }
+        Some(expand_macro(
+            context,
+            loc,
+            m,
+            f,
+            ty_args_opt,
+            sp(argloc, args),
+        ))
     } else {
         Some((ret_ty, TE::ModuleCall(Box::new(call))))
     }
@@ -2473,13 +2475,7 @@ fn module_call(
     let (call, ret_ty) =
         module_call_impl(context, loc, m, f, is_macro_call, fty, argloc, args.clone());
     if is_macro_call {
-        match macro_expand::call(context, loc, m, f, ty_args_opt, sp(argloc, args)) {
-            None => (context.error_type(loc), T::UnannotatedExp_::UnresolvedError),
-            Some(expanded) => {
-                let e = exp_(context, expanded);
-                (e.ty, e.exp.value)
-            }
-        }
+        expand_macro(context, loc, m, f, ty_args_opt, sp(argloc, args))
     } else {
         (ret_ty, T::UnannotatedExp_::ModuleCall(Box::new(call)))
     }
@@ -2546,7 +2542,8 @@ fn module_call_impl(
         subtype(context, loc, msg, arg_ty, param_ty);
     }
     let params_ty_list = parameters.into_iter().map(|(_, ty)| ty).collect();
-    if is_macro_call {
+    if is_macro_call && context.in_macro_function {
+        // sanity check lambdas inside of a macro since it won't get expanded
         args.iter_mut().for_each(|arg| solve_lambdas(context, arg));
     }
     let call = T::ModuleCall {
@@ -2725,6 +2722,70 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
     given
 }
 
+fn expand_macro(
+    context: &mut core::Context,
+    call_loc: Loc,
+    m: ModuleIdent,
+    f: FunctionName,
+    type_args_opt: Option<Vec<N::Type>>,
+    args: Spanned<Vec<T::Exp>>,
+) -> (Type, T::UnannotatedExp_) {
+    use T::SequenceItem_ as TS;
+    use T::UnannotatedExp_ as TE;
+
+    let argloc = args.loc;
+    match macro_expand::call(context, call_loc, m, f, type_args_opt, args) {
+        None => {
+            assert!(context.env.has_errors());
+            (context.error_type(call_loc), TE::UnresolvedError)
+        }
+        Some(macro_expand::ExpandedMacro {
+            argument_bindings,
+            body,
+        }) => {
+            // split the param bindings from their arguments and their types
+            let (lvalues_, es): (Vec<_>, Vec<_>) = argument_bindings
+                .into_iter()
+                .map(|(mut_, v, ty, e)| {
+                    let lvalue_ = N::LValue_::Var {
+                        mut_,
+                        var: v,
+                        unused_binding: false,
+                    };
+                    (sp(v.loc, lvalue_), (e, ty))
+                })
+                .unzip();
+            // type check the arguments against the parameters annotated types
+            let (es, tys) = es
+                .into_iter()
+                .map(|(e, ty)| {
+                    let arg_loc = e.exp.loc;
+                    subtype(
+                        context,
+                        arg_loc,
+                        || "Invalid macro argument",
+                        e.ty.clone(),
+                        ty.clone(),
+                    );
+                    let e_ = sp(arg_loc, TE::Annotate(Box::new(e), Box::new(ty.clone())));
+                    let e = T::exp(ty.clone(), e_);
+                    (T::ExpListItem::Single(e, Box::new(ty.clone())), ty)
+                })
+                .unzip();
+            // bind the locals  and push it on the macro body
+            let tys = Type_::multiple(argloc, tys);
+            let es = T::exp(tys.clone(), sp(argloc, TE::ExpList(es)));
+            let b = bind_list(context, sp(argloc, lvalues_), Some(tys));
+            let lvalue_ty = lvalues_expected_types(context, &b);
+            let mut body = sequence(context, body);
+            body.push_front(sp(argloc, TS::Bind(b, lvalue_ty, Box::new(es))));
+            let ty = sequence_type(&body).clone();
+            let e_ = TE::Block(body);
+            (ty, e_)
+        }
+    }
+}
+
 //**************************************************************************************************
 // Lambdas
 //**************************************************************************************************
@@ -2793,14 +2854,13 @@ fn solve_lambdas(context: &mut Context, e: &mut T::Exp) {
         }
 
         // already expanded
-        E::Lambda(_, _) => (),
+        E::Lambda(true, _, _) => (),
 
         // expand
-        E::UnvisitedLambda(lambda_opt) => {
-            let (args, body) = lambda_opt.take().unwrap();
-            let (solved_ty, solved_e) = lambda(context, e.exp.loc, args, *body);
-            e.ty = solved_ty;
-            e.exp.value = solved_e;
+        E::Lambda(visited, args, body) => {
+            assert!(!*visited);
+            *visited = true;
+            lambda(context, e.exp.loc, e.ty.clone(), args.clone(), body.clone());
         }
     }
 }

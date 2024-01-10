@@ -8,6 +8,7 @@ use crate::{
     naming::ast::{self as N, BlockLabel, TParamID, Type, Type_, Var, Var_},
     parser::ast::FunctionName,
     shared::program_info::FunctionInfo,
+    typing::ast as T,
     typing::core::{self, TParamSubst},
 };
 use move_ir_types::location::*;
@@ -21,14 +22,19 @@ struct Context<'a, 'b> {
     tparam_subst: TParamSubst,
 }
 
+pub struct ExpandedMacro {
+    pub argument_bindings: Vec<(Option<Loc>, Var, N::Type, T::Exp)>,
+    pub body: N::Sequence,
+}
+
 pub(crate) fn call(
     context: &mut core::Context,
     call_loc: Loc,
     m: ModuleIdent,
     f: FunctionName,
     type_args_opt: Option<Vec<N::Type>>,
-    sp!(_, args): Spanned<Vec<N::Exp>>,
-) -> Option<N::Exp> {
+    sp!(_, args): Spanned<Vec<T::Exp>>,
+) -> Option<ExpandedMacro> {
     let next_color = context.next_variable_color();
     // If none, there is no body to expand, likely because of an error in the macro definition
     let macro_body = context.macro_body(&m, &f)?;
@@ -52,6 +58,7 @@ pub(crate) fn call(
             .map(|_| sp(call_loc, N::Type_::Anything))
             .collect(),
     };
+
     if macro_type_params.len() != type_args.len() || macro_params.len() != args.len() {
         assert!(context.env.has_errors());
         return None;
@@ -60,7 +67,7 @@ pub(crate) fn call(
     let tparam_subst = macro_type_params.into_iter().zip(type_args).collect();
     // make lambda map and bind non-lambda args to local vars
     let mut lambdas = BTreeMap::new();
-    let mut result = VecDeque::new();
+    let mut argument_bindings = Vec::new();
     for ((mut_, param, param_ty), arg) in macro_params.into_iter().zip(args) {
         let param_ty = core::subst_tparams(&tparam_subst, param_ty);
         if let sp!(loc, Type_::Fun(param_tys, result_ty)) = param_ty {
@@ -74,17 +81,7 @@ pub(crate) fn call(
                 *result_ty,
             )?;
         } else {
-            // todo var determine usage
-            let var_ = N::LValue_::Var {
-                mut_,
-                var: param,
-                unused_binding: false,
-            };
-            let bind_ = sp(param.loc, var_);
-            let bind = sp(param.loc, vec![bind_]);
-            let arg_loc = arg.loc;
-            let annot_arg = sp(arg_loc, N::Exp_::Annotate(Box::new(arg), param_ty));
-            result.push_back(sp(arg_loc, N::SequenceItem_::Bind(bind, annot_arg)));
+            argument_bindings.push((mut_, param, param_ty, arg))
         }
     }
     let mut context = Context {
@@ -93,9 +90,10 @@ pub(crate) fn call(
         tparam_subst,
     };
     seq(&mut context, &mut macro_body);
-    let (macro_use_funs, macro_seq) = macro_body;
-    result.extend(macro_seq);
-    Some(sp(call_loc, N::Exp_::Block((macro_use_funs, result))))
+    Some(ExpandedMacro {
+        argument_bindings,
+        body: macro_body,
+    })
 }
 
 fn recolor_macro(
@@ -120,15 +118,15 @@ fn recolor_macro(
         ..
     } = signature;
     let tparam_ids = type_parameters.iter().map(|t| t.id).collect();
-    let mask = &mut Mask::new();
-    mask.add_params(&parameters);
+    let recolor = &mut Recolor::new(color);
+    recolor.add_params(&parameters);
     let parameters = parameters
         .iter()
-        .map(|(mut_, v, t)| (*mut_, recolor_var_owned(mask, color, *v), t.clone()))
+        .map(|(mut_, v, t)| (*mut_, recolor_var_owned(recolor, *v), t.clone()))
         .collect();
     let body = {
         let mut body = macro_body.clone();
-        recolor_seq(mask, color, &mut body);
+        recolor_seq(recolor, &mut body);
         body
     };
     Ok((tparam_ids, parameters, body))
@@ -138,15 +136,15 @@ fn bind_lambda(
     context: &mut core::Context,
     lambdas: &mut LambdaMap,
     param: Var_,
-    arg: N::Exp,
+    arg: T::Exp,
     param_ty: Type,
     result_ty: Type,
 ) -> Option<()> {
-    match arg.value {
-        N::Exp_::Annotate(inner, _) => {
+    match arg.exp.value {
+        T::UnannotatedExp_::Annotate(inner, _) => {
             bind_lambda(context, lambdas, param, *inner, param_ty, result_ty)
         }
-        N::Exp_::Lambda(lvs, body) => {
+        T::UnannotatedExp_::Lambda(_, lvs, body) => {
             lambdas.insert(param, (lvs, param_ty, body, result_ty));
             Some(())
         }
@@ -157,7 +155,7 @@ fn bind_lambda(
             );
             context
                 .env
-                .add_diag(diag!(TypeSafety::CannotExpandMacro, (arg.loc, msg)));
+                .add_diag(diag!(TypeSafety::CannotExpandMacro, (arg.exp.loc, msg)));
             None
         }
     }
@@ -170,14 +168,16 @@ fn bind_lambda(
 // The mask is here to make sure we do not recolor captured variables/labels. So we don't need to
 // generally care about scoping in the normal way, since that should already be handled by the
 // unique-ing of variables done by naming
-struct Mask {
+struct Recolor {
+    color: u16,
     vars: BTreeSet<Var>,
     block_labels: BTreeSet<BlockLabel>,
 }
 
-impl Mask {
-    pub fn new() -> Self {
+impl Recolor {
+    pub fn new(color: u16) -> Self {
         Self {
+            color,
             vars: BTreeSet::new(),
             block_labels: BTreeSet::new(),
         }
@@ -214,115 +214,115 @@ impl Mask {
     }
 }
 
-fn recolor_var_owned(mask: &mut Mask, color: u16, mut v: Var) -> Var {
-    recolor_var(mask, color, &mut v);
+fn recolor_var_owned(ctx: &mut Recolor, mut v: Var) -> Var {
+    recolor_var(ctx, &mut v);
     v
 }
 
-fn recolor_var(mask: &mut Mask, color: u16, v: &mut Var) {
-    // do not recolor if not in the mask
+fn recolor_var(ctx: &mut Recolor, v: &mut Var) {
+    // do not recolor if not in the ctx
     // this is to handle captured variables in lambda bodies
-    if !mask.vars.contains(v) {
+    if !ctx.vars.contains(v) {
         return;
     }
-    v.value.color = color;
+    v.value.color = ctx.color;
 }
 
-fn recolor_block_label(mask: &mut Mask, color: u16, label: &mut BlockLabel) {
-    // do not recolor if not in the mask
+fn recolor_block_label(ctx: &mut Recolor, label: &mut BlockLabel) {
+    // do not recolor if not in the ctx
     // this is to handle captured labels in lambda bodies
-    if !mask.block_labels.contains(label) {
+    if !ctx.block_labels.contains(label) {
         return;
     }
-    label.0.value.color = color;
+    label.0.value.color = ctx.color;
 }
 
-fn recolor_seq(mask: &mut Mask, color: u16, (_use_funs, seq): &mut N::Sequence) {
+fn recolor_seq(ctx: &mut Recolor, (_use_funs, seq): &mut N::Sequence) {
     for sp!(_, item_) in seq {
         match item_ {
-            N::SequenceItem_::Seq(e) => recolor_exp(mask, color, e),
-            N::SequenceItem_::Declare(lvalues, _) => recolor_lvalues(mask, color, lvalues),
+            N::SequenceItem_::Seq(e) => recolor_exp(ctx, e),
+            N::SequenceItem_::Declare(lvalues, _) => recolor_lvalues(ctx, lvalues),
             N::SequenceItem_::Bind(lvalues, e) => {
-                recolor_lvalues(mask, color, lvalues);
-                recolor_exp(mask, color, e)
+                recolor_lvalues(ctx, lvalues);
+                recolor_exp(ctx, e)
             }
         }
     }
 }
 
-fn recolor_lvalues(mask: &mut Mask, color: u16, lvalues: &mut N::LValueList) {
-    mask.add_lvalues(lvalues);
+fn recolor_lvalues(ctx: &mut Recolor, lvalues: &mut N::LValueList) {
+    ctx.add_lvalues(lvalues);
     for lvalue in &mut lvalues.value {
-        recolor_lvalue(mask, color, lvalue)
+        recolor_lvalue(ctx, lvalue)
     }
 }
 
-fn recolor_lvalue(mask: &mut Mask, color: u16, sp!(_, lvalue_): &mut N::LValue) {
+fn recolor_lvalue(ctx: &mut Recolor, sp!(_, lvalue_): &mut N::LValue) {
     match lvalue_ {
         N::LValue_::Ignore => (),
-        N::LValue_::Var { var, .. } => recolor_var(mask, color, var),
+        N::LValue_::Var { var, .. } => recolor_var(ctx, var),
         N::LValue_::Unpack(_, _, _, lvalues) => {
             for (_, _, (_, lvalue)) in lvalues {
-                recolor_lvalue(mask, color, lvalue)
+                recolor_lvalue(ctx, lvalue)
             }
         }
     }
 }
 
-fn recolor_exp(mask: &mut Mask, color: u16, sp!(_, e_): &mut N::Exp) {
+fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
     match e_ {
         N::Exp_::Value(_) | N::Exp_::Constant(_, _) => (),
         N::Exp_::Give(label, e) => {
-            recolor_block_label(mask, color, label);
-            recolor_exp(mask, color, e)
+            recolor_block_label(ctx, label);
+            recolor_exp(ctx, e)
         }
-        N::Exp_::Continue(label) => recolor_block_label(mask, color, label),
+        N::Exp_::Continue(label) => recolor_block_label(ctx, label),
         N::Exp_::Unit { .. } | N::Exp_::UnresolvedError => (),
-        N::Exp_::Var(var) => recolor_var(mask, color, var),
+        N::Exp_::Var(var) => recolor_var(ctx, var),
         N::Exp_::Return(e) => {
             todo!("set label for return");
-            recolor_exp(mask, color, e)
+            recolor_exp(ctx, e)
         }
 
         N::Exp_::Abort(e)
         | N::Exp_::Dereference(e)
         | N::Exp_::UnaryExp(_, e)
         | N::Exp_::Cast(e, _)
-        | N::Exp_::Annotate(e, _) => recolor_exp(mask, color, e),
+        | N::Exp_::Annotate(e, _) => recolor_exp(ctx, e),
         N::Exp_::Assign(lvalues, e) => {
-            recolor_lvalues(mask, color, lvalues);
-            recolor_exp(mask, color, e)
+            recolor_lvalues(ctx, lvalues);
+            recolor_exp(ctx, e)
         }
         N::Exp_::IfElse(econd, et, ef) => {
-            recolor_exp(mask, color, econd);
-            recolor_exp(mask, color, et);
-            recolor_exp(mask, color, ef);
+            recolor_exp(ctx, econd);
+            recolor_exp(ctx, et);
+            recolor_exp(ctx, ef);
         }
         N::Exp_::Loop(name, e) => {
-            mask.add_block_label(*name);
-            recolor_exp(mask, color, e)
+            ctx.add_block_label(*name);
+            recolor_exp(ctx, e)
         }
         N::Exp_::While(econd, name, ebody) => {
-            mask.add_block_label(*name);
-            recolor_exp(mask, color, econd);
-            recolor_exp(mask, color, ebody)
+            ctx.add_block_label(*name);
+            recolor_exp(ctx, econd);
+            recolor_exp(ctx, ebody)
         }
-        N::Exp_::Block(s) => recolor_seq(mask, color, s),
+        N::Exp_::Block(s) => recolor_seq(ctx, s),
         N::Exp_::NamedBlock(n, s) => {
-            mask.add_block_label(*n);
-            recolor_seq(mask, color, s)
+            ctx.add_block_label(*n);
+            recolor_seq(ctx, s)
         }
         N::Exp_::FieldMutate(ed, e) => {
-            recolor_exp_dotted(mask, color, ed);
-            recolor_exp(mask, color, e)
+            recolor_exp_dotted(ctx, ed);
+            recolor_exp(ctx, e)
         }
         N::Exp_::Mutate(el, er) | N::Exp_::BinopExp(el, _, er) => {
-            recolor_exp(mask, color, el);
-            recolor_exp(mask, color, er)
+            recolor_exp(ctx, el);
+            recolor_exp(ctx, er)
         }
         N::Exp_::Pack(_, _, _, fields) => {
             for (_, _, (_, e)) in fields {
-                recolor_exp(mask, color, e)
+                recolor_exp(ctx, e)
             }
         }
         N::Exp_::Builtin(_, sp!(_, es))
@@ -330,34 +330,34 @@ fn recolor_exp(mask: &mut Mask, color: u16, sp!(_, e_): &mut N::Exp) {
         | N::Exp_::ModuleCall(_, _, _, _, sp!(_, es))
         | N::Exp_::ExpList(es) => {
             for e in es {
-                recolor_exp(mask, color, e)
+                recolor_exp(ctx, e)
             }
         }
         N::Exp_::MethodCall(ed, _, _, _, sp!(_, es)) => {
-            recolor_exp_dotted(mask, color, ed);
+            recolor_exp_dotted(ctx, ed);
             for e in es {
-                recolor_exp(mask, color, e)
+                recolor_exp(ctx, e)
             }
         }
         N::Exp_::VarCall(v, sp!(_, es)) => {
-            recolor_var(mask, color, v);
+            recolor_var(ctx, v);
             for e in es {
-                recolor_exp(mask, color, e)
+                recolor_exp(ctx, e)
             }
         }
 
         N::Exp_::Lambda(lvalues, e) => {
-            recolor_lvalues(mask, color, lvalues);
-            recolor_exp(mask, color, e)
+            recolor_lvalues(ctx, lvalues);
+            recolor_exp(ctx, e)
         }
-        N::Exp_::ExpDotted(_dotted_usage, ed) => recolor_exp_dotted(mask, color, ed),
+        N::Exp_::ExpDotted(_dotted_usage, ed) => recolor_exp_dotted(ctx, ed),
     }
 }
 
-fn recolor_exp_dotted(mask: &mut Mask, color: u16, sp!(_, ed_): &mut N::ExpDotted) {
+fn recolor_exp_dotted(ctx: &mut Recolor, sp!(_, ed_): &mut N::ExpDotted) {
     match ed_ {
-        N::ExpDotted_::Exp(e) => recolor_exp(mask, color, e),
-        N::ExpDotted_::Dot(ed, _) => recolor_exp_dotted(mask, color, ed),
+        N::ExpDotted_::Exp(e) => recolor_exp(ctx, e),
+        N::ExpDotted_::Dot(ed, _) => recolor_exp_dotted(ctx, ed),
     }
 }
 
@@ -485,10 +485,10 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             let (mut lambda_params, param_ty, mut lambda_body, result_ty) =
                 context.lambdas.get(&v.value).unwrap().clone();
             // recolor in case the lambda is used more than once
-            let mask = &mut Mask::new();
             let next_color = context.core.next_variable_color();
-            recolor_lvalues(mask, next_color, &mut lambda_params);
-            recolor_exp(mask, next_color, &mut lambda_body);
+            let recolor = &mut Recolor::new(next_color);
+            recolor_lvalues(recolor, &mut lambda_params);
+            recolor_exp(recolor, &mut lambda_body);
             let param_loc = lambda_params.loc;
             let N::Exp_::VarCall(_, sp!(args_loc, arg_list)) =
                 std::mem::replace(e_, /* dummy */ N::Exp_::UnresolvedError)

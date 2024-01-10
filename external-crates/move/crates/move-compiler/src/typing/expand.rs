@@ -19,7 +19,7 @@ use move_ir_types::location::*;
 
 pub fn function_body_(context: &mut Context, b_: &mut T::FunctionBody_) {
     match b_ {
-        T::FunctionBody_::Native => (),
+        T::FunctionBody_::Native | T::FunctionBody_::Macro => (),
         T::FunctionBody_::Defined(es) => sequence(context, es),
     }
 }
@@ -80,6 +80,17 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
                 }
                 _ => panic!("ICE impossible. tapply switched to nontapply"),
             }
+        }
+        Fun(args, result) => {
+            if !context.in_macro_function {
+                let msg =
+                    "Unexpected lambda type. Lambdas can only be used as parameters for, or direct arguments to, macro functions";
+                context
+                    .env
+                    .add_diag(diag!(TypeSafety::UnexpectedFunctionType, (ty.loc, msg)));
+            }
+            types(context, args);
+            type_(context, result);
         }
     }
 }
@@ -247,6 +258,12 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
         E::Loop { body: eloop, .. } => exp(context, eloop),
         E::NamedBlock(_, seq) => sequence(context, seq),
         E::Block(seq) => sequence(context, seq),
+        E::Lambda(_, _, _) => {
+            let msg = "Lambdas can only be used directly as arguments to macro functions";
+            context
+                .env
+                .add_diag(diag!(TypeSafety::UnexpectedLambda, (e.exp.loc, msg)));
+        }
         E::Assign(assigns, tys, er) => {
             lvalues(context, assigns);
             expected_types(context, tys);
