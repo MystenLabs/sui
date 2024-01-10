@@ -117,15 +117,11 @@ pub enum KeyToolCommand {
         key_scheme: SignatureScheme,
         derivation_path: Option<DerivationPath>,
     },
-    /// Output the private key of the given address in Sui CLI Keystore as Bech32 encoded string starting
-    /// with `suiprivkey`. If the alias is provided, the private key for the given alias will be exported.
+    /// Output the private key of the given key identity in Sui CLI Keystore as Bech32
+    /// encoded string starting with `suiprivkey`.
     Export {
         #[clap(long)]
-        address: KeyIdentity,
-    },
-        #[clap(long)]
-        alias: Option<String>,
-        address: Option<SuiAddress>,
+        key_identity: KeyIdentity,
     },
     /// List all keys by its Sui address, Base64 encoded public key, key scheme name in
     /// sui.keystore.
@@ -597,8 +593,8 @@ impl KeyToolCommand {
                     }
                 }
             }
-            KeyToolCommand::Export { address } => {
-                let address = get_identity_address_from_keystore(address, keystore)?;
+            KeyToolCommand::Export { key_identity } => {
+                let address = get_identity_address_from_keystore(key_identity, keystore)?;
                 let skp = keystore.get_key(&address)?;
                 let key = ExportedKey {
                     exported_private_key: skp

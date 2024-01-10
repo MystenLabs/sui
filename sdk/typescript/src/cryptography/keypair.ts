@@ -112,8 +112,8 @@ export abstract class Keypair extends BaseSigner {
 }
 
 /**
- * This returns an ParsedKeypair object based by validating the 
- * 33-byte Bech32 encoded string starting with `suiprivkey`, and 
+ * This returns an ParsedKeypair object based by validating the
+ * 33-byte Bech32 encoded string starting with `suiprivkey`, and
  * parse out the signature scheme and the private key in bytes.
  */
 export function decodeSuiPrivateKey(value: string): ParsedKeypair {
