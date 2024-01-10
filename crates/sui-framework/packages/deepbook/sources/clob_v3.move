@@ -27,7 +27,7 @@ module deepbook::clob_v3 {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    use deepbook::critbit::{Self, CritbitTree, is_empty, borrow_mut_leaf_by_index, min_leaf, remove_leaf_by_index, max_leaf, next_leaf, previous_leaf, borrow_leaf_by_index, borrow_leaf_by_key, find_leaf, insert_leaf};
+    use deepbook::critbit::{Self, CritbitTree, is_empty, borrow_mut_leaf_by_index, min_leaf, max_leaf, borrow_leaf_by_index, borrow_leaf_by_key, find_leaf, insert_leaf};
     use deepbook::custodian_v2::{Self as custodian, Custodian, AccountCap, mint_account_cap, account_owner};
     use deepbook::math::Self as clob_math;
     use deepbook::big_queue::{Self, BigQueue};
@@ -54,7 +54,6 @@ module deepbook::clob_v3 {
     const EInvalidExpireTimestamp: u64 = 19;
     const EInvalidTickSizeLotSize: u64 = 20;
     const EInvalidSelfMatchingPreventionArg: u64 = 21;
-    const EAlreadyRemovedFromTickLevel: u64 = 22;
     const EOrderAlreadyCanceled: u64 = 23;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
@@ -265,19 +264,7 @@ module deepbook::clob_v3 {
 
     /// Capability granting permission to access an entry in `Pool.quote_asset_trading_fees`.
     /// The pool objects created for older pools do not have a PoolOwnerCap because they were created
-    /// prior to the addition of this feature. Here is a list of 11 pools on mainnet that 
-    /// do not have this capability: 
-    /// 0x31d1790e617eef7f516555124155b28d663e5c600317c769a75ee6336a54c07f
-    /// 0x6e417ee1c12ad5f2600a66bc80c7bd52ff3cb7c072d508700d17cf1325324527
-    /// 0x17625f1a241d34d2da0dc113086f67a2b832e3e8cd8006887c195cd24d3598a3
-    /// 0x276ff4d99ecb3175091ba4baffa9b07590f84e2344e3f16e95d30d2c1678b84c
-    /// 0xd1f0a9baacc1864ab19534e2d4c5d6c14f2e071a1f075e8e7f9d51f2c17dc238
-    /// 0x4405b50d791fd3346754e8171aaab6bc2ed26c2c46efdd033c14b30ae507ac33
-    /// 0xf0f663cf87f1eb124da2fc9be813e0ce262146f3df60bc2052d738eb41a25899
-    /// 0xd9e45ab5440d61cc52e3b2bd915cdd643146f7593d587c715bc7bfa48311d826
-    /// 0x5deafda22b6b86127ea4299503362638bea0ca33bb212ea3a67b029356b8b955
-    /// 0x7f526b1263c4b91b43c9e646419b5696f424de28dda3c1e6658cc0a54558baa7
-    /// 0x18d871e3c3da99046dfc0d3de612c5d88859bc03b8f0568bd127d0e70dbc58be
+    /// prior to the addition of this feature.
     struct PoolOwnerCap has key, store {
         id: UID,
         /// The owner of this AccountCap. Note: this is
@@ -316,7 +303,7 @@ module deepbook::clob_v3 {
     fun get_tick_level_and_base_order_id(
         order_id: u128
     ): (u64, u64) {
-        ((order_id>>64 as u64), (order_id as u64))
+        (((order_id >> 64) as u64), (order_id as u64))
     }
 
     /// Check if the order exists in the queue
@@ -389,16 +376,6 @@ module deepbook::clob_v3 {
         let PoolOwnerCap { id, owner: _ } = pool_owner_cap;
         object::delete(id)
     }
-
-    // fun destroy_empty_level(level: TickLevel) {
-    //     let TickLevel {
-    //         price: _,
-    //         open_orders: orders,
-    //         count_elements_popped: _,
-    //         next_order_id: _,
-    //     } = level;
-    //     big_queue::destroy_empty(orders);
-    // }
 
     public fun create_account(ctx: &mut TxContext): AccountCap {
         mint_account_cap(ctx)
@@ -725,7 +702,6 @@ module deepbook::clob_v3 {
 
         while (!is_empty<TickLevel>(all_open_orders) && tick_price <= price_limit) {
             let tick_level = borrow_mut_leaf_by_index(all_open_orders, tick_index);
-            let order_id = big_queue::peek_front(&tick_level.order_queue).order_id;
 
             while (!big_queue::is_empty(&tick_level.order_queue)) {
                 let maker_order = big_queue::peek_front(&tick_level.order_queue);
@@ -850,7 +826,6 @@ module deepbook::clob_v3 {
                 if (skip_order || maker_base_quantity == 0) {
                     // Remove the maker order.
                     big_queue::pop_front(&mut tick_level.order_queue);
-                    order_id = big_queue::peek_front(&tick_level.order_queue).order_id;
                 } else {
                     // Update the maker order.
                     let maker_order_mut = big_queue::peek_front_mut(&mut tick_level.order_queue);
@@ -860,11 +835,6 @@ module deepbook::clob_v3 {
                     break
                 };
             };
-            // if (linked_table::is_empty(&tick_level.open_orders)) {
-            //     (tick_price, _) = next_leaf(all_open_orders, tick_price);
-            //     destroy_empty_level(remove_leaf_by_index(all_open_orders, tick_index));
-            //     (_, tick_index) = find_leaf(all_open_orders, tick_price);
-            // };
             if (terminate_loop) {
                 break
             };
@@ -904,7 +874,6 @@ module deepbook::clob_v3 {
 
         while (!is_empty<TickLevel>(all_open_orders) && tick_price <= price_limit) {
             let tick_level = borrow_mut_leaf_by_index(all_open_orders, tick_index);
-            let order_id = big_queue::peek_front(&tick_level.order_queue).order_id;
 
             while (!big_queue::is_empty(&tick_level.order_queue)) {
                 let maker_order = big_queue::peek_front(&tick_level.order_queue);
@@ -996,7 +965,6 @@ module deepbook::clob_v3 {
                 if (skip_order || maker_base_quantity == 0) {
                     // Remove the maker order.
                     big_queue::pop_front(&mut tick_level.order_queue);
-                    order_id = big_queue::peek_front(&tick_level.order_queue).order_id;
                 } else {
                     // Update the maker order.
                     let maker_order_mut = big_queue::peek_front_mut(&mut tick_level.order_queue);
@@ -1006,11 +974,6 @@ module deepbook::clob_v3 {
                     break
                 };
             };
-            // if (linked_table::is_empty(&tick_level.open_orders)) {
-            //     (tick_price, _) = next_leaf(all_open_orders, tick_price);
-            //     destroy_empty_level(remove_leaf_by_index(all_open_orders, tick_index));
-            //     (_, tick_index) = find_leaf(all_open_orders, tick_price);
-            // };
             if (taker_base_quantity_remaining == 0) {
                 break
             };
@@ -1058,17 +1021,7 @@ module deepbook::clob_v3 {
 
                 if (maker_order.expire_timestamp <= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                     skip_order = true;
-                    let (is_round_down, maker_quote_quantity) = clob_math::unsafe_mul_round(maker_order.quantity, maker_order.price);
-                    // If a bit is rounded down, the pool will take this as a fee.
-                    if (is_round_down) {
-                        let rounded_down_quantity = custodian::decrease_user_locked_balance<QuoteAsset>(
-                            &mut pool.quote_custodian,
-                            maker_order.owner,
-                            1
-                        );                            
-                        balance::join(&mut pool.quote_asset_trading_fees, rounded_down_quantity);
-                    };
-
+                    let maker_quote_quantity = clob_math::mul(maker_order.quantity, maker_order.price);
                     custodian::unlock_balance(&mut pool.quote_custodian, maker_order.owner, maker_quote_quantity);
                     let canceled_order_event = AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
                         client_order_id: maker_order.client_order_id,
@@ -1157,12 +1110,6 @@ module deepbook::clob_v3 {
                     break
                 };
             };
-            // TODO should we do destroy_empty?: 
-            // if (linked_table::is_empty(&tick_level.open_orders)) {
-            //     (tick_price, _) = previous_leaf(all_open_orders, tick_price);
-            //     destroy_empty_level(remove_leaf_by_index(all_open_orders, tick_index));
-            //     (_, tick_index) = find_leaf(all_open_orders, tick_price);
-            // };
             if (balance::value(&base_balance_left) == 0) {
                 break
             };
@@ -1733,7 +1680,6 @@ module deepbook::clob_v3 {
         let n_order = vector::length(&order_ids);
         assert!(n_order == vector::length(&order_owners), ENotEqual);
         let i_order = 0;
-        let tick_index: u64 = 0;
         let tick_price: u64 = 0;
         let canceled_order_events = vector[];
         while (i_order < n_order) {
@@ -1747,12 +1693,11 @@ module deepbook::clob_v3 {
             let open_orders = if (is_bid) { &mut pool.bids } else { &mut pool.asks };
             if (new_tick_price != tick_price) {
                 tick_price = new_tick_price;
-                let (tick_exists, new_tick_index) = find_leaf(
+                let (tick_exists, _) = find_leaf(
                     open_orders,
                     tick_price
                 );
                 assert!(tick_exists, EInvalidTickPrice);
-                tick_index = new_tick_index;
             };
             let order = remove_order(open_orders, usr_open_orders, order_id, owner);
             assert!(order.expire_timestamp < now, EInvalidExpireTimestamp);
