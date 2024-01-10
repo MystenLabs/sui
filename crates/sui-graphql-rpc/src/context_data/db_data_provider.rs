@@ -17,6 +17,7 @@ use crate::{
         move_object::MoveObject,
         move_type::MoveType,
         object::{Object, ObjectFilter},
+        owner::HistoricalContext,
         stake::StakedSui,
         sui_address::SuiAddress,
         suins_registration::SuinsRegistration,
@@ -883,6 +884,7 @@ impl PgManager {
 
         Ok(record.target_address.map(|address| Address {
             address: SuiAddress::from_array(address.to_inner()),
+            historical_context: HistoricalContext::default(),
         }))
     }
 
@@ -1306,6 +1308,8 @@ pub(crate) fn convert_to_validators(
     validators: Vec<SuiValidatorSummary>,
     system_state: Option<NativeSuiSystemStateSummary>,
 ) -> Vec<Validator> {
+    let historical_context = HistoricalContext::with_epoch(system_state.as_ref().map(|s| s.epoch));
+
     let (at_risk, reports) = if let Some(NativeSuiSystemStateSummary {
         at_risk_validators,
         validator_report_records,
@@ -1330,6 +1334,7 @@ pub(crate) fn convert_to_validators(
                     .cloned()
                     .map(|a| Address {
                         address: SuiAddress::from(a),
+                        historical_context,
                     })
                     .collect()
             });
@@ -1338,6 +1343,7 @@ pub(crate) fn convert_to_validators(
                 validator_summary,
                 at_risk,
                 report_records,
+                historical_context,
             }
         })
         .collect()

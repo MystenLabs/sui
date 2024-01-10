@@ -18,6 +18,7 @@ use super::display::{get_rendered_fields, DisplayEntry};
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::MoveObject;
 use super::move_package::MovePackage;
+use super::owner::HistoricalContext;
 use super::suins_registration::SuinsRegistration;
 use super::{
     balance::Balance, coin::Coin, owner::Owner, stake::StakedSui, sui_address::SuiAddress,
@@ -41,6 +42,8 @@ pub(crate) struct Object {
 
     /// Deserialized representation of `stored_object.serialized_object`.
     pub native: NativeObject,
+
+    pub historical_context: HistoricalContext,
 }
 
 #[derive(InputObject, Default, Clone)]
@@ -212,7 +215,10 @@ impl Object {
             O::AddressOwner(address) => {
                 let address = SuiAddress::from(address);
                 Some(ObjectOwner::Address(AddressOwner {
-                    owner: Some(Owner { address }),
+                    owner: Some(Owner {
+                        address,
+                        historical_context: self.historical_context,
+                    }),
                 }))
             }
             O::Immutable => Some(ObjectOwner::Immutable(Immutable { dummy: None })),
@@ -412,6 +418,7 @@ impl Object {
             address,
             stored: None,
             native,
+            historical_context: HistoricalContext::default(),
         }
     }
 
@@ -454,10 +461,15 @@ impl TryFrom<StoredObject> for Object {
         let native_object = bcs::from_bytes(&stored_object.serialized_object)
             .map_err(|_| Error::Internal(format!("Failed to deserialize object {address}")))?;
 
+        let historical_context = HistoricalContext::with_checkpoint(Some(
+            stored_object.checkpoint_sequence_number as u64,
+        ));
+
         Ok(Self {
             address,
             stored: Some(stored_object),
             native: native_object,
+            historical_context,
         })
     }
 }

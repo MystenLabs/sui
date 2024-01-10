@@ -5,23 +5,26 @@ use crate::context_data::db_data_provider::PgManager;
 use crate::types::object::Object;
 use async_graphql::connection::Connection;
 use async_graphql::*;
-use sui_json_rpc_types::SuiGasData;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress as NativeSuiAddress},
+    base_types::SuiAddress as NativeSuiAddress,
     effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
     gas::GasCostSummary as NativeGasCostSummary,
-    transaction::GasData,
+    transaction::TransactionDataAPI,
 };
 
-use super::object::ObjectFilter;
-use super::{address::Address, big_int::BigInt, sui_address::SuiAddress};
+use super::{
+    address::Address, big_int::BigInt, owner::HistoricalContext, sui_address::SuiAddress,
+    transaction_block::TransactionBlock,
+};
+use super::{object::ObjectFilter, object_read::ObjectRead};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub(crate) struct GasInput {
     pub owner: NativeSuiAddress,
     pub price: u64,
     pub budget: u64,
-    pub payment_obj_ids: Vec<ObjectID>,
+    pub payment_obj_ids: Vec<ObjectRead>,
+    pub historical_context: HistoricalContext,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -45,6 +48,7 @@ impl GasInput {
     async fn gas_sponsor(&self) -> Option<Address> {
         Some(Address {
             address: SuiAddress::from(self.owner),
+            historical_context: self.historical_context,
         })
     }
 
@@ -61,7 +65,7 @@ impl GasInput {
             object_ids: Some(
                 self.payment_obj_ids
                     .iter()
-                    .map(|id| SuiAddress::from_array(***id))
+                    .map(|obj_ref| SuiAddress::from(obj_ref.0 .0))
                     .collect(),
             ),
             ..Default::default()
@@ -139,24 +143,22 @@ impl GasEffects {
     }
 }
 
-impl From<&SuiGasData> for GasInput {
-    fn from(s: &SuiGasData) -> Self {
-        Self {
-            owner: s.owner,
-            price: s.price,
-            budget: s.budget,
-            payment_obj_ids: s.payment.iter().map(|o| o.object_id).collect(),
-        }
-    }
-}
+impl From<&TransactionBlock> for GasInput {
+    fn from(tx: &TransactionBlock) -> Self {
+        let gas_data = tx.native.transaction_data().gas_data();
+        let historical_context =
+            HistoricalContext::with_checkpoint(Some(tx.stored.checkpoint_sequence_number as u64));
 
-impl From<&GasData> for GasInput {
-    fn from(s: &GasData) -> Self {
         Self {
-            owner: s.owner,
-            price: s.price,
-            budget: s.budget,
-            payment_obj_ids: s.payment.iter().map(|o| o.0).collect(),
+            owner: gas_data.owner,
+            price: gas_data.price,
+            budget: gas_data.budget,
+            payment_obj_ids: gas_data
+                .payment
+                .iter()
+                .map(|o| ObjectRead(o.clone()))
+                .collect(),
+            historical_context,
         }
     }
 }

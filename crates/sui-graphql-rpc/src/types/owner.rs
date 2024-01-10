@@ -98,6 +98,13 @@ pub(crate) enum IOwner {
 #[derive(Clone, Debug)]
 pub(crate) struct Owner {
     pub address: SuiAddress,
+    pub historical_context: HistoricalContext,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct HistoricalContext {
+    pub epoch: Option<u64>,
+    pub checkpoint: Option<u64>,
 }
 
 #[Object]
@@ -106,6 +113,7 @@ impl Owner {
         // For now only addresses can be owners
         Some(Address {
             address: self.address,
+            historical_context: self.historical_context,
         })
     }
 
@@ -270,5 +278,25 @@ impl Owner {
             .fetch_dynamic_fields(first, after, last, before, self.address)
             .await
             .extend()
+    }
+}
+
+impl HistoricalContext {
+    pub fn new(epoch: Option<u64>, checkpoint: Option<u64>) -> Self {
+        Self { epoch, checkpoint }
+    }
+
+    pub fn with_epoch(epoch: Option<u64>) -> Self {
+        Self {
+            epoch,
+            checkpoint: None,
+        }
+    }
+
+    pub fn with_checkpoint(checkpoint: Option<u64>) -> Self {
+        Self {
+            epoch: None,
+            checkpoint,
+        }
     }
 }

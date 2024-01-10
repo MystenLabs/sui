@@ -5,12 +5,18 @@ use async_graphql::*;
 use sui_json_rpc_types::BalanceChange as StoredBalanceChange;
 use sui_types::object::Owner as NativeOwner;
 
-use super::{big_int::BigInt, move_type::MoveType, owner::Owner, sui_address::SuiAddress};
+use super::{
+    big_int::BigInt,
+    move_type::MoveType,
+    owner::{HistoricalContext, Owner},
+    sui_address::SuiAddress,
+};
 use crate::error::Error;
 
 pub(crate) struct BalanceChange {
     // TODO: Move this type into indexer crates, rather than JSON-RPC.
     stored: StoredBalanceChange,
+    historical_context: HistoricalContext,
 }
 
 /// Effects to the balance (sum of coin values per coin type) owned by an address or object.
@@ -23,6 +29,7 @@ impl BalanceChange {
         match self.stored.owner {
             O::AddressOwner(addr) | O::ObjectOwner(addr) => Some(Owner {
                 address: SuiAddress::from(addr),
+                historical_context: self.historical_context,
             }),
 
             O::Shared { .. } | O::Immutable => None,
@@ -41,10 +48,16 @@ impl BalanceChange {
 }
 
 impl BalanceChange {
-    pub(crate) fn read(bytes: &[u8]) -> Result<Self, Error> {
+    pub(crate) fn read(
+        bytes: &[u8],
+        historical_context: Option<HistoricalContext>,
+    ) -> Result<Self, Error> {
         let stored = bcs::from_bytes(bytes)
             .map_err(|e| Error::Internal(format!("Error deserializing BalanceChange: {e}")))?;
 
-        Ok(Self { stored })
+        Ok(Self {
+            stored,
+            historical_context: historical_context.unwrap_or_else(HistoricalContext::default),
+        })
     }
 }

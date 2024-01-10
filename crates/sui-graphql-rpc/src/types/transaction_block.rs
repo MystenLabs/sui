@@ -23,6 +23,7 @@ use super::{
     epoch::Epoch,
     event::Event,
     gas::GasInput,
+    owner::HistoricalContext,
     sui_address::SuiAddress,
     transaction_block_effects::TransactionBlockEffects,
     transaction_block_kind::TransactionBlockKind,
@@ -82,6 +83,9 @@ impl TransactionBlock {
         let sender = self.native.transaction_data().sender();
         (sender != NativeSuiAddress::ZERO).then(|| Address {
             address: SuiAddress::from(sender),
+            historical_context: HistoricalContext::with_checkpoint(Some(
+                self.stored.checkpoint_sequence_number as u64,
+            )),
         })
     }
 
@@ -91,7 +95,7 @@ impl TransactionBlock {
     /// If the owner of the gas object(s) is not the same as the sender, the transaction block is a
     /// sponsored transaction block.
     async fn gas_input(&self) -> Option<GasInput> {
-        Some(GasInput::from(self.native.transaction_data().gas_data()))
+        Some(GasInput::from(self))
     }
 
     /// The type of this transaction as well as the commands and/or parameters comprising the

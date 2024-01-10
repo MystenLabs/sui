@@ -20,7 +20,7 @@ use super::{
     event::{Event, EventFilter},
     move_type::MoveType,
     object::{Object, ObjectFilter},
-    owner::Owner,
+    owner::{HistoricalContext, Owner},
     protocol_config::ProtocolConfigs,
     sui_address::SuiAddress,
     transaction_block::{TransactionBlock, TransactionBlockFilter},
@@ -64,7 +64,10 @@ impl Query {
     // coinMetadata
 
     async fn owner(&self, address: SuiAddress) -> Option<Owner> {
-        Some(Owner { address })
+        Some(Owner {
+            address,
+            historical_context: HistoricalContext::default(),
+        })
     }
 
     async fn object(
@@ -79,7 +82,10 @@ impl Query {
     }
 
     async fn address(&self, address: SuiAddress) -> Option<Address> {
-        Some(Address { address })
+        Some(Address {
+            address,
+            historical_context: HistoricalContext::default(),
+        })
     }
 
     /// Fetch a structured representation of a concrete type, including its layout information.

@@ -23,6 +23,7 @@ use super::{
     epoch::Epoch,
     gas::GasEffects,
     object_change::ObjectChange,
+    owner::HistoricalContext,
     transaction_block::TransactionBlock,
     unchanged_shared_object::UnchangedSharedObject,
 };
@@ -251,7 +252,8 @@ impl TransactionBlockEffects {
                 continue;
             };
 
-            let balance_change = BalanceChange::read(serialized).extend()?;
+            let balance_change =
+                BalanceChange::read(serialized, Some(self.historical_context())).extend()?;
             connection
                 .edges
                 .push(Edge::new(c.encode_cursor(), balance_change));
@@ -303,6 +305,22 @@ impl TransactionBlockEffects {
         };
 
         Ok(Base64::from(bytes))
+    }
+}
+
+impl TransactionBlockEffects {
+    fn checkpoint_sequence_num_impl(&self) -> Option<u64> {
+        self.tx_data
+            .as_ref()
+            .left()
+            .map(|stored| stored.checkpoint_sequence_number as u64)
+    }
+
+    fn historical_context(&self) -> HistoricalContext {
+        HistoricalContext::new(
+            Some(self.native.executed_epoch()),
+            self.checkpoint_sequence_num_impl(),
+        )
     }
 }
 

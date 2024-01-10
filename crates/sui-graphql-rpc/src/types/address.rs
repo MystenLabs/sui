@@ -11,6 +11,7 @@ use super::{
     coin::Coin,
     dynamic_field::{DynamicField, DynamicFieldName},
     object::{Object, ObjectFilter},
+    owner::HistoricalContext,
     stake::StakedSui,
     sui_address::SuiAddress,
     suins_registration::SuinsRegistration,
@@ -20,6 +21,7 @@ use super::{
 #[derive(Clone, Debug, PartialEq, Eq, Copy)]
 pub(crate) struct Address {
     pub address: SuiAddress,
+    pub historical_context: HistoricalContext,
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]

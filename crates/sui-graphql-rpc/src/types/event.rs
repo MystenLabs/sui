@@ -11,6 +11,7 @@ use sui_types::{parse_sui_struct_tag, TypeTag};
 use crate::error::Error;
 
 use super::digest::Digest;
+use super::owner::HistoricalContext;
 use super::{
     address::Address, base64::Base64, date_time::DateTime, move_module::MoveModule,
     move_value::MoveValue, sui_address::SuiAddress,
@@ -83,7 +84,12 @@ impl Event {
             return Ok(None);
         }
 
-        Ok(Some(Address { address }))
+        Ok(Some(Address {
+            address,
+            historical_context: HistoricalContext::with_checkpoint(Some(
+                self.stored.checkpoint_sequence_number as u64,
+            )),
+        }))
     }
 
     /// UTC timestamp in milliseconds since epoch (1/1/1970)

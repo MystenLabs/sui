@@ -5,6 +5,7 @@ use crate::context_data::db_data_provider::PgManager;
 
 use super::big_int::BigInt;
 use super::move_object::MoveObject;
+use super::owner::HistoricalContext;
 use super::sui_address::SuiAddress;
 use super::validator_credentials::ValidatorCredentials;
 use super::{address::Address, base64::Base64};
@@ -16,6 +17,7 @@ pub(crate) struct Validator {
     pub validator_summary: NativeSuiValidatorSummary,
     pub at_risk: Option<u64>,
     pub report_records: Option<Vec<Address>>,
+    pub historical_context: HistoricalContext,
 }
 
 #[Object]
@@ -24,6 +26,7 @@ impl Validator {
     async fn address(&self) -> Address {
         Address {
             address: SuiAddress::from(self.validator_summary.sui_address),
+            historical_context: self.historical_context,
         }
     }
 
