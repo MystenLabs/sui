@@ -238,6 +238,7 @@ describe('Interacting with the pool', () => {
 			pool.poolId,
 			LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE,
 			3n * LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE,
+			'both'
 		)) as Level2BookStatusPoint[][];
 		expect(status.length).toBe(2);
 		expect(status[0].length).toBe(1);

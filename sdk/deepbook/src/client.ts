@@ -665,16 +665,16 @@ export class DeepBookClient {
 	 * @param poolId the pool id, eg: 0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4
 	 * @param lowerPrice lower price you want to query in the level2 book, eg: 18000000000. The number must be an integer float scaled by `FLOAT_SCALING_FACTOR`.
 	 * @param higherPrice higher price you want to query in the level2 book, eg: 20000000000. The number must be an integer float scaled by `FLOAT_SCALING_FACTOR`.
-	 * @param side { 'bid' | 'ask' } bid or ask side. If left undefined, both sides will be returned.
+	 * @param side { 'bid' | 'ask' | 'both' } bid or ask or both sides.
 	 */
 	async getLevel2BookStatus(
 		poolId: string,
 		lowerPrice: bigint,
 		higherPrice: bigint,
-		side: 'bid' | 'ask' | undefined = undefined,
+		side: 'bid' | 'ask' | 'both',
 	): Promise<Level2BookStatusPoint[] | Level2BookStatusPoint[][]> {
 		const txb = new TransactionBlock();
-		if (side === undefined) {
+		if (side === 'both') {
 			txb.moveCall({
 				typeArguments: await this.getPoolTypeArgs(poolId),
 				target: `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_bid_side`,
@@ -713,7 +713,7 @@ export class DeepBookClient {
 			sender: this.currentAddress,
 		});
 
-		if (side === undefined) {
+		if (side === 'both') {
 			const bidSide = results.results![0].returnValues!.map(([bytes, _]) =>
 				bcs.de('vector<u64>', Uint8Array.from(bytes)).map((s: string) => BigInt(s)),
 			);
