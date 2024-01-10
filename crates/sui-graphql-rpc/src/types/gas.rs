@@ -153,11 +153,7 @@ impl From<&TransactionBlock> for GasInput {
             owner: gas_data.owner,
             price: gas_data.price,
             budget: gas_data.budget,
-            payment_obj_ids: gas_data
-                .payment
-                .iter()
-                .map(|o| ObjectRead(o.clone()))
-                .collect(),
+            payment_obj_ids: gas_data.payment.iter().map(|o| ObjectRead(*o)).collect(),
             historical_context,
         }
     }

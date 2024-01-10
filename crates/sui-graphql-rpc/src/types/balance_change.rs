@@ -57,7 +57,7 @@ impl BalanceChange {
 
         Ok(Self {
             stored,
-            historical_context: historical_context.unwrap_or_else(HistoricalContext::default),
+            historical_context: historical_context.unwrap_or_default(),
         })
     }
 }
