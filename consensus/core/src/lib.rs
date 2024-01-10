@@ -3,9 +3,13 @@
 
 mod block;
 mod block_verifier;
+mod commit;
 mod context;
 mod core;
+mod dag_state;
+mod error;
 mod metrics;
 mod stake_aggregator;
+mod storage;
 mod threshold_clock;
 mod validator;

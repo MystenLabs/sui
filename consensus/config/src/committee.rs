@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::traits::KeyPair;
-use std::fmt::{Display, Formatter};
+use std::{
+    fmt::{Display, Formatter},
+    ops::{Index, IndexMut},
+};
 
 use multiaddr::Multiaddr;
 use rand::rngs::StdRng;
@@ -109,11 +112,11 @@ impl Committee {
     }
 
     pub fn stake(&self, authority_index: AuthorityIndex) -> Stake {
-        self.authorities[authority_index.value()].stake
+        self.authorities[authority_index].stake
     }
 
     pub fn authority(&self, authority_index: AuthorityIndex) -> &Authority {
-        &self.authorities[authority_index.value()]
+        &self.authorities[authority_index]
     }
 
     pub fn authorities(&self) -> impl Iterator<Item = (AuthorityIndex, &Authority)> {
@@ -170,6 +173,34 @@ impl AuthorityIndex {
 impl Display for AuthorityIndex {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.0.to_string().as_str())
+    }
+}
+
+impl<T, const N: usize> Index<AuthorityIndex> for [T; N] {
+    type Output = T;
+
+    fn index(&self, index: AuthorityIndex) -> &Self::Output {
+        self.get(index.value()).unwrap()
+    }
+}
+
+impl<T> Index<AuthorityIndex> for Vec<T> {
+    type Output = T;
+
+    fn index(&self, index: AuthorityIndex) -> &Self::Output {
+        self.get(index.value()).unwrap()
+    }
+}
+
+impl<T, const N: usize> IndexMut<AuthorityIndex> for [T; N] {
+    fn index_mut(&mut self, index: AuthorityIndex) -> &mut Self::Output {
+        self.get_mut(index.value()).unwrap()
+    }
+}
+
+impl<T> IndexMut<AuthorityIndex> for Vec<T> {
+    fn index_mut(&mut self, index: AuthorityIndex) -> &mut Self::Output {
+        self.get_mut(index.value()).unwrap()
     }
 }
 

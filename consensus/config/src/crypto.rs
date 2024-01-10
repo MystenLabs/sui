@@ -21,6 +21,8 @@ use shared_crypto::intent::INTENT_PREFIX_LENGTH;
 pub type NetworkPublicKey = ed25519::Ed25519PublicKey;
 pub type NetworkPrivateKey = ed25519::Ed25519PrivateKey;
 pub type NetworkKeyPair = ed25519::Ed25519KeyPair;
+pub type NetworkKeySignature = ed25519::Ed25519Signature;
+pub type NetworkKeySignatureAsBytes = ed25519::Ed25519SignatureAsBytes;
 
 /// Protocol key is used in random beacon.
 pub type ProtocolPublicKey = bls12381::min_sig::BLS12381PublicKey;
