@@ -26,7 +26,7 @@ impl LeaderSchedule {
             // TODO: we need to differentiate the leader strategy in tests, so for
             // some type of testing (ex sim tests) we can use the staked approach.
             if #[cfg(test)] {
-                AuthorityIndex::new((round + leader_offset) % self.committee.size() as u32)
+                AuthorityIndex::new_for_test((round + leader_offset) % self.committee.size() as u32)
             } else {
                 self.elect_leader_stake_based(round, leader_offset)
             }
@@ -39,7 +39,7 @@ impl LeaderSchedule {
         // TODO: this needs to be removed.
         // if genesis, always return index 0
         if round == 0 {
-            return AuthorityIndex::new(0);
+            return AuthorityIndex::new_for_test(0);
         }
 
         // To ensure that we elect different leaders for the same round (using
@@ -47,7 +47,7 @@ impl LeaderSchedule {
         // a weighted way the results, but skip based on the offset.
         // TODO: use a cache in case this proves to be computationally expensive
         let mut seed_bytes = [0u8; 32];
-        seed_bytes[32 - 8..].copy_from_slice(&(round).to_le_bytes());
+        seed_bytes[32 - 4..].copy_from_slice(&(round).to_le_bytes());
         let mut rng = StdRng::from_seed(seed_bytes);
 
         let choices = self
@@ -65,5 +65,48 @@ impl LeaderSchedule {
             .unwrap();
 
         leader_index
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_elect_leader() {
+        let committee = Committee::new_for_test(0, vec![1, 1, 1, 1]).0;
+        let leader_schedule = LeaderSchedule::new(Arc::new(committee));
+
+        assert_eq!(
+            leader_schedule.elect_leader(0, 0),
+            AuthorityIndex::new_for_test(0)
+        );
+        assert_eq!(
+            leader_schedule.elect_leader(1, 0),
+            AuthorityIndex::new_for_test(1)
+        );
+        assert_eq!(
+            leader_schedule.elect_leader(5, 0),
+            AuthorityIndex::new_for_test(1)
+        );
+    }
+
+    #[test]
+    fn test_elect_leader_stake_based() {
+        let committee = Committee::new_for_test(0, vec![1, 1, 1, 1]).0;
+        let leader_schedule = LeaderSchedule::new(Arc::new(committee));
+
+        assert_eq!(
+            leader_schedule.elect_leader_stake_based(0, 0),
+            AuthorityIndex::new_for_test(0)
+        );
+        assert_eq!(
+            leader_schedule.elect_leader_stake_based(1, 0),
+            AuthorityIndex::new_for_test(1)
+        );
+        assert_eq!(
+            leader_schedule.elect_leader_stake_based(5, 0),
+            AuthorityIndex::new_for_test(3)
+        );
     }
 }

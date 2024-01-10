@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::block::BlockRef;
-use crate::context::Context;
-use crate::stake_aggregator::{QuorumThreshold, StakeAggregator};
-use crate::types::Round;
+use std::{cmp::Ordering, sync::Arc, time::Instant};
 
-use std::cmp::Ordering;
-use std::sync::Arc;
-use std::time::Instant;
+use crate::{
+    block::BlockRef,
+    context::Context,
+    stake_aggregator::{QuorumThreshold, StakeAggregator},
+    types::Round,
+};
 
 #[allow(unused)]
 
@@ -83,7 +83,7 @@ mod tests {
         let committee = Committee::new_for_test(0, vec![1, 1, 1, 1]).0;
         let metrics = test_metrics();
         let context = Arc::new(Context::new(
-            AuthorityIndex::new(0),
+            AuthorityIndex::new_for_test(0),
             committee,
             Parameters::default(),
             ProtocolConfig::get_for_min_version(),
@@ -92,49 +92,49 @@ mod tests {
         let mut aggregator = ThresholdClock::new(0, context);
 
         aggregator.add_block(BlockRef::new_test(
-            AuthorityIndex::new(0),
+            AuthorityIndex::new_for_test(0),
             0,
             BlockDigest::default(),
         ));
         assert_eq!(aggregator.get_round(), 0);
         aggregator.add_block(BlockRef::new_test(
-            AuthorityIndex::new(1),
+            AuthorityIndex::new_for_test(1),
             0,
             BlockDigest::default(),
         ));
         assert_eq!(aggregator.get_round(), 0);
         aggregator.add_block(BlockRef::new_test(
-            AuthorityIndex::new(2),
+            AuthorityIndex::new_for_test(2),
             0,
             BlockDigest::default(),
         ));
         assert_eq!(aggregator.get_round(), 1);
         aggregator.add_block(BlockRef::new_test(
-            AuthorityIndex::new(0),
+            AuthorityIndex::new_for_test(0),
             1,
             BlockDigest::default(),
         ));
         assert_eq!(aggregator.get_round(), 1);
         aggregator.add_block(BlockRef::new_test(
-            AuthorityIndex::new(3),
+            AuthorityIndex::new_for_test(3),
             1,
             BlockDigest::default(),
         ));
         assert_eq!(aggregator.get_round(), 1);
         aggregator.add_block(BlockRef::new_test(
-            AuthorityIndex::new(1),
+            AuthorityIndex::new_for_test(1),
             2,
             BlockDigest::default(),
         ));
         assert_eq!(aggregator.get_round(), 2);
         aggregator.add_block(BlockRef::new_test(
-            AuthorityIndex::new(1),
+            AuthorityIndex::new_for_test(1),
             1,
             BlockDigest::default(),
         ));
         assert_eq!(aggregator.get_round(), 2);
         aggregator.add_block(BlockRef::new_test(
-            AuthorityIndex::new(2),
+            AuthorityIndex::new_for_test(2),
             5,
             BlockDigest::default(),
         ));

@@ -1,19 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    types::{AuthorityRound, Round},
-    utils::format_authority_round,
-};
-
-use enum_dispatch::enum_dispatch;
-use fastcrypto::hash::{Digest, HashFunction};
-use serde::{Deserialize, Serialize};
 use std::{
     cell::OnceCell,
     fmt,
     hash::{Hash, Hasher},
 };
+
+use enum_dispatch::enum_dispatch;
+use fastcrypto::hash::{Digest, HashFunction};
+use serde::{Deserialize, Serialize};
+
+use crate::{types::Round, utils::format_authority_round};
 
 use consensus_config::{AuthorityIndex, DefaultHashFunction, NetworkKeySignature, DIGEST_LENGTH};
 
@@ -144,9 +142,9 @@ impl BlockRef {
     }
 }
 
-impl From<BlockRef> for AuthorityRound {
+impl From<BlockRef> for BlockSlot {
     fn from(value: BlockRef) -> Self {
-        AuthorityRound::new(value.author, value.round)
+        BlockSlot::new(value.author, value.round)
     }
 }
 
@@ -164,11 +162,7 @@ impl fmt::Debug for BlockRef {
 
 impl fmt::Display for BlockRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            format_authority_round(&AuthorityRound::from(*self))
-        )
+        write!(f, "{}", format_authority_round(&BlockSlot::from(*self)))
     }
 }
 
@@ -226,6 +220,31 @@ pub(crate) struct VerifiedBlock {
 
     #[serde(skip)]
     serialized: bytes::Bytes,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Default, Hash)]
+pub struct BlockSlot {
+    pub authority: AuthorityIndex,
+    pub round: Round,
+}
+
+#[allow(unused)]
+impl BlockSlot {
+    pub fn new(authority: AuthorityIndex, round: Round) -> Self {
+        Self { authority, round }
+    }
+}
+
+impl fmt::Debug for BlockSlot {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl fmt::Display for BlockSlot {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", format_authority_round(self))
+    }
 }
 
 // TODO: add basic verification for BlockRef and BlockDigest computations.

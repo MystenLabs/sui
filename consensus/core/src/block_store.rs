@@ -4,8 +4,8 @@
 // TODO: replace with proper storage/interface code.
 
 use crate::{
-    block::{Block, BlockRef},
-    types::{AuthorityRound, Round},
+    block::{Block, BlockRef, BlockSlot},
+    types::Round,
 };
 
 pub struct BlockStore {}
@@ -16,7 +16,7 @@ impl BlockStore {
         unimplemented!()
     }
 
-    pub fn get_blocks_at_authority_round(&self, _author_round: AuthorityRound) -> Vec<Block> {
+    pub fn get_blocks_at_block_slot(&self, _block_slot: BlockSlot) -> Vec<Block> {
         unimplemented!()
     }
 

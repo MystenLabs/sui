@@ -70,10 +70,10 @@ mod tests {
         let committee = Committee::new_for_test(0, vec![1, 1, 1, 1]).0;
         let mut aggregator = StakeAggregator::<QuorumThreshold>::new();
 
-        assert!(!aggregator.add(AuthorityIndex::new(0), &committee));
-        assert!(!aggregator.add(AuthorityIndex::new(1), &committee));
-        assert!(aggregator.add(AuthorityIndex::new(2), &committee));
-        assert!(aggregator.add(AuthorityIndex::new(3), &committee));
+        assert!(!aggregator.add(AuthorityIndex::new_for_test(0), &committee));
+        assert!(!aggregator.add(AuthorityIndex::new_for_test(1), &committee));
+        assert!(aggregator.add(AuthorityIndex::new_for_test(2), &committee));
+        assert!(aggregator.add(AuthorityIndex::new_for_test(3), &committee));
     }
 
     #[test]
@@ -81,8 +81,8 @@ mod tests {
         let committee = Committee::new_for_test(0, vec![1, 1, 1, 1]).0;
         let mut aggregator = StakeAggregator::<ValidityThreshold>::new();
 
-        assert!(!aggregator.add(AuthorityIndex::new(0), &committee));
-        assert!(aggregator.add(AuthorityIndex::new(1), &committee));
+        assert!(!aggregator.add(AuthorityIndex::new_for_test(0), &committee));
+        assert!(aggregator.add(AuthorityIndex::new_for_test(1), &committee));
     }
 
     #[test]
@@ -90,14 +90,14 @@ mod tests {
         let committee = Committee::new_for_test(0, vec![1, 1, 1, 1]).0;
         let mut aggregator = StakeAggregator::<ValidityThreshold>::new();
 
-        assert!(!aggregator.add(AuthorityIndex::new(0), &committee));
-        assert!(aggregator.add(AuthorityIndex::new(1), &committee));
+        assert!(!aggregator.add(AuthorityIndex::new_for_test(0), &committee));
+        assert!(aggregator.add(AuthorityIndex::new_for_test(1), &committee));
 
         // clear the aggregator
         aggregator.clear();
 
         // now add them again
-        assert!(!aggregator.add(AuthorityIndex::new(0), &committee));
-        assert!(aggregator.add(AuthorityIndex::new(1), &committee));
+        assert!(!aggregator.add(AuthorityIndex::new_for_test(0), &committee));
+        assert!(aggregator.add(AuthorityIndex::new_for_test(1), &committee));
     }
 }

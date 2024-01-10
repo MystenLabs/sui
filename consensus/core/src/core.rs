@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::block::{Block, BlockAPI, BlockRef, BlockV1};
-use crate::context::Context;
-use crate::threshold_clock::ThresholdClock;
-use crate::types::Round;
-
 use std::sync::Arc;
+
+use crate::{
+    block::{Block, BlockAPI, BlockRef, BlockV1},
+    context::Context,
+    threshold_clock::ThresholdClock,
+    types::Round,
+};
 
 use mysten_metrics::monitored_scope;
 
@@ -91,7 +93,7 @@ mod test {
         let (committee, _) = Committee::new_for_test(0, vec![1, 1, 1, 1]);
         let metrics = test_metrics();
         let context = Arc::new(Context::new(
-            AuthorityIndex::new(0),
+            AuthorityIndex::new_for_test(0),
             committee,
             Parameters::default(),
             ProtocolConfig::get_for_min_version(),
