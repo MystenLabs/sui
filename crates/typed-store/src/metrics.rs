@@ -22,17 +22,6 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
 ];
 
-const BYTES_BUCKETS: &[f64] = &[
-    1.,
-    10.,
-    100.,
-    1024., // 1k
-    1024. * 10.,
-    1024. * 100.,
-    1024. * 1024., // 1M
-    1024. * 1024. * 10.,
-];
-
 #[derive(Debug, Clone)]
 // A struct for sampling based on number of operations or duration.
 // Sampling happens if the duration expires and after number of operations
@@ -283,7 +272,9 @@ impl OperationMetrics {
                 "rocksdb_iter_bytes",
                 "Rocksdb iter size in bytes",
                 &["cf_name"],
-                BYTES_BUCKETS.to_vec(),
+                prometheus::exponential_buckets(1.0, 4.0, 15)
+                    .unwrap()
+                    .to_vec(),
                 registry,
             )
             .unwrap(),
@@ -306,7 +297,9 @@ impl OperationMetrics {
                 "rocksdb_get_bytes",
                 "Rocksdb get call returned data size in bytes",
                 &["cf_name"],
-                BYTES_BUCKETS.to_vec(),
+                prometheus::exponential_buckets(1.0, 4.0, 15)
+                    .unwrap()
+                    .to_vec(),
                 registry
             )
             .unwrap(),
@@ -322,7 +315,9 @@ impl OperationMetrics {
                 "rocksdb_multiget_bytes",
                 "Rocksdb multiget call returned data size in bytes",
                 &["cf_name"],
-                BYTES_BUCKETS.to_vec(),
+                prometheus::exponential_buckets(1.0, 4.0, 15)
+                    .unwrap()
+                    .to_vec(),
                 registry,
             )
             .unwrap(),
@@ -338,7 +333,9 @@ impl OperationMetrics {
                 "rocksdb_put_bytes",
                 "Rocksdb put call puts data size in bytes",
                 &["cf_name"],
-                BYTES_BUCKETS.to_vec(),
+                prometheus::exponential_buckets(1.0, 4.0, 15)
+                    .unwrap()
+                    .to_vec(),
                 registry,
             )
             .unwrap(),
@@ -369,7 +366,9 @@ impl OperationMetrics {
                 "rocksdb_batch_commit_bytes",
                 "Rocksdb schema batch commit size in bytes",
                 &["db_name"],
-                BYTES_BUCKETS.to_vec(),
+                prometheus::exponential_buckets(1.0, 4.0, 15)
+                    .unwrap()
+                    .to_vec(),
                 registry,
             )
             .unwrap(),
