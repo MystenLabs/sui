@@ -460,7 +460,7 @@ impl ExecutionCacheRead for InMemoryCache {
         assert_eq!(results.len(), fetch_digests.len());
 
         for (i, result) in fetch_indices.into_iter().zip(multiget_results.into_iter()) {
-            results[i] = result.map(|r| Arc::new(r));
+            results[i] = result.map(Arc::new);
         }
 
         Ok(results)

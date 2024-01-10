@@ -4,7 +4,6 @@
 use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_core::authority::EffectsNotifyRead;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_macros::sim_test;

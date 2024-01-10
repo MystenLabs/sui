@@ -7,7 +7,6 @@ use rand::distributions::Distribution;
 use std::ops::Deref;
 use std::time::{Duration, SystemTime};
 use sui_config::node::OverloadThresholdConfig;
-use sui_core::authority::EffectsNotifyRead;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::{register_fail_point_async, sim_test};

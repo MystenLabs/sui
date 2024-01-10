@@ -286,6 +286,8 @@ where
         Ok(async move {
             let digests = [tx_digest];
             let effects_await = cache_reader.notify_read_executed_effects(&digests);
+            // let-and-return necessary to satisfy borrow checker.
+            #[allow(clippy::let_and_return)]
             let res = match select(ticket, effects_await.boxed()).await {
                 Either::Left((quorum_driver_response, _)) => Ok(quorum_driver_response),
                 Either::Right((_, unfinished_quorum_driver_task)) => {

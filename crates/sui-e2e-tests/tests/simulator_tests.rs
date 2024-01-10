@@ -11,7 +11,6 @@ use rand::{
     Rng,
 };
 use std::collections::{HashMap, HashSet};
-use sui_core::authority::EffectsNotifyRead;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use tokio::time::{sleep, Duration, Instant};

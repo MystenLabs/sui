@@ -76,6 +76,9 @@ pub enum StopReason {
 
 pub struct CheckpointExecutor {
     mailbox: broadcast::Receiver<VerifiedCheckpoint>,
+    // TODO: AuthorityState is only needed because we have to call deprecated_insert_finalized_transactions
+    // once that code is fully deprecated we can remove this
+    state: Arc<AuthorityState>,
     checkpoint_store: Arc<CheckpointStore>,
     cache_reader: Arc<dyn ExecutionCacheRead>,
     tx_manager: Arc<TransactionManager>,
@@ -95,6 +98,7 @@ impl CheckpointExecutor {
     ) -> Self {
         Self {
             mailbox,
+            state: state.clone(),
             checkpoint_store,
             cache_reader: state.get_cache_reader().clone(),
             tx_manager: state.transaction_manager().clone(),
@@ -112,6 +116,7 @@ impl CheckpointExecutor {
     ) -> Self {
         Self {
             mailbox,
+            state: state.clone(),
             checkpoint_store,
             cache_reader: state.get_cache_reader().clone(),
             tx_manager: state.transaction_manager().clone(),
@@ -390,11 +395,13 @@ impl CheckpointExecutor {
         let cache_reader = self.cache_reader.clone();
         let tx_manager = self.tx_manager.clone();
         let accumulator = self.accumulator.clone();
+        let state = self.state.clone();
 
         pending.push_back(spawn_monitored_task!(async move {
             let epoch_store = epoch_store.clone();
             while let Err(err) = execute_checkpoint(
                 checkpoint.clone(),
+                &state,
                 cache_reader.as_ref(),
                 checkpoint_store.clone(),
                 epoch_store.clone(),
@@ -449,6 +456,7 @@ impl CheckpointExecutor {
             )
             .expect("Enqueueing change_epoch tx cannot fail");
         handle_execution_effects(
+            &self.state,
             vec![execution_digests],
             vec![change_epoch_tx_digest],
             checkpoint.clone(),
@@ -523,6 +531,7 @@ impl CheckpointExecutor {
                         .expect("Failed to get executed effects for finalizing checkpoint");
 
                     finalize_checkpoint(
+                        &self.state,
                         self.cache_reader.as_ref(),
                         self.checkpoint_store.clone(),
                         &all_tx_digests,
@@ -557,6 +566,7 @@ impl CheckpointExecutor {
 #[instrument(level = "debug", skip_all, fields(seq = ?checkpoint.sequence_number(), epoch = ?epoch_store.epoch()))]
 async fn execute_checkpoint(
     checkpoint: VerifiedCheckpoint,
+    state: &AuthorityState,
     cache_reader: &dyn ExecutionCacheRead,
     checkpoint_store: Arc<CheckpointStore>,
     epoch_store: Arc<AuthorityPerEpochStore>,
@@ -590,6 +600,7 @@ async fn execute_checkpoint(
         execution_digests,
         all_tx_digests.clone(),
         executable_txns,
+        state,
         cache_reader,
         checkpoint_store.clone(),
         epoch_store.clone(),
@@ -607,6 +618,7 @@ async fn execute_checkpoint(
 
 #[instrument(level = "error", skip_all, fields(seq = ?checkpoint.sequence_number(), epoch = ?epoch_store.epoch()))]
 async fn handle_execution_effects(
+    state: &AuthorityState,
     execution_digests: Vec<ExecutionDigests>,
     all_tx_digests: Vec<TransactionDigest>,
     checkpoint: VerifiedCheckpoint,
@@ -717,6 +729,7 @@ async fn handle_execution_effects(
                 // the change epoch tx, which is done after all other checkpoint execution
                 if checkpoint.end_of_epoch_data.is_none() {
                     finalize_checkpoint(
+                        state,
                         cache_reader,
                         checkpoint_store.clone(),
                         &all_tx_digests,
@@ -959,6 +972,7 @@ async fn execute_transactions(
     execution_digests: Vec<ExecutionDigests>,
     all_tx_digests: Vec<TransactionDigest>,
     executable_txns: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
+    state: &AuthorityState,
     cache_reader: &dyn ExecutionCacheRead,
     checkpoint_store: Arc<CheckpointStore>,
     epoch_store: Arc<AuthorityPerEpochStore>,
@@ -1029,6 +1043,7 @@ async fn execute_transactions(
         .enqueue_with_expected_effects_digest(executable_txns.clone(), &epoch_store)?;
 
     handle_execution_effects(
+        state,
         execution_digests,
         all_tx_digests,
         checkpoint.clone(),
@@ -1055,6 +1070,7 @@ async fn execute_transactions(
 
 #[instrument(level = "debug", skip_all)]
 fn finalize_checkpoint(
+    state: &AuthorityState,
     cache_reader: &dyn ExecutionCacheRead,
     checkpoint_store: Arc<CheckpointStore>,
     tx_digests: &[TransactionDigest],
@@ -1068,7 +1084,7 @@ fn finalize_checkpoint(
         epoch_store.insert_finalized_transactions(tx_digests, checkpoint.sequence_number)?;
     }
     // TODO remove once we no longer need to support this table for read RPC
-    authority_store.deprecated_insert_finalized_transactions(
+    state.database.deprecated_insert_finalized_transactions(
         tx_digests,
         epoch_store.epoch(),
         checkpoint.sequence_number,
