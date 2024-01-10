@@ -137,6 +137,7 @@ jobs:
           [ -f ./target/release/sui-faucet ] && mv ./target/release/sui-faucet ./target/release/sui-faucet-${os_type}
           [ -f ./target/release/sui-test-validator ] && mv ./target/release/sui-test-validator ./target/release/sui-test-validator-${os_type}
           [ -f ./target/release/sui-data-ingestion ] && mv ./target/release/sui-data-ingestion ./target/release/sui-data-ingestion-${os_type}
+          [ -f ./target/release/sui-bridge ] && mv ./target/release/sui-bridge ./target/release/sui-bridge-${os_type}
           [ -f ./external-crates/move/target/release/move-analyzer ] && mv ./external-crates/move/target/release/move-analyzer ./external-crates/move/target/release/move-analyzer-${os_type}
           tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}* ./external-crates/move/target/release/move-analyzer-${os_type}
           [[ ${{ env.sui_tag }} == *"mainnet"* ]] && aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz || true
