@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
-import type { SuiObjectChange } from '@mysten/sui.js/client';
+import type { ObjectOwner, SuiObjectChange } from '@mysten/sui.js/client';
 import type { Keypair } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import type { TransactionObjectInput } from '@mysten/sui.js/transactions';
@@ -180,9 +180,11 @@ export class ZkSendLink {
 			digest: string;
 		}[] = [];
 
-		dryRun.balanceChanges.map((balanceChange) =>
-			balances.push({ coinType: balanceChange.coinType, amount: BigInt(balanceChange.amount) }),
-		);
+		dryRun.balanceChanges.forEach((balanceChange) => {
+			if (BigInt(balanceChange.amount) > 0n && isOwner(balanceChange.owner, normalizedAddress)) {
+				balances.push({ coinType: balanceChange.coinType, amount: BigInt(balanceChange.amount) });
+			}
+		});
 
 		dryRun.objectChanges.forEach((objectChange) => {
 			if ('objectType' in objectChange) {
@@ -206,6 +208,20 @@ export class ZkSendLink {
 			balances,
 			nfts,
 		};
+	}
+
+	async claimAssets(
+		address: string,
+		options?: {
+			claimObjectsAddedAfterCreation?: boolean;
+			coinTypes?: string[];
+			objects?: string[];
+		},
+	) {
+		return this.#client.signAndExecuteTransactionBlock({
+			transactionBlock: await this.createClaimTransaction(address, options),
+			signer: this.#keypair,
+		});
 	}
 
 	createClaimTransaction(
@@ -318,23 +334,22 @@ function ownedAfterChange(
 	objectChange: SuiObjectChange,
 	address: string,
 ): objectChange is Extract<SuiObjectChange, { type: 'created' | 'transferred' }> {
-	if (
-		objectChange.type === 'transferred' &&
-		typeof objectChange.recipient === 'object' &&
-		'AddressOwner' in objectChange.recipient &&
-		normalizeSuiAddress(objectChange.recipient.AddressOwner) === address
-	) {
+	if (objectChange.type === 'transferred' && isOwner(objectChange.recipient, address)) {
 		return true;
 	}
 
-	if (
-		objectChange.type === 'created' &&
-		typeof objectChange.owner === 'object' &&
-		'AddressOwner' in objectChange.owner &&
-		normalizeSuiAddress(objectChange.owner.AddressOwner) === address
-	) {
+	if (objectChange.type === 'created' && isOwner(objectChange.owner, address)) {
 		return true;
 	}
 
 	return false;
+}
+
+function isOwner(owner: ObjectOwner, address: string): owner is { AddressOwner: string } {
+	return (
+		owner &&
+		typeof owner === 'object' &&
+		'AddressOwner' in owner &&
+		normalizeSuiAddress(owner.AddressOwner) === address
+	);
 }
