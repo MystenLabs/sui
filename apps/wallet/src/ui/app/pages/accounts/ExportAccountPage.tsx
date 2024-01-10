@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
-import { fromB64 } from '@mysten/sui.js/utils';
-import { bytesToHex } from '@noble/hashes/utils';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 

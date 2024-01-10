@@ -1280,7 +1280,7 @@ impl SuiClientCommands {
                     ));
                 }
 
-                if let Some(address) = address.clone() {
+                if let Some(address) = address {
                     let address = get_identity_address(Some(address), context)?;
                     if !context.config.keystore.addresses().contains(&address) {
                         return Err(anyhow!("Address {} not managed by wallet", address));
