@@ -1270,7 +1270,11 @@ fn type_(context: &mut Context, sp!(loc, ety_): E::Type) -> N::Type {
                 NT::Apply(None, tn, tys)
             }
         },
-        ET::Fun(_, _) => panic!("ICE only allowed in spec context"),
+        ET::Fun(tys, ty) => {
+            let tys = types(context, tys);
+            let ty = Box::new(type_(context, *ty));
+            NT::Fun(tys, ty)
+        }
     };
     sp(loc, ty_)
 }
