@@ -390,6 +390,12 @@ impl<'env> Context<'env> {
         })
     }
 
+    fn current_function_info(&self) -> Option<&FunctionInfo> {
+        let m = self.current_module.as_ref()?;
+        let f = self.current_function.as_ref()?;
+        Some(self.function_info(m, f))
+    }
+
     fn module_info(&self, m: &ModuleIdent) -> &ModuleInfo {
         self.modules.module(m)
     }
@@ -966,12 +972,10 @@ pub fn make_function_type(
     let public_for_testing =
         public_testing_visibility(context.env, context.current_package, f, finfo.entry);
     let is_testing_context = context.is_testing_context();
-    if true {
-        todo!("Check macro visibility persistence")
-    }
-    match finfo.visibility {
-        _ if is_testing_context && public_for_testing.is_some() => (),
-        Visibility::Internal if in_current_module => (),
+    let visibility = finfo.visibility;
+    let vis_valid = match visibility {
+        _ if is_testing_context && public_for_testing.is_some() => true,
+        Visibility::Internal if in_current_module => true,
         Visibility::Internal => {
             let internal_msg = format!(
                 "This function is internal to its module. Only '{}', '{}', and '{}' functions can \
@@ -983,16 +987,24 @@ pub fn make_function_type(
             visibility_error(
                 context,
                 public_for_testing,
-                (loc, format!("Invalid call to '{}::{}'", m, f)),
+                (loc, format!("Invalid call to internal function '{m}::{f}'")),
                 (defined_loc, internal_msg),
             );
+            false
         }
         Visibility::Package(loc)
             if in_current_module || context.current_module_shares_package_and_address(m) =>
         {
             context.record_current_module_as_friend(m, loc);
+            true
         }
         Visibility::Package(vis_loc) => {
+            let msg = format!(
+                "Invalid call to '{}' visible function '{}::{}'",
+                Visibility::PACKAGE,
+                m,
+                f
+            );
             let internal_msg = format!(
                 "A '{}' function can only be called from the same address and package as \
                 module '{}' in package '{}'. This call is from address '{}' in package '{}'",
@@ -1016,25 +1028,89 @@ pub fn make_function_type(
             visibility_error(
                 context,
                 public_for_testing,
-                (loc, format!("Invalid call to '{}::{}'", m, f)),
+                (loc, msg),
                 (vis_loc, internal_msg),
             );
+            false
         }
-        Visibility::Friend(_) if in_current_module || context.current_module_is_a_friend_of(m) => {}
+        Visibility::Friend(_) if in_current_module || context.current_module_is_a_friend_of(m) => {
+            true
+        }
         Visibility::Friend(vis_loc) => {
-            let internal_msg = format!(
-                "This function can only be called from a 'friend' of module '{}'",
-                m
+            let msg = format!(
+                "Invalid call to '{}' visible function '{m}::{f}'",
+                Visibility::FRIEND,
             );
+            let internal_msg =
+                format!("This function can only be called from a 'friend' of module '{m}'",);
             visibility_error(
                 context,
                 public_for_testing,
-                (loc, format!("Invalid call to '{}::{}'", m, f)),
+                (loc, msg),
                 (vis_loc, internal_msg),
             );
+            false
         }
-        Visibility::Public(_) => (),
+        Visibility::Public(_) => true,
     };
+    if context.in_macro_function && vis_valid {
+        let current_function_info = context.current_function_info().unwrap();
+        let current_vis = current_function_info.visibility;
+        match (visibility, current_vis) {
+            // public functions can always be called
+            (Visibility::Public(_), _) => (),
+
+            // Can call package vis from the same package
+            // Rely on package vis check below for checking the same package
+            (Visibility::Package(_), Visibility::Package(_)) => (),
+            (Visibility::Package(_), Visibility::Internal) => (),
+
+            // Can call internal functions from an internal macro
+            (Visibility::Internal, Visibility::Internal) => (),
+
+            // cannot call friend functions from macros
+            (Visibility::Friend(vis_loc), _) => {
+                let msg = format!(
+                    "Invalid call to '{friend}' visibile function '{m}::{f}'. \
+                    Cannot call '{friend}' functions cannot be called from macros",
+                    friend = Visibility::FRIEND
+                );
+                let vis_msg = format!("Declared '{}' here", Visibility::FRIEND);
+                context.env.add_diag(diag!(
+                    TypeSafety::Visibility,
+                    (loc, msg),
+                    (vis_loc, vis_msg),
+                ));
+            }
+
+            // Error cases
+            (Visibility::Package(vis_loc), Visibility::Public(_) | Visibility::Friend(_)) => {
+                let msg = format!(
+                    "Invalid call to '{pkg}' visibile function '{m}::{f}'. \
+                    Can call '{pkg}' functions only from '{pkg}' or internal macros",
+                    pkg = Visibility::PACKAGE
+                );
+                let vis_msg = format!("Declared '{}' here", Visibility::PACKAGE);
+                visibility_error(context, public_for_testing, (loc, msg), (vis_loc, vis_msg));
+            }
+            (
+                Visibility::Internal,
+                Visibility::Public(_) | Visibility::Friend(_) | Visibility::Package(_),
+            ) => {
+                let msg = format!(
+                    "Invalid call to internal function '{m}::{f}'. \
+                    Can call internal functions only from internal macros",
+                );
+                let callee_msg = "Declared internal here";
+                visibility_error(
+                    context,
+                    public_for_testing,
+                    (loc, msg),
+                    (defined_loc, callee_msg),
+                );
+            }
+        }
+    }
     ResolvedFunctionType {
         declared: defined_loc,
         macro_,
@@ -1044,6 +1120,7 @@ pub fn make_function_type(
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum PublicForTesting {
     /// The function is entry, so it can be called in unit tests
     Entry(Loc),
