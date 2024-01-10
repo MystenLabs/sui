@@ -91,7 +91,7 @@ mod test {
         let (committee, _) = Committee::new_for_test(0, vec![1, 1, 1, 1]);
         let metrics = test_metrics();
         let context = Arc::new(Context::new(
-            AuthorityIndex::new_for_test(0),
+            AuthorityIndex::new(0),
             committee,
             Parameters::default(),
             ProtocolConfig::get_for_min_version(),

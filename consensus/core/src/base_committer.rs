@@ -5,9 +5,9 @@ use crate::{
     block::{Block, BlockAPI, BlockRef},
     block_store::BlockStore,
     constants::{DEFAULT_WAVE_LENGTH, MINIMUM_WAVE_LENGTH},
+    leader_schedule::LeaderSchedule,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     types::{AuthorityRound, LeaderStatus, Round, WaveNumber},
-    utils::format_authority_round,
 };
 
 use std::{collections::HashMap, fmt::Display, sync::Arc};
@@ -46,6 +46,9 @@ impl Default for BaseCommitterOptions {
 pub struct BaseCommitter {
     /// The committee information
     committee: Arc<Committee>,
+    /// The consensus leader schedule to be used to resolve the leader for a
+    /// given round.
+    leader_schedule: LeaderSchedule,
     /// Keep all block data
     block_store: BlockStore,
     /// The options used by this committer
@@ -53,9 +56,14 @@ pub struct BaseCommitter {
 }
 
 impl BaseCommitter {
-    pub fn new(committee: Arc<Committee>, block_store: BlockStore) -> Self {
+    pub fn new(
+        committee: Arc<Committee>,
+        leader_schedule: LeaderSchedule,
+        block_store: BlockStore,
+    ) -> Self {
         Self {
             committee,
+            leader_schedule,
             block_store,
             options: BaseCommitterOptions::default(),
         }
@@ -102,7 +110,7 @@ impl BaseCommitter {
         }
 
         Some(AuthorityRound::new(
-            self.committee
+            self.leader_schedule
                 .elect_leader(round, self.options.leader_offset),
             round,
         ))
@@ -119,7 +127,7 @@ impl BaseCommitter {
         search_author_round: AuthorityRound,
         from: &Block,
     ) -> Option<BlockRef> {
-        if from.round() < search_author_round.round() {
+        if from.round() < search_author_round.round {
             return None;
         }
         for ancestor in from.ancestors() {
@@ -127,7 +135,7 @@ impl BaseCommitter {
                 return Some(*ancestor);
             }
             // Weak links may point to blocks with lower round numbers than strong links.
-            if ancestor.round() <= search_author_round.round() {
+            if ancestor.round <= search_author_round.round {
                 continue;
             }
             let ancestor = self
@@ -177,7 +185,7 @@ impl BaseCommitter {
 
             if is_vote {
                 tracing::trace!("[{self}] {reference} is a vote for {leader_block:?}");
-                if votes_stake_aggregator.add(reference.author(), &self.committee) {
+                if votes_stake_aggregator.add(reference.author, &self.committee) {
                     return true;
                 }
             } else {
@@ -197,7 +205,7 @@ impl BaseCommitter {
 
         // Get all blocks that could be potential certificates for the target leader. These blocks
         // are in the decision round of the target leader and are linked to the anchor.
-        let wave = self.wave_number(leader.round());
+        let wave = self.wave_number(leader.round);
         let decision_round = self.decision_round(wave);
         let potential_certificates = self.block_store.linked_to_round(anchor, decision_round);
 
@@ -232,15 +240,15 @@ impl BaseCommitter {
 
         let mut blame_stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
         for voting_block in &voting_blocks {
-            let voter = voting_block.reference().author();
+            let voter = voting_block.reference().author;
             if voting_block
                 .ancestors()
                 .iter()
-                .all(|ancestor| ancestor.author() != leader)
+                .all(|ancestor| ancestor.author != leader)
             {
                 tracing::trace!(
                     "[{self}] {voting_block:?} is a blame for leader {}",
-                    format_authority_round(leader, voting_round - 1)
+                    AuthorityRound::new(leader, voting_round - 1)
                 );
                 if blame_stake_aggregator.add(voter, &self.committee) {
                     return true;
@@ -274,7 +282,7 @@ impl BaseCommitter {
         let mut certificate_stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
         let mut all_votes = HashMap::new();
         for decision_block in &decision_blocks {
-            let authority = decision_block.reference().author();
+            let authority = decision_block.reference().author;
             if self.is_certificate(decision_block, leader_block, &mut all_votes) {
                 tracing::trace!(
                     "[{self}] {decision_block:?} is a certificate for leader {leader_block:?}"
@@ -293,7 +301,7 @@ impl BaseCommitter {
 
     /// Apply the indirect decision rule to the specified leader to see whether
     /// we can indirect-commit or indirect-skip it.
-    #[tracing::instrument(skip_all, fields(leader = %format_authority_round(leader.authority(), leader.round())))]
+    #[tracing::instrument(skip_all, fields(leader = %leader))]
     pub fn try_indirect_decide<'a>(
         &self,
         leader: AuthorityRound,
@@ -301,13 +309,10 @@ impl BaseCommitter {
     ) -> LeaderStatus {
         // The anchor is the first committed leader with round higher than the decision round of the
         // target leader. We must stop the iteration upon encountering an undecided leader.
-        let anchors = leaders.filter(|x| leader.round() + self.options.wave_length <= x.round());
+        let anchors = leaders.filter(|x| leader.round + self.options.wave_length <= x.round());
 
         for anchor in anchors {
-            tracing::trace!(
-                "[{self}] Trying to indirect-decide {} using anchor {anchor}",
-                format_authority_round(leader.authority(), leader.round()),
-            );
+            tracing::trace!("[{self}] Trying to indirect-decide {leader} using anchor {anchor}",);
             match anchor {
                 LeaderStatus::Commit(anchor) => {
                     return self.decide_leader_from_anchor(anchor, leader);
@@ -322,19 +327,19 @@ impl BaseCommitter {
 
     /// Apply the direct decision rule to the specified leader to see whether we
     /// can direct-commit or direct-skip it.
-    #[tracing::instrument(skip_all, fields(leader = %format_authority_round(leader.authority(), leader.round())))]
+    #[tracing::instrument(skip_all, fields(leader = %leader))]
     pub fn try_direct_decide(&self, leader: AuthorityRound) -> LeaderStatus {
         // Check whether the leader has enough blame. That is, whether there are 2f+1 non-votes
         // for that leader (which ensure there will never be a certificate for that leader).
-        let voting_round = leader.round() + 1;
-        if self.enough_leader_blame(voting_round, leader.authority()) {
+        let voting_round = leader.round + 1;
+        if self.enough_leader_blame(voting_round, leader.authority) {
             return LeaderStatus::Skip(leader);
         }
 
         // Check whether the leader(s) has enough support. That is, whether there are 2f+1
         // certificates over the leader. Note that there could be more than one leader block
         // (created by Byzantine leaders).
-        let wave = self.wave_number(leader.round());
+        let wave = self.wave_number(leader.round);
         let decision_round = self.decision_round(wave);
         let leader_blocks = self.block_store.get_blocks_at_authority_round(leader);
         let mut leaders_with_enough_support: Vec<_> = leader_blocks
@@ -346,10 +351,7 @@ impl BaseCommitter {
         // There can be at most one leader with enough support for each round, otherwise it means
         // the BFT assumption is broken.
         if leaders_with_enough_support.len() > 1 {
-            panic!(
-                "[{self}] More than one certified block for {}",
-                format_authority_round(leader.authority(), leader.round())
-            )
+            panic!("[{self}] More than one certified block for {leader}")
         }
 
         leaders_with_enough_support

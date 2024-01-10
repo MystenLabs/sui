@@ -3,7 +3,7 @@
 
 use crate::{
     block::{Block, BlockAPI},
-    utils::{format_authority_index, format_authority_round},
+    utils::format_authority_round,
 };
 
 use serde::{Deserialize, Serialize};
@@ -35,8 +35,8 @@ impl LeaderStatus {
     pub fn round(&self) -> Round {
         match self {
             Self::Commit(block) => block.round(),
-            Self::Skip(leader) => leader.round(),
-            Self::Undecided(leader) => leader.round(),
+            Self::Skip(leader) => leader.round,
+            Self::Undecided(leader) => leader.round,
         }
     }
 }
@@ -45,38 +45,22 @@ impl Display for LeaderStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Commit(block) => write!(f, "Commit({})", block.reference()),
-            Self::Skip(leader) => write!(
-                f,
-                "Skip({})",
-                format_authority_round(leader.authority, leader.round)
-            ),
-            Self::Undecided(leader) => write!(
-                f,
-                "Undecided({})",
-                format_authority_round(leader.authority, leader.round)
-            ),
+            Self::Skip(leader) => write!(f, "Skip({leader})"),
+            Self::Undecided(leader) => write!(f, "Undecided({leader})"),
         }
     }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Default, Hash)]
 pub struct AuthorityRound {
-    authority: AuthorityIndex,
-    round: Round,
+    pub authority: AuthorityIndex,
+    pub round: Round,
 }
 
 #[allow(unused)]
 impl AuthorityRound {
     pub fn new(authority: AuthorityIndex, round: Round) -> Self {
         Self { authority, round }
-    }
-
-    pub fn round(&self) -> Round {
-        self.round
-    }
-
-    pub fn authority(&self) -> AuthorityIndex {
-        self.authority
     }
 }
 
@@ -88,15 +72,6 @@ impl fmt::Debug for AuthorityRound {
 
 impl fmt::Display for AuthorityRound {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.authority.value() < 26 {
-            write!(
-                f,
-                "{}{}",
-                format_authority_index(self.authority),
-                self.round
-            )
-        } else {
-            write!(f, "[{:02}]{}", self.authority, self.round)
-        }
+        write!(f, "{}", format_authority_round(self))
     }
 }

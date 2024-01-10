@@ -83,7 +83,7 @@ mod tests {
         let committee = Committee::new_for_test(0, vec![1, 1, 1, 1]).0;
         let metrics = test_metrics();
         let context = Arc::new(Context::new(
-            AuthorityIndex::new_for_test(0),
+            AuthorityIndex::new(0),
             committee,
             Parameters::default(),
             ProtocolConfig::get_for_min_version(),
@@ -92,49 +92,49 @@ mod tests {
         let mut aggregator = ThresholdClock::new(0, context);
 
         aggregator.add_block(BlockRef::new_test(
-            AuthorityIndex::new_for_test(0),
+            AuthorityIndex::new(0),
             0,
             BlockDigest::default(),
         ));
         assert_eq!(aggregator.get_round(), 0);
         aggregator.add_block(BlockRef::new_test(
-            AuthorityIndex::new_for_test(1),
+            AuthorityIndex::new(1),
             0,
             BlockDigest::default(),
         ));
         assert_eq!(aggregator.get_round(), 0);
         aggregator.add_block(BlockRef::new_test(
-            AuthorityIndex::new_for_test(2),
+            AuthorityIndex::new(2),
             0,
             BlockDigest::default(),
         ));
         assert_eq!(aggregator.get_round(), 1);
         aggregator.add_block(BlockRef::new_test(
-            AuthorityIndex::new_for_test(0),
+            AuthorityIndex::new(0),
             1,
             BlockDigest::default(),
         ));
         assert_eq!(aggregator.get_round(), 1);
         aggregator.add_block(BlockRef::new_test(
-            AuthorityIndex::new_for_test(3),
+            AuthorityIndex::new(3),
             1,
             BlockDigest::default(),
         ));
         assert_eq!(aggregator.get_round(), 1);
         aggregator.add_block(BlockRef::new_test(
-            AuthorityIndex::new_for_test(1),
+            AuthorityIndex::new(1),
             2,
             BlockDigest::default(),
         ));
         assert_eq!(aggregator.get_round(), 2);
         aggregator.add_block(BlockRef::new_test(
-            AuthorityIndex::new_for_test(1),
+            AuthorityIndex::new(1),
             1,
             BlockDigest::default(),
         ));
         assert_eq!(aggregator.get_round(), 2);
         aggregator.add_block(BlockRef::new_test(
-            AuthorityIndex::new_for_test(2),
+            AuthorityIndex::new(2),
             5,
             BlockDigest::default(),
         ));

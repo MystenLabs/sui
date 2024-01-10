@@ -3,7 +3,7 @@
 
 use crate::{
     types::{AuthorityRound, Round},
-    utils::format_authority_index,
+    utils::format_authority_round,
 };
 
 use enum_dispatch::enum_dispatch;
@@ -50,18 +50,21 @@ impl Eq for Block {}
 
 impl fmt::Debug for Block {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "Block {:?} {{", self.reference())?;
+        write!(
+            f,
+            "ancestors({})={:?},",
+            self.ancestors().len(),
+            self.ancestors()
+        )?;
+        // TODO: add printing of transactions.
+        writeln!(f, "}}")
     }
 }
 
 impl fmt::Display for Block {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:[", self.reference())?;
-        for ancestor in self.ancestors() {
-            write!(f, "{},", ancestor)?;
-        }
-        write!(f, "]")
-        // TODO: add printing of transactions.
+        write!(f, "{}", self.reference())
     }
 }
 
@@ -139,18 +142,6 @@ impl BlockRef {
             digest,
         }
     }
-
-    pub fn round(&self) -> Round {
-        self.round
-    }
-
-    pub fn author(&self) -> AuthorityIndex {
-        self.author
-    }
-
-    pub fn digest(&self) -> BlockDigest {
-        self.digest
-    }
 }
 
 impl From<BlockRef> for AuthorityRound {
@@ -173,11 +164,11 @@ impl fmt::Debug for BlockRef {
 
 impl fmt::Display for BlockRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.author.value() < 26 {
-            write!(f, "{}{}", format_authority_index(self.author), self.round)
-        } else {
-            write!(f, "[{:02}]{}", self.author, self.round)
-        }
+        write!(
+            f,
+            "{}",
+            format_authority_round(&AuthorityRound::from(*self))
+        )
     }
 }
 

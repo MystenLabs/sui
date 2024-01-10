@@ -12,6 +12,7 @@ mod core;
 mod core_thread;
 mod dag_state;
 mod error;
+mod leader_schedule;
 mod metrics;
 mod stake_aggregator;
 mod storage;
