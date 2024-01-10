@@ -365,6 +365,24 @@ pub fn get_ews_for_tx(tx: &TransactionWithEffects, ew_ids: &Vec<UniqueId>) -> Ha
         .collect()
 }
 
+pub fn get_ews_for_tx_results(
+    tx_results: &TransactionWithResults,
+    ew_ids: &Vec<UniqueId>,
+) -> HashSet<UniqueId> {
+    // get deleted and written objects
+    let rw_set: Vec<_> = tx_results
+        .deleted
+        .keys()
+        .chain(tx_results.written.keys())
+        .cloned()
+        .collect();
+
+    rw_set
+        .into_iter()
+        .map(|obj_id| get_ew_owner_for_object(obj_id, ew_ids))
+        .collect()
+}
+
 pub trait WritableObjectStore {
     fn insert(&self, k: ObjectID, v: (ObjectRef, Object)) -> Option<(ObjectRef, Object)>;
 
