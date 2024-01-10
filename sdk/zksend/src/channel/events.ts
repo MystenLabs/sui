@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { Output } from 'valibot';
-import { literal, object, string, union, uuid } from 'valibot';
+import { literal, object, optional, string, union, uuid } from 'valibot';
 
 export type ZkSendSignPersonalMessageResponse = Output<typeof ZkSendSignPersonalMessageResponse>;
 
@@ -46,9 +46,9 @@ export const ZkSendRequestData = union([
 export const ZkSendRequest = object({
 	id: string([uuid()]),
 	origin: string(),
-	name: string(),
+	name: optional(string()),
 	type: ZkSendRequestType,
-	data: ZkSendRequestData,
+	data: optional(ZkSendRequestData),
 });
 export interface ZkSendRequestTypes extends Record<string, Record<string, string>> {
 	// eslint-disable-next-line @typescript-eslint/ban-types
