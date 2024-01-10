@@ -246,7 +246,7 @@ async fn test_private_keys_import_export() -> Result<(), anyhow::Error> {
         );
         assert_eq!(kp, kp_from_hex);
 
-        let kp_from_base64 = SuiKeyPair::decode_base64(&private_key_base64).unwrap();
+        let kp_from_base64 = SuiKeyPair::decode_base64(private_key_base64).unwrap();
         assert_eq!(kp, kp_from_base64);
 
         let addr = SuiAddress::from_str(address).unwrap();
@@ -255,8 +255,7 @@ async fn test_private_keys_import_export() -> Result<(), anyhow::Error> {
 
         // Export output shows the private key in Bech32
         let output = KeyToolCommand::Export {
-            address: Some(addr),
-            alias: None,
+            key_identity: KeyIdentity::Address(addr),
         }
         .execute(&mut keystore)
         .await?;
