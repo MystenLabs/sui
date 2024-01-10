@@ -18,6 +18,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::BTreeMap;
 use sui_types::execution::DynamicallyLoadedObjectMetadata;
 use tokio::sync::OwnedMutexGuard;
+use typed_store::TypedStoreError;
 
 use crate::mutex_table::MutexTable;
 use crate::sharded_lru::ShardedLruCache;
@@ -1133,20 +1134,21 @@ impl IndexStore {
         &self,
         object: ObjectID,
         cursor: Option<ObjectID>,
-    ) -> SuiResult<impl Iterator<Item = (ObjectID, DynamicFieldInfo)> + '_> {
+    ) -> SuiResult<impl Iterator<Item = Result<(ObjectID, DynamicFieldInfo), TypedStoreError>> + '_>
+    {
         debug!(?object, "get_dynamic_fields");
         let iter_lower_bound = (object, ObjectID::ZERO);
         let iter_upper_bound = (object, ObjectID::MAX);
         Ok(self
             .tables
             .dynamic_field_index
-            .iter_with_bounds(Some(iter_lower_bound), Some(iter_upper_bound))
+            .safe_iter_with_bounds(Some(iter_lower_bound), Some(iter_upper_bound))
             // The object id 0 is the smallest possible
             .skip_to(&(object, cursor.unwrap_or(ObjectID::ZERO)))?
             // skip an extra b/c the cursor is exclusive
             .skip(usize::from(cursor.is_some()))
-            .take_while(move |((object_owner, _), _)| (object_owner == &object))
-            .map(|((_, c), object_info)| (c, object_info)))
+            .take_while(move |result| result.is_err() || (result.as_ref().unwrap().0 .0 == object))
+            .map_ok(|((_, c), object_info)| (c, object_info)))
     }
 
     pub fn get_dynamic_field_object_id(

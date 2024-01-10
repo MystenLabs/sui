@@ -69,6 +69,13 @@ where
     /// Same as `iter` but performs status check.
     fn safe_iter(&'a self) -> Self::SafeIterator;
 
+    /// Returns an iterator visiting each key-value pair in the map.
+    fn safe_iter_with_bounds(
+        &'a self,
+        lower_bound: Option<K>,
+        upper_bound: Option<K>,
+    ) -> Self::SafeIterator;
+
     // Same as `range_iter` but performs status check.
     fn safe_range_iter(&'a self, range: impl RangeBounds<K>) -> Self::SafeIterator;
 

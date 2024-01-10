@@ -195,10 +195,11 @@ impl AuthorityStorePruner {
         if !object_tombstones_to_prune.is_empty() {
             let mut object_keys_to_delete = vec![];
             for ObjectKey(object_id, seq_number) in object_tombstones_to_prune {
-                for (object_key, _object_value) in perpetual_db.objects.iter_with_bounds(
+                for result in perpetual_db.objects.safe_iter_with_bounds(
                     Some(ObjectKey(object_id, VersionNumber::MIN)),
                     Some(ObjectKey(object_id, seq_number.next())),
                 ) {
+                    let (object_key, _) = result?;
                     assert_eq!(object_key.0, object_id);
                     object_keys_to_delete.push(object_key);
                 }
