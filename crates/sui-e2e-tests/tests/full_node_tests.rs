@@ -1398,7 +1398,7 @@ async fn test_full_node_run_with_range_checkpoint() -> Result<(), anyhow::Error>
     }));
 
     // sleep some time to ensure we don't see further ccheckpoints executed
-    let _ = tokio::time::sleep(tokio::time::Duration::from_secs(15));
+    tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
 
     // verify again execution has not progressed beyond expectations
     assert!(test_cluster.fullnode_handle.sui_node.with(|node| {
@@ -1444,7 +1444,7 @@ async fn test_full_node_run_with_range_epoch() -> Result<(), anyhow::Error> {
         .with(|node| node.current_epoch_for_testing() == stop_after_epoch + 1));
 
     // epoch duration is 10s for testing, lets sleep long enough that epoch would normally progress
-    let _ = tokio::time::sleep(tokio::time::Duration::from_secs(15));
+    tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
 
     // ensure we are still at epoch + 1
     assert!(test_cluster
