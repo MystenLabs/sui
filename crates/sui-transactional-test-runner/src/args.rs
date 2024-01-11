@@ -60,6 +60,8 @@ pub struct SuiInitArgs {
     pub reference_gas_price: Option<u64>,
     #[clap(long = "default-gas-price")]
     pub default_gas_price: Option<u64>,
+    #[clap(long = "env-vars", num_args(1..))]
+    pub env_vars: Option<Vec<String>>,
 }
 
 #[derive(Debug, clap::Parser)]

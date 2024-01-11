@@ -309,8 +309,8 @@ pub mod tests {
     };
     use rand::{rngs::StdRng, SeedableRng};
     use simulacrum::Simulacrum;
-    use std::sync::Arc;
     use std::time::Duration;
+    use std::{collections::BTreeMap, sync::Arc};
 
     async fn prep_cluster() -> (ConnectionConfig, ExecutorCluster) {
         let rng = StdRng::from_seed([12; 32]);
@@ -326,6 +326,7 @@ pub mod tests {
                 connection_config,
                 DEFAULT_INTERNAL_DATA_SOURCE_PORT,
                 Arc::new(sim),
+                BTreeMap::new(),
             )
             .await,
         )

@@ -6,6 +6,7 @@ use crate::config::Limits;
 use crate::config::ServerConfig;
 use crate::config::ServiceConfig;
 use crate::server::graphiql_server::start_graphiql_server;
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -79,11 +80,17 @@ pub async fn start_cluster(
     }
 }
 
+// TODO (wlmyng) what's the diff between this and start_cluster? This yields an executor to do e2e tests, start_cluster only creates
 pub async fn serve_executor(
     graphql_connection_config: ConnectionConfig,
     internal_data_source_rpc_port: u16,
     executor: Arc<dyn NodeStateGetter>,
+    env_vars: BTreeMap<String, String>,
 ) -> ExecutorCluster {
+    for (k, v) in env_vars {
+        std::env::set_var(k, v);
+    }
+
     let db_url = graphql_connection_config.db_url.clone();
 
     let executor_server_url: SocketAddr = format!("127.0.0.1:{}", internal_data_source_rpc_port)
@@ -94,7 +101,8 @@ pub async fn serve_executor(
         sui_rest_api::start_service(executor_server_url, executor, Some("/rest".to_owned())).await;
     });
 
-    // Starts indexer
+    // set the env variables
+
     let (pg_store, pg_handle) = start_test_indexer_v2(
         Some(db_url),
         format!("http://{}", executor_server_url),

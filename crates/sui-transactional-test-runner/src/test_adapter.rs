@@ -204,6 +204,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             custom_validator_account,
             reference_gas_price,
             default_gas_price,
+            env_vars,
         ) = match task_opt.map(|t| t.command) {
             Some((
                 InitCommand { named_addresses },
@@ -216,6 +217,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     custom_validator_account,
                     reference_gas_price,
                     default_gas_price,
+                    env_vars,
                 },
             )) => {
                 let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -243,6 +245,19 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 if reference_gas_price.is_some() && !simulator {
                     panic!("Can only set reference gas price in simulator mode");
                 }
+
+                let mut env_vars_map = BTreeMap::new();
+
+                if let Some(env_vars) = env_vars {
+                    for kv in env_vars {
+                        let parts: Vec<&str> = kv.splitn(2, '=').collect();
+                        if parts.len() == 2 {
+                            env_vars_map.insert(parts[0].to_string(), parts[1].to_string());
+                        } else {
+                            panic!("Invalid key-value pair: {}", kv);
+                        }
+                    }
+                }
                 (
                     map,
                     accounts,
@@ -251,6 +266,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     custom_validator_account,
                     reference_gas_price,
                     default_gas_price,
+                    env_vars_map,
                 )
             }
             None => {
@@ -263,6 +279,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     false,
                     None,
                     None,
+                    BTreeMap::new(),
                 )
             }
         };
@@ -285,6 +302,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 &protocol_config,
                 custom_validator_account,
                 reference_gas_price,
+                env_vars,
             )
             .await
         } else {
@@ -1807,6 +1825,7 @@ async fn init_sim_executor(
     protocol_config: &ProtocolConfig,
     custom_validator_account: bool,
     reference_gas_price: Option<u64>,
+    env_vars: BTreeMap<String, String>,
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
@@ -1876,6 +1895,7 @@ async fn init_sim_executor(
         ConnectionConfig::ci_integration_test_cfg(),
         DEFAULT_INTERNAL_DATA_SOURCE_PORT,
         Arc::new(read_replica),
+        env_vars,
     )
     .await;
 
