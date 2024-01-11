@@ -42,4 +42,4 @@ CREATE TABLE IF NOT EXISTS chaindata.TRANSACTION
     effects_json               JSON
 )
 PARTITION BY RANGE_BUCKET(epoch, GENERATE_ARRAY(0, 100000, 10))
-CLUSTER BY epoch, checkpoint, transaction_digest
+CLUSTER BY transaction_digest
