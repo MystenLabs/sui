@@ -80,7 +80,7 @@ pub async fn start_cluster(
     }
 }
 
-// TODO (wlmyng) what's the diff between this and start_cluster? This yields an executor to do e2e tests, start_cluster only creates
+/// Spins up a cluster and executor, typically for tests that require simulating transaction executions.
 pub async fn serve_executor(
     graphql_connection_config: ConnectionConfig,
     internal_data_source_rpc_port: u16,
@@ -100,8 +100,6 @@ pub async fn serve_executor(
     let executor_server_handle = tokio::spawn(async move {
         sui_rest_api::start_service(executor_server_url, executor, Some("/rest".to_owned())).await;
     });
-
-    // set the env variables
 
     let (pg_store, pg_handle) = start_test_indexer_v2(
         Some(db_url),
