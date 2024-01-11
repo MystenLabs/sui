@@ -148,7 +148,7 @@ impl UnitTestingConfig {
         let (files, comments_and_compiler_res) =
             Compiler::from_files(source_files, deps, addresses)
                 .set_flags(flags)
-                .run::<PASS_CFGIR>(false /* no_fail */)
+                .run::<PASS_CFGIR>()
                 .unwrap();
         let (_, compiler) =
             diagnostics::unwrap_or_report_diagnostics(&files, comments_and_compiler_res);
