@@ -5,6 +5,7 @@ mod object_store_trait;
 mod read_store;
 mod shared_in_memory_store;
 mod write_store;
+pub mod error;
 
 use crate::base_types::{TransactionDigest, VersionNumber};
 use crate::committee::EpochId;
