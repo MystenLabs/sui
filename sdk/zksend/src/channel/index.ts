@@ -5,10 +5,12 @@ import type { Output } from 'valibot';
 import { parse, safeParse } from 'valibot';
 
 import { withResolvers } from '../utils/withResolvers.js';
-import type { ZkSendRequestTypes, ZkSendResponsePayload, ZkSendResponseTypes } from './events.js';
+import type { ZkSendRequestData, ZkSendResponsePayload, ZkSendResponseTypes } from './events.js';
 import { ZkSendRequest, ZkSendResponse } from './events.js';
 
 export const DEFAULT_ZKSEND_ORIGIN = 'https://zksend.com';
+
+export { ZkSendRequest, ZkSendResponse };
 
 interface ZkSendPopupOptions {
 	origin?: string;
@@ -28,11 +30,10 @@ export class ZkSendPopup {
 		this.#name = name;
 	}
 
-	async createRequest<T extends keyof ZkSendResponseTypes>(
-		type: T,
-		data: ZkSendRequestTypes[T],
-	): Promise<ZkSendResponseTypes[T]> {
-		const { promise, resolve, reject } = withResolvers<ZkSendResponseTypes[T]>();
+	async createRequest<T extends ZkSendRequestData>(
+		request: T,
+	): Promise<ZkSendResponseTypes[T['type']]> {
+		const { promise, resolve, reject } = withResolvers<ZkSendResponseTypes[T['type']]>();
 
 		let popup: Window | null = null;
 
@@ -48,7 +49,7 @@ export class ZkSendPopup {
 			if (output.payload.type === 'reject') {
 				reject(new Error('User rejected the request'));
 			} else if (output.payload.type === 'resolve') {
-				resolve(output.payload.data as ZkSendResponseTypes[T]);
+				resolve(output.payload.data as ZkSendResponseTypes[T['type']]);
 			}
 		};
 
@@ -59,12 +60,14 @@ export class ZkSendPopup {
 
 		window.addEventListener('message', listener);
 
+		const { type, ...data } = request;
+
 		popup = window.open(
 			`${this.#origin}/dapp/${type}?${new URLSearchParams({
 				id: this.#id,
 				origin: window.origin,
 				name: this.#name,
-			})}${data ? `#${new URLSearchParams(data)}` : ''}`,
+			})}${data ? `#${new URLSearchParams(data as Record<string, string>)}` : ''}`,
 		);
 
 		if (!popup) {
@@ -95,12 +98,18 @@ export class ZkSendHost {
 	static fromUrl(url: string = window.location.href) {
 		const parsed = new URL(url);
 
+		const urlHashData = parsed.hash
+			? Object.fromEntries(new URLSearchParams(parsed.hash.slice(1)))
+			: {};
+
 		const request = parse(ZkSendRequest, {
 			id: parsed.searchParams.get('id'),
 			origin: parsed.searchParams.get('origin'),
 			name: parsed.searchParams.get('name'),
-			type: parsed.pathname.split('/').pop(),
-			data: parsed.hash ? Object.fromEntries(new URLSearchParams(parsed.hash.slice(1))) : {},
+			payload: {
+				type: parsed.pathname.split('/').pop(),
+				...urlHashData,
+			},
 		});
 
 		return new ZkSendHost(request);
