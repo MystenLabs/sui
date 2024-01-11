@@ -130,7 +130,9 @@ export class ZkSendLinkBuilder {
 			objectsToTransfer.push(gas);
 		}
 
-		txb.transferObjects(objectsToTransfer, address);
+		if (objectsToTransfer.length > 0) {
+			txb.transferObjects(objectsToTransfer, address);
+		}
 
 		return txb;
 	}
@@ -139,6 +141,7 @@ export class ZkSendLinkBuilder {
 		const txb = new TransactionBlock();
 		txb.setSender(this.#sender);
 		txb.setGasPayment([]);
+		txb.transferObjects([txb.gas], this.#keypair.toSuiAddress());
 
 		if (this.#mist) {
 			const allCoins = await this.#client.getCoins({
@@ -152,15 +155,15 @@ export class ZkSendLinkBuilder {
 			}
 
 			txb.transferObjects(
-				[txb.object(allCoins.data[0].coinObjectId)],
+				[allCoins.data[0].coinObjectId, ...this.#objects].map((id) => txb.object(id)),
+				this.#keypair.toSuiAddress(),
+			);
+		} else if (this.#objects.size > 0) {
+			txb.transferObjects(
+				[...this.#objects].map((id) => txb.object(id)),
 				this.#keypair.toSuiAddress(),
 			);
 		}
-
-		txb.transferObjects(
-			[...this.#objects].map((id) => txb.object(id)),
-			this.#keypair.toSuiAddress(),
-		);
 
 		const result = await this.#client.dryRunTransactionBlock({
 			transactionBlock: await txb.build({ client: this.#client }),
@@ -330,11 +333,13 @@ export class ZkSendLink {
 
 		if (this.#gasCoin && this.#creatorAddress) {
 			txb.transferObjects([txb.gas], this.#creatorAddress);
-		} else if (claimAll || options?.coinTypes?.includes(SUI_COIN_TYPE)) {
+		} else if (claimAll || coinTypes?.has(SUI_COIN_TYPE)) {
 			objectsToTransfer.push(txb.gas);
 		}
 
-		txb.transferObjects(objectsToTransfer, address);
+		if (objectsToTransfer.length > 0) {
+			txb.transferObjects(objectsToTransfer, address);
+		}
 
 		return txb;
 	}
