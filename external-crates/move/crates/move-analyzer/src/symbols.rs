@@ -523,7 +523,7 @@ fn type_to_ide_string(sp!(_, t): &Type) -> String {
         },
         Type_::Anything => "_".to_string(),
         Type_::Var(_) => "invalid type (var)".to_string(),
-        Type_::UnresolvedError => "invalid type (unresolved)".to_string(),
+        Type_::UnresolvedError => "unknown type (unresolved)".to_string(),
     }
 }
 
@@ -1598,7 +1598,6 @@ impl<'a> ParsingSymbolicator<'a> {
             P::Use::ModuleUse(mod_ident, mod_use) => {
                 let mod_ident_str = format!("{}", mod_ident);
                 let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
-                    debug_assert!(false);
                     return;
                 };
                 self.mod_name_symbol(&mod_ident.value.module, mod_defs, mod_ident_str.clone());
@@ -1608,7 +1607,6 @@ impl<'a> ParsingSymbolicator<'a> {
                 for (mod_name, mod_use) in uses {
                     let mod_ident_str = format!("{leading_name}::{mod_name}");
                     let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
-                        debug_assert!(false);
                         continue;
                     };
                     self.mod_name_symbol(mod_name, mod_defs, mod_ident_str.clone());
@@ -2322,7 +2320,6 @@ impl<'a> TypingSymbolicator<'a> {
     fn add_const_use_def(&mut self, module_ident: &ModuleIdent, use_name: &Symbol, use_pos: &Loc) {
         let mod_ident_str = format!("{}", module_ident.value);
         let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
-            debug_assert!(false);
             return;
         };
         // insert use of the const's module
@@ -2384,7 +2381,6 @@ impl<'a> TypingSymbolicator<'a> {
     fn add_fun_use_def(&mut self, module_ident: &ModuleIdent, use_name: &Symbol, use_pos: &Loc) {
         let mod_ident_str = format!("{}", module_ident.value);
         let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
-            debug_assert!(false);
             return;
         };
         // insert use of the functions's module
@@ -2433,7 +2429,6 @@ impl<'a> TypingSymbolicator<'a> {
     fn add_struct_use_def(&mut self, module_ident: &ModuleIdent, use_name: &Symbol, use_pos: &Loc) {
         let mod_ident_str = format!("{}", module_ident);
         let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
-            debug_assert!(false);
             return;
         };
         // insert use of the struct's module
@@ -2492,7 +2487,6 @@ impl<'a> TypingSymbolicator<'a> {
             return;
         };
         let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
-            debug_assert!(false);
             return;
         };
         if let Some(def) = mod_defs.structs.get(struct_name) {
@@ -5266,5 +5260,218 @@ fn module_access_test() {
         "module Symbols::M9",
         None,
         Some("A module doc comment\n"),
+    );
+}
+
+#[test]
+/// Tests if in presence of parsing errors for one module (M1), symbolication information will still
+/// be correctly constructed for another independent module (M2).
+fn parse_error_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/parse-error");
+
+    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/M2.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+
+    // struct def in the same file
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        2,
+        11,
+        "M2.move",
+        2,
+        11,
+        "M2.move",
+        "struct ParseError::M2::SomeStruct{\n\tsome_field: u64\n}",
+        Some((2, 11, "M2.move")),
+    );
+}
+
+#[test]
+/// Tests if in presence of parsing errors for one module (M1), partial symbolication information
+/// will still be correctly constructed for another dependent module (M2).
+fn parse_error_with_deps_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/parse-error-dep");
+
+    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/M2.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+
+    // function def in the same file
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        4,
+        15,
+        "M2.move",
+        4,
+        15,
+        "M2.move",
+        "public fun ParseErrorDep::M2::fun_call(): u64",
+        None,
+    );
+
+    // arg def of unknown type (unresolved from a non-parseable module)
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        1,
+        8,
+        29,
+        "M2.move",
+        8,
+        29,
+        "M2.move",
+        "s: unknown type (unresolved)",
+        None,
+    );
+}
+
+#[test]
+/// Tests if in presence of pre-typing (e.g. in naming) errors for one module (M1), symbolication
+/// information will still be correctly constructed for another independent module (M2).
+fn pretype_error_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/pre-type-error");
+
+    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/M2.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+
+    // struct def in the same file
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        2,
+        11,
+        "M2.move",
+        2,
+        11,
+        "M2.move",
+        "struct PreTypeError::M2::SomeStruct{\n\tsome_field: u64\n}",
+        Some((2, 11, "M2.move")),
+    );
+}
+
+#[test]
+/// Tests if in presence of pre-typing (e.g. in naming) errors for one module (M1), partial
+/// symbolication information will still be correctly constructed for another dependent module (M2)
+/// or even for a module with the error.
+fn pretype_error_with_deps_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/pre-type-error-dep");
+
+    let (symbols_opt, _) = get_symbols(path.as_path(), false).unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/M1.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+
+    // struct def in the file containing an error
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        2,
+        11,
+        "M1.move",
+        2,
+        11,
+        "M1.move",
+        "struct PreTypeErrorDep::M1::SomeStruct{\n\tsome_field: u64\n}",
+        Some((2, 11, "M1.move")),
+    );
+
+    // fun def in the file containing an error inside this fun body
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        12,
+        8,
+        "M1.move",
+        12,
+        8,
+        "M1.move",
+        "fun PreTypeErrorDep::M1::wrong(): address",
+        None,
+    );
+
+    let mut fpath = path.clone();
+    fpath.push("sources/M2.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+
+    // function def in the same file
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        4,
+        15,
+        "M2.move",
+        4,
+        15,
+        "M2.move",
+        "public fun PreTypeErrorDep::M2::fun_call(): u64",
+        None,
+    );
+
+    // arg def of type defined in a module containing an error
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        1,
+        8,
+        29,
+        "M2.move",
+        8,
+        29,
+        "M2.move",
+        "s: PreTypeErrorDep::M1::SomeStruct",
+        Some((2, 11, "M1.move")),
+    );
+    // function call (to a function defined in a module containing errors)
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        1,
+        5,
+        29,
+        "M2.move",
+        6,
+        15,
+        "M1.move",
+        "public fun PreTypeErrorDep::M1::foo(): u64",
+        None,
     );
 }

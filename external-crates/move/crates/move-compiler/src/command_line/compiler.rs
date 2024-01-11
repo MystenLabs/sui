@@ -307,13 +307,14 @@ impl<'a> Compiler<'a> {
         {
             compilation_env.add_custom_known_filters(filters, filter_attr_name)?;
         }
-        let (source_text, pprog_and_comments_res) =
+
+        let (source_text, pprog, comments) =
             parse_program(&mut compilation_env, maps, targets, deps)?;
-        let res: Result<_, Diagnostics> = pprog_and_comments_res.and_then(|(pprog, comments)| {
+
+        let res: Result<_, Diagnostics> =
             SteppedCompiler::new_at_parser(compilation_env, pre_compiled_lib, pprog)
                 .run::<TARGET>()
-                .map(|compiler| (comments, compiler))
-        });
+                .map(|compiler| (comments, compiler));
         Ok((source_text, res))
     }
 
@@ -422,7 +423,7 @@ macro_rules! ast_stepped_compilers {
                 }
 
                 pub fn run<const TARGET: Pass>(
-                    self
+                    self,
                 ) -> Result<SteppedCompiler<'a, TARGET>, Diagnostics> {
                     self.run_impl()
                 }
@@ -451,7 +452,7 @@ macro_rules! ast_stepped_compilers {
                 }
 
                 pub fn build(
-                    self
+                    self,
                 ) -> Result<(Vec<AnnotatedCompiledUnit>, Diagnostics), Diagnostics> {
                     let units = self.run::<PASS_COMPILATION>()?.into_compiled_units();
                     Ok(units)
@@ -851,6 +852,7 @@ fn run(
     until: Pass,
     mut result_check: impl FnMut(&PassResult, &CompilationEnv),
 ) -> Result<PassResult, Diagnostics> {
+    compilation_env.check_diags_at_or_above_severity(Severity::Bug)?;
     assert!(
         until <= PASS_COMPILATION,
         "Invalid pass for run_to. Target is greater than maximum pass"
@@ -866,7 +868,6 @@ fn run(
             let prog = unit_test::filter_test_members::program(compilation_env, prog);
             let prog = verification::ast_filter::program(compilation_env, prog);
             let eprog = expansion::translate::program(compilation_env, pre_compiled_lib, prog);
-            compilation_env.check_diags_at_or_above_severity(Severity::Bug)?;
             run(
                 compilation_env,
                 pre_compiled_lib,
@@ -877,7 +878,6 @@ fn run(
         }
         PassResult::Expansion(eprog) => {
             let nprog = naming::translate::program(compilation_env, pre_compiled_lib, eprog);
-            compilation_env.check_diags_at_or_above_severity(Severity::Bug)?;
             run(
                 compilation_env,
                 pre_compiled_lib,
@@ -888,7 +888,6 @@ fn run(
         }
         PassResult::Naming(nprog) => {
             let tprog = typing::translate::program(compilation_env, pre_compiled_lib, nprog);
-            compilation_env.check_diags_at_or_above_severity(Severity::BlockingError)?;
             run(
                 compilation_env,
                 pre_compiled_lib,
@@ -898,8 +897,8 @@ fn run(
             )
         }
         PassResult::Typing(tprog) => {
+            compilation_env.check_diags_at_or_above_severity(Severity::BlockingError)?;
             let hprog = hlir::translate::program(compilation_env, pre_compiled_lib, tprog);
-            compilation_env.check_diags_at_or_above_severity(Severity::Bug)?;
             run(
                 compilation_env,
                 pre_compiled_lib,
@@ -910,7 +909,6 @@ fn run(
         }
         PassResult::HLIR(hprog) => {
             let cprog = cfgir::translate::program(compilation_env, pre_compiled_lib, hprog);
-            compilation_env.check_diags_at_or_above_severity(Severity::NonblockingError)?;
             run(
                 compilation_env,
                 pre_compiled_lib,
@@ -920,8 +918,11 @@ fn run(
             )
         }
         PassResult::CFGIR(cprog) => {
+            // Don't generate bytecode if there are any errors
+            compilation_env.check_diags_at_or_above_severity(Severity::NonblockingError)?;
             let compiled_units =
                 to_bytecode::translate::program(compilation_env, pre_compiled_lib, cprog);
+            // Report any errors from bytecode generation
             compilation_env.check_diags_at_or_above_severity(Severity::NonblockingError)?;
             let warnings = compilation_env.take_final_warning_diags();
             assert!(until == PASS_COMPILATION);
