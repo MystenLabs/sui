@@ -84,6 +84,10 @@ pub(crate) struct ChannelMetrics {
     pub tx_transactions_submit: IntGauge,
     /// total received on channel from TransactionsClient to TransactionsConsumer
     pub tx_transactions_submit_total: IntCounter,
+    /// occupancy of the CoreThread commands channel
+    pub core_thread: IntGauge,
+    /// total received on the CoreThread commands channel
+    pub core_thread_total: IntCounter,
 }
 
 impl ChannelMetrics {
@@ -97,6 +101,16 @@ impl ChannelMetrics {
             tx_transactions_submit_total: register_int_counter_with_registry!(
                 "tx_transactions_submit_total",
                 "total received on channel from the `TransactionsClient` to the `TransactionsConsumer`",
+                registry
+            ).unwrap(),
+            core_thread: register_int_gauge_with_registry!(
+                "core_thread",
+                "occupancy of the `CoreThread` commands channel",
+                registry
+            ).unwrap(),
+            core_thread_total: register_int_counter_with_registry!(
+                "core_thread_total",
+                "total received on the `CoreThread` commands channel",
                 registry
             ).unwrap(),
         }
