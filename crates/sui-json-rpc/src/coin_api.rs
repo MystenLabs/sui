@@ -425,7 +425,6 @@ mod tests {
     use sui_types::object::Object;
     use sui_types::utils::create_fake_transaction;
     use sui_types::{parse_sui_struct_tag, TypeTag};
-    use typed_store_error::TypedStoreError;
 
     mock! {
         pub KeyValueStore {}
@@ -790,10 +789,7 @@ mod tests {
             mock_state
                 .expect_get_owned_coins()
                 .returning(move |_, _, _, _| {
-                    Err(SuiError::StorageError(TypedStoreError::RocksDBError(
-                        "mock rocksdb error".to_string(),
-                    ))
-                    .into())
+                    Err(SuiError::StorageError("mock rocksdb error".to_string()).into())
                 });
             let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api

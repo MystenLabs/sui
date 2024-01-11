@@ -1754,7 +1754,7 @@ impl sui_types::storage::ObjectStore for IndexerReader {
         object_id: &ObjectID,
     ) -> Result<Option<sui_types::object::Object>, sui_types::error::SuiError> {
         self.get_object(object_id, None)
-            .map_err(|e| sui_types::error::SuiError::GenericStorageError(e.to_string()))
+            .map_err(|e| sui_types::error::SuiError::StorageError(e.to_string()))
     }
 
     fn get_object_by_key(
@@ -1763,7 +1763,7 @@ impl sui_types::storage::ObjectStore for IndexerReader {
         version: sui_types::base_types::VersionNumber,
     ) -> Result<Option<sui_types::object::Object>, sui_types::error::SuiError> {
         self.get_object(object_id, Some(version))
-            .map_err(|e| sui_types::error::SuiError::GenericStorageError(e.to_string()))
+            .map_err(|e| sui_types::error::SuiError::StorageError(e.to_string()))
     }
 }
 

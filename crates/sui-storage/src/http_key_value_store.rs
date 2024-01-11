@@ -68,7 +68,7 @@ where
     E: std::error::Error,
 {
     fn into_sui_result(self) -> SuiResult<T> {
-        self.map_err(|e| SuiError::GenericStorageError(e.to_string()))
+        self.map_err(|e| SuiError::StorageError(e.to_string()))
     }
 }
 

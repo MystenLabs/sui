@@ -268,8 +268,8 @@ pub(crate) fn try_construct_object(
             )?)
         },
         _ => {
-            return Err(SuiError::StorageCorruptedFieldError(
-                "inconsistent object representation".to_string(),
+            return Err(SuiError::StorageError(
+                "corrupted field: inconsistent object representation".to_string(),
             ))
         }
     };

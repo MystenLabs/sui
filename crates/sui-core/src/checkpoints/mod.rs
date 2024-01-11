@@ -46,7 +46,7 @@ use sui_types::committee::StakeUnit;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::{SuiResult};
 use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
@@ -632,7 +632,7 @@ impl CheckpointStore {
         // This checkpoints the entire db and not one column family
         self.checkpoint_content
             .checkpoint_db(path)
-            .map_err(SuiError::StorageError)
+            .map_err(Into::into)
     }
 
     pub fn delete_highest_executed_checkpoint_test_only(&self) -> Result<(), TypedStoreError> {
@@ -649,8 +649,7 @@ impl CheckpointStore {
         self.delete_highest_executed_checkpoint_test_only()?;
         self.watermarks
             .rocksdb
-            .flush()
-            .map_err(SuiError::StorageError)?;
+            .flush()?;
         Ok(())
     }
 }

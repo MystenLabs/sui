@@ -1081,7 +1081,7 @@ impl AuthorityPerEpochStore {
             .state_hash_by_checkpoint
             .safe_range_iter(from_checkpoint..=to_checkpoint)
             .collect::<Result<Vec<_>, _>>()
-            .map_err(SuiError::StorageError)
+            .map_err(Into::into)
     }
 
     /// Returns future containing the state digest for the given epoch

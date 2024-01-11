@@ -467,10 +467,8 @@ pub enum SuiError {
         authority: AuthorityName,
         reason: String,
     },
-    #[error("Storage error")]
-    StorageError(#[from] TypedStoreError),
-    #[error("Non-RocksDB Storage error: {0}")]
-    GenericStorageError(String),
+    #[error("Storage error: {0}")]
+    StorageError(String),
     #[error(
         "Attempted to access {object} through parent {given_parent}, \
         but it's actual parent is {actual_owner}"
@@ -480,11 +478,6 @@ pub enum SuiError {
         given_parent: ObjectID,
         actual_owner: Owner,
     },
-
-    #[error("Missing fields/data in storage error: {0}")]
-    StorageMissingFieldError(String),
-    #[error("Corrupted fields/data in storage error: {0}")]
-    StorageCorruptedFieldError(String),
 
     #[error("Authority Error: {error:?}")]
     GenericAuthorityError { error: String },
@@ -654,6 +647,18 @@ impl From<Status> for SuiError {
                 status.code().description().to_owned(),
             )
         }
+    }
+}
+
+impl From<TypedStoreError> for SuiError {
+    fn from(e: TypedStoreError) -> Self {
+        Self::StorageError(e.to_string())
+    }
+}
+
+impl From<crate::storage::error::Error> for SuiError {
+    fn from(e: crate::storage::error::Error) -> Self {
+        Self::StorageError(e.to_string())
     }
 }
 
