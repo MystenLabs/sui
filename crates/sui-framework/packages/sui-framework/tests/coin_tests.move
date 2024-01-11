@@ -92,7 +92,7 @@ module sui::coin_tests {
         test_scenario::next_tx(test, TEST_ADDR);
 
         let witness = COIN_TESTS {};
-        let (treasury, deny_cap, metadata) = coin::create_currency_with_deny_list(
+        let (treasury, deny_cap, metadata) = coin::create_regulated_currency(
             witness,
             6,
             b"COIN_TESTS",

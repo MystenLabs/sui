@@ -12,7 +12,7 @@ module sui::deny_list {
     use sui::tx_context;
     use sui::table::{Self, Table};
     use sui::vec_set::{Self, VecSet};
-    use std::ascii::String;
+    use sui::versioned::{Self, Versioned};
 
     friend sui::coin;
 
@@ -26,24 +26,29 @@ module sui::deny_list {
     const COIN_INDEX: u64 = 0;
 
 
+    /// A shared object that stores the addresses that are blocked for a given core type.
+    struct DenyList has key {
+        id: UID,
+        /// the versioned deny list
+        inner: Versioned,
+    }
+
+    /// Stores the deny lists for each type
+    struct DenyListV0 has store {
+        /// A vector of lists, each element is used for a distinct core framework type
+        lists: vector<PerTypeListV0>,
+    }
+
     /// Stores the addresses that are denied for a given core type.
-    struct PerTypeList has store {
+    struct PerTypeListV0 has store {
         /// Number of object types that have been banned for a given address.
         /// Used to quickly skip checks for most addresses
         denied_count: Table<address, u64>,
         /// Set of addresses that are banned for a given type.
         /// For example with `sui::coin::Coin`: If addresses A and B are banned from using
         /// `0x123::my_coin::MY_COIN`, this will be 0x123 -> {A, B}
-        denied_addresses: Table<String, VecSet<address>>,
+        denied_addresses: Table<vector<u8>, VecSet<address>>,
     }
-
-    /// A shared object that stores the addresses that are blocked for a given core type.
-    struct DenyList has key {
-        id: UID,
-        /// A vector of lists, each element is used for a distinct core framework type
-        lists: vector<PerTypeList>,
-    }
-
 
     /// Adds the given address to the deny list of the specified type, preventing it
     /// from interacting with instances of that type as an input to a transaction. For coins,
@@ -52,9 +57,10 @@ module sui::deny_list {
     public(friend) fun add(
         deny_list: &mut DenyList,
         per_type_index: u64,
-        type: String,
+        type: vector<u8>,
         addr: address,
     ) {
+        let deny_list: &mut DenyListV0 = versioned::load_value_mut(&mut deny_list.inner);
         let list = vector::borrow_mut(&mut deny_list.lists, per_type_index);
         if (!table::contains(&list.denied_addresses, type)) {
             table::add(&mut list.denied_addresses, type, vec_set::empty());
@@ -76,9 +82,10 @@ module sui::deny_list {
     public(friend) fun remove(
         deny_list: &mut DenyList,
         per_type_index: u64,
-        type: String,
+        type: vector<u8>,
         addr: address,
     ) {
+        let deny_list: &mut DenyListV0 = versioned::load_value_mut(&mut deny_list.inner);
         let list = vector::borrow_mut(&mut deny_list.lists, per_type_index);
         let denied_addresses = table::borrow_mut(&mut list.denied_addresses, type);
         assert!(vec_set::contains(denied_addresses, &addr), ENotDenied);
@@ -91,9 +98,10 @@ module sui::deny_list {
     public(friend) fun contains(
         deny_list: &DenyList,
         per_type_index: u64,
-        type: String,
+        type: vector<u8>,
         addr: address,
     ): bool {
+        let deny_list: &DenyListV0 = versioned::load_value(&deny_list.inner);
         let list = vector::borrow(&deny_list.lists, per_type_index);
         if (!table::contains(&list.denied_count, addr)) return false;
 
@@ -112,15 +120,19 @@ module sui::deny_list {
     fun create(ctx: &mut TxContext) {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
 
+        let v0 = DenyListV0 {
+            lists: vector[per_type_list(ctx)],
+        };
+        let inner = versioned::create(0, v0, ctx);
         let deny_list_object = DenyList {
             id: object::sui_deny_list_object_id(),
-            lists: vector[per_type_list(ctx)],
+            inner,
         };
         transfer::share_object(deny_list_object);
     }
 
-    fun per_type_list(ctx: &mut TxContext): PerTypeList {
-        PerTypeList {
+    fun per_type_list(ctx: &mut TxContext): PerTypeListV0 {
+        PerTypeListV0 {
             denied_count: table::new(ctx),
             denied_addresses: table::new(ctx),
         }

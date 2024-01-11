@@ -12,6 +12,8 @@
 -  [Function `to_bytes`](#0x2_address_to_bytes)
 -  [Function `to_ascii_string`](#0x2_address_to_ascii_string)
 -  [Function `to_string`](#0x2_address_to_string)
+-  [Function `from_ascii_bytes`](#0x2_address_from_ascii_bytes)
+-  [Function `hex_char_value`](#0x2_address_hex_char_value)
 -  [Function `length`](#0x2_address_length)
 -  [Function `max`](#0x2_address_max)
 
@@ -198,6 +200,72 @@ Convert <code>a</code> to a hex-encoded ASCII string
 
 <pre><code><b>public</b> <b>fun</b> <a href="address.md#0x2_address_to_string">to_string</a>(a: <b>address</b>): <a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a> {
     <a href="dependencies/move-stdlib/string.md#0x1_string_from_ascii">string::from_ascii</a>(<a href="address.md#0x2_address_to_ascii_string">to_ascii_string</a>(a))
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_address_from_ascii_bytes"></a>
+
+## Function `from_ascii_bytes`
+
+Converts an ASCII string to an address, taking the numerical value for each character. The
+string must be Base16 encoded, and thus exactly 64 characters long.
+For example, the string "00000000000000000000000000000000000000000000000000000000DEADB33F"
+will be converted to the address @0xDEADB33F.
+Aborts with <code><a href="address.md#0x2_address_EAddressParseError">EAddressParseError</a></code> if the length of <code>s</code> is not 64,
+or if an invalid character is encountered.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="address.md#0x2_address_from_ascii_bytes">from_ascii_bytes</a>(bytes: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <b>address</b>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="address.md#0x2_address_from_ascii_bytes">from_ascii_bytes</a>(bytes: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <b>address</b> {
+    <b>assert</b>!(<a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(bytes) == 64, <a href="address.md#0x2_address_EAddressParseError">EAddressParseError</a>);
+    <b>let</b> hex_bytes = <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>[];
+    <b>let</b> i = 0;
+    <b>while</b> (i &lt; 64) {
+        <b>let</b> hi = <a href="address.md#0x2_address_hex_char_value">hex_char_value</a>(*<a href="dependencies/move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(bytes, i));
+        <b>let</b> lo = <a href="address.md#0x2_address_hex_char_value">hex_char_value</a>(*<a href="dependencies/move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(bytes, i + 1));
+        <a href="dependencies/move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> hex_bytes, (hi &lt;&lt; 4) | lo);
+        i = i + 2;
+    };
+    <a href="address.md#0x2_address_from_bytes">from_bytes</a>(hex_bytes)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_address_hex_char_value"></a>
+
+## Function `hex_char_value`
+
+
+
+<pre><code><b>fun</b> <a href="address.md#0x2_address_hex_char_value">hex_char_value</a>(c: u8): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="address.md#0x2_address_hex_char_value">hex_char_value</a>(c: u8): u8 {
+    <b>if</b> (c &gt;= 48 && c &lt;= 57) c - 48 // 0-9
+    <b>else</b> <b>if</b> (c &gt;= 65 && c &lt;= 70) c - 55 // A-F
+    <b>else</b> <b>if</b> (c &gt;= 97 && c &lt;= 102) c - 87 // a-f
+    <b>else</b> <b>abort</b> <a href="address.md#0x2_address_EAddressParseError">EAddressParseError</a>
 }
 </code></pre>
 
