@@ -254,7 +254,10 @@ pub enum ToolCommand {
         db_checkpoint_path: PathBuf,
     },
 
-    #[clap(name = "download-db-snapshot")]
+    #[clap(
+        name = "download-db-snapshot",
+        about = "Downloads the legacy database snapshot via cloud object store, outputs to local disk"
+    )]
     DownloadDBSnapshot {
         #[clap(long = "epoch")]
         epoch: u64,
@@ -273,7 +276,10 @@ pub enum ToolCommand {
         /// If true, restore from formal (slim, DB agnostic) snapshot. Note that this is only supported
         /// for protocol versions supporting `commit_root_state_digest`. For mainnet, this is
         /// epoch 20+, and for testnet this is epoch 12+
-        #[clap(long = "formal")]
+        #[clap(
+            long = "formal",
+            help = "Deprecated: use download-formal-snapshot instead"
+        )]
         formal: bool,
         /// If true, perform snapshot and checkpoint summary verification. Only
         /// applicable if `--formal` flag is specified. Defaults to true.
@@ -311,7 +317,10 @@ pub enum ToolCommand {
         verbose: bool,
     },
 
-    #[clap(name = "download-formal-snapshot")]
+    #[clap(
+        name = "download-formal-snapshot",
+        about = "Downloads formal database snapshot via cloud object store, outputs to local disk"
+    )]
     DownloadFormalSnapshot {
         #[clap(long = "epoch")]
         epoch: u64,
@@ -774,6 +783,9 @@ impl ToolCommand {
                         .checked_sub(1)
                         .expect("Failed to get number of CPUs")
                 });
+                if formal {
+                    println!("Warning: download-db-snapshot --formal is deprecated. Please use download-formal-snapshot.");
+                }
                 let snapshot_bucket =
                     snapshot_bucket.or_else(|| match (formal, network, no_sign_request) {
                         (true, Chain::Mainnet, false) => Some(
