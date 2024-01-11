@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
+import type {
+	TransactionArgument,
+	TransactionBlock,
 	TransactionObjectArgument,
-	type TransactionArgument,
-	type TransactionBlock,
 } from '@mysten/sui.js/transactions';
 
-import * as kioskTx from '../tx/kiosk';
-import { convertToPersonalTx, transferPersonalCapTx } from '../tx/personal-kiosk';
-import { confirmRequest } from '../tx/transfer-policy';
-import {
+import * as kioskTx from '../tx/kiosk.js';
+import { convertToPersonalTx, transferPersonalCapTx } from '../tx/personal-kiosk.js';
+import { confirmRequest } from '../tx/transfer-policy.js';
+import type {
 	ItemId,
 	ItemReference,
 	ItemValue,
@@ -18,9 +18,9 @@ import {
 	ObjectArgument,
 	Price,
 	PurchaseOptions,
-} from '../types';
-import { getNormalizedRuleType } from '../utils';
-import { type KioskClient } from './kiosk-client';
+} from '../types/index.js';
+import { getNormalizedRuleType } from '../utils.js';
+import type { KioskClient } from './kiosk-client.js';
 
 export type KioskTransactionParams = {
 	/** The TransactionBlock for this run */

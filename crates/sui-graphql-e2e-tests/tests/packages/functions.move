@@ -74,8 +74,10 @@ fragment Functions on Object {
         nodes {
             effects {
                 objectChanges {
-                    outputState {
-                        ...Functions
+                    nodes {
+                        outputState {
+                            ...Functions
+                        }
                     }
                 }
             }
@@ -122,8 +124,10 @@ fragment Functions on Object {
         nodes {
             effects {
                 objectChanges {
-                    outputState {
-                        ...Functions
+                    nodes {
+                        outputState {
+                            ...Functions
+                        }
                     }
                 }
             }

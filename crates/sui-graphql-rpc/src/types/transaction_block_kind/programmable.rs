@@ -11,16 +11,13 @@ use sui_types::transaction::{
     ProgrammableTransaction as NativeProgrammableTransactionBlock,
 };
 
-use crate::{
-    context_data::db_data_provider::PgManager,
-    types::{
-        base64::Base64,
-        cursor::{Cursor, Page},
-        move_function::MoveFunction,
-        move_type::MoveType,
-        object_read::ObjectRead,
-        sui_address::SuiAddress,
-    },
+use crate::types::{
+    base64::Base64,
+    cursor::{Cursor, Page},
+    move_function::MoveFunction,
+    move_type::MoveType,
+    object_read::ObjectRead,
+    sui_address::SuiAddress,
 };
 
 #[derive(Clone, Eq, PartialEq)]
@@ -271,14 +268,14 @@ impl MoveCallTransaction {
 
     /// The function being called, resolved.
     async fn function(&self, ctx: &Context<'_>) -> Result<Option<MoveFunction>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_move_function(
-                self.0.package.into(),
-                self.0.module.as_str(),
-                self.0.function.as_str(),
-            )
-            .await
-            .extend()
+        MoveFunction::query(
+            ctx.data_unchecked(),
+            self.0.package.into(),
+            self.0.module.as_str(),
+            self.0.function.as_str(),
+        )
+        .await
+        .extend()
     }
 
     /// The actual type parameters passed in for this move call.

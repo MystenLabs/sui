@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ObjectOwner } from '@mysten/sui.js/client';
-import { TransactionObjectArgument, type TransactionBlock } from '@mysten/sui.js/transactions';
+import type { ObjectOwner } from '@mysten/sui.js/client';
+import type { TransactionBlock, TransactionObjectArgument } from '@mysten/sui.js/transactions';
 
-import { ObjectArgument } from '.';
+import type { ObjectArgument } from './index.js';
 
 /** The Transfer Policy module. */
 export const TRANSFER_POLICY_MODULE = '0x2::transfer_policy';

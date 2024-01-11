@@ -72,7 +72,7 @@ mod tests {
 
     #[tokio::test]
     async fn validator_start_and_stop() {
-        let (committee, keypairs) = Committee::new_for_test(0, 1);
+        let (committee, keypairs) = Committee::new_for_test(0, vec![1]);
         let registry = Registry::new();
         let parameters = Parameters::default();
         let block_verifier = TestBlockVerifier {};

@@ -3,7 +3,7 @@ source: crates/sui-swarm-config/tests/snapshot_tests.rs
 expression: genesis.sui_system_object().into_genesis_version_for_tooling()
 ---
 epoch: 0
-protocol_version: 33
+protocol_version: 35
 system_state_version: 1
 validators:
   total_stake: 20000000000000000
@@ -240,13 +240,13 @@ validators:
         next_epoch_worker_address: ~
         extra_fields:
           id:
-            id: "0x062e81a8f6d18f295ca6a22cb3f4a4c20a33e8cfb80d9d17bfe4af0d58ce38b1"
+            id: "0xadd76d8d4f0771f83d6ec93e9117208cb85a6a8ca823c47314f8998cc8ef6b07"
           size: 0
       voting_power: 10000
-      operation_cap_id: "0x5484fb6f2fd427d26cc3ad477d7716b37e32b6d8a11b15c2569f429e1d37cd9e"
+      operation_cap_id: "0x3626e8a77e860310f55b3a365dbfca2d1ee2aebc57a10cd2517b21a8007cff4b"
       gas_price: 1000
       staking_pool:
-        id: "0x4ad2afbdbda719e2a3114769cfced187de3ba8756c5c4ef0da78e89e455fb56c"
+        id: "0xc478ae0878cf5e455d923a8d48dd545e5b7a28d6aa1b3c8f451beae48f7935fd"
         activation_epoch: 0
         deactivation_epoch: ~
         sui_balance: 20000000000000000
@@ -254,14 +254,14 @@ validators:
           value: 0
         pool_token_balance: 20000000000000000
         exchange_rates:
-          id: "0x2fd90758fdce96d513e934cce636bb55d1f764922858c63ab4cf95e8757cec39"
+          id: "0xa4175d84b38817d01c4af0e2ce08e8f072e9203337e27ee646483cfe250c044c"
           size: 1
         pending_stake: 0
         pending_total_sui_withdraw: 0
         pending_pool_token_withdraw: 0
         extra_fields:
           id:
-            id: "0xdb0b3621ff362a0c8e661617722ef00b813df144965680cb61c75b1522ed4753"
+            id: "0xee63d121046b581122edb93f5a6e97effdd4165d168c83791ee894e4b5b6c189"
           size: 0
       commission_rate: 200
       next_epoch_stake: 20000000000000000
@@ -269,27 +269,27 @@ validators:
       next_epoch_commission_rate: 200
       extra_fields:
         id:
-          id: "0x5cff2c8922f189524999b77acbf09e03c91927374187eae806e35e1cf3abce70"
+          id: "0x5b8f6a061399b578074b5402af88312a3bdcdf58b70707b1274f6a1acdf7eb65"
         size: 0
   pending_active_validators:
     contents:
-      id: "0x77c4da44f229ebb3712e1cda392eddff9cbdde8deb2744978d370fa6b6c8547b"
+      id: "0xdc227119671a1ae57f8f871a95a681eabe4b02a6c772885a532b08e0787034a9"
       size: 0
   pending_removals: []
   staking_pool_mappings:
-    id: "0x406e8f7d3ff97496ba1f69c602836faf129a5b15351759350ae2447e69b61d85"
+    id: "0xb235d4881e60de8b9e45cd9a9193142a9d231bffe546e5c2345f21a2a0124353"
     size: 1
   inactive_validators:
-    id: "0xfa71e0130dabc77b124c444631e73e73633333ba86542b747d8dae674e416243"
+    id: "0xb4db1b12f8d1a4e8cf731c7488caccc99cc4a2fde311050c2da0290d184dbb95"
     size: 0
   validator_candidates:
-    id: "0xa76d7ef485858e023f5ac4e8483c03131622ff4327ef86c083631188824642d8"
+    id: "0xa280f58b5c1038a83b097794bf4938b4a317ecbea61f1c7d2a544acadda578bd"
     size: 0
   at_risk_validators:
     contents: []
   extra_fields:
     id:
-      id: "0xa42067f8186320ec9a28b113659f4c5e126fb680c43e5c759147cd6717b26789"
+      id: "0x7b24d1da1ce7082c96f303591afeb4f77eaa6eb0758654d748f52f6a1e9cc7b0"
     size: 0
 storage_fund:
   total_object_storage_rebates:
@@ -306,7 +306,7 @@ parameters:
   validator_low_stake_grace_period: 7
   extra_fields:
     id:
-      id: "0x50a5c5f030ac07c8e14bb4ec9031966b75e639b9a43ac8919092ca99004217cf"
+      id: "0xc6e7aa20e89a8c2be44589d70a11ff87613a822adf12afc4b99b6e6d2a2acffe"
     size: 0
 reference_gas_price: 1000
 validator_report_records:
@@ -320,7 +320,7 @@ stake_subsidy:
   stake_subsidy_decrease_rate: 1000
   extra_fields:
     id:
-      id: "0x2961501644a51868bd19baf645584c7ad3923a0bdbc07e93f00111785d5d5170"
+      id: "0xecf2545c6aeb8f66fefb90a3be8650fba009e6a613d58b2843df1e66b495eae7"
     size: 0
 safe_mode: false
 safe_mode_storage_rewards:
@@ -332,6 +332,6 @@ safe_mode_non_refundable_storage_fee: 0
 epoch_start_timestamp_ms: 10
 extra_fields:
   id:
-    id: "0x6113e56be46fd6287d611f6512366786e936738ce2179d471c7c23a7089d2b32"
+    id: "0x79fcb346bdc801dc0ff9325f3225a43f096efe03ff7f9c5516cfe020514529e8"
   size: 0
 

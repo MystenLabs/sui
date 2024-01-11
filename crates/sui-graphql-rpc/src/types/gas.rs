@@ -114,10 +114,13 @@ impl GasCostSummary {
 #[Object]
 impl GasEffects {
     async fn gas_object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_obj(self.object_id, Some(self.object_version))
-            .await
-            .extend()
+        Object::query(
+            ctx.data_unchecked(),
+            self.object_id,
+            Some(self.object_version),
+        )
+        .await
+        .extend()
     }
 
     async fn gas_summary(&self) -> Option<&GasCostSummary> {

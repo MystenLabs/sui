@@ -235,6 +235,7 @@ arc-swap = { version = "1.5.1", features = ["serde"] }
 assert_cmd = "2.0.6"
 async-graphql = "6.0.7"
 async-graphql-axum = "6.0.7"
+async-graphql-value = "6.0.7"
 async-recursion = "1.0.4"
 async-trait = "0.1.61"
 atomic_float = "0.1"

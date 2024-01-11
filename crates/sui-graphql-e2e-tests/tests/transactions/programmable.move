@@ -155,21 +155,27 @@ fragment ComprehensivePTB on ProgrammableTransactionBlock {
                 status
                 errors
                 lamportVersion
-                dependencies { digest }
+                dependencies {
+                    nodes { digest }
+                }
 
                 balanceChanges {
-                    owner { address }
-                    amount
-                    coinType { repr }
+                    nodes {
+                        owner { address }
+                        amount
+                        coinType { repr }
+                    }
                 }
 
                 objectChanges {
-                    address
+                    nodes {
+                        address
 
-                    idCreated
-                    idDeleted
+                        idCreated
+                        idDeleted
 
-                    outputState { address digest }
+                        outputState { address digest }
+                    }
                 }
 
                 gasEffects {
@@ -352,21 +358,27 @@ fragment ComprehensivePTB on ProgrammableTransactionBlock {
                 status
                 errors
                 lamportVersion
-                dependencies { digest }
+                dependencies {
+                    nodes { digest }
+                }
 
                 balanceChanges {
-                    owner { address }
-                    amount
-                    coinType { repr }
+                    nodes {
+                        owner { address }
+                        amount
+                        coinType { repr }
+                    }
                 }
 
                 objectChanges {
-                    address
+                    nodes {
+                        address
 
-                    idCreated
-                    idDeleted
+                        idCreated
+                        idDeleted
 
-                    outputState { address digest }
+                        outputState { address digest }
+                    }
                 }
 
                 gasEffects {
@@ -540,27 +552,33 @@ fragment ComprehensivePTB on ProgrammableTransactionBlock {
                 status
                 errors
                 lamportVersion
-                dependencies { digest }
+                dependencies {
+                    nodes { digest }
+                }
 
                 balanceChanges {
-                    owner { address }
-                    amount
-                    coinType { repr }
+                    nodes {
+                        owner { address }
+                        amount
+                        coinType { repr }
+                    }
                 }
 
                 objectChanges {
-                    address
-
-                    idCreated
-                    idDeleted
-
-                    outputState {
+                    nodes {
                         address
-                        digest
-                        asMoveObject {
-                            contents {
-                                type { repr }
-                                json
+
+                        idCreated
+                        idDeleted
+
+                        outputState {
+                            address
+                            digest
+                            asMoveObject {
+                                contents {
+                                    type { repr }
+                                    json
+                                }
                             }
                         }
                     }
@@ -729,21 +747,27 @@ fragment ComprehensivePTB on ProgrammableTransactionBlock {
                 status
                 errors
                 lamportVersion
-                dependencies { digest }
+                dependencies {
+                    nodes { digest }
+                }
 
                 balanceChanges {
-                    owner { address }
-                    amount
-                    coinType { repr }
+                    nodes {
+                        owner { address }
+                        amount
+                        coinType { repr }
+                    }
                 }
 
                 objectChanges {
-                    address
+                    nodes {
+                        address
 
-                    idCreated
-                    idDeleted
+                        idCreated
+                        idDeleted
 
-                    outputState { address digest }
+                        outputState { address digest }
+                    }
                 }
 
                 gasEffects {

@@ -20,7 +20,7 @@ gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 
 task 5 'create-checkpoint'. lines 38-38:
 Checkpoint created: 1
 
-task 6 'run-graphql'. lines 40-85:
+task 6 'run-graphql'. lines 40-88:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -31,12 +31,12 @@ Response: {
             "transactions": {
               "nodes": [
                 {
-                  "package": "0xae3cf4f1fe23eb192fe1f2afa05419b3b78b54f4231a424f68990c994f759a94",
+                  "package": "0x677edb10e7112abf579dcb01a6accd968f913bc0dcaf8a83ae7957df77f35a38",
                   "module": "m",
                   "functionName": "get"
                 },
                 {
-                  "package": "0xae3cf4f1fe23eb192fe1f2afa05419b3b78b54f4231a424f68990c994f759a94",
+                  "package": "0x677edb10e7112abf579dcb01a6accd968f913bc0dcaf8a83ae7957df77f35a38",
                   "module": "m",
                   "functionName": "inc"
                 }
@@ -45,7 +45,9 @@ Response: {
           },
           "effects": {
             "status": "SUCCESS",
-            "unchangedSharedObjects": []
+            "unchangedSharedObjects": {
+              "nodes": []
+            }
           }
         },
         {
@@ -54,7 +56,7 @@ Response: {
             "transactions": {
               "nodes": [
                 {
-                  "package": "0xae3cf4f1fe23eb192fe1f2afa05419b3b78b54f4231a424f68990c994f759a94",
+                  "package": "0x677edb10e7112abf579dcb01a6accd968f913bc0dcaf8a83ae7957df77f35a38",
                   "module": "m",
                   "functionName": "inc"
                 }
@@ -63,7 +65,9 @@ Response: {
           },
           "effects": {
             "status": "SUCCESS",
-            "unchangedSharedObjects": []
+            "unchangedSharedObjects": {
+              "nodes": []
+            }
           }
         },
         {
@@ -72,7 +76,7 @@ Response: {
             "transactions": {
               "nodes": [
                 {
-                  "package": "0xae3cf4f1fe23eb192fe1f2afa05419b3b78b54f4231a424f68990c994f759a94",
+                  "package": "0x677edb10e7112abf579dcb01a6accd968f913bc0dcaf8a83ae7957df77f35a38",
                   "module": "m",
                   "functionName": "get"
                 }
@@ -81,15 +85,17 @@ Response: {
           },
           "effects": {
             "status": "SUCCESS",
-            "unchangedSharedObjects": [
-              {
-                "__typename": "SharedObjectRead",
-                "address": "0xcd86658e39502bcf2306e162a77d4e7d252900a15f80287997b013d25a3f23e5",
-                "version": 2,
-                "digest": "9CELqQqgcLmj7a4wajr3fNQhqDWJvEbxC7uiVHUyGbgg",
-                "object": null
-              }
-            ]
+            "unchangedSharedObjects": {
+              "nodes": [
+                {
+                  "__typename": "SharedObjectRead",
+                  "address": "0xeca111b0beed71ac6f261a67537881e6ee736240c06a4004520db5f757cf88ea",
+                  "version": 2,
+                  "digest": "9XurwaUgZFaffCcp88sU1hXjqjvi4jy4fdXmhNPfjjCU",
+                  "object": null
+                }
+              ]
+            }
           }
         }
       ]

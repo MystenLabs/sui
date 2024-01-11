@@ -226,7 +226,7 @@ impl<'env> Docgen<'env> {
         // Generate documentation for standalone modules which are not included in the templates.
         for (id, info) in self.infos.clone() {
             let m = self.env.get_module(id);
-            if !info.is_included && m.is_target() {
+            if !info.is_included {
                 self.gen_module(&m, &info);
                 let path = self.make_file_in_out_dir(&info.target_file);
                 self.output.push((path, self.writer.extract_result()));
@@ -369,10 +369,10 @@ impl<'env> Docgen<'env> {
                 m.get_name().display_full(m.symbol_pool()),
                 out_dir,
                 i.target_file,
-                if !m.is_target() {
-                    "exists"
+                if m.is_target() {
+                    "is target"
                 } else {
-                    "will be generated"
+                    "is a dependency"
                 }
             );
         };
@@ -446,7 +446,25 @@ impl<'env> Docgen<'env> {
                             .to_string(),
                     )
                 } else {
-                    None
+                    // If it's a dependency traverse back up to finde the package name so that we
+                    // can generate the documentation in the right place.
+                    let path = PathBuf::from(module_env.get_source_path());
+                    let package_name = path.ancestors().find_map(|dir| {
+                        let mut path = PathBuf::from(dir);
+                        path.push("Move.toml");
+                        if path.exists() {
+                            dir.file_stem()
+                        } else {
+                            None
+                        }
+                    });
+                    package_name.map(|package_name| {
+                        format!(
+                            "dependencies/{}/{}",
+                            package_name.to_string_lossy(),
+                            file_name.to_string_lossy()
+                        )
+                    })
                 }
             })
         } else {
@@ -1408,7 +1426,17 @@ impl<'env> Docgen<'env> {
     /// Return the reference for a module.
     fn ref_for_module(&self, module_env: &ModuleEnv<'_>) -> String {
         if let Some(info) = self.infos.get(&module_env.get_id()) {
-            format!("{}#{}", info.target_file, info.label)
+            let extension = if !self
+                .current_module
+                .as_ref()
+                .map(|x| x.is_target())
+                .unwrap_or(true)
+            {
+                "../../"
+            } else {
+                ""
+            };
+            format!("{}{}#{}", extension, info.target_file, info.label)
         } else {
             "".to_string()
         }

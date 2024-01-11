@@ -42,9 +42,13 @@ module Test::M1 {
     objectConnection{
       edges {
         node {
-          kind
           owner {
-            address
+            __typename
+            ... on AddressOwner {
+              owner {
+                address
+              }
+            }
           }
         }
       }
@@ -64,9 +68,13 @@ module Test::M1 {
     objectConnection{
       edges {
         node {
-          kind
           owner {
-            address
+            __typename
+            ... on AddressOwner {
+              owner {
+                address
+              }
+            }
           }
         }
       }
@@ -80,9 +88,13 @@ module Test::M1 {
     objectConnection(filter: {owner: "0x42"}) {
       edges {
         node {
-          kind
           owner {
-            address
+            __typename
+            ... on AddressOwner {
+              owner {
+                address
+              }
+            }
           }
         }
       }
@@ -96,9 +108,13 @@ module Test::M1 {
     objectConnection(filter: {owner: "0x888"}) {
       edges {
         node {
-          kind
           owner {
-            address
+            __typename
+            ... on AddressOwner {
+              owner {
+                address
+              }
+            }
           }
         }
       }
@@ -112,9 +128,13 @@ module Test::M1 {
     objectConnection{
       edges {
         node {
-          kind
           owner {
-            address
+            __typename
+            ... on AddressOwner {
+              owner {
+                address
+              }
+            }
           }
         }
       }
@@ -128,9 +148,13 @@ module Test::M1 {
     objectConnection{
       edges {
         node {
-          kind
           owner {
-            address
+            __typename
+            ... on AddressOwner {
+              owner {
+                address
+              }
+            }
           }
         }
       }

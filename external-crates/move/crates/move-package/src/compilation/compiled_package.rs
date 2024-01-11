@@ -671,15 +671,15 @@ impl CompiledPackage {
             .iter()
             .map(|dep_name| {
                 root_for_docs
-                    .join(dep_name.as_str())
                     .join(CompiledPackageLayout::CompiledDocs.path())
+                    .join(dep_name.as_str())
                     .to_string_lossy()
                     .to_string()
             })
             .collect();
         let in_pkg_doc_path = root_for_docs
-            .join(package_name.as_str())
-            .join(CompiledPackageLayout::CompiledDocs.path());
+            .join(CompiledPackageLayout::CompiledDocs.path())
+            .join(package_name.as_str());
         let references_path = package_root
             .join(SourcePackageLayout::DocTemplates.path())
             .join(REFERENCE_TEMPLATE_FILENAME);

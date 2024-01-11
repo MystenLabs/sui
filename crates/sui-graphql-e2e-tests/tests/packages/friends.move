@@ -67,8 +67,10 @@ fragment ModuleFriends on Object {
         nodes {
             effects {
                 objectChanges {
-                    outputState {
-                        ...ModuleFriends
+                    nodes {
+                        outputState {
+                            ...ModuleFriends
+                        }
                     }
                 }
             }
@@ -97,8 +99,10 @@ fragment ModuleFriends on Object {
         nodes {
             effects {
                 objectChanges {
-                    outputState {
-                        ...ModuleFriends
+                    nodes {
+                        outputState {
+                            ...ModuleFriends
+                        }
                     }
                 }
             }
@@ -159,8 +163,10 @@ fragment ModuleFriends on Object {
         nodes {
             effects {
                 objectChanges {
-                    outputState {
-                        ...ModuleFriends
+                    nodes {
+                        outputState {
+                            ...ModuleFriends
+                        }
                     }
                 }
             }
@@ -210,8 +216,10 @@ fragment ModuleFriends on Object {
         nodes {
             effects {
                 objectChanges {
-                    outputState {
-                        ...ModuleFriends
+                    nodes {
+                        outputState {
+                            ...ModuleFriends
+                        }
                     }
                 }
             }

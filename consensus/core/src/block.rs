@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use enum_dispatch::enum_dispatch;
 use std::{
     cell::OnceCell,
     fmt,
@@ -10,7 +11,7 @@ use std::{
 use fastcrypto::hash::{Digest, HashFunction};
 use serde::{Deserialize, Serialize};
 
-use consensus_config::{AuthorityIndex, DefaultHashFunction, DIGEST_LENGTH};
+use consensus_config::{AuthorityIndex, DefaultHashFunction, NetworkKeySignature, DIGEST_LENGTH};
 
 /// Round number of a block.
 pub type Round = u32;
@@ -23,6 +24,7 @@ pub type BlockTimestampMs = u64;
 /// Well behaved validators produce at most one block per round, but malicious validators can
 /// equivocate.
 #[derive(Clone, Deserialize, Serialize)]
+#[enum_dispatch(BlockAPI)]
 pub enum Block {
     V1(BlockV1),
 }
@@ -37,12 +39,13 @@ impl fastcrypto::hash::Hash<{ DIGEST_LENGTH }> for Block {
     }
 }
 
+#[enum_dispatch]
 pub trait BlockAPI {
     fn reference(&self) -> BlockRef;
     fn digest(&self) -> BlockDigest;
     fn round(&self) -> Round;
     fn author(&self) -> AuthorityIndex;
-    fn timestamp(&self) -> BlockTimestampMs;
+    fn timestamp_ms(&self) -> BlockTimestampMs;
     fn ancestors(&self) -> &[BlockRef];
     // TODO: add accessor for transactions.
 }
@@ -51,7 +54,7 @@ pub trait BlockAPI {
 pub struct BlockV1 {
     round: Round,
     author: AuthorityIndex,
-    timestamp: BlockTimestampMs,
+    timestamp_ms: BlockTimestampMs,
     ancestors: Vec<BlockRef>,
 
     #[serde(skip)]
@@ -83,8 +86,8 @@ impl BlockAPI for BlockV1 {
         self.author
     }
 
-    fn timestamp(&self) -> BlockTimestampMs {
-        self.timestamp
+    fn timestamp_ms(&self) -> BlockTimestampMs {
+        self.timestamp_ms
     }
 
     fn ancestors(&self) -> &[BlockRef] {
@@ -100,17 +103,20 @@ pub struct BlockRef {
     pub digest: BlockDigest,
 }
 
-impl Hash for BlockRef {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write(&self.digest.0[..8]);
+impl BlockRef {
+    #[cfg(test)]
+    pub fn new_test(author: AuthorityIndex, round: Round, digest: BlockDigest) -> Self {
+        Self {
+            round,
+            author,
+            digest,
+        }
     }
 }
 
-impl fastcrypto::hash::Hash<{ DIGEST_LENGTH }> for BlockRef {
-    type TypedDigest = BlockDigest;
-
-    fn digest(&self) -> BlockDigest {
-        self.digest
+impl Hash for BlockRef {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write(&self.digest.0[..8]);
     }
 }
 
@@ -138,6 +144,36 @@ impl fmt::Debug for BlockDigest {
             base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
         )
     }
+}
+
+/// Signature of block digest by its author.
+#[allow(unused)]
+pub(crate) type BlockSignature = NetworkKeySignature;
+
+/// Unverified block only allows limited access to its content.
+#[allow(unused)]
+#[derive(Deserialize)]
+pub(crate) struct SignedBlock {
+    block: Block,
+    signature: bytes::Bytes,
+
+    #[serde(skip)]
+    serialized: bytes::Bytes,
+}
+
+impl SignedBlock {
+    // TODO: add deserialization and verification.
+}
+
+/// Verifiied block allows access to its content.
+#[allow(unused)]
+#[derive(Deserialize, Serialize)]
+pub(crate) struct VerifiedBlock {
+    pub block: Block,
+    pub signature: bytes::Bytes,
+
+    #[serde(skip)]
+    serialized: bytes::Bytes,
 }
 
 // TODO: add basic verification for BlockRef and BlockDigest computations.

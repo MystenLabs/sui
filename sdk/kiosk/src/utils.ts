@@ -1,26 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
+import type {
+	DynamicFieldInfo,
 	PaginationArguments,
 	SuiClient,
 	SuiObjectData,
 	SuiObjectDataFilter,
 	SuiObjectDataOptions,
 	SuiObjectResponse,
-	type DynamicFieldInfo,
 } from '@mysten/sui.js/client';
 import { normalizeStructTag, normalizeSuiAddress, parseStructTag } from '@mysten/sui.js/utils';
 
-import { bcs } from './bcs';
-import {
-	Kiosk,
-	KIOSK_TYPE,
-	KioskData,
-	KioskListing,
-	TRANSFER_POLICY_CAP_TYPE,
-	TransferPolicyCap,
-} from './types';
+import { bcs } from './bcs.js';
+import type { Kiosk, KioskData, KioskListing, TransferPolicyCap } from './types/index.js';
+import { KIOSK_TYPE, TRANSFER_POLICY_CAP_TYPE } from './types/index.js';
 
 const DEFAULT_QUERY_LIMIT = 50;
 

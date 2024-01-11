@@ -193,12 +193,15 @@ where
             .ok_or(BridgeError::BridgeEventNotActionable)
     }
 
+    // TODO: expose this API to jsonrpc like system state query
     pub async fn get_bridge_committee(&self) -> BridgeResult<BridgeCommittee> {
         let move_type_bridge_committee =
             self.inner.get_bridge_committee().await.map_err(|e| {
                 BridgeError::InternalError(format!("Can't get bridge committee: {e}"))
             })?;
         let mut authorities = vec![];
+
+        // TODO: move this to MoveTypeBridgeCommittee
         for member in move_type_bridge_committee.members.contents {
             let MoveTypeCommitteeMember {
                 sui_address,

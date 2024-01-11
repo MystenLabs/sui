@@ -4,12 +4,11 @@
 use async_graphql::*;
 use sui_indexer::models_v2::events::StoredEvent;
 use sui_indexer::models_v2::transactions::StoredTransaction;
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::event::Event as NativeEvent;
 use sui_types::{parse_sui_struct_tag, TypeTag};
 
 use crate::error::Error;
-
-use crate::context_data::db_data_provider::PgManager;
 
 use super::digest::Digest;
 use super::{
@@ -65,23 +64,26 @@ impl Event {
         let sending_package = SuiAddress::from_bytes(&self.stored.package)
             .map_err(|e| Error::Internal(e.to_string()))
             .extend()?;
-        ctx.data_unchecked::<PgManager>()
-            .fetch_move_module(sending_package, &self.stored.module)
+        MoveModule::query(ctx.data_unchecked(), sending_package, &self.stored.module)
             .await
             .extend()
     }
 
-    /// Addresses of the senders of the event
-    async fn senders(&self) -> Result<Option<Vec<Address>>> {
-        let mut addrs = Vec::with_capacity(self.stored.senders.len());
-        for sender in &self.stored.senders {
-            let Some(sender) = &sender else { continue };
-            let address = SuiAddress::from_bytes(sender)
-                .map_err(|e| Error::Internal(format!("Failed to deserialize address: {e}")))
-                .extend()?;
-            addrs.push(Address { address });
+    /// Address of the sender of the event
+    async fn sender(&self) -> Result<Option<Address>> {
+        let Some(Some(sender)) = self.stored.senders.first() else {
+            return Ok(None);
+        };
+
+        let address = SuiAddress::from_bytes(sender)
+            .map_err(|e| Error::Internal(format!("Failed to deserialize address: {e}")))
+            .extend()?;
+
+        if address.as_slice() == NativeSuiAddress::ZERO.as_ref() {
+            return Ok(None);
         }
-        Ok(Some(addrs))
+
+        Ok(Some(Address { address }))
     }
 
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
