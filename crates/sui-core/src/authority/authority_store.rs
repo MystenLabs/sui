@@ -1359,8 +1359,7 @@ impl AuthorityStore {
             if let Some(lock_info) = self
                 .perpetual_tables
                 .owned_object_transaction_locks
-                .get(&obj_ref)
-                .map_err(SuiError::StorageError)?
+                .get(&obj_ref)?
             {
                 match lock_info {
                     Some(lock_info) => {

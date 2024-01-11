@@ -122,7 +122,7 @@ impl CommitteeStore {
         self.tables
             .committee_map
             .checkpoint_db(path)
-            .map_err(SuiError::StorageError)
+            .map_err(Into::into)
     }
 
     fn database_is_empty(&self) -> bool {
