@@ -270,8 +270,6 @@ impl<'a> Compiler<'a> {
         self
     }
 
-    /// Runs the compiler. If `no_fail` flag is true then the compilation will continue even in
-    /// presence of compilation errors.
     pub fn run<const TARGET: Pass>(
         self,
     ) -> anyhow::Result<(
@@ -424,8 +422,6 @@ macro_rules! ast_stepped_compilers {
                     }
                 }
 
-                /// Runs the compiler. If the `no_fail` flag is true then the compilation will
-                /// continue even in presence of compilation errors.
                 pub fn run<const TARGET: Pass>(
                     self,
                 ) -> Result<SteppedCompiler<'a, TARGET>, Diagnostics> {
@@ -849,9 +845,6 @@ impl PassResult {
     }
 }
 
-/// Run the compiler until a desired pass is reached. If `no_fail` argument is true, it is
-/// guaranteed that this function will return `PassResult` (and not `Diagnostics`) as part of it
-/// result.
 fn run(
     compilation_env: &mut CompilationEnv,
     pre_compiled_lib: Option<&FullyCompiledProgram>,

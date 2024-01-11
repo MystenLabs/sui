@@ -640,7 +640,7 @@ pub fn compile_source_units(
         edition: state.edition,
         ..PackageConfig::default()
     })
-    .run::<PASS_COMPILATION>(false /* no_fail */)?;
+    .run::<PASS_COMPILATION>()?;
     let units_or_diags = comments_and_compiler_res
         .map(|(_comments, move_compiler)| move_compiler.into_compiled_units());
 

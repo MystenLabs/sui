@@ -183,8 +183,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
     // control back to the Move package system.
     let mut warning_diags = None;
     build_plan.compile_with_driver(writer, |compiler| {
-        let (files, comments_and_compiler_res) =
-            compiler.run::<PASS_CFGIR>(false /* no_fail */).unwrap();
+        let (files, comments_and_compiler_res) = compiler.run::<PASS_CFGIR>().unwrap();
         let (_, compiler) =
             diagnostics::unwrap_or_report_diagnostics(&files, comments_and_compiler_res);
         let (mut compiler, cfgir) = compiler.into_ast();
