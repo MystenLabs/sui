@@ -4,7 +4,7 @@
 use crate::config::{MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD};
 use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
-use crate::metrics::{DBMetrics, Metrics, QueryMetrics};
+use crate::metrics::{DBMetrics, Metrics, QueryMetrics, RequestMetrics};
 use crate::mutation::Mutation;
 use crate::{
     config::ServerConfig,
@@ -16,7 +16,6 @@ use crate::{
         query_limits_checker::{QueryLimitsChecker, ShowUsage},
         timeout::Timeout,
     },
-    metrics::RequestMetrics,
     server::version::{check_version_middleware, set_version_middleware},
     types::query::{Query, SuiGraphQLSchema},
 };
@@ -29,7 +28,7 @@ use axum::http::HeaderMap;
 use axum::response::IntoResponse;
 use axum::routing::{post, MethodRouter, Route};
 use axum::{
-    extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo},
+    extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo, State},
     middleware,
 };
 use axum::{headers::Header, Router};
@@ -65,15 +64,17 @@ pub(crate) struct ServerBuilder {
 
     schema: SchemaBuilder<Query, Mutation, EmptySubscription>,
     router: Option<Router>,
+    metrics: Option<Metrics>,
 }
 
 impl ServerBuilder {
-    pub fn new(port: u16, host: String) -> Self {
+    pub fn new(port: u16, host: String, metrics: Option<Metrics>) -> Self {
         Self {
             port,
             host,
             schema: async_graphql::Schema::build(Query, Mutation, EmptySubscription),
             router: None,
+            metrics,
         }
     }
 
@@ -112,7 +113,8 @@ impl ServerBuilder {
                 .route("/graphql", post(graphql_handler))
                 .route("/health", axum::routing::get(health_checks))
                 .layer(middleware::from_fn(check_version_middleware))
-                .layer(middleware::from_fn(set_version_middleware));
+                .layer(middleware::from_fn(set_version_middleware))
+                .with_state(self.metrics.clone());
             self.router = Some(router);
         }
     }
@@ -159,16 +161,6 @@ impl ServerBuilder {
     }
 
     pub async fn from_config(config: &ServerConfig) -> Result<Self, Error> {
-        let mut builder =
-            ServerBuilder::new(config.connection.port, config.connection.host.clone());
-
-        let name_service_config = config.name_service.clone();
-        let reader = PgManager::reader_with_config(
-            config.connection.db_url.clone(),
-            config.connection.db_pool_size,
-        )
-        .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
-
         // PROMETHEUS
         let prom_addr: SocketAddr = format!(
             "{}:{}",
@@ -190,6 +182,19 @@ impl ServerBuilder {
         let db_metrics = DBMetrics::new(&registry);
         let query_metrics = QueryMetrics::new(&registry);
         let metrics = Metrics::new(db_metrics, request_metrics, query_metrics);
+
+        let mut builder = ServerBuilder::new(
+            config.connection.port,
+            config.connection.host.clone(),
+            Some(metrics.clone()),
+        );
+
+        let name_service_config = config.name_service.clone();
+        let reader = PgManager::reader_with_config(
+            config.connection.db_url.clone(),
+            config.connection.db_pool_size,
+        )
+        .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
 
         // DB
         let db = Db::new(reader.clone(), config.service.limits, Some(metrics.clone()));
@@ -263,13 +268,13 @@ impl ServerBuilder {
 }
 
 async fn graphql_handler(
+    State(metrics): State<Option<Metrics>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
     headers: HeaderMap,
     req: GraphQLRequest,
-    ctx: &Context<'static>,
 ) -> GraphQLResponse {
-    let instant = Instant::now();
+    let timer = metrics.map(|x| x.request_metrics.request_response_time.start_timer());
     let mut req = req.into_inner();
     if headers.contains_key(ShowUsage::name()) {
         req.data.insert(ShowUsage)
@@ -278,12 +283,8 @@ async fn graphql_handler(
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
     let result = schema.execute(req).await.into();
-    let elapsed = instant.elapsed();
-    if let Some(metrics) = ctx.data_opt::<Arc<RequestMetrics>>() {
-        metrics
-            .request_response_time
-            .with_label_values(&["response_time"])
-            .observe(elapsed.as_secs() as f64)
+    if let Some(timer) = timer {
+        timer.observe_duration();
     }
     result
 }
@@ -397,7 +398,7 @@ pub mod tests {
 
             let db = Db::new(reader.clone(), cfg.limits, None);
             let pg_conn_pool = PgManager::new(reader, cfg.limits);
-            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), None)
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(cfg)
@@ -448,7 +449,7 @@ pub mod tests {
             };
             let db = Db::new(reader.clone(), service_config.limits, None);
             let pg_conn_pool = PgManager::new(reader, service_config.limits);
-            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), None)
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(service_config)
@@ -517,7 +518,7 @@ pub mod tests {
             };
             let db = Db::new(reader.clone(), service_config.limits, None);
             let pg_conn_pool = PgManager::new(reader, service_config.limits);
-            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), None)
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(service_config)
@@ -590,7 +591,7 @@ pub mod tests {
             Metrics::default_none(),
         );
         let pg_conn_pool = PgManager::new(reader, service_config.limits);
-        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), None)
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)
@@ -637,7 +638,7 @@ pub mod tests {
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
         let pg_conn_pool = PgManager::new(reader, Limits::default());
-        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), None)
             .context_data(pg_conn_pool)
             .build_schema();
 
@@ -681,7 +682,7 @@ pub mod tests {
             Metrics::default_none(),
         );
         let pg_conn_pool = PgManager::new(reader, service_config.limits);
-        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), None)
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)

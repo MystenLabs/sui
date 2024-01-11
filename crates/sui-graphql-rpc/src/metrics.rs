@@ -65,7 +65,7 @@ pub(crate) struct DBMetrics {
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+    0.0001, 0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
 ];
 
 const BATCH_SIZE_BUCKETS: &[f64] = &[
@@ -90,7 +90,6 @@ impl DBMetrics {
             )
             .unwrap(),
 
-            // not sure if we want this histogram from metrics or the prometheus one
             db_fetch_latency: register_histogram_vec_with_registry!(
                 "db_fetch_latency",
                 "Latency of DB requests",
@@ -121,7 +120,7 @@ pub(crate) struct RequestMetrics {
     pub query_payload_error: IntCounterVec,
     pub _db_query_cost: Histogram,
     pub query_validation_latency: HistogramVec,
-    pub request_response_time: HistogramVec,
+    pub request_response_time: Histogram,
     pub type_argument_depth: Histogram,
     pub type_argument_width: Histogram,
     pub type_nodes: Histogram,
@@ -232,10 +231,9 @@ impl RequestMetrics {
                 registry,
             )
             .unwrap(),
-            request_response_time: register_histogram_vec_with_registry!(
+            request_response_time: register_histogram_with_registry!(
                 "request_response_time",
                 "The time needed to resolve and get the result for the request",
-                &["response_time"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
