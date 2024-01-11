@@ -17,14 +17,19 @@ use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber};
-use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
+use sui_types::digests::{
+    ObjectDigest, TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest,
+};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectStore, PackageObject};
 use sui_types::transaction::VerifiedTransaction;
+use sui_types::{
+    base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber},
+    effects::TransactionEffectsAPI,
+};
 use typed_store::Map;
 
 pub trait ExecutionCacheRead: Send + Sync {
@@ -32,6 +37,11 @@ pub trait ExecutionCacheRead: Send + Sync {
     fn force_reload_system_packages(&self, system_package_ids: &[ObjectID]);
 
     fn get_object(&self, id: &ObjectID) -> SuiResult<Option<Object>>;
+
+    fn get_latest_object_ref_or_tombstone(
+        &self,
+        object_id: ObjectID,
+    ) -> SuiResult<Option<ObjectRef>>;
 
     fn get_object_by_key(
         &self,
@@ -183,10 +193,22 @@ pub trait ExecutionCacheWrite: Send + Sync {
     fn update_state(&self, epoch_id: EpochId, tx_outputs: TransactionOutputs) -> SuiResult;
 }
 
+enum ObjectEntry {
+    Object(Object),
+    Deleted,
+    Wrapped,
+}
+
+impl From<Object> for ObjectEntry {
+    fn from(object: Object) -> Self {
+        ObjectEntry::Object(object)
+    }
+}
+
 pub struct InMemoryCache {
     // Objects are not cached using an LRU because we manage cache evictions manually due to sui
     // semantics.
-    objects: DashMap<ObjectID, BTreeMap<SequenceNumber, Object>>,
+    objects: DashMap<ObjectID, BTreeMap<SequenceNumber, ObjectEntry>>,
 
     // packages are cache separately from objects because they are immutable and can be used by any
     // number of transactions
@@ -244,10 +266,28 @@ impl InMemoryCache {
     }
 
     fn insert_object(&self, object_id: &ObjectID, object: &Object) {
+        let version = object.version();
+        tracing::debug!("inserting object {:?}: {:?}", object_id, version);
         self.objects
             .entry(*object_id)
             .or_default()
-            .insert(object.version(), object.clone());
+            .insert(object.version(), object.clone().into());
+    }
+
+    fn insert_deleted_tombstone(&self, object_id: &ObjectID, version: SequenceNumber) {
+        tracing::debug!("inserting deleted tombstone {:?}: {:?}", object_id, version);
+        self.objects
+            .entry(*object_id)
+            .or_default()
+            .insert(version, ObjectEntry::Deleted);
+    }
+
+    fn insert_wrapped_tombstone(&self, object_id: &ObjectID, version: SequenceNumber) {
+        tracing::debug!("inserting wrapped tombstone {:?}: {:?}", object_id, version);
+        self.objects
+            .entry(*object_id)
+            .or_default()
+            .insert(version, ObjectEntry::Wrapped);
     }
 
     pub fn as_notify_read_wrapper(self: Arc<Self>) -> NotifyReadWrapper {
@@ -308,7 +348,11 @@ impl ExecutionCacheRead for InMemoryCache {
 
     fn get_object(&self, id: &ObjectID) -> SuiResult<Option<Object>> {
         if let Some(objects) = self.objects.get(id) {
-            return Ok(Some(get_last(&*objects).1.clone()));
+            // If any version of the object is in the cache, it must be the most recent version.
+            return match get_last(&*objects).1 {
+                ObjectEntry::Object(object) => Ok(Some(object.clone())),
+                _ => Ok(None),
+            };
         }
 
         // We don't insert objects into the cache because they are usually only
@@ -324,7 +368,11 @@ impl ExecutionCacheRead for InMemoryCache {
     ) -> SuiResult<Option<Object>> {
         if let Some(objects) = self.objects.get(object_id) {
             if let Some(object) = objects.get(&version) {
-                return Ok(Some(object.clone()));
+                if let ObjectEntry::Object(object) = object {
+                    return Ok(Some(object.clone()));
+                } else {
+                    return Ok(None);
+                }
             }
         }
 
@@ -386,6 +434,23 @@ impl ExecutionCacheRead for InMemoryCache {
         }
 
         Ok(results.into_iter().map(|r| r.unwrap()).collect())
+    }
+
+    fn get_latest_object_ref_or_tombstone(
+        &self,
+        object_id: ObjectID,
+    ) -> SuiResult<Option<ObjectRef>> {
+        if let Some(objects) = self.objects.get(&object_id) {
+            let (version, object) = get_last(&*objects);
+            let objref = match object {
+                ObjectEntry::Object(object) => object.compute_object_reference(),
+                ObjectEntry::Deleted => (object_id, *version, ObjectDigest::OBJECT_DIGEST_DELETED),
+                ObjectEntry::Wrapped => (object_id, *version, ObjectDigest::OBJECT_DIGEST_WRAPPED),
+            };
+            return Ok(Some(objref));
+        }
+
+        self.store.get_latest_object_ref_or_tombstone(object_id)
     }
 
     /// If the shared object was deleted, return deletion info for the current live version
@@ -562,6 +627,8 @@ impl ExecutionCacheWrite for InMemoryCache {
             effects,
             markers,
             written,
+            deleted,
+            wrapped,
             ..
         } = &tx_outputs;
 
@@ -592,8 +659,29 @@ impl ExecutionCacheWrite for InMemoryCache {
             }
         }
 
+        for ObjectKey(id, version) in deleted.iter() {
+            self.insert_deleted_tombstone(id, *version);
+        }
+        for ObjectKey(id, version) in wrapped.iter() {
+            self.insert_wrapped_tombstone(id, *version);
+        }
+
+        // remove dead objects from cache
+        for (id, version) in effects.modified_at_versions().iter() {
+            // delete the given id, version from self.objects. if no versions remain, remove the
+            // entry from self.objects
+            match self.objects.entry(*id) {
+                dashmap::mapref::entry::Entry::Occupied(mut entry) => {
+                    entry.get_mut().remove(version);
+                    if entry.get().is_empty() {
+                        entry.remove();
+                    }
+                }
+                dashmap::mapref::entry::Entry::Vacant(_) => panic!("object not found"),
+            }
+        }
+
         let tx_digest = *transaction.digest();
-        dbg!(&tx_digest);
         let effects_digest = effects.digest();
 
         self.transaction_effects
