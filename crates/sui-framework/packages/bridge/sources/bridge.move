@@ -183,9 +183,6 @@ module bridge::bridge {
         let inner = load_inner_mut(self);
         let key = message::key(&message);
 
-        // verify signatures
-        committee::verify_signatures(&inner.committee, message, signatures);
-
         // retrieve pending message if source chain is Sui, the initial message must exist on chain.
         if (message::message_type(&message) == message_types::token() && message::source_chain(&message) == inner.chain_id) {
             let record = linked_table::borrow_mut(&mut inner.bridge_records, key);
@@ -198,6 +195,8 @@ module bridge::bridge {
                 emit(TokenTransferAlreadyApproved { message_key: key });
                 return
             };
+            // verify signatures
+            committee::verify_signatures(&inner.committee, message, signatures);
             // Store approval
             record.verified_signatures = some(signatures)
         } else {
@@ -207,6 +206,8 @@ module bridge::bridge {
                 emit(TokenTransferAlreadyApproved { message_key: key });
                 return
             };
+            // verify signatures
+            committee::verify_signatures(&inner.committee, message, signatures);
             // Store message and approval
             linked_table::push_back(&mut inner.bridge_records, key, BridgeRecord {
                 message,
@@ -230,7 +231,6 @@ module bridge::bridge {
         if (!linked_table::contains(&inner.bridge_records, key)) {
             abort EMessageNotFoundInRecords
         };
-        // TODO: use borrow mut
         // retrieve approved bridge message
         let record = linked_table::borrow_mut(&mut inner.bridge_records, key);
         // ensure this is a token bridge message
