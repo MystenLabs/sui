@@ -63,7 +63,7 @@ fragment ModuleFriends on Object {
 }
 
 {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
         nodes {
             effects {
                 objectChanges {
@@ -95,7 +95,7 @@ fragment ModuleFriends on Object {
 }
 
 {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
         nodes {
             effects {
                 objectChanges {
@@ -159,7 +159,7 @@ fragment ModuleFriends on Object {
 }
 
 {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
         nodes {
             effects {
                 objectChanges {
@@ -212,7 +212,7 @@ fragment ModuleFriends on Object {
 }
 
 {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
         nodes {
             effects {
                 objectChanges {

@@ -3,7 +3,7 @@ processed 14 tasks
 task 1 'run-graphql'. lines 6-14:
 Response: {
   "data": {
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "pageInfo": {
         "hasPreviousPage": false
       }
@@ -16,7 +16,7 @@ Response: {
       "depth": 3,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 141
+      "queryPayload": 132
     }
   }
 }
@@ -24,7 +24,7 @@ Response: {
 task 2 'run-graphql'. lines 16-26:
 Response: {
   "data": {
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "edges": [
         {
           "node": {
@@ -41,7 +41,7 @@ Response: {
       "depth": 4,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 172
+      "queryPayload": 163
     }
   }
 }
@@ -52,7 +52,7 @@ Response: {
     "checkpoints": {
       "nodes": [
         {
-          "transactionBlockConnection": {
+          "transactionBlocks": {
             "edges": [
               {
                 "txns": {
@@ -72,7 +72,7 @@ Response: {
       "depth": 6,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 215
+      "queryPayload": 206
     }
   }
 }
@@ -112,7 +112,7 @@ Response: {
       "depth": 6,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 324
+      "queryPayload": 306
     }
   }
 }
@@ -146,7 +146,7 @@ Response: {
       "depth": 6,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 326
+      "queryPayload": 308
     }
   }
 }
@@ -154,7 +154,7 @@ Response: {
 task 6 'run-graphql'. lines 90-100:
 Response: {
   "data": {
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "edges": [
         {
           "txns": {
@@ -171,7 +171,7 @@ Response: {
       "depth": 4,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 154
+      "queryPayload": 145
     }
   }
 }
@@ -179,7 +179,7 @@ Response: {
 task 7 'run-graphql'. lines 102-112:
 Response: {
   "data": {
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "edges": [
         {
           "txns": {
@@ -196,7 +196,7 @@ Response: {
       "depth": 4,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 152
+      "queryPayload": 143
     }
   }
 }
@@ -204,7 +204,7 @@ Response: {
 task 8 'run-graphql'. lines 114-142:
 Response: {
   "data": {
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "edges": [
         {
           "txns": {
@@ -223,7 +223,7 @@ Response: {
       "depth": 8,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 510
+      "queryPayload": 501
     }
   }
 }
@@ -231,7 +231,7 @@ Response: {
 task 9 'run-graphql'. lines 144-170:
 Response: {
   "data": {
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "nodes": [
         {
           "digest": "7pmUhaENwwVedRTDm9RxJdphHp1nqLguWUfXtS6SXoRA",
@@ -248,7 +248,7 @@ Response: {
       "depth": 7,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 542
+      "queryPayload": 533
     }
   }
 }
@@ -256,7 +256,7 @@ Response: {
 task 10 'run-graphql'. lines 172-221:
 Response: {
   "data": {
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "edges": [
         {
           "txns": {
@@ -278,7 +278,7 @@ Response: {
       "depth": 11,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 1422
+      "queryPayload": 1395
     }
   }
 }
@@ -286,7 +286,7 @@ Response: {
 task 11 'run-graphql'. lines 223-248:
 Response: {
   "data": {
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "edges": [
         {
           "node": {
@@ -304,7 +304,7 @@ Response: {
       "depth": 11,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 722
+      "queryPayload": 704
     }
   }
 }
@@ -319,7 +319,7 @@ Response: {
       "depth": 4,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 163
+      "queryPayload": 154
     }
   },
   "errors": [
@@ -332,7 +332,7 @@ Response: {
         }
       ],
       "path": [
-        "transactionBlockConnection"
+        "transactionBlocks"
       ],
       "extensions": {
         "code": "BAD_USER_INPUT"
@@ -351,7 +351,7 @@ Response: {
       "depth": 4,
       "variables": 0,
       "fragments": 0,
-      "queryPayload": 156
+      "queryPayload": 147
     }
   },
   "errors": [
@@ -360,7 +360,7 @@ Response: {
       "locations": [
         {
           "line": 3,
-          "column": 30
+          "column": 21
         }
       ]
     }

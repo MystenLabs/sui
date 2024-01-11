@@ -1,6 +1,6 @@
 # Filter on inputObject
 {
-  transactionBlockConnection(
+  transactionBlocks(
     filter: {
       inputObject: "0x0000000000000000000000000000000000000000000000000000000000000006"
     }

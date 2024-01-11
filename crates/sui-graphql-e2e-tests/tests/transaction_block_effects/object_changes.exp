@@ -19,7 +19,7 @@ Checkpoint created: 1
 task 4 'run-graphql'. lines 34-53:
 Response: {
   "data": {
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "nodes": [
         {
           "effects": {
@@ -103,7 +103,7 @@ Response: {
 task 5 'run-graphql'. lines 55-74:
 Response: {
   "data": {
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "nodes": [
         {
           "effects": {

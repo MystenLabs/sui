@@ -11,7 +11,7 @@ use super::cursor::Page;
 use super::date_time::DateTime;
 use super::protocol_config::ProtocolConfigs;
 use super::system_state_summary::SystemStateSummary;
-use super::transaction_block::{TransactionBlock, TransactionBlockFilter};
+use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
 use async_graphql::*;
@@ -160,29 +160,31 @@ impl Epoch {
     }
 
     /// The epoch's corresponding transaction blocks
-    async fn transaction_block_connection(
+    async fn transaction_blocks(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<transaction_block::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
+        before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
-    ) -> Result<Option<Connection<String, TransactionBlock>>> {
-        let stored_epoch = &self.stored;
+    ) -> Result<Connection<String, TransactionBlock>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
-        let new_filter = TransactionBlockFilter {
-            after_checkpoint: if stored_epoch.first_checkpoint_id > 0 {
-                Some((stored_epoch.first_checkpoint_id - 1) as u64)
-            } else {
-                None
-            },
-            before_checkpoint: stored_epoch.last_checkpoint_id.map(|id| (id + 1) as u64),
-            ..filter.unwrap_or_default()
+        #[allow(clippy::unnecessary_lazy_evaluations)] // rust-lang/rust-clippy#9422
+        let Some(filter) = filter
+            .unwrap_or_default()
+            .intersect(TransactionBlockFilter {
+                after_checkpoint: (self.stored.first_checkpoint_id > 0)
+                    .then(|| self.stored.first_checkpoint_id as u64 - 1),
+                before_checkpoint: self.stored.last_checkpoint_id.map(|id| id as u64 + 1),
+                ..Default::default()
+            })
+        else {
+            return Ok(Connection::new(false, false));
         };
 
-        ctx.data_unchecked::<PgManager>()
-            .fetch_txs(first, after, last, before, Some(new_filter))
+        TransactionBlock::paginate(ctx.data_unchecked(), page, filter)
             .await
             .extend()
     }

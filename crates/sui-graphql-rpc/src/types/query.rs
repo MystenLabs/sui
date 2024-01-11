@@ -23,7 +23,7 @@ use super::{
     owner::Owner,
     protocol_config::ProtocolConfigs,
     sui_address::SuiAddress,
-    transaction_block::{TransactionBlock, TransactionBlockFilter},
+    transaction_block::{self, TransactionBlock, TransactionBlockFilter},
 };
 use crate::{
     config::ServiceConfig, context_data::db_data_provider::PgManager, error::Error,
@@ -153,17 +153,17 @@ impl Query {
             .extend()
     }
 
-    async fn transaction_block_connection(
+    async fn transaction_blocks(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<transaction_block::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
+        before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
-    ) -> Result<Option<Connection<String, TransactionBlock>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_txs(first, after, last, before, filter)
+    ) -> Result<Connection<String, TransactionBlock>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        TransactionBlock::paginate(ctx.data_unchecked(), page, filter.unwrap_or_default())
             .await
             .extend()
     }

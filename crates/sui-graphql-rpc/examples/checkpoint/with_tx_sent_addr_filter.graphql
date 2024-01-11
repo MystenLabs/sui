@@ -1,13 +1,13 @@
-# Select checkpoint at sequence number 14830285 for transactions from sentAddress
+# Select checkpoint at sequence number 14830285 for transactions from signAddress
 {
   checkpoint(id: { sequenceNumber: 14830285 }) {
     digest
     sequenceNumber
     timestamp
     liveObjectSetDigest
-    transactionBlockConnection(
+    transactionBlocks(
       filter: {
-        sentAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
+        signAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
       }
     ) {
       edges {

@@ -21,7 +21,7 @@
 //# run-graphql
 {
   address(address: "@{C}") {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
       nodes {
         effects {
           balanceChanges {
@@ -47,7 +47,7 @@
 //# run-graphql --cursors 2
 {
   address(address: "@{C}") {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
       nodes {
         effects {
           balanceChanges(first: 2 after: "@{cursor_0}") {
@@ -73,7 +73,7 @@
 //# run-graphql --cursors 3
 {
   address(address: "@{C}") {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
       nodes {
         effects {
           balanceChanges(last: 3 before: "@{cursor_0}") {

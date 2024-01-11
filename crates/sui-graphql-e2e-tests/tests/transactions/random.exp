@@ -35,7 +35,7 @@ Response: {
         }
       }
     },
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "nodes": [
         {
           "kind": {
@@ -69,7 +69,7 @@ Checkpoint created: 3
 task 6 'run-graphql'. lines 54-69:
 Response: {
   "data": {
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "nodes": [
         {
           "kind": {

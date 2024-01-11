@@ -1,8 +1,8 @@
-# Filter on sign or sentAddress
+# Filter on signing address
 {
-  transactionBlockConnection(
+  transactionBlocks(
     filter: {
-      sentAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
+      signAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
     }
   ) {
     nodes {
