@@ -226,8 +226,6 @@ pub struct SuiNode {
     _state_archive_handle: Option<broadcast::Sender<()>>,
 
     _state_snapshot_uploader_handle: Option<broadcast::Sender<()>>,
-    _kv_store_uploader_handle: Option<oneshot::Sender<()>>,
-
     // Channel to allow signaling upstream to shutdown sui-node
     shutdown_channel_tx: broadcast::Sender<Option<RunWithRange>>,
 }
@@ -721,7 +719,6 @@ impl SuiNode {
 
             _state_archive_handle: state_archive_handle,
             _state_snapshot_uploader_handle: state_snapshot_handle,
-            _kv_store_uploader_handle: kv_store_uploader_handle,
             shutdown_channel_tx: shutdown_channel,
         };
 
