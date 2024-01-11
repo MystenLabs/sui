@@ -462,8 +462,7 @@ impl VMRuntime {
         ) = self
             .loader
             .load_script(script.borrow(), &type_arguments, data_store)?;
-        #[cfg(feature = "gas-profiler")]
-        {
+        move_vm_profiler::gas_profiler_feature_enabled! {
             let rem = gas_meter.remaining_gas().into();
             gas_meter.set_profiler(GasProfiler::init_default_cfg(func.pretty_string(), rem));
         }

@@ -196,9 +196,9 @@ mod checked {
                 tx_context.epoch(),
             );
 
-            // Set the profiler if in debug mode
-            #[cfg(feature = "gas-profiler")]
-            {
+            // Set the profiler if feature is enabled
+            #[skip_checked_arithmetic]
+            move_vm_profiler::gas_profiler_feature_enabled! {
                 let tx_digest = tx_context.digest();
                 let remaining_gas: u64 =
                     move_vm_types::gas::GasMeter::remaining_gas(gas_charger.move_gas_status())

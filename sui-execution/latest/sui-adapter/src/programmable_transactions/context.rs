@@ -201,8 +201,8 @@ mod checked {
             );
 
             // Set the profiler if in CLI
-            #[cfg(feature = "gas-profiler")]
-            {
+            #[skip_checked_arithmetic]
+            move_vm_profiler::gas_profiler_feature_enabled! {
                 let tx_digest = tx_context.digest();
 
                 let remaining_gas: u64 =
