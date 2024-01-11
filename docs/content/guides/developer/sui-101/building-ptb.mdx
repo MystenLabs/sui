@@ -90,7 +90,11 @@ You can use the result of a transaction command as an argument in subsequent tra
 const [coin] = txb.splitCoins(txb.gas, [txb.pure(100)]);
 // Transfer the resulting coin object:
 txb.transferObjects([coin], txb.pure(address));
+```
+
 When a transaction command returns multiple results, you can access the result at a specific index either using destructuring, or array indexes.
+
+```ts
 // Destructuring (preferred, as it gives you logical local names):
 const [nft1, nft2] = txb.moveCall({ target: "0x2::nft::mint_many" });
 txb.transferObjects([nft1, nft2], txb.pure(address));
