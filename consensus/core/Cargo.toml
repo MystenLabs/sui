@@ -13,12 +13,11 @@ bytes.workspace = true
 fastcrypto.workspace = true
 serde.workspace = true
 prometheus.workspace = true
-thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 async-trait.workspace = true
 enum_dispatch.workspace = true
-
+thiserror.workspace = true
 consensus-config.workspace = true
 sui-protocol-config.workspace = true
 

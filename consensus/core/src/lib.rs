@@ -6,6 +6,7 @@ mod block_verifier;
 mod commit;
 mod context;
 mod core;
+mod core_thread;
 mod dag_state;
 mod error;
 mod metrics;
