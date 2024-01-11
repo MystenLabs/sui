@@ -1,6 +1,44 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub fn evaluate(expressions: &mut vector<Expression>) -> u64 {
+    use a::ex::Expression as E;
+    let mut stack = vector;
+    while (!expressions.is_empty()) {
+        match (expressions.pop_back()) {
+            E::Done => break,
+
+            E::Add => {
+                let e1 = stack.pop_back();
+
+                let e2 = stack.pop_back();
+
+                stack.push_back(e1 + e2);
+            }
+
+            E::Mul => {
+                let e1 = stack.pop_back();
+
+                let e2 = stack.pop_back();
+
+                stack.push_back(e1 * e2);
+            }
+
+            E::Num(number) => {
+                stack.push_back(number);
+            }
+        }
+    }
+
+    let result = stack.pop_back();
+
+    assert!(expressions.is_empty(), 0);
+
+    assert!(stack.is_empty(), 1);
+
+    result
+}
+
 use clap::Parser;
 #[cfg(feature = "unit_test")]
 use move_cli::base::test::UnitTestResult;
