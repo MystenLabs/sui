@@ -20,10 +20,10 @@ use crate::{
     server::version::{check_version_middleware, set_version_middleware},
     types::query::{Query, SuiGraphQLSchema},
 };
-use async_graphql::extensions::Tracing;
 use async_graphql::extensions::{ApolloTracing, OpenTelemetry};
-use async_graphql::EmptySubscription;
+use async_graphql::extensions::{ExtensionContext, Tracing};
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
+use async_graphql::{Context, EmptySubscription};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
@@ -38,12 +38,13 @@ use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Body;
 use hyper::Server as HyperServer;
 use std::convert::Infallible;
+use std::sync::Arc;
 use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::sync::OnceCell;
 use tower::{Layer, Service};
-use tracing::warn;
+use tracing::{info, warn};
 
 pub struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
@@ -181,7 +182,7 @@ impl ServerBuilder {
             ))
         })?;
         let registry_service = mysten_metrics::start_prometheus_server(prom_addr);
-        println!("Starting Prometheus HTTP endpoint at {}", prom_addr);
+        info!("Starting Prometheus HTTP endpoint at {}", prom_addr);
         let registry = registry_service.default_registry();
 
         // METRICS
@@ -266,7 +267,9 @@ async fn graphql_handler(
     schema: axum::Extension<SuiGraphQLSchema>,
     headers: HeaderMap,
     req: GraphQLRequest,
+    ctx: &Context<'static>,
 ) -> GraphQLResponse {
+    let instant = Instant::now();
     let mut req = req.into_inner();
     if headers.contains_key(ShowUsage::name()) {
         req.data.insert(ShowUsage)
@@ -274,7 +277,15 @@ async fn graphql_handler(
     // Capture the IP address of the client
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
-    schema.execute(req).await.into()
+    let result = schema.execute(req).await.into();
+    let elapsed = instant.elapsed();
+    if let Some(metrics) = ctx.data_opt::<Arc<RequestMetrics>>() {
+        metrics
+            .request_response_time
+            .with_label_values(&["response_time"])
+            .observe(elapsed.as_secs() as f64)
+    }
+    result
 }
 
 async fn health_checks(

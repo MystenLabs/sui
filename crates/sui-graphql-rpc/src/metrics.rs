@@ -121,6 +121,11 @@ pub(crate) struct RequestMetrics {
     pub query_payload_error: IntCounterVec,
     pub _db_query_cost: Histogram,
     pub query_validation_latency: HistogramVec,
+    pub request_response_time: HistogramVec,
+    pub type_argument_depth: Histogram,
+    pub type_argument_width: Histogram,
+    pub type_nodes: Histogram,
+    pub move_value_depth: Histogram,
 }
 
 // TODO: finetune buckets as we learn more about the distribution of queries
@@ -139,6 +144,10 @@ const QUERY_PAYLOAD_SIZE_BUCKETS: &[f64] = &[
     51200., 102400.,
 ];
 const DB_QUERY_COST_BUCKETS: &[f64] = &[
+    1., 2., 4., 8., 12., 16., 24., 32., 48., 64., 96., 128., 256., 512., 1024.,
+];
+
+const MOVE_TYPE_BUCKETS: &[f64] = &[
     1., 2., 4., 8., 12., 16., 24., 32., 48., 64., 96., 128., 256., 512., 1024.,
 ];
 
@@ -191,6 +200,42 @@ impl RequestMetrics {
                 "query_validation_latency",
                 "The time in ms to validate the query",
                 &["validation", "latency"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            type_argument_depth: register_histogram_with_registry!(
+                "type_argument_depth",
+                "Number of nested type arguments in Move Types",
+                MOVE_TYPE_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            type_argument_width: register_histogram_with_registry!(
+                "type_argument_width",
+                "Number of type arguments passed into a generic instantiation of a resolved Move Type",
+                MOVE_TYPE_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            type_nodes: register_histogram_with_registry!(
+                "type_nodes",
+                "Number of structs that are processed when calculating the layout of a single Move Type",
+                MOVE_TYPE_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            move_value_depth: register_histogram_with_registry!(
+                "move_value_depth",
+                "Number of nested struct fields when calculating the layout of a single Move Type",
+                MOVE_TYPE_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            request_response_time: register_histogram_vec_with_registry!(
+                "request_response_time",
+                "The time needed to resolve and get the result for the request",
+                &["response_time"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
