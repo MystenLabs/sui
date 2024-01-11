@@ -672,8 +672,8 @@ pub struct PTB {
     #[clap(long, required = false)]
     gas: String,
     /// The gas budget to be used to execute this PTB
-    #[clap(long, required = true)]
-    gas_budget: String,
+    #[clap(long)]
+    gas_budget: Option<String>,
     /// Given n-values of the same type, it constructs a vector.
     /// For non objects or an empty vector, the type tag must be specified.
     /// For example, --make-move-vec "<u64>" "[]"
