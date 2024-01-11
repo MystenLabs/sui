@@ -192,21 +192,8 @@ module sui::object {
     // helper for delete
     native fun delete_impl(id: address);
 
-    spec delete_impl {
-        pragma opaque;
-        aborts_if [abstract] false;
-        ensures [abstract] !exists<Ownership>(id);
-    }
-
     // marks newly created UIDs from hash
     native fun record_new_uid(id: address);
-
-    spec record_new_uid {
-        pragma opaque;
-        // TODO: stub to be replaced by actual abort conditions if any
-        aborts_if [abstract] true;
-        // TODO: specify actual function behavior
-     }
 
     #[test_only]
     /// Return the most recent created object ID.
@@ -219,7 +206,7 @@ module sui::object {
 
     #[verify_only]
     /// Ownership information for a given object (stored at the object's address)
-    struct Ownership has key {
+    struct Ownership {
         owner: address, // only matters if status == OWNED
         status: u64,
     }
@@ -227,7 +214,7 @@ module sui::object {
     #[verify_only]
     /// List of fields with a given name type of an object containing fields (stored at the
     /// containing object's address)
-    struct DynamicFields<K: copy + drop + store> has key {
+    struct DynamicFields<K: copy + drop + store> {
         names: vector<K>,
     }
 

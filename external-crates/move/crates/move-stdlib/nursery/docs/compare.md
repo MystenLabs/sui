@@ -78,10 +78,6 @@ to left, byte-by-byte comparison means that (for example)
 <code>compare_bcs_bytes(bcs(0x100), bcs(0x001)) == <a href="compare.md#0x1_compare_LESS_THAN">LESS_THAN</a></code> (as you probably wouldn't expect).
 Keep this in mind when using this function to compare addresses.
 
-> TODO: there is currently no specification for this function, which causes no problem because it is not yet
-> used in the Diem framework. However, should this functionality be needed in specification, a customized
-> native abstraction is needed in the prover framework.
-
 
 <pre><code><b>public</b> <b>fun</b> <a href="compare.md#0x1_compare_cmp_bcs_bytes">cmp_bcs_bytes</a>(v1: &<a href="">vector</a>&lt;u8&gt;, v2: &<a href="">vector</a>&lt;u8&gt;): u8
 </code></pre>

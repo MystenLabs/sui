@@ -26,7 +26,7 @@ type ActiveJwk {
 	"""
 	The most recent epoch in which the JWK was validated.
 	"""
-	epoch: Epoch!
+	epoch: Epoch
 }
 
 type ActiveJwkConnection {
@@ -58,7 +58,7 @@ type ActiveJwkEdge {
 	cursor: String!
 }
 
-type Address implements ObjectOwner {
+type Address implements IOwner {
 	"""
 	Similar behavior to the `transactionBlockConnection` in Query but
 	supports additional `AddressTransactionBlockRelationship` filter
@@ -95,6 +95,15 @@ type Address implements ObjectOwner {
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
+"""
+An address-owned object is owned by a specific 32-byte address that is
+either an account address (derived from a particular signature scheme) or
+an object ID. An address-owned object is accessible only to its owner and no others.
+"""
+type AddressOwner {
+	owner: Owner
+}
+
 enum AddressTransactionBlockRelationship {
 	SIGN
 	SENT
@@ -113,7 +122,7 @@ type AuthenticatorStateExpireTransaction {
 	"""
 	Expire JWKs that have a lower epoch than this.
 	"""
-	minEpoch: Epoch!
+	minEpoch: Epoch
 	"""
 	The initial version that the AuthenticatorStateUpdate was shared at.
 	"""
@@ -127,7 +136,7 @@ type AuthenticatorStateUpdateTransaction {
 	"""
 	Epoch of the authenticator state update transaction.
 	"""
-	epoch: Epoch!
+	epoch: Epoch
 	"""
 	Consensus round of the authenticator state update.
 	"""
@@ -135,7 +144,7 @@ type AuthenticatorStateUpdateTransaction {
 	"""
 	Newly active JWKs (JSON Web Keys).
 	"""
-	newActiveJwkConnection(first: Int, after: String, last: Int, before: String): ActiveJwkConnection!
+	newActiveJwks(first: Int, after: String, last: Int, before: String): ActiveJwkConnection!
 	"""
 	The initial version of the authenticator object that it was shared at.
 	"""
@@ -178,6 +187,35 @@ type BalanceChange {
 	The signed balance change.
 	"""
 	amount: BigInt
+}
+
+type BalanceChangeConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [BalanceChangeEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [BalanceChange!]!
+}
+
+"""
+An edge in a connection.
+"""
+type BalanceChangeEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: BalanceChange!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 type BalanceConnection {
@@ -228,7 +266,7 @@ type ChangeEpochTransaction {
 	"""
 	The next (to become) epoch.
 	"""
-	epoch: Epoch!
+	epoch: Epoch
 	"""
 	The protocol version in effect in the new epoch.
 	"""
@@ -253,61 +291,63 @@ type ChangeEpochTransaction {
 	"""
 	Time at which the next epoch will start.
 	"""
-	startTimestamp: DateTime
+	startTimestamp: DateTime!
 	"""
 	System packages (specifically framework and move stdlib) that are written before the new
 	epoch starts, to upgrade them on-chain. Validators write these packages out when running the
 	transaction.
 	"""
-	systemPackageConnection(first: Int, after: String, last: Int, before: String): MovePackageConnection!
+	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection!
 }
 
 type Checkpoint {
 	"""
-	A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58.
-	This hash can be used to verify checkpoint contents by checking signatures against the committee,
+	A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58. This
+	hash can be used to verify checkpoint contents by checking signatures against the committee,
 	Hashing contents to match digest, and checking that the previous checkpoint digest matches.
 	"""
 	digest: String!
 	"""
-	This checkpoint's position in the total order of finalized checkpoints, agreed upon by consensus.
+	This checkpoint's position in the total order of finalized checkpoints, agreed upon by
+	consensus.
 	"""
 	sequenceNumber: Int!
 	"""
 	The timestamp at which the checkpoint is agreed to have happened according to consensus.
 	Transactions that access time in this checkpoint will observe this timestamp.
 	"""
-	timestamp: DateTime
+	timestamp: DateTime!
 	"""
-	This is an aggregation of signatures from a quorum of validators for the checkpoint proposal.
+	This is an aggregation of signatures from a quorum of validators for the checkpoint
+	proposal.
 	"""
-	validatorSignature: Base64
+	validatorSignatures: Base64!
 	"""
 	The digest of the checkpoint at the previous sequence number.
 	"""
 	previousCheckpointDigest: String
 	"""
-	This is a commitment by the committee at the end of epoch
-	on the contents of the live object set at that time.
-	This can be used to verify state snapshots.
+	A commitment by the committee at the end of epoch on the contents of the live object set at
+	that time. This can be used to verify state snapshots.
 	"""
 	liveObjectSetDigest: String
 	"""
-	Tracks the total number of transaction blocks in the network at the time of the checkpoint.
+	The total number of transaction blocks in the network by the end of this checkpoint.
 	"""
 	networkTotalTransactions: Int
 	"""
-	The computation and storage cost, storage rebate, and nonrefundable storage fee accumulated
-	during this epoch, up to and including this checkpoint.
-	These values increase monotonically across checkpoints in the same epoch.
+	The computation cost, storage cost, storage rebate, and non-refundable storage fee
+	accumulated during this epoch, up to and including this checkpoint. These values increase
+	monotonically across checkpoints in the same epoch, and reset on epoch boundaries.
 	"""
 	rollingGasSummary: GasCostSummary
 	"""
-	End of epoch data is only available on the final checkpoint of an epoch.
-	This field provides information on the new committee and protocol version for the next epoch.
+	The epoch this checkpoint is part of.
 	"""
-	endOfEpoch: EndOfEpochData
 	epoch: Epoch
+	"""
+	Transactions in this checkpoint.
+	"""
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 }
 
@@ -416,11 +456,6 @@ type CoinMetadata {
 	asMoveObject: MoveObject!
 }
 
-type CommitteeMember {
-	authorityName: String
-	stakeUnit: Int
-}
-
 """
 System transaction that runs at the beginning of a checkpoint, and is responsible for setting
 the current value of the clock, based on the timestamp from consensus.
@@ -429,7 +464,7 @@ type ConsensusCommitPrologueTransaction {
 	"""
 	Epoch of the commit prologue transaction.
 	"""
-	epoch: Epoch!
+	epoch: Epoch
 	"""
 	Consensus round of the commit.
 	"""
@@ -437,7 +472,7 @@ type ConsensusCommitPrologueTransaction {
 	"""
 	Unix timestamp from consensus.
 	"""
-	commitTimestamp: DateTime
+	commitTimestamp: DateTime!
 	"""
 	Digest of consensus output, encoded as a Base58 string (only available from V2 of the
 	transaction).
@@ -446,7 +481,7 @@ type ConsensusCommitPrologueTransaction {
 }
 
 """
-ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ
+ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ. Note that the milliseconds part is optional, and it may be omitted if its value is 0.
 """
 scalar DateTime
 
@@ -527,11 +562,6 @@ input DynamicFieldName {
 
 union DynamicFieldValue = MoveObject | MoveValue
 
-type EndOfEpochData {
-	newCommittee: [CommitteeMember!]
-	nextProtocolVersion: Int
-}
-
 """
 System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions
 at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other
@@ -541,7 +571,7 @@ type EndOfEpochTransaction {
 	"""
 	The list of system transactions that are allowed to run at the end of the epoch.
 	"""
-	transactionConnection(first: Int, before: String, last: Int, after: String): EndOfEpochTransactionKindConnection!
+	transactions(first: Int, before: String, last: Int, after: String): EndOfEpochTransactionKindConnection!
 }
 
 union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction
@@ -591,7 +621,7 @@ type Epoch {
 	"""
 	The epoch's starting timestamp
 	"""
-	startTimestamp: DateTime
+	startTimestamp: DateTime!
 	"""
 	The epoch's ending timestamp
 	"""
@@ -635,11 +665,35 @@ type Epoch {
 	"""
 	The epoch's corresponding protocol configuration, including the feature flags and the configuration options
 	"""
-	protocolConfigs: ProtocolConfigs
+	protocolConfigs: ProtocolConfigs!
+	"""
+	SUI set aside to account for objects stored on-chain, at the start of the epoch.
+	This is also used for storage rebates.
+	"""
+	storageFund: StorageFund
+	"""
+	Information about whether this epoch was started in safe mode, which happens if the full epoch
+	change logic fails for some reason.
+	"""
+	safeMode: SafeMode
+	"""
+	The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.  This
+	version changes whenever the fields contained in the system state object (held in a dynamic
+	field attached to `0x5`) change.
+	"""
+	systemStateVersion: Int
+	"""
+	Details of the system that are decided during genesis.
+	"""
+	systemParameters: SystemParameters
+	"""
+	Parameters related to the subsidy that supplements staking rewards
+	"""
+	systemStakeSubsidy: StakeSubsidy
 	"""
 	The epoch's corresponding checkpoints
 	"""
-	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
+	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	"""
 	The epoch's corresponding transaction blocks
 	"""
@@ -656,9 +710,9 @@ type Event {
 	"""
 	sendingModule: MoveModule
 	"""
-	Addresses of the senders of the event
+	Address of the sender of the event
 	"""
-	senders: [Address!]
+	sender: Address
 	"""
 	UTC timestamp in milliseconds since epoch (1/1/1970)
 	"""
@@ -781,8 +835,8 @@ enum Feature {
 	"""
 	SUBSCRIPTIONS
 	"""
-	Information about the system that changes from epoch to epoch (protocol config, committee,
-	reference gas price).
+	Aspects that affect the running of the system that are managed by the
+	validators either directly, or through system transactions.
 	"""
 	SYSTEM_STATE
 }
@@ -853,9 +907,31 @@ type GenesisTransaction {
 	"""
 	Objects to be created during genesis.
 	"""
-	objectConnection(first: Int, after: String, last: Int, before: String): ObjectConnection!
+	objects(first: Int, after: String, last: Int, before: String): ObjectConnection!
 }
 
+
+interface IOwner {
+	address: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String): Balance
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
+	defaultNameServiceName: String
+	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
+	dynamicField(name: DynamicFieldName!): DynamicField
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+}
+
+"""
+An immutable object is an object that can't be mutated, transferred, or deleted.
+Immutable objects have no owner, so anyone can use them.
+"""
+type Immutable {
+	_: Boolean
+}
 
 """
 One of the input objects or primitive values to the programmable transaction block.
@@ -1070,7 +1146,7 @@ type MoveModule {
 	Modules that this module considers friends (these modules can access `public(friend)`
 	functions from this module).
 	"""
-	friendConnection(first: Int, after: String, last: Int, before: String): MoveModuleConnection!
+	friends(first: Int, after: String, last: Int, before: String): MoveModuleConnection!
 	"""
 	Look-up the definition of a struct defined in this module, by its name.
 	"""
@@ -1078,7 +1154,7 @@ type MoveModule {
 	"""
 	Iterate through the structs defined in this module.
 	"""
-	structConnection(first: Int, after: String, last: Int, before: String): MoveStructConnection
+	structs(first: Int, after: String, last: Int, before: String): MoveStructConnection
 	"""
 	Look-up the signature of a function defined in this module, by its name.
 	"""
@@ -1086,7 +1162,7 @@ type MoveModule {
 	"""
 	Iterate through the signatures of functions defined in this module.
 	"""
-	functionConnection(first: Int, after: String, last: Int, before: String): MoveFunctionConnection
+	functions(first: Int, after: String, last: Int, before: String): MoveFunctionConnection
 	"""
 	The Base64 encoded bcs serialization of the module.
 	"""
@@ -1167,7 +1243,7 @@ type MovePackage {
 	"""
 	Paginate through the MoveModules defined in this package.
 	"""
-	moduleConnection(first: Int, after: String, last: Int, before: String): MoveModuleConnection
+	modules(first: Int, after: String, last: Int, before: String): MoveModuleConnection
 	"""
 	The transitive dependencies of this package.
 	"""
@@ -1324,7 +1400,7 @@ type MoveTypeSignature =
   | "u8" | "u16" | ... | "u256"
   | { vector: MoveTypeSignature }
   | {
-      struct: {
+      datatype: {
         package: string,
         module: string,
         type: string,
@@ -1380,7 +1456,7 @@ type Mutation {
 	executeTransactionBlock(txBytes: String!, signatures: [String!]!): ExecutionResult!
 }
 
-type Object implements ObjectOwner {
+type Object implements IOwner {
 	version: Int!
 	"""
 	32-byte hash that identifies the object's current contents, encoded as a Base58 string.
@@ -1406,15 +1482,11 @@ type Object implements ObjectOwner {
 	"""
 	previousTransactionBlock: TransactionBlock
 	"""
-	Objects can either be immutable, shared, owned by an address,
-	or are child objects (part of a dynamic field)
+	The owner type of this Object.
+	The owner can be one of the following types: Immutable, Shared, Parent, Address
+	Immutable and Shared Objects do not have owners.
 	"""
-	kind: ObjectKind
-	"""
-	The Address or Object that owns this Object.  Immutable and Shared Objects do not have
-	owners.
-	"""
-	owner: Owner
+	owner: ObjectOwner
 	"""
 	Attempts to convert the object into a MoveObject
 	"""
@@ -1507,6 +1579,35 @@ type ObjectChange {
 	idDeleted: Boolean
 }
 
+type ObjectChangeConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ObjectChangeEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [ObjectChange!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ObjectChangeEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: ObjectChange!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 type ObjectConnection {
 	"""
 	Information to aid in pagination.
@@ -1567,26 +1668,10 @@ input ObjectKey {
 	version: Int!
 }
 
-enum ObjectKind {
-	OWNED
-	CHILD
-	SHARED
-	IMMUTABLE
-}
-
-interface ObjectOwner {
-	address: SuiAddress!
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
-	balance(type: String): Balance
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
-	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
-	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
-	defaultNameServiceName: String
-	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
-	dynamicField(name: DynamicFieldName!): DynamicField
-	dynamicObjectField(name: DynamicFieldName!): DynamicField
-	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
-}
+"""
+The object's owner type: Immutable, Shared, Parent, or Address.
+"""
+union ObjectOwner = Immutable | Shared | Parent | AddressOwner
 
 """
 Represents types that could contain references or free type parameters.  Such types can appear
@@ -1617,7 +1702,7 @@ type OpenMoveTypeSignatureBody =
   | "u8" | "u16" | ... | "u256"
   | { vector: OpenMoveTypeSignatureBody }
   | {
-      struct {
+      datatype {
         package: string,
         module: string,
         type: string,
@@ -1651,7 +1736,7 @@ type OwnedOrImmutable {
 	object: Object
 }
 
-type Owner implements ObjectOwner {
+type Owner implements IOwner {
 	asAddress: Address
 	asObject: Object
 	address: SuiAddress!
@@ -1720,6 +1805,13 @@ type PageInfo {
 }
 
 """
+The parent of this object
+"""
+type Parent {
+	parent: Object
+}
+
+"""
 A single transaction, or command, in the programmable transaction block.
 """
 union ProgrammableTransaction = MoveCallTransaction | TransferObjectsTransaction | SplitCoinsTransaction | MergeCoinsTransaction | PublishTransaction | UpgradeTransaction | MakeMoveVecTransaction
@@ -1732,11 +1824,11 @@ type ProgrammableTransactionBlock {
 	"""
 	Input objects or primitive values.
 	"""
-	inputConnection(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
 	"""
 	The transaction commands, executed sequentially.
 	"""
-	transactionConnection(first: Int, after: String, last: Int, before: String): ProgrammableTransactionConnection!
+	transactions(first: Int, after: String, last: Int, before: String): ProgrammableTransactionConnection!
 }
 
 type ProgrammableTransactionConnection {
@@ -1773,7 +1865,7 @@ A single protocol configuration value.
 """
 type ProtocolConfigAttr {
 	key: String!
-	value: String!
+	value: String
 }
 
 """
@@ -1855,7 +1947,7 @@ type Query {
 	Configuration for this RPC service
 	"""
 	serviceConfig: ServiceConfig!
-	owner(address: SuiAddress!): ObjectOwner
+	owner(address: SuiAddress!): Owner
 	object(address: SuiAddress!, version: Int): Object
 	address(address: SuiAddress!): Address
 	"""
@@ -1883,7 +1975,7 @@ type Query {
 	(e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
-	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
+	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 	eventConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
@@ -1896,7 +1988,6 @@ type Query {
 	Resolves the owner address of the provided domain name
 	"""
 	resolveNameServiceAddress(name: String!): Address
-	latestSuiSystemState: SuiSystemStateSummary!
 	coinMetadata(coinType: String!): CoinMetadata
 }
 
@@ -1914,7 +2005,7 @@ type RandomnessStateUpdateTransaction {
 	"""
 	Epoch of the randomness state update transaction.
 	"""
-	epoch: Epoch!
+	epoch: Epoch
 	"""
 	Randomness round of the update.
 	"""
@@ -2001,6 +2092,19 @@ type ServiceConfig {
 	"""
 	maxQueryNodes: Int!
 	"""
+	The maximum number of output nodes in a GraphQL response.
+	
+	Non-connection nodes have a count of 1, while connection nodes are counted as
+	the specified 'first' or 'last' number of items, or the default_page_size
+	as set by the server if those arguments are not set.
+	
+	Counts accumulate multiplicatively down the query tree. For example, if a query starts
+	with a connection of first: 10 and has a field to a connection with last: 20, the count
+	at the second level would be 200 nodes. This is then summed to the count of 10 nodes
+	at the first level, for a total of 210 nodes.
+	"""
+	maxOutputNodes: Int!
+	"""
 	Maximum estimated cost of a database query used to serve a GraphQL request.  This is
 	measured in the same units that the database uses in EXPLAIN queries.
 	"""
@@ -2021,6 +2125,35 @@ type ServiceConfig {
 	Maximum length of a query payload string.
 	"""
 	maxQueryPayloadSize: Int!
+	"""
+	Maximum nesting allowed in type arguments in Move Types resolved by this service.
+	"""
+	maxTypeArgumentDepth: Int!
+	"""
+	Maximum number of type arguments passed into a generic instantiation of a Move Type resolved
+	by this service.
+	"""
+	maxTypeArgumentWidth: Int!
+	"""
+	Maximum number of structs that need to be processed when calculating the layout of a single
+	Move Type.
+	"""
+	maxTypeNodes: Int!
+	"""
+	Maximum nesting allowed in struct fields when calculating the layout of a single Move Type.
+	"""
+	maxMoveValueDepth: Int!
+}
+
+"""
+A shared object is an object that is shared using the 0x2::transfer::share_object function
+and is accessible to everyone.
+Unlike owned objects, once an object is shared, it stays mutable and can be accessed by anyone,
+unless it is made immutable. An example of immutable shared objects are all published packages
+and modules on Sui.
+"""
+type Shared {
+	initialSharedVersion: Int!
 }
 
 """
@@ -2235,57 +2368,6 @@ String containing 32B hex-encoded address, with a leading "0x". Leading zeroes c
 """
 scalar SuiAddress
 
-"""
-Aspects that affect the running of the system that are managed by the validators either
-directly, or through system transactions.
-"""
-type SuiSystemStateSummary {
-	"""
-	The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.  This
-	version changes whenever the fields contained in the system state object (held in a dynamic
-	field attached to `0x5`) change.
-	"""
-	systemStateVersion: BigInt
-	"""
-	The minimum gas price that a quorum of validators are guaranteed to sign a transaction for.
-	"""
-	referenceGasPrice: BigInt
-	"""
-	Details of the system that are decided during genesis.
-	"""
-	systemParameters: SystemParameters
-	"""
-	Parameters related to subsiding staking rewards
-	"""
-	stakeSubsidy: StakeSubsidy
-	"""
-	Details of the currently active validators and pending changes to that set.
-	"""
-	validatorSet: ValidatorSet
-	"""
-	SUI set aside to account for objects stored on-chain, at the start of the epoch.
-	"""
-	storageFund: StorageFund
-	"""
-	Information about whether last epoch change used safe mode, which happens if the full epoch
-	change logic fails for some reason.
-	"""
-	safeMode: SafeMode
-	"""
-	The start of the current epoch.
-	"""
-	startTimestamp: DateTime
-	"""
-	The epoch for which this is the system state.
-	"""
-	epoch: Epoch
-	"""
-	Configuration for how the chain operates that can change from epoch to epoch (due to a
-	protocol version upgrade).
-	"""
-	protocolConfigs: ProtocolConfigs
-}
-
 type SuinsRegistration {
 	"""
 	Domain name of the SuinsRegistration object
@@ -2406,6 +2488,10 @@ type TransactionBlock {
 	"""
 	effects: TransactionBlockEffects
 	"""
+	Events emitted by this transaction block.
+	"""
+	events(first: Int, after: String, last: Int, before: String): EventConnection!
+	"""
 	This field is set by senders of a transaction block. It is an epoch reference that sets a
 	deadline after which validators will no longer consider the transaction valid. By default,
 	there is no deadline for when a transaction must execute.
@@ -2467,7 +2553,7 @@ type TransactionBlockEffects {
 	"""
 	Transactions whose outputs this transaction depends upon.
 	"""
-	dependencies: [TransactionBlock!]
+	dependencies(first: Int, after: String, last: Int, before: String): TransactionBlockConnection!
 	"""
 	Effects to the gas object.
 	"""
@@ -2475,16 +2561,16 @@ type TransactionBlockEffects {
 	"""
 	Shared objects that are referenced by but not changed by this transaction.
 	"""
-	unchangedSharedObjects: [UnchangedSharedObject!]
+	unchangedSharedObjects(first: Int, after: String, last: Int, before: String): UnchangedSharedObjectConnection!
 	"""
 	The effect this transaction had on objects on-chain.
 	"""
-	objectChanges: [ObjectChange!]
+	objectChanges(first: Int, after: String, last: Int, before: String): ObjectChangeConnection!
 	"""
 	The effect this transaction had on the balances (sum of coin values per coin type) of
 	addresses and objects.
 	"""
-	balanceChanges: [BalanceChange!]
+	balanceChanges(first: Int, after: String, last: Int, before: String): BalanceChangeConnection!
 	"""
 	Timestamp corresponding to the checkpoint this transaction was finalized in.
 	"""
@@ -2598,6 +2684,35 @@ the shared object as input, consensus must schedule it and pick the version that
 used.
 """
 union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete
+
+type UnchangedSharedObjectConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [UnchangedSharedObjectEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [UnchangedSharedObject!]!
+}
+
+"""
+An edge in a connection.
+"""
+type UnchangedSharedObjectEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: UnchangedSharedObject!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
 
 """
 Upgrades a Move Package.
@@ -2732,6 +2847,11 @@ type Validator {
 	The addresses of other validators this validator has reported.
 	"""
 	reportRecords: [Address!]
+	"""
+	The APY of this validator in basis points.
+	To get the APY in percentage, divide by 100.
+	"""
+	apy: Int
 }
 
 type ValidatorCredentials {

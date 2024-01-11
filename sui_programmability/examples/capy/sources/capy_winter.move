@@ -196,9 +196,10 @@ module capy::capy_winter {
     /// This function demonstrates the way of getting a `u64` number
     /// from a vector of bytes.
     fun get_attribute(seed: &vector<u8>): Attribute {
+        let attr_values = ATTRIBUTE_VALUES;
         let bcs_bytes = bcs::new(hash(*seed));
-        let attr_idx = bcs::peel_u64(&mut bcs_bytes) % vec::length(&ATTRIBUTE_VALUES); // get the index of the attribute
-        let attr_value = *vec::borrow(&ATTRIBUTE_VALUES, attr_idx);
+        let attr_idx = bcs::peel_u64(&mut bcs_bytes) % vec::length(&attr_values); // get the index of the attribute
+        let attr_value = *vec::borrow(&attr_values, attr_idx);
 
         capy::create_attribute(ATTRIBUTE_NAME, attr_value)
     }

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use diesel::{Insertable, Queryable};
+use diesel::{Insertable, Queryable, Selectable};
 
 use crate::errors::IndexerError;
 use crate::schema_v2::epochs;
@@ -33,7 +33,8 @@ pub struct StoredEpochInfo {
     pub epoch_commitments: Option<Vec<u8>>,
 }
 
-#[derive(Queryable)]
+#[derive(Queryable, Selectable)]
+#[diesel(table_name = epochs)]
 pub struct QueryableEpochInfo {
     pub epoch: i64,
     pub first_checkpoint_id: i64,
@@ -61,11 +62,6 @@ pub struct QueryableEpochSystemState {
     pub system_state: Vec<u8>,
 }
 
-#[derive(Queryable)]
-pub struct QueryableEpochId {
-    pub id: i64,
-}
-
 impl StoredEpochInfo {
     pub fn from_epoch_beginning_info(e: &IndexedEpochInfo) -> Self {
         Self {
@@ -76,7 +72,6 @@ impl StoredEpochInfo {
             protocol_version: e.protocol_version as i64,
             total_stake: e.total_stake as i64,
             storage_fund_balance: e.storage_fund_balance as i64,
-            system_state: e.system_state.clone(),
             ..Default::default()
         }
     }
@@ -84,6 +79,7 @@ impl StoredEpochInfo {
     pub fn from_epoch_end_info(e: &IndexedEpochInfo) -> Self {
         Self {
             epoch: e.epoch as i64,
+            system_state: e.system_state.clone(),
             epoch_total_transactions: e.epoch_total_transactions.map(|v| v as i64),
             last_checkpoint_id: e.last_checkpoint_id.map(|v| v as i64),
             epoch_end_timestamp: e.epoch_end_timestamp.map(|v| v as i64),
@@ -109,7 +105,6 @@ impl StoredEpochInfo {
             protocol_version: 0,
             total_stake: 0,
             storage_fund_balance: 0,
-            system_state: vec![],
         }
     }
 }
@@ -142,15 +137,18 @@ impl TryFrom<StoredEpochInfo> for EpochInfo {
     fn try_from(value: StoredEpochInfo) -> Result<Self, Self::Error> {
         let epoch = value.epoch as u64;
         let end_of_epoch_info = (&value).into();
-        let system_state: SuiSystemStateSummary =
-            bcs::from_bytes(&value.system_state).map_err(|_| {
+        let system_state: Option<SuiSystemStateSummary> = bcs::from_bytes(&value.system_state)
+            .map_err(|_| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(
                     "Failed to deserialize `system_state` for epoch {epoch}",
                 ))
-            })?;
+            })
+            .ok();
         Ok(EpochInfo {
             epoch: value.epoch as u64,
-            validators: system_state.active_validators,
+            validators: system_state
+                .map(|s| s.active_validators)
+                .unwrap_or_default(),
             epoch_total_transactions: value.epoch_total_transactions.unwrap_or(0) as u64,
             first_checkpoint_id: value.first_checkpoint_id as u64,
             epoch_start_timestamp: value.epoch_start_timestamp as u64,

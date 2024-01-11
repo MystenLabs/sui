@@ -8,39 +8,138 @@ gas summary: computation_cost: 1000000, storage_cost: 6004000,  storage_rebate: 
 task 2 'create-checkpoint'. lines 33-33:
 Checkpoint created: 1
 
-task 3 'run-graphql'. lines 35-63:
+task 3 'run-graphql'. lines 35-65:
 Response: {
   "data": {
     "transactionBlockConnection": {
       "nodes": [
         {
           "effects": {
-            "objectChanges": [
-              {
-                "outputState": {
-                  "address": "0x52cf80120b0345307c0f09300dd5b27ae4f2ff46b8f11e6bee7f5bb9269eb32a",
-                  "asMovePackage": null
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "address": "0x3e5559ca0a8dd38dd2fe448a022965724b670207f76017288a1cff26c5f558f4",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xb26e126edb1dda1afe3fdd42df5bea0fd198f639d82d183997d7c1ca5d005522",
+                    "asMovePackage": {
+                      "module": {
+                        "name": "m",
+                        "package": {
+                          "asObject": {
+                            "address": "0xb26e126edb1dda1afe3fdd42df5bea0fd198f639d82d183997d7c1ca5d005522"
+                          }
+                        },
+                        "fileFormatVersion": 6,
+                        "bytes": "oRzrCwYAAAAIAQAGAgYKAxARBCEEBSUfB0QiCGZADKYBMAAFAQMBBgEADAEAAQIBAgAABAABAQIAAgIBAAEHBQEBAAIEAAYCAwYLAAEJAAEDAQYLAAEIAQABCQABBgsAAQkAAQgBBENvaW4DU1VJA2JhcgRjb2luA2ZvbwFtA3N1aQV2YWx1ZbJuEm7bHdoa/j/dQt9b6g/RmPY52C0YOZfXwcpdAFUiAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAQAAAwULATgACwAWAgEBAAADCAYqAAAAAAAAAAoAOAEGKwAAAAAAAAALADgBGAIA",
+                        "disassembly": "// Move bytecode v6\nmodule b26e126edb1dda1afe3fdd42df5bea0fd198f639d82d183997d7c1ca5d005522.m {\nuse 0000000000000000000000000000000000000000000000000000000000000002::coin;\nuse 0000000000000000000000000000000000000000000000000000000000000002::sui;\n\n\n\n\npublic foo<Ty0: drop>(Arg0: u64, Arg1: &Coin<Ty0>): u64 {\nB0:\n\t0: MoveLoc[1](Arg1: &Coin<Ty0>)\n\t1: Call coin::value<Ty0>(&Coin<Ty0>): u64\n\t2: MoveLoc[0](Arg0: u64)\n\t3: Add\n\t4: Ret\n}\npublic bar(Arg0: &Coin<SUI>): u64 {\nB0:\n\t0: LdU64(42)\n\t1: CopyLoc[0](Arg0: &Coin<SUI>)\n\t2: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t3: LdU64(43)\n\t4: MoveLoc[0](Arg0: &Coin<SUI>)\n\t5: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t6: Mul\n\t7: Ret\n}\n}"
+                      }
+                    }
+                  }
                 }
-              },
-              {
-                "outputState": {
-                  "address": "0xde1998d07504e61cd97532c5d233cbf7f7f5cbad19f5ef844aadcdd03c295491",
-                  "asMovePackage": {
-                    "module": {
-                      "name": "m",
-                      "package": {
-                        "asObject": {
-                          "address": "0xde1998d07504e61cd97532c5d233cbf7f7f5cbad19f5ef844aadcdd03c295491"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 4 'run-graphql'. lines 67-104:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "address": "0x3e5559ca0a8dd38dd2fe448a022965724b670207f76017288a1cff26c5f558f4",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xb26e126edb1dda1afe3fdd42df5bea0fd198f639d82d183997d7c1ca5d005522",
+                    "asMovePackage": {
+                      "all": {
+                        "edges": [
+                          {
+                            "cursor": "Im0i",
+                            "node": {
+                              "name": "m"
+                            }
+                          },
+                          {
+                            "cursor": "Im4i",
+                            "node": {
+                              "name": "n"
+                            }
+                          },
+                          {
+                            "cursor": "Im8i",
+                            "node": {
+                              "name": "o"
+                            }
+                          }
+                        ],
+                        "pageInfo": {
+                          "hasNextPage": false,
+                          "hasPreviousPage": false
                         }
                       },
-                      "fileFormatVersion": 6,
-                      "bytes": "oRzrCwYAAAAIAQAGAgYKAxARBCEEBSUfB0QiCGZADKYBMAAFAQMBBgEADAEAAQIBAgAABAABAQIAAgIBAAEHBQEBAAIEAAYCAwYLAAEJAAEDAQYLAAEIAQABCQABBgsAAQkAAQgBBENvaW4DU1VJA2JhcgRjb2luA2ZvbwFtA3N1aQV2YWx1Zd4ZmNB1BOYc2XUyxdIzy/f39cutGfXvhEqtzdA8KVSRAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAQAAAwULATgACwAWAgEBAAADCAYqAAAAAAAAAAoAOAEGKwAAAAAAAAALADgBGAIA",
-                      "disassembly": "// Move bytecode v6\nmodule de1998d07504e61cd97532c5d233cbf7f7f5cbad19f5ef844aadcdd03c295491.m {\nuse 0000000000000000000000000000000000000000000000000000000000000002::coin;\nuse 0000000000000000000000000000000000000000000000000000000000000002::sui;\n\n\n\n\npublic foo<Ty0: drop>(Arg0: u64, Arg1: &Coin<Ty0>): u64 {\nB0:\n\t0: MoveLoc[1](Arg1: &Coin<Ty0>)\n\t1: Call coin::value<Ty0>(&Coin<Ty0>): u64\n\t2: MoveLoc[0](Arg0: u64)\n\t3: Add\n\t4: Ret\n}\npublic bar(Arg0: &Coin<SUI>): u64 {\nB0:\n\t0: LdU64(42)\n\t1: CopyLoc[0](Arg0: &Coin<SUI>)\n\t2: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t3: LdU64(43)\n\t4: MoveLoc[0](Arg0: &Coin<SUI>)\n\t5: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t6: Mul\n\t7: Ret\n}\n}"
+                      "after": {
+                        "edges": [
+                          {
+                            "cursor": "Im4i",
+                            "node": {
+                              "name": "n"
+                            }
+                          },
+                          {
+                            "cursor": "Im8i",
+                            "node": {
+                              "name": "o"
+                            }
+                          }
+                        ],
+                        "pageInfo": {
+                          "hasNextPage": false,
+                          "hasPreviousPage": true
+                        }
+                      },
+                      "before": {
+                        "edges": [
+                          {
+                            "cursor": "Im0i",
+                            "node": {
+                              "name": "m"
+                            }
+                          },
+                          {
+                            "cursor": "Im4i",
+                            "node": {
+                              "name": "n"
+                            }
+                          }
+                        ],
+                        "pageInfo": {
+                          "hasNextPage": true,
+                          "hasPreviousPage": false
+                        }
+                      }
                     }
                   }
                 }
-              }
-            ]
+              ]
+            }
           }
         }
       ]
@@ -48,180 +147,138 @@ Response: {
   }
 }
 
-task 4 'run-graphql'. lines 65-97:
+task 5 'run-graphql'. lines 106-146:
 Response: {
   "data": {
     "transactionBlockConnection": {
       "nodes": [
         {
           "effects": {
-            "objectChanges": [
-              {
-                "outputState": {
-                  "address": "0x52cf80120b0345307c0f09300dd5b27ae4f2ff46b8f11e6bee7f5bb9269eb32a",
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "address": "0xde1998d07504e61cd97532c5d233cbf7f7f5cbad19f5ef844aadcdd03c295491",
-                  "asMovePackage": {
-                    "all": {
-                      "nodes": [
-                        {
-                          "name": "m"
-                        },
-                        {
-                          "name": "n"
-                        },
-                        {
-                          "name": "o"
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "address": "0x3e5559ca0a8dd38dd2fe448a022965724b670207f76017288a1cff26c5f558f4",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xb26e126edb1dda1afe3fdd42df5bea0fd198f639d82d183997d7c1ca5d005522",
+                    "asMovePackage": {
+                      "prefix": {
+                        "edges": [
+                          {
+                            "cursor": "Im4i",
+                            "node": {
+                              "name": "n"
+                            }
+                          }
+                        ],
+                        "pageInfo": {
+                          "hasNextPage": true,
+                          "hasPreviousPage": true
                         }
-                      ],
-                      "pageInfo": {
-                        "hasNextPage": false,
-                        "hasPreviousPage": false
-                      }
-                    },
-                    "after": {
-                      "nodes": [
-                        {
-                          "name": "n"
-                        },
-                        {
-                          "name": "o"
+                      },
+                      "prefixAll": {
+                        "edges": [
+                          {
+                            "cursor": "Im4i",
+                            "node": {
+                              "name": "n"
+                            }
+                          },
+                          {
+                            "cursor": "Im8i",
+                            "node": {
+                              "name": "o"
+                            }
+                          }
+                        ],
+                        "pageInfo": {
+                          "hasNextPage": false,
+                          "hasPreviousPage": true
                         }
-                      ],
-                      "pageInfo": {
-                        "hasNextPage": false,
-                        "hasPreviousPage": true
-                      }
-                    },
-                    "before": {
-                      "nodes": [
-                        {
-                          "name": "m"
-                        },
-                        {
-                          "name": "n"
+                      },
+                      "prefixExcess": {
+                        "edges": [
+                          {
+                            "cursor": "Im4i",
+                            "node": {
+                              "name": "n"
+                            }
+                          },
+                          {
+                            "cursor": "Im8i",
+                            "node": {
+                              "name": "o"
+                            }
+                          }
+                        ],
+                        "pageInfo": {
+                          "hasNextPage": false,
+                          "hasPreviousPage": true
                         }
-                      ],
-                      "pageInfo": {
-                        "hasNextPage": true,
-                        "hasPreviousPage": false
+                      },
+                      "suffix": {
+                        "edges": [
+                          {
+                            "cursor": "Im4i",
+                            "node": {
+                              "name": "n"
+                            }
+                          }
+                        ],
+                        "pageInfo": {
+                          "hasNextPage": true,
+                          "hasPreviousPage": true
+                        }
+                      },
+                      "suffixAll": {
+                        "edges": [
+                          {
+                            "cursor": "Im0i",
+                            "node": {
+                              "name": "m"
+                            }
+                          },
+                          {
+                            "cursor": "Im4i",
+                            "node": {
+                              "name": "n"
+                            }
+                          }
+                        ],
+                        "pageInfo": {
+                          "hasNextPage": true,
+                          "hasPreviousPage": false
+                        }
+                      },
+                      "suffixExcess": {
+                        "edges": [
+                          {
+                            "cursor": "Im0i",
+                            "node": {
+                              "name": "m"
+                            }
+                          },
+                          {
+                            "cursor": "Im4i",
+                            "node": {
+                              "name": "n"
+                            }
+                          }
+                        ],
+                        "pageInfo": {
+                          "hasNextPage": true,
+                          "hasPreviousPage": false
+                        }
                       }
                     }
                   }
                 }
-              }
-            ]
-          }
-        }
-      ]
-    }
-  }
-}
-
-task 5 'run-graphql'. lines 99-134:
-Response: {
-  "data": {
-    "transactionBlockConnection": {
-      "nodes": [
-        {
-          "effects": {
-            "objectChanges": [
-              {
-                "outputState": {
-                  "address": "0x52cf80120b0345307c0f09300dd5b27ae4f2ff46b8f11e6bee7f5bb9269eb32a",
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "address": "0xde1998d07504e61cd97532c5d233cbf7f7f5cbad19f5ef844aadcdd03c295491",
-                  "asMovePackage": {
-                    "prefix": {
-                      "nodes": [
-                        {
-                          "name": "n"
-                        }
-                      ],
-                      "pageInfo": {
-                        "hasNextPage": true,
-                        "hasPreviousPage": true
-                      }
-                    },
-                    "prefixAll": {
-                      "nodes": [
-                        {
-                          "name": "n"
-                        },
-                        {
-                          "name": "o"
-                        }
-                      ],
-                      "pageInfo": {
-                        "hasNextPage": false,
-                        "hasPreviousPage": true
-                      }
-                    },
-                    "prefixExcess": {
-                      "nodes": [
-                        {
-                          "name": "n"
-                        },
-                        {
-                          "name": "o"
-                        }
-                      ],
-                      "pageInfo": {
-                        "hasNextPage": false,
-                        "hasPreviousPage": true
-                      }
-                    },
-                    "suffix": {
-                      "nodes": [
-                        {
-                          "name": "n"
-                        }
-                      ],
-                      "pageInfo": {
-                        "hasNextPage": true,
-                        "hasPreviousPage": true
-                      }
-                    },
-                    "suffixAll": {
-                      "nodes": [
-                        {
-                          "name": "m"
-                        },
-                        {
-                          "name": "n"
-                        }
-                      ],
-                      "pageInfo": {
-                        "hasNextPage": true,
-                        "hasPreviousPage": false
-                      }
-                    },
-                    "suffixExcess": {
-                      "nodes": [
-                        {
-                          "name": "m"
-                        },
-                        {
-                          "name": "n"
-                        }
-                      ],
-                      "pageInfo": {
-                        "hasNextPage": true,
-                        "hasPreviousPage": false
-                      }
-                    }
-                  }
-                }
-              }
-            ]
+              ]
+            }
           }
         }
       ]

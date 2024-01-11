@@ -58,6 +58,7 @@ mod checked {
         execution_status::{CommandArgumentError, PackageUpgradeError},
     };
     use sui_verifier::{
+        default_verifier_config,
         private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
         INIT_FN_NAME,
     };
@@ -837,7 +838,11 @@ mod checked {
         for module in modules {
             // Run Sui bytecode verifier, which runs some additional checks that assume the Move
             // bytecode verifier has passed.
-            sui_verifier::verifier::sui_verify_module_unmetered(module, &BTreeMap::new())?;
+            sui_verifier::verifier::sui_verify_module_unmetered(
+                module,
+                &BTreeMap::new(),
+                &default_verifier_config(context.protocol_config, false),
+            )?;
         }
 
         Ok(())

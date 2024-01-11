@@ -190,9 +190,21 @@ impl RandomnessState {
         // Load existing data from store.
         let dkg_output = store.dkg_output();
         if let Some(dkg_output) = &dkg_output {
+            info!(
+                "random beacon: loaded existing DKG output for epoch {}",
+                committee.epoch()
+            );
             metrics
                 .state_handler_random_beacon_dkg_num_shares
                 .set(dkg_output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
+            if let Err(e) = vss_key_output.set(dkg_output.vss_pk.clone()) {
+                error!("random beacon: unable to write VSS key to output during startup: {e:?}")
+            }
+        } else {
+            info!(
+                "random beacon: no existing DKG output found for epoch {}",
+                committee.epoch()
+            );
         }
         metrics
             .state_handler_current_randomness_round
@@ -222,6 +234,9 @@ impl RandomnessState {
         self.metrics
             .state_handler_random_beacon_dkg_num_shares
             .set(output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
+        if let Err(e) = self.vss_key_output.set(output.vss_pk.clone()) {
+            error!("random beacon: unable to write VSS key to output: {e:?}")
+        }
         self.store.set_dkg_output(&output);
         self.dkg_output = Some(output);
     }
@@ -305,9 +320,6 @@ impl RandomnessState {
                 &mut rand::thread_rng(),
             ) {
                 Ok(output) => {
-                    if let Err(e) = self.vss_key_output.set(output.vss_pk.clone()) {
-                        error!("random beacon: unable to write VSS key to output: {e:?}")
-                    }
                     let num_shares = output.shares.as_ref().map_or(0, |shares| shares.len());
                     self.set_dkg_output(output);
                     info!("random beacon: DKG complete with {num_shares} shares for this node");

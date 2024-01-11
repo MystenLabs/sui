@@ -24,20 +24,26 @@
             kind {
                 __typename
                 ... on GenesisTransaction {
-                    objectConnection {
-                        nodes {
-                            address
+                    objects {
+                        edges {
+                            cursor
+                            node {
+                                address
 
-                            asMoveObject {
-                                contents {
-                                    type { repr }
-                                    json
+                                asMoveObject {
+                                    contents {
+                                        type { repr }
+                                        json
+                                    }
                                 }
-                            }
 
-                            asMovePackage {
-                                moduleConnection {
-                                    nodes { name }
+                                asMovePackage {
+                                    modules {
+                                        edges {
+                                            cursor
+                                            node { name }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -49,21 +55,27 @@
                 status
                 errors
                 lamportVersion
-                dependencies { digest }
+                dependencies {
+                    nodes { digest }
+                }
 
                 balanceChanges {
-                    owner { address }
-                    amount
-                    coinType { repr }
+                    nodes {
+                        owner { address }
+                        amount
+                        coinType { repr }
+                    }
                 }
 
                 objectChanges {
-                    address
+                    nodes {
+                        address
 
-                    idCreated
-                    idDeleted
+                        idCreated
+                        idDeleted
 
-                    outputState { address digest }
+                        outputState { address digest }
+                    }
                 }
 
                 gasEffects {
@@ -124,21 +136,27 @@
                 status
                 errors
                 lamportVersion
-                dependencies { digest }
+                dependencies {
+                    nodes { digest }
+                }
 
                 balanceChanges {
-                    owner { address }
-                    amount
-                    coinType { repr }
+                    nodes {
+                        owner { address }
+                        amount
+                        coinType { repr }
+                    }
                 }
 
                 objectChanges {
-                    address
+                    nodes {
+                        address
 
-                    idCreated
-                    idDeleted
+                        idCreated
+                        idDeleted
 
-                    outputState { address digest }
+                        outputState { address digest }
+                    }
                 }
 
                 gasEffects {
@@ -187,17 +205,20 @@
             kind {
                 __typename
                 ... on EndOfEpochTransaction {
-                    transactionConnection {
-                        nodes {
-                            __typename
-                            ... on ChangeEpochTransaction {
-                                epoch { epochId }
-                                protocolVersion
-                                storageCharge
-                                computationCharge
-                                storageRebate
-                                nonRefundableStorageFee
-                                startTimestamp
+                    transactions {
+                        edges {
+                            cursor
+                            node {
+                                __typename
+                                ... on ChangeEpochTransaction {
+                                    epoch { epochId }
+                                    protocolVersion
+                                    storageCharge
+                                    computationCharge
+                                    storageRebate
+                                    nonRefundableStorageFee
+                                    startTimestamp
+                                }
                             }
                         }
                     }
@@ -208,21 +229,27 @@
                 status
                 errors
                 lamportVersion
-                dependencies { digest }
+                dependencies {
+                    nodes { digest }
+                }
 
                 balanceChanges {
-                    owner { address }
-                    amount
-                    coinType { repr }
+                    nodes {
+                        owner { address }
+                        amount
+                        coinType { repr }
+                    }
                 }
 
                 objectChanges {
-                    address
+                    nodes {
+                        address
 
-                    idCreated
-                    idDeleted
+                        idCreated
+                        idDeleted
 
-                    outputState { address digest }
+                        outputState { address digest }
+                    }
                 }
 
                 gasEffects {

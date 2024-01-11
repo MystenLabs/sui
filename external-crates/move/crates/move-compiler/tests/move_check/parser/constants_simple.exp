@@ -20,7 +20,7 @@ error[E03009]: unbound variable
   ┌─ tests/move_check/parser/constants_simple.move:8:24
   │
 8 │     const C4: u8 = if (cond) 0 else 1;
-  │                        ^^^^ Invalid variable usage. Unbound variable 'cond'
+  │                        ^^^^ Unbound variable 'cond'
 
 error[E04013]: invalid statement or expression in constant
   ┌─ tests/move_check/parser/constants_simple.move:9:38

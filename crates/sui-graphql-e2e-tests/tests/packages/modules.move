@@ -53,8 +53,10 @@ fragment Modules on Object {
         nodes {
             effects {
                 objectChanges {
-                    outputState {
-                        ...Modules
+                    nodes {
+                        outputState {
+                            ...Modules
+                        }
                     }
                 }
             }
@@ -62,9 +64,12 @@ fragment Modules on Object {
     }
 }
 
-//# run-graphql
+//# run-graphql --cursors "m" "o"
 fragment NodeNames on MoveModuleConnection {
-    nodes { name }
+    edges {
+        cursor
+        node { name }
+    }
     pageInfo { hasNextPage hasPreviousPage }
 }
 
@@ -76,9 +81,9 @@ fragment Modules on Object {
         # correctly detect the existence of predecessor or successor
         # pages.
 
-        all: moduleConnection { ...NodeNames }
-        after: moduleConnection(after: "m") { ...NodeNames }
-        before: moduleConnection(before: "o") { ...NodeNames }
+        all: modules { ...NodeNames }
+        after: modules(after: "@{cursor_0}") { ...NodeNames }
+        before: modules(before: "@{cursor_1}") { ...NodeNames }
     }
 }
 
@@ -87,8 +92,10 @@ fragment Modules on Object {
         nodes {
             effects {
                 objectChanges {
-                    outputState {
-                        ...Modules
+                    nodes {
+                        outputState {
+                            ...Modules
+                        }
                     }
                 }
             }
@@ -96,9 +103,12 @@ fragment Modules on Object {
     }
 }
 
-//# run-graphql
+//# run-graphql --cursors "m" "o"
 fragment NodeNames on MoveModuleConnection {
-    nodes { name }
+    edges {
+        cursor
+        node { name }
+    }
     pageInfo { hasNextPage hasPreviousPage }
 }
 
@@ -109,13 +119,13 @@ fragment Modules on Object {
         # number of modules returned and correctly detect the
         # existence of predecessor or successor pages.
 
-        prefix: moduleConnection(after: "m", first: 1) { ...NodeNames }
-        prefixAll: moduleConnection(after: "m", first: 2) { ...NodeNames }
-        prefixExcess: moduleConnection(after: "m", first: 100) { ...NodeNames }
+        prefix: modules(after: "@{cursor_0}", first: 1) { ...NodeNames }
+        prefixAll: modules(after: "@{cursor_0}", first: 2) { ...NodeNames }
+        prefixExcess: modules(after: "@{cursor_0}", first: 20) { ...NodeNames }
 
-        suffix: moduleConnection(before: "o", last: 1) { ...NodeNames }
-        suffixAll: moduleConnection(before: "o", last: 2) { ...NodeNames }
-        suffixExcess: moduleConnection(before: "o", last: 100) { ...NodeNames }
+        suffix: modules(before: "@{cursor_1}", last: 1) { ...NodeNames }
+        suffixAll: modules(before: "@{cursor_1}", last: 2) { ...NodeNames }
+        suffixExcess: modules(before: "@{cursor_1}", last: 20) { ...NodeNames }
     }
 }
 
@@ -124,8 +134,10 @@ fragment Modules on Object {
         nodes {
             effects {
                 objectChanges {
-                    outputState {
-                        ...Modules
+                    nodes {
+                        outputState {
+                            ...Modules
+                        }
                     }
                 }
             }

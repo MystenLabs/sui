@@ -48,7 +48,9 @@ use sui_json_rpc_types::{
     Balance, Coin as SuiCoin, SuiCoinMetadata, SuiTransactionBlockEffects,
     SuiTransactionBlockEffectsAPI,
 };
-use sui_types::{balance::Supply, coin::TreasuryCap, dynamic_field::DynamicFieldName};
+use sui_types::{
+    balance::Supply, coin::TreasuryCap, dynamic_field::DynamicFieldName, object::MoveObject,
+};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
     committee::EpochId,
@@ -393,7 +395,10 @@ impl IndexerReader {
     }
 
     /// Retrieve the system state data for the given epoch. If no epoch is given,
-    /// it will retrieve the last known epoch's data and return the system state.
+    /// it will retrieve the latest epoch's data and return the system state.
+    /// System state of the an epoch is written at the end of the epoch, so system state
+    /// of the current epoch is empty until the epoch ends. You can call
+    /// `get_latest_sui_system_state` for current epoch instead.
     pub fn get_epoch_sui_system_state(
         &self,
         epoch: Option<EpochId>,
@@ -1016,12 +1021,13 @@ impl IndexerReader {
             .into_iter()
             .enumerate()
             .map(|(i, event)| {
+                let layout = MoveObject::get_layout_from_struct_tag(event.type_.clone(), self)?;
                 sui_json_rpc_types::SuiEvent::try_from(
                     event,
                     digest,
                     i as u64,
                     Some(timestamp_ms as u64),
-                    self,
+                    layout,
                 )
             })
             .collect::<Result<Vec<_>, _>>()

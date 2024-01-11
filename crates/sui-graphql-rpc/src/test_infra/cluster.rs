@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client::simple_client::SimpleClient;
 use crate::config::ConnectionConfig;
 use crate::config::Limits;
 use crate::config::ServerConfig;
@@ -10,6 +9,7 @@ use crate::server::graphiql_server::start_graphiql_server;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_graphql_rpc_client::simple_client::SimpleClient;
 use sui_indexer::errors::IndexerError;
 use sui_indexer::store::indexer_store_v2::IndexerStoreV2;
 use sui_indexer::store::PgIndexerStoreV2;

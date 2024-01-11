@@ -15,7 +15,7 @@ query byEmittingPackageModuleAndEventType {
       type {
         repr
       }
-      senders {
+      sender {
         address
       }
       timestamp

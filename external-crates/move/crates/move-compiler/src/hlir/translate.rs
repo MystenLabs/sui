@@ -283,7 +283,6 @@ fn module(
         structs: tstructs,
         functions: tfunctions,
         constants: tconstants,
-        spec_dependencies: _,
     } = mdef;
     context.current_package = package_name;
     context.env.add_warning_filter_scope(warning_filter.clone());
@@ -683,7 +682,12 @@ fn tail(
             if arms_unreachable {
                 None
             } else {
-                Some(bound_exp)
+                Some(maybe_freeze(
+                    context,
+                    block,
+                    expected_type.cloned(),
+                    bound_exp,
+                ))
             }
         }
         // While loops can't yield values, so we treat them as statements with no binders.
@@ -702,7 +706,7 @@ fn tail(
                 // need to swap the implicit unit out for a trailing unit in tail position
                 trailing_unit_exp(eloc)
             } else {
-                bound_exp
+                maybe_freeze(context, block, expected_type.cloned(), bound_exp)
             };
             context.record_named_block_binders(name, binders);
             context.record_named_block_type(name, out_type.clone());
@@ -734,7 +738,7 @@ fn tail(
                 // need to swap the implicit unit out for a trailing unit in tail position
                 trailing_unit_exp(eloc)
             } else {
-                bound_exp
+                maybe_freeze(context, block, expected_type.cloned(), bound_exp)
             };
             context.record_named_block_binders(name, binders.clone());
             context.record_named_block_type(name, out_type.clone());
@@ -752,7 +756,7 @@ fn tail(
                 result
             })
         }
-        E::Block(seq) => tail_block(context, block, Some(&out_type), seq),
+        E::Block(seq) => tail_block(context, block, expected_type, seq),
 
         // -----------------------------------------------------------------------------------------
         //  statements that need to be hoisted out
@@ -1206,18 +1210,6 @@ fn value(
         // -----------------------------------------------------------------------------------------
         E::Use(_) => panic!("ICE unexpanded use"),
 
-        E::Spec(u, tused_locals) => {
-            let used_locals = tused_locals
-                .into_iter()
-                .map(|(var, ty)| {
-                    let v = translate_var(var);
-                    let st = single_type(context, ty);
-                    (v, st)
-                })
-                .collect();
-            make_exp(HE::Spec(u, used_locals))
-        }
-
         E::UnresolvedError => {
             assert!(context.env.has_errors());
             make_exp(HE::UnresolvedError)
@@ -1520,7 +1512,6 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         | E::Constant(_, _)
         | E::Move { .. }
         | E::Copy { .. }
-        | E::Spec(..)
         | E::UnresolvedError
         | E::NamedBlock(_, _)) => value_statement(context, block, make_exp(e_)),
 

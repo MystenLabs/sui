@@ -10,7 +10,7 @@
 //# run-graphql
 # Make sure the randomness state was created on the epoch boundary
 {
-    latestSuiSystemState {
+    epoch {
         protocolConfigs {
             protocolVersion
             randomBeacon: featureFlag(key: "random_beacon") { value }
@@ -33,8 +33,11 @@
             kind {
                 __typename
                 ... on EndOfEpochTransaction {
-                    transactionConnection {
-                        nodes { __typename }
+                    transactions {
+                        edges {
+                            cursor
+                            node { __typename }
+                        }
                     }
                 }
             }
@@ -43,7 +46,7 @@
 }
 
 
-//# set-random-state --randomness-round 1 --random-bytes SGVsbG8gU3Vp --randomness-initial-version 2
+//# set-random-state --randomness-round 0 --random-bytes SGVsbG8gU3Vp --randomness-initial-version 2
 # Set the contents of the randomness object
 
 //# create-checkpoint

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::progress_store::{ExecutorProgress, ProgressStore, ProgressStoreWrapper};
-use crate::reader::LocalReader;
+use crate::reader::CheckpointReader;
 use crate::worker_pool::WorkerPool;
 use crate::workers::Worker;
 use crate::DataIngestionMetrics;
@@ -60,10 +60,10 @@ impl<P: ProgressStore> IndexerExecutor<P> {
         path: PathBuf,
         mut exit_receiver: oneshot::Receiver<()>,
     ) -> Result<ExecutorProgress> {
-        let (checkpoint_reader, mut checkpoint_recv, gc_sender, _exit_sender) =
-            LocalReader::initialize(path);
         let mut reader_checkpoint_number = self.progress_store.min_watermark()?;
-        spawn_monitored_task!(checkpoint_reader.run(reader_checkpoint_number));
+        let (checkpoint_reader, mut checkpoint_recv, gc_sender, _exit_sender) =
+            CheckpointReader::initialize(path, reader_checkpoint_number);
+        spawn_monitored_task!(checkpoint_reader.run());
 
         for pool in std::mem::take(&mut self.pools) {
             spawn_monitored_task!(pool);

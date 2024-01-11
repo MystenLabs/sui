@@ -191,7 +191,7 @@
 >  checkpoint(id: { digest: "GaDeWEfbSQCQ8FBQHUHVdm4KjrnbgMqEZPuhStoq5njU" }) {
 >    digest
 >    sequenceNumber
->    validatorSignature
+>    validatorSignatures
 >    previousCheckpointDigest
 >    networkTotalTransactions
 >    rollingGasSummary {
@@ -205,9 +205,6 @@
 >      referenceGasPrice
 >      startTimestamp
 >      endTimestamp
->    }
->    endOfEpoch {
->      nextProtocolVersion
 >    }
 >  }
 >}</pre>
@@ -220,7 +217,7 @@
 >  checkpoint(id: { sequenceNumber: 10 }) {
 >    digest
 >    sequenceNumber
->    validatorSignature
+>    validatorSignatures
 >    previousCheckpointDigest
 >    networkTotalTransactions
 >    rollingGasSummary {
@@ -234,9 +231,6 @@
 >      referenceGasPrice
 >      startTimestamp
 >      endTimestamp
->    }
->    endOfEpoch {
->      nextProtocolVersion
 >    }
 >  }
 >}</pre>
@@ -280,7 +274,7 @@
 >  checkpoint {
 >    digest
 >    sequenceNumber
->    validatorSignature
+>    validatorSignatures
 >    previousCheckpointDigest
 >    networkTotalTransactions
 >    rollingGasSummary {
@@ -295,23 +289,20 @@
 >      startTimestamp
 >      endTimestamp
 >    }
->    endOfEpoch {
->      nextProtocolVersion
->    }
 >  }
 >}</pre>
 
 ### <a id=196609></a>
 ### Multiple Selections
 ####  Get the checkpoint at sequence 9769 and show
-####  the new committee authority and stake units
+####  its transactions
 
 ><pre>{
 >  checkpoint(id: { sequenceNumber: 9769 }) {
 >    digest
 >    sequenceNumber
 >    timestamp
->    validatorSignature
+>    validatorSignatures
 >    previousCheckpointDigest
 >    liveObjectSetDigest
 >    networkTotalTransactions
@@ -323,13 +314,6 @@
 >    }
 >    epoch {
 >      epochId
->    }
->    endOfEpoch {
->      newCommittee {
->        authorityName
->        stakeUnit
->      }
->      nextProtocolVersion
 >    }
 >    transactionBlockConnection {
 >      edges {
@@ -410,11 +394,11 @@
 ####  Use the checkpoint connection to fetch some default amount of checkpoints in an ascending order
 
 ><pre>{
->  checkpointConnection {
+>  checkpoints {
 >    nodes {
 >      digest
 >      sequenceNumber
->      validatorSignature
+>      validatorSignatures
 >      previousCheckpointDigest
 >      networkTotalTransactions
 >      rollingGasSummary {
@@ -429,19 +413,16 @@
 >        startTimestamp
 >        endTimestamp
 >      }
->      endOfEpoch {
->        nextProtocolVersion
->      }
 >    }
 >  }
 >}</pre>
 
 ### <a id=262141></a>
 ### First Ten After Checkpoint
-####  Fetch the digest and sequence number of the first 10 checkpoints after the cursor, which in this example is set to be checkpoint 11. Note that cursor will be opaque
+####  Fetch the digest and sequence number of the first 10 checkpoints after the cursor, which in this example is set to be checkpoint 11. Note that the cursor is opaque.
 
 ><pre>{
->  checkpointConnection(first: 10, after: "11") {
+>  checkpoints(first: 10, after: "MTE=") {
 >    nodes {
 >      sequenceNumber
 >      digest
@@ -454,7 +435,7 @@
 ####  Fetch the digest and the sequence number of the last 20 checkpoints before the cursor
 
 ><pre>{
->  checkpointConnection(last: 20, before: "100") {
+>  checkpoints(last: 20, before: "MTAw") {
 >    nodes {
 >      sequenceNumber
 >      digest
@@ -518,42 +499,6 @@
 >    referenceGasPrice
 >    startTimestamp
 >    endTimestamp
->    validatorSet {
->      totalStake
->      pendingActiveValidatorsSize
->      stakePoolMappingsSize
->      inactivePoolsSize
->      validatorCandidatesSize
->      activeValidators {
->        name
->        description
->        imageUrl
->        projectUrl
->        exchangeRates {
->          asObject {
->            storageRebate
->            bcs
->            kind
->          }
->          hasPublicTransfer
->        }
->        exchangeRatesSize
->        stakingPoolActivationEpoch
->        stakingPoolSuiBalance
->        rewardsPool
->        poolTokenBalance
->        pendingStake
->        pendingTotalSuiWithdraw
->        pendingPoolTokenWithdraw
->        votingPower
->        gasPrice
->        commissionRate
->        nextEpochStake
->        nextEpochGasPrice
->        nextEpochCommissionRate
->        atRisk
->      }
->    }
 >  }
 >}</pre>
 
@@ -585,7 +530,6 @@
 >          asObject {
 >            storageRebate
 >            bcs
->            kind
 >          }
 >          hasPublicTransfer
 >        }
@@ -614,7 +558,7 @@
 
 ><pre>{
 >  epoch {
->    checkpointConnection {
+>    checkpoints {
 >      nodes {
 >        transactionBlockConnection(first: 10) {
 >          pageInfo {
@@ -737,7 +681,7 @@
 >      type {
 >        repr
 >      }
->      senders {
+>      sender {
 >        address
 >      }
 >      timestamp
@@ -767,7 +711,7 @@
 >      type {
 >        repr
 >      }
->      senders {
+>      sender {
 >        address
 >      }
 >      timestamp
@@ -796,7 +740,7 @@
 >      type {
 >        repr
 >      }
->      senders {
+>      sender {
 >        address
 >      }
 >      timestamp
@@ -844,12 +788,26 @@
 >    digest
 >    storageRebate
 >    owner {
->      defaultNameServiceName
+>      __typename
+>      ... on Shared {
+>        initialSharedVersion
+>      }
+>      __typename
+>      ... on Parent {
+>        parent {
+>          address
+>        }
+>      }
+>      __typename
+>      ... on AddressOwner {
+>        owner {
+>          address
+>        }
+>      }
 >    }
 >    previousTransactionBlock {
 >      digest
 >    }
->    kind
 >  }
 >}</pre>
 
@@ -870,7 +828,24 @@
 >    edges {
 >      node {
 >        storageRebate
->        kind
+>        owner {
+>          __typename
+>          ... on Shared {
+>            initialSharedVersion
+>          }
+>          __typename
+>          ... on Parent {
+>            parent {
+>              address
+>            }
+>          }
+>          __typename
+>          ... on AddressOwner {
+>            owner {
+>              address
+>            }
+>          }
+>        }
 >      }
 >    }
 >  }
@@ -927,7 +902,24 @@
 >    edges {
 >      node {
 >        storageRebate
->        kind
+>        owner {
+>          __typename
+>          ... on Shared {
+>            initialSharedVersion
+>          }
+>          __typename
+>          ... on Parent {
+>            parent {
+>              address
+>            }
+>          }
+>          __typename
+>          ... on AddressOwner {
+>            owner {
+>              address
+>            }
+>          }
+>        }
 >      }
 >    }
 >  }
@@ -1255,47 +1247,41 @@
 ## Sui System State Summary
 ### <a id=1048560></a>
 ### Sui System State Summary
+####  Get the latest sui system state data
 
 ><pre>{
->  latestSuiSystemState {
->    systemStateVersion
->    referenceGasPrice
->    startTimestamp
->    validatorSet {
->      totalStake
->      pendingActiveValidatorsSize
->      stakePoolMappingsSize
->      inactivePoolsSize
->      validatorCandidatesSize
->      activeValidators {
->        name
->        description
->        imageUrl
->        projectUrl
->        exchangeRates {
->          asObject {
->            storageRebate
->            bcs
->            kind
->          }
->          hasPublicTransfer
->        }
->        exchangeRatesSize
->        stakingPoolActivationEpoch
->        stakingPoolSuiBalance
->        rewardsPool
->        poolTokenBalance
->        pendingStake
->        pendingTotalSuiWithdraw
->        pendingPoolTokenWithdraw
->        votingPower
->        gasPrice
->        commissionRate
->        nextEpochStake
->        nextEpochGasPrice
->        nextEpochCommissionRate
->        atRisk
+>  epoch {
+>    storageFund {
+>      totalObjectStorageRebates
+>      nonRefundableBalance
+>    }
+>    safeMode {
+>      enabled
+>      gasSummary {
+>         computationCost
+>         storageCost
+>         storageRebate
+>         nonRefundableStorageFee
 >      }
+>    }
+>    systemStateVersion
+>    systemParameters {
+>      durationMs
+>      stakeSubsidyStartEpoch
+>      minValidatorCount
+>      maxValidatorCount
+>      minValidatorJoiningStake
+>      validatorLowStakeThreshold
+>      validatorVeryLowStakeThreshold
+>      validatorLowStakeGracePeriod
+>    }
+>    systemStakeSubsidy {
+>      balance
+>      distributionCounter
+>      currentDistributionAmount
+>      periodLength
+>      decreaseRate
+>
 >    }
 >  }
 >}</pre>
@@ -1366,7 +1352,7 @@
 >          storageRebate
 >        }
 >        ... on GenesisTransaction {
->          objectConnection {
+>          objects {
 >            nodes { address }
 >          }
 >        }
@@ -1669,7 +1655,24 @@
 >    address: "0x0bba1e7d907dc2832edfc3bf4468b6deacd9a2df435a35b17e640e135d2d5ddc"
 >  ) {
 >    version
->    kind
+>    owner {
+>      __typename
+>      ... on Shared {
+>        initialSharedVersion
+>      }
+>      __typename
+>      ... on Parent {
+>        parent {
+>          address
+>        }
+>      }
+>      __typename
+>      ... on AddressOwner {
+>        owner {
+>          address
+>        }
+>      }
+>    }
 >    previousTransactionBlock {
 >      effects {
 >        status
@@ -1686,22 +1689,26 @@
 >          }
 >        }
 >        balanceChanges {
->          owner {
->            address
->            balance(type: "0x2::sui::SUI") {
->              totalBalance
+>          nodes {
+>            owner {
+>              address
+>              balance(type: "0x2::sui::SUI") {
+>                totalBalance
+>              }
 >            }
->          }
->          amount
->          coinType {
->            repr
->            signature
->            layout
+>            amount
+>            coinType {
+>              repr
+>              signature
+>              layout
+>            }
 >          }
 >        }
 >        dependencies {
->          sender {
->            address
+>          nodes {
+>            sender {
+>              address
+>            }
 >          }
 >        }
 >      }

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses Test=0x0 A=0x42 --simulator --custom-validator-account --reference-gas-price 234
+//# init --addresses Test=0x0 A=0x42 --simulator --custom-validator-account --reference-gas-price 234 --default-gas-price 1000
 
 //# publish
 module Test::M1 {
@@ -27,7 +27,7 @@ module Test::M1 {
     }
 }
 
-//# run Test::M1::create --args 0 @A
+//# run Test::M1::create --args 0 @A --gas-price 1000
 
 //# run Test::M1::create --args 0 @validator_0
 
@@ -88,7 +88,9 @@ module Test::M1 {
         node {
           address
           digest
-          kind
+          owner {
+            __typename
+          }
         }
       }
     }
@@ -103,7 +105,9 @@ module Test::M1 {
         node {
           address
           digest
-          kind
+          owner {
+            __typename
+          }
         }
       }
     }
@@ -114,7 +118,9 @@ module Test::M1 {
         node {
           address
           digest
-          kind
+          owner {
+            __typename
+          }
         }
       }
     }
@@ -126,9 +132,8 @@ module Test::M1 {
         node {
           address
           digest
-          kind
-            owner {
-            address
+          owner {
+            __typename
           }
         }
       }
@@ -138,7 +143,12 @@ module Test::M1 {
   object(address: $obj_2_0) {
     version
     owner {
-      address
+      __typename
+      ... on AddressOwner {
+        owner {
+          address
+        }
+      }
     }
   }
 
@@ -151,7 +161,7 @@ module Test::M1 {
 
 //# run-graphql --variables validator_0
 {
-  latestSuiSystemState {
+  epoch {
     validatorSet {
       activeValidators {
         address {
@@ -168,7 +178,13 @@ module Test::M1 {
 //# run-graphql
 # Since we set it at the init, it should be the same as 234
 {
-  latestSuiSystemState {
+  epoch {
     referenceGasPrice
   }
 }
+
+//# run Test::M1::create --args 0 @A --gas-price 999
+
+//# run Test::M1::create --args 0 @A --gas-price 1000
+
+//# run Test::M1::create --args 0 @A --gas-price 235

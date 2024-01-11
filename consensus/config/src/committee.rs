@@ -1,12 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::{Display, Formatter};
+use fastcrypto::traits::KeyPair;
+use std::{
+    fmt::{Display, Formatter},
+    ops::{Index, IndexMut},
+};
 
 use multiaddr::Multiaddr;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use serde::{Deserialize, Serialize};
 
-use crate::{NetworkPublicKey, ProtocolPublicKey};
+use crate::{NetworkKeyPair, NetworkPublicKey, ProtocolKeyPair, ProtocolPublicKey};
 
 /// Committee of the consensus protocol is updated each epoch.
 pub type Epoch = u64;
@@ -53,6 +59,30 @@ impl Committee {
         }
     }
 
+    pub fn new_for_test(
+        epoch: Epoch,
+        authorities_stake: Vec<Stake>,
+    ) -> (Self, Vec<(NetworkKeyPair, ProtocolKeyPair)>) {
+        let mut authorities = vec![];
+        let mut key_pairs = vec![];
+        let mut rng = StdRng::from_seed([9; 32]);
+        for (i, stake) in authorities_stake.into_iter().enumerate() {
+            let network_keypair = NetworkKeyPair::generate(&mut rng);
+            let protocol_keypair = ProtocolKeyPair::generate(&mut rng);
+            authorities.push(Authority {
+                stake,
+                address: Multiaddr::empty(),
+                hostname: format!("test_host {i}").to_string(),
+                network_key: network_keypair.public().clone(),
+                protocol_key: protocol_keypair.public().clone(),
+            });
+            key_pairs.push((network_keypair, protocol_keypair));
+        }
+
+        let committee = Committee::new(epoch, authorities);
+        (committee, key_pairs)
+    }
+
     /// Public accessors for Committee data.
 
     pub fn epoch(&self) -> Epoch {
@@ -71,12 +101,22 @@ impl Committee {
         self.validity_threshold
     }
 
+    /// Returns true if the provided stake has reached quorum (2f+1)
+    pub fn reached_quorum(&self, stake: Stake) -> bool {
+        stake >= self.quorum_threshold()
+    }
+
+    /// Returns true if the provided stake has reached validity (f+1)
+    pub fn reached_validity(&self, stake: Stake) -> bool {
+        stake >= self.validity_threshold()
+    }
+
     pub fn stake(&self, authority_index: AuthorityIndex) -> Stake {
-        self.authorities[authority_index.value()].stake
+        self.authorities[authority_index].stake
     }
 
     pub fn authority(&self, authority_index: AuthorityIndex) -> &Authority {
-        &self.authorities[authority_index.value()]
+        &self.authorities[authority_index]
     }
 
     pub fn authorities(&self) -> impl Iterator<Item = (AuthorityIndex, &Authority)> {
@@ -124,40 +164,57 @@ impl AuthorityIndex {
     }
 }
 
+impl AuthorityIndex {
+    pub fn new_for_test(index: u32) -> Self {
+        Self(index)
+    }
+}
+
 impl Display for AuthorityIndex {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.0.to_string().as_str())
     }
 }
 
+impl<T, const N: usize> Index<AuthorityIndex> for [T; N] {
+    type Output = T;
+
+    fn index(&self, index: AuthorityIndex) -> &Self::Output {
+        self.get(index.value()).unwrap()
+    }
+}
+
+impl<T> Index<AuthorityIndex> for Vec<T> {
+    type Output = T;
+
+    fn index(&self, index: AuthorityIndex) -> &Self::Output {
+        self.get(index.value()).unwrap()
+    }
+}
+
+impl<T, const N: usize> IndexMut<AuthorityIndex> for [T; N] {
+    fn index_mut(&mut self, index: AuthorityIndex) -> &mut Self::Output {
+        self.get_mut(index.value()).unwrap()
+    }
+}
+
+impl<T> IndexMut<AuthorityIndex> for Vec<T> {
+    fn index_mut(&mut self, index: AuthorityIndex) -> &mut Self::Output {
+        self.get_mut(index.value()).unwrap()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::{Authority, Committee, NetworkKeyPair, ProtocolKeyPair, Stake};
-    use fastcrypto::traits::KeyPair as _;
-    use multiaddr::Multiaddr;
-    use rand::{rngs::StdRng, SeedableRng};
+    use crate::{Committee, Stake};
 
     #[test]
     fn committee_basic() {
         // GIVEN
         let epoch = 100;
-
-        let mut authorities = vec![];
-        let mut rng = StdRng::from_seed([9; 32]);
         let num_of_authorities = 9;
-        for i in 1..=num_of_authorities {
-            let network_keypair = NetworkKeyPair::generate(&mut rng);
-            let protocol_keypair = ProtocolKeyPair::generate(&mut rng);
-            authorities.push(Authority {
-                stake: i as Stake,
-                address: Multiaddr::empty(),
-                hostname: "test_host".to_string(),
-                network_key: network_keypair.public().clone(),
-                protocol_key: protocol_keypair.public().clone(),
-            });
-        }
-
-        let committee = Committee::new(epoch, authorities);
+        let authority_stakes = (1..=9).map(|s| s as Stake).collect();
+        let (committee, _) = Committee::new_for_test(epoch, authority_stakes);
 
         // THEN make sure the output Committee fields are populated correctly.
         assert_eq!(committee.size(), num_of_authorities);

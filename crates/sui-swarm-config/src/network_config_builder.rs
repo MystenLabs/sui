@@ -21,7 +21,7 @@ pub enum CommitteeConfig {
     Size(NonZeroUsize),
     Validators(Vec<ValidatorGenesisConfig>),
     AccountKeys(Vec<AccountKeyPair>),
-    /// Indicates that a committee should be deterministically generated, useing the provided rng
+    /// Indicates that a committee should be deterministically generated, using the provided rng
     /// as a source of randomness as well as generating deterministic network port information.
     Deterministic((NonZeroUsize, Option<Vec<AccountKeyPair>>)),
 }
@@ -327,7 +327,10 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 .add_objects(self.additional_objects);
 
             for (i, validator) in validators.iter().enumerate() {
-                let name = format!("validator-{i}");
+                let name = validator
+                    .name
+                    .clone()
+                    .unwrap_or(format!("validator-{i}").to_string());
                 let validator_info = validator.to_validator_info(name);
                 builder =
                     builder.add_validator(validator_info.info, validator_info.proof_of_possession);

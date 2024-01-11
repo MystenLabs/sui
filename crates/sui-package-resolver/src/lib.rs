@@ -6,6 +6,7 @@ use lru::LruCache;
 use move_binary_format::file_format::{
     AbilitySet, FunctionDefinitionIndex, Signature, SignatureIndex, StructTypeParameter, Visibility,
 };
+use std::collections::btree_map::Entry;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use std::{borrow::Cow, collections::BTreeMap};
@@ -42,6 +43,21 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 pub struct Resolver<S> {
     package_store: S,
+    limits: Option<Limits>,
+}
+
+/// Optional configuration that imposes limits on the work that the resolver can do for each
+/// request.
+#[derive(Debug)]
+pub struct Limits {
+    /// Maximum recursion depth through type parameters.
+    pub max_type_argument_depth: usize,
+    /// Maximum number of type arguments in a single type instantiation.
+    pub max_type_argument_width: usize,
+    /// Maximum size for the resolution context.
+    pub max_type_nodes: usize,
+    /// Maximum recursion depth through struct fields.
+    pub max_move_value_depth: usize,
 }
 
 /// Store which fetches package for the given address from the backend db and caches it
@@ -127,14 +143,14 @@ pub struct FunctionDef {
 /// to a map, an instance can be created to query the map without having to allocate strings on the
 /// heap.
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Hash)]
-pub struct StructRef<'m, 'n> {
+pub struct DatatypeRef<'m, 'n> {
     pub package: AccountAddress,
     pub module: Cow<'m, str>,
     pub name: Cow<'n, str>,
 }
 
 /// A `StructRef` that owns its strings.
-pub type StructKey = StructRef<'static, 'static>;
+pub type DatatypeKey = DatatypeRef<'static, 'static>;
 
 #[derive(Clone, Debug)]
 pub enum Reference {
@@ -162,15 +178,17 @@ pub enum OpenSignatureBody {
     U128,
     U256,
     Vector(Box<OpenSignatureBody>),
-    Struct(StructKey, Vec<OpenSignatureBody>),
+    Datatype(DatatypeKey, Vec<OpenSignatureBody>),
     TypeParameter(u16),
 }
 
 /// Information necessary to convert a type tag into a type layout.
 #[derive(Debug, Default)]
-struct ResolutionContext {
+struct ResolutionContext<'l> {
     /// Definitions (field information) for structs referred to by types added to this context.
-    structs: BTreeMap<StructKey, StructDef>,
+    structs: BTreeMap<DatatypeKey, StructDef>,
+    /// Limits configuration from the calling resolver.
+    limits: Option<&'l Limits>,
 }
 
 /// Interface to abstract over access to a store of live packages.  Used to override the default
@@ -201,9 +219,33 @@ macro_rules! as_ref_impl {
 as_ref_impl!(Arc<dyn PackageStore>);
 as_ref_impl!(Box<dyn PackageStore>);
 
+/// Check $value does not exceed $limit in config, if the limit config exists, returning an error
+/// containing the max value and actual value otherwise.
+macro_rules! check_max_limit {
+    ($err:ident, $config:expr; $limit:ident $op:tt $value:expr) => {
+        if let Some(l) = $config {
+            let max = l.$limit;
+            let val = $value;
+            if !(max $op val) {
+                return Err(Error::$err(max, val));
+            }
+        }
+    };
+}
+
 impl<S> Resolver<S> {
     pub fn new(package_store: S) -> Self {
-        Self { package_store }
+        Self {
+            package_store,
+            limits: None,
+        }
+    }
+
+    pub fn new_with_limits(package_store: S, limits: Limits) -> Self {
+        Self {
+            package_store,
+            limits: Some(limits),
+        }
     }
 
     pub fn package_store(&self) -> &S {
@@ -220,7 +262,7 @@ impl<S: PackageStore> Resolver<S> {
     /// structs in terms of their defining ID (i.e. their package ID always points to the first
     /// package that introduced them).
     pub async fn type_layout(&self, mut tag: TypeTag) -> Result<MoveTypeLayout> {
-        let mut context = ResolutionContext::default();
+        let mut context = ResolutionContext::new(self.limits.as_ref());
 
         // (1). Fetch all the information from this store that is necessary to resolve types
         // referenced by this tag.
@@ -234,7 +276,12 @@ impl<S: PackageStore> Resolver<S> {
             .await?;
 
         // (2). Use that information to resolve the tag into a layout.
-        context.resolve_layout(&tag)
+        let max_depth = self
+            .limits
+            .as_ref()
+            .map_or(usize::MAX, |l| l.max_move_value_depth);
+
+        Ok(context.resolve_layout(&tag, max_depth)?.0)
     }
 
     /// Return the abilities of a concrete type, based on the abilities in its type definition, and
@@ -243,7 +290,7 @@ impl<S: PackageStore> Resolver<S> {
     /// have the ability as well. Similar rules apply for `key` except that it requires its type
     /// parameters to have `store`.
     pub async fn abilities(&self, mut tag: TypeTag) -> Result<AbilitySet> {
-        let mut context = ResolutionContext::default();
+        let mut context = ResolutionContext::new(self.limits.as_ref());
 
         // (1). Fetch all the information from this store that is necessary to resolve types
         // referenced by this tag.
@@ -457,7 +504,7 @@ impl Module {
         &self,
         after: Option<&str>,
         before: Option<&str>,
-    ) -> impl Iterator<Item = &str> + Clone {
+    ) -> impl DoubleEndedIterator<Item = &str> + Clone {
         use std::ops::Bound as B;
         self.struct_index
             .range::<str, _>((
@@ -507,7 +554,7 @@ impl Module {
         &self,
         after: Option<&str>,
         before: Option<&str>,
-    ) -> impl Iterator<Item = &str> + Clone {
+    ) -> impl DoubleEndedIterator<Item = &str> + Clone {
         use std::ops::Bound as B;
         self.function_index
             .range::<str, _>((
@@ -581,9 +628,9 @@ impl OpenSignatureBody {
 
             S::Vector(sig) => O::Vector(Box::new(OpenSignatureBody::read(sig, bytecode)?)),
 
-            S::Struct(ix) => O::Struct(StructKey::read(*ix, bytecode), vec![]),
-            S::StructInstantiation(ix, params) => O::Struct(
-                StructKey::read(*ix, bytecode),
+            S::Struct(ix) => O::Datatype(DatatypeKey::read(*ix, bytecode), vec![]),
+            S::StructInstantiation(ix, params) => O::Datatype(
+                DatatypeKey::read(*ix, bytecode),
                 params
                     .iter()
                     .map(|sig| OpenSignatureBody::read(sig, bytecode))
@@ -593,9 +640,9 @@ impl OpenSignatureBody {
     }
 }
 
-impl<'m, 'n> StructRef<'m, 'n> {
-    pub fn as_key(&self) -> StructKey {
-        StructKey {
+impl<'m, 'n> DatatypeRef<'m, 'n> {
+    pub fn as_key(&self) -> DatatypeKey {
+        DatatypeKey {
             package: self.package,
             module: self.module.to_string().into(),
             name: self.name.to_string().into(),
@@ -603,7 +650,7 @@ impl<'m, 'n> StructRef<'m, 'n> {
     }
 }
 
-impl StructKey {
+impl DatatypeKey {
     fn read(ix: StructHandleIndex, bytecode: &CompiledModule) -> Self {
         let sh = bytecode.struct_handle_at(ix);
         let mh = bytecode.module_handle_at(sh.module);
@@ -612,7 +659,7 @@ impl StructKey {
         let module = bytecode.identifier_at(mh.name).to_string().into();
         let name = bytecode.identifier_at(sh.name).to_string().into();
 
-        StructKey {
+        DatatypeKey {
             package,
             module,
             name,
@@ -620,7 +667,14 @@ impl StructKey {
     }
 }
 
-impl ResolutionContext {
+impl<'l> ResolutionContext<'l> {
+    fn new(limits: Option<&'l Limits>) -> Self {
+        ResolutionContext {
+            structs: BTreeMap::new(),
+            limits,
+        }
+    }
+
     /// Gather definitions for types that contribute to the definition of `tag` into this resolution
     /// context, fetching data from the `store` as necessary. Also updates package addresses in
     /// `tag` to point to runtime IDs instead of storage IDs to ensure queries made using these
@@ -642,8 +696,24 @@ impl ResolutionContext {
     ) -> Result<()> {
         use TypeTag as T;
 
-        let mut frontier = vec![tag];
-        while let Some(tag) = frontier.pop() {
+        struct ToVisit<'t> {
+            tag: &'t mut TypeTag,
+            depth: usize,
+        }
+
+        let mut frontier = vec![ToVisit { tag, depth: 0 }];
+        while let Some(ToVisit { tag, depth }) = frontier.pop() {
+            macro_rules! push_ty_param {
+                ($tag:expr) => {{
+                    check_max_limit!(
+                        TypeParamNesting, self.limits;
+                        max_type_argument_depth > depth
+                    );
+
+                    frontier.push(ToVisit { tag: $tag, depth: depth + 1 })
+                }}
+            }
+
             match tag {
                 T::Address
                 | T::Bool
@@ -657,11 +727,11 @@ impl ResolutionContext {
                     // Nothing further to add to context
                 }
 
-                T::Vector(tag) => frontier.push(tag),
+                T::Vector(tag) => push_ty_param!(tag),
 
                 T::Struct(s) => {
                     let context = store.fetch(s.address).await?;
-                    let struct_def = context
+                    let def = context
                         .clone()
                         .struct_def(s.module.as_str(), s.name.as_str())?;
 
@@ -670,12 +740,23 @@ impl ResolutionContext {
                     // for keys.  Take care to do this before generating the key that is used to
                     // query and/or write into `self.structs.
                     s.address = context.runtime_id;
-                    let key = StructRef::from(s.as_ref()).as_key();
+                    let key = DatatypeRef::from(s.as_ref()).as_key();
 
-                    for (param, def) in s.type_params.iter_mut().zip(struct_def.type_params.iter())
-                    {
+                    if def.type_params.len() != s.type_params.len() {
+                        return Err(Error::TypeArityMismatch(
+                            def.type_params.len(),
+                            s.type_params.len(),
+                        ));
+                    }
+
+                    check_max_limit!(
+                        TooManyTypeParams, self.limits;
+                        max_type_argument_width >= s.type_params.len()
+                    );
+
+                    for (param, def) in s.type_params.iter_mut().zip(def.type_params.iter()) {
                         if !def.is_phantom || visit_phantoms {
-                            frontier.push(param)
+                            push_ty_param!(param);
                         }
                     }
 
@@ -684,12 +765,17 @@ impl ResolutionContext {
                     }
 
                     if visit_fields {
-                        for (_, sig) in &struct_def.fields {
+                        for (_, sig) in &def.fields {
                             self.add_signature(sig.clone(), store, &context).await?;
                         }
                     }
 
-                    self.structs.insert(key, struct_def);
+                    check_max_limit!(
+                        TooManyTypeNodes, self.limits;
+                        max_type_nodes > self.structs.len()
+                    );
+
+                    self.structs.insert(key, def);
                 }
             }
         }
@@ -724,19 +810,41 @@ impl ResolutionContext {
 
                 O::Vector(sig) => frontier.push(*sig),
 
-                O::Struct(key, params) => {
+                O::Datatype(key, params) => {
+                    check_max_limit!(
+                        TooManyTypeParams, self.limits;
+                        max_type_argument_width >= params.len()
+                    );
+
+                    let params_count = params.len();
+                    let struct_count = self.structs.len();
                     frontier.extend(params.into_iter());
 
-                    if self.structs.contains_key(&key) {
-                        continue;
+                    let def = match self.structs.entry(key.clone()) {
+                        Entry::Occupied(e) => e.into_mut(),
+
+                        Entry::Vacant(e) => {
+                            let storage_id = context.relocate(key.package)?;
+                            let package = store.fetch(storage_id).await?;
+                            let def = package.struct_def(&key.module, &key.name)?;
+
+                            frontier.extend(def.fields.iter().map(|f| &f.1).cloned());
+
+                            check_max_limit!(
+                                TooManyTypeNodes, self.limits;
+                                max_type_nodes > struct_count
+                            );
+
+                            e.insert(def)
+                        }
+                    };
+
+                    if def.type_params.len() != params_count {
+                        return Err(Error::TypeArityMismatch(
+                            def.type_params.len(),
+                            params_count,
+                        ));
                     }
-
-                    let storage_id = context.relocate(key.package)?;
-                    let package = store.fetch(storage_id).await?;
-                    let struct_def = package.struct_def(&key.module, &key.name)?;
-
-                    frontier.extend(struct_def.fields.iter().map(|f| &f.1).cloned());
-                    self.structs.insert(key.clone(), struct_def);
                 }
             }
         }
@@ -747,23 +855,35 @@ impl ResolutionContext {
     /// Translate a type `tag` into its layout using only the information contained in this context.
     /// Requires that the necessary information was added to the context through calls to
     /// `add_type_tag` and `add_signature` before being called.
-    fn resolve_layout(&self, tag: &TypeTag) -> Result<MoveTypeLayout> {
+    ///
+    /// `max_depth` controls how deep the layout is allowed to grow to. The actual depth reached is
+    /// returned alongside the layout (assuming it does not exceed `max_depth`).
+    fn resolve_layout(&self, tag: &TypeTag, max_depth: usize) -> Result<(MoveTypeLayout, usize)> {
         use MoveTypeLayout as L;
         use TypeTag as T;
+
+        if max_depth == 0 {
+            return Err(Error::ValueNesting(
+                self.limits.map_or(0, |l| l.max_move_value_depth),
+            ));
+        }
 
         Ok(match tag {
             T::Signer => return Err(Error::UnexpectedSigner),
 
-            T::Address => L::Address,
-            T::Bool => L::Bool,
-            T::U8 => L::U8,
-            T::U16 => L::U16,
-            T::U32 => L::U32,
-            T::U64 => L::U64,
-            T::U128 => L::U128,
-            T::U256 => L::U256,
+            T::Address => (L::Address, 1),
+            T::Bool => (L::Bool, 1),
+            T::U8 => (L::U8, 1),
+            T::U16 => (L::U16, 1),
+            T::U32 => (L::U32, 1),
+            T::U64 => (L::U64, 1),
+            T::U128 => (L::U128, 1),
+            T::U256 => (L::U256, 1),
 
-            T::Vector(tag) => L::Vector(Box::new(self.resolve_layout(tag)?)),
+            T::Vector(tag) => {
+                let (layout, depth) = self.resolve_layout(tag, max_depth - 1)?;
+                (L::Vector(Box::new(layout)), depth + 1)
+            }
 
             T::Struct(s) => {
                 // TODO (optimization): Could introduce a layout cache to further speed up
@@ -774,7 +894,7 @@ impl ResolutionContext {
                 // they are keyed by runtime IDs.
 
                 // SAFETY: `add_type_tag` ensures `structs` has an element with this key.
-                let key = StructRef::from(s.as_ref());
+                let key = DatatypeRef::from(s.as_ref());
                 let def = &self.structs[&key];
 
                 let StructTag {
@@ -784,13 +904,6 @@ impl ResolutionContext {
                     ..
                 } = s.as_ref();
 
-                if def.type_params.len() != type_params.len() {
-                    return Err(Error::TypeArityMismatch(
-                        def.type_params.len(),
-                        type_params.len(),
-                    ));
-                }
-
                 // TODO (optimization): This could be made more efficient by only generating layouts
                 // for non-phantom types.  This efficiency could be extended to the exploration
                 // phase (i.e. only explore layouts of non-phantom types). But this optimisation is
@@ -799,7 +912,9 @@ impl ResolutionContext {
                 // tag.
                 let param_layouts = type_params
                     .iter()
-                    .map(|tag| self.resolve_layout(tag))
+                    // Reduce the max depth because we know these type parameters will be nested
+                    // wthin this struct.
+                    .map(|tag| self.resolve_layout(tag, max_depth - 1))
                     .collect::<Result<Vec<_>>>()?;
 
                 // SAFETY: `param_layouts` contains `MoveTypeLayout`-s that are generated by this
@@ -807,7 +922,7 @@ impl ResolutionContext {
                 // is necessary to avoid errors when converting layouts into type tags.
                 let type_params = param_layouts
                     .iter()
-                    .map(|layout| layout.try_into().unwrap())
+                    .map(|l| TypeTag::try_from(&l.0).unwrap())
                     .collect();
 
                 let type_ = StructTag {
@@ -817,58 +932,90 @@ impl ResolutionContext {
                     type_params,
                 };
 
-                let fields = def
-                    .fields
-                    .iter()
-                    .map(|(name, sig)| {
-                        Ok(MoveFieldLayout {
-                            name: ident(name.as_str())?,
-                            layout: self.resolve_signature(sig, &param_layouts)?,
-                        })
-                    })
-                    .collect::<Result<_>>()?;
+                let mut fields = Vec::with_capacity(def.fields.len());
+                let mut field_depth = 0;
 
-                L::Struct(MoveStructLayout { type_, fields })
+                for (name, sig) in &def.fields {
+                    let (layout, depth) =
+                        self.resolve_signature(sig, &param_layouts, max_depth - 1)?;
+
+                    field_depth = field_depth.max(depth);
+                    fields.push(MoveFieldLayout {
+                        name: ident(name.as_str())?,
+                        layout,
+                    })
+                }
+
+                (
+                    L::Struct(MoveStructLayout { type_, fields }),
+                    field_depth + 1,
+                )
             }
         })
     }
 
     /// Like `resolve_type_tag` but for signatures.  Needs to be provided the layouts of type
     /// parameters which are substituted when a type parameter is encountered.
+    ///
+    /// `max_depth` controls how deep the layout is allowed to grow to. The actual depth reached is
+    /// returned alongside the layout (assuming it does not exceed `max_depth`).
     fn resolve_signature(
         &self,
         sig: &OpenSignatureBody,
-        param_layouts: &Vec<MoveTypeLayout>,
-    ) -> Result<MoveTypeLayout> {
+        param_layouts: &[(MoveTypeLayout, usize)],
+        max_depth: usize,
+    ) -> Result<(MoveTypeLayout, usize)> {
         use MoveTypeLayout as L;
         use OpenSignatureBody as O;
 
+        if max_depth == 0 {
+            return Err(Error::ValueNesting(
+                self.limits.map_or(0, |l| l.max_move_value_depth),
+            ));
+        }
+
         Ok(match sig {
-            O::Address => L::Address,
-            O::Bool => L::Bool,
-            O::U8 => L::U8,
-            O::U16 => L::U16,
-            O::U32 => L::U32,
-            O::U64 => L::U64,
-            O::U128 => L::U128,
-            O::U256 => L::U256,
+            O::Address => (L::Address, 1),
+            O::Bool => (L::Bool, 1),
+            O::U8 => (L::U8, 1),
+            O::U16 => (L::U16, 1),
+            O::U32 => (L::U32, 1),
+            O::U64 => (L::U64, 1),
+            O::U128 => (L::U128, 1),
+            O::U256 => (L::U256, 1),
 
-            O::TypeParameter(ix) => param_layouts
-                .get(*ix as usize)
-                .ok_or_else(|| Error::TypeParamOOB(*ix, param_layouts.len()))
-                .cloned()?,
+            O::TypeParameter(ix) => {
+                let (layout, depth) = param_layouts
+                    .get(*ix as usize)
+                    .ok_or_else(|| Error::TypeParamOOB(*ix, param_layouts.len()))
+                    .cloned()?;
 
-            O::Vector(sig) => L::Vector(Box::new(
-                self.resolve_signature(sig.as_ref(), param_layouts)?,
-            )),
+                // We need to re-check the type parameter before we use it because it might have
+                // been fine when it was created, but result in too deep a layout when we use it at
+                // this position.
+                if depth > max_depth {
+                    return Err(Error::ValueNesting(
+                        self.limits.map_or(0, |l| l.max_move_value_depth),
+                    ));
+                }
 
-            O::Struct(key, params) => {
+                (layout, depth)
+            }
+
+            O::Vector(sig) => {
+                let (layout, depth) =
+                    self.resolve_signature(sig.as_ref(), param_layouts, max_depth - 1)?;
+
+                (L::Vector(Box::new(layout)), depth + 1)
+            }
+
+            O::Datatype(key, params) => {
                 // SAFETY: `add_signature` ensures `structs` has an element with this key.
                 let def = &self.structs[key];
 
                 let param_layouts = params
                     .iter()
-                    .map(|sig| self.resolve_signature(sig, param_layouts))
+                    .map(|sig| self.resolve_signature(sig, param_layouts, max_depth - 1))
                     .collect::<Result<Vec<_>>>()?;
 
                 // SAFETY: `param_layouts` contains `MoveTypeLayout`-s that are generated by this
@@ -876,7 +1023,7 @@ impl ResolutionContext {
                 // is necessary to avoid errors when converting layouts into type tags.
                 let type_params = param_layouts
                     .iter()
-                    .map(|layout| layout.try_into().unwrap())
+                    .map(|l| TypeTag::try_from(&l.0).unwrap())
                     .collect();
 
                 let type_ = StructTag {
@@ -886,18 +1033,23 @@ impl ResolutionContext {
                     type_params,
                 };
 
-                let fields = def
-                    .fields
-                    .iter()
-                    .map(|(name, sig)| {
-                        Ok(MoveFieldLayout {
-                            name: ident(name.as_str())?,
-                            layout: self.resolve_signature(sig, &param_layouts)?,
-                        })
-                    })
-                    .collect::<Result<_>>()?;
+                let mut fields = Vec::with_capacity(def.fields.len());
+                let mut field_depth = 0;
+                for (name, sig) in &def.fields {
+                    let (layout, depth) =
+                        self.resolve_signature(sig, &param_layouts, max_depth - 1)?;
 
-                L::Struct(MoveStructLayout { type_, fields })
+                    field_depth = field_depth.max(depth);
+                    fields.push(MoveFieldLayout {
+                        name: ident(name.as_str())?,
+                        layout,
+                    });
+                }
+
+                (
+                    L::Struct(MoveStructLayout { type_, fields }),
+                    field_depth + 1,
+                )
             }
         })
     }
@@ -917,7 +1069,7 @@ impl ResolutionContext {
 
             T::Struct(s) => {
                 // SAFETY: `add_type_tag` ensures `structs` has an element with this key.
-                let key = StructRef::from(s.as_ref());
+                let key = DatatypeRef::from(s.as_ref());
                 let def = &self.structs[&key];
 
                 if def.type_params.len() != s.type_params.len() {
@@ -953,9 +1105,9 @@ impl ResolutionContext {
     }
 }
 
-impl<'s> From<&'s StructTag> for StructRef<'s, 's> {
+impl<'s> From<&'s StructTag> for DatatypeRef<'s, 's> {
     fn from(tag: &'s StructTag) -> Self {
-        StructRef {
+        DatatypeRef {
             package: tag.address,
             module: tag.module.as_str().into(),
             name: tag.name.as_str().into(),
@@ -1236,6 +1388,140 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_value_nesting_boundary() {
+        let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
+
+        let resolver = Resolver::new_with_limits(
+            cache,
+            Limits {
+                max_type_argument_width: 100,
+                max_type_argument_depth: 100,
+                max_type_nodes: 100,
+                max_move_value_depth: 3,
+            },
+        );
+
+        // The layout of this type is fine, because it is *just* at the correct depth.
+        let layout = resolver
+            .type_layout(type_("0xa0::m::T1<u8, u8>"))
+            .await
+            .unwrap();
+        let expect = expect![[r#"
+            struct 0xa0::m::T1<u8, u8> {
+                a: address,
+                p: u8,
+                q: vector<u8>,
+            }"#]];
+
+        expect.assert_eq(&format!("{layout:#}"));
+    }
+
+    #[tokio::test]
+    async fn test_err_value_nesting_simple() {
+        let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
+
+        let resolver = Resolver::new_with_limits(
+            cache,
+            Limits {
+                max_type_argument_width: 100,
+                max_type_argument_depth: 100,
+                max_type_nodes: 100,
+                max_move_value_depth: 2,
+            },
+        );
+
+        // The depth limit is now too low, so this will fail.
+        let err = resolver
+            .type_layout(type_("0xa0::m::T1<u8, u8>"))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::ValueNesting(2)))
+    }
+
+    #[tokio::test]
+    async fn test_err_value_nesting_big_type_param() {
+        let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
+
+        let resolver = Resolver::new_with_limits(
+            cache,
+            Limits {
+                max_type_argument_width: 100,
+                max_type_argument_depth: 100,
+                max_type_nodes: 100,
+                max_move_value_depth: 3,
+            },
+        );
+
+        // This layout calculation will fail early because we know that the type parameter we're
+        // calculating will eventually contribute to a layout that exceeds the max depth.
+        let err = resolver
+            .type_layout(type_("0xa0::m::T1<vector<vector<u8>>, u8>"))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::ValueNesting(3)))
+    }
+
+    #[tokio::test]
+    async fn test_err_value_nesting_big_phantom_type_param() {
+        let (_, cache) = package_cache([
+            (1, build_package("sui"), sui_types()),
+            (1, build_package("d0"), d0_types()),
+        ]);
+
+        let resolver = Resolver::new_with_limits(
+            cache,
+            Limits {
+                max_type_argument_width: 100,
+                max_type_argument_depth: 100,
+                max_type_nodes: 100,
+                max_move_value_depth: 3,
+            },
+        );
+
+        // Check that this layout request would succeed.
+        let _ = resolver
+            .type_layout(type_("0xd0::m::O<u8, u8>"))
+            .await
+            .unwrap();
+
+        // But this one fails, even though the big layout is for a phantom type parameter. This may
+        // change in future if we optimise the way we handle phantom type parameters to not
+        // calculate their full layout, just their type tag.
+        let err = resolver
+            .type_layout(type_("0xd0::m::O<u8, vector<vector<u8>>>"))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::ValueNesting(3)))
+    }
+
+    #[tokio::test]
+    async fn test_err_value_nesting_type_param_application() {
+        let (_, cache) = package_cache([
+            (1, build_package("sui"), sui_types()),
+            (1, build_package("d0"), d0_types()),
+        ]);
+
+        let resolver = Resolver::new_with_limits(
+            cache,
+            Limits {
+                max_type_argument_width: 100,
+                max_type_argument_depth: 100,
+                max_type_nodes: 100,
+                max_move_value_depth: 3,
+            },
+        );
+
+        // Make sure that even if all type parameters individually meet the depth requirements,
+        // that we correctly fail if they extend the layout's depth on application.
+        let err = resolver
+            .type_layout(type_("0xd0::m::O<vector<u8>, u8>"))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, Error::ValueNesting(3)))
+    }
+
+    #[tokio::test]
     async fn test_system_package_invalidation() {
         let (inner, cache) = package_cache([(1, build_package("s0"), s0_types())]);
         let resolver = Resolver::new(cache);
@@ -1406,15 +1692,15 @@ mod tests {
                     (
                         "v",
                         Vector(
-                            Struct(
-                                StructRef {
+                            Datatype(
+                                DatatypeRef {
                                     package: 00000000000000000000000000000000000000000000000000000000000000a0,
                                     module: "m",
                                     name: "T1",
                                 },
                                 [
-                                    Struct(
-                                        StructRef {
+                                    Datatype(
+                                        DatatypeRef {
                                             package: 00000000000000000000000000000000000000000000000000000000000000a0,
                                             module: "m",
                                             name: "T2",
@@ -1536,8 +1822,8 @@ mod tests {
                         ref_: Some(
                             Immutable,
                         ),
-                        body: Struct(
-                            StructRef {
+                        body: Datatype(
+                            DatatypeRef {
                                 package: 00000000000000000000000000000000000000000000000000000000000000c0,
                                 module: "m",
                                 name: "T0",
@@ -1549,8 +1835,8 @@ mod tests {
                         ref_: Some(
                             Mutable,
                         ),
-                        body: Struct(
-                            StructRef {
+                        body: Datatype(
+                            DatatypeRef {
                                 package: 00000000000000000000000000000000000000000000000000000000000000a0,
                                 module: "n",
                                 name: "T1",
@@ -1760,9 +2046,107 @@ mod tests {
         assert!(matches!(err, Error::UnexpectedSigner));
     }
 
+    #[tokio::test]
+    async fn test_err_too_many_type_params() {
+        let (_, cache) = package_cache([
+            (1, build_package("sui"), sui_types()),
+            (1, build_package("d0"), d0_types()),
+        ]);
+
+        let resolver = Resolver::new_with_limits(
+            cache,
+            Limits {
+                max_type_argument_width: 1,
+                max_type_argument_depth: 100,
+                max_type_nodes: 100,
+                max_move_value_depth: 100,
+            },
+        );
+
+        let err = resolver
+            .abilities(type_("0xd0::m::O<u32, u64>"))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::TooManyTypeParams(1, 2)));
+    }
+
+    #[tokio::test]
+    async fn test_err_too_many_type_nodes() {
+        use Ability as A;
+        use AbilitySet as S;
+
+        let (_, cache) = package_cache([
+            (1, build_package("sui"), sui_types()),
+            (1, build_package("d0"), d0_types()),
+        ]);
+
+        let resolver = Resolver::new_with_limits(
+            cache,
+            Limits {
+                max_type_argument_width: 100,
+                max_type_argument_depth: 100,
+                max_type_nodes: 2,
+                max_move_value_depth: 100,
+            },
+        );
+
+        // This request is OK, because one of O's type parameters is phantom, so we can avoid
+        // loading its definition.
+        let a1 = resolver
+            .abilities(type_("0xd0::m::O<0xd0::m::S, 0xd0::m::Q>"))
+            .await
+            .unwrap();
+        assert_eq!(a1, S::EMPTY | A::Key | A::Store);
+
+        // But this request will hit the limit
+        let err = resolver
+            .abilities(type_("0xd0::m::T<0xd0::m::P, 0xd0::m::Q>"))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::TooManyTypeNodes(2, _)));
+    }
+
+    #[tokio::test]
+    async fn test_err_type_param_nesting() {
+        use Ability as A;
+        use AbilitySet as S;
+
+        let (_, cache) = package_cache([
+            (1, build_package("sui"), sui_types()),
+            (1, build_package("d0"), d0_types()),
+        ]);
+
+        let resolver = Resolver::new_with_limits(
+            cache,
+            Limits {
+                max_type_argument_width: 100,
+                max_type_argument_depth: 2,
+                max_type_nodes: 100,
+                max_move_value_depth: 100,
+            },
+        );
+
+        // This request is OK, because one of O's type parameters is phantom, so we can avoid
+        // loading its definition.
+        let a1 = resolver
+            .abilities(type_(
+                "0xd0::m::O<0xd0::m::S, 0xd0::m::T<vector<u32>, vector<u64>>>",
+            ))
+            .await
+            .unwrap();
+        assert_eq!(a1, S::EMPTY | A::Key | A::Store);
+
+        // But this request will hit the limit
+        let err = resolver
+            .abilities(type_("vector<0xd0::m::T<0xd0::m::O<u64, u32>, u16>>"))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::TypeParamNesting(2, _)));
+    }
+
     /***** Test Helpers ***************************************************************************/
 
-    type TypeOriginTable = Vec<StructKey>;
+    type TypeOriginTable = Vec<DatatypeKey>;
 
     fn a0_types() -> TypeOriginTable {
         vec![
@@ -1938,8 +2322,8 @@ mod tests {
         AccountAddress::from_str(a).unwrap()
     }
 
-    fn struct_(a: &str, m: &'static str, n: &'static str) -> StructKey {
-        StructKey {
+    fn struct_(a: &str, m: &'static str, n: &'static str) -> DatatypeKey {
+        DatatypeKey {
             package: addr(a),
             module: m.into(),
             name: n.into(),

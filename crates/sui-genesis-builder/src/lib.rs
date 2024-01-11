@@ -698,8 +698,7 @@ fn get_genesis_protocol_config(version: ProtocolVersion) -> ProtocolConfig {
     // depends on protocol config.
     //
     // ChainIdentifier::default().chain() which can be overridden by the
-    // SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE if necessary (this is mainly used for compatibility tests
-    // in which we want to start a cluster that thinks it is mainnet).
+    // SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE if necessary
     ProtocolConfig::get_for_version(version, ChainIdentifier::default().chain())
 }
 
@@ -1014,12 +1013,9 @@ pub fn generate_genesis_system_object(
     token_distribution_schedule: &TokenDistributionSchedule,
     metrics: Arc<LimitsMetrics>,
 ) -> anyhow::Result<()> {
-    // We don't know the chain ID here since we haven't yet created the genesis checkpoint.
-    // However since we know there are no chain specific protocol config options in genesis,
-    // we use Chain::Unknown here.
     let protocol_config = ProtocolConfig::get_for_version(
         ProtocolVersion::new(genesis_chain_parameters.protocol_version),
-        sui_protocol_config::Chain::Unknown,
+        ChainIdentifier::default().chain(),
     );
 
     let pt = {

@@ -38,7 +38,6 @@ exclude = [
     "external-crates/move/crates/move-package",
     "external-crates/move/crates/move-proc-macros",
     "external-crates/move/crates/move-prover",
-    "external-crates/move/crates/move-prover-boogie-backend",
     "external-crates/move/crates/move-prover-test-utils",
     "external-crates/move/crates/move-read-write-set-types",
     "external-crates/move/crates/move-stackless-bytecode",
@@ -54,9 +53,7 @@ exclude = [
     "external-crates/move/crates/move-vm-test-utils",
     "external-crates/move/crates/move-vm-transactional-tests",
     "external-crates/move/crates/move-vm-types",
-    "external-crates/move/crates/prover-mutation",
     "external-crates/move/crates/serializer-tests",
-    "external-crates/move/crates/spec-flatten",
     "external-crates/move/crates/test-generation",
     "external-crates/move/move-execution/next-vm/crates/move-bytecode-verifier",
     "external-crates/move/move-execution/next-vm/crates/move-stdlib",
@@ -78,6 +75,7 @@ members = [
     "crates/mysten-common",
     "crates/mysten-metrics",
     "crates/mysten-network",
+    "crates/mysten-service",
     "crates/mysten-util-mem",
     "crates/mysten-util-mem-derive",
     "crates/prometheus-closure-metric",
@@ -107,6 +105,8 @@ members = [
     "crates/sui-genesis-builder",
     "crates/sui-graphql-e2e-tests",
     "crates/sui-graphql-rpc",
+    "crates/sui-graphql-rpc-client",
+    "crates/sui-graphql-rpc-headers",
     "crates/sui-indexer",
     "crates/sui-json",
     "crates/sui-json-rpc",
@@ -114,7 +114,7 @@ members = [
     "crates/sui-json-rpc-tests",
     "crates/sui-json-rpc-types",
     "crates/sui-keys",
-    "crates/sui-kvstore",
+    "crates/sui-light-client",
     "crates/sui-macros",
     "crates/sui-metric-checker",
     "crates/sui-move",
@@ -190,7 +190,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.16.0"
+version = "1.17.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -234,6 +234,7 @@ arc-swap = { version = "1.5.1", features = ["serde"] }
 assert_cmd = "2.0.6"
 async-graphql = "6.0.7"
 async-graphql-axum = "6.0.7"
+async-graphql-value = "6.0.7"
 async-recursion = "1.0.4"
 async-trait = "0.1.61"
 atomic_float = "0.1"
@@ -535,14 +536,13 @@ move-command-line-common = { path = "external-crates/move/crates/move-command-li
 move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }
 move-ir-types = { path = "external-crates/move/crates/move-ir-types" }
 move-prover = { path = "external-crates/move/crates/move-prover" }
-move-prover-boogie-backend = { path = "external-crates/move/crates/move-prover-boogie-backend" }
 move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9579a60fbffe15c0f65626ae55998bf8ef42e193" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9579a60fbffe15c0f65626ae55998bf8ef42e193"}
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "9579a60fbffe15c0f65626ae55998bf8ef42e193", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c18dc3835f26bc5cf2848ffd32228071fe540071" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c18dc3835f26bc5cf2848ffd32228071fe540071"}
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c18dc3835f26bc5cf2848ffd32228071fe540071", package = "fastcrypto-zkp" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
@@ -580,6 +580,8 @@ sui-framework = { path = "crates/sui-framework" }
 sui-framework-snapshot = { path = "crates/sui-framework-snapshot" }
 sui-framework-tests = { path = "crates/sui-framework-tests" }
 sui-graphql-rpc = { path = "crates/sui-graphql-rpc" }
+sui-graphql-rpc-client = { path = "crates/sui-graphql-rpc-client" }
+sui-graphql-rpc-headers = { path = "crates/sui-graphql-rpc-headers" }
 sui-genesis-builder = { path = "crates/sui-genesis-builder" }
 sui-indexer = { path = "crates/sui-indexer" }
 sui-json = { path = "crates/sui-json" }
@@ -587,7 +589,6 @@ sui-json-rpc = { path = "crates/sui-json-rpc" }
 sui-json-rpc-api = { path = "crates/sui-json-rpc-api" }
 sui-json-rpc-types = { path = "crates/sui-json-rpc-types" }
 sui-keys = { path = "crates/sui-keys" }
-sui-kvstore = { path = "crates/sui-kvstore" }
 sui-macros = { path = "crates/sui-macros" }
 sui-metric-checker = { path = "crates/sui-metric-checker" }
 sui-move = { path = "crates/sui-move" }

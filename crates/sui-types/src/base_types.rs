@@ -145,6 +145,15 @@ pub fn random_object_ref() -> ObjectRef {
     )
 }
 
+#[cfg(any(feature = "test-utils", test))]
+pub fn update_object_ref_for_testing(object_ref: ObjectRef) -> ObjectRef {
+    (
+        object_ref.0,
+        object_ref.1.next(),
+        ObjectDigest::new([0; 32]),
+    )
+}
+
 /// Wrapper around StructTag with a space-efficient representation for common types like coins
 /// The StructTag for a gas coin is 84 bytes, so using 1 byte instead is a win.
 /// The inner representation is private to prevent incorrectly constructing an `Other` instead of

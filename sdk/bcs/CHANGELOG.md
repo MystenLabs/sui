@@ -1,5 +1,17 @@
 # Change Log
 
+## 0.10.1
+
+### Patch Changes
+
+- 9ac0a4ec01: Add extensions to all sdk import paths
+
+## 0.10.0
+
+### Minor Changes
+
+- e5f9e3ba21: Replace tsup based build to fix issues with esm/cjs dual publishing
+
 ## 0.9.1
 
 ### Patch Changes

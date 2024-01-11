@@ -9,9 +9,8 @@ use futures::future::{select, Either};
 use futures::pin_mut;
 use futures::FutureExt;
 use itertools::Itertools;
-use mysten_network::Multiaddr;
 use narwhal_types::{TransactionProto, TransactionsClient};
-use narwhal_worker::LocalNarwhalClient;
+use narwhal_worker::LazyNarwhalClient;
 use parking_lot::{Mutex, RwLockReadGuard};
 use prometheus::Histogram;
 use prometheus::HistogramVec;
@@ -40,7 +39,7 @@ use sui_types::error::{SuiError, SuiResult};
 use tap::prelude::*;
 use tokio::sync::{Semaphore, SemaphorePermit};
 use tokio::task::JoinHandle;
-use tokio::time::{self, sleep, timeout};
+use tokio::time::{self};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::{classify, SequencedConsensusTransactionKey};
@@ -208,48 +207,6 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
                 warn!("Submit transaction failed with: {:?}", r);
             })?;
         Ok(())
-    }
-}
-
-/// A Narwhal client that instantiates LocalNarwhalClient lazily.
-pub struct LazyNarwhalClient {
-    /// Outer ArcSwapOption allows initialization after the first connection to Narwhal.
-    /// Inner ArcSwap allows Narwhal restarts across epoch changes.
-    client: ArcSwapOption<ArcSwap<LocalNarwhalClient>>,
-    addr: Multiaddr,
-}
-
-impl LazyNarwhalClient {
-    /// Lazily instantiates LocalNarwhalClient keyed by the address of the Narwhal worker.
-    pub fn new(addr: Multiaddr) -> Self {
-        Self {
-            client: ArcSwapOption::empty(),
-            addr,
-        }
-    }
-
-    async fn get(&self) -> Arc<ArcSwap<LocalNarwhalClient>> {
-        // Narwhal may not have started and created LocalNarwhalClient, so retry in a loop.
-        // Retries should only happen on Sui process start.
-        const NARWHAL_WORKER_START_TIMEOUT: Duration = Duration::from_secs(30);
-        if let Ok(client) = timeout(NARWHAL_WORKER_START_TIMEOUT, async {
-            loop {
-                match LocalNarwhalClient::get_global(&self.addr) {
-                    Some(c) => return c,
-                    None => {
-                        sleep(Duration::from_millis(100)).await;
-                    }
-                };
-            }
-        })
-        .await
-        {
-            return client;
-        }
-        panic!(
-            "Timed out after {:?} waiting for Narwhal worker ({}) to start!",
-            NARWHAL_WORKER_START_TIMEOUT, self.addr,
-        );
     }
 }
 
@@ -832,19 +789,7 @@ impl ConsensusAdapter {
             {
                 let pending_count = epoch_store.pending_consensus_certificates_count();
                 debug!(epoch=?epoch_store.epoch(), ?pending_count, "Deciding whether to send EndOfPublish");
-                // Send end of epoch if empty and all deferred tx are procesed.
-                if pending_count > 0 {
-                    false
-                } else {
-                    // Don't check deferred table until pending_count is already 0, since it may
-                    // require scanning through a bunch of deletion markers.
-                    let deferred_is_empty = epoch_store.deferred_transactions_empty();
-                    debug!(
-                        ?deferred_is_empty,
-                        "Deciding whether to block EndOfPublish on deferred tx"
-                    );
-                    deferred_is_empty
-                }
+                pending_count == 0 // send end of epoch if empty
             } else {
                 false
             }

@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{connection::Connection, *};
+use diesel::{ExpressionMethods, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
 use sui_indexer::models_v2::objects::StoredObject;
+use sui_indexer::schema_v2::objects;
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_package_resolver::Resolver;
 use sui_types::dynamic_field::DynamicFieldType;
@@ -23,6 +25,7 @@ use super::{
 };
 use crate::context_data::db_data_provider::PgManager;
 use crate::context_data::package_cache::PackageCache;
+use crate::data::{Db, QueryExecutor};
 use crate::error::Error;
 use crate::types::base64::Base64;
 use sui_types::object::{
@@ -38,14 +41,6 @@ pub(crate) struct Object {
 
     /// Deserialized representation of `stored_object.serialized_object`.
     pub native: NativeObject,
-}
-
-#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
-pub(crate) enum ObjectKind {
-    Owned,
-    Child,
-    Shared,
-    Immutable,
 }
 
 #[derive(InputObject, Default, Clone)]
@@ -74,6 +69,47 @@ pub(crate) struct ObjectFilter {
 pub(crate) struct ObjectKey {
     object_id: SuiAddress,
     version: u64,
+}
+
+/// The object's owner type: Immutable, Shared, Parent, or Address.
+#[derive(Union, Clone)]
+pub enum ObjectOwner {
+    Immutable(Immutable),
+    Shared(Shared),
+    Parent(Parent),
+    Address(AddressOwner),
+}
+
+/// An immutable object is an object that can't be mutated, transferred, or deleted.
+/// Immutable objects have no owner, so anyone can use them.
+#[derive(SimpleObject, Clone)]
+pub struct Immutable {
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
+}
+
+/// A shared object is an object that is shared using the 0x2::transfer::share_object function
+/// and is accessible to everyone.
+/// Unlike owned objects, once an object is shared, it stays mutable and can be accessed by anyone,
+/// unless it is made immutable. An example of immutable shared objects are all published packages
+/// and modules on Sui.
+#[derive(SimpleObject, Clone)]
+pub struct Shared {
+    initial_shared_version: u64,
+}
+
+/// The parent of this object
+#[derive(SimpleObject, Clone)]
+pub struct Parent {
+    parent: Option<Object>,
+}
+
+/// An address-owned object is owned by a specific 32-byte address that is
+/// either an account address (derived from a particular signature scheme) or
+/// an object ID. An address-owned object is accessible only to its owner and no others.
+#[derive(SimpleObject, Clone)]
+pub struct AddressOwner {
+    owner: Option<Owner>,
 }
 
 #[Object]
@@ -159,36 +195,41 @@ impl Object {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<TransactionBlock>> {
-        let digest = self.native.previous_transaction.to_string();
+        let digest = self.native.previous_transaction;
         ctx.data_unchecked::<PgManager>()
-            .fetch_tx(digest.as_str())
+            .fetch_tx(&digest.into())
             .await
             .extend()
     }
 
-    /// Objects can either be immutable, shared, owned by an address,
-    /// or are child objects (part of a dynamic field)
-    async fn kind(&self) -> Option<ObjectKind> {
+    /// The owner type of this Object.
+    /// The owner can be one of the following types: Immutable, Shared, Parent, Address
+    /// Immutable and Shared Objects do not have owners.
+    async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwner> {
         use NativeOwner as O;
-        use ObjectKind as K;
-        Some(match self.native.owner {
-            O::AddressOwner(_) => K::Owned,
-            O::ObjectOwner(_) => K::Child,
-            O::Shared { .. } => K::Shared,
-            O::Immutable => K::Immutable,
-        })
-    }
 
-    /// The Address or Object that owns this Object.  Immutable and Shared Objects do not have
-    /// owners.
-    async fn owner(&self) -> Option<Owner> {
-        use NativeOwner as O;
-        let (O::AddressOwner(address) | O::ObjectOwner(address)) = self.native.owner else {
-            return None;
-        };
+        match self.native.owner {
+            O::AddressOwner(address) => {
+                let address = SuiAddress::from(address);
+                Some(ObjectOwner::Address(AddressOwner {
+                    owner: Some(Owner { address }),
+                }))
+            }
+            O::Immutable => Some(ObjectOwner::Immutable(Immutable { dummy: None })),
+            O::ObjectOwner(address) => {
+                let parent = Object::query(ctx.data_unchecked(), address.into(), None)
+                    .await
+                    .ok()
+                    .flatten();
 
-        let address = SuiAddress::from(address);
-        Some(Owner { address })
+                return Some(ObjectOwner::Parent(Parent { parent }));
+            }
+            O::Shared {
+                initial_shared_version,
+            } => Some(ObjectOwner::Shared(Shared {
+                initial_shared_version: initial_shared_version.value(),
+            })),
+        }
     }
 
     /// Attempts to convert the object into a MoveObject
@@ -372,6 +413,36 @@ impl Object {
             stored: None,
             native,
         }
+    }
+
+    pub(crate) async fn query(
+        db: &Db,
+        address: SuiAddress,
+        version: Option<u64>,
+    ) -> Result<Option<Self>, Error> {
+        use objects::dsl;
+
+        let address = address.into_vec();
+        let version = version.map(|v| v as i64);
+
+        let stored_obj: Option<StoredObject> = db
+            .optional(move || {
+                let mut query = dsl::objects
+                    .filter(dsl::object_id.eq(address.clone()))
+                    .limit(1)
+                    .into_boxed();
+
+                // TODO: leverage objects_history
+                if let Some(version) = version {
+                    query = query.filter(dsl::object_version.eq(version));
+                }
+
+                query
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))?;
+
+        stored_obj.map(Self::try_from).transpose()
     }
 }
 

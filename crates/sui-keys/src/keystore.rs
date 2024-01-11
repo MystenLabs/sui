@@ -600,12 +600,35 @@ impl InMemKeystore {
 }
 
 fn validate_alias(alias: &str) -> Result<String, anyhow::Error> {
-    let re = Regex::new(r"^[A-Za-z][A-Za-z0-9-_]*$")
+    let re = Regex::new(r"^[A-Za-z][A-Za-z0-9-_\.]*$")
         .map_err(|_| anyhow!("Cannot build the regex needed to validate the alias naming"))?;
     let alias = alias.trim();
     ensure!(
         re.is_match(alias),
-        "Invalid alias. A valid alias must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_)."
+        "Invalid alias. A valid alias must start with a letter and can contain only letters, digits, hyphens (-), dots (.), or underscores (_)."
     );
     Ok(alias.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::keystore::validate_alias;
+
+    #[test]
+    fn validate_alias_test() {
+        // OK
+        assert!(validate_alias("A.B_dash").is_ok());
+        assert!(validate_alias("A.B-C1_dash").is_ok());
+        assert!(validate_alias("abc_123.sui").is_ok());
+        // Not allowed
+        assert!(validate_alias("A.B-C_dash!").is_err());
+        assert!(validate_alias(".B-C_dash!").is_err());
+        assert!(validate_alias("_test").is_err());
+        assert!(validate_alias("123").is_err());
+        assert!(validate_alias("@@123").is_err());
+        assert!(validate_alias("@_Ab").is_err());
+        assert!(validate_alias("_Ab").is_err());
+        assert!(validate_alias("^A").is_err());
+        assert!(validate_alias("-A").is_err());
+    }
 }

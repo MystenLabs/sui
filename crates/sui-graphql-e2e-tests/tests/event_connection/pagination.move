@@ -39,7 +39,7 @@ module Test::M1 {
         type {
           repr
         }
-        senders {
+        sender {
           address
         }
         json
@@ -61,7 +61,7 @@ module Test::M1 {
         type {
           repr
         }
-        senders {
+        sender {
           address
         }
         json
@@ -83,7 +83,7 @@ module Test::M1 {
         type {
           repr
         }
-        senders {
+        sender {
           address
         }
         json
@@ -105,7 +105,7 @@ module Test::M1 {
         type {
           repr
         }
-        senders {
+        sender {
           address
         }
         json

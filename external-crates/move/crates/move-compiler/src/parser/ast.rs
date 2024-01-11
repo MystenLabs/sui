@@ -584,10 +584,10 @@ new_name!(BlockLabel);
 #[allow(clippy::large_enum_variant)]
 pub enum Exp_ {
     Value(Value),
-    // move(x)
-    Move(Var),
-    // copy(x)
-    Copy(Var),
+    // move e
+    Move(Loc, Box<Exp>),
+    // copy e
+    Copy(Loc, Box<Exp>),
     // [m::]n[<t1, .., tn>]
     Name(NameAccessChain, Option<Vec<Type>>),
 
@@ -1725,8 +1725,14 @@ impl AstDebug for Exp_ {
         match self {
             E::Unit => w.write("()"),
             E::Value(v) => v.ast_debug(w),
-            E::Move(v) => w.write(&format!("move {}", v)),
-            E::Copy(v) => w.write(&format!("copy {}", v)),
+            E::Move(_, e) => {
+                w.write("move ");
+                e.ast_debug(w);
+            }
+            E::Copy(_, e) => {
+                w.write("copy ");
+                e.ast_debug(w);
+            }
             E::Name(ma, tys_opt) => {
                 ma.ast_debug(w);
                 if let Some(ss) = tys_opt {

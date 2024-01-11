@@ -314,7 +314,6 @@ impl WalletContext {
                 tx,
                 SuiTransactionBlockResponseOptions::new()
                     .with_effects()
-                    .with_events()
                     .with_input()
                     .with_events()
                     .with_object_changes()

@@ -11,8 +11,12 @@ pub enum BridgeError {
     OriginTxFailed,
     // The referenced transction does not exist
     TxNotFound,
-    // The referenced transaction does not contain bridge events
-    NoBridgeEventsInTx,
+    // Tx is not yet finalized
+    TxNotFinalized,
+    // No recognized bridge event in specified transaction and event position
+    NoBridgeEventsInTxPosition,
+    // Found BridgeEvent but not BridgeAction
+    BridgeEventNotActionable,
     // Internal Bridge error
     InternalError(String),
     // Authority signature duplication
@@ -35,6 +39,8 @@ pub enum BridgeError {
     MismatchedAuthoritySigner,
     // Signature is over a mismatched action
     MismatchedAction,
+    // Authority has invalid url
+    AuthoirtyUrlInvalid,
     // Sui transaction failure due to generic error
     SuiTxFailureGeneric(String),
     // Storage Error

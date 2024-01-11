@@ -136,11 +136,13 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     }
 
     // Print all addresses
-    SuiClientCommands::Addresses
-        .execute(&mut context)
-        .await
-        .unwrap()
-        .print(true);
+    SuiClientCommands::Addresses {
+        sort_by_alias: true,
+    }
+    .execute(&mut context)
+    .await
+    .unwrap()
+    .print(true);
 
     Ok(())
 }

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ulebDecode } from './uleb';
+import { ulebDecode } from './uleb.js';
 
 /**
  * Class used for reading BCS data chunk by chunk. Meant to be used

@@ -43,7 +43,9 @@ pub(crate) struct GasEffects {
 impl GasInput {
     /// Address of the owner of the gas object(s) used
     async fn gas_sponsor(&self) -> Option<Address> {
-        Some(Address::from(SuiAddress::from(self.owner)))
+        Some(Address {
+            address: SuiAddress::from(self.owner),
+        })
     }
 
     /// Objects used to pay for a transaction's execution and storage
@@ -112,10 +114,13 @@ impl GasCostSummary {
 #[Object]
 impl GasEffects {
     async fn gas_object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_obj(self.object_id, Some(self.object_version))
-            .await
-            .extend()
+        Object::query(
+            ctx.data_unchecked(),
+            self.object_id,
+            Some(self.object_version),
+        )
+        .await
+        .extend()
     }
 
     async fn gas_summary(&self) -> Option<&GasCostSummary> {

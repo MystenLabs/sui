@@ -6,9 +6,10 @@ import { fromB64, toB64 } from './b64.js';
 import { BcsType } from './bcs-type.js';
 import { fromHEX, toHEX } from './hex.js';
 import { BcsReader } from './reader.js';
-import { Encoding } from './types.js';
+import type { Encoding } from './types.js';
 import { decodeStr, splitGenericParameters } from './utils.js';
-import { BcsWriter, BcsWriterOptions } from './writer.js';
+import type { BcsWriterOptions } from './writer.js';
+import { BcsWriter } from './writer.js';
 
 /**
  * Allows for array definitions for names.
@@ -438,7 +439,7 @@ export class BCS {
 					(param) =>
 						new BcsType<unknown>({
 							name: String(param),
-							write: (data, writer) => {
+							write: (_data, _writer) => {
 								throw new Error('Not implemented');
 							},
 							read: (reader) => {

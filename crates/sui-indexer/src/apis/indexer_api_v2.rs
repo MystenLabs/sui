@@ -323,7 +323,9 @@ impl IndexerApiServer for IndexerApiV2 {
         _cursor: Option<ObjectID>,
         _limit: Option<usize>,
     ) -> RpcResult<Page<String, ObjectID>> {
-        let reverse_record_id = self.name_service_config.reverse_record_field_id(address);
+        let reverse_record_id = self
+            .name_service_config
+            .reverse_record_field_id(address.as_ref());
 
         let field_reverse_record_object = match self
             .inner

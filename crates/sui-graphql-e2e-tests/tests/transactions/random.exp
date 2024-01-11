@@ -6,12 +6,12 @@ Checkpoint created: 1
 task 2 'advance-epoch'. lines 8-8:
 Epoch advanced: 0
 
-task 3 'run-graphql'. lines 10-43:
+task 3 'run-graphql'. lines 10-46:
 Response: {
   "data": {
-    "latestSuiSystemState": {
+    "epoch": {
       "protocolConfigs": {
-        "protocolVersion": 32,
+        "protocolVersion": 35,
         "randomBeacon": {
           "value": true
         }
@@ -28,7 +28,7 @@ Response: {
           "json": {
             "id": "0x0000000000000000000000000000000000000000000000000000000000000008",
             "inner": {
-              "id": "0x25629a1397e4822d51639dd612de1377cdb8d09fb30263af5a1632b38427f554",
+              "id": "0xd75e8f8fd1d84e9e2fc7655f6476e5877863de159ec892a46384ddd434ddf6b0",
               "version": "1"
             }
           }
@@ -40,13 +40,19 @@ Response: {
         {
           "kind": {
             "__typename": "EndOfEpochTransaction",
-            "transactionConnection": {
-              "nodes": [
+            "transactions": {
+              "edges": [
                 {
-                  "__typename": "RandomnessStateCreateTransaction"
+                  "cursor": "MA",
+                  "node": {
+                    "__typename": "RandomnessStateCreateTransaction"
+                  }
                 },
                 {
-                  "__typename": "ChangeEpochTransaction"
+                  "cursor": "MQ",
+                  "node": {
+                    "__typename": "ChangeEpochTransaction"
+                  }
                 }
               ]
             }
@@ -57,10 +63,10 @@ Response: {
   }
 }
 
-task 5 'create-checkpoint'. lines 49-49:
+task 5 'create-checkpoint'. lines 52-52:
 Checkpoint created: 3
 
-task 6 'run-graphql'. lines 51-66:
+task 6 'run-graphql'. lines 54-69:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -71,7 +77,7 @@ Response: {
             "epoch": {
               "epochId": 0
             },
-            "randomnessRound": 1,
+            "randomnessRound": 0,
             "randomBytes": "SGVsbG8gU3Vp",
             "randomnessObjInitialSharedVersion": 2
           }

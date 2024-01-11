@@ -33,13 +33,11 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x98066eb7ecf6d012f6cb58b51879a46bf3d310e5db6623fc1777a14db679a0c8::M1::EventA"
+              "repr": "0xa1b4b5e41ec2fd82f4c4f67a3e5212aa3a3e6e30c3a74c4ed45bef3e3b20387d::M1::EventA"
             },
-            "senders": [
-              {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            ],
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
             "json": {
               "new_value": "0"
             },
@@ -53,13 +51,11 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x98066eb7ecf6d012f6cb58b51879a46bf3d310e5db6623fc1777a14db679a0c8::M1::EventA"
+              "repr": "0xa1b4b5e41ec2fd82f4c4f67a3e5212aa3a3e6e30c3a74c4ed45bef3e3b20387d::M1::EventA"
             },
-            "senders": [
-              {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            ],
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
             "json": {
               "new_value": "1"
             },
@@ -73,13 +69,11 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x98066eb7ecf6d012f6cb58b51879a46bf3d310e5db6623fc1777a14db679a0c8::M1::EventA"
+              "repr": "0xa1b4b5e41ec2fd82f4c4f67a3e5212aa3a3e6e30c3a74c4ed45bef3e3b20387d::M1::EventA"
             },
-            "senders": [
-              {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            ],
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
             "json": {
               "new_value": "2"
             },
@@ -103,13 +97,11 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x98066eb7ecf6d012f6cb58b51879a46bf3d310e5db6623fc1777a14db679a0c8::M1::EventA"
+              "repr": "0xa1b4b5e41ec2fd82f4c4f67a3e5212aa3a3e6e30c3a74c4ed45bef3e3b20387d::M1::EventA"
             },
-            "senders": [
-              {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            ],
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
             "json": {
               "new_value": "1"
             },
@@ -123,13 +115,11 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x98066eb7ecf6d012f6cb58b51879a46bf3d310e5db6623fc1777a14db679a0c8::M1::EventA"
+              "repr": "0xa1b4b5e41ec2fd82f4c4f67a3e5212aa3a3e6e30c3a74c4ed45bef3e3b20387d::M1::EventA"
             },
-            "senders": [
-              {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            ],
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
             "json": {
               "new_value": "2"
             },
@@ -153,13 +143,11 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x98066eb7ecf6d012f6cb58b51879a46bf3d310e5db6623fc1777a14db679a0c8::M1::EventA"
+              "repr": "0xa1b4b5e41ec2fd82f4c4f67a3e5212aa3a3e6e30c3a74c4ed45bef3e3b20387d::M1::EventA"
             },
-            "senders": [
-              {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            ],
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
             "json": {
               "new_value": "0"
             },
@@ -173,13 +161,11 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x98066eb7ecf6d012f6cb58b51879a46bf3d310e5db6623fc1777a14db679a0c8::M1::EventA"
+              "repr": "0xa1b4b5e41ec2fd82f4c4f67a3e5212aa3a3e6e30c3a74c4ed45bef3e3b20387d::M1::EventA"
             },
-            "senders": [
-              {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            ],
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
             "json": {
               "new_value": "1"
             },
@@ -203,13 +189,11 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x98066eb7ecf6d012f6cb58b51879a46bf3d310e5db6623fc1777a14db679a0c8::M1::EventA"
+              "repr": "0xa1b4b5e41ec2fd82f4c4f67a3e5212aa3a3e6e30c3a74c4ed45bef3e3b20387d::M1::EventA"
             },
-            "senders": [
-              {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            ],
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
             "json": {
               "new_value": "1"
             },
@@ -223,13 +207,11 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x98066eb7ecf6d012f6cb58b51879a46bf3d310e5db6623fc1777a14db679a0c8::M1::EventA"
+              "repr": "0xa1b4b5e41ec2fd82f4c4f67a3e5212aa3a3e6e30c3a74c4ed45bef3e3b20387d::M1::EventA"
             },
-            "senders": [
-              {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            ],
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
             "json": {
               "new_value": "2"
             },

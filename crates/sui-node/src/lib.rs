@@ -12,6 +12,7 @@ use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::TryFutureExt;
+use narwhal_worker::LazyNarwhalClient;
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
@@ -22,18 +23,15 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_core::authority::CHAIN_IDENTIFIER;
-use sui_core::consensus_adapter::{LazyNarwhalClient, SubmitToConsensus};
+use sui_core::consensus_adapter::SubmitToConsensus;
 use sui_json_rpc_api::JsonRpcMetrics;
-use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
 use sui_types::base_types::ConciseableName;
 use sui_types::digests::ChainIdentifier;
 use sui_types::message_envelope::get_google_jwk_bytes;
-use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
 use tokio::runtime::Handle;
 use tokio::sync::broadcast;
-use tokio::sync::oneshot;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
@@ -92,7 +90,6 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
 use sui_json_rpc::JsonRpcServerBuilder;
-use sui_kvstore::writer::setup_key_value_store_uploader;
 use sui_macros::{fail_point_async, replay_log};
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
@@ -550,14 +547,6 @@ impl SuiNode {
             epoch_store.epoch_start_state(),
         )
         .expect("Initial trusted peers must be set");
-
-        // Start uploading transactions/events to remote key value store
-        let kv_store_uploader_handle = setup_key_value_store_uploader(
-            state_sync_store.clone(),
-            &config.transaction_kv_store_write_config,
-            &prometheus_registry,
-        )
-        .await?;
 
         // Start archiving local state to remote store
         let state_archive_handle =
@@ -1593,19 +1582,12 @@ impl SuiNode {
             .expect("Error loading last checkpoint for current epoch")
             .expect("Could not load last checkpoint for current epoch");
 
-        let authenticator_state_obj_initial_shared_version =
-            get_authenticator_state_obj_initial_shared_version(&state.database)
-                .expect("read cannot fail");
-        let randomness_state_obj_initial_shared_version =
-            get_randomness_state_obj_initial_shared_version(&state.database)
-                .expect("read cannot fail");
-
         let epoch_start_configuration = EpochStartConfiguration::new(
             next_epoch_start_system_state,
             *last_checkpoint.digest(),
-            authenticator_state_obj_initial_shared_version,
-            randomness_state_obj_initial_shared_version,
-        );
+            &state.database,
+        )
+        .expect("EpochStartConfiguration construction cannot fail");
 
         let new_epoch_store = self
             .state

@@ -165,6 +165,7 @@ codes!(
     // bucket for random one off errors. unlikely to be used
     Uncategorized: [
         DeprecatedWillBeRemoved: { msg: "DEPRECATED. will be removed", severity: Warning },
+        DeprecatedSpecItem: { msg: "DEPRECATED. unexpected spec item", severity: NonblockingError },
     ],
     // syntax errors
     Syntax: [
@@ -182,6 +183,7 @@ codes!(
         InvalidSpecBlockMember: { msg: "invalid spec block member", severity: NonblockingError },
         InvalidRestrictedIdentifier:
             { msg: "invalid identifier escape", severity: NonblockingError },
+        InvalidMoveOrCopy: { msg: "invalid 'move' or 'copy'", severity: NonblockingError },
     ],
     // errors for any rules around declaration items
     Declarations: [
@@ -259,6 +261,9 @@ codes!(
         InvalidImmVariableUsage:
             { msg: "invalid usage of immutable variable", severity: NonblockingError },
         InvalidControlFlow: { msg: "invalid control flow", severity: BlockingError },
+        InvalidCopyOp: { msg: "invalid 'copy' usage", severity: NonblockingError },
+        InvalidMoveOp: { msg: "invalid 'move' usage", severity: NonblockingError },
+        ImplicitConstantCopy: { msg: "implicit copy of a constant", severity: Warning },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [

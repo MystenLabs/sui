@@ -51,13 +51,11 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::M1::EventA"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::EventA"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "0"
           },
@@ -68,13 +66,11 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::M1::EventB<0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::M1::Object>"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::EventB<0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::Object>"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "1"
           },
@@ -85,13 +81,11 @@ Response: {
             "name": "M2"
           },
           "type": {
-            "repr": "0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::M2::EventA"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M2::EventA"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "2"
           },
@@ -102,13 +96,11 @@ Response: {
             "name": "M2"
           },
           "type": {
-            "repr": "0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::M2::EventB<0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::M2::Object>"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M2::EventB<0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M2::Object>"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "3"
           },
@@ -129,13 +121,11 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::M1::EventA"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::EventA"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "0"
           },
@@ -146,13 +136,11 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::M1::EventB<0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::M1::Object>"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::EventB<0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::Object>"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "1"
           },
@@ -163,13 +151,11 @@ Response: {
             "name": "M2"
           },
           "type": {
-            "repr": "0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::M2::EventA"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M2::EventA"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "2"
           },
@@ -180,13 +166,11 @@ Response: {
             "name": "M2"
           },
           "type": {
-            "repr": "0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::M2::EventB<0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::M2::Object>"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M2::EventB<0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M2::Object>"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "3"
           },
@@ -207,13 +191,11 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::M1::EventA"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::EventA"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "0"
           },
@@ -224,13 +206,11 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::M1::EventB<0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::M1::Object>"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::EventB<0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::Object>"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "1"
           },
@@ -251,13 +231,11 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::M1::EventA"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::EventA"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "0"
           },
@@ -278,13 +256,11 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::M1::EventB<0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::M1::Object>"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::EventB<0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::Object>"
           },
-          "senders": [
-            {
-              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-            }
-          ],
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
           "json": {
             "new_value": "1"
           },
@@ -300,7 +276,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Invalid type provided as filter: Invalid struct type: 0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::M1::EventB<. Got error: unexpected end of tokens",
+      "message": "Invalid type provided as filter: Invalid struct type: 0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::EventB<. Got error: unexpected end of tokens",
       "locations": [
         {
           "line": 2,
@@ -344,7 +320,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Invalid type provided as filter: Invalid format in '0xc6d87e1b811586a8f918c4da6008004b6b3fc6479236a8047c9b0dfab4f68ebd::' - if '::' is present, there must be a non-empty string on both sides. Expected format like 'package[::module[::type[<type_params>]]]'",
+      "message": "Invalid type provided as filter: Invalid format in '0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::' - if '::' is present, there must be a non-empty string on both sides. Expected format like 'package[::module[::type[<type_params>]]]'",
       "locations": [
         {
           "line": 2,

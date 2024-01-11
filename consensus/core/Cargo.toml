@@ -7,6 +7,20 @@ edition = "2021"
 publish = false
 
 [dependencies]
+base64.workspace = true
+bcs.workspace = true
+bytes.workspace = true
+fastcrypto.workspace = true
+serde.workspace = true
+prometheus.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+async-trait.workspace = true
+enum_dispatch.workspace = true
+thiserror.workspace = true
 consensus-config.workspace = true
+sui-protocol-config.workspace = true
 
 workspace-hack.workspace = true
+
+mysten-metrics = { path = "../../crates/mysten-metrics" }

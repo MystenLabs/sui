@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[allow(implicit_const_copy)]
 /// Functionality for converting Move types into values. Use with care!
 module std::type_name {
     use std::ascii::{Self, String};
@@ -26,9 +27,6 @@ module std::type_name {
     /// this function are defining IDs (the ID of the package in
     /// storage that first introduced the type).
     public native fun get<T>(): TypeName;
-    spec get {
-        pragma opaque;
-    }
 
     /// Return a value representation of the type `T`.  Package IDs
     /// that appear in fully qualified type names in the output from
@@ -36,9 +34,6 @@ module std::type_name {
     /// the package, even if the type in question was introduced in a
     /// later upgrade).
     public native fun get_with_original_ids<T>(): TypeName;
-    spec get_with_original_ids {
-        pragma opaque;
-    }
 
     /// Get the String representation of `self`
     public fun borrow_string(self: &TypeName): &String {

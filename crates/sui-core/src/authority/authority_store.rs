@@ -168,9 +168,8 @@ impl AuthorityStore {
             let epoch_start_configuration = EpochStartConfiguration::new(
                 genesis.sui_system_object().into_epoch_start_state(),
                 *genesis.checkpoint().digest(),
-                genesis.authenticator_state_obj_initial_shared_version(),
-                genesis.randomness_state_obj_initial_shared_version(),
-            );
+                &genesis.objects(),
+            )?;
             perpetual_tables
                 .set_epoch_start_configuration(&epoch_start_configuration)
                 .await?;
@@ -1087,6 +1086,7 @@ impl AuthorityStore {
     }
 
     /// Acquires read locks for affected indirect objects
+    #[instrument(level = "trace", skip_all)]
     async fn acquire_read_locks_for_indirect_objects(
         &self,
         inner_temporary_store: &InnerTemporaryStore,
@@ -1112,6 +1112,7 @@ impl AuthorityStore {
     }
 
     /// Helper function for updating the objects and locks in the state
+    #[instrument(level = "trace", skip_all)]
     async fn update_objects_and_locks(
         &self,
         write_batch: &mut DBBatch,

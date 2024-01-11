@@ -376,7 +376,7 @@ impl MoveObject {
                 *balances.entry(type_tag).or_insert(0) += balance;
             }
         } else {
-            let layout = layout_resolver.get_annotated_layout(self)?;
+            let layout = layout_resolver.get_annotated_layout(&self.type_().clone().into())?;
             let move_struct = self.to_move_struct(&layout)?;
             Self::get_coin_balances_in_struct(&move_struct, &mut balances, 0)?;
         }

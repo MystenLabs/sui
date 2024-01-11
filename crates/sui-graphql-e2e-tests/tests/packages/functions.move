@@ -74,8 +74,10 @@ fragment Functions on Object {
         nodes {
             effects {
                 objectChanges {
-                    outputState {
-                        ...Functions
+                    nodes {
+                        outputState {
+                            ...Functions
+                        }
                     }
                 }
             }
@@ -122,8 +124,10 @@ fragment Functions on Object {
         nodes {
             effects {
                 objectChanges {
-                    outputState {
-                        ...Functions
+                    nodes {
+                        outputState {
+                            ...Functions
+                        }
                     }
                 }
             }
@@ -131,14 +135,17 @@ fragment Functions on Object {
     }
 }
 
-//# run-graphql
+//# run-graphql --cursors "consensus_commit_prologue" "timestamp_ms"
 
 fragment Signatures on MoveFunctionConnection {
-    nodes {
-        name
-        typeParameters { constraints }
-        parameters { repr }
-        return { repr }
+    edges {
+        cursor
+        node {
+            name
+            typeParameters { constraints }
+            parameters { repr }
+            return { repr }
+        }
     }
     pageInfo { hasNextPage hasPreviousPage }
 }
@@ -148,16 +155,16 @@ fragment Signatures on MoveFunctionConnection {
         asMovePackage {
             module(name: "clock") {
                 # Get the signatures of all functions.
-                all: functionConnection { ...Signatures }
+                all: functions { ...Signatures }
 
                 # Functions are iterated in lexicographical order of
                 # name, so this should skip the first one.
-                after: functionConnection(after: "consensus_commit_prologue") {
+                after: functions(after: "@{cursor_0}") {
                     ...Signatures
                 }
 
                 # ...and this should skip the last one.
-                before: functionConnection(before: "timestamp_ms") {
+                before: functions(before: "@{cursor_1}") {
                     ...Signatures
                 }
             }
@@ -165,14 +172,17 @@ fragment Signatures on MoveFunctionConnection {
     }
 }
 
-//# run-graphql
+//# run-graphql --cursors "consensus_commit_prologue" "timestamp_ms"
 
 fragment Signatures on MoveFunctionConnection {
-    nodes {
-        name
-        typeParameters { constraints }
-        parameters { repr }
-        return { repr }
+    edges {
+        cursor
+        node {
+            name
+            typeParameters { constraints }
+            parameters { repr }
+            return { repr }
+        }
     }
     pageInfo { hasNextPage hasPreviousPage }
 }
@@ -183,50 +193,50 @@ fragment Signatures on MoveFunctionConnection {
             module(name: "clock") {
                 # Limit the number of elements in the page using
                 # `first` and skip elements using `after.
-                prefix: functionConnection(
+                prefix: functions(
                     first: 1,
-                    after: "consensus_commit_prologue",
+                    after: "@{cursor_0}",
                 ) {
                     ...Signatures
                 }
 
                 # No limit, because there are only two other
                 # functions, other than `consensus_commit_prologue`.
-                prefixAll: functionConnection(
+                prefixAll: functions(
                     first: 2,
-                    after: "consensus_commit_prologue",
+                    after: "@{cursor_0}",
                 ) {
                     ...Signatures
                 }
 
                 # No limit, because we are asking for way more
                 # functions than we have.
-                prefixExcess: functionConnection(
-                    first: 100,
-                    after: "consensus_commit_prologue",
+                prefixExcess: functions(
+                    first: 20,
+                    after: "@{cursor_0}",
                 ) {
                     ...Signatures
                 }
 
                 # Remaining tests are similar but replacing
                 # after/first with before/last.
-                suffix: functionConnection(
+                suffix: functions(
                     last: 1,
-                    before: "timestamp_ms",
+                    before: "@{cursor_1}",
                 ) {
                     ...Signatures
                 }
 
-                suffixAll: functionConnection(
+                suffixAll: functions(
                     last: 2,
-                    before: "timestamp_ms",
+                    before: "@{cursor_1}",
                 ) {
                     ...Signatures
                 }
 
-                suffixExcess: functionConnection(
-                    last: 100,
-                    before: "timestamp_ms",
+                suffixExcess: functions(
+                    last: 20,
+                    before: "@{cursor_1}",
                 ) {
                     ...Signatures
                 }

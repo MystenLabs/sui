@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    context_data::db_data_provider::PgManager,
-    types::{date_time::DateTime, epoch::Epoch},
-};
+use crate::types::{date_time::DateTime, epoch::Epoch};
 use async_graphql::*;
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_types::{
@@ -34,9 +31,8 @@ pub(crate) struct ConsensusCommitPrologueTransaction {
 #[Object]
 impl ConsensusCommitPrologueTransaction {
     /// Epoch of the commit prologue transaction.
-    async fn epoch(&self, ctx: &Context<'_>) -> Result<Epoch> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_epoch_strict(self.epoch)
+    async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
+        Epoch::query(ctx.data_unchecked(), Some(self.epoch))
             .await
             .extend()
     }
@@ -47,8 +43,8 @@ impl ConsensusCommitPrologueTransaction {
     }
 
     /// Unix timestamp from consensus.
-    async fn commit_timestamp(&self) -> Option<DateTime> {
-        DateTime::from_ms(self.commit_timestamp_ms as i64)
+    async fn commit_timestamp(&self) -> Result<DateTime, Error> {
+        Ok(DateTime::from_ms(self.commit_timestamp_ms as i64)?)
     }
 
     /// Digest of consensus output, encoded as a Base58 string (only available from V2 of the

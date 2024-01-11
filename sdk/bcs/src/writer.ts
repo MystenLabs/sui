@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Encoding } from './types';
-import { ulebEncode } from './uleb';
-import { encodeStr } from './utils';
+import type { Encoding } from './types.js';
+import { ulebEncode } from './uleb.js';
+import { encodeStr } from './utils.js';
 
 export interface BcsWriterOptions {
 	/** The initial size (in bytes) of the buffer tht will be allocated */

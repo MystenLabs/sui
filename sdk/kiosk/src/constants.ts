@@ -1,13 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// eslint-disable-next-line import/no-cycle
 import {
 	resolveFloorPriceRule,
 	resolveKioskLockRule,
 	resolvePersonalKioskRule,
 	resolveRoyaltyRule,
-} from './tx/rules//resolve';
-import { Network, type ObjectArgument, type RuleResolvingParams } from './types';
+} from './tx/rules//resolve.js';
+import { Network } from './types/index.js';
+import type { ObjectArgument, RuleResolvingParams } from './types/index.js';
 
 /**
  * The base rule package ids that can be extended

@@ -89,6 +89,11 @@ const guides = [
 			{
 				type: 'category',
 				label: 'Advanced Topics',
+				items: ['guides/developer/advanced/asset-tokenization'],
+			},
+			/*{
+				type: 'category',
+				label: 'Advanced Topics',
 				link: {
 					type: 'doc',
 					id: 'guides/developer/advanced',
@@ -108,7 +113,7 @@ const guides = [
 					'guides/developer/advanced/maximize-reach',
 					'guides/developer/advanced/asset-tokenization',
 				],
-			},
+			},*/
 			{
 				type: 'category',
 				label: 'App Examples',

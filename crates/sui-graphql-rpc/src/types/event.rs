@@ -3,12 +3,14 @@
 
 use async_graphql::*;
 use sui_indexer::models_v2::events::StoredEvent;
+use sui_indexer::models_v2::transactions::StoredTransaction;
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
+use sui_types::event::Event as NativeEvent;
 use sui_types::{parse_sui_struct_tag, TypeTag};
 
 use crate::error::Error;
 
-use crate::context_data::db_data_provider::PgManager;
-
+use super::digest::Digest;
 use super::{
     address::Address, base64::Base64, date_time::DateTime, move_module::MoveModule,
     move_value::MoveValue, sui_address::SuiAddress,
@@ -18,10 +20,10 @@ pub(crate) struct Event {
     pub stored: StoredEvent,
 }
 
-#[derive(InputObject, Clone)]
+#[derive(InputObject, Clone, Default)]
 pub(crate) struct EventFilter {
     pub sender: Option<SuiAddress>,
-    pub transaction_digest: Option<String>,
+    pub transaction_digest: Option<Digest>,
     // Enhancement (post-MVP)
     // after_checkpoint
     // before_checkpoint
@@ -62,28 +64,31 @@ impl Event {
         let sending_package = SuiAddress::from_bytes(&self.stored.package)
             .map_err(|e| Error::Internal(e.to_string()))
             .extend()?;
-        ctx.data_unchecked::<PgManager>()
-            .fetch_move_module(sending_package, &self.stored.module)
+        MoveModule::query(ctx.data_unchecked(), sending_package, &self.stored.module)
             .await
             .extend()
     }
 
-    /// Addresses of the senders of the event
-    async fn senders(&self) -> Result<Option<Vec<Address>>> {
-        let mut addrs = Vec::with_capacity(self.stored.senders.len());
-        for sender in &self.stored.senders {
-            let Some(sender) = &sender else { continue };
-            let address = SuiAddress::from_bytes(sender)
-                .map_err(|e| Error::Internal(format!("Failed to deserialize address: {e}")))
-                .extend()?;
-            addrs.push(Address { address });
+    /// Address of the sender of the event
+    async fn sender(&self) -> Result<Option<Address>> {
+        let Some(Some(sender)) = self.stored.senders.first() else {
+            return Ok(None);
+        };
+
+        let address = SuiAddress::from_bytes(sender)
+            .map_err(|e| Error::Internal(format!("Failed to deserialize address: {e}")))
+            .extend()?;
+
+        if address.as_slice() == NativeSuiAddress::ZERO.as_ref() {
+            return Ok(None);
         }
-        Ok(Some(addrs))
+
+        Ok(Some(Address { address }))
     }
 
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
-    async fn timestamp(&self) -> Option<DateTime> {
-        DateTime::from_ms(self.stored.timestamp_ms)
+    async fn timestamp(&self) -> Result<Option<DateTime>, Error> {
+        Ok(DateTime::from_ms(self.stored.timestamp_ms).ok())
     }
 
     #[graphql(flatten)]
@@ -94,5 +99,45 @@ impl Event {
                 .extend()?,
         );
         Ok(MoveValue::new(type_, Base64::from(self.stored.bcs.clone())))
+    }
+}
+
+impl Event {
+    pub(crate) fn try_from_stored_transaction(
+        stored_tx: &StoredTransaction,
+        idx: usize,
+    ) -> Result<Self, Error> {
+        let Some(Some(serialized_event)) = stored_tx.events.get(idx) else {
+            return Err(Error::Internal(format!(
+                "Could not find event with event_sequence_number {} at transaction {}",
+                idx, stored_tx.tx_sequence_number
+            )));
+        };
+
+        let native_event: NativeEvent = bcs::from_bytes(serialized_event).map_err(|_| {
+            Error::Internal(format!(
+                "Failed to deserialize event with {} at transaction {}",
+                idx, stored_tx.tx_sequence_number
+            ))
+        })?;
+
+        let stored_event = StoredEvent {
+            tx_sequence_number: stored_tx.tx_sequence_number,
+            event_sequence_number: idx as i64,
+            transaction_digest: stored_tx.transaction_digest.clone(),
+            checkpoint_sequence_number: stored_tx.checkpoint_sequence_number,
+            senders: vec![Some(native_event.sender.to_vec())],
+            package: native_event.package_id.to_vec(),
+            module: native_event.transaction_module.to_string(),
+            event_type: native_event
+                .type_
+                .to_canonical_string(/* with_prefix */ true),
+            bcs: native_event.contents,
+            timestamp_ms: stored_tx.timestamp_ms,
+        };
+
+        Ok(Self {
+            stored: stored_event,
+        })
     }
 }

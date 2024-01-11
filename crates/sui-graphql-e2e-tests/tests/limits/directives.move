@@ -30,11 +30,37 @@ fragment Modules on Object  @deprecated {
         nodes {
             effects {
                 objectChanges {
+                  nodes {
                     outputState {
                         ...Modules
                     }
+                  }
                 }
             }
         }
     }
+}
+
+//# run-graphql
+
+{
+  chainIdentifier @skip(if: true)
+}
+
+//# run-graphql
+
+{
+  chainIdentifier @skip(if: false)
+}
+
+//# run-graphql
+
+{
+  chainIdentifier @include(if: true)
+}
+
+//# run-graphql
+
+{
+  chainIdentifier @include(if: false)
 }

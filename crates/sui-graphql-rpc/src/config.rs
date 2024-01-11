@@ -12,10 +12,15 @@ use crate::functional_group::FunctionalGroup;
 // TODO: calculate proper cost limits
 const MAX_QUERY_DEPTH: u32 = 15;
 const MAX_QUERY_NODES: u32 = 50;
+const MAX_OUTPUT_NODES: u64 = 100_000; // Maximum number of output nodes allowed in the response
 const MAX_QUERY_PAYLOAD_SIZE: u32 = 2_000;
 const MAX_DB_QUERY_COST: u64 = 20_000; // Max DB query cost (normally f64) truncated
 const DEFAULT_PAGE_SIZE: u64 = 20; // Default number of elements allowed on a page of a connection
 const MAX_PAGE_SIZE: u64 = 50; // Maximum number of elements allowed on a page of a connection
+const MAX_TYPE_ARGUMENT_DEPTH: u32 = 16;
+const MAX_TYPE_ARGUMENT_WIDTH: u32 = 32;
+const MAX_TYPE_NODES: u32 = 256;
+const MAX_MOVE_VALUE_DEPTH: u32 = 128;
 
 const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 40_000;
 
@@ -62,40 +67,48 @@ pub struct ServiceConfig {
 #[serde(rename_all = "kebab-case")]
 pub struct Limits {
     #[serde(default)]
-    pub(crate) max_query_depth: u32,
+    pub max_query_depth: u32,
     #[serde(default)]
-    pub(crate) max_query_nodes: u32,
+    pub max_query_nodes: u32,
     #[serde(default)]
-    pub(crate) max_query_payload_size: u32,
+    pub max_output_nodes: u64,
     #[serde(default)]
-    pub(crate) max_db_query_cost: u64,
+    pub max_query_payload_size: u32,
     #[serde(default)]
-    pub(crate) default_page_size: u64,
+    pub max_db_query_cost: u64,
     #[serde(default)]
-    pub(crate) max_page_size: u64,
+    pub default_page_size: u64,
     #[serde(default)]
-    pub(crate) request_timeout_ms: u64,
+    pub max_page_size: u64,
+    #[serde(default)]
+    pub request_timeout_ms: u64,
+    #[serde(default)]
+    pub max_type_argument_depth: u32,
+    #[serde(default)]
+    pub max_type_argument_width: u32,
+    #[serde(default)]
+    pub max_type_nodes: u32,
+    #[serde(default)]
+    pub max_move_value_depth: u32,
 }
 
 impl Limits {
-    pub fn max_query_depth(&self) -> u32 {
-        self.max_query_depth
-    }
-
-    pub fn max_query_nodes(&self) -> u32 {
-        self.max_query_nodes
-    }
-
-    pub fn max_query_payload_size(&self) -> u32 {
-        self.max_query_payload_size
-    }
-
     pub fn default_for_simulator_testing() -> Self {
         Self {
             max_query_nodes: 500,
             max_query_depth: 20,
             max_query_payload_size: 5_000,
             ..Self::default()
+        }
+    }
+
+    /// Extract limits for the package resolver.
+    pub fn package_resolver_limits(&self) -> sui_package_resolver::Limits {
+        sui_package_resolver::Limits {
+            max_type_argument_depth: self.max_type_argument_depth as usize,
+            max_type_argument_width: self.max_type_argument_width as usize,
+            max_type_nodes: self.max_type_nodes as usize,
+            max_move_value_depth: self.max_move_value_depth as usize,
         }
     }
 }
@@ -204,6 +217,20 @@ impl ServiceConfig {
         self.limits.max_query_nodes
     }
 
+    /// The maximum number of output nodes in a GraphQL response.
+    ///
+    /// Non-connection nodes have a count of 1, while connection nodes are counted as
+    /// the specified 'first' or 'last' number of items, or the default_page_size
+    /// as set by the server if those arguments are not set.
+    ///
+    /// Counts accumulate multiplicatively down the query tree. For example, if a query starts
+    /// with a connection of first: 10 and has a field to a connection with last: 20, the count
+    /// at the second level would be 200 nodes. This is then summed to the count of 10 nodes
+    /// at the first level, for a total of 210 nodes.
+    pub async fn max_output_nodes(&self) -> u64 {
+        self.limits.max_output_nodes
+    }
+
     /// Maximum estimated cost of a database query used to serve a GraphQL request.  This is
     /// measured in the same units that the database uses in EXPLAIN queries.
     async fn max_db_query_cost(&self) -> BigInt {
@@ -229,6 +256,28 @@ impl ServiceConfig {
     async fn max_query_payload_size(&self) -> u32 {
         self.limits.max_query_payload_size
     }
+
+    /// Maximum nesting allowed in type arguments in Move Types resolved by this service.
+    async fn max_type_argument_depth(&self) -> u32 {
+        self.limits.max_type_argument_depth
+    }
+
+    /// Maximum number of type arguments passed into a generic instantiation of a Move Type resolved
+    /// by this service.
+    async fn max_type_argument_width(&self) -> u32 {
+        self.limits.max_type_argument_width
+    }
+
+    /// Maximum number of structs that need to be processed when calculating the layout of a single
+    /// Move Type.
+    async fn max_type_nodes(&self) -> u32 {
+        self.limits.max_type_nodes
+    }
+
+    /// Maximum nesting allowed in struct fields when calculating the layout of a single Move Type.
+    async fn max_move_value_depth(&self) -> u32 {
+        self.limits.max_move_value_depth
+    }
 }
 
 impl Default for ConnectionConfig {
@@ -249,11 +298,16 @@ impl Default for Limits {
         Self {
             max_query_depth: MAX_QUERY_DEPTH,
             max_query_nodes: MAX_QUERY_NODES,
+            max_output_nodes: MAX_OUTPUT_NODES,
             max_query_payload_size: MAX_QUERY_PAYLOAD_SIZE,
             max_db_query_cost: MAX_DB_QUERY_COST,
             default_page_size: DEFAULT_PAGE_SIZE,
             max_page_size: MAX_PAGE_SIZE,
             request_timeout_ms: DEFAULT_REQUEST_TIMEOUT_MS,
+            max_type_argument_depth: MAX_TYPE_ARGUMENT_DEPTH,
+            max_type_argument_width: MAX_TYPE_ARGUMENT_WIDTH,
+            max_type_nodes: MAX_TYPE_NODES,
+            max_move_value_depth: MAX_MOVE_VALUE_DEPTH,
         }
     }
 }
@@ -368,11 +422,16 @@ mod tests {
             r#" [limits]
                 max-query-depth = 100
                 max-query-nodes = 300
+                max-output-nodes = 200000
                 max-query-payload-size = 2000
                 max-db-query-cost = 50
                 default-page-size = 20
                 max-page-size = 50
                 request-timeout-ms = 27000
+                max-type-argument-depth = 32
+                max-type-argument-width = 64
+                max-type-nodes = 128
+                max-move-value-depth = 256
             "#,
         )
         .unwrap();
@@ -381,11 +440,16 @@ mod tests {
             limits: Limits {
                 max_query_depth: 100,
                 max_query_nodes: 300,
+                max_output_nodes: 200000,
                 max_query_payload_size: 2000,
                 max_db_query_cost: 50,
                 default_page_size: 20,
                 max_page_size: 50,
                 request_timeout_ms: 27_000,
+                max_type_argument_depth: 32,
+                max_type_argument_width: 64,
+                max_type_nodes: 128,
+                max_move_value_depth: 256,
             },
             ..Default::default()
         };
@@ -439,11 +503,16 @@ mod tests {
                 [limits]
                 max-query-depth = 42
                 max-query-nodes = 320
+                max-output-nodes = 200000
                 max-query-payload-size = 200
                 max-db-query-cost = 20
                 default-page-size = 10
                 max-page-size = 20
                 request-timeout-ms = 30000
+                max-type-argument-depth = 32
+                max-type-argument-width = 64
+                max-type-nodes = 128
+                max-move-value-depth = 256
 
                 [experiments]
                 test-flag = true
@@ -455,11 +524,16 @@ mod tests {
             limits: Limits {
                 max_query_depth: 42,
                 max_query_nodes: 320,
+                max_output_nodes: 200000,
                 max_query_payload_size: 200,
                 max_db_query_cost: 20,
                 default_page_size: 10,
                 max_page_size: 20,
                 request_timeout_ms: 30_000,
+                max_type_argument_depth: 32,
+                max_type_argument_width: 64,
+                max_type_nodes: 128,
+                max_move_value_depth: 256,
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),
             experiments: Experiments { test_flag: true },

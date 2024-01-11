@@ -5,12 +5,9 @@
 use crate::{
     borrow_analysis::BorrowAnalysisProcessor,
     clean_and_optimize::CleanAndOptimizeProcessor,
-    data_invariant_instrumentation::DataInvariantInstrumentationProcessor,
     debug_instrumentation::DebugInstrumenter,
     eliminate_imm_refs::EliminateImmRefsProcessor,
     function_target_pipeline::{FunctionTargetPipeline, FunctionTargetProcessor},
-    global_invariant_analysis::GlobalInvariantAnalysisProcessor,
-    global_invariant_instrumentation::GlobalInvariantInstrumentationProcessor,
     inconsistency_check::InconsistencyCheckInstrumenter,
     livevar_analysis::LiveVarAnalysisProcessor,
     loop_analysis::LoopAnalysisProcessor,
@@ -21,10 +18,6 @@ use crate::{
     number_operation_analysis::NumberOperationProcessor,
     options::ProverOptions,
     reaching_def_analysis::ReachingDefProcessor,
-    spec_instrumentation::SpecInstrumentationProcessor,
-    usage_analysis::UsageProcessor,
-    verification_analysis::VerificationAnalysisProcessor,
-    well_formed_instrumentation::WellFormedInstrumentationProcessor,
 };
 
 pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetPipeline {
@@ -39,8 +32,6 @@ pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetP
         BorrowAnalysisProcessor::new_borrow_natives(options.borrow_natives.clone()),
         MemoryInstrumentationProcessor::new(),
         CleanAndOptimizeProcessor::new(),
-        UsageProcessor::new(),
-        VerificationAnalysisProcessor::new(),
     ];
 
     if !options.skip_loop_analysis {
@@ -48,12 +39,6 @@ pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetP
     }
 
     processors.append(&mut vec![
-        // spec instrumentation
-        SpecInstrumentationProcessor::new(),
-        GlobalInvariantAnalysisProcessor::new(),
-        GlobalInvariantInstrumentationProcessor::new(),
-        WellFormedInstrumentationProcessor::new(),
-        DataInvariantInstrumentationProcessor::new(),
         // monomorphization
         MonoAnalysisProcessor::new(),
     ]);
@@ -95,14 +80,7 @@ pub fn experimental_pipeline() -> FunctionTargetPipeline {
         BorrowAnalysisProcessor::new(),
         MemoryInstrumentationProcessor::new(),
         CleanAndOptimizeProcessor::new(),
-        UsageProcessor::new(),
-        VerificationAnalysisProcessor::new(),
         LoopAnalysisProcessor::new(),
-        // spec instrumentation
-        SpecInstrumentationProcessor::new(),
-        DataInvariantInstrumentationProcessor::new(),
-        GlobalInvariantAnalysisProcessor::new(),
-        GlobalInvariantInstrumentationProcessor::new(),
         // optimization
         MonoAnalysisProcessor::new(),
     ];

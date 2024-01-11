@@ -74,20 +74,16 @@ pub enum Error {
     DomainParse(#[from] DomainParseError),
     #[error(transparent)]
     DbValidation(#[from] DbValidationError),
-    #[error("Provide one of digest or sequence_number, not both")]
-    InvalidCheckpointQuery,
     #[error("Invalid coin type: {0}")]
     InvalidCoinType(String),
-    #[error("String is not valid base58: {0}")]
-    InvalidBase58(String),
-    #[error("Invalid digest length: expected {expected}, actual {actual}")]
-    InvalidDigestLength { expected: usize, actual: usize },
     #[error("'before' and 'after' must not be used together")]
     CursorNoBeforeAfter,
     #[error("'first' and 'last' must not be used together")]
     CursorNoFirstLast,
     #[error("reverse pagination is not supported")]
     _CursorNoReversePagination,
+    #[error("Connection's page size of {0} exceeds max of {1}")]
+    PageTooLarge(u64, u64),
     #[error("Invalid cursor: {0}")]
     InvalidCursor(String),
     #[error("Data has changed since cursor was generated: {0}")]
@@ -110,15 +106,13 @@ impl ErrorExtensions for Error {
             | Error::ProtocolVersionUnsupported { .. }
             | Error::DomainParse(_)
             | Error::DbValidation(_)
-            | Error::InvalidCheckpointQuery
             | Error::CursorNoBeforeAfter
             | Error::CursorNoFirstLast
             | Error::_CursorNoReversePagination
+            | Error::PageTooLarge(_, _)
             | Error::InvalidCursor(_)
             | Error::_CursorConnectionFetchFailed(_)
             | Error::MultiGet(_)
-            | Error::InvalidBase58(_)
-            | Error::InvalidDigestLength { .. }
             | Error::Client(_) => {
                 e.set("code", code::BAD_USER_INPUT);
             }

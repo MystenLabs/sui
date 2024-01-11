@@ -6,6 +6,12 @@ import type { ReactNode } from 'react';
 import { useRef } from 'react';
 import type { StateStorage } from 'zustand/middleware';
 
+import {
+	DEFAULT_REQUIRED_FEATURES,
+	DEFAULT_STORAGE,
+	DEFAULT_STORAGE_KEY,
+	SUI_WALLET_NAME,
+} from '../constants/walletDefaults.js';
 import { WalletContext } from '../contexts/walletContext.js';
 import { useAutoConnectWallet } from '../hooks/wallet/useAutoConnectWallet.js';
 import { useUnsafeBurnerWallet } from '../hooks/wallet/useUnsafeBurnerWallet.js';
@@ -13,11 +19,12 @@ import { useWalletPropertiesChanged } from '../hooks/wallet/useWalletPropertiesC
 import { useWalletsChanged } from '../hooks/wallet/useWalletsChanged.js';
 import { lightTheme } from '../themes/lightTheme.js';
 import type { Theme } from '../themes/themeContract.js';
+import { createInMemoryStore } from '../utils/stateStorage.js';
 import { getRegisteredWallets } from '../utils/walletUtils.js';
 import { createWalletStore } from '../walletStore.js';
 import { InjectedThemeStyles } from './styling/InjectedThemeStyles.js';
 
-type WalletProviderProps = {
+export type WalletProviderProps = {
 	/** A list of wallets that are sorted to the top of the wallet list, if they are available to connect to. By default, wallets are sorted by the order they are loaded in. */
 	preferredWallets?: string[];
 
@@ -30,8 +37,8 @@ type WalletProviderProps = {
 	/** Enables automatically reconnecting to the most recently used wallet account upon mounting. */
 	autoConnect?: boolean;
 
-	/** Configures how the most recently connected to wallet account is stored. Defaults to using localStorage. */
-	storage?: StateStorage;
+	/** Configures how the most recently connected to wallet account is stored. Set to `null` to disable persisting state entirely. Defaults to using localStorage if it is available. */
+	storage?: StateStorage | null;
 
 	/** The key to use to store the most recently connected wallet account. */
 	storageKey?: string;
@@ -42,20 +49,12 @@ type WalletProviderProps = {
 	children: ReactNode;
 };
 
-const SUI_WALLET_NAME = 'Sui Wallet';
-
-const DEFAULT_STORAGE_KEY = 'sui-dapp-kit:wallet-connection-info';
-
-const DEFAULT_REQUIRED_FEATURES: (keyof WalletWithRequiredFeatures['features'])[] = [
-	'sui:signTransactionBlock',
-];
-
 export type { WalletWithFeatures };
 
 export function WalletProvider({
 	preferredWallets = [SUI_WALLET_NAME],
 	requiredFeatures = DEFAULT_REQUIRED_FEATURES,
-	storage = localStorage,
+	storage = DEFAULT_STORAGE,
 	storageKey = DEFAULT_STORAGE_KEY,
 	enableUnsafeBurner = false,
 	autoConnect = false,
@@ -66,8 +65,8 @@ export function WalletProvider({
 		createWalletStore({
 			autoConnectEnabled: autoConnect,
 			wallets: getRegisteredWallets(preferredWallets, requiredFeatures),
+			storage: storage || createInMemoryStore(),
 			storageKey,
-			storage,
 		}),
 	);
 

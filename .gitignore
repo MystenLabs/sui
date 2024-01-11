@@ -13,6 +13,7 @@
 # Move build directory
 build
 storage
+!consensus/core/src/storage
 !crates/sui-types/src/storage
 !narwhal/storage
 
@@ -65,3 +66,5 @@ yarn-error.log*
 # misc
 *.key
 .env
+checkpoints_dir/*
+light_client.yaml

@@ -50,7 +50,12 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     }
 
     // List all addresses with flag
-    KeyToolCommand::List.execute(&mut keystore).await.unwrap();
+    KeyToolCommand::List {
+        sort_by_alias: true,
+    }
+    .execute(&mut keystore)
+    .await
+    .unwrap();
     Ok(())
 }
 
