@@ -12182,30 +12182,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-kvstore"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "aws-config",
- "aws-sdk-dynamodb",
- "aws-sdk-s3",
- "backoff",
- "base64-url",
- "bcs",
- "mysten-metrics",
- "prometheus",
- "serde",
- "sui-config",
- "sui-core",
- "sui-storage",
- "sui-types",
- "tokio",
- "tracing",
- "workspace-hack",
-]
-
-[[package]]
 name = "sui-light-client"
 version = "0.0.0"
 dependencies = [
@@ -12477,7 +12453,6 @@ dependencies = [
  "sui-core",
  "sui-json-rpc",
  "sui-json-rpc-api",
- "sui-kvstore",
  "sui-macros",
  "sui-network",
  "sui-protocol-config",

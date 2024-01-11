@@ -32,7 +32,6 @@ use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
 use tokio::runtime::Handle;
 use tokio::sync::broadcast;
-use tokio::sync::oneshot;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
@@ -92,7 +91,6 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
 use sui_json_rpc::JsonRpcServerBuilder;
-use sui_kvstore::writer::setup_key_value_store_uploader;
 use sui_macros::{fail_point_async, replay_log};
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
@@ -229,7 +227,6 @@ pub struct SuiNode {
     _state_archive_handle: Option<broadcast::Sender<()>>,
 
     _state_snapshot_uploader_handle: Option<broadcast::Sender<()>>,
-    _kv_store_uploader_handle: Option<oneshot::Sender<()>>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -547,14 +544,6 @@ impl SuiNode {
         )
         .expect("Initial trusted peers must be set");
 
-        // Start uploading transactions/events to remote key value store
-        let kv_store_uploader_handle = setup_key_value_store_uploader(
-            state_sync_store.clone(),
-            &config.transaction_kv_store_write_config,
-            &prometheus_registry,
-        )
-        .await?;
-
         // Start archiving local state to remote store
         let state_archive_handle =
             Self::start_state_archival(&config, &prometheus_registry, state_sync_store).await?;
@@ -725,7 +714,6 @@ impl SuiNode {
 
             _state_archive_handle: state_archive_handle,
             _state_snapshot_uploader_handle: state_snapshot_handle,
-            _kv_store_uploader_handle: kv_store_uploader_handle,
         };
 
         info!("SuiNode started!");
