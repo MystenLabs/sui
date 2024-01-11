@@ -330,7 +330,7 @@ export class ZkSendLink {
 
 		if (this.#gasCoin && this.#creatorAddress) {
 			txb.transferObjects([txb.gas], this.#creatorAddress);
-		} else if (claimAll || options?.coinTypes?.includes(SUI_COIN_TYPE)) {
+		} else if (claimAll || coinTypes?.has(SUI_COIN_TYPE)) {
 			objectsToTransfer.push(txb.gas);
 		}
 
