@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fs, path::PathBuf};
+use std::fs;
 use sui_replay::ReplayToolCommand;
+use tempfile::tempdir;
 
 /// This test exists to make sure that the feature gating for all the code under `gas-profiler`
 /// remains fully connected such that if and only if we enable the feature here, the `gas-profiler`
@@ -33,23 +34,17 @@ use sui_replay::ReplayToolCommand;
 #[cfg(feature = "gas-profiler")]
 #[test]
 fn test_macro_shows_feature_enabled() {
-    let mut called = false;
-    assert!(!called);
-    move_vm_profiler::gas_profiler_feature! {
-        called = true;
+    move_vm_profiler::gas_profiler_feature_disabled! {
+        panic!("gas profile feature graph became disconnected");
     }
-    assert!(called);
 }
 
 #[ignore]
 #[cfg(feature = "gas-profiler")]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_profiler() {
-    let output_dir = "./profile_testing_temp";
-    _ = fs::remove_dir_all(output_dir);
-    fs::create_dir(output_dir).unwrap();
-    let mut profile_output = PathBuf::from(output_dir);
-    profile_output.push("profile.json");
+    let output_dir = tempdir().unwrap();
+    let profile_output = output_dir.path().join("profile.json");
 
     let testnet_url = "https://fullnode.testnet.sui.io:443".to_string();
     let tx_digest = "98KxVD14f2JgceKx4X27HaVAA2YGJ3Aazf6Y4tabpHa8".to_string();
@@ -68,7 +63,7 @@ async fn test_profiler() {
 
     // check that the profile was written
     let mut found = false;
-    for entry in fs::read_dir(output_dir).unwrap().flatten() {
+    for entry in fs::read_dir(output_dir.into_path()).unwrap().flatten() {
         if entry
             .file_name()
             .into_string()
@@ -79,5 +74,4 @@ async fn test_profiler() {
         }
     }
     assert!(found);
-    fs::remove_dir_all(output_dir).unwrap();
 }

@@ -117,9 +117,9 @@ impl Interpreter {
             call_stack: CallStack::new(),
             runtime_limits_config: loader.vm_config().runtime_limits_config.clone(),
         };
-        #[cfg(feature = "gas-profiler")]
-        profile_open_frame!(gas_meter, function.pretty_string());
-
+        move_vm_profiler::gas_profiler_feature_enabled! {
+            profile_open_frame!(gas_meter, function.pretty_string());
+        }
         if function.is_native() {
             for arg in args {
                 interpreter
@@ -202,8 +202,9 @@ impl Interpreter {
                     gas_meter
                         .charge_drop_frame(non_ref_vals.into_iter())
                         .map_err(|e| self.set_location(e))?;
-                    #[cfg(feature = "gas-profiler")]
-                    profile_close_frame!(gas_meter, current_frame.function.pretty_string());
+                    move_vm_profiler::gas_profiler_feature_enabled! {
+                        profile_close_frame!(gas_meter, current_frame.function.pretty_string());
+                    }
                     if let Some(frame) = self.call_stack.pop() {
                         // Note: the caller will find the callee's return values at the top of the shared operand stack
                         current_frame = frame;
@@ -217,9 +218,9 @@ impl Interpreter {
                     let func = resolver.function_from_handle(fh_idx);
                     #[cfg(feature = "gas-profiler")]
                     let func_name = func.pretty_string();
-                    #[cfg(feature = "gas-profiler")]
-                    profile_open_frame!(gas_meter, func_name.clone());
-
+                    move_vm_profiler::gas_profiler_feature_enabled! {
+                        profile_open_frame!(gas_meter, func_name.clone());
+                    }
                     // Charge gas
                     let module_id = func.module_id();
                     gas_meter
@@ -260,9 +261,9 @@ impl Interpreter {
                     let func = resolver.function_from_instantiation(idx);
                     #[cfg(feature = "gas-profiler")]
                     let func_name = func.pretty_string();
-                    #[cfg(feature = "gas-profiler")]
-                    profile_open_frame!(gas_meter, func_name.clone());
-
+                    move_vm_profiler::gas_profiler_feature_enabled! {
+                        profile_open_frame!(gas_meter, func_name.clone());
+                    }
                     // Charge gas
                     let module_id = func.module_id();
                     gas_meter

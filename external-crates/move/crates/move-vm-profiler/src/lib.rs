@@ -340,7 +340,7 @@ macro_rules! profile_dump_file {
 
 #[cfg(feature = "gas-profiler")]
 #[macro_export]
-macro_rules! gas_profiler_feature {
+macro_rules! gas_profiler_feature_enabled {
     ($($tt:tt)*) => {
         #[cfg(feature = "gas-profiler")]
       {
@@ -351,6 +351,23 @@ macro_rules! gas_profiler_feature {
 
 #[cfg(not(feature = "gas-profiler"))]
 #[macro_export]
-macro_rules! gas_profiler_feature {
+macro_rules! gas_profiler_feature_enabled {
+    ( $( $tt:tt )* ) => {};
+}
+
+#[cfg(not(feature = "gas-profiler"))]
+#[macro_export]
+macro_rules! gas_profiler_feature_disabled {
+    ($($tt:tt)*) => {
+        #[cfg(not(feature = "gas-profiler"))]
+      {
+        $($tt)*
+      }
+    };
+}
+
+#[cfg(feature = "gas-profiler")]
+#[macro_export]
+macro_rules! gas_profiler_feature_disabled {
     ( $( $tt:tt )* ) => {};
 }
