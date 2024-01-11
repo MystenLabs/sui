@@ -58,16 +58,19 @@ async fn main() {
         } => {
             if gas_info {
                 telemetry_subscribers::TelemetryConfig::new()
+                    .with_log_level("error")
                     .with_trace_target("replay")
                     .with_env()
                     .init()
             } else {
                 telemetry_subscribers::TelemetryConfig::new()
+                    .with_log_level("error")
                     .with_env()
                     .init()
             }
         }
         _ => telemetry_subscribers::TelemetryConfig::new()
+            .with_log_level("error")
             .with_env()
             .init(),
     };
