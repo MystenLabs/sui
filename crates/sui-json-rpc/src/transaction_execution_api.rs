@@ -136,8 +136,9 @@ impl TransactionExecutionApi {
         opts: Option<SuiTransactionBlockResponseOptions>,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> Result<SuiTransactionBlockResponse, Error> {
-        let (opts, request_type, sender, input_objs, txn, transaction, raw_transaction) =
-            self.prepare_execute_transaction_block(tx_bytes, signatures, opts, request_type)?;
+        let (opts, request_type, sender, input_objs, txn, transaction, raw_transaction) = self
+            .prepare_execute_transaction_block(tx_bytes, signatures, opts, request_type)
+            .unwrap();
         let digest = *txn.digest();
 
         let transaction_orchestrator = self.transaction_orchestrator.clone();
@@ -148,8 +149,10 @@ impl TransactionExecutionApi {
                 request_type,
             }
         ))
-        .await?
-        .map_err(Error::from)?;
+        .await
+        .unwrap()
+        .map_err(Error::from)
+        .unwrap();
         drop(orch_timer);
 
         let _post_orch_timer = self.metrics.post_orchestrator_latency_ms.start_timer();
@@ -161,19 +164,23 @@ impl TransactionExecutionApi {
             let mut layout_resolver = epoch_store
                 .executor()
                 .type_layout_resolver(Box::new(self.state.get_db()));
-            events = Some(SuiTransactionBlockEvents::try_from(
-                transaction_events,
-                digest,
-                None,
-                layout_resolver.as_mut(),
-            )?);
+            events = Some(
+                SuiTransactionBlockEvents::try_from(
+                    transaction_events,
+                    digest,
+                    None,
+                    layout_resolver.as_mut(),
+                )
+                .unwrap(),
+            );
         }
 
         let object_cache = ObjectProviderCache::new(self.state.clone());
         let balance_changes = if opts.show_balance_changes && is_executed_locally {
             Some(
                 get_balance_changes_from_effect(&object_cache, &effects.effects, input_objs, None)
-                    .await?,
+                    .await
+                    .unwrap(),
             )
         } else {
             None
@@ -187,7 +194,8 @@ impl TransactionExecutionApi {
                     effects.effects.all_changed_objects(),
                     effects.effects.all_removed_objects(),
                 )
-                .await?,
+                .await
+                .unwrap(),
             )
         } else {
             None
@@ -197,7 +205,9 @@ impl TransactionExecutionApi {
             digest,
             transaction,
             raw_transaction,
-            effects: opts.show_effects.then_some(effects.effects.try_into()?),
+            effects: opts
+                .show_effects
+                .then_some(effects.effects.try_into().unwrap()),
             events,
             object_changes,
             balance_changes,

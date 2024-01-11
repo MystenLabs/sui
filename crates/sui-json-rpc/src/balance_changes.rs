@@ -87,7 +87,8 @@ pub async fn get_balance_changes<P: ObjectProvider<Error = E>, E>(
 ) -> Result<Vec<BalanceChange>, E> {
     // 1. subtract all input coins
     let balances = fetch_coins(object_provider, modified_at_version)
-        .await?
+        .await
+        .unwrap_or_else(|_| panic!("panic"))
         .into_iter()
         .fold(
             BTreeMap::<_, i128>::new(),
@@ -98,7 +99,8 @@ pub async fn get_balance_changes<P: ObjectProvider<Error = E>, E>(
         );
     // 2. add all mutated coins
     let balances = fetch_coins(object_provider, all_mutated)
-        .await?
+        .await
+        .unwrap_or_else(|_| panic!("panic"))
         .into_iter()
         .fold(balances, |mut acc, (owner, type_, amount)| {
             *acc.entry((owner, type_)).or_default() += amount as i128;
@@ -127,7 +129,10 @@ async fn fetch_coins<P: ObjectProvider<Error = E>, E>(
     let mut all_mutated_coins = vec![];
     for (id, version, digest_opt) in objects {
         // TODO: use multi get object
-        let o = object_provider.get_object(id, version).await?;
+        let o = object_provider
+            .get_object(id, version)
+            .await
+            .unwrap_or_else(|_| panic!("panic"));
         if let Some(type_) = o.type_() {
             if type_.is_coin() {
                 if let Some(digest) = digest_opt {
