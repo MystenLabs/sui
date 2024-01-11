@@ -39,6 +39,7 @@ const SUI_COIN_TYPE = normalizeStructTag('0x2::sui::SUI');
 const SUI_COIN_OBJECT_TYPE = normalizeStructTag('0x2::coin::Coin<0x2::sui::SUI>');
 
 interface CreateZkSendLinkOptions {
+	transactionBlock?: TransactionBlock;
 	calculateGas?: (options: {
 		mist: bigint;
 		objects: TransactionObjectInput[];
@@ -98,7 +99,10 @@ export class ZkSendLinkBuilder {
 			signer,
 		});
 	}
-	async createSendTransaction({ calculateGas }: CreateZkSendLinkOptions = {}) {
+	async createSendTransaction({
+		transactionBlock: txb = new TransactionBlock(),
+		calculateGas,
+	}: CreateZkSendLinkOptions = {}) {
 		const gasEstimateFromDryRun = await this.#estimateClaimGasFee();
 		const baseGasAmount = calculateGas
 			? await calculateGas({
@@ -113,10 +117,9 @@ export class ZkSendLinkBuilder {
 		// Ensure that gas amount ends in 987
 		const roundedGasAmount = gasWithBuffer - (gasWithBuffer % 1000n) - 13n;
 
-		const txb = new TransactionBlock();
 		const address = this.#keypair.toSuiAddress();
 		const objectsToTransfer = [...this.#objects].map((id) => txb.object(id));
-		txb.setSender(this.#sender);
+		txb.setSenderIfNotSet(this.#sender);
 
 		if (this.#mist) {
 			const [gas, sui] = txb.splitCoins(txb.gas, [roundedGasAmount, this.#mist]);
