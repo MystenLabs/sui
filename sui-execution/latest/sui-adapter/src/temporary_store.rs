@@ -16,6 +16,7 @@ use sui_types::execution::{
     DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
 };
 use sui_types::execution_status::ExecutionStatus;
+use sui_types::gas::{RebateInfo, TransactionRebateInfo};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::storage::{BackingStore, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
@@ -778,7 +779,11 @@ impl<'backing> TemporaryStore<'backing> {
     /// All objects will be updated with their new (current) storage rebate/cost.
     /// `SuiGasStatus` `storage_rebate` and `storage_gas_units` track the transaction
     /// overall storage rebate and cost.
-    pub(crate) fn collect_storage_and_rebate(&mut self, gas_charger: &mut GasCharger) {
+    pub(crate) fn collect_storage_and_rebate(
+        &mut self,
+        gas_charger: &mut GasCharger,
+    ) -> TransactionRebateInfo {
+        let mut rows = Vec::new();
         // Use two loops because we cannot mut iterate written while calling get_object_modified_at.
         let old_storage_rebates: Vec<_> = self
             .execution_results
@@ -802,12 +807,23 @@ impl<'backing> TemporaryStore<'backing> {
             let new_storage_rebate =
                 gas_charger.track_storage_mutation(new_object_size, old_storage_rebate);
             object.storage_rebate = new_storage_rebate;
+
+            rows.push(RebateInfo {
+                object_id: object.id(),
+                size: new_object_size,
+                old_rebate: old_storage_rebate,
+                new_rebate: new_storage_rebate,
+            });
         }
 
-        self.collect_rebate(gas_charger);
+        rows.extend(self.collect_rebate(gas_charger));
+        TransactionRebateInfo {
+            per_object_info: rows,
+        }
     }
 
-    pub(crate) fn collect_rebate(&self, gas_charger: &mut GasCharger) {
+    pub(crate) fn collect_rebate(&self, gas_charger: &mut GasCharger) -> Vec<RebateInfo> {
+        let mut rows = Vec::new();
         for object_id in &self.execution_results.modified_objects {
             if self
                 .execution_results
@@ -823,7 +839,15 @@ impl<'backing> TemporaryStore<'backing> {
                 .unwrap()
                 .storage_rebate;
             gas_charger.track_storage_mutation(0, storage_rebate);
+
+            rows.push(RebateInfo {
+                object_id: object_id.clone(),
+                size: 0,
+                old_rebate: storage_rebate,
+                new_rebate: 0,
+            });
         }
+        rows
     }
 
     pub fn check_execution_results_consistency(&self) -> Result<(), ExecutionError> {

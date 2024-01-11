@@ -12,6 +12,7 @@ use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults, SharedInput};
 use sui_types::execution_status::ExecutionStatus;
+use sui_types::gas::{RebateInfo, TransactionRebateInfo};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::storage::{BackingStore, DeleteKindWithOldVersion, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
@@ -678,7 +679,11 @@ impl<'backing> TemporaryStore<'backing> {
     /// All objects will be updated with their new (current) storage rebate/cost.
     /// `SuiGasStatus` `storage_rebate` and `storage_gas_units` track the transaction
     /// overall storage rebate and cost.
-    pub(crate) fn collect_storage_and_rebate(&mut self, gas_charger: &mut GasCharger) {
+    pub(crate) fn collect_storage_and_rebate(
+        &mut self,
+        gas_charger: &mut GasCharger,
+    ) -> TransactionRebateInfo {
+        let mut rows = Vec::new();
         let mut objects_to_update = vec![];
         for (object_id, (object, write_kind)) in &mut self.written {
             // get the object storage_rebate in input for mutated objects
@@ -710,18 +715,30 @@ impl<'backing> TemporaryStore<'backing> {
             if !object.is_immutable() {
                 objects_to_update.push((object.clone(), *write_kind));
             }
+
+            rows.push(RebateInfo {
+                object_id: object.id(),
+                size: new_object_size,
+                old_rebate: old_storage_rebate,
+                new_rebate: new_storage_rebate,
+            });
         }
 
-        self.collect_rebate(gas_charger);
+        rows.extend(self.collect_rebate(gas_charger));
 
         // Write all objects at the end only if all previous gas charges succeeded.
         // This avoids polluting the temporary store state if this function failed.
         for (object, write_kind) in objects_to_update {
             self.write_object(object, write_kind);
         }
+
+        TransactionRebateInfo {
+            per_object_info: rows,
+        }
     }
 
-    pub(crate) fn collect_rebate(&self, gas_charger: &mut GasCharger) {
+    pub(crate) fn collect_rebate(&self, gas_charger: &mut GasCharger) -> Vec<RebateInfo> {
+        let mut rows = Vec::new();
         for (object_id, kind) in &self.deleted {
             match kind {
                 DeleteKindWithOldVersion::Wrap(version)
@@ -729,6 +746,13 @@ impl<'backing> TemporaryStore<'backing> {
                     // get and track the deleted object `storage_rebate`
                     let storage_rebate = self.get_input_storage_rebate(object_id, *version);
                     gas_charger.track_storage_mutation(0, storage_rebate);
+
+                    rows.push(RebateInfo {
+                        object_id: object_id.clone(),
+                        size: 0,
+                        old_rebate: storage_rebate,
+                        new_rebate: 0,
+                    });
                 }
                 DeleteKindWithOldVersion::UnwrapThenDelete
                 | DeleteKindWithOldVersion::UnwrapThenDeleteDEPRECATED(_) => {
@@ -736,6 +760,7 @@ impl<'backing> TemporaryStore<'backing> {
                 }
             }
         }
+        rows
     }
 }
 //==============================================================================
