@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
-import type { ObjectOwner, SuiObjectChange } from '@mysten/sui.js/client';
-import type { Keypair } from '@mysten/sui.js/cryptography';
+import type { CoinStruct, ObjectOwner, SuiObjectChange } from '@mysten/sui.js/client';
+import type { Keypair, Signer } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import type { TransactionObjectInput } from '@mysten/sui.js/transactions';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
@@ -13,6 +13,7 @@ import {
 	normalizeSuiAddress,
 	normalizeSuiObjectId,
 	parseStructTag,
+	SUI_TYPE_ARG,
 } from '@mysten/sui.js/utils';
 
 export interface ZkSendLinkBuilderOptions {
@@ -20,6 +21,8 @@ export interface ZkSendLinkBuilderOptions {
 	path?: string;
 	mist?: number;
 	keypair?: Keypair;
+	client?: SuiClient;
+	sender: string;
 }
 
 export interface ZkSendLinkOptions {
@@ -33,24 +36,39 @@ const DEFAULT_ZK_SEND_LINK_OPTIONS = {
 	client: new SuiClient({ url: getFullnodeUrl('mainnet') }),
 };
 
-const SUI_COIN_TYPE = normalizeStructTag('0x2::coin::Coin<0x2::sui::SUI>');
+const SUI_COIN_TYPE = normalizeStructTag(SUI_TYPE_ARG);
+const SUI_COIN_OBJECT_TYPE = normalizeStructTag('0x2::coin::Coin<0x2::sui::SUI>');
+
+interface CreateZkSendLinkOptions {
+	transactionBlock?: TransactionBlock;
+	calculateGas?: (options: {
+		mist: bigint;
+		objects: TransactionObjectInput[];
+		gasEstimateFromDryRun: bigint;
+	}) => Promise<bigint> | bigint;
+}
 
 export class ZkSendLinkBuilder {
 	#host: string;
 	#path: string;
 	#keypair: Keypair;
+	#client: SuiClient;
 	#objects = new Set<TransactionObjectInput>();
 	#mist = 0n;
-	#gasFee = 0n;
+	#sender: string;
 
 	constructor({
 		host = DEFAULT_ZK_SEND_LINK_OPTIONS.host,
 		path = DEFAULT_ZK_SEND_LINK_OPTIONS.path,
 		keypair = new Ed25519Keypair(),
-	}: ZkSendLinkBuilderOptions = {}) {
+		client = DEFAULT_ZK_SEND_LINK_OPTIONS.client,
+		sender,
+	}: ZkSendLinkBuilderOptions) {
 		this.#host = host;
 		this.#path = path;
 		this.#keypair = keypair;
+		this.#client = client;
+		this.#sender = normalizeSuiAddress(sender);
 	}
 
 	addClaimableMist(amount: bigint) {
@@ -69,32 +87,47 @@ export class ZkSendLinkBuilder {
 		return link.toString();
 	}
 
-	async addGasForClaim(
-		getAmount?: (options: {
-			mist: bigint;
-			objects: TransactionObjectInput[];
-			estimatedFee: bigint;
-		}) => Promise<bigint> | bigint,
-	) {
-		const estimatedFee = await this.#estimateClaimGasFee();
-		this.#gasFee = getAmount
-			? await getAmount({
+	async create({
+		signer,
+		...options
+	}: CreateZkSendLinkOptions & {
+		signer: Signer;
+	}) {
+		const txb = await this.createSendTransaction(options);
+
+		return this.#client.signAndExecuteTransactionBlock({
+			transactionBlock: await txb.build({ client: this.#client }),
+			signer,
+		});
+	}
+	async createSendTransaction({
+		transactionBlock: txb = new TransactionBlock(),
+		calculateGas,
+	}: CreateZkSendLinkOptions = {}) {
+		const gasEstimateFromDryRun = await this.#estimateClaimGasFee();
+		const baseGasAmount = calculateGas
+			? await calculateGas({
 					mist: this.#mist,
 					objects: [...this.#objects],
-					estimatedFee,
+					gasEstimateFromDryRun,
 			  })
-			: estimatedFee;
-	}
+			: gasEstimateFromDryRun * 2n;
 
-	createSendTransaction() {
-		const txb = new TransactionBlock();
+		// Ensure that rounded gas is not less than the calculated gas
+		const gasWithBuffer = baseGasAmount + 1013n;
+		// Ensure that gas amount ends in 987
+		const roundedGasAmount = gasWithBuffer - (gasWithBuffer % 1000n) - 13n;
+
 		const address = this.#keypair.toSuiAddress();
 		const objectsToTransfer = [...this.#objects].map((id) => txb.object(id));
-		const totalMist = this.#mist + this.#gasFee;
+		txb.setSenderIfNotSet(this.#sender);
 
-		if (totalMist) {
-			const [coin] = txb.splitCoins(txb.gas, [totalMist]);
-			objectsToTransfer.push(coin);
+		if (this.#mist) {
+			const [gas, sui] = txb.splitCoins(txb.gas, [roundedGasAmount, this.#mist]);
+			objectsToTransfer.push(gas, sui);
+		} else {
+			const [gas] = txb.splitCoins(txb.gas, [roundedGasAmount]);
+			objectsToTransfer.push(gas);
 		}
 
 		txb.transferObjects(objectsToTransfer, address);
@@ -102,8 +135,42 @@ export class ZkSendLinkBuilder {
 		return txb;
 	}
 
-	#estimateClaimGasFee(): Promise<bigint> {
-		return Promise.resolve(0n);
+	async #estimateClaimGasFee(): Promise<bigint> {
+		const txb = new TransactionBlock();
+		txb.setSender(this.#sender);
+		txb.setGasPayment([]);
+
+		if (this.#mist) {
+			const allCoins = await this.#client.getCoins({
+				owner: this.#sender,
+				coinType: SUI_COIN_TYPE,
+				limit: 1,
+			});
+
+			if (!allCoins.data.length) {
+				throw new Error('Sending account does not contain any Sui');
+			}
+
+			txb.transferObjects(
+				[txb.object(allCoins.data[0].coinObjectId)],
+				this.#keypair.toSuiAddress(),
+			);
+		}
+
+		txb.transferObjects(
+			[...this.#objects].map((id) => txb.object(id)),
+			this.#keypair.toSuiAddress(),
+		);
+
+		const result = await this.#client.dryRunTransactionBlock({
+			transactionBlock: await txb.build({ client: this.#client }),
+		});
+
+		return (
+			BigInt(result.effects.gasUsed.computationCost) +
+			BigInt(result.effects.gasUsed.storageCost) -
+			BigInt(result.effects.gasUsed.storageRebate)
+		);
 	}
 }
 
@@ -115,13 +182,14 @@ export class ZkSendLink {
 	#client: SuiClient;
 	#keypair: Keypair;
 	#initiallyOwnedObjects = new Set<string>();
-	#ownedBalances = new Map<string, bigint>();
 	#ownedObjects: Array<{
 		objectId: string;
 		version: string;
 		digest: string;
 		type: string;
 	}> = [];
+	#gasCoin?: CoinStruct;
+	#creatorAddress?: string;
 
 	constructor({
 		client = DEFAULT_ZK_SEND_LINK_OPTIONS.client,
@@ -146,11 +214,7 @@ export class ZkSendLink {
 	}
 
 	async loadOwnedData() {
-		await Promise.all([
-			this.#loadInitialTransactionData(),
-			this.#loadOwnedObjects(),
-			this.#loadOwnedBalances(),
-		]);
+		await Promise.all([this.#loadInitialTransactionData(), this.#loadOwnedObjects()]);
 	}
 
 	async listClaimableAssets(
@@ -241,7 +305,11 @@ export class ZkSendLink {
 
 		const objectsToTransfer = this.#ownedObjects
 			.filter((object) => {
-				if (object.type === SUI_COIN_TYPE) {
+				if (this.#gasCoin) {
+					if (object.objectId === this.#gasCoin.coinObjectId) {
+						return false;
+					}
+				} else if (object.type === SUI_COIN_OBJECT_TYPE) {
 					return false;
 				}
 
@@ -260,7 +328,9 @@ export class ZkSendLink {
 			})
 			.map((object) => txb.object(object.objectId));
 
-		if (claimAll || options?.coinTypes?.includes(SUI_COIN_TYPE)) {
+		if (this.#gasCoin && this.#creatorAddress) {
+			txb.transferObjects([txb.gas], this.#creatorAddress);
+		} else if (claimAll || options?.coinTypes?.includes(SUI_COIN_TYPE)) {
 			objectsToTransfer.push(txb.gas);
 		}
 
@@ -296,18 +366,6 @@ export class ZkSendLink {
 		} while (nextCursor);
 	}
 
-	async #loadOwnedBalances() {
-		this.#ownedBalances = new Map();
-
-		const balances = await this.#client.getAllBalances({
-			owner: this.#keypair.toSuiAddress(),
-		});
-
-		for (const balance of balances) {
-			this.#ownedBalances.set(normalizeStructTag(balance.coinType), BigInt(balance.totalBalance));
-		}
-	}
-
 	async #loadInitialTransactionData() {
 		const result = await this.#client.queryTransactionBlocks({
 			limit: 1,
@@ -317,6 +375,7 @@ export class ZkSendLink {
 			},
 			options: {
 				showObjectChanges: true,
+				showInput: true,
 			},
 		});
 
@@ -327,6 +386,8 @@ export class ZkSendLink {
 				this.#initiallyOwnedObjects.add(normalizeSuiObjectId(objectChange.objectId));
 			}
 		});
+
+		this.#creatorAddress = result.data[0]?.transaction?.data.sender;
 	}
 }
 

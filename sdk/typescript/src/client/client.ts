@@ -4,7 +4,7 @@ import { fromB58, toB64, toHEX } from '@mysten/bcs';
 
 import type { TransactionBlock } from '../builder/index.js';
 import { isTransactionBlock } from '../builder/index.js';
-import type { Keypair } from '../cryptography/index.js';
+import type { Signer } from '../cryptography/index.js';
 import {
 	isValidSuiAddress,
 	isValidSuiObjectId,
@@ -429,7 +429,7 @@ export class SuiClient {
 		...input
 	}: {
 		transactionBlock: Uint8Array | TransactionBlock;
-		signer: Keypair;
+		signer: Signer;
 	} & Omit<
 		ExecuteTransactionBlockParams,
 		'transactionBlock' | 'signature'

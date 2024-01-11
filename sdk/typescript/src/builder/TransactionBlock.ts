@@ -7,7 +7,7 @@ import { is, mask } from 'superstruct';
 
 import { bcs } from '../bcs/index.js';
 import type { ProtocolConfig, SuiClient, SuiMoveNormalizedType } from '../client/index.js';
-import type { Keypair, SignatureWithBytes } from '../cryptography/index.js';
+import type { SignatureWithBytes, Signer } from '../cryptography/index.js';
 import type { SuiObjectResponse } from '../types/index.js';
 import {
 	extractMutableReference,
@@ -153,7 +153,7 @@ interface BuildOptions {
 }
 
 interface SignOptions extends BuildOptions {
-	signer: Keypair;
+	signer: Signer;
 }
 
 export function isTransactionBlock(obj: unknown): obj is TransactionBlock {
