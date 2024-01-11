@@ -989,10 +989,7 @@ pub async fn download_formal_snapshot(
 pub async fn download_db_snapshot(
     path: &Path,
     epoch: u64,
-    genesis: &Path,
     snapshot_store_config: ObjectStoreConfig,
-    archive_store_config: ObjectStoreConfig,
-    skip_checkpoints: bool,
     skip_indexes: bool,
     num_parallel_downloads: usize,
 ) -> Result<(), anyhow::Error> {
@@ -1055,26 +1052,24 @@ pub async fn download_db_snapshot(
             .await?
             .objects,
     );
-    if !skip_checkpoints {
-        let checkpoints_dir = entries
-            .common_prefixes
-            .iter()
-            .find(|entry| {
-                entry
-                    .filename()
-                    .map(|filename| filename == "checkpoints")
-                    .unwrap_or(false)
-            })
-            .ok_or(anyhow!(
-                "Checkpoints dir doesn't exist under the remote epoch dir"
-            ))?;
-        files.extend(
-            remote_store
-                .list_with_delimiter(Some(checkpoints_dir))
-                .await?
-                .objects,
-        );
-    }
+    let checkpoints_dir = entries
+        .common_prefixes
+        .iter()
+        .find(|entry| {
+            entry
+                .filename()
+                .map(|filename| filename == "checkpoints")
+                .unwrap_or(false)
+        })
+        .ok_or(anyhow!(
+            "Checkpoints dir doesn't exist under the remote epoch dir"
+        ))?;
+    files.extend(
+        remote_store
+            .list_with_delimiter(Some(checkpoints_dir))
+            .await?
+            .objects,
+    );
     if !skip_indexes {
         let indexes_dir = entries
             .common_prefixes
@@ -1108,40 +1103,6 @@ pub async fn download_db_snapshot(
     .make()?;
     let m = MultiProgress::new();
     let path = path.to_path_buf();
-    let genesis = genesis.to_path_buf();
-    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(
-        &path.join(format!("epoch_{}", epoch)).join("store"),
-        None,
-    ));
-    let summaries_handle = if skip_checkpoints {
-        let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&path.join("store"), None));
-        let genesis = Genesis::load(genesis).unwrap();
-        let genesis_committee = genesis.committee()?;
-        let committee_store = Arc::new(CommitteeStore::new(
-            path.join("epochs"),
-            &genesis_committee,
-            None,
-        ));
-        let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
-            path.join("checkpoints"),
-            MetricConf::default(),
-            None,
-            None,
-        ));
-        Some(start_summary_sync(
-            perpetual_db,
-            committee_store,
-            checkpoint_store,
-            m.clone(),
-            genesis,
-            archive_store_config,
-            epoch,
-            num_parallel_downloads,
-            false, // verify
-        ))
-    } else {
-        None
-    };
     let snapshot_handle = tokio::spawn(async move {
         let progress_bar = m.add(
             ProgressBar::new(files.len() as u64).with_style(
@@ -1192,28 +1153,13 @@ pub async fn download_db_snapshot(
         Ok::<(), anyhow::Error>(())
     });
 
-    let mut tasks: Vec<_> = vec![Box::pin(snapshot_handle)];
-    if let Some(summary_handle) = summaries_handle {
-        tasks.push(Box::pin(summary_handle));
-    }
+    let tasks: Vec<_> = vec![Box::pin(snapshot_handle)];
     join_all(tasks)
         .await
         .into_iter()
         .collect::<Result<Vec<_>, _>>()?
         .into_iter()
         .for_each(|result| result.expect("Task failed"));
-    if skip_checkpoints {
-        let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
-            path.join("checkpoints"),
-            MetricConf::default(),
-            None,
-            None,
-        ));
-        let last_checkpoint = checkpoint_store
-            .get_highest_verified_checkpoint()?
-            .expect("Expected nonempty checkpoint store");
-        perpetual_db.set_highest_pruned_checkpoint_without_wb(last_checkpoint.sequence_number)?;
-    }
 
     let store_dir = path.join("store");
     if store_dir.exists() {
