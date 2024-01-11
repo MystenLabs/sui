@@ -2493,6 +2493,7 @@ dependencies = [
  "serde",
  "sui-protocol-config",
  "tempfile",
+ "tap",
  "thiserror",
  "tokio",
  "tracing",

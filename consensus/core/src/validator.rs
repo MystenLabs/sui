@@ -12,10 +12,12 @@ use tracing::info;
 use crate::block_verifier::BlockVerifier;
 use crate::context::Context;
 use crate::metrics::initialise_metrics;
+use crate::transactions_client::{TransactionsClient, TransactionsConsumer};
 
 pub struct Validator {
     context: Arc<Context>,
     start_time: Instant,
+    transactions_client: Arc<TransactionsClient>,
 }
 
 impl Validator {
@@ -41,9 +43,14 @@ impl Validator {
         ));
         let start_time = Instant::now();
 
+        // Create the transactions client and the transactions consumer
+        let (client, tx_receiver) = TransactionsClient::new(context.clone());
+        let _tx_consumer = TransactionsConsumer::new(tx_receiver);
+
         Self {
             context,
             start_time,
+            transactions_client: Arc::new(client),
         }
     }
 
@@ -58,6 +65,11 @@ impl Validator {
             .node_metrics
             .uptime
             .observe(self.start_time.elapsed().as_secs_f64());
+    }
+
+    #[allow(unused)]
+    pub fn transactions_client(&self) -> Arc<TransactionsClient> {
+        self.transactions_client.clone()
     }
 }
 
