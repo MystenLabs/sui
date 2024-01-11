@@ -62,7 +62,10 @@ impl<W: Worker + 'static> WorkerPool<W> {
                                     .clone()
                                     .process_checkpoint(checkpoint.clone())
                                     .await
-                                    .map_err(backoff::Error::transient)
+                                    .map_err(|err| {
+                                        info!("transient worker execution error {:?}", err);
+                                        backoff::Error::transient(err)
+                                    })
                             })
                             .await
                             .expect("checkpoint processing failed for checkpoint");
