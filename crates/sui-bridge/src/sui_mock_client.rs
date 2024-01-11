@@ -19,7 +19,7 @@ use sui_types::transaction::Transaction;
 use sui_types::Identifier;
 
 use crate::sui_client::SuiClientInner;
-use crate::types::BridgeCommittee;
+use crate::types::MoveTypeBridgeCommittee;
 
 /// Mock client used in test environments.
 #[allow(clippy::type_complexity)]
@@ -155,7 +155,7 @@ impl SuiClientInner for SuiMockClient {
         Ok(self.latest_checkpoint_sequence_number)
     }
 
-    async fn get_bridge_committee(&self) -> Result<BridgeCommittee, Self::Error> {
+    async fn get_bridge_committee(&self) -> Result<MoveTypeBridgeCommittee, Self::Error> {
         unimplemented!()
     }
 

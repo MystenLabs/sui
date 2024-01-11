@@ -4,24 +4,28 @@
 // TODO remove when integrated
 #![allow(unused)]
 
+use std::str::from_utf8;
 use std::time::Duration;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
 use axum::response::sse::Event;
 use ethers::types::{Address, U256};
+use fastcrypto::traits::ToFromBytes;
+use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-use sui_json_rpc_types::{EventFilter, Page, SuiEvent};
+use sui_json_rpc_types::{EventFilter, Page, SuiData, SuiEvent};
 use sui_json_rpc_types::{
     EventPage, SuiObjectDataOptions, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
 use sui_types::base_types::ObjectRef;
+use sui_types::dynamic_field::Field;
 use sui_types::error::UserInputError;
 use sui_types::event;
 use sui_types::gas_coin::GasCoin;
-use sui_types::object::Owner;
+use sui_types::object::{Object, Owner};
 use sui_types::transaction::Transaction;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -32,9 +36,27 @@ use sui_types::{
 use tap::TapFallible;
 use tracing::warn;
 
+use crate::crypto::BridgeAuthorityPublicKey;
 use crate::error::{BridgeError, BridgeResult};
 use crate::events::SuiBridgeEvent;
-use crate::types::{BridgeAction, BridgeCommittee};
+use crate::types::{
+    BridgeAction, BridgeAuthority, BridgeCommittee, MoveTypeBridgeCommittee, MoveTypeBridgeInner,
+    MoveTypeCommitteeMember,
+};
+
+// TODO: once we have bridge package on sui framework, we can hardcode the actual
+// bridge dynamic field object id (not 0x9 or dynamic field wrapper) and update
+// along with software upgrades.
+// Or do we always retrieve from 0x9? We can figure this out before the first uggrade.
+fn get_bridge_object_id() -> &'static ObjectID {
+    static BRIDGE_OBJ_ID: OnceCell<ObjectID> = OnceCell::new();
+    BRIDGE_OBJ_ID.get_or_init(|| {
+        let bridge_object_id =
+            std::env::var("BRIDGE_OBJECT_ID").expect("Expect BRIDGE_OBJECT_ID env var set");
+        ObjectID::from_hex_literal(&bridge_object_id)
+            .expect("BRIDGE_OBJECT_ID must be a valid hex string")
+    })
+}
 
 pub struct SuiClient<P> {
     inner: P,
@@ -171,11 +193,38 @@ where
             .ok_or(BridgeError::BridgeEventNotActionable)
     }
 
+    // TODO: expose this API to jsonrpc like system state query
     pub async fn get_bridge_committee(&self) -> BridgeResult<BridgeCommittee> {
-        self.inner
-            .get_bridge_committee()
-            .await
-            .map_err(|e| BridgeError::InternalError(format!("Can't get bridge committee: {e}")))
+        let move_type_bridge_committee =
+            self.inner.get_bridge_committee().await.map_err(|e| {
+                BridgeError::InternalError(format!("Can't get bridge committee: {e}"))
+            })?;
+        let mut authorities = vec![];
+        // TODO: move this to MoveTypeBridgeCommittee
+        for member in move_type_bridge_committee.members.contents {
+            let MoveTypeCommitteeMember {
+                sui_address,
+                bridge_pubkey_bytes,
+                voting_power,
+                http_rest_url,
+                blocklisted,
+            } = member.value;
+            let pubkey = BridgeAuthorityPublicKey::from_bytes(&bridge_pubkey_bytes)?;
+            let base_url = from_utf8(&http_rest_url).unwrap_or_else(|e| {
+                warn!(
+                    "Bridge authority address: {}, pubkey: {:?} has invalid http url: {:?}",
+                    sui_address, bridge_pubkey_bytes, http_rest_url
+                );
+                ""
+            });
+            authorities.push(BridgeAuthority {
+                pubkey,
+                voting_power,
+                base_url: base_url.into(),
+                is_blocklisted: blocklisted,
+            });
+        }
+        BridgeCommittee::new(authorities)
     }
 
     pub async fn execute_transaction_block_with_effects(
@@ -214,7 +263,7 @@ pub trait SuiClientInner: Send + Sync {
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, Self::Error>;
 
-    async fn get_bridge_committee(&self) -> Result<BridgeCommittee, Self::Error>;
+    async fn get_bridge_committee(&self) -> Result<MoveTypeBridgeCommittee, Self::Error>;
 
     async fn execute_transaction_block_with_effects(
         &self,
@@ -258,8 +307,28 @@ impl SuiClientInner for SuiSdkClient {
             .await
     }
 
-    async fn get_bridge_committee(&self) -> Result<BridgeCommittee, Self::Error> {
-        unimplemented!()
+    async fn get_bridge_committee(&self) -> Result<MoveTypeBridgeCommittee, Self::Error> {
+        let object_id = *get_bridge_object_id();
+        let resp = self
+            .read_api()
+            .get_object_with_options(object_id, SuiObjectDataOptions::default().with_bcs())
+            .await?;
+        if resp.error.is_some() {
+            return Err(Self::Error::DataError(format!(
+                "Can't get bridge object {:?}: {:?}",
+                object_id, resp.error
+            )));
+        }
+        let move_object = resp
+            .data
+            .unwrap() // unwrap: Bridge object must exist
+            .bcs
+            .unwrap(); // unwrap requested bcs data
+                       // unwrap: Bridge object must be a Move object
+        let bcs = move_object.try_as_move().unwrap();
+        let bridge_dynamic_field: Field<u64, MoveTypeBridgeInner> =
+            bcs::from_bytes(&bcs.bcs_bytes)?;
+        Ok(bridge_dynamic_field.value.committee)
     }
 
     async fn execute_transaction_block_with_effects(
@@ -285,7 +354,7 @@ impl SuiClientInner for SuiSdkClient {
                 .read_api()
                 .get_object_with_options(
                     gas_object_id,
-                    SuiObjectDataOptions::default().with_owner(),
+                    SuiObjectDataOptions::default().with_owner().with_content(),
                 )
                 .await
                 .map(|resp| resp.data)
