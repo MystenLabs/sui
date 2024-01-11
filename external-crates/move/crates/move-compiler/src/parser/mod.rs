@@ -30,12 +30,7 @@ pub(crate) fn parse_program(
     named_address_maps: NamedAddressMaps,
     targets: Vec<IndexedPackagePath>,
     deps: Vec<IndexedPackagePath>,
-) -> anyhow::Result<(
-    FilesSourceText,
-    parser::ast::Program,
-    CommentMap,
-    Diagnostics,
-)> {
+) -> anyhow::Result<(FilesSourceText, parser::ast::Program, CommentMap)> {
     fn find_move_filenames_with_address_mapping(
         paths_with_mapping: Vec<IndexedPackagePath>,
     ) -> anyhow::Result<Vec<IndexedPackagePath>> {
@@ -69,7 +64,6 @@ pub(crate) fn parse_program(
     let mut source_definitions = Vec::new();
     let mut source_comments = CommentMap::new();
     let mut lib_definitions = Vec::new();
-    let mut diags: Diagnostics = Diagnostics::new();
 
     for IndexedPackagePath {
         package,
@@ -85,7 +79,7 @@ pub(crate) fn parse_program(
             def,
         }));
         source_comments.insert(file_hash, comments);
-        diags.extend(ds);
+        compilation_env.add_diags(ds);
     }
 
     for IndexedPackagePath {
@@ -100,7 +94,7 @@ pub(crate) fn parse_program(
             named_address_map,
             def,
         }));
-        diags.extend(ds);
+        compilation_env.add_diags(ds);
     }
 
     let pprog = parser::ast::Program {
@@ -108,7 +102,7 @@ pub(crate) fn parse_program(
         source_definitions,
         lib_definitions,
     };
-    Ok((files, pprog, source_comments, diags))
+    Ok((files, pprog, source_comments))
 }
 
 fn ensure_targets_deps_dont_intersect(

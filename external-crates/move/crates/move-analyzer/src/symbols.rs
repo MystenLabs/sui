@@ -987,7 +987,7 @@ pub fn get_symbols(
     let mut diagnostics = None;
     build_plan.compile_with_driver(&mut std::io::sink(), |compiler| {
         // extract expansion AST
-        let (files, compilation_result) = compiler.run::<PASS_PARSER>(true /* no_fail */)?;
+        let (files, compilation_result) = compiler.run::<PASS_PARSER>()?;
         let (_, compiler) = match compilation_result {
             Ok(v) => v,
             Err(diags) => {
@@ -1002,9 +1002,7 @@ pub fn get_symbols(
         parsed_ast = Some(parsed_program.clone());
 
         // extract typed AST
-        let compilation_result = compiler
-            .at_parser(parsed_program)
-            .run::<PASS_TYPING>(true /* no_fail */);
+        let compilation_result = compiler.at_parser(parsed_program).run::<PASS_TYPING>();
         let compiler = match compilation_result {
             Ok(v) => v,
             Err(diags) => {

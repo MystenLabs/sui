@@ -113,7 +113,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     let (files, comments_and_compiler_res) = Compiler::from_package_paths(move_sources, deps)?
         .set_flags(flags)
         .set_warning_filter(warning_filter)
-        .run::<PASS_PARSER>(false /* no_fail */)?;
+        .run::<PASS_PARSER>()?;
     let (comment_map, compiler) = match comments_and_compiler_res {
         Err(diags) => {
             // Add source files so that the env knows how to translate locations of parse errors
@@ -199,10 +199,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
             lib_definitions: vec![],
         }
     };
-    let (compiler, expansion_ast) = match compiler
-        .at_parser(parsed_prog)
-        .run::<PASS_EXPANSION>(false /* no_fail */)
-    {
+    let (compiler, expansion_ast) = match compiler.at_parser(parsed_prog).run::<PASS_EXPANSION>() {
         Err(diags) => {
             add_move_lang_diagnostics(&mut env, diags);
             return Ok(env);
@@ -211,7 +208,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     };
     let (compiler, typing_ast) = match compiler
         .at_expansion(expansion_ast.clone())
-        .run::<PASS_TYPING>(false /* no_fail */)
+        .run::<PASS_TYPING>()
     {
         Err(diags) => {
             add_move_lang_diagnostics(&mut env, diags);
@@ -258,10 +255,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     };
 
     // Run the compiler fully to the compiled units
-    let units = match compiler
-        .at_typing(typing_ast)
-        .run::<PASS_COMPILATION>(false /* no_fail */)
-    {
+    let units = match compiler.at_typing(typing_ast).run::<PASS_COMPILATION>() {
         Err(diags) => {
             add_move_lang_diagnostics(&mut env, diags);
             return Ok(env);

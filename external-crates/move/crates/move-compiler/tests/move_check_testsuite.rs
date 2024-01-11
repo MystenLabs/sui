@@ -194,8 +194,7 @@ pub fn run_test(
             .add_custom_known_filters(filters, filter_attr_name);
     }
 
-    let (files, comments_and_compiler_res) =
-        compiler.run::<PASS_PARSER>(false /* no_fail */)?;
+    let (files, comments_and_compiler_res) = compiler.run::<PASS_PARSER>()?;
     let diags = move_check_for_errors(comments_and_compiler_res);
 
     let has_diags = !diags.is_empty();
