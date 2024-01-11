@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{context_data::db_data_provider::PgManager, error::Error};
+use crate::error::Error;
 use async_graphql::{
-    connection::{Connection, CursorType, Edge},
+    connection::{Connection, ConnectionNameType, CursorType, Edge, EdgeNameType, EmptyFields},
     *,
 };
 use either::Either;
@@ -20,6 +20,7 @@ use super::{
     checkpoint::{Checkpoint, CheckpointId},
     cursor::{Cursor, Page},
     date_time::DateTime,
+    digest::Digest,
     epoch::Epoch,
     gas::GasEffects,
     object_change::ObjectChange,
@@ -45,6 +46,10 @@ pub enum ExecutionStatus {
     /// The transaction block could not be executed
     Failure,
 }
+
+/// Type to override names of the Dependencies Connection (which has nullable transactions and
+/// therefore must be a different types to the default `TransactionBlockConnection`).
+struct DependencyConnectionNames;
 
 pub(crate) type CDependencies = Cursor<usize>;
 pub(crate) type CUnchangedSharedObject = Cursor<usize>;
@@ -112,7 +117,16 @@ impl TransactionBlockEffects {
         after: Option<CDependencies>,
         last: Option<u64>,
         before: Option<CDependencies>,
-    ) -> Result<Connection<String, TransactionBlock>> {
+    ) -> Result<
+        Connection<
+            String,
+            Option<TransactionBlock>,
+            EmptyFields,
+            EmptyFields,
+            DependencyConnectionNames,
+            DependencyConnectionNames,
+        >,
+    > {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let mut connection = Connection::new(false, false);
 
@@ -128,23 +142,29 @@ impl TransactionBlockEffects {
             return Ok(connection);
         };
 
-        let transactions = ctx
-            .data_unchecked::<PgManager>()
-            .fetch_txs_by_digests(&dependencies[**fst..=**lst])
-            .await
-            .extend()?;
+        let transactions = TransactionBlock::multi_query(
+            ctx.data_unchecked(),
+            dependencies[**fst..=**lst]
+                .iter()
+                .map(|d| Digest::from(*d))
+                .collect(),
+        )
+        .await
+        .extend()?;
 
-        let Some(transactions) = transactions else {
+        if transactions.is_empty() {
             return Ok(connection);
         };
 
         connection.has_previous_page = prev;
         connection.has_next_page = next;
 
-        for (c, transaction) in indices.into_iter().zip(transactions.into_iter()) {
-            connection
-                .edges
-                .push(Edge::new(c.encode_cursor(), transaction));
+        for idx in indices {
+            let digest: Digest = dependencies[*idx].into();
+            connection.edges.push(Edge::new(
+                idx.encode_cursor(),
+                transactions.get(&digest).cloned(),
+            ));
         }
 
         Ok(connection)
@@ -306,6 +326,18 @@ impl TransactionBlockEffects {
         };
 
         Ok(Base64::from(bytes))
+    }
+}
+
+impl ConnectionNameType for DependencyConnectionNames {
+    fn type_name<T: OutputType>() -> String {
+        "DependencyConnection".to_string()
+    }
+}
+
+impl EdgeNameType for DependencyConnectionNames {
+    fn type_name<T: OutputType>() -> String {
+        "DependencyEdge".to_string()
     }
 }
 

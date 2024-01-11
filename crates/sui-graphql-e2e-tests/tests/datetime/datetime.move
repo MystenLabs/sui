@@ -69,7 +69,7 @@
 # Query for the system transaction that corresponds to a checkpoint (note that
 # its timestamp is advanced, because the clock has advanced).
 {
-  transactionBlockConnection(last: 10) {
+  transactionBlocks(last: 10) {
     nodes {
       kind {
         __typename

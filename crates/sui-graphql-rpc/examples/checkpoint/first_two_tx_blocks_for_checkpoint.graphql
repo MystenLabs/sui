@@ -1,7 +1,7 @@
 # Get data for the first two transaction blocks of checkpoint at sequence number 10
 {
   checkpoint(id: { sequenceNumber: 10 }) {
-    transactionBlockConnection(first: 2) {
+    transactionBlocks(first: 2) {
       edges {
         node {
           kind {

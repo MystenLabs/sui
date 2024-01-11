@@ -39,7 +39,7 @@ module P0::m {
 
 //# run-graphql
 {
-  transactionBlockConnection(last: 3) {
+  transactionBlocks(last: 3) {
     nodes {
       kind {
         __typename

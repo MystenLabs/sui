@@ -58,7 +58,7 @@ module Test::M1 {
 
 //# run-graphql
 {
-  transactionBlockConnection(last: 1) {
+  transactionBlocks(last: 1) {
     nodes {
       digest
       effects {
@@ -97,7 +97,7 @@ module Test::M1 {
 
 //# run-graphql --cursors 0
 {
-  transactionBlockConnection(last: 1) {
+  transactionBlocks(last: 1) {
     nodes {
       digest
       effects {

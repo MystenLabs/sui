@@ -3,14 +3,11 @@
 
 use diesel::backend::Backend;
 use sui_indexer::{
-    schema_v2::{display, objects, transactions},
+    schema_v2::{display, objects},
     types_v2::OwnerType,
 };
 
-use crate::{
-    error::Error,
-    types::{object::ObjectFilter, transaction_block::TransactionBlockFilter},
-};
+use crate::{error::Error, types::object::ObjectFilter};
 use diesel::{
     query_builder::{BoxedSelectStatement, FromClause, QueryId},
     sql_types::Text,
@@ -34,14 +31,6 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn get_obj(address: Vec<u8>, version: Option<i64>) -> objects::BoxedQuery<'static, DB>;
     fn get_obj_by_type(object_type: String) -> objects::BoxedQuery<'static, DB>;
     fn get_display_by_obj_type(object_type: String) -> display::BoxedQuery<'static, DB>;
-    fn multi_get_txs(
-        cursor: Option<i64>,
-        descending_order: bool,
-        limit: PageLimit,
-        filter: Option<TransactionBlockFilter>,
-        after_tx_seq_num: Option<i64>,
-        before_tx_seq_num: Option<i64>,
-    ) -> Result<transactions::BoxedQuery<'static, DB>, Error>;
     fn multi_get_coins(
         before: Option<Vec<u8>>,
         after: Option<Vec<u8>>,

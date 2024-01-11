@@ -3,7 +3,7 @@ processed 8 tasks
 task 1 'run-graphql'. lines 8-102:
 Response: {
   "data": {
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "nodes": [
         {
           "digest": "7pmUhaENwwVedRTDm9RxJdphHp1nqLguWUfXtS6SXoRA",
@@ -1317,7 +1317,7 @@ Checkpoint created: 1
 task 4 'run-graphql'. lines 108-183:
 Response: {
   "data": {
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "nodes": [
         {
           "digest": "CHyKA8xirNCGtcDMLJcxBZsxGyAA7DNrzDEVodxZzNn",
@@ -1404,7 +1404,7 @@ Epoch advanced: 0
 task 7 'run-graphql'. lines 189-276:
 Response: {
   "data": {
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "nodes": [
         {
           "digest": "DgPxfaDGo7xB4wW6YmtRSCEX2GvNWrbsffEhswcMukaT",

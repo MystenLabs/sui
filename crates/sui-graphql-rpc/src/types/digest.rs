@@ -9,7 +9,7 @@ use sui_types::digests::TransactionDigest;
 
 pub(crate) const BASE58_DIGEST_LENGTH: usize = 32;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub(crate) struct Digest([u8; BASE58_DIGEST_LENGTH]);
 
 #[derive(thiserror::Error, Debug)]
@@ -33,17 +33,25 @@ impl FromStr for Digest {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut result = [0u8; BASE58_DIGEST_LENGTH];
         let buffer = Base58::decode(s).map_err(|_| Error::InvalidBase58(s.to_string()))?;
+        Digest::try_from(&buffer[..])
+    }
+}
 
-        if buffer.len() != BASE58_DIGEST_LENGTH {
+impl TryFrom<&[u8]> for Digest {
+    type Error = Error;
+
+    fn try_from(value: &[u8]) -> Result<Self, Error> {
+        let mut result = [0u8; BASE58_DIGEST_LENGTH];
+
+        if value.len() != BASE58_DIGEST_LENGTH {
             return Err(Error::BadDigestLength {
                 expect: BASE58_DIGEST_LENGTH,
-                actual: buffer.len(),
+                actual: value.len(),
             });
         }
 
-        result.copy_from_slice(&buffer);
+        result.copy_from_slice(value);
         Ok(Digest(result))
     }
 }

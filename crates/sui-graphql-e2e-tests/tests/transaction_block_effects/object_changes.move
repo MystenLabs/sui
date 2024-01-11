@@ -33,7 +33,7 @@ module Test::M1 {
 
 //# run-graphql
 {
-  transactionBlockConnection(first: 1) {
+  transactionBlocks(first: 1) {
     nodes {
       effects {
         objectChanges {
@@ -54,7 +54,7 @@ module Test::M1 {
 
 //# run-graphql --cursors 10
 {
-  transactionBlockConnection(first: 1) {
+  transactionBlocks(first: 1) {
     nodes {
       effects {
         objectChanges(first: 5, after: "@{cursor_0}") {

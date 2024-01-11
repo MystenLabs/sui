@@ -6,12 +6,11 @@ use crate::{
     config::{Limits, DEFAULT_SERVER_DB_POOL_SIZE},
     error::Error,
     types::{
-        address::{Address, AddressTransactionBlockRelationship},
+        address::Address,
         balance::Balance,
         big_int::BigInt,
         coin::Coin,
         coin_metadata::CoinMetadata,
-        digest::Digest,
         dynamic_field::{DynamicField, DynamicFieldName},
         move_object::MoveObject,
         move_type::MoveType,
@@ -19,19 +18,17 @@ use crate::{
         stake::StakedSui,
         sui_address::SuiAddress,
         suins_registration::SuinsRegistration,
-        transaction_block::{TransactionBlock, TransactionBlockFilter},
         validator::Validator,
     },
 };
 use async_graphql::connection::{Connection, Edge};
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use diesel::{OptionalExtension, RunQueryDsl};
 use move_core_types::language_storage::StructTag;
 use std::{collections::BTreeMap, str::FromStr};
 use sui_indexer::{
     apis::GovernanceReadApiV2,
     indexer_reader::IndexerReader,
-    models_v2::{display::StoredDisplay, objects::StoredObject, transactions::StoredTransaction},
-    schema_v2::transactions,
+    models_v2::{display::StoredDisplay, objects::StoredObject},
     types_v2::OwnerType,
     PgConnectionPoolConfig,
 };
@@ -43,7 +40,6 @@ use sui_json_rpc_types::Stake as RpcStakedSui;
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SuiAddress as NativeSuiAddress},
     coin::{CoinMetadata as NativeCoinMetadata, TreasuryCap},
-    digests::TransactionDigest,
     dynamic_field::{DynamicFieldType, Field},
     gas_coin::{GAS, TOTAL_SUPPLY_SUI},
     governance::StakedSui as NativeStakedSui,
@@ -260,87 +256,6 @@ impl PgManager {
         .await
     }
 
-    async fn multi_get_txs(
-        &self,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        filter: Option<TransactionBlockFilter>,
-    ) -> Result<Option<(Vec<StoredTransaction>, bool)>, Error> {
-        let limit = self.validate_page_limit(first, last)?;
-        let descending_order = last.is_some();
-        let cursor = after
-            .or(before)
-            .map(|cursor| self.parse_tx_cursor(&cursor))
-            .transpose()?;
-
-        let mut after_tx_seq_num: Option<i64> = None;
-        let mut before_tx_seq_num: Option<i64> = None;
-        if let Some(filter) = &filter {
-            if let Some(checkpoint) = filter.after_checkpoint {
-                let subquery = transactions::dsl::transactions
-                    .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint as i64))
-                    .order(transactions::dsl::tx_sequence_number.asc())
-                    .select(transactions::dsl::tx_sequence_number)
-                    .limit(1)
-                    .into_boxed();
-
-                after_tx_seq_num = self
-                    .run_query_async(|conn| subquery.get_result::<i64>(conn).optional())
-                    .await?;
-
-                // Return early if we cannot find txs after the specified checkpoint
-                if after_tx_seq_num.is_none() {
-                    return Ok(None);
-                }
-            }
-
-            if let Some(checkpoint) = filter.before_checkpoint {
-                let subquery = transactions::dsl::transactions
-                    .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint as i64))
-                    .order(transactions::dsl::tx_sequence_number.desc())
-                    .select(transactions::dsl::tx_sequence_number)
-                    .into_boxed();
-
-                before_tx_seq_num = self
-                    .run_query_async(|conn| subquery.get_result::<i64>(conn).optional())
-                    .await?;
-
-                // Return early if we cannot find tx before the specified checkpoint
-                if before_tx_seq_num.is_none() {
-                    return Ok(None);
-                }
-            }
-        }
-
-        let query = move || {
-            QueryBuilder::multi_get_txs(
-                cursor,
-                descending_order,
-                limit,
-                filter.clone(),
-                after_tx_seq_num,
-                before_tx_seq_num,
-            )
-        };
-
-        let result: Option<Vec<StoredTransaction>> = self
-            .run_query_async_with_cost(query, |query| move |conn| query.load(conn).optional())
-            .await?;
-
-        result
-            .map(|mut stored_txs| {
-                let has_next_page = stored_txs.len() as i64 > limit.value();
-                if has_next_page {
-                    stored_txs.pop();
-                }
-
-                Ok((stored_txs, has_next_page))
-            })
-            .transpose()
-    }
-
     async fn multi_get_objs(
         &self,
         first: Option<u64>,
@@ -391,55 +306,10 @@ impl PgManager {
 
 /// Implement methods to be used by graphql resolvers
 impl PgManager {
-    pub(crate) fn parse_tx_cursor(&self, cursor: &str) -> Result<i64, Error> {
-        let tx_sequence_number = cursor
-            .parse::<i64>()
-            .map_err(|_| Error::InvalidCursor("tx".to_string()))?;
-        Ok(tx_sequence_number)
-    }
-
     pub(crate) fn parse_obj_cursor(&self, cursor: &str) -> Result<Vec<u8>, Error> {
         Ok(SuiAddress::from_str(cursor)
             .map_err(|e| Error::InvalidCursor(e.to_string()))?
             .into_vec())
-    }
-
-    pub(crate) fn validate_package_dependencies(
-        &self,
-        package: Option<&SuiAddress>,
-        module: Option<&String>,
-        function: Option<&String>,
-    ) -> Result<(), Error> {
-        if function.is_some() {
-            if package.is_none() || module.is_none() {
-                return Err(DbValidationError::RequiresPackageAndModule.into());
-            }
-        } else if module.is_some() && package.is_none() {
-            return Err(DbValidationError::RequiresPackage.into());
-        }
-        Ok(())
-    }
-
-    pub(crate) fn validate_tx_block_filter(
-        &self,
-        filter: &TransactionBlockFilter,
-    ) -> Result<(), Error> {
-        if filter.at_checkpoint.is_some()
-            && (filter.before_checkpoint.is_some() || filter.after_checkpoint.is_some())
-        {
-            return Err(DbValidationError::InvalidCheckpointCombination.into());
-        }
-        if let (Some(before), Some(after)) = (filter.before_checkpoint, filter.after_checkpoint) {
-            if before <= after {
-                return Err(DbValidationError::InvalidCheckpointOrder.into());
-            }
-        }
-        self.validate_package_dependencies(
-            filter.package.as_ref(),
-            filter.module.as_ref(),
-            filter.function.as_ref(),
-        )?;
-        Ok(())
     }
 
     pub(crate) fn validate_obj_filter(&self, filter: &ObjectFilter) -> Result<(), Error> {
@@ -493,105 +363,6 @@ impl PgManager {
     ) -> Result<Option<StoredDisplay>, Error> {
         let object_type = object_type.to_canonical_string(/* with_prefix */ true);
         self.get_display_by_obj_type(object_type).await
-    }
-
-    pub(crate) async fn fetch_txs_for_address(
-        &self,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        mut filter: Option<TransactionBlockFilter>,
-        // TODO: Do we really need this when filter seems to be able to do the same?
-        address_relation: (SuiAddress, AddressTransactionBlockRelationship),
-    ) -> Result<Option<Connection<String, TransactionBlock>>, Error> {
-        let (address, relation) = address_relation;
-        if filter.is_none() {
-            filter = Some(TransactionBlockFilter::default());
-        }
-        let address = Some(address);
-        // Override filter with relation
-        // TODO: is this the desired behavior?
-        filter = filter.map(|mut f| {
-            match relation {
-                AddressTransactionBlockRelationship::Sign => f.sign_address = address,
-                AddressTransactionBlockRelationship::Sent => f.sent_address = address,
-                AddressTransactionBlockRelationship::Recv => f.recv_address = address,
-                AddressTransactionBlockRelationship::Paid => f.paid_address = address,
-            };
-            f
-        });
-
-        self.fetch_txs(first, after, last, before, filter).await
-    }
-
-    pub(crate) async fn fetch_txs(
-        &self,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        filter: Option<TransactionBlockFilter>,
-    ) -> Result<Option<Connection<String, TransactionBlock>>, Error> {
-        validate_cursor_pagination(&first, &after, &last, &before)?;
-        if let Some(filter) = &filter {
-            self.validate_tx_block_filter(filter)?;
-        }
-
-        let transactions = self
-            .multi_get_txs(first, after, last, before, filter)
-            .await?;
-
-        if let Some((stored_txs, has_next_page)) = transactions {
-            let mut connection = Connection::new(false, has_next_page);
-            connection
-                .edges
-                .extend(stored_txs.into_iter().filter_map(|stored_tx| {
-                    let cursor = stored_tx.tx_sequence_number.to_string();
-                    TransactionBlock::try_from(stored_tx)
-                        .map_err(|e| eprintln!("Error converting transaction: {:?}", e))
-                        .ok()
-                        .map(|tx| Edge::new(cursor, tx))
-                }));
-            Ok(Some(connection))
-        } else {
-            Ok(None)
-        }
-    }
-
-    pub(crate) async fn fetch_txs_by_digests(
-        &self,
-        digests: &[TransactionDigest],
-    ) -> Result<Option<Vec<TransactionBlock>>, Error> {
-        let tx_block_filter = TransactionBlockFilter {
-            package: None,
-            module: None,
-            function: None,
-            kind: None,
-            after_checkpoint: None,
-            at_checkpoint: None,
-            before_checkpoint: None,
-            sign_address: None,
-            sent_address: None,
-            recv_address: None,
-            paid_address: None,
-            input_object: None,
-            changed_object: None,
-            transaction_ids: Some(digests.iter().map(|d| Digest::from(*d)).collect()),
-        };
-        let txs = self
-            .multi_get_txs(None, None, None, None, Some(tx_block_filter))
-            .await?;
-
-        let Some((txs, _)) = txs else {
-            return Ok(None);
-        };
-
-        Ok(Some(
-            txs.into_iter()
-                .map(TransactionBlock::try_from)
-                .collect::<Result<Vec<_>, _>>()?,
-        ))
     }
 
     pub(crate) async fn fetch_owned_objs(

@@ -136,7 +136,7 @@ fragment ComprehensivePTB on ProgrammableTransactionBlock {
 }
 
 {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
         nodes {
             digest
             sender { address }
@@ -339,7 +339,7 @@ fragment ComprehensivePTB on ProgrammableTransactionBlock {
 }
 
 {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
         nodes {
             digest
             sender { address }
@@ -403,6 +403,11 @@ fragment ComprehensivePTB on ProgrammableTransactionBlock {
         }
     }
 }
+
+//# programmable --sender A --inputs 41u64 @A
+//> 0: MakeMoveVec<u64>([Input(0)]);
+//> 1: P0::m::new(Result(0));
+//> sui::transfer::public_transfer<P0::m::Foo>(Result(1), Input(1))
 
 //# programmable --sender A --inputs 42u64 43u64 1000 @A
 //> 0: MakeMoveVec<u64>([Input(0), Input(1)]);
@@ -533,7 +538,7 @@ fragment ComprehensivePTB on ProgrammableTransactionBlock {
 }
 
 {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
         nodes {
             digest
             sender { address }
@@ -728,7 +733,7 @@ fragment ComprehensivePTB on ProgrammableTransactionBlock {
 }
 
 {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
         nodes {
             digest
             sender { address }
@@ -790,5 +795,76 @@ fragment ComprehensivePTB on ProgrammableTransactionBlock {
 
             expiration { epochId }
         }
+    }
+}
+
+//# run-graphql
+{ # All transactions
+    transactionBlocks(last: 10) {
+        edges {
+            cursor
+            node {
+                kind { __typename }
+            }
+        }
+    }
+}
+
+//# run-graphql
+{ # System transactions
+    transactionBlocks(last: 10, filter: { kind: SYSTEM_TX }) {
+        edges {
+            cursor
+            node {
+                kind { __typename }
+            }
+        }
+    }
+}
+
+//# run-graphql
+{ # Non-system transactions
+    transactionBlocks(last: 10, filter: { kind: PROGRAMMABLE_TX }) {
+        edges {
+            cursor
+            node {
+                kind { __typename }
+            }
+        }
+    }
+}
+
+//# run-graphql
+{ # Conflicting filter and context
+    address(address: "@{A}") {
+        transactionBlocks(last: 10, filter: { signAddress: "0x0" }) {
+            nodes { kind { __typename } }
+        }
+    }
+}
+
+//# run-graphql
+{ # Filtering by function package
+    transactionBlocks(last: 10, filter: { function: "0x2" }) {
+        edges { cursor }
+    }
+}
+
+//# run-graphql
+{ # Filtering by function module
+    transactionBlocks(last: 10, filter: { function: "@{P0}::m" }) {
+        edges { cursor }
+    }
+}
+
+//# run-graphql
+{ # Filtering by function
+    transactionBlocks(
+        last: 10,
+        filter: {
+            function: "0x2::transfer::public_transfer"
+        }
+    ) {
+        edges { cursor }
     }
 }

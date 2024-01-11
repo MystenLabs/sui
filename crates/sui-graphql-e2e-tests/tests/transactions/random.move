@@ -28,7 +28,7 @@
         }
     }
 
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
         nodes {
             kind {
                 __typename
@@ -53,7 +53,7 @@
 
 //# run-graphql
 {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
         nodes {
             kind {
                 __typename

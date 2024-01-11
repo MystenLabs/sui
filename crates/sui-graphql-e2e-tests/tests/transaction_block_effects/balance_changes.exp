@@ -22,7 +22,7 @@ task 5 'run-graphql'. lines 21-45:
 Response: {
   "data": {
     "address": {
-      "transactionBlockConnection": {
+      "transactionBlocks": {
         "nodes": [
           {
             "effects": {
@@ -84,7 +84,7 @@ task 6 'run-graphql'. lines 47-71:
 Response: {
   "data": {
     "address": {
-      "transactionBlockConnection": {
+      "transactionBlocks": {
         "nodes": [
           {
             "effects": {
@@ -122,7 +122,7 @@ task 7 'run-graphql'. lines 73-97:
 Response: {
   "data": {
     "address": {
-      "transactionBlockConnection": {
+      "transactionBlocks": {
         "nodes": [
           {
             "effects": {
