@@ -51,7 +51,7 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::M1::EventA"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::EventA"
           },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -66,7 +66,7 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::M1::EventB<0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::M1::Object>"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::EventB<0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::Object>"
           },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -81,7 +81,7 @@ Response: {
             "name": "M2"
           },
           "type": {
-            "repr": "0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::M2::EventA"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M2::EventA"
           },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -96,7 +96,7 @@ Response: {
             "name": "M2"
           },
           "type": {
-            "repr": "0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::M2::EventB<0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::M2::Object>"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M2::EventB<0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M2::Object>"
           },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -121,7 +121,7 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::M1::EventA"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::EventA"
           },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -136,7 +136,7 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::M1::EventB<0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::M1::Object>"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::EventB<0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::Object>"
           },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -151,7 +151,7 @@ Response: {
             "name": "M2"
           },
           "type": {
-            "repr": "0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::M2::EventA"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M2::EventA"
           },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -166,7 +166,7 @@ Response: {
             "name": "M2"
           },
           "type": {
-            "repr": "0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::M2::EventB<0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::M2::Object>"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M2::EventB<0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M2::Object>"
           },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -191,7 +191,7 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::M1::EventA"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::EventA"
           },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -206,7 +206,7 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::M1::EventB<0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::M1::Object>"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::EventB<0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::Object>"
           },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -231,7 +231,7 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::M1::EventA"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::EventA"
           },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -256,7 +256,7 @@ Response: {
             "name": "M1"
           },
           "type": {
-            "repr": "0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::M1::EventB<0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::M1::Object>"
+            "repr": "0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::EventB<0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::Object>"
           },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -276,7 +276,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Invalid type provided as filter: Invalid struct type: 0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::M1::EventB<. Got error: unexpected end of tokens",
+      "message": "Invalid type provided as filter: Invalid struct type: 0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::M1::EventB<. Got error: unexpected end of tokens",
       "locations": [
         {
           "line": 2,
@@ -320,7 +320,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Invalid type provided as filter: Invalid format in '0xc97522be922915971b9ca4cb8175cc5d190f5feb487c1b882d52226ec196a93a::' - if '::' is present, there must be a non-empty string on both sides. Expected format like 'package[::module[::type[<type_params>]]]'",
+      "message": "Invalid type provided as filter: Invalid format in '0xd3d80179bea4aa285f2484b4161933e976dbbf3d6a3bafcb3450c39e6047fb4d::' - if '::' is present, there must be a non-empty string on both sides. Expected format like 'package[::module[::type[<type_params>]]]'",
       "locations": [
         {
           "line": 2,

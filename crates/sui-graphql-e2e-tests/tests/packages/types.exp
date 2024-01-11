@@ -264,7 +264,7 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Internal error occurred while processing request: Error calculating layout for 0x6761846de753aa5b25e7077e9063c1697c0c35801567b64f7779d47e04ad1cef::m::S1<u32>: Type layout nesting exceeded limit of 128",
+      "message": "Internal error occurred while processing request: Error calculating layout for 0x54bc9fad908240eb7768ae26fa14d7871fc5084c4883469864156216ae1ab887::m::S1<u32>: Type layout nesting exceeded limit of 128",
       "locations": [
         {
           "line": 4,

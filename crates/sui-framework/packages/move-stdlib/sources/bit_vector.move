@@ -9,6 +9,7 @@ module std::bit_vector {
     /// An invalid length of bitvector was given
     const ELENGTH: u64 = 0x20001;
 
+    #[allow(unused_const)]
     const WORD_SIZE: u64 = 1;
     /// The maximum allowed bitvector size
     const MAX_SIZE: u64 = 1024;
