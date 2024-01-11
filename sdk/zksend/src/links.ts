@@ -13,6 +13,7 @@ import {
 	normalizeSuiAddress,
 	normalizeSuiObjectId,
 	parseStructTag,
+	SUI_TYPE_ARG,
 } from '@mysten/sui.js/utils';
 
 export interface ZkSendLinkBuilderOptions {
@@ -35,7 +36,7 @@ const DEFAULT_ZK_SEND_LINK_OPTIONS = {
 	client: new SuiClient({ url: getFullnodeUrl('mainnet') }),
 };
 
-const SUI_COIN_TYPE = normalizeStructTag('0x2::sui::SUI');
+const SUI_COIN_TYPE = normalizeStructTag(SUI_TYPE_ARG);
 const SUI_COIN_OBJECT_TYPE = normalizeStructTag('0x2::coin::Coin<0x2::sui::SUI>');
 
 interface CreateZkSendLinkOptions {
