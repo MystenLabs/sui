@@ -2045,7 +2045,7 @@ impl AuthorityStore {
                 Some(ObjectKey(object_id, VersionNumber::MIN)),
                 Some(ObjectKey(object_id, VersionNumber::MAX)),
             )
-            .collect::<Vec<_>>()
+            .collect::<Result<Vec<_>, _>>()
             .unwrap()
             .len()
     }
