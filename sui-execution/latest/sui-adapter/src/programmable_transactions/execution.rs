@@ -361,6 +361,7 @@ mod checked {
         let SerializedReturnValues {
             mutable_reference_outputs,
             return_values,
+            call_traces,
         } = vm_move_call(
             context,
             module_id,
@@ -373,8 +374,8 @@ mod checked {
             by_mut_ref.len() == mutable_reference_outputs.len(),
             "lost mutable input"
         );
-
         context.take_user_events(module_id, index, last_instr)?;
+        context.tx_context.call_traces_mut().extend(call_traces);
 
         // save the link context because calls to `make_value` below can set new ones, and we don't want
         // it to be clobbered.

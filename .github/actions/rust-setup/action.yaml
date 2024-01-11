@@ -1,0 +1,16 @@
+runs:
+  using: composite
+  steps:
+    - run: sudo apt-get update && sudo apt-get install build-essential ca-certificates clang curl git libpq-dev libssl-dev pkg-config unzip --no-install-recommends --assume-yes
+      shell: bash
+    - name: Install latest nightly
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: "1.70"
+        override: true
+        components: rustfmt, clippy
+    - run: echo "${HOME}/cargo/bin" | tee -a $GITHUB_PATH
+      shell: bash
+    - uses: Swatinem/rust-cache@v2
+      with:
+        cache-on-failure: true

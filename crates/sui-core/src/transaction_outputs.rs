@@ -39,6 +39,7 @@ impl TransactionOutputs {
             loaded_runtime_objects: _,
             no_extraneous_module_bytes: _,
             runtime_packages_loaded_from_db: _,
+            call_traces: _,
             lamport_version,
         } = inner_temporary_store;
 

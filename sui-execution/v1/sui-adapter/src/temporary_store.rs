@@ -5,6 +5,7 @@ use crate::gas_charger::GasCharger;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::StructTag;
 use move_core_types::resolver::ResourceResolver;
+use move_core_types::trace::CallTrace;
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use sui_protocol_config::ProtocolConfig;
@@ -103,6 +104,11 @@ impl<'backing> TemporaryStore<'backing> {
 
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
     pub fn into_inner(self) -> InnerTemporaryStore {
+        self.into_inner_with_call_traces(Vec::new())
+    }
+
+    /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
+    pub fn into_inner_with_call_traces(self, call_traces: Vec<CallTrace>) -> InnerTemporaryStore {
         let results = self.execution_results;
         InnerTemporaryStore {
             input_objects: self.input_objects,
@@ -116,6 +122,7 @@ impl<'backing> TemporaryStore<'backing> {
             no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
             lamport_version: self.lamport_timestamp,
+            call_traces,
         }
     }
 
@@ -173,6 +180,7 @@ impl<'backing> TemporaryStore<'backing> {
         status: ExecutionStatus,
         gas_charger: &mut GasCharger,
         epoch: EpochId,
+        call_traces: Vec<CallTrace>,
     ) -> (InnerTemporaryStore, TransactionEffects) {
         self.update_object_version_and_prev_tx();
 
@@ -204,6 +212,7 @@ impl<'backing> TemporaryStore<'backing> {
                 status,
                 gas_charger,
                 epoch,
+                call_traces,
             )
         } else {
             let shared_object_refs = shared_object_refs
@@ -223,6 +232,7 @@ impl<'backing> TemporaryStore<'backing> {
                 status,
                 gas_charger,
                 epoch,
+                call_traces,
             )
         }
     }
@@ -236,6 +246,7 @@ impl<'backing> TemporaryStore<'backing> {
         status: ExecutionStatus,
         gas_charger: &mut GasCharger,
         epoch: EpochId,
+        call_traces: Vec<CallTrace>,
     ) -> (InnerTemporaryStore, TransactionEffects) {
         let updated_gas_object_info = if let Some(coin_id) = gas_charger.gas_coin() {
             let object = &self.execution_results.written_objects[&coin_id];
@@ -299,7 +310,7 @@ impl<'backing> TemporaryStore<'backing> {
             });
         modified_at_versions.extend(deleted_at_versions);
 
-        let inner = self.into_inner();
+        let inner = self.into_inner_with_call_traces(call_traces);
         let effects = TransactionEffects::new_from_execution_v1(
             status,
             epoch,
@@ -333,6 +344,7 @@ impl<'backing> TemporaryStore<'backing> {
         status: ExecutionStatus,
         gas_charger: &mut GasCharger,
         epoch: EpochId,
+        call_traces: Vec<CallTrace>,
     ) -> (InnerTemporaryStore, TransactionEffects) {
         // In the case of special transactions that don't require a gas object,
         // we don't really care about the effects to gas, just use the input for it.
@@ -343,7 +355,7 @@ impl<'backing> TemporaryStore<'backing> {
         let object_changes = self.get_object_changes();
 
         let lamport_version = self.lamport_timestamp;
-        let inner = self.into_inner();
+        let inner = self.into_inner_with_call_traces(call_traces);
 
         let effects = TransactionEffects::new_from_execution_v2(
             status,

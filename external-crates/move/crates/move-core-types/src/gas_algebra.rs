@@ -107,6 +107,10 @@ impl<U> GasQuantity<U> {
     pub const fn is_zero(&self) -> bool {
         self.val == 0
     }
+
+    pub const fn value(&self) -> u64 {
+        self.val
+    }
 }
 
 /***************************************************************************************************

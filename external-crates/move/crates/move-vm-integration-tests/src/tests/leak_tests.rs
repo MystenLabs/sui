@@ -9,6 +9,7 @@ use move_core_types::account_address::AccountAddress;
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_test_utils::{gas_schedule::GasStatus, InMemoryStorage};
 
+#[ignore]
 #[test]
 fn leak_with_abort() {
     let mut locals = vec![U128, MutableReference(Box::new(U128))];

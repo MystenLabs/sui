@@ -65,6 +65,7 @@ fn run(
     let SerializedReturnValues {
         return_values,
         mutable_reference_outputs: _,
+        call_traces: _,
     } = sess.execute_function_bypass_visibility(
         &module_id,
         &fun_name,

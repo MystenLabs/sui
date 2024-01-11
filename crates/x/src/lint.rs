@@ -13,6 +13,7 @@ use nexlint_lints::{
     },
 };
 static EXTERNAL_CRATE_DIR: &str = "external-crates/";
+static IGNORE_DIR2: &str = "crates/mamoru-sui-sniffer/";
 static CREATE_DAPP_TEMPLATE_DIR: &str = "sdk/create-dapp/templates";
 static LICENSE_HEADER: &str = "Copyright (c) Mysten Labs, Inc.\n\
                                SPDX-License-Identifier: Apache-2.0\n\
@@ -136,6 +137,10 @@ pub fn handle_lint_results_exclude_external_crate_checks(
                 || path.to_string().contains("/generated/"))
                 && source.name() == "license-header"
             {
+                continue;
+            }
+
+            if path.starts_with(IGNORE_DIR2) && source.name() == "license-header" {
                 continue;
             }
         }

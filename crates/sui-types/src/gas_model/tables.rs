@@ -54,6 +54,7 @@ pub struct GasStatus {
     pub gas_model_version: u64,
     cost_table: CostTable,
     gas_left: InternalGas,
+    gas_left_total: InternalGas,
     gas_price: u64,
     initial_budget: InternalGas,
     charge: bool,
@@ -97,6 +98,7 @@ impl GasStatus {
         Self {
             gas_model_version,
             gas_left,
+            gas_left_total: gas_left,
             gas_price,
             initial_budget: gas_left,
             cost_table,
@@ -124,6 +126,7 @@ impl GasStatus {
         Self {
             gas_model_version: 4,
             gas_left: InternalGas::new(0),
+            gas_left_total: InternalGas::new(0),
             gas_price: 1,
             initial_budget: InternalGas::new(0),
             cost_table: ZERO_COST_SCHEDULE.clone(),
@@ -676,6 +679,12 @@ impl GasMeter for GasStatus {
 
     fn set_profiler(&mut self, profiler: GasProfiler) {
         self.profiler = Some(profiler);
+    }
+
+    fn charged_already_total(&self) -> Option<InternalGas> {
+        let charged = self.gas_left_total.checked_sub(self.gas_left)?;
+
+        Some(charged)
     }
 }
 

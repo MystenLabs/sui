@@ -17,6 +17,7 @@ use move_core_types::{
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
     resolver::MoveResolver,
+    trace::CallTrace,
     runtime_value::MoveTypeLayout,
 };
 use move_vm_types::{
@@ -41,6 +42,8 @@ pub struct SerializedReturnValues {
     pub mutable_reference_outputs: Vec<(LocalIndex, Vec<u8>, MoveTypeLayout)>,
     /// The return values from the function
     pub return_values: Vec<(Vec<u8>, MoveTypeLayout)>,
+    /// The call traces after function invocation
+    pub call_traces: Vec<CallTrace>,
 }
 
 impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {

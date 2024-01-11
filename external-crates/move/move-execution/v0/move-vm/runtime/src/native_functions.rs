@@ -8,12 +8,11 @@ use crate::{
 use move_binary_format::errors::{ExecutionState, PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
+    annotated_value as A,
     gas_algebra::InternalGas,
     identifier::Identifier,
     language_storage::TypeTag,
     runtime_value as R,
-    annotated_value as A,
-
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_config::runtime::VMRuntimeLimitsConfig;

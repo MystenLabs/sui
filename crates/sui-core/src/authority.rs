@@ -38,6 +38,7 @@ use std::{
     pin::Pin,
     sync::Arc,
     vec,
+    time::Instant,
 };
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
@@ -55,6 +56,8 @@ pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 
 use once_cell::sync::OnceCell;
+use mamoru_sui_sniffer::SuiSniffer;
+use move_core_types::trace::CallTrace;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::certificate_deny_config::CertificateDenyConfig;
@@ -151,9 +154,6 @@ use crate::state_accumulator::{AccumulatorStore, StateAccumulator, WrappedObject
 use crate::subscription_handler::SubscriptionHandler;
 use crate::transaction_input_loader::TransactionInputLoader;
 use crate::transaction_manager::TransactionManager;
-
-#[cfg(msim)]
-use sui_types::committee::CommitteeTrait;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -752,6 +752,10 @@ pub struct AuthorityState {
 
     /// Current overload status in this authority. Updated periodically.
     pub overload_info: AuthorityOverloadInfo,
+
+    sniffer: Option<SuiSniffer>,
+
+    sniffer_emit_debug_info: bool,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1221,6 +1225,7 @@ impl AuthorityState {
         expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
+        let before_ms = Utc::now().timestamp_millis();
         let digest = *certificate.digest();
 
         fail_point_if!("correlated-crash-process-certificate", || {
@@ -1264,7 +1269,7 @@ impl AuthorityState {
         // non-transient (transaction input is invalid, move vm errors). However, all errors from
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
-        let (inner_temporary_store, effects, execution_error_opt) = match self.prepare_certificate(
+        let (mut inner_temporary_store, effects, execution_error_opt) = match self.prepare_certificate(
             &execution_guard,
             certificate,
             input_objects,
@@ -1315,6 +1320,8 @@ impl AuthorityState {
             }
         }
 
+        let call_traces = std::mem::take(&mut inner_temporary_store.call_traces);
+
         fail_point_async!("crash");
 
         self.commit_certificate(
@@ -1324,6 +1331,7 @@ impl AuthorityState {
             tx_guard,
             execution_guard,
             epoch_store,
+            call_traces,
         )
         .await?;
 
@@ -1360,6 +1368,13 @@ impl AuthorityState {
             }
         }
 
+        let after_ms = Utc::now().timestamp_millis();
+
+        info!(
+            "Process certificate executed in {} ms.",
+            after_ms - before_ms,
+        );
+
         Ok((effects, execution_error_opt))
     }
 
@@ -1372,6 +1387,7 @@ impl AuthorityState {
         tx_guard: CertTxGuard,
         _execution_guard: ExecutionLockReadGuard<'_>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        call_traces: Vec<CallTrace>,
     ) -> SuiResult {
         let _scope: Option<mysten_metrics::MonitoredScopeGuard> =
             monitored_scope("Execution::commit_certificate");
@@ -1398,13 +1414,46 @@ impl AuthorityState {
         };
 
         // index certificate
-        let _ = self
-            .post_process_one_tx(certificate, effects, &inner_temporary_store, epoch_store)
+        self.post_process_one_tx(certificate, effects, &inner_temporary_store, epoch_store)
             .await
             .tap_err(|e| {
                 self.metrics.post_processing_total_failures.inc();
                 error!(?tx_digest, "tx post processing failed: {e}");
-            });
+            })
+            .unwrap_or_default();
+
+        if let Some(sniffer) = &self.sniffer {
+            let observe_timer = Instant::now();
+
+            let ctx = {
+                let mut layout_resolver = epoch_store.executor().type_layout_resolver(Box::new(
+                    TemporaryPackageStore::new(&inner_temporary_store, self.execution_cache.clone()),
+                ));
+
+                // We can't pass `layout_resolver` to a future, so using a plain function to prepare the context.
+                sniffer.prepare_ctx(
+                    certificate.clone(),
+                    effects.clone(),
+                    &inner_temporary_store,
+                    call_traces,
+                    Utc::now(),
+                    self.sniffer_emit_debug_info,
+                    layout_resolver.as_mut(),
+                )
+            };
+            match ctx {
+                Ok(ctx) => sniffer.observe_data(ctx).await,
+                Err(err) => {
+                    error!(?err, "Failed to observe transaction");
+                }
+            }
+
+            info!(
+                tx_tash = Base58::encode(certificate.data().digest()),
+                duration_ms = observe_timer.elapsed().as_millis(),
+                "sniffer.observe_transaction() executed",
+            );
+        }
 
         // The insertion to epoch_store is not atomic with the insertion to the perpetual store. This is OK because
         // we insert to the epoch store first. And during lookups we always look up in the perpetual store first.
@@ -2321,7 +2370,7 @@ impl AuthorityState {
             self.metrics
                 .post_processing_total_events_emitted
                 .inc_by(events.data.len() as u64);
-        };
+        }
         Ok(())
     }
 
@@ -2565,6 +2614,17 @@ impl AuthorityState {
         let input_loader = TransactionInputLoader::new(execution_cache.clone());
         let cache_pointers = ExecutionCacheTraitPointers::new(&execution_cache);
         let epoch = epoch_store.epoch();
+
+        let sniffer = match std::env::var_os("MAMORU_SNIFFER_ENABLE") {
+            Some(_) => Some(
+                SuiSniffer::new()
+                    .await
+                    .expect("Failed to connect to validation chain"),
+            ),
+            None => None,
+        };
+        let sniffer_emit_debug_info = std::env::var_os("MAMORU_SNIFFER_DEBUG").is_some();
+
         let state = Arc::new(AuthorityState {
             name,
             secret,
@@ -2589,6 +2649,8 @@ impl AuthorityState {
             debug_dump_config,
             authority_overload_config: authority_overload_config.clone(),
             overload_info: AuthorityOverloadInfo::default(),
+            sniffer,
+            sniffer_emit_debug_info,
         });
 
         // Start a task to execute ready certificates.
@@ -4804,9 +4866,10 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
 
 #[cfg(msim)]
 pub mod framework_injection {
-    use move_binary_format::CompiledModule;
-    use std::collections::BTreeMap;
     use std::{cell::RefCell, collections::BTreeSet};
+    use std::collections::BTreeMap;
+
+    use move_binary_format::CompiledModule;
     use sui_framework::{BuiltInFramework, SystemPackage};
     use sui_types::base_types::{AuthorityName, ObjectID};
     use sui_types::is_system_package;

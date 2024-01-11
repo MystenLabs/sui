@@ -5,6 +5,7 @@ use crate::gas_charger::GasCharger;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::StructTag;
 use move_core_types::resolver::ResourceResolver;
+use move_core_types::trace::CallTrace;
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, HashSet};
 use sui_protocol_config::ProtocolConfig;
@@ -142,6 +143,11 @@ impl<'backing> TemporaryStore<'backing> {
 
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
     pub fn into_inner(self) -> InnerTemporaryStore {
+        self.into_inner_with_call_traces(Vec::new())
+    }
+
+    /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
+    pub fn into_inner_with_call_traces(self, call_traces: Vec<CallTrace>) -> InnerTemporaryStore {
         InnerTemporaryStore {
             input_objects: self.input_objects,
             mutable_inputs: self.mutable_input_refs,
@@ -156,6 +162,7 @@ impl<'backing> TemporaryStore<'backing> {
             no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
             lamport_version: self.lamport_timestamp,
+            call_traces,
         }
     }
 
@@ -187,6 +194,7 @@ impl<'backing> TemporaryStore<'backing> {
         status: ExecutionStatus,
         gas_charger: &mut GasCharger,
         epoch: EpochId,
+        call_traces: Vec<CallTrace>,
     ) -> (InnerTemporaryStore, TransactionEffects) {
         let mut modified_at_versions = vec![];
 
@@ -256,7 +264,7 @@ impl<'backing> TemporaryStore<'backing> {
             }
         }
 
-        let inner = self.into_inner();
+        let inner = self.into_inner_with_call_traces(call_traces);
 
         let shared_object_refs = shared_object_refs
             .into_iter()

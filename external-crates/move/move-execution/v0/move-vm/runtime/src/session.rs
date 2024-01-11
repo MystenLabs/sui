@@ -12,12 +12,12 @@ use move_binary_format::{
 };
 use move_core_types::{
     account_address::AccountAddress,
+    annotated_value as A,
     effects::{ChangeSet, Event},
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
     resolver::MoveResolver,
     runtime_value as R,
-    annotated_value as A
 };
 use move_vm_types::{
     data_store::DataStore,
@@ -273,7 +273,10 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
             .get_type_layout(type_tag, &self.data_cache)
     }
 
-    pub fn get_fully_annotated_type_layout(&self, type_tag: &TypeTag) -> VMResult<A::MoveTypeLayout> {
+    pub fn get_fully_annotated_type_layout(
+        &self,
+        type_tag: &TypeTag,
+    ) -> VMResult<A::MoveTypeLayout> {
         self.runtime
             .loader()
             .get_fully_annotated_type_layout(type_tag, &self.data_cache)

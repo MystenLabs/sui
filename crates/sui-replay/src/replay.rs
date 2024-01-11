@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::Intent;
 use similar::{ChangeTag, TextDiff};
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     path::PathBuf,
     sync::Arc,
     sync::Mutex,
@@ -726,7 +726,11 @@ impl LocalExec {
         );
         assert_eq!(
             input_objects.transaction_dependencies(),
-            tx_info.dependencies.clone().into_iter().collect(),
+            tx_info
+                .dependencies
+                .clone()
+                .into_iter()
+                .collect::<BTreeSet<_>>(),
         );
         // At this point we have all the objects needed for replay
 

@@ -405,7 +405,7 @@ mod test {
             ])
             .iter()
             .cloned()
-            .collect()
+            .collect::<HashMap<_, _>>()
         );
         assert_eq!(data.sum.as_secs(), 1265);
         assert_eq!(data.count, 1860);

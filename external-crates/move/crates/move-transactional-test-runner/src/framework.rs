@@ -351,6 +351,7 @@ fn display_return_values(return_values: SerializedReturnValues) -> Option<String
     let SerializedReturnValues {
         mutable_reference_outputs,
         return_values,
+        call_traces: _,
     } = return_values;
     let mut output = vec![];
     if !mutable_reference_outputs.is_empty() {

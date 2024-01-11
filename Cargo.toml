@@ -69,7 +69,8 @@ members = [
   "consensus/core",
   "crates/anemo-benchmark",
   "crates/data-transform",
-  "crates/mysten-common",
+  "crates/mamoru-sui-sniffer",
+    "crates/mysten-common",
   "crates/mysten-metrics",
   "crates/mysten-network",
   "crates/mysten-service",
@@ -545,6 +546,12 @@ move-prover = { path = "external-crates/move/crates/move-prover" }
 move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
+
+# The mamoru
+mamoru-sniffer = { git = "https://github.com/Mamoru-Foundation/mamoru-core", rev = "428a62190c6b60bbf2db462f44fe3aa27de28f14" }
+mamoru-sui-types = { git = "https://github.com/Mamoru-Foundation/mamoru-core", rev = "428a62190c6b60bbf2db462f44fe3aa27de28f14" }
+#mamoru-sniffer = { path = "../mamoru-core/mamoru-sniffer" }
+#mamoru-sui-types = { path = "../mamoru-core/blockchain-types/mamoru-sui-types" }
 
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ea66012b860d9dd152abb7f2156275698ee91126" }
 fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ea66012b860d9dd152abb7f2156275698ee91126" }

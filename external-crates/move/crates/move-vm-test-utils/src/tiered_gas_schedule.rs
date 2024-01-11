@@ -707,6 +707,10 @@ impl<'b> GasMeter for GasStatus<'b> {
     fn set_profiler(&mut self, profiler: GasProfiler) {
         self.profiler = Some(profiler);
     }
+
+    fn charged_already_total(&self) -> Option<InternalGas> {
+        Some(InternalGas::zero())
+    }
 }
 
 pub fn zero_cost_schedule() -> CostTable {

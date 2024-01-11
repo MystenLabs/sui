@@ -23,11 +23,11 @@ use move_binary_format::{
 use move_bytecode_verifier::{self, cyclic_dependencies, dependencies};
 use move_core_types::{
     account_address::AccountAddress,
+    annotated_value as A,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
     metadata::Metadata,
     runtime_value as R,
-    annotated_value as A,
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
@@ -2565,14 +2565,15 @@ impl Loader {
             Type::U256 => R::MoveTypeLayout::U256,
             Type::Address => R::MoveTypeLayout::Address,
             Type::Signer => R::MoveTypeLayout::Signer,
-            Type::Vector(ty) => R::MoveTypeLayout::Vector(Box::new(self.type_to_type_layout_impl(
-                ty,
+            Type::Vector(ty) => R::MoveTypeLayout::Vector(Box::new(
+                self.type_to_type_layout_impl(ty, count, depth + 1)?,
+            )),
+            Type::Struct(gidx) => R::MoveTypeLayout::Struct(self.struct_gidx_to_type_layout(
+                *gidx,
+                &[],
                 count,
-                depth + 1,
-            )?)),
-            Type::Struct(gidx) => {
-                R::MoveTypeLayout::Struct(self.struct_gidx_to_type_layout(*gidx, &[], count, depth)?)
-            }
+                depth,
+            )?),
             Type::StructInstantiation(gidx, ty_args) => R::MoveTypeLayout::Struct(
                 self.struct_gidx_to_type_layout(*gidx, ty_args, count, depth)?,
             ),

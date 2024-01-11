@@ -3,6 +3,11 @@ resolver = "2"
 
 members = [
     "crates/*",
+    "move-execution/v0/move-bytecode-verifier",
+    "move-execution/v0/move-stdlib",
+    "move-execution/v0/move-vm/runtime",
+    "move-execution/v1/crates/*",
+    "move-execution/next-vm/crates/*",
 ]
 
 # Dependencies that should be kept in sync through the whole workspace

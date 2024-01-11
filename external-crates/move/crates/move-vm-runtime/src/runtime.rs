@@ -349,7 +349,7 @@ impl VMRuntime {
         )?;
 
         let serialized_return_values = self
-            .serialize_return_values(&return_types, return_values)
+            .serialize_return_values(&return_types, return_values.values)
             .map_err(|e| e.finish(Location::Undefined))?;
         let serialized_mut_ref_outputs = mut_ref_args
             .into_iter()
@@ -373,6 +373,7 @@ impl VMRuntime {
         Ok(SerializedReturnValues {
             mutable_reference_outputs: serialized_mut_ref_outputs,
             return_values: serialized_return_values,
+            call_traces: return_values.call_traces,
         })
     }
 
