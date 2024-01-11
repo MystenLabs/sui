@@ -37,7 +37,7 @@ module Test::M1 {
 
 //# run-graphql
 {
-  transactionBlockConnection(filter: {sentAddress: "@{A}"}) {
+  transactionBlocks(filter: { signAddress: "@{A}" }) {
     nodes {
       events {
         edges {
@@ -56,7 +56,7 @@ module Test::M1 {
 
 //# run-graphql
 {
-  events(filter: {sender: "@{A}"}) {
+  events(filter: { sender: "@{A}" }) {
     nodes {
       sendingModule {
         name
@@ -69,7 +69,7 @@ module Test::M1 {
 
 //# run-graphql
 {
-  transactionBlockConnection(first: 1, filter: {sentAddress: "@{A}"}) {
+  transactionBlocks(first: 1, filter: { signAddress: "@{A}" }) {
     nodes {
       events(last: 1) {
         edges {
@@ -88,7 +88,7 @@ module Test::M1 {
 
 //# run-graphql --cursors 0
 {
-  transactionBlockConnection(last: 1, filter: {sentAddress: "@{A}"}) {
+  transactionBlocks(last: 1, filter: { signAddress: "@{A}" }) {
     nodes {
       events(first: 2, after: "@{cursor_0}") {
         edges {

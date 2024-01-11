@@ -8,7 +8,7 @@
 //# run-graphql
 # Query for the genesis transaction
 {
-    transactionBlockConnection(first: 1) {
+    transactionBlocks(first: 1) {
         nodes {
             digest
             sender { address }
@@ -109,7 +109,7 @@
 # Query for the system transaction that corresponds to a checkpoint (note that
 # its timestamp is advanced, because the clock has advanced).
 {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
         nodes {
             digest
             sender { address }
@@ -189,7 +189,7 @@
 //# run-graphql
 # Look for the change epoch transaction, and again, note the timestamp change.
 {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
         nodes {
             digest
             sender { address }

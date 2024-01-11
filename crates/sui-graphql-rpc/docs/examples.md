@@ -65,12 +65,12 @@
 #### &emsp;&emsp;[Before After Checkpoint](#1179630)
 #### &emsp;&emsp;[Changed Object Filter](#1179631)
 #### &emsp;&emsp;[Input Object Filter](#1179632)
-#### &emsp;&emsp;[Input Object Sent Addr Filter](#1179633)
+#### &emsp;&emsp;[Input Object Sign Addr Filter](#1179633)
 #### &emsp;&emsp;[Package Filter](#1179634)
 #### &emsp;&emsp;[Package Module Filter](#1179635)
 #### &emsp;&emsp;[Package Module Func Filter](#1179636)
 #### &emsp;&emsp;[Recv Addr Filter](#1179637)
-#### &emsp;&emsp;[Sent Addr Filter](#1179638)
+#### &emsp;&emsp;[Sign Addr Filter](#1179638)
 #### &emsp;&emsp;[Tx Ids Filter](#1179639)
 #### &emsp;&emsp;[Tx Kind Filter](#1179640)
 #### &emsp;&emsp;[With Defaults Ascending](#1179641)
@@ -111,21 +111,23 @@
 
 ### <a id=1></a>
 ### Transaction Block Connection
-####  See examples in Query::transactionBlockConnection as this is
-####  similar behavior to the `transactionBlockConnection` in Query but
-####  supports additional `AddressTransactionBlockRelationship` filter
-####  Filtering on package where the sender of the TX is the current address
-####  and displaying the transaction's sender and the gas price and budget
+####  See examples in Query::transactionBlocks as this is similar behavior
+####  to the `transactionBlocks` in Query but supports additional
+####  `AddressTransactionBlockRelationship` filter
+####  Filtering on package where the signer of the TX is the current
+####  address and displaying the transaction's sender and the gas price
+####  and budget.
 
-><pre># See examples in Query::transactionBlockConnection as this is
-># similar behavior to the `transactionBlockConnection` in Query but
-># supports additional `AddressTransactionBlockRelationship` filter
+><pre># See examples in Query::transactionBlocks as this is similar behavior
+># to the `transactionBlocks` in Query but supports additional
+># `AddressTransactionBlockRelationship` filter
 >
-># Filtering on package where the sender of the TX is the current address
-># and displaying the transaction's sender and the gas price and budget
+># Filtering on package where the signer of the TX is the current
+># address and displaying the transaction's sender and the gas price
+># and budget.
 >query transaction_block_with_relation_filter {
 >  address(address: "0x2") {
->    transactionBlockConnection(relation: SENT, filter: { package: "0x2" }) {
+>    transactionBlocks(relation: SIGN, filter: { function: "0x2" }) {
 >      nodes {
 >        sender {
 >          address
@@ -241,7 +243,7 @@
 
 ><pre>{
 >  checkpoint(id: { sequenceNumber: 10 }) {
->    transactionBlockConnection(first: 2) {
+>    transactionBlocks(first: 2) {
 >      edges {
 >        node {
 >          kind {
@@ -315,7 +317,7 @@
 >    epoch {
 >      epochId
 >    }
->    transactionBlockConnection {
+>    transactionBlocks {
 >      edges {
 >        node {
 >          digest
@@ -341,7 +343,7 @@
 >    sequenceNumber
 >    timestamp
 >    liveObjectSetDigest
->    transactionBlockConnection {
+>    transactionBlocks {
 >      edges {
 >        node {
 >          digest
@@ -359,7 +361,7 @@
 
 ### <a id=196611></a>
 ### With Tx Sent Addr Filter
-####  Select checkpoint at sequence number 14830285 for transactions from sentAddress
+####  Select checkpoint at sequence number 14830285 for transactions from signAddress
 
 ><pre>{
 >  checkpoint(id: { sequenceNumber: 14830285 }) {
@@ -367,9 +369,9 @@
 >    sequenceNumber
 >    timestamp
 >    liveObjectSetDigest
->    transactionBlockConnection(
+>    transactionBlocks(
 >      filter: {
->        sentAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
+>        signAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
 >      }
 >    ) {
 >      edges {
@@ -560,7 +562,7 @@
 >  epoch {
 >    checkpoints {
 >      nodes {
->        transactionBlockConnection(first: 10) {
+>        transactionBlocks(first: 10) {
 >          pageInfo {
 >            hasNextPage
 >            endCursor
@@ -592,11 +594,12 @@
 
 ### <a id=458748></a>
 ### With Tx Block Connection
-####  Fetch the first 20 transactions after 231220100 for epoch 97
+####  Fetch the first 20 transactions after 231220100 (encoded as a
+####  cursor) in epoch 97.
 
 ><pre>{
->  epoch(id:97) {
->    transactionBlockConnection(first: 20, after:"231220100") {
+>  epoch(id: 97) {
+>    transactionBlocks(first: 20, after:"MjMxMjIwMTAw") {
 >      pageInfo {
 >        hasNextPage
 >        endCursor
@@ -627,12 +630,12 @@
 
 ### <a id=458749></a>
 ### With Tx Block Connection Latest Epoch
-####  the last checkpoint of epoch 97 is 8097645
-####  last tx number of the checkpoint is 261225985
+####  the last checkpoint of epoch 97 is 8097645, and the last transaction
+####  number of the checkpoint is 261225985 (encoded as a cursor).
 
 ><pre>{
 >  epoch {
->    transactionBlockConnection(first: 20, after: "261225985") {
+>    transactionBlocks(first: 20, after: "MjYxMjI1OTg1") {
 >      pageInfo {
 >        hasNextPage
 >        endCursor
@@ -1375,7 +1378,7 @@
 ####  Filter on before_ and after_checkpoint. If both are provided, before must be greater than after
 
 ><pre>{
->  transactionBlockConnection(
+>  transactionBlocks(
 >    filter: { afterCheckpoint: 10, beforeCheckpoint: 20 }
 >  ) {
 >    nodes {
@@ -1395,7 +1398,7 @@
 ####  Filter on changedObject
 
 ><pre>{
->  transactionBlockConnection(
+>  transactionBlocks(
 >    filter: {
 >      changedObject: "0x0000000000000000000000000000000000000000000000000000000000000006"
 >    }
@@ -1417,7 +1420,7 @@
 ####  Filter on inputObject
 
 ><pre>{
->  transactionBlockConnection(
+>  transactionBlocks(
 >    filter: {
 >      inputObject: "0x0000000000000000000000000000000000000000000000000000000000000006"
 >    }
@@ -1435,14 +1438,14 @@
 >}</pre>
 
 ### <a id=1179633></a>
-### Input Object Sent Addr Filter
+### Input Object Sign Addr Filter
 ####  multiple filters
 
 ><pre>{
->  transactionBlockConnection(
+>  transactionBlocks(
 >    filter: {
 >      inputObject: "0x0000000000000000000000000000000000000000000000000000000000000006"
->      sentAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
+>      signAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
 >    }
 >  ) {
 >    nodes {
@@ -1469,11 +1472,7 @@
 ####  Filtering on package
 
 ><pre>{
->  transactionBlockConnection(
->    filter: {
->      package: "0x0000000000000000000000000000000000000000000000000000000000000003"
->    }
->  ) {
+>  transactionBlocks(filter: { function: "0x3" }) {
 >    nodes {
 >      sender {
 >        address
@@ -1491,10 +1490,9 @@
 ####  Filtering on package and module
 
 ><pre>{
->  transactionBlockConnection(
+>  transactionBlocks(
 >    filter: {
->      package: "0x0000000000000000000000000000000000000000000000000000000000000003"
->      module: "sui_system"
+>      function: "0x3::sui_system"
 >    }
 >  ) {
 >    nodes {
@@ -1514,11 +1512,9 @@
 ####  Filtering on package, module and function
 
 ><pre>{
->  transactionBlockConnection(
+>  transactionBlocks(
 >    filter: {
->      package: "0x0000000000000000000000000000000000000000000000000000000000000003"
->      module: "sui_system"
->      function: "request_withdraw_stake"
+>      function: "0x3::sui_system::request_withdraw_stake"
 >    }
 >  ) {
 >    nodes {
@@ -1538,7 +1534,7 @@
 ####  Filter on recvAddress
 
 ><pre>{
->  transactionBlockConnection(
+>  transactionBlocks(
 >    filter: {
 >      recvAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
 >    }
@@ -1556,13 +1552,13 @@
 >}</pre>
 
 ### <a id=1179638></a>
-### Sent Addr Filter
-####  Filter on sign or sentAddress
+### Sign Addr Filter
+####  Filter on signing address
 
 ><pre>{
->  transactionBlockConnection(
+>  transactionBlocks(
 >    filter: {
->      sentAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
+>      signAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
 >    }
 >  ) {
 >    nodes {
@@ -1582,7 +1578,7 @@
 ####  Filter on transactionIds
 
 ><pre>{
->  transactionBlockConnection(
+>  transactionBlocks(
 >    filter: { transactionIds: ["DtQ6v6iJW4wMLgadENPUCEUS5t8AP7qvdG5jX84T1akR"] }
 >  ) {
 >    nodes {
@@ -1602,7 +1598,7 @@
 ####  Filter on TransactionKind (only SYSTEM_TX or PROGRAMMABLE_TX)
 
 ><pre>{
->  transactionBlockConnection(filter: { kind: SYSTEM_TX }) {
+>  transactionBlocks(filter: { kind: SYSTEM_TX }) {
 >    nodes {
 >      sender {
 >        address
@@ -1620,7 +1616,7 @@
 ####  Fetch some default amount of transactions, ascending
 
 ><pre>{
->  transactionBlockConnection {
+>  transactionBlocks {
 >    nodes {
 >      digest
 >      effects {

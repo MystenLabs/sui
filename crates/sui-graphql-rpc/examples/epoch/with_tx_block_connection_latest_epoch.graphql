@@ -1,8 +1,8 @@
-# the last checkpoint of epoch 97 is 8097645
-# last tx number of the checkpoint is 261225985
+# the last checkpoint of epoch 97 is 8097645, and the last transaction
+# number of the checkpoint is 261225985 (encoded as a cursor).
 {
   epoch {
-    transactionBlockConnection(first: 20, after: "261225985") {
+    transactionBlocks(first: 20, after: "MjYxMjI1OTg1") {
       pageInfo {
         hasNextPage
         endCursor

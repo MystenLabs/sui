@@ -8,9 +8,7 @@ use super::{
 use crate::{
     context_data::db_data_provider::PgManager,
     error::Error,
-    types::{
-        object::ObjectFilter, sui_address::SuiAddress, transaction_block::TransactionBlockFilter,
-    },
+    types::{object::ObjectFilter, sui_address::SuiAddress},
 };
 use async_trait::async_trait;
 use diesel::{
@@ -21,10 +19,7 @@ use diesel::{
 };
 use std::str::FromStr;
 use sui_indexer::{
-    schema_v2::{
-        display, objects, transactions, tx_calls, tx_changed_objects, tx_input_objects,
-        tx_recipients, tx_senders,
-    },
+    schema_v2::{display, objects},
     types_v2::OwnerType,
 };
 use sui_types::parse_sui_struct_tag;
@@ -59,140 +54,6 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
             .into_boxed()
     }
 
-    fn multi_get_txs(
-        cursor: Option<i64>,
-        descending_order: bool,
-        limit: PageLimit,
-        filter: Option<TransactionBlockFilter>,
-        after_tx_seq_num: Option<i64>,
-        before_tx_seq_num: Option<i64>,
-    ) -> Result<transactions::BoxedQuery<'static, Pg>, Error> {
-        let mut query = transactions::dsl::transactions.into_boxed();
-
-        if let Some(cursor_val) = cursor {
-            if descending_order {
-                let filter_value =
-                    before_tx_seq_num.map_or(cursor_val, |b| std::cmp::min(b, cursor_val));
-                query = query.filter(transactions::dsl::tx_sequence_number.lt(filter_value));
-            } else {
-                let filter_value =
-                    after_tx_seq_num.map_or(cursor_val, |a| std::cmp::max(a, cursor_val));
-                query = query.filter(transactions::dsl::tx_sequence_number.gt(filter_value));
-            }
-        } else {
-            if let Some(av) = after_tx_seq_num {
-                query = query.filter(transactions::dsl::tx_sequence_number.gt(av));
-            }
-            if let Some(bv) = before_tx_seq_num {
-                query = query.filter(transactions::dsl::tx_sequence_number.lt(bv));
-            }
-        }
-
-        if descending_order {
-            query = query.order(transactions::dsl::tx_sequence_number.desc());
-        } else {
-            query = query.order(transactions::dsl::tx_sequence_number.asc());
-        }
-
-        query = query.limit(limit.value() + 1);
-
-        if let Some(filter) = filter {
-            // Filters for transaction table
-            // at_checkpoint mutually exclusive with before_ and after_checkpoint
-            if let Some(checkpoint) = filter.at_checkpoint {
-                query = query
-                    .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint as i64));
-            }
-            if let Some(transaction_ids) = filter.transaction_ids {
-                let digests: Vec<_> = transaction_ids.iter().map(|d| d.to_vec()).collect();
-                query = query.filter(transactions::dsl::transaction_digest.eq_any(digests));
-            }
-
-            // Queries on foreign tables
-            match (filter.package, filter.module, filter.function) {
-                (Some(p), None, None) => {
-                    let subquery = tx_calls::dsl::tx_calls
-                        .filter(tx_calls::dsl::package.eq(p.into_vec()))
-                        .select(tx_calls::dsl::tx_sequence_number);
-
-                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-                }
-                (Some(p), Some(m), None) => {
-                    let subquery = tx_calls::dsl::tx_calls
-                        .filter(tx_calls::dsl::package.eq(p.into_vec()))
-                        .filter(tx_calls::dsl::module.eq(m))
-                        .select(tx_calls::dsl::tx_sequence_number);
-
-                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-                }
-                (Some(p), Some(m), Some(f)) => {
-                    let subquery = tx_calls::dsl::tx_calls
-                        .filter(tx_calls::dsl::package.eq(p.into_vec()))
-                        .filter(tx_calls::dsl::module.eq(m))
-                        .filter(tx_calls::dsl::func.eq(f))
-                        .select(tx_calls::dsl::tx_sequence_number);
-
-                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-                }
-                _ => {}
-            }
-
-            if let Some(signer) = filter.sign_address {
-                if let Some(sender) = filter.sent_address {
-                    let subquery = tx_senders::dsl::tx_senders
-                        .filter(
-                            tx_senders::dsl::sender
-                                .eq(signer.into_vec())
-                                .or(tx_senders::dsl::sender.eq(sender.into_vec())),
-                        )
-                        .select(tx_senders::dsl::tx_sequence_number);
-
-                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-                } else {
-                    let subquery = tx_senders::dsl::tx_senders
-                        .filter(tx_senders::dsl::sender.eq(signer.into_vec()))
-                        .select(tx_senders::dsl::tx_sequence_number);
-
-                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-                }
-            } else if let Some(sender) = filter.sent_address {
-                let subquery = tx_senders::dsl::tx_senders
-                    .filter(tx_senders::dsl::sender.eq(sender.into_vec()))
-                    .select(tx_senders::dsl::tx_sequence_number);
-
-                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-            }
-            if let Some(recipient) = filter.recv_address {
-                let subquery = tx_recipients::dsl::tx_recipients
-                    .filter(tx_recipients::dsl::recipient.eq(recipient.into_vec()))
-                    .select(tx_recipients::dsl::tx_sequence_number);
-
-                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-            }
-            if filter.paid_address.is_some() {
-                return Err(Error::Internal(
-                    "Paid address filter not supported".to_string(),
-                ));
-            }
-
-            if let Some(input_object) = filter.input_object {
-                let subquery = tx_input_objects::dsl::tx_input_objects
-                    .filter(tx_input_objects::dsl::object_id.eq(input_object.into_vec()))
-                    .select(tx_input_objects::dsl::tx_sequence_number);
-
-                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-            }
-            if let Some(changed_object) = filter.changed_object {
-                let subquery = tx_changed_objects::dsl::tx_changed_objects
-                    .filter(tx_changed_objects::dsl::object_id.eq(changed_object.into_vec()))
-                    .select(tx_changed_objects::dsl::tx_sequence_number);
-
-                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-            }
-        };
-
-        Ok(query)
-    }
     fn multi_get_coins(
         before: Option<Vec<u8>>,
         after: Option<Vec<u8>>,

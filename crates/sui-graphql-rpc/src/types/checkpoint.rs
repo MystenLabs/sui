@@ -8,10 +8,9 @@ use super::{
     digest::Digest,
     epoch::Epoch,
     gas::GasCostSummary,
-    transaction_block::{TransactionBlock, TransactionBlockFilter},
+    transaction_block::{self, TransactionBlock, TransactionBlockFilter},
 };
 use crate::{
-    context_data::db_data_provider::PgManager,
     data::{BoxedQuery, Db, QueryExecutor},
     error::Error,
 };
@@ -118,20 +117,28 @@ impl Checkpoint {
     }
 
     /// Transactions in this checkpoint.
-    async fn transaction_block_connection(
+    async fn transaction_blocks(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<transaction_block::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
+        before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
-    ) -> Result<Option<Connection<String, TransactionBlock>>> {
-        let mut filter = filter.unwrap_or_default();
-        filter.at_checkpoint = Some(self.stored.sequence_number as u64);
+    ) -> Result<Connection<String, TransactionBlock>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
-        ctx.data_unchecked::<PgManager>()
-            .fetch_txs(first, after, last, before, Some(filter))
+        let Some(filter) = filter
+            .unwrap_or_default()
+            .intersect(TransactionBlockFilter {
+                at_checkpoint: Some(self.stored.sequence_number as u64),
+                ..Default::default()
+            })
+        else {
+            return Ok(Connection::new(false, false));
+        };
+
+        TransactionBlock::paginate(ctx.data_unchecked(), page, filter)
             .await
             .extend()
     }

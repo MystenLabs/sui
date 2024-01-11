@@ -26,7 +26,7 @@ fragment Modules on Object  @deprecated {
 }
 
 {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
         nodes {
             effects {
                 objectChanges {

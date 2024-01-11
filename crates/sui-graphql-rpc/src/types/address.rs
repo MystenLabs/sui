@@ -9,12 +9,13 @@ use crate::{context_data::db_data_provider::PgManager, error::Error};
 use super::{
     balance::Balance,
     coin::Coin,
+    cursor::Page,
     dynamic_field::{DynamicField, DynamicFieldName},
     object::{Object, ObjectFilter},
     stake::StakedSui,
     sui_address::SuiAddress,
     suins_registration::SuinsRegistration,
-    transaction_block::{TransactionBlock, TransactionBlockFilter},
+    transaction_block::{self, TransactionBlock, TransactionBlockFilter},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Copy)]
@@ -27,41 +28,43 @@ pub(crate) struct Address {
 pub(crate) enum AddressTransactionBlockRelationship {
     /// Transactions this address has signed either as a sender or as a sponsor
     Sign,
-    /// Transactions that transferred objects from this address
-    Sent,
     /// Transactions that sent objects to this addres
     Recv,
-    /// Transactions that were paid for by this address either as a sender or as a sponsor
-    Paid,
 }
 
 #[Object]
 impl Address {
-    /// Similar behavior to the `transactionBlockConnection` in Query but
-    /// supports additional `AddressTransactionBlockRelationship` filter
-    async fn transaction_block_connection(
+    /// Similar behavior to the `transactionBlocks` in Query but supporting the additional
+    /// `AddressTransactionBlockRelationship` filter, which defaults to `SIGN`.
+    async fn transaction_blocks(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<transaction_block::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
+        before: Option<transaction_block::Cursor>,
         relation: Option<AddressTransactionBlockRelationship>,
         filter: Option<TransactionBlockFilter>,
-    ) -> Result<Option<Connection<String, TransactionBlock>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_txs_for_address(
-                first,
-                after,
-                last,
-                before,
-                filter,
-                (
-                    self.address,
-                    // Assume signer if no relationship is specified
-                    relation.unwrap_or(AddressTransactionBlockRelationship::Sign),
-                ),
-            )
+    ) -> Result<Connection<String, TransactionBlock>> {
+        use AddressTransactionBlockRelationship as R;
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+
+        let Some(filter) = filter.unwrap_or_default().intersect(match relation {
+            // Relationship defaults to "signer" if none is supplied.
+            Some(R::Sign) | None => TransactionBlockFilter {
+                sign_address: Some(self.address),
+                ..Default::default()
+            },
+
+            Some(R::Recv) => TransactionBlockFilter {
+                recv_address: Some(self.address),
+                ..Default::default()
+            },
+        }) else {
+            return Ok(Connection::new(false, false));
+        };
+
+        TransactionBlock::paginate(ctx.data_unchecked(), page, filter)
             .await
             .extend()
     }

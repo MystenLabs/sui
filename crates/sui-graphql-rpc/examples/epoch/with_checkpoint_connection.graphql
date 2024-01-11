@@ -2,7 +2,7 @@
   epoch {
     checkpoints {
       nodes {
-        transactionBlockConnection(first: 10) {
+        transactionBlocks(first: 10) {
           pageInfo {
             hasNextPage
             endCursor

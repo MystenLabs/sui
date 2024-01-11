@@ -49,7 +49,7 @@ module P0::m {
 
 //# run-graphql
 {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
         nodes {
             effects {
                 objectChanges {

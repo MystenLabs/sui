@@ -49,7 +49,7 @@ fragment Modules on Object {
 }
 
 {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
         nodes {
             effects {
                 objectChanges {
@@ -88,7 +88,7 @@ fragment Modules on Object {
 }
 
 {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
         nodes {
             effects {
                 objectChanges {
@@ -130,7 +130,7 @@ fragment Modules on Object {
 }
 
 {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
         nodes {
             effects {
                 objectChanges {

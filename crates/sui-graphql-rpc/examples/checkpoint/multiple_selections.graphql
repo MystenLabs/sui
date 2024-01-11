@@ -18,7 +18,7 @@
     epoch {
       epochId
     }
-    transactionBlockConnection {
+    transactionBlocks {
       edges {
         node {
           digest
