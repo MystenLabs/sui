@@ -112,7 +112,8 @@ export class ZkSendWallet implements Wallet {
 		);
 
 		const popup = new ZkSendPopup({ name: this.#name, origin: this.#origin });
-		const response = await popup.createRequest('sign-transaction-block', {
+		const response = await popup.createRequest({
+			type: 'sign-transaction-block',
 			bytes,
 			address: account.address,
 		});
@@ -126,7 +127,8 @@ export class ZkSendWallet implements Wallet {
 	#signPersonalMessage: SuiSignPersonalMessageMethod = async ({ message, account }) => {
 		const bytes = toB64(bcs.vector(bcs.u8()).serialize(message).toBytes());
 		const popup = new ZkSendPopup({ name: this.#name, origin: this.#origin });
-		const response = await popup.createRequest('sign-personal-message', {
+		const response = await popup.createRequest({
+			type: 'sign-personal-message',
 			bytes,
 			address: account.address,
 		});
@@ -174,7 +176,9 @@ export class ZkSendWallet implements Wallet {
 		}
 
 		const popup = new ZkSendPopup({ name: this.#name, origin: this.#origin });
-		const response = await popup.createRequest('connect', {});
+		const response = await popup.createRequest({
+			type: 'connect',
+		});
 		if (!('address' in response)) {
 			throw new Error('Unexpected response');
 		}
