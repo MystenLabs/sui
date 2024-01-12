@@ -42,10 +42,16 @@ async fn run(
     std::env::set_var(ENV_VAR_LOCAL_READ_TIMEOUT_MS, "10");
     let (sender, recv) = oneshot::channel();
     let result = match duration {
-        None => indexer.run(path.unwrap_or_else(temp_dir), recv).await,
+        None => {
+            indexer
+                .run(path.unwrap_or_else(temp_dir), None, vec![], recv)
+                .await
+        }
         Some(duration) => {
             let handle = tokio::task::spawn(async move {
-                indexer.run(path.unwrap_or_else(temp_dir), recv).await
+                indexer
+                    .run(path.unwrap_or_else(temp_dir), None, vec![], recv)
+                    .await
             });
             tokio::time::sleep(duration).await;
             drop(sender);

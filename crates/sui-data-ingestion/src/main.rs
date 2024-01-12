@@ -43,6 +43,10 @@ struct IndexerConfig {
     path: PathBuf,
     tasks: Vec<TaskConfig>,
     progress_store: ProgressStoreConfig,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    remote_store_url: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    remote_store_options: Vec<(String, String)>,
     #[serde(default = "default_metrics_host")]
     metrics_host: String,
     #[serde(default = "default_metrics_port")]
@@ -123,6 +127,13 @@ async fn main() -> Result<()> {
             }
         };
     }
-    executor.run(config.path, exit_receiver).await?;
+    executor
+        .run(
+            config.path,
+            config.remote_store_url,
+            config.remote_store_options,
+            exit_receiver,
+        )
+        .await?;
     Ok(())
 }
