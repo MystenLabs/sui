@@ -2059,11 +2059,12 @@ impl AuthorityStore {
     pub fn count_object_versions(&self, object_id: ObjectID) -> usize {
         self.perpetual_tables
             .objects
-            .iter_with_bounds(
+            .safe_iter_with_bounds(
                 Some(ObjectKey(object_id, VersionNumber::MIN)),
                 Some(ObjectKey(object_id, VersionNumber::MAX)),
             )
-            .collect::<Vec<_>>()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
             .len()
     }
 }

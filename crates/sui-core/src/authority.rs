@@ -122,7 +122,7 @@ use sui_types::{
     SUI_SYSTEM_ADDRESS,
 };
 use sui_types::{is_system_package, TypeTag};
-use typed_store::Map;
+use typed_store::{Map, TypedStoreError};
 
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
@@ -3102,7 +3102,7 @@ impl AuthorityState {
         Ok(self
             .get_dynamic_fields_iterator(owner, cursor)?
             .take(limit)
-            .collect())
+            .collect::<Result<Vec<_>, _>>()?)
     }
 
     fn get_dynamic_fields_iterator(
@@ -3110,7 +3110,8 @@ impl AuthorityState {
         owner: ObjectID,
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
-    ) -> SuiResult<impl Iterator<Item = (ObjectID, DynamicFieldInfo)> + '_> {
+    ) -> SuiResult<impl Iterator<Item = Result<(ObjectID, DynamicFieldInfo), TypedStoreError>> + '_>
+    {
         if let Some(indexes) = &self.indexes {
             indexes.get_dynamic_fields_iterator(owner, cursor)
         } else {

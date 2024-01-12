@@ -1367,15 +1367,18 @@ impl AuthorityPerEpochStore {
         max: DeferralKey,
     ) -> SuiResult<Vec<VerifiedSequencedConsensusTransaction>> {
         let mut keys = Vec::new();
-        let txns: Vec<_> = self
-            .tables()?
+        let mut txns = Vec::new();
+        self.tables()?
             .deferred_transactions
-            .iter_with_bounds(Some(min), Some(max))
-            .flat_map(|(key, txns)| {
-                keys.push(key);
-                txns
-            })
-            .collect();
+            .safe_iter_with_bounds(Some(min), Some(max))
+            .try_for_each(|result| match result {
+                Ok((key, txs)) => {
+                    keys.push(key);
+                    txns.extend(txs);
+                    Ok(())
+                }
+                Err(err) => Err(err),
+            })?;
 
         // verify that there are no duplicates - should be impossible due to
         // is_consensus_message_processed
@@ -1761,12 +1764,12 @@ impl AuthorityPerEpochStore {
         Ok(self
             .tables()?
             .active_jwks
-            .iter_with_bounds(Some(start), Some(end))
-            .map(|((r, (jwk_id, jwk)), _)| {
+            .safe_iter_with_bounds(Some(start), Some(end))
+            .map_ok(|((r, (jwk_id, jwk)), _)| {
                 debug_assert!(round == r);
                 ActiveJwk { jwk_id, jwk, epoch }
             })
-            .collect())
+            .collect::<Result<Vec<_>, _>>()?)
     }
 
     pub fn jwk_active_in_current_epoch(&self, jwk_id: &JwkId, jwk: &JWK) -> bool {

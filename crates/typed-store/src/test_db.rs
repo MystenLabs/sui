@@ -302,6 +302,14 @@ where
         .build()
     }
 
+    fn safe_iter_with_bounds(
+        &'a self,
+        _lower_bound: Option<K>,
+        _upper_bound: Option<K>,
+    ) -> Self::SafeIterator {
+        unimplemented!("unimplemented API");
+    }
+
     fn safe_range_iter(&'a self, _range: impl RangeBounds<K>) -> Self::SafeIterator {
         unimplemented!("unimplemented API");
     }
