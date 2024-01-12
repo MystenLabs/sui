@@ -461,6 +461,12 @@ pub enum ObjectOrTombstone {
     Tombstone(ObjectRef),
 }
 
+impl From<Object> for ObjectOrTombstone {
+    fn from(object: Object) -> Self {
+        ObjectOrTombstone::Object(object)
+    }
+}
+
 /// Fetch the `ObjectKey`s (IDs and versions) for non-shared input objects.  Includes owned,
 /// and immutable objects as well as the gas objects, but not move packages or shared objects.
 pub fn transaction_input_object_keys(tx: &SenderSignedData) -> SuiResult<Vec<ObjectKey>> {

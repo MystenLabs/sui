@@ -24,7 +24,7 @@ use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
-use sui_types::storage::{MarkerValue, ObjectKey, ObjectStore, PackageObject};
+use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
 use sui_types::transaction::VerifiedTransaction;
 use sui_types::{
     base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber},
@@ -42,6 +42,11 @@ pub trait ExecutionCacheRead: Send + Sync {
         &self,
         object_id: ObjectID,
     ) -> SuiResult<Option<ObjectRef>>;
+
+    fn get_latest_object_or_tombstone(
+        &self,
+        object_id: ObjectID,
+    ) -> SuiResult<Option<(ObjectKey, ObjectOrTombstone)>>;
 
     fn get_object_by_key(
         &self,
@@ -451,6 +456,23 @@ impl ExecutionCacheRead for InMemoryCache {
         }
 
         self.store.get_latest_object_ref_or_tombstone(object_id)
+    }
+
+    fn get_latest_object_or_tombstone(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<Option<(ObjectKey, ObjectOrTombstone)>, SuiError> {
+        if let Some(objref) = self.get_latest_object_ref_or_tombstone(object_id)? {
+            if !objref.2.is_alive() {
+                return Ok(Some((objref.into(), ObjectOrTombstone::Tombstone(objref))));
+            } else {
+                let key: ObjectKey = objref.into();
+                let object = self.get_object_by_key(&objref.0, objref.1)?;
+                return Ok(object.map(|o| (key, o.into())));
+            }
+        }
+
+        self.store.get_latest_object_or_tombstone(object_id)
     }
 
     /// If the shared object was deleted, return deletion info for the current live version
