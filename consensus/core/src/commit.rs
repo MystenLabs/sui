@@ -5,7 +5,7 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-use crate::block::{BlockAPI, BlockRef, BlockSlot, Round, VerifiedBlock};
+use crate::block::{BlockAPI, BlockRef, Round, Slot, VerifiedBlock};
 
 /// Default wave length for all committers. A longer wave length increases the
 /// chance of committing the leader under asynchrony at the cost of latency in
@@ -41,8 +41,8 @@ pub(crate) struct Commit {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum LeaderStatus {
     Commit(VerifiedBlock),
-    Skip(BlockSlot),
-    Undecided(BlockSlot),
+    Skip(Slot),
+    Undecided(Slot),
 }
 
 #[allow(unused)]

@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-    block::{BlockAPI as _, BlockRef, BlockSlot, Round, VerifiedBlock},
+    block::{BlockAPI as _, BlockRef, Round, Slot, VerifiedBlock},
     context::Context,
     storage::Store,
 };
@@ -71,7 +71,7 @@ impl DagState {
         unimplemented!()
     }
 
-    pub(crate) fn get_blocks_at_block_slot(&self, _block_slot: BlockSlot) -> Vec<VerifiedBlock> {
+    pub(crate) fn get_blocks_at_slot(&self, _slot: Slot) -> Vec<VerifiedBlock> {
         unimplemented!()
     }
 

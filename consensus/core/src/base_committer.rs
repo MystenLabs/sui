@@ -1,16 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Display,
-    sync::Arc,
-};
+use std::{collections::HashMap, fmt::Display, sync::Arc};
 
 use parking_lot::RwLock;
 
 use crate::{
-    block::{BlockAPI, BlockRef, BlockSlot, Round, VerifiedBlock},
+    block::{BlockAPI, BlockRef, Round, Slot, VerifiedBlock},
     commit::{LeaderStatus, WaveNumber, DEFAULT_WAVE_LENGTH, MINIMUM_WAVE_LENGTH},
     context::Context,
     dag_state::DagState,
@@ -81,7 +77,7 @@ impl BaseCommitter {
     /// Apply the direct decision rule to the specified leader to see whether we
     /// can direct-commit or direct-skip it.
     #[tracing::instrument(skip_all, fields(leader = %leader))]
-    pub fn try_direct_decide(&self, leader: BlockSlot) -> LeaderStatus {
+    pub fn try_direct_decide(&self, leader: Slot) -> LeaderStatus {
         // Check whether the leader has enough blame. That is, whether there are 2f+1 non-votes
         // for that leader (which ensure there will never be a certificate for that leader).
         let voting_round = leader.round + 1;
@@ -94,7 +90,7 @@ impl BaseCommitter {
         // (created by Byzantine leaders).
         let wave = self.wave_number(leader.round);
         let decision_round = self.decision_round(wave);
-        let leader_blocks = self.dag_state.read().get_blocks_at_block_slot(leader);
+        let leader_blocks = self.dag_state.read().get_blocks_at_slot(leader);
         let mut leaders_with_enough_support: Vec<_> = leader_blocks
             .into_iter()
             .filter(|l| self.enough_leader_support(decision_round, l))
@@ -114,34 +110,33 @@ impl BaseCommitter {
 
     /// Apply the indirect decision rule to the specified leader to see whether
     /// we can indirect-commit or indirect-skip it.
-    #[tracing::instrument(skip_all, fields(leader = %leader_block_slot))]
+    #[tracing::instrument(skip_all, fields(leader = %leader_slot))]
     pub fn try_indirect_decide<'a>(
         &self,
-        leader_block_slot: BlockSlot,
+        leader_slot: Slot,
         leaders: impl Iterator<Item = &'a LeaderStatus>,
     ) -> LeaderStatus {
         // The anchor is the first committed leader with round higher than the decision round of the
         // target leader. We must stop the iteration upon encountering an undecided leader.
-        let anchors =
-            leaders.filter(|x| leader_block_slot.round + self.options.wave_length <= x.round());
+        let anchors = leaders.filter(|x| leader_slot.round + self.options.wave_length <= x.round());
 
         for anchor in anchors {
             tracing::trace!(
-                "[{self}] Trying to indirect-decide {leader_block_slot} using anchor {anchor}",
+                "[{self}] Trying to indirect-decide {leader_slot} using anchor {anchor}",
             );
             match anchor {
                 LeaderStatus::Commit(anchor) => {
-                    return self.decide_leader_from_anchor(anchor, leader_block_slot);
+                    return self.decide_leader_from_anchor(anchor, leader_slot);
                 }
                 LeaderStatus::Skip(..) => (),
                 LeaderStatus::Undecided(..) => break,
             }
         }
 
-        LeaderStatus::Undecided(leader_block_slot)
+        LeaderStatus::Undecided(leader_slot)
     }
 
-    pub fn elect_leader(&self, round: Round) -> Option<BlockSlot> {
+    pub fn elect_leader(&self, round: Round) -> Option<Slot> {
         let wave = self.wave_number(round);
         tracing::debug!(
             "elect_leader: round={}, wave={}, leader_round={}, leader_offset={}",
@@ -154,7 +149,7 @@ impl BaseCommitter {
             return None;
         }
 
-        Some(BlockSlot::new(
+        Some(Slot::new(
             self.leader_schedule
                 .elect_leader(round, self.options.leader_offset),
             round,
@@ -188,20 +183,16 @@ impl BaseCommitter {
     /// If block A supports B at (author, round), it is guaranteed that any
     /// processed block by the same author that directly or indirectly includes
     /// A will also support B at (author, round).
-    fn find_supported_block(
-        &self,
-        leader_block_slot: BlockSlot,
-        from: &VerifiedBlock,
-    ) -> Option<BlockRef> {
-        if from.round() < leader_block_slot.round {
+    fn find_supported_block(&self, leader_slot: Slot, from: &VerifiedBlock) -> Option<BlockRef> {
+        if from.round() < leader_slot.round {
             return None;
         }
         for ancestor in from.ancestors() {
-            if BlockSlot::from(*ancestor) == leader_block_slot {
+            if Slot::from(*ancestor) == leader_slot {
                 return Some(*ancestor);
             }
             // Weak links may point to blocks with lower round numbers than strong links.
-            if ancestor.round <= leader_block_slot.round {
+            if ancestor.round <= leader_slot.round {
                 continue;
             }
             let ancestor = self
@@ -209,7 +200,7 @@ impl BaseCommitter {
                 .read()
                 .get_block(*ancestor)
                 .expect("We should have the whole sub-dag by now");
-            if let Some(support) = self.find_supported_block(leader_block_slot, &ancestor) {
+            if let Some(support) = self.find_supported_block(leader_slot, &ancestor) {
                 return Some(support);
             }
         }
@@ -220,8 +211,8 @@ impl BaseCommitter {
     /// the specified leader (`leader_block`).
     fn is_vote(&self, potential_vote: &VerifiedBlock, leader_block: &VerifiedBlock) -> bool {
         let reference = leader_block.reference();
-        let leader_block_slot = BlockSlot::from(reference);
-        self.find_supported_block(leader_block_slot, potential_vote) == Some(reference)
+        let leader_slot = Slot::from(reference);
+        self.find_supported_block(leader_slot, potential_vote) == Some(reference)
     }
 
     /// Check whether the specified block (`potential_certificate`) is a certificate
@@ -266,32 +257,22 @@ impl BaseCommitter {
     /// Decide the status of a target leader from the specified anchor. We commit
     /// the target leader if it has a certified link to the anchor. Otherwise, we
     /// skip the target leader.
-    fn decide_leader_from_anchor(
-        &self,
-        anchor: &VerifiedBlock,
-        leader_block_slot: BlockSlot,
-    ) -> LeaderStatus {
+    fn decide_leader_from_anchor(&self, anchor: &VerifiedBlock, leader_slot: Slot) -> LeaderStatus {
         // Get the block(s) proposed by the leader. There could be more than one leader block
         // per round (produced by a Byzantine leader).
-        let leader_blocks = self
-            .dag_state
-            .read()
-            .get_blocks_at_block_slot(leader_block_slot);
+        let leader_blocks = self.dag_state.read().get_blocks_at_slot(leader_slot);
 
-        // TODO: Remove this check once we have a better way to handle/track Byzantine leaders.
-        let mut seen_rounds = HashSet::new();
-        for block in leader_blocks.iter() {
-            if !seen_rounds.insert(block.round()) {
-                tracing::warn!(
-                    "Multiple blocks found for block slot {}",
-                    BlockSlot::from(block.reference())
-                );
-            }
+        // TODO: Re-evaluate this check once we have a better way to handle/track byzantine authorities.
+        if leader_blocks.len() > 1 {
+            tracing::warn!(
+                "Multiple blocks found for leader slot {leader_slot}: {:?}",
+                leader_blocks
+            );
         }
 
         // Get all blocks that could be potential certificates for the target leader. These blocks
         // are in the decision round of the target leader and are linked to the anchor.
-        let wave = self.wave_number(leader_block_slot.round);
+        let wave = self.wave_number(leader_slot.round);
         let decision_round = self.decision_round(wave);
         let potential_certificates = self
             .dag_state
@@ -312,14 +293,14 @@ impl BaseCommitter {
 
         // There can be at most one certified leader, otherwise it means the BFT assumption is broken.
         if certified_leader_blocks.len() > 1 {
-            panic!("More than one certified block at wave {wave} from leader {leader_block_slot}")
+            panic!("More than one certified block at wave {wave} from leader {leader_slot}")
         }
 
         // We commit the target leader if it has a certificate that is an ancestor of the anchor.
         // Otherwise skip it.
         match certified_leader_blocks.pop() {
             Some(certified_leader_block) => LeaderStatus::Commit(certified_leader_block),
-            None => LeaderStatus::Skip(leader_block_slot),
+            None => LeaderStatus::Skip(leader_slot),
         }
     }
 
@@ -337,7 +318,7 @@ impl BaseCommitter {
             {
                 tracing::trace!(
                     "[{self}] {voting_block:?} is a blame for leader {}",
-                    BlockSlot::new(leader, voting_round - 1)
+                    Slot::new(leader, voting_round - 1)
                 );
                 if blame_stake_aggregator.add(voter, &self.context.committee) {
                     return true;

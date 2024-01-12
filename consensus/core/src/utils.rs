@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::block::BlockSlot;
+use crate::block::Slot;
 
 use consensus_config::AuthorityIndex;
 
-pub fn format_authority_round(author_round: &BlockSlot) -> String {
+pub fn format_authority_round(author_round: &Slot) -> String {
     format!(
         "{}{}",
         format_authority_index(author_round.authority),

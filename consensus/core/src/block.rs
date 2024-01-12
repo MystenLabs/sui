@@ -145,9 +145,9 @@ impl BlockRef {
     }
 }
 
-impl From<BlockRef> for BlockSlot {
+impl From<BlockRef> for Slot {
     fn from(value: BlockRef) -> Self {
-        BlockSlot::new(value.author, value.round)
+        Slot::new(value.author, value.round)
     }
 }
 
@@ -165,7 +165,7 @@ impl fmt::Debug for BlockRef {
 
 impl fmt::Display for BlockRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", format_authority_round(&BlockSlot::from(*self)))
+        write!(f, "{}", format_authority_round(&Slot::from(*self)))
     }
 }
 
@@ -266,25 +266,25 @@ impl fmt::Debug for VerifiedBlock {
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Default, Hash)]
-pub struct BlockSlot {
+pub struct Slot {
     pub authority: AuthorityIndex,
     pub round: Round,
 }
 
 #[allow(unused)]
-impl BlockSlot {
+impl Slot {
     pub fn new(authority: AuthorityIndex, round: Round) -> Self {
         Self { authority, round }
     }
 }
 
-impl fmt::Debug for BlockSlot {
+impl fmt::Debug for Slot {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self)
     }
 }
 
-impl fmt::Display for BlockSlot {
+impl fmt::Display for Slot {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", format_authority_round(self))
     }
