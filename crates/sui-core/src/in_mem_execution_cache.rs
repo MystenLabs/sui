@@ -25,6 +25,7 @@ use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
+use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 use sui_types::transaction::VerifiedTransaction;
 use sui_types::{
     base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber},
@@ -103,6 +104,16 @@ pub trait ExecutionCacheRead: Send + Sync {
         &self,
         digests: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<TransactionEffectsDigest>>>;
+
+    fn is_tx_already_executed(&self, digest: &TransactionDigest) -> SuiResult<bool> {
+        self.multi_get_executed_effects_digests(&[*digest])
+            .map(|mut digests| {
+                digests
+                    .pop()
+                    .expect("multi-get must return correct number of items")
+                    .is_some()
+            })
+    }
 
     fn multi_get_executed_effects(
         &self,
@@ -192,6 +203,8 @@ pub trait ExecutionCacheRead: Send + Sync {
         }
         .boxed()
     }
+
+    fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState>;
 }
 
 pub trait ExecutionCacheWrite: Send + Sync {
@@ -640,6 +653,10 @@ impl ExecutionCacheRead for InMemoryCache {
         // TODO: use cache?
         self.store.multi_get_events(event_digests)
     }
+
+    fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
+        get_sui_system_state(&ObjectStoreWrapper(self))
+    }
 }
 
 impl ExecutionCacheWrite for InMemoryCache {
@@ -750,5 +767,22 @@ impl EffectsNotifyRead for NotifyReadWrapper {
         digests: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
         self.0.multi_get_executed_effects(digests)
+    }
+}
+
+// Wrapper to avoid having to disambiguate traits everywhere
+struct ObjectStoreWrapper<'a>(&'a InMemoryCache);
+
+impl<'a> ObjectStore for ObjectStoreWrapper<'a> {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        self.0.get_object(object_id)
+    }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: sui_types::base_types::VersionNumber,
+    ) -> Result<Option<Object>, SuiError> {
+        self.0.get_object_by_key(object_id, version)
     }
 }
