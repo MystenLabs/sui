@@ -51,7 +51,7 @@ pub enum UseFunKind {
     // From a function declaration in the module
     FunctionDeclaration,
     // From a normal, non 'use fun' use declaration,
-    UseAlias { used: bool },
+    UseAlias,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -63,6 +63,10 @@ pub struct UseFun {
     // If None, disregard any use/unused information.
     // If Some, we track whether or not the associated function alias was used prior to receiver
     pub kind: UseFunKind,
+    // Set to true on usage during typing on usage.
+    // For UseAlias implicit use funs, this might already be set to true if it was used in a
+    // non method syntax case
+    pub used: bool,
 }
 
 // Mapping from type to their possible "methods"
@@ -762,6 +766,7 @@ impl AstDebug for UseFun {
             is_public,
             target_function: (target_m, target_f),
             kind,
+            used,
         } = self;
         attributes.ast_debug(w);
         w.new_line();
@@ -769,12 +774,12 @@ impl AstDebug for UseFun {
             w.write("public ")
         }
         let kind_str = match kind {
-            UseFunKind::Explicit => "",
-            UseFunKind::UseAlias { used: true } => "#used",
-            UseFunKind::UseAlias { used: false } => "#unused",
+            UseFunKind::Explicit => "#explicit",
+            UseFunKind::UseAlias => "#use-alias",
             UseFunKind::FunctionDeclaration => "#fundecl",
         };
-        w.write(&format!("use{kind_str} {target_m}::{target_f}"));
+        let usage = if *used { "#used" } else { "#unused" };
+        w.write(&format!("use{kind_str}{usage} {target_m}::{target_f}"));
     }
 }
 

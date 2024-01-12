@@ -751,6 +751,7 @@ fn explicit_use_fun(
         is_public,
         target_function,
         kind: N::UseFunKind::Explicit,
+        used: is_public.is_some(), // suppress unused warning for public use funs
     };
     Some((tn, method, use_fun))
 }
