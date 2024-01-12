@@ -46,7 +46,6 @@ use sui_config::node::ArchiveReaderConfig;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::AuthorityStore;
 use sui_core::checkpoints::CheckpointStore;
-use sui_core::db_checkpoint_handler::SUCCESS_MARKER;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::storage::RocksDbStore;
 use sui_snapshot::reader::StateSnapshotReaderV1;
@@ -1017,8 +1016,6 @@ pub async fn download_db_snapshot(
     let epoch_path = format!("epoch_{}", epoch);
     let epoch_dir = get_path(&epoch_path);
 
-    let success_marker = epoch_dir.child(SUCCESS_MARKER);
-    let _get_result = remote_store.get_bytes(&success_marker).await?;
     let manifest_file = epoch_dir.child(MANIFEST_FILENAME);
     let epoch_manifest_contents =
         String::from_utf8(remote_store.get_bytes(&manifest_file).await?.to_vec())
@@ -1027,10 +1024,8 @@ pub async fn download_db_snapshot(
     let epoch_manifest =
         PerEpochManifest::deserialize_from_newline_delimited(&epoch_manifest_contents);
 
-    let store_entries = epoch_manifest.filter_by_prefix("store");
-
     let mut files: Vec<String> = vec![];
-    files.extend(store_entries.filter_by_prefix("store/perpetual").lines);
+    files.extend(epoch_manifest.filter_by_prefix("store/perpetual").lines);
     files.extend(epoch_manifest.filter_by_prefix("epochs").lines);
     files.extend(epoch_manifest.filter_by_prefix("checkpoints").lines);
     if !skip_indexes {

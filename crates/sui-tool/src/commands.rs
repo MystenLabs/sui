@@ -273,7 +273,7 @@ pub enum ToolCommand {
         /// value based on number of available logical cores.
         #[clap(long = "num-parallel-downloads")]
         num_parallel_downloads: Option<usize>,
-        /// If true, restore from formal (slim, DB agnostic) snapshot. Note that this is only supported
+        /// DEPRECATED - use download-formal-snapshot instead. If true, restore from formal (slim, DB agnostic) snapshot. Note that this is only supported
         /// for protocol versions supporting `commit_root_state_digest`. For mainnet, this is
         /// epoch 20+, and for testnet this is epoch 12+
         #[clap(
@@ -294,9 +294,11 @@ pub enum ToolCommand {
         /// based on value of `--network` and `--formal` flags.
         #[clap(long = "snapshot-bucket")]
         snapshot_bucket: Option<String>,
-        /// Snapshot bucket type. Defaults to "gcs" if `--formal`
-        /// flag specified, otherwise "s3".
-        #[clap(long = "snapshot-bucket-type")]
+        /// Snapshot bucket type
+        #[clap(
+            long = "snapshot-bucket-type",
+            help = "Required if --no-sign-request is not set"
+        )]
         snapshot_bucket_type: Option<ObjectStoreType>,
         /// Path to snapshot directory on local filesystem.
         /// Only applicable if `--snapshot-bucket-type` is "file".
@@ -309,7 +311,10 @@ pub enum ToolCommand {
         #[clap(long = "archive-bucket-type", default_value = "s3")]
         archive_bucket_type: ObjectStoreType,
         /// If true, no authentication is needed for snapshot restores
-        #[clap(long = "no-sign-request")]
+        #[clap(
+            long = "no-sign-request",
+            help = "if set, --snapshot-bucket and --snapshot-bucket-type are ignored"
+        )]
         no_sign_request: bool,
         /// If false (default), log level will be overridden to "off",
         /// and output will be reduced to necessary status information.
@@ -317,6 +322,9 @@ pub enum ToolCommand {
         verbose: bool,
     },
 
+    // Restore from formal (slim, DB agnostic) snapshot. Note that this is only supported
+    /// for protocol versions supporting `commit_root_state_digest`. For mainnet, this is
+    /// epoch 20+, and for testnet this is epoch 12+
     #[clap(
         name = "download-formal-snapshot",
         about = "Downloads formal database snapshot via cloud object store, outputs to local disk"
@@ -342,12 +350,14 @@ pub enum ToolCommand {
         #[clap(long = "network", default_value = "mainnet")]
         network: Chain,
         /// Snapshot bucket name. If not specified, defaults are
-        /// based on value of `--network` and `--formal` flags.
+        /// based on value of `--network` flag.
         #[clap(long = "snapshot-bucket")]
         snapshot_bucket: Option<String>,
-        /// Snapshot bucket type. Defaults to "gcs" if `--formal`
-        /// flag specified, otherwise "s3".
-        #[clap(long = "snapshot-bucket-type")]
+        /// Snapshot bucket type
+        #[clap(
+            long = "snapshot-bucket-type",
+            help = "Required if --no-sign-request is not set"
+        )]
         snapshot_bucket_type: Option<ObjectStoreType>,
         /// Path to snapshot directory on local filesystem.
         /// Only applicable if `--snapshot-bucket-type` is "file".
@@ -360,7 +370,10 @@ pub enum ToolCommand {
         #[clap(long = "archive-bucket-type", default_value = "s3")]
         archive_bucket_type: ObjectStoreType,
         /// If true, no authentication is needed for snapshot restores
-        #[clap(long = "no-sign-request")]
+        #[clap(
+            long = "no-sign-request",
+            help = "if set, --snapshot-bucket and --snapshot-bucket-type are ignored"
+        )]
         no_sign_request: bool,
         /// If false (default), log level will be overridden to "off",
         /// and output will be reduced to necessary status information.
@@ -840,14 +853,12 @@ impl ToolCommand {
                             } else {
                                 None
                             }
+                        } else if network == Chain::Mainnet {
+                            Some("https://db-snapshot.mainnet.sui.io".to_string())
+                        } else if network == Chain::Testnet {
+                            Some("https://db-snapshot.testnet.sui.io".to_string())
                         } else {
-                            if network == Chain::Mainnet {
-                                Some("https://db-snapshot.mainnet.sui.io".to_string())
-                            } else if network == Chain::Testnet {
-                                Some("https://db-snapshot.testnet.sui.io".to_string())
-                            } else {
-                                None
-                            }
+                            None
                         }
                     });
                     ObjectStoreConfig {
