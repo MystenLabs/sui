@@ -11,12 +11,15 @@ use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, HashFunction};
 use serde::{Deserialize, Serialize};
 
-use crate::{types::Round, utils::format_authority_round};
+use crate::utils::format_authority_round;
 
 use consensus_config::{AuthorityIndex, DefaultHashFunction, NetworkKeySignature, DIGEST_LENGTH};
 
 /// Block proposal timestamp in milliseconds.
 pub type BlockTimestampMs = u64;
+
+/// Round number of a block.
+pub type Round = u32;
 
 /// A block includes references to previous round blocks and transactions that the validator
 /// considers valid.
@@ -213,13 +216,53 @@ impl SignedBlock {
 
 /// Verifiied block allows access to its content.
 #[allow(unused)]
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub(crate) struct VerifiedBlock {
-    pub block: Block,
+    pub data: Block,
     pub signature: bytes::Bytes,
 
     #[serde(skip)]
     serialized: bytes::Bytes,
+}
+
+impl BlockAPI for VerifiedBlock {
+    fn reference(&self) -> BlockRef {
+        self.data.reference()
+    }
+
+    fn digest(&self) -> BlockDigest {
+        self.data.digest()
+    }
+
+    fn round(&self) -> Round {
+        self.data.round()
+    }
+
+    fn author(&self) -> AuthorityIndex {
+        self.data.author()
+    }
+
+    fn timestamp_ms(&self) -> BlockTimestampMs {
+        self.data.timestamp_ms()
+    }
+
+    fn ancestors(&self) -> &[BlockRef] {
+        self.data.ancestors()
+    }
+}
+
+impl PartialEq for VerifiedBlock {
+    fn eq(&self, other: &Self) -> bool {
+        self.data == other.data
+    }
+}
+
+impl Eq for VerifiedBlock {}
+
+impl fmt::Debug for VerifiedBlock {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.data)
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Default, Hash)]

@@ -4,10 +4,9 @@
 use std::sync::Arc;
 
 use crate::{
-    block::{Block, BlockAPI, BlockRef, BlockV1},
+    block::{Block, BlockAPI, BlockRef, BlockV1, Round},
     context::Context,
     threshold_clock::ThresholdClock,
-    types::Round,
 };
 
 use mysten_metrics::monitored_scope;

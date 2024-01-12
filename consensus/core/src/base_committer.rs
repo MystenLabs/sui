@@ -7,14 +7,15 @@ use std::{
     sync::Arc,
 };
 
+use parking_lot::RwLock;
+
 use crate::{
-    block::{Block, BlockAPI, BlockRef, BlockSlot},
-    block_store::BlockStore,
-    constants::{DEFAULT_WAVE_LENGTH, MINIMUM_WAVE_LENGTH},
+    block::{BlockAPI, BlockRef, BlockSlot, Round, VerifiedBlock},
+    commit::{LeaderStatus, WaveNumber, DEFAULT_WAVE_LENGTH, MINIMUM_WAVE_LENGTH},
     context::Context,
+    dag_state::DagState,
     leader_schedule::LeaderSchedule,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
-    types::{LeaderStatus, Round, WaveNumber},
 };
 
 use consensus_config::{AuthorityIndex, Stake};
@@ -55,8 +56,8 @@ pub(crate) struct BaseCommitter {
     /// The consensus leader schedule to be used to resolve the leader for a
     /// given round.
     leader_schedule: LeaderSchedule,
-    /// Keep all block data
-    block_store: BlockStore,
+    /// Block store representing the Dag state
+    dag_state: Arc<RwLock<DagState>>,
     /// The options used by this committer
     options: BaseCommitterOptions,
 }
@@ -65,14 +66,14 @@ impl BaseCommitter {
     pub fn new(
         context: Arc<Context>,
         leader_schedule: LeaderSchedule,
-        block_store: BlockStore,
+        dag_state: Arc<RwLock<DagState>>,
         options: BaseCommitterOptions,
     ) -> Self {
         assert!(options.wave_length >= MINIMUM_WAVE_LENGTH);
         Self {
             context,
             leader_schedule,
-            block_store,
+            dag_state,
             options,
         }
     }
@@ -93,7 +94,7 @@ impl BaseCommitter {
         // (created by Byzantine leaders).
         let wave = self.wave_number(leader.round);
         let decision_round = self.decision_round(wave);
-        let leader_blocks = self.block_store.get_blocks_at_block_slot(leader);
+        let leader_blocks = self.dag_state.read().get_blocks_at_block_slot(leader);
         let mut leaders_with_enough_support: Vec<_> = leader_blocks
             .into_iter()
             .filter(|l| self.enough_leader_support(decision_round, l))
@@ -187,7 +188,11 @@ impl BaseCommitter {
     /// If block A supports B at (author, round), it is guaranteed that any
     /// processed block by the same author that directly or indirectly includes
     /// A will also support B at (author, round).
-    fn find_supported_block(&self, leader_block_slot: BlockSlot, from: &Block) -> Option<BlockRef> {
+    fn find_supported_block(
+        &self,
+        leader_block_slot: BlockSlot,
+        from: &VerifiedBlock,
+    ) -> Option<BlockRef> {
         if from.round() < leader_block_slot.round {
             return None;
         }
@@ -200,7 +205,8 @@ impl BaseCommitter {
                 continue;
             }
             let ancestor = self
-                .block_store
+                .dag_state
+                .read()
                 .get_block(*ancestor)
                 .expect("We should have the whole sub-dag by now");
             if let Some(support) = self.find_supported_block(leader_block_slot, &ancestor) {
@@ -212,7 +218,7 @@ impl BaseCommitter {
 
     /// Check whether the specified block (`potential_vote`) is a vote for
     /// the specified leader (`leader_block`).
-    fn is_vote(&self, potential_vote: &Block, leader_block: &Block) -> bool {
+    fn is_vote(&self, potential_vote: &VerifiedBlock, leader_block: &VerifiedBlock) -> bool {
         let reference = leader_block.reference();
         let leader_block_slot = BlockSlot::from(reference);
         self.find_supported_block(leader_block_slot, potential_vote) == Some(reference)
@@ -226,8 +232,8 @@ impl BaseCommitter {
     /// and it can't be reused for different leaders.
     fn is_certificate(
         &self,
-        potential_certificate: &Block,
-        leader_block: &Block,
+        potential_certificate: &VerifiedBlock,
+        leader_block: &VerifiedBlock,
         all_votes: &mut HashMap<BlockRef, bool>,
     ) -> bool {
         let mut votes_stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
@@ -236,7 +242,8 @@ impl BaseCommitter {
                 *is_vote
             } else {
                 let potential_vote = self
-                    .block_store
+                    .dag_state
+                    .read()
                     .get_block(*reference)
                     .expect("We should have the whole sub-dag by now");
                 let is_vote = self.is_vote(&potential_vote, leader_block);
@@ -250,7 +257,7 @@ impl BaseCommitter {
                     return true;
                 }
             } else {
-                tracing::trace!("[{self}] {reference} is not a vote for {leader_block:?}");
+                tracing::trace!("[{self}] {reference} is not a vote for {leader_block:?}",);
             }
         }
         false
@@ -261,12 +268,15 @@ impl BaseCommitter {
     /// skip the target leader.
     fn decide_leader_from_anchor(
         &self,
-        anchor: &Block,
+        anchor: &VerifiedBlock,
         leader_block_slot: BlockSlot,
     ) -> LeaderStatus {
         // Get the block(s) proposed by the leader. There could be more than one leader block
         // per round (produced by a Byzantine leader).
-        let leader_blocks = self.block_store.get_blocks_at_block_slot(leader_block_slot);
+        let leader_blocks = self
+            .dag_state
+            .read()
+            .get_blocks_at_block_slot(leader_block_slot);
 
         // TODO: Remove this check once we have a better way to handle/track Byzantine leaders.
         let mut seen_rounds = HashSet::new();
@@ -283,7 +293,10 @@ impl BaseCommitter {
         // are in the decision round of the target leader and are linked to the anchor.
         let wave = self.wave_number(leader_block_slot.round);
         let decision_round = self.decision_round(wave);
-        let potential_certificates = self.block_store.linked_to_round(anchor, decision_round);
+        let potential_certificates = self
+            .dag_state
+            .read()
+            .linked_to_round(anchor, decision_round);
 
         // Use those potential certificates to determine which (if any) of the target leader
         // blocks can be committed.
@@ -312,7 +325,7 @@ impl BaseCommitter {
 
     /// Check whether the specified leader has 2f+1 non-votes (blames) to be directly skipped.
     fn enough_leader_blame(&self, voting_round: Round, leader: AuthorityIndex) -> bool {
-        let voting_blocks = self.block_store.get_blocks_by_round(voting_round);
+        let voting_blocks = self.dag_state.read().get_blocks_by_round(voting_round);
 
         let mut blame_stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
         for voting_block in &voting_blocks {
@@ -336,8 +349,8 @@ impl BaseCommitter {
 
     /// Check whether the specified leader has 2f+1 certificates to be directly
     /// committed.
-    fn enough_leader_support(&self, decision_round: Round, leader_block: &Block) -> bool {
-        let decision_blocks = self.block_store.get_blocks_by_round(decision_round);
+    fn enough_leader_support(&self, decision_round: Round, leader_block: &VerifiedBlock) -> bool {
+        let decision_blocks = self.dag_state.read().get_blocks_by_round(decision_round);
 
         // Quickly reject if there isn't enough stake to support the leader from
         // the potential certificates.

@@ -4,10 +4,9 @@
 use std::{cmp::Ordering, sync::Arc, time::Instant};
 
 use crate::{
-    block::BlockRef,
+    block::{BlockRef, Round},
     context::Context,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
-    types::Round,
 };
 
 #[allow(unused)]

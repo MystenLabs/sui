@@ -14,6 +14,7 @@ bytes.workspace = true
 cfg-if.workspace = true
 enum_dispatch.workspace = true
 fastcrypto.workspace = true
+parking_lot.workspace = true
 prometheus.workspace = true
 rand.workspace = true
 serde.workspace = true

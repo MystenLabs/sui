@@ -1,14 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::{Display, Formatter};
-
-use fastcrypto::traits::KeyPair;
 use std::{
     fmt::{Display, Formatter},
     ops::{Index, IndexMut},
 };
 
+use fastcrypto::traits::KeyPair;
 use multiaddr::Multiaddr;
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
