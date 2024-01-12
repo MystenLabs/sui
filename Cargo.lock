@@ -388,7 +388,7 @@ dependencies = [
  "ark-std",
  "derivative",
  "hashbrown 0.13.2",
- "itertools",
+ "itertools 0.10.5",
  "num-traits",
  "zeroize",
 ]
@@ -405,7 +405,7 @@ dependencies = [
  "ark-std",
  "derivative",
  "digest 0.10.6",
- "itertools",
+ "itertools 0.10.5",
  "num-bigint 0.4.4",
  "num-traits",
  "paste",
@@ -2422,7 +2422,7 @@ checksum = "410208eb08c3f3ad44b95b51c4fc0d5993cbcc9dd39cfadb4214b9115a97dcb5"
 dependencies = [
  "ansi_term",
  "dissimilar",
- "itertools",
+ "itertools 0.10.5",
 ]
 
 [[package]]
@@ -2664,7 +2664,7 @@ dependencies = [
  "criterion-plot",
  "futures",
  "is-terminal",
- "itertools",
+ "itertools 0.10.5",
  "num-traits",
  "once_cell",
  "oorandom",
@@ -2686,7 +2686,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b50826342786a51a89e2da3a28f1c32b06e387201bc2d19791f622c673706b1"
 dependencies = [
  "cast",
- "itertools",
+ "itertools 0.10.5",
 ]
 
 [[package]]
@@ -3357,7 +3357,7 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c0ff24a73b51d9009c40897faf87d31b77345c90ffbf4dc3a1d2957032c5653"
 dependencies = [
- "itertools",
+ "itertools 0.10.5",
 ]
 
 [[package]]
@@ -4203,7 +4203,7 @@ dependencies = [
  "fastcrypto",
  "fastcrypto-derive",
  "hex",
- "itertools",
+ "itertools 0.10.5",
  "rand 0.8.5",
  "serde",
  "sha3 0.10.6",
@@ -4767,7 +4767,7 @@ dependencies = [
  "guppy-summaries",
  "guppy-workspace-hack",
  "indexmap 1.9.3",
- "itertools",
+ "itertools 0.10.5",
  "nested",
  "once_cell",
  "pathdiff",
@@ -4838,7 +4838,7 @@ dependencies = [
  "guppy-workspace-hack",
  "include_dir",
  "indenter",
- "itertools",
+ "itertools 0.10.5",
  "owo-colors",
  "pathdiff",
  "rayon",
@@ -5459,6 +5459,15 @@ name = "itertools"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
 dependencies = [
  "either",
 ]
@@ -6118,7 +6127,7 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysticeti?rev=318d61d27f47d257d99a86983d835e9e9756bc59#318d61d27f47d257d99a86983d835e9e9756bc59"
+source = "git+https://github.com/MystenLabs/mysticeti?rev=769f24018f35ae461d331f105f9590ef1094cbba#769f24018f35ae461d331f105f9590ef1094cbba"
 dependencies = [
  "memmap2 0.7.1",
  "serde",
@@ -6458,7 +6467,7 @@ dependencies = [
  "anyhow",
  "codespan",
  "codespan-reporting",
- "itertools",
+ "itertools 0.10.5",
  "log",
  "move-compiler",
  "move-model",
@@ -6543,7 +6552,7 @@ dependencies = [
  "codespan",
  "codespan-reporting",
  "internment",
- "itertools",
+ "itertools 0.10.5",
  "log",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -6566,7 +6575,7 @@ dependencies = [
  "anyhow",
  "clap",
  "colored",
- "itertools",
+ "itertools 0.10.5",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-utils",
@@ -6607,7 +6616,7 @@ dependencies = [
  "anyhow",
  "clap",
  "codespan-reporting",
- "itertools",
+ "itertools 0.10.5",
  "log",
  "move-command-line-common",
  "move-compiler",
@@ -6638,7 +6647,7 @@ dependencies = [
  "codespan-reporting",
  "ethnum",
  "im",
- "itertools",
+ "itertools 0.10.5",
  "log",
  "move-binary-format",
  "move-command-line-common",
@@ -6660,7 +6669,7 @@ dependencies = [
  "bytecode-interpreter-crypto",
  "clap",
  "codespan-reporting",
- "itertools",
+ "itertools 0.10.5",
  "move-binary-format",
  "move-core-types",
  "move-model",
@@ -6799,7 +6808,7 @@ dependencies = [
  "clap",
  "codespan-reporting",
  "colored",
- "itertools",
+ "itertools 0.10.5",
  "move-binary-format",
  "move-bytecode-utils",
  "move-command-line-common",
@@ -7157,12 +7166,13 @@ dependencies = [
 [[package]]
 name = "mysticeti-core"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysticeti?rev=318d61d27f47d257d99a86983d835e9e9756bc59#318d61d27f47d257d99a86983d835e9e9756bc59"
+source = "git+https://github.com/MystenLabs/mysticeti?rev=769f24018f35ae461d331f105f9590ef1094cbba#769f24018f35ae461d331f105f9590ef1094cbba"
 dependencies = [
  "async-trait",
  "axum",
  "bincode",
  "blake2",
+ "cfg-if",
  "crc32fast",
  "digest 0.10.6",
  "ed25519-consensus",
@@ -7171,6 +7181,7 @@ dependencies = [
  "gettid",
  "hex",
  "hyper",
+ "itertools 0.11.0",
  "libc",
  "memmap2 0.7.1",
  "minibytes",
@@ -7378,7 +7389,7 @@ dependencies = [
  "futures",
  "governor",
  "indexmap 2.1.0",
- "itertools",
+ "itertools 0.10.5",
  "mockall",
  "mysten-common",
  "mysten-metrics",
@@ -7443,7 +7454,7 @@ dependencies = [
  "fastcrypto",
  "fdlimit",
  "indexmap 2.1.0",
- "itertools",
+ "itertools 0.10.5",
  "mysten-metrics",
  "mysten-network",
  "narwhal-config",
@@ -7531,7 +7542,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "governor",
- "itertools",
+ "itertools 0.10.5",
  "mysten-metrics",
  "mysten-network",
  "narwhal-config",
@@ -7956,7 +7967,7 @@ dependencies = [
  "futures",
  "humantime",
  "hyper",
- "itertools",
+ "itertools 0.10.5",
  "parking_lot 0.12.1",
  "percent-encoding",
  "quick-xml",
@@ -8804,7 +8815,7 @@ checksum = "59230a63c37f3e18569bdb90e4a89cbf5bf8b06fea0b84e65ea10cc4df47addd"
 dependencies = [
  "difflib",
  "float-cmp",
- "itertools",
+ "itertools 0.10.5",
  "normalize-line-endings",
  "predicates-core",
  "regex",
@@ -9009,7 +9020,7 @@ version = "0.2.3"
 source = "git+https://github.com/asonnino/prometheus-parser.git?rev=75334db#75334dbe2d286edf6d4424abba92a74643333096"
 dependencies = [
  "chrono",
- "itertools",
+ "itertools 0.10.5",
  "lazy_static",
  "regex",
 ]
@@ -9074,7 +9085,7 @@ checksum = "8bdf592881d821b83d471f8af290226c8d51402259e9bb5be7f9f8bdebbb11ac"
 dependencies = [
  "bytes",
  "heck",
- "itertools",
+ "itertools 0.10.5",
  "log",
  "multimap",
  "once_cell",
@@ -9095,7 +9106,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5d2d8d10f3c6ded6da8b05b5fb3b8a5082514344d56c9f871412d29b4e075b4"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.10.5",
  "proc-macro2 1.0.66",
  "quote 1.0.33",
  "syn 1.0.107",
@@ -9108,7 +9119,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "265baba7fabd416cf5078179f7d2cbeca4ce7a9041111900675ea7c4cb8a4c32"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.10.5",
  "proc-macro2 1.0.66",
  "quote 1.0.33",
  "syn 2.0.32",
@@ -11307,7 +11318,7 @@ dependencies = [
  "futures",
  "hdrhistogram",
  "indicatif",
- "itertools",
+ "itertools 0.10.5",
  "move-core-types",
  "mysten-metrics",
  "narwhal-node",
@@ -11494,7 +11505,7 @@ dependencies = [
  "futures",
  "im",
  "indexmap 2.1.0",
- "itertools",
+ "itertools 0.10.5",
  "lru 0.10.0",
  "more-asserts",
  "move-binary-format",
@@ -11967,7 +11978,7 @@ dependencies = [
  "diesel_migrations",
  "fastcrypto",
  "futures",
- "itertools",
+ "itertools 0.10.5",
  "jsonrpsee",
  "move-binary-format",
  "move-bytecode-utils",
@@ -12040,7 +12051,7 @@ dependencies = [
  "futures",
  "hyper",
  "indexmap 2.1.0",
- "itertools",
+ "itertools 0.10.5",
  "jsonrpsee",
  "mockall",
  "move-binary-format",
@@ -12141,7 +12152,7 @@ dependencies = [
  "colored",
  "enum_dispatch",
  "fastcrypto",
- "itertools",
+ "itertools 0.10.5",
  "json_to_table",
  "move-binary-format",
  "move-bytecode-utils",
@@ -12503,7 +12514,7 @@ name = "sui-open-rpc-macros"
 version = "0.1.0"
 dependencies = [
  "derive-syn-parse",
- "itertools",
+ "itertools 0.10.5",
  "proc-macro2 1.0.66",
  "quote 1.0.33",
  "syn 1.0.107",
@@ -12617,7 +12628,7 @@ dependencies = [
  "git-version",
  "http-body",
  "hyper",
- "itertools",
+ "itertools 0.10.5",
  "mime",
  "multiaddr",
  "mysten-metrics",
@@ -12759,7 +12770,7 @@ dependencies = [
  "dashmap",
  "dirs 4.0.0",
  "futures",
- "itertools",
+ "itertools 0.10.5",
  "serde",
  "serde_json",
  "shared-crypto",
@@ -12982,7 +12993,7 @@ dependencies = [
  "hyper-rustls 0.24.0",
  "indicatif",
  "integer-encoding",
- "itertools",
+ "itertools 0.10.5",
  "lru 0.10.0",
  "move-binary-format",
  "move-bytecode-utils",
@@ -13183,7 +13194,7 @@ dependencies = [
  "git-version",
  "hex",
  "indicatif",
- "itertools",
+ "itertools 0.10.5",
  "move-core-types",
  "narwhal-storage",
  "narwhal-types",
@@ -13314,7 +13325,7 @@ dependencies = [
  "fastcrypto-zkp",
  "im",
  "indexmap 2.1.0",
- "itertools",
+ "itertools 0.10.5",
  "move-binary-format",
  "move-bytecode-utils",
  "move-command-line-common",
@@ -14066,7 +14077,7 @@ checksum = "5376256e44f2443f8896ac012507c19a012df0fe8758b55246ae51a2279db51f"
 dependencies = [
  "combine",
  "indexmap 1.9.3",
- "itertools",
+ "itertools 0.10.5",
  "serde",
 ]
 
@@ -14078,7 +14089,7 @@ checksum = "b1541ba70885967e662f69d31ab3aeca7b1aaecfcd58679590b893e9239c3646"
 dependencies = [
  "combine",
  "indexmap 1.9.3",
- "itertools",
+ "itertools 0.10.5",
  "toml_datetime 0.5.1",
 ]
 
@@ -14483,7 +14494,7 @@ dependencies = [
  "eyre",
  "fdlimit",
  "hdrhistogram",
- "itertools",
+ "itertools 0.10.5",
  "msim",
  "once_cell",
  "ouroboros",
@@ -14744,7 +14755,7 @@ version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee97e1d97bd593fb513912a07691b742361b3dd64ad56f2c694ea2dbfe0665d3"
 dependencies = [
- "itertools",
+ "itertools 0.10.5",
  "nom",
 ]
 
@@ -15613,7 +15624,8 @@ dependencies = [
  "ipnet",
  "iri-string",
  "is-terminal",
- "itertools",
+ "itertools 0.10.5",
+ "itertools 0.11.0",
  "itoa",
  "jemalloc-ctl",
  "jemalloc-sys",

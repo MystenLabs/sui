@@ -14,7 +14,7 @@ use itertools::Itertools;
 use mysten_metrics::{RegistryID, RegistryService};
 use mysticeti_core::commit_observer::SimpleCommitObserver;
 use mysticeti_core::committee::{Authority, Committee};
-use mysticeti_core::config::{Identifier, Parameters, PrivateConfig};
+use mysticeti_core::config::{Identifier, Parameters, PrivateConfig, SynchronizerParameters};
 use mysticeti_core::types::AuthorityIndex;
 use mysticeti_core::validator::Validator;
 use mysticeti_core::{CommitConsumer, PublicKey, Signer, SimpleBlockHandler};
@@ -23,6 +23,7 @@ use prometheus::Registry;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use sui_config::NodeConfig;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::EpochId;
@@ -221,10 +222,14 @@ fn mysticeti_committee(committee: &narwhal_config::Committee) -> Arc<Committee> 
         .map(|authority| {
             // TODO: using the  Ed25519 network key which is compatible with Mysticeti which also uses Ed25519. Should
             // switch to using the authority's protocol key (BLS) instead.
-            Authority::new(authority.stake(), PublicKey(authority.network_key().0))
+            Authority::new(
+                authority.stake(),
+                PublicKey(authority.network_key().0),
+                authority.hostname().to_string(),
+            )
         })
         .collect_vec();
-    Committee::new(authorities.clone())
+    Committee::new(authorities.clone(), committee.epoch())
 }
 
 fn mysticeti_parameters(committee: &narwhal_config::Committee) -> Parameters {
@@ -249,6 +254,14 @@ fn mysticeti_parameters(committee: &narwhal_config::Committee) -> Parameters {
     //TODO: for now fallback to default parameters - will read from properties
     Parameters {
         identifiers,
+        enable_pipelining: true,
+        leader_timeout: Duration::from_millis(250),
+        enable_cleanup: true,
+        synchronizer_parameters: SynchronizerParameters {
+            sample_precision: Duration::from_millis(300),
+            batch_size: 20,
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
