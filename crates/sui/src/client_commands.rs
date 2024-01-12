@@ -1,13 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    fmt::{Debug, Display, Formatter, Write},
-    path::PathBuf,
-    sync::Arc,
-};
-
 use anyhow::{anyhow, ensure};
 use bip32::DerivationPath;
 use clap::{parser::ValuesRef, *};
@@ -15,6 +8,13 @@ use colored::Colorize;
 use fastcrypto::{
     encoding::{Base64, Encoding},
     traits::ToFromBytes,
+};
+use petgraph::prelude::DiGraphMap;
+use std::{
+    collections::BTreeMap,
+    fmt::{Debug, Display, Formatter, Write},
+    path::PathBuf,
+    sync::Arc,
 };
 
 use json_to_table::json_to_table;
@@ -750,6 +750,7 @@ impl PTB {
     pub fn from_matches(
         &self,
         matches: &ArgMatches,
+        included_files: &mut BTreeMap<String, Vec<String>>,
     ) -> Result<BTreeMap<usize, PTBCommand>, anyhow::Error> {
         let mut order = BTreeMap::<usize, PTBCommand>::new();
         for arg_name in matches.ids() {
@@ -826,7 +827,7 @@ impl PTB {
                 }
             }
         }
-        Ok(self.build_ptb_for_parsing(order)?)
+        Ok(self.build_ptb_for_parsing(order, included_files)?)
     }
 
     // fn insert_value<T>(&self, values: ValuesRef<'_, T>) {
@@ -849,6 +850,7 @@ impl PTB {
     pub fn build_ptb_for_parsing(
         &self,
         ptb: BTreeMap<usize, PTBCommand>,
+        included_files: &mut BTreeMap<String, Vec<String>>,
     ) -> Result<BTreeMap<usize, PTBCommand>, anyhow::Error> {
         // the ptb input is a list of commands  and values, where the key is the index
         // of that value / command as it appearead in the args list on the CLI.
@@ -861,6 +863,7 @@ impl PTB {
         let mut curr_idx = 0;
         let mut cmd_idx = 0;
 
+        // println!("{:?}", ptb);
         for (idx, val) in ptb.iter() {
             // these bool commands do not take any values
             // so handle them separately
@@ -886,7 +889,13 @@ impl PTB {
                 // check if the command is a file inclusion, as we need to sequentially
                 // insert that in the array of PTBCommands
                 if val.name == "file" {
-                    let new_index = self.resolve_file(val.values.clone(), cmd_idx, &mut output)?;
+                    let new_index = self.resolve_file(
+                        val.values.clone(),
+                        included_files,
+                        val.values.get(0).unwrap().to_string(),
+                        cmd_idx,
+                        &mut output,
+                    )?;
                     cmd_idx = new_index;
                 } else {
                     output.insert(cmd_idx, val.clone());
@@ -903,6 +912,8 @@ impl PTB {
     fn resolve_file(
         &self,
         filename: Vec<String>,
+        included_files: &mut BTreeMap<String, Vec<String>>,
+        current_file: String,
         start_index: usize,
         output: &mut BTreeMap<usize, PTBCommand>,
     ) -> Result<usize, anyhow::Error> {
@@ -925,6 +936,31 @@ impl PTB {
             ));
         }
 
+        let files_to_include = file_content
+            .lines()
+            .filter(|x| x.starts_with("--file"))
+            .map(|x| x.to_string().replace("--file", "").replace(" ", ""))
+            .collect::<Vec<_>>();
+        if let Some(files) = included_files.get_mut(&current_file) {
+            files.extend(files_to_include);
+        } else {
+            included_files.insert(current_file, files_to_include);
+        }
+
+        let edges = included_files.iter().flat_map(|(k, vs)| {
+            let vs = vs.iter().map(|v| v.as_str());
+            std::iter::repeat(k.as_str()).zip(vs)
+        });
+
+        let graph: DiGraphMap<_, ()> = edges.collect();
+        let sort = petgraph::algo::toposort(&graph, None);
+        sort.map_err(|x| {
+            anyhow!(
+                "Cannot have circular file inclusions. It appears that the issue is in the {:?} file",
+                x.node_id()
+            )
+        })?;
+
         let lines = file_content
             .lines()
             .flat_map(|x| x.split_whitespace())
@@ -938,7 +974,7 @@ impl PTB {
         // and in the file there is no --gas-budget. For now, --gas-budget is always required
         // so we might want to figure out the best way to handle this case
         let args = input.get_matches_from(lines);
-        let ptb_commands = self.from_matches(&args)?;
+        let ptb_commands = self.from_matches(&args, included_files)?;
         let len_cmds = ptb_commands.len();
 
         // add a pseudo command to tag where does the file include start and end
@@ -966,6 +1002,41 @@ impl PTB {
         Ok(start_index + len_cmds + 1)
     }
 
+    /*
+    def isCyclicUtil(self, v, visited, recStack):
+
+        # Mark current node as visited and
+        # adds to recursion stack
+        visited[v] = True
+        recStack[v] = True
+
+        # Recur for all neighbours
+        # if any neighbour is visited and in
+        # recStack then graph is cyclic
+        for neighbour in self.graph[v]:
+            if visited[neighbour] == False:
+                if self.isCyclicUtil(neighbour, visited, recStack) == True:
+                    return True
+            elif recStack[neighbour] == True:
+                return True
+
+        # The node needs to be popped from
+        # recursion stack before function ends
+        recStack[v] = False
+        return False
+
+    # Returns true if graph is cyclic else false
+    def isCyclic(self):
+        visited = [False] * (self.V + 1)
+        recStack = [False] * (self.V + 1)
+        for node in range(self.V):
+            if visited[node] == False:
+                if self.isCyclicUtil(node, visited, recStack) == True:
+                    return True
+        return False
+
+     */
+
     pub async fn execute(self, matches: ArgMatches) -> Result<(), anyhow::Error> {
         let ptb_args_matches = matches
             .subcommand_matches("client")
@@ -973,7 +1044,7 @@ impl PTB {
             .subcommand_matches("ptb")
             .ok_or_else(|| anyhow!("Expected the ptb subcommand but got a different command"))?;
         let json = ptb_args_matches.get_flag("json");
-        let commands = self.from_matches(ptb_args_matches)?;
+        let commands = self.from_matches(ptb_args_matches, &mut BTreeMap::new())?;
         for (k, v) in commands.iter() {
             println!("{k}: {v:?}");
         }
