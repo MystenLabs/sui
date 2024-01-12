@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use enum_dispatch::enum_dispatch;
 use std::{
     fmt,
     hash::{Hash, Hasher},
@@ -9,7 +10,6 @@ use std::{
 };
 
 use consensus_config::{AuthorityIndex, DefaultHashFunction, DIGEST_LENGTH};
-use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, HashFunction};
 use serde::{Deserialize, Serialize};
 
@@ -68,6 +68,7 @@ pub struct BlockV1 {
 }
 
 impl BlockV1 {
+    #[allow(dead_code)]
     pub(crate) fn new(
         round: Round,
         author: AuthorityIndex,
@@ -79,7 +80,6 @@ impl BlockV1 {
             author,
             timestamp_ms,
             ancestors,
-            digest: OnceCell::new(),
         }
     }
 }
@@ -240,6 +240,7 @@ pub(crate) struct VerifiedBlock {
 }
 
 impl VerifiedBlock {
+
     /// Creates VerifiedBlock from verified SignedBlock and its serialized bytes.
     pub fn new_verified(
         signed_block: SignedBlock,
@@ -296,6 +297,7 @@ impl VerifiedBlock {
     }
 }
 
+/// Allow quick access on the underlying Block without having to always refer to the inner block ref.
 impl Deref for VerifiedBlock {
     type Target = Block;
 
@@ -371,6 +373,3 @@ impl TestBlock {
         Block::V1(self.block)
     }
 }
-
-// TODO: add basic verification for BlockRef and BlockDigest.
-// TODO: add tests for SignedBlock and VerifiedBlock conversion.

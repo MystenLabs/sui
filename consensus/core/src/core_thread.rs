@@ -9,11 +9,12 @@ use tokio::sync::oneshot::error::RecvError;
 use tracing::warn;
 
 use crate::{
-    block::{Block, BlockRef, Round},
+    block::{BlockRef, Round, VerifiedBlock},
     context::Context,
     core::Core,
     core_thread::CoreError::Shutdown,
 };
+
 const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 32;
 
 #[allow(unused)]
@@ -72,7 +73,7 @@ pub(crate) struct CoreThreadDispatcher {
 
 enum CoreThreadCommand {
     /// Add blocks to be processed and accepted
-    AddBlocks(Vec<Block>, oneshot::Sender<Vec<BlockRef>>),
+    AddBlocks(Vec<VerifiedBlock>, oneshot::Sender<Vec<BlockRef>>),
     /// Called when a leader timeout occurs and a block should be produced
     ForceNewBlock(Round, oneshot::Sender<()>),
     /// Request missing blocks that need to be synced.
@@ -115,7 +116,7 @@ impl CoreThreadDispatcher {
         (dispatcher, handler)
     }
 
-    pub async fn add_blocks(&self, blocks: Vec<Block>) -> Result<Vec<BlockRef>, CoreError> {
+    pub async fn add_blocks(&self, blocks: Vec<VerifiedBlock>) -> Result<Vec<BlockRef>, CoreError> {
         let (sender, receiver) = oneshot::channel();
         self.send(CoreThreadCommand::AddBlocks(blocks, sender))
             .await;
@@ -162,7 +163,7 @@ mod test {
         let block_manager = BlockManager::new();
         let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
         let transactions_consumer = TransactionsConsumer::new(tx_receiver);
-        let (signals, _new_block_receiver, _new_round_receiver) = CoreSignals::new();
+        let (signals, _signal_receivers) = CoreSignals::new();
         let core = Core::new(
             context.clone(),
             transactions_consumer,

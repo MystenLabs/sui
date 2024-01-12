@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tokio::sync::watch;
 
 use crate::{
-    block::{Block, BlockAPI, BlockRef, BlockV1, Round, Transaction},
+    block::{Block, BlockAPI, BlockRef, BlockV1, Round, SignedBlock, Transaction, VerifiedBlock},
     context::Context,
     threshold_clock::ThresholdClock,
 };
@@ -60,7 +60,7 @@ impl Core {
 
     /// Processes the provided blocks and accepts them if possible when their causal history exists.
     /// The method returns the references of parents that are unknown and need to be fetched.
-    pub(crate) fn add_blocks(&mut self, blocks: Vec<Block>) -> Vec<BlockRef> {
+    pub(crate) fn add_blocks(&mut self, blocks: Vec<VerifiedBlock>) -> Vec<BlockRef> {
         let _scope = monitored_scope("Core::add_blocks");
 
         // Try to accept them via the block manager
@@ -100,7 +100,7 @@ impl Core {
     }
 
     /// Force creating a new block for the dictated round. This is used when a leader timeout occurs.
-    pub fn force_new_block(&mut self, round: Round) -> Option<Block> {
+    pub fn force_new_block(&mut self, round: Round) -> Option<SignedBlock> {
         if self.last_proposed_round() < round {
             self.context.metrics.node_metrics.leader_timeout_total.inc();
             self.try_new_block(true)
@@ -111,7 +111,7 @@ impl Core {
 
     /// Attempts to propose a new block for the next round. If a block has already proposed for latest
     /// or earlier round, then no block is created and None is returned.
-    pub(crate) fn try_new_block(&mut self, force_new_block: bool) -> Option<Block> {
+    pub(crate) fn try_new_block(&mut self, force_new_block: bool) -> Option<SignedBlock> {
         let _scope = monitored_scope("Core::try_new_block");
 
         let clock_round = self.threshold_clock.get_round();
@@ -134,6 +134,10 @@ impl Core {
 
             // create the block and insert to storage.
             // TODO: take a decision on whether we want to flush to disk at this point the DagState.
+
+            // emit an event that a new block is ready
+            // TODO: replace the default with the actual block ref.
+            self.signals.new_block_ready(BlockRef::default());
         }
 
         None
@@ -151,17 +155,15 @@ impl Core {
 }
 
 /// Signals support a series of signals that are sent from Core when various events happen (ex new block produced).
+#[allow(dead_code)]
 pub(crate) struct CoreSignals {
     new_round_sender: watch::Sender<Round>,
     block_ready_sender: watch::Sender<Option<BlockRef>>,
 }
 
 impl CoreSignals {
-    pub(crate) fn new() -> (
-        Self,
-        watch::Receiver<Option<BlockRef>>,
-        watch::Receiver<Round>,
-    ) {
+    #[allow(dead_code)]
+    pub(crate) fn new() -> (Self, CoreSignalsReceivers) {
         let (block_ready_sender, block_ready_receiver) = watch::channel(None);
         let (new_round_sender, new_round_receiver) = watch::channel(0);
 
@@ -170,7 +172,12 @@ impl CoreSignals {
             new_round_sender,
         };
 
-        (me, block_ready_receiver, new_round_receiver)
+        let receivers = CoreSignalsReceivers {
+            block_ready_receiver,
+            new_round_receiver,
+        };
+
+        (me, receivers)
     }
 
     /// Sends a signal to all the waiters that a new block has been produced.
@@ -182,6 +189,23 @@ impl CoreSignals {
     /// threshold clock has advanced to.
     fn new_round(&mut self, round_number: Round) {
         self.new_round_sender.send(round_number).ok();
+    }
+}
+
+#[allow(dead_code)]
+pub(crate) struct CoreSignalsReceivers {
+    block_ready_receiver: watch::Receiver<Option<BlockRef>>,
+    new_round_receiver: watch::Receiver<Round>,
+}
+
+#[allow(dead_code)]
+impl CoreSignalsReceivers {
+    pub(crate) fn block_ready_receiver(&self) -> watch::Receiver<Option<BlockRef>> {
+        self.block_ready_receiver.clone()
+    }
+
+    pub(crate) fn new_round_receiver(&self) -> watch::Receiver<Round> {
+        self.new_round_receiver.clone()
     }
 }
 
@@ -197,7 +221,9 @@ mod test {
         let block_manager = BlockManager::new();
         let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
         let transactions_consumer = TransactionsConsumer::new(tx_receiver);
-        let (signals, _new_block_receiver, mut new_round_receiver) = CoreSignals::new();
+        let (signals, signal_receivers) = CoreSignals::new();
+
+        let mut new_round_receiver = signal_receivers.new_round_receiver();
 
         let mut core = Core::new(context, transactions_consumer, block_manager, signals);
 
@@ -208,7 +234,10 @@ mod test {
         let block_2 = BlockV1::new(1, AuthorityIndex::new_for_test(1), 0, vec![]);
         let block_3 = BlockV1::new(1, AuthorityIndex::new_for_test(2), 0, vec![]);
 
-        let blocks = vec![Block::V1(block_1), Block::V1(block_2), Block::V1(block_3)];
+        let blocks = vec![block_1, block_2, block_3]
+            .into_iter()
+            .map(|b| VerifiedBlock::new_for_test(Block::V1(b)))
+            .collect();
 
         // Process them via Core
         _ = core.add_blocks(blocks);
@@ -217,5 +246,8 @@ mod test {
         assert!(new_round_receiver.changed().await.is_ok());
         let new_round = new_round_receiver.borrow_and_update();
         assert_eq!(*new_round, 2);
+
+        // And that core is also on same round on its threshold clock
+        assert_eq!(core.threshold_clock.get_round(), 2);
     }
 }
