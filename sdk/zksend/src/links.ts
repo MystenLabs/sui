@@ -369,6 +369,13 @@ export class ZkSendLink {
 				}
 			}
 		} while (nextCursor);
+
+		const coins = await this.#client.getCoins({
+			coinType: SUI_COIN_TYPE,
+			owner: this.#keypair.toSuiAddress(),
+		});
+
+		this.#gasCoin = coins.data.find((coin) => BigInt(coin.balance) % 1000n === 987n);
 	}
 
 	async #loadInitialTransactionData() {
