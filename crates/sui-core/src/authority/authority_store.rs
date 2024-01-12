@@ -2043,7 +2043,10 @@ impl BackingPackageStore for AuthorityStore {
 
 impl ObjectStore for AuthorityStore {
     /// Read an object and return it, or Ok(None) if the object was not found.
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    fn get_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
         self.perpetual_tables.as_ref().get_object(object_id)
     }
 
@@ -2051,7 +2054,7 @@ impl ObjectStore for AuthorityStore {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
         self.perpetual_tables.get_object_by_key(object_id, version)
     }
 }

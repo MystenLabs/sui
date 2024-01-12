@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod error;
 mod object_store_trait;
 mod read_store;
 mod shared_in_memory_store;
 mod write_store;
-pub mod error;
 
 use crate::base_types::{TransactionDigest, VersionNumber};
 use crate::committee::EpochId;

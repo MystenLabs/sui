@@ -2064,10 +2064,10 @@ impl NodeStateGetter for SuiTestAdapter<'_> {
         object_id: &ObjectID,
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
-        ObjectStore::get_object_by_key(&*self.executor, object_id, version)
+        ObjectStore::get_object_by_key(&*self.executor, object_id, version).map_err(Into::into)
     }
 
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        ObjectStore::get_object(&*self.executor, object_id)
+        ObjectStore::get_object(&*self.executor, object_id).map_err(Into::into)
     }
 }

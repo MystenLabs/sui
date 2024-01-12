@@ -512,7 +512,7 @@ impl ObjectStore for PersistedStore {
     fn get_object(
         &self,
         object_id: &ObjectID,
-    ) -> Result<Option<Object>, sui_types::error::SuiError> {
+    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
         Ok(SimulatorStore::get_object(self, object_id))
     }
 
@@ -520,7 +520,7 @@ impl ObjectStore for PersistedStore {
         &self,
         object_id: &ObjectID,
         version: sui_types::base_types::VersionNumber,
-    ) -> Result<Option<Object>, sui_types::error::SuiError> {
+    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
         Ok(self.get_object_at_version(object_id, version))
     }
 }

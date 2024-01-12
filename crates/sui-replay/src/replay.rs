@@ -1948,16 +1948,19 @@ impl ModuleResolver for &mut LocalExec {
 impl ObjectStore for LocalExec {
     /// The object must be present in store by normal process we used to backfill store in init
     /// We dont download if not present
-    fn get_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
-        let res = Ok(self.storage.live_objects_store.get(object_id).cloned());
+    fn get_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> sui_types::storage::error::Result<Option<Object>> {
+        let res = self.storage.live_objects_store.get(object_id).cloned();
         self.exec_store_events
             .lock()
             .expect("Unable to lock events list")
             .push(ExecutionStoreEvent::ObjectStoreGetObject {
                 object_id: *object_id,
-                result: res.clone(),
+                result: Ok(res.clone()),
             });
-        res
+        Ok(res)
     }
 
     /// The object must be present in store by normal process we used to backfill store in init
@@ -1966,8 +1969,8 @@ impl ObjectStore for LocalExec {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> SuiResult<Option<Object>> {
-        let res = Ok(self
+    ) -> sui_types::storage::error::Result<Option<Object>> {
+        let res = self
             .storage
             .live_objects_store
             .get(object_id)
@@ -1977,7 +1980,7 @@ impl ObjectStore for LocalExec {
                 } else {
                     None
                 }
-            }));
+            });
 
         self.exec_store_events
             .lock()
@@ -1985,15 +1988,18 @@ impl ObjectStore for LocalExec {
             .push(ExecutionStoreEvent::ObjectStoreGetObjectByKey {
                 object_id: *object_id,
                 version,
-                result: res.clone(),
+                result: Ok(res.clone()),
             });
 
-        res
+        Ok(res)
     }
 }
 
 impl ObjectStore for &mut LocalExec {
-    fn get_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> sui_types::storage::error::Result<Option<Object>> {
         // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_object(object_id)
     }
@@ -2002,7 +2008,7 @@ impl ObjectStore for &mut LocalExec {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> SuiResult<Option<Object>> {
+    ) -> sui_types::storage::error::Result<Option<Object>> {
         // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_object_by_key(object_id, version)
     }
