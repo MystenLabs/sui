@@ -6,6 +6,7 @@ module sui::address {
     use std::ascii;
     use std::bcs;
     use std::string;
+    use std::vector;
 
     /// The length of an address, in bytes
     const LENGTH: u64 = 32;
@@ -42,6 +43,32 @@ module sui::address {
     /// Convert `a` to a hex-encoded ASCII string
     public fun to_string(a: address): string::String {
         string::from_ascii(to_ascii_string(a))
+    }
+
+    /// Converts an ASCII string to an address, taking the numerical value for each character. The
+    /// string must be Base16 encoded, and thus exactly 64 characters long.
+    /// For example, the string "00000000000000000000000000000000000000000000000000000000DEADB33F"
+    /// will be converted to the address @0xDEADB33F.
+    /// Aborts with `EAddressParseError` if the length of `s` is not 64,
+    /// or if an invalid character is encountered.
+    public fun from_ascii_bytes(bytes: &vector<u8>): address {
+        assert!(vector::length(bytes) == 64, EAddressParseError);
+        let hex_bytes = vector[];
+        let i = 0;
+        while (i < 64) {
+            let hi = hex_char_value(*vector::borrow(bytes, i));
+            let lo = hex_char_value(*vector::borrow(bytes, i + 1));
+            vector::push_back(&mut hex_bytes, (hi << 4) | lo);
+            i = i + 2;
+        };
+        from_bytes(hex_bytes)
+    }
+
+    fun hex_char_value(c: u8): u8 {
+        if (c >= 48 && c <= 57) c - 48 // 0-9
+        else if (c >= 65 && c <= 70) c - 55 // A-F
+        else if (c >= 97 && c <= 102) c - 87 // a-f
+        else abort EAddressParseError
     }
 
     /// Length of a Sui address in bytes

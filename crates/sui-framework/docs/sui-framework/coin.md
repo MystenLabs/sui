@@ -10,7 +10,9 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 
 -  [Resource `Coin`](#0x2_coin_Coin)
 -  [Resource `CoinMetadata`](#0x2_coin_CoinMetadata)
+-  [Resource `RegulatedCoinMetadata`](#0x2_coin_RegulatedCoinMetadata)
 -  [Resource `TreasuryCap`](#0x2_coin_TreasuryCap)
+-  [Resource `DenyCap`](#0x2_coin_DenyCap)
 -  [Struct `CurrencyCreated`](#0x2_coin_CurrencyCreated)
 -  [Constants](#@Constants_0)
 -  [Function `total_supply`](#0x2_coin_total_supply)
@@ -30,9 +32,13 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 -  [Function `zero`](#0x2_coin_zero)
 -  [Function `destroy_zero`](#0x2_coin_destroy_zero)
 -  [Function `create_currency`](#0x2_coin_create_currency)
+-  [Function `create_regulated_currency`](#0x2_coin_create_regulated_currency)
 -  [Function `mint`](#0x2_coin_mint)
 -  [Function `mint_balance`](#0x2_coin_mint_balance)
 -  [Function `burn`](#0x2_coin_burn)
+-  [Function `deny_list_add`](#0x2_coin_deny_list_add)
+-  [Function `deny_list_remove`](#0x2_coin_deny_list_remove)
+-  [Function `deny_list_contains`](#0x2_coin_deny_list_contains)
 -  [Function `mint_and_transfer`](#0x2_coin_mint_and_transfer)
 -  [Function `update_name`](#0x2_coin_update_name)
 -  [Function `update_symbol`](#0x2_coin_update_symbol)
@@ -49,7 +55,9 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 <pre><code><b>use</b> <a href="dependencies/move-stdlib/ascii.md#0x1_ascii">0x1::ascii</a>;
 <b>use</b> <a href="dependencies/move-stdlib/option.md#0x1_option">0x1::option</a>;
 <b>use</b> <a href="dependencies/move-stdlib/string.md#0x1_string">0x1::string</a>;
+<b>use</b> <a href="dependencies/move-stdlib/type_name.md#0x1_type_name">0x1::type_name</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
+<b>use</b> <a href="deny_list.md#0x2_deny_list">0x2::deny_list</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
@@ -155,6 +163,47 @@ unique instance of CoinMetadata<T> that stores the metadata for this coin type.
 
 </details>
 
+<a name="0x2_coin_RegulatedCoinMetadata"></a>
+
+## Resource `RegulatedCoinMetadata`
+
+Similar to CoinMetadata, but created only for regulated coins that use the DenyList.
+This object is always immutable.
+
+
+<pre><code><b>struct</b> <a href="coin.md#0x2_coin_RegulatedCoinMetadata">RegulatedCoinMetadata</a>&lt;T&gt; <b>has</b> key
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>coin_metadata_object: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+ The ID of the coin's CoinMetadata object.
+</dd>
+<dt>
+<code>deny_cap_object: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+ The ID of the coin's DenyCap object.
+</dd>
+</dl>
+
+
+</details>
+
 <a name="0x2_coin_TreasuryCap"></a>
 
 ## Resource `TreasuryCap`
@@ -181,6 +230,35 @@ coins of type <code>T</code>. Transferable
 </dd>
 <dt>
 <code>total_supply: <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_coin_DenyCap"></a>
+
+## Resource `DenyCap`
+
+Capability allowing the bearer to freeze addresses, preventing those addresses from
+interacting with the coin as an input to a transaction.
+
+
+<pre><code><b>struct</b> <a href="coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt; <b>has</b> store, key
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
 </dt>
 <dd>
 
@@ -228,6 +306,16 @@ Trying to split a coin more times than its balance allows.
 
 
 <pre><code><b>const</b> <a href="coin.md#0x2_coin_ENotEnough">ENotEnough</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="0x2_coin_DENY_LIST_COIN_INDEX"></a>
+
+The index into the deny list vector for the <code>sui::coin::Coin</code> type.
+
+
+<pre><code><b>const</b> <a href="coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>: u64 = 0;
 </code></pre>
 
 
@@ -738,6 +826,58 @@ type, ensuring that there's only one <code><a href="coin.md#0x2_coin_TreasuryCap
 
 </details>
 
+<a name="0x2_coin_create_regulated_currency"></a>
+
+## Function `create_regulated_currency`
+
+This creates a new currency, via <code>create_currency</code>, but with an extra capability that
+allows for specific addresses to have their coins frozen. Those addresses cannot interact
+with the coin as input objects.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_create_regulated_currency">create_regulated_currency</a>&lt;T: drop&gt;(witness: T, decimals: u8, symbol: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, name: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, description: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, icon_url: <a href="dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="url.md#0x2_url_Url">url::Url</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin_DenyCap">coin::DenyCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_create_regulated_currency">create_regulated_currency</a>&lt;T: drop&gt;(
+    witness: T,
+    decimals: u8,
+    symbol: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    name: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    description: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    icon_url: Option&lt;Url&gt;,
+    ctx: &<b>mut</b> TxContext
+): (<a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;) {
+    <b>let</b> (treasury_cap, metadata) = <a href="coin.md#0x2_coin_create_currency">create_currency</a>(
+        witness,
+        decimals,
+        symbol,
+        name,
+        description,
+        icon_url,
+        ctx
+    );
+    <b>let</b> deny_cap = <a href="coin.md#0x2_coin_DenyCap">DenyCap</a> {
+        id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
+    };
+    <a href="transfer.md#0x2_transfer_freeze_object">transfer::freeze_object</a>(<a href="coin.md#0x2_coin_RegulatedCoinMetadata">RegulatedCoinMetadata</a>&lt;T&gt; {
+        id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
+        coin_metadata_object: <a href="object.md#0x2_object_id">object::id</a>(&metadata),
+        deny_cap_object: <a href="object.md#0x2_object_id">object::id</a>(&deny_cap),
+    });
+    (treasury_cap, deny_cap, metadata)
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_coin_mint"></a>
 
 ## Function `mint`
@@ -819,6 +959,120 @@ accordingly.
     <b>let</b> <a href="coin.md#0x2_coin_Coin">Coin</a> { id, <a href="balance.md#0x2_balance">balance</a> } = c;
     <a href="object.md#0x2_object_delete">object::delete</a>(id);
     <a href="balance.md#0x2_balance_decrease_supply">balance::decrease_supply</a>(&<b>mut</b> cap.total_supply, <a href="balance.md#0x2_balance">balance</a>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_deny_list_add"></a>
+
+## Function `deny_list_add`
+
+Adds the given address to the deny list, preventing it
+from interacting with the specified coin type as an input to a transaction.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_deny_list_add">deny_list_add</a>&lt;T&gt;(<a href="deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="coin.md#0x2_coin_DenyCap">coin::DenyCap</a>&lt;T&gt;, addr: <b>address</b>, _ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_deny_list_add">deny_list_add</a>&lt;T&gt;(
+   <a href="deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> DenyList,
+   _deny_cap: &<b>mut</b> <a href="coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt;,
+   addr: <b>address</b>,
+   _ctx: &<b>mut</b> TxContext
+) {
+    <b>let</b> type =
+        <a href="dependencies/move-stdlib/ascii.md#0x1_ascii_into_bytes">ascii::into_bytes</a>(<a href="dependencies/move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;()));
+    <a href="deny_list.md#0x2_deny_list_add">deny_list::add</a>(
+        <a href="deny_list.md#0x2_deny_list">deny_list</a>,
+        <a href="coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>,
+        type,
+        addr,
+    )
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_deny_list_remove"></a>
+
+## Function `deny_list_remove`
+
+Removes an address from the deny list.
+Aborts with <code>ENotFrozen</code> if the address is not already in the list.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_deny_list_remove">deny_list_remove</a>&lt;T&gt;(<a href="deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="coin.md#0x2_coin_DenyCap">coin::DenyCap</a>&lt;T&gt;, addr: <b>address</b>, _ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_deny_list_remove">deny_list_remove</a>&lt;T&gt;(
+   <a href="deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> DenyList,
+   _deny_cap: &<b>mut</b> <a href="coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt;,
+   addr: <b>address</b>,
+   _ctx: &<b>mut</b> TxContext
+) {
+    <b>let</b> type =
+        <a href="dependencies/move-stdlib/ascii.md#0x1_ascii_into_bytes">ascii::into_bytes</a>(<a href="dependencies/move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;()));
+    <a href="deny_list.md#0x2_deny_list_remove">deny_list::remove</a>(
+        <a href="deny_list.md#0x2_deny_list">deny_list</a>,
+        <a href="coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>,
+        type,
+        addr,
+    )
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_deny_list_contains"></a>
+
+## Function `deny_list_contains`
+
+Returns true iff the given address is denied for the given coin type. It will
+return false if given a non-coin type.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_deny_list_contains">deny_list_contains</a>&lt;T&gt;(freezer: &<a href="deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, addr: <b>address</b>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_deny_list_contains">deny_list_contains</a>&lt;T&gt;(
+   freezer: &DenyList,
+   addr: <b>address</b>,
+): bool {
+    <b>let</b> name = <a href="dependencies/move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;();
+    <b>if</b> (<a href="dependencies/move-stdlib/type_name.md#0x1_type_name_is_primitive">type_name::is_primitive</a>(&name)) <b>return</b> <b>false</b>;
+
+    <b>let</b> type = <a href="dependencies/move-stdlib/ascii.md#0x1_ascii_into_bytes">ascii::into_bytes</a>(<a href="dependencies/move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(name));
+    <a href="deny_list.md#0x2_deny_list_contains">deny_list::contains</a>(
+        freezer,
+        <a href="coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>,
+        type,
+        addr,
+    )
 }
 </code></pre>
 

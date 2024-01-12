@@ -89,12 +89,18 @@ const SUI_RANDOMNESS_STATE_CREATE: FunctionIdent = (
     RANDOMNESS_MODULE_NAME,
     ident_str!("create"),
 );
+const SUI_DENY_LIST_CREATE: FunctionIdent = (
+    &SUI_FRAMEWORK_ADDRESS,
+    ident_str!("deny_list"),
+    ident_str!("create"),
+);
 const FRESH_ID_FUNCTIONS: &[FunctionIdent] = &[OBJECT_NEW, OBJECT_NEW_UID_FROM_HASH, TS_NEW_OBJECT];
 const FUNCTIONS_TO_SKIP: &[FunctionIdent] = &[
     SUI_SYSTEM_CREATE,
     SUI_CLOCK_CREATE,
     SUI_AUTHENTICATOR_STATE_CREATE,
     SUI_RANDOMNESS_STATE_CREATE,
+    SUI_DENY_LIST_CREATE,
 ];
 
 impl AbstractValue {

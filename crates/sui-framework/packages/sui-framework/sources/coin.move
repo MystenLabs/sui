@@ -10,10 +10,12 @@ module sui::coin {
     use std::option::{Self, Option};
     use sui::balance::{Self, Balance, Supply};
     use sui::tx_context::TxContext;
-    use sui::object::{Self, UID};
+    use sui::object::{Self, UID, ID};
     use sui::transfer;
     use sui::url::{Self, Url};
     use std::vector;
+    use sui::deny_list::{Self, DenyList};
+    use std::type_name;
 
     /// A type passed to create_supply is not a one-time witness.
     const EBadWitness: u64 = 0;
@@ -47,11 +49,27 @@ module sui::coin {
         icon_url: Option<Url>
     }
 
+    /// Similar to CoinMetadata, but created only for regulated coins that use the DenyList.
+    /// This object is always immutable.
+    struct RegulatedCoinMetadata<phantom T> has key {
+        id: UID,
+        /// The ID of the coin's CoinMetadata object.
+        coin_metadata_object: ID,
+        /// The ID of the coin's DenyCap object.
+        deny_cap_object: ID,
+    }
+
     /// Capability allowing the bearer to mint and burn
     /// coins of type `T`. Transferable
     struct TreasuryCap<phantom T> has key, store {
         id: UID,
         total_supply: Supply<T>
+    }
+
+    /// Capability allowing the bearer to freeze addresses, preventing those addresses from
+    /// interacting with the coin as an input to a transaction.
+    struct DenyCap<phantom T> has key, store {
+        id: UID,
     }
 
     // === Supply <-> TreasuryCap morphing and accessors  ===
@@ -208,6 +226,38 @@ module sui::coin {
         )
     }
 
+    /// This creates a new currency, via `create_currency`, but with an extra capability that
+    /// allows for specific addresses to have their coins frozen. Those addresses cannot interact
+    /// with the coin as input objects.
+    public fun create_regulated_currency<T: drop>(
+        witness: T,
+        decimals: u8,
+        symbol: vector<u8>,
+        name: vector<u8>,
+        description: vector<u8>,
+        icon_url: Option<Url>,
+        ctx: &mut TxContext
+    ): (TreasuryCap<T>, DenyCap<T>, CoinMetadata<T>) {
+        let (treasury_cap, metadata) = create_currency(
+            witness,
+            decimals,
+            symbol,
+            name,
+            description,
+            icon_url,
+            ctx
+        );
+        let deny_cap = DenyCap {
+            id: object::new(ctx),
+        };
+        transfer::freeze_object(RegulatedCoinMetadata<T> {
+            id: object::new(ctx),
+            coin_metadata_object: object::id(&metadata),
+            deny_cap_object: object::id(&deny_cap),
+        });
+        (treasury_cap, deny_cap, metadata)
+    }
+
     /// Create a coin worth `value`. and increase the total supply
     /// in `cap` accordingly.
     public fun mint<T>(
@@ -234,6 +284,63 @@ module sui::coin {
         let Coin { id, balance } = c;
         object::delete(id);
         balance::decrease_supply(&mut cap.total_supply, balance)
+    }
+
+    /// The index into the deny list vector for the `sui::coin::Coin` type.
+    const DENY_LIST_COIN_INDEX: u64 = 0; // TODO public(package) const
+
+    /// Adds the given address to the deny list, preventing it
+    /// from interacting with the specified coin type as an input to a transaction.
+    public fun deny_list_add<T>(
+       deny_list: &mut DenyList,
+       _deny_cap: &mut DenyCap<T>,
+       addr: address,
+       _ctx: &mut TxContext
+    ) {
+        let type =
+            ascii::into_bytes(type_name::into_string(type_name::get_with_original_ids<T>()));
+        deny_list::add(
+            deny_list,
+            DENY_LIST_COIN_INDEX,
+            type,
+            addr,
+        )
+    }
+
+    /// Removes an address from the deny list.
+    /// Aborts with `ENotFrozen` if the address is not already in the list.
+    public fun deny_list_remove<T>(
+       deny_list: &mut DenyList,
+       _deny_cap: &mut DenyCap<T>,
+       addr: address,
+       _ctx: &mut TxContext
+    ) {
+        let type =
+            ascii::into_bytes(type_name::into_string(type_name::get_with_original_ids<T>()));
+        deny_list::remove(
+            deny_list,
+            DENY_LIST_COIN_INDEX,
+            type,
+            addr,
+        )
+    }
+
+    /// Returns true iff the given address is denied for the given coin type. It will
+    /// return false if given a non-coin type.
+    public fun deny_list_contains<T>(
+       freezer: &DenyList,
+       addr: address,
+    ): bool {
+        let name = type_name::get_with_original_ids<T>();
+        if (type_name::is_primitive(&name)) return false;
+
+        let type = ascii::into_bytes(type_name::into_string(name));
+        deny_list::contains(
+            freezer,
+            DENY_LIST_COIN_INDEX,
+            type,
+            addr,
+        )
     }
 
     // === Entrypoints ===

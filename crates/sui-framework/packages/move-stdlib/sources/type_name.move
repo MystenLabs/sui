@@ -11,10 +11,26 @@ module std::type_name {
     /// ASCII Character code for the `:` (colon) symbol.
     const ASCII_COLON: u8 = 58;
 
+    /// ASCII Character code for the `v` (lowercase v) symbol.
+    const ASCII_V: u8 = 118;
+    /// ASCII Character code for the `e` (lowercase e) symbol.
+    const ASCII_E: u8 = 101;
+    /// ASCII Character code for the `c` (lowercase c) symbol.
+    const ASCII_C: u8 = 99;
+    /// ASCII Character code for the `t` (lowercase t) symbol.
+    const ASCII_T: u8 = 116;
+    /// ASCII Character code for the `o` (lowercase o) symbol.
+    const ASCII_O: u8 = 111;
+    /// ASCII Character code for the `r` (lowercase r) symbol.
+    const ASCII_R: u8 = 114;
+
+    /// The type is not from a package/module. It is a primitive type.
+    const ENonModuleType: u64 = 0;
+
     struct TypeName has copy, drop, store {
         /// String representation of the type. All types are represented
         /// using their source syntax:
-        /// "u8", "u64", "u128", "bool", "address", "vector", "signer" for ground types.
+        /// "u8", "u64", "bool", "address", "vector", and so on for primitive types.
         /// Struct types are represented as fully qualified type names; e.g.
         /// `00000000000000000000000000000001::string::String` or
         /// `0000000000000000000000000000000a::module_name1::type_name1<0000000000000000000000000000000a::module_name2::type_name2<u64>>`
@@ -35,13 +51,38 @@ module std::type_name {
     /// later upgrade).
     public native fun get_with_original_ids<T>(): TypeName;
 
+    /// Returns true iff the TypeName represents a primitive type, i.e. one of
+    /// u8, u16, u32, u64, u128, u256, bool, address, vector.
+    public fun is_primitive(self: &TypeName): bool {
+        let bytes = ascii::as_bytes(&self.name);
+        bytes == &b"bool" ||
+        bytes == &b"u8" ||
+        bytes == &b"u16" ||
+        bytes == &b"u32" ||
+        bytes == &b"u64" ||
+        bytes == &b"u128" ||
+        bytes == &b"u256" ||
+        bytes == &b"address" ||
+        (vector::length(bytes) >= 6 &&
+        *vector::borrow(bytes, 0) == ASCII_V &&
+        *vector::borrow(bytes, 1) == ASCII_E &&
+        *vector::borrow(bytes, 2) == ASCII_C &&
+        *vector::borrow(bytes, 3) == ASCII_T &&
+        *vector::borrow(bytes, 4) == ASCII_O &&
+        *vector::borrow(bytes, 5) == ASCII_R)
+
+    }
+
     /// Get the String representation of `self`
     public fun borrow_string(self: &TypeName): &String {
         &self.name
     }
 
     /// Get Address string (Base16 encoded), first part of the TypeName.
+    /// Aborts if given a primitive type.
     public fun get_address(self: &TypeName): String {
+        assert!(!is_primitive(self), ENonModuleType);
+
         // Base16 (string) representation of an address has 2 symbols per byte.
         let len = address::length() * 2;
         let str_bytes = ascii::as_bytes(&self.name);
@@ -61,7 +102,10 @@ module std::type_name {
     }
 
     /// Get name of the module.
+    /// Aborts if given a primitive type.
     public fun get_module(self: &TypeName): String {
+        assert!(!is_primitive(self), ENonModuleType);
+
         // Starts after address and a double colon: `<addr as HEX>::`
         let i = address::length() * 2 + 2;
         let str_bytes = ascii::as_bytes(&self.name);

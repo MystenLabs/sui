@@ -99,15 +99,6 @@
 ## Constants
 
 
-<a name="0x2_vec_map_EIndexOutOfBounds"></a>
-
-
-
-<pre><code><b>const</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>: u64 = 3;
-</code></pre>
-
-
-
 <a name="0x2_vec_map_EKeyAlreadyExists"></a>
 
 
@@ -122,6 +113,15 @@
 
 
 <pre><code><b>const</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_EKeyDoesNotExist">EKeyDoesNotExist</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="0x2_vec_map_EIndexOutOfBounds"></a>
+
+
+
+<pre><code><b>const</b> <a href="../../dependencies/sui-framework/vec_map.md#0x2_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>: u64 = 3;
 </code></pre>
 
 

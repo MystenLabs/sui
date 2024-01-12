@@ -111,11 +111,10 @@ impl<'a> TypingVisitorContext for Context<'a> {
     fn visit_module_custom(&mut self, ident: ModuleIdent, mdef: &mut T::ModuleDefinition) -> bool {
         let config = self.env.package_config(mdef.package_name);
         if config.flavor != Flavor::Sui {
-            // skip if not sui
+            // Skip if not sui
             return true;
         }
-
-        if !mdef.is_source_module {
+        if config.is_dependency || !mdef.is_source_module {
             // Skip non-source, dependency modules
             return true;
         }
