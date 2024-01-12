@@ -4586,7 +4586,7 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         Vec<Option<TransactionEvents>>,
     )> {
         let txns = if !transactions.is_empty() {
-            self.database
+            self.execution_cache
                 .multi_get_transaction_blocks(transactions)?
                 .into_iter()
                 .map(|t| t.map(|t| t.into_inner()))
@@ -4596,13 +4596,13 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         };
 
         let fx = if !effects.is_empty() {
-            self.database.multi_get_executed_effects(effects)?
+            self.execution_cache.multi_get_executed_effects(effects)?
         } else {
             vec![]
         };
 
         let evts = if !events.is_empty() {
-            self.database.multi_get_events(events)?
+            self.execution_cache.multi_get_events(events)?
         } else {
             vec![]
         };
@@ -4676,7 +4676,7 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         object_id: ObjectID,
         version: VersionNumber,
     ) -> SuiResult<Option<Object>> {
-        self.database.get_object_by_key(&object_id, version)
+        self.execution_cache.get_object_by_key(&object_id, version)
     }
 
     async fn multi_get_transaction_checkpoint(
