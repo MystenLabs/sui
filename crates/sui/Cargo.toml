@@ -68,7 +68,11 @@ move-core-types.workspace = true
 move-package.workspace = true
 csv.workspace = true
 workspace-hack.workspace = true
+<<<<<<< HEAD
 move-vm-profiler.workspace = true
+=======
+petgraph.workspace = true
+>>>>>>> c9824a0021 (Detect cycles properly by using a graph)
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl.workspace = true
