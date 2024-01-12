@@ -157,8 +157,6 @@ pub struct RunGraphqlCommand {
     #[clap(long = "show-service-version")]
     pub show_service_version: bool,
     #[clap(long, num_args(1..))]
-    pub variables: Vec<String>,
-    #[clap(long, num_args(1..))]
     pub cursors: Vec<String>,
 }
 
@@ -212,8 +210,6 @@ pub enum SuiSubcommand {
     ViewCheckpoint,
     #[clap(name = "run-graphql")]
     RunGraphql(RunGraphqlCommand),
-    #[clap(name = "view-graphql-variables")]
-    ViewGraphqlVariables,
 }
 
 #[derive(Clone, Debug)]

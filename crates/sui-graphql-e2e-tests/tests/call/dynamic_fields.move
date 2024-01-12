@@ -61,9 +61,9 @@ module Test::m {
 
 //# create-checkpoint
 
-//# run-graphql --variables obj_2_0
+//# run-graphql
 {
-  object(address: $obj_2_0) {
+  object(address: "@{obj_2_0}") {
     dynamicFieldConnection {
       nodes {
         name {
@@ -90,9 +90,9 @@ module Test::m {
 
 //# create-checkpoint
 
-//# run-graphql --variables obj_2_0
+//# run-graphql
 {
-  object(address: $obj_2_0) {
+  object(address: "@{obj_2_0}") {
     dynamicFieldConnection {
       nodes {
         name {
@@ -115,9 +115,9 @@ module Test::m {
   }
 }
 
-//# run-graphql --variables obj_2_0
+//# run-graphql
 {
-  owner(address: $obj_2_0) {
+  owner(address: "@{obj_2_0}") {
     dynamicFieldConnection {
       nodes {
         name {
@@ -142,9 +142,9 @@ module Test::m {
   }
 }
 
-//# run-graphql --variables obj_2_0
+//# run-graphql
 {
-  owner(address: $obj_2_0) {
+  owner(address: "@{obj_2_0}") {
     dynamicField(name: {type: "u64", bcs: "AAAAAAAAAAA="}) {
       name {
         type {
@@ -164,9 +164,9 @@ module Test::m {
   }
 }
 
-//# run-graphql --variables obj_2_0
+//# run-graphql
 {
-  owner(address: $obj_2_0) {
+  owner(address: "@{obj_2_0}") {
     dynamicObjectField(name: {type: "u64", bcs: "AAAAAAAAAAA="}) {
       value {
         ... on MoveObject {
