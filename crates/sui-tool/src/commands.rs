@@ -262,7 +262,7 @@ pub enum ToolCommand {
         #[clap(long = "epoch")]
         epoch: u64,
         #[clap(long = "genesis")]
-        genesis: PathBuf,
+        genesis: Option<PathBuf>,
         #[clap(long = "path", default_value = "/tmp")]
         path: PathBuf,
         /// skip downloading indexes dir. Overridden to `true` if `--formal` flag specified,
@@ -743,6 +743,7 @@ impl ToolCommand {
                         e
                     );
                 }
+
                 let verify = verify.unwrap_or(true);
                 download_formal_snapshot(
                     &path,
@@ -857,7 +858,7 @@ impl ToolCommand {
                         )
                         .ok()
                         .and_then(|b| b.parse().ok())
-                        .unwrap_or(formal && no_sign_request),
+                        .unwrap_or(no_sign_request),
                         object_store_connection_limit: 200,
                         no_sign_request,
                         ..Default::default()
@@ -982,6 +983,8 @@ impl ToolCommand {
                 }
                 if formal {
                     let verify = verify.unwrap_or(true);
+                    let genesis =
+                        genesis.expect("--genesis must be set if using the --formal flag");
                     download_formal_snapshot(
                         &path,
                         epoch,

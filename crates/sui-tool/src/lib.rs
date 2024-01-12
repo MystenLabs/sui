@@ -996,15 +996,13 @@ pub async fn download_db_snapshot(
     skip_indexes: bool,
     num_parallel_downloads: usize,
 ) -> Result<(), anyhow::Error> {
-    // anywhere that remote store lists are being called I'll need to replace with manifest file gets
     let remote_store = if snapshot_store_config.no_sign_request {
         snapshot_store_config.make_http()?
     } else {
         snapshot_store_config.make().map(Arc::new)?
     };
 
-    // https://github.com/MystenLabs/sui/pull/15389/files
-    // ^that pr introduces a top level MANIFEST file which contains all valid epochs, we can use that instead to list the "entries"
+    // We rely on the top level MANIFEST file which contains all valid epochs
     let manifest_contents = remote_store.get_bytes(&get_path(MANIFEST_FILENAME)).await?;
     let root_manifest: Manifest = serde_json::from_slice(&manifest_contents)
         .map_err(|err| anyhow!("Error parsing MANIFEST from bytes: {}", err))?;
@@ -1056,8 +1054,6 @@ pub async fn download_db_snapshot(
             ),
         );
         let cloned_progress_bar = progress_bar.clone();
-        let mut instant = Instant::now();
-        let downloaded_bytes = AtomicUsize::new(0);
         let file_counter = Arc::new(AtomicUsize::new(0));
         futures::stream::iter(files.iter())
             .map(|file| {
@@ -1068,28 +1064,19 @@ pub async fn download_db_snapshot(
                     counter_cloned.fetch_add(1, Ordering::Relaxed);
                     let file_path = get_path(format!("epoch_{}/{}", epoch, file).as_str());
                     copy_file(&file_path, &file_path, &remote_store, &local_store).await?;
-                    Ok::<(::object_store::path::Path, usize), anyhow::Error>((
-                        file_path.clone(),
-                        1, // hack, need to decide if we want to keep the size estimate or not
-                    ))
+                    Ok::<::object_store::path::Path, anyhow::Error>(file_path.clone())
                 }
             })
             .boxed()
             .buffer_unordered(num_parallel_downloads)
-            .try_for_each(|(path, bytes)| {
+            .try_for_each(|path| {
                 file_counter.fetch_sub(1, Ordering::Relaxed);
-                downloaded_bytes.fetch_add(bytes, Ordering::Relaxed);
                 cloned_progress_bar.inc(1);
                 cloned_progress_bar.set_message(format!(
-                    "Download speed: {} MiB/s, file: {}, #downloads_in_progress: {}",
-                    downloaded_bytes.load(Ordering::Relaxed) as f64
-                        / (1024 * 1024) as f64
-                        / instant.elapsed().as_secs_f64(),
+                    "Downloading file: {}, #downloads_in_progress: {}",
                     path,
                     file_counter.load(Ordering::Relaxed)
                 ));
-                instant = Instant::now();
-                downloaded_bytes.store(0, Ordering::Relaxed);
                 futures::future::ready(Ok(()))
             })
             .await?;
