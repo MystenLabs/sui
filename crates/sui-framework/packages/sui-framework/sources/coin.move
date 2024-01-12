@@ -227,8 +227,8 @@ module sui::coin {
     }
 
     /// This creates a new currency, via `create_currency`, but with an extra capability that
-    /// allows for specific addresses to have their coins frozen. Those addresses will not
-    /// be able to interact with the coin as input objects
+    /// allows for specific addresses to have their coins frozen. Those addresses cannot interact
+    /// with the coin as input objects.
     public fun create_regulated_currency<T: drop>(
         witness: T,
         decimals: u8,
@@ -252,8 +252,8 @@ module sui::coin {
         };
         transfer::freeze_object(RegulatedCoinMetadata<T> {
             id: object::new(ctx),
-            coin_metadata_object: object::uid_to_inner(&metadata.id),
-            deny_cap_object: object::uid_to_inner(&deny_cap.id),
+            coin_metadata_object: object::id(&metadata),
+            deny_cap_object: object::id(&deny_cap),
         });
         (treasury_cap, deny_cap, metadata)
     }

@@ -31,7 +31,7 @@ module sui::object {
     /// The hardcoded ID for the singleton Random Object.
     const SUI_RANDOM_ID: address = @0x8;
 
-    /// The hardcoded ID for the singleton Deny list.
+    /// The hardcoded ID for the singleton DenyList.
     const SUI_DENY_LIST_OBJECT_ID: address = @0x403;
 
     /// Sender is not @0x0 the system address.

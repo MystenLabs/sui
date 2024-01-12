@@ -24,13 +24,13 @@ module std::type_name {
     /// ASCII Character code for the `r` (lowercase r) symbol.
     const ASCII_R: u8 = 114;
 
-    /// The type does is not from a package/module. It is a primitive type.
+    /// The type is not from a package/module. It is a primitive type.
     const ENonModuleType: u64 = 0;
 
     struct TypeName has copy, drop, store {
         /// String representation of the type. All types are represented
         /// using their source syntax:
-        /// "u8", "u64", "bool", "address", "vector", etc for primitive types.
+        /// "u8", "u64", "bool", "address", "vector", and so on for primitive types.
         /// Struct types are represented as fully qualified type names; e.g.
         /// `00000000000000000000000000000001::string::String` or
         /// `0000000000000000000000000000000a::module_name1::type_name1<0000000000000000000000000000000a::module_name2::type_name2<u64>>`
@@ -102,7 +102,7 @@ module std::type_name {
     }
 
     /// Get name of the module.
-    /// Aborts if given a primitive type
+    /// Aborts if given a primitive type.
     public fun get_module(self: &TypeName): String {
         assert!(!is_primitive(self), ENonModuleType);
 
