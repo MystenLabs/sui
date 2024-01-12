@@ -1,4 +1,4 @@
-error[E03005]: unbound unscoped name
+error[E03009]: unbound variable
   ┌─ tests/move_check/unit_test/test_filter_function.move:6:24
   │
 6 │     public fun foo() { bar() }

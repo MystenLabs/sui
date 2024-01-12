@@ -1638,6 +1638,23 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
             let nes = call_args(context, rhs);
             match resolve_function(context, eloc, ma, ty_args) {
                 ResolvedFunction::Builtin(sp!(bloc, BF::Assert(_))) => {
+                    if !is_macro {
+                        let dep_msg = format!(
+                            "'{}' function syntax has been deprecated and will be removed",
+                            BF::ASSERT_MACRO
+                        );
+                        // TODO make this a tip/hint?
+                        let help_msg = format!(
+                            "Replace with '{0}!'. '{0}' has been replaced with a '{0}!' built-in \
+                            macro so that arguments are no longer eagerly evaluated",
+                            BF::ASSERT_MACRO
+                        );
+                        context.env.add_diag(diag!(
+                            Uncategorized::DeprecatedWillBeRemoved,
+                            (bloc, dep_msg),
+                            (bloc, help_msg),
+                        ));
+                    }
                     NE::Builtin(sp(bloc, BF::Assert(is_macro)), nes)
                 }
                 ResolvedFunction::Builtin(bf @ sp!(_, BF::Freeze(_))) => {
@@ -1937,23 +1954,8 @@ fn resolve_builtin_function(
     Some(match b.value.as_str() {
         B::FREEZE => Freeze(check_builtin_ty_arg(context, loc, b, ty_args)),
         B::ASSERT_MACRO => {
-            let dep_msg = format!(
-                "'{}' function syntax has been deprecated and will be removed",
-                B::ASSERT_MACRO
-            );
-            // TODO make this a tip/hint?
-            let help_msg = format!(
-                "Replace with '{0}!'. '{0}' has been replaced with a '{0}!' built-in macro so \
-                 that arguments are no longer eagerly evaluated",
-                B::ASSERT_MACRO
-            );
-            context.env.add_diag(diag!(
-                Uncategorized::DeprecatedWillBeRemoved,
-                (b.loc, dep_msg),
-                (b.loc, help_msg),
-            ));
             check_builtin_ty_args(context, loc, b, 0, ty_args);
-            Assert(false)
+            Assert(/* is_macro, set by caller */ false)
         }
         _ => {
             context.env.add_diag(diag!(
