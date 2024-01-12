@@ -4,10 +4,10 @@ title: Create a Coin
 
 Publishing a coin on Sui is nearly as straightforward as publishing a new type. The main difference is the requirement of a [one-time witness](/concepts/sui-move-concepts/one-time-witness.mdx) when creating a coin.
 
-```move
+```rust
 module examples::mycoin {
     use std::option;
-    use sui::coin;
+    use sui::coin::{Self, Coin, TreasuryCap};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
@@ -27,6 +27,14 @@ module examples::mycoin {
 ```
 
 The `Coin<T>` is a generic implementation of a coin on Sui. The owner of the `TreasuryCap` gets control over the minting and burning of coins. Further transactions can be sent directly to the `sui::coin::Coin` with `TreasuryCap` object as authorization.
+
+```rust
+public fun mint(
+        treasury_cap: &mut TreasuryCap<MYCOIN>, amount: u64, recipient: address, ctx: &mut TxContext
+    ) {
+        coin::mint_and_transfer(treasury_cap, amount, recipient, ctx)
+    }
+```
 
 ## Freeze addresses from using your coin
 
