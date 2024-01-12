@@ -666,8 +666,10 @@
 ### Event Connection
 
 ><pre>{
->  eventConnection(
->    filter: {eventType: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13::Market::ChangePriceEvent<0x2::sui::SUI>"}
+>  events(
+>    filter: {
+>      eventType: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13::Market::ChangePriceEvent<0x2::sui::SUI>"
+>    }
 >  ) {
 >    nodes {
 >      sendingModule {
@@ -694,11 +696,14 @@
 ### <a id=524281></a>
 ### Filter By Emitting Package Module And Event Type
 
-><pre>query byEmittingPackageModuleAndEventType {
->  eventConnection(
+><pre>query ByEmittingPackageModuleAndEventType {
+>  events(
 >    first: 1
->    after: "85173:0"
->    filter: {emittingModule: "0x3::sui_system", eventType: "0x3::validator::StakingRequestEvent"}
+>    after: "eyJ0eCI6ODUxNzMsImUiOjB9"
+>    filter: {
+>      emittingModule: "0x3::sui_system",
+>      eventType: "0x3::validator::StakingRequestEvent"
+>    }
 >  ) {
 >    pageInfo {
 >      hasNextPage
@@ -724,10 +729,12 @@
 ### <a id=524282></a>
 ### Filter By Sender
 
-><pre>query byTxSender {
->  eventConnection(
+><pre>query ByTxSender {
+>  events(
 >    first: 1
->    filter: {sender: "0xdff57c401e125a7e0e06606380560b459a179aacd08ed396d0162d57dbbdadfb"}
+>    filter: {
+>      sender: "0xdff57c401e125a7e0e06606380560b459a179aacd08ed396d0162d57dbbdadfb"
+>    }
 >  ) {
 >    pageInfo {
 >      hasNextPage
