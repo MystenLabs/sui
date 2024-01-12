@@ -289,13 +289,7 @@ fn module(
     let structs = tstructs.map(|name, s| struct_def(context, name, s));
 
     let constants = tconstants.map(|name, c| constant(context, name, c));
-    let functions = tfunctions.filter_map(|name, f| {
-        if matches!(f.body.value, T::FunctionBody_::Macro) {
-            None
-        } else {
-            Some(function(context, name, f))
-        }
-    });
+    let functions = tfunctions.map(|name, f| function(context, name, f));
 
     gen_unused_warnings(context, is_source_module, &structs);
 
@@ -1218,7 +1212,7 @@ fn value(
         // odds and ends -- things we need to deal with but that don't do much
         // -----------------------------------------------------------------------------------------
         E::Use(_) => panic!("ICE unexpanded use"),
-        E::Lambda(_, _) => panic!("ICE unexpanded lambda"),
+        E::Lambda(_) => panic!("ICE unexpanded lambda"),
 
         E::UnresolvedError => {
             assert!(context.env.has_errors());
@@ -1531,7 +1525,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         // odds and ends -- things we need to deal with but that don't do much
         // -----------------------------------------------------------------------------------------
         E::Use(_) => panic!("ICE unexpanded use"),
-        E::Lambda(_, _) => panic!("ICE unexpanded lambda"),
+        E::Lambda(_) => panic!("ICE unexpanded lambda"),
     }
 }
 

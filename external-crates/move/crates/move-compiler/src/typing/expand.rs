@@ -258,7 +258,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
         E::Loop { body: eloop, .. } => exp(context, eloop),
         E::NamedBlock(_, seq) => sequence(context, seq),
         E::Block(seq) => sequence(context, seq),
-        E::Lambda(_, _) => {
+        E::Lambda(_) => {
             let msg = "Lambdas can only be used directly as arguments to macro functions";
             context
                 .env

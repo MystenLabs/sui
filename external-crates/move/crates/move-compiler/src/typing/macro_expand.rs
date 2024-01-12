@@ -162,7 +162,7 @@ fn bind_lambda(
         T::UnannotatedExp_::Annotate(inner, _) => {
             bind_lambda(context, lambdas, param, *inner, param_ty, result_ty)
         }
-        T::UnannotatedExp_::Lambda(_, lambda) => {
+        T::UnannotatedExp_::Lambda(lambda) => {
             lambdas.insert(param, (lambda, param_ty, result_ty));
             Some(())
         }

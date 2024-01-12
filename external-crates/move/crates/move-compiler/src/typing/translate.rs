@@ -28,7 +28,7 @@ use crate::{
     sui_mode,
     typing::{
         ast as T,
-        core::{public_testing_visibility, InstantiatedFunctionType, PublicForTesting},
+        core::{public_testing_visibility, PublicForTesting, ResolvedFunctionType},
         dependency_ordering, macro_expand,
     },
     FullyCompiledProgram,
@@ -51,8 +51,8 @@ pub fn program(
     } = prog;
     let mut context = Context::new(compilation_env, pre_compiled_lib, info);
 
-    let nmodules_with_macros = translate_macros(&mut context, nmodules);
-    let mut modules = modules(&mut context, nmodules_with_macros);
+    extract_macros(&mut context, &nmodules);
+    let mut modules = modules(&mut context, nmodules);
 
     assert!(context.constraints.is_empty());
     dependency_ordering::program(context.env, &mut modules);
@@ -77,56 +77,30 @@ pub fn program(
     }
 }
 
-fn translate_macros(
-    context: &mut Context,
-    modules: UniqueMap<ModuleIdent, N::ModuleDefinition>,
-) -> UniqueMap<ModuleIdent, (N::ModuleDefinition, UniqueMap<FunctionName, T::Function>)> {
-    let mut all_macro_definitions = UniqueMap::new();
-    let modules_with_macros = modules.map(|ident, mut mdef| {
-        assert!(context.current_package.is_none());
-        assert!(context.new_friends.is_empty());
-        context.current_module = Some(ident);
-        context.current_package = mdef.package_name;
-        context
-            .env
-            .add_warning_filter_scope(mdef.warning_filter.clone());
-        context.add_use_funs_scope(mdef.use_funs.clone());
-
-        let mut translated_macros = UniqueMap::new();
-        let mut macro_definitions = UniqueMap::new();
-        let functions = std::mem::take(&mut mdef.functions);
-
-        for (name, f) in functions {
-            if f.macro_.is_some() {
-                let (tf, body_opt) = macro_(context, name, f);
-                translated_macros.add(name, tf).unwrap();
-                if let Some(body) = body_opt {
-                    macro_definitions.add(name, body).unwrap();
-                }
-            } else {
-                mdef.functions.add(name, f).unwrap();
+fn extract_macros(context: &mut Context, modules: &UniqueMap<ModuleIdent, N::ModuleDefinition>) {
+    let all_macro_definitions = modules.ref_map(|_mident, mdef| {
+        mdef.functions.ref_filter_map(|_name, f| {
+            if f.macro_.is_none() {
+                return None;
             }
-        }
-        assert!(context.constraints.is_empty());
-        context.current_package = None;
-        // macros themselves don't add friends since they do not exist at runtime
-        context.new_friends = BTreeSet::new();
-        context.pop_use_funs_scope();
-        context.env.pop_warning_filter_scope();
-        all_macro_definitions.add(ident, macro_definitions).unwrap();
-        (mdef, translated_macros)
+            if let N::FunctionBody_::Defined(body) = &f.body.value {
+                Some(body.clone())
+            } else {
+                None
+            }
+        })
     });
+
     context.set_macros(all_macro_definitions);
-    modules_with_macros
 }
 
 fn modules(
     context: &mut Context,
-    modules: UniqueMap<ModuleIdent, (N::ModuleDefinition, UniqueMap<FunctionName, T::Function>)>,
+    modules: UniqueMap<ModuleIdent, N::ModuleDefinition>,
 ) -> UniqueMap<ModuleIdent, T::ModuleDefinition> {
     let mut all_new_friends = BTreeMap::new();
-    let mut typed_modules = modules.map(|ident, (mdef, translated_macros)| {
-        let (typed_mdef, new_friends) = module(context, ident, mdef, translated_macros);
+    let mut typed_modules = modules.map(|ident, mdef| {
+        let (typed_mdef, new_friends) = module(context, ident, mdef);
         for (pub_package_module, loc) in new_friends {
             let friend = Friend {
                 attributes: UniqueMap::new(),
@@ -160,7 +134,6 @@ fn module(
     context: &mut Context,
     ident: ModuleIdent,
     mdef: N::ModuleDefinition,
-    translated_macros: UniqueMap<FunctionName, T::Function>,
 ) -> (T::ModuleDefinition, BTreeSet<(ModuleIdent, Loc)>) {
     assert!(context.current_package.is_none());
     assert!(context.new_friends.is_empty());
@@ -186,10 +159,7 @@ fn module(
         .for_each(|(_, _, s)| struct_def(context, s));
     process_attributes(context, &attributes);
     let constants = nconstants.map(|name, c| constant(context, name, c));
-    let mut functions = translated_macros;
-    for (name, f) in nfunctions {
-        functions.add(name, function(context, name, f)).unwrap();
-    }
+    let functions = nfunctions.map(|name, f| function(context, name, f));
     assert!(context.constraints.is_empty());
     context.current_package = None;
     context.pop_use_funs_scope();
@@ -217,31 +187,6 @@ fn module(
 // Functions
 //**************************************************************************************************
 
-fn macro_(
-    context: &mut Context,
-    name: FunctionName,
-    f: N::Function,
-) -> (T::Function, Option<N::Sequence>) {
-    let num_err_before = context
-        .env
-        .count_diags_at_or_above_severity(Severity::NonblockingError);
-    let body = match &f.body.value {
-        N::FunctionBody_::Defined(seq) => Some(seq.clone()),
-        N::FunctionBody_::Native => None,
-    };
-    let translated = function(context, name, f);
-    let num_err_after = context
-        .env
-        .count_diags_at_or_above_severity(Severity::NonblockingError);
-    let body = if num_err_before == num_err_after {
-        body
-    } else {
-        assert!(num_err_after > num_err_before);
-        None
-    };
-    (translated, body)
-}
-
 fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Function {
     let N::Function {
         warning_filter,
@@ -266,13 +211,13 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     function_signature(context, &signature);
     expand::function_signature(context, &mut signature);
 
-    let sp!(bloc, body_) = function_body(context, n_body);
-    let body_ = if macro_.is_some() {
-        T::FunctionBody_::Macro
+    let body = if macro_.is_some() {
+        sp(n_body.loc, T::FunctionBody_::Macro)
     } else {
-        body_
+        let body = function_body(context, n_body);
+        unused_let_muts(context);
+        body
     };
-    unused_let_muts(context);
     context.current_function = None;
     context.env.pop_warning_filter_scope();
     T::Function {
@@ -283,7 +228,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
         entry,
         macro_,
         signature,
-        body: sp(bloc, body_),
+        body,
     }
 }
 
@@ -517,7 +462,7 @@ mod check_valid_constant {
                 s = format!("'{}' is", b);
                 &s
             }
-            E::Lambda(_, _) => "lambda expressions are",
+            E::Lambda(_) => "lambda expressions are",
             E::IfElse(eb, et, ef) => {
                 exp(context, eb);
                 exp(context, et);
@@ -1174,59 +1119,6 @@ fn sequence_type(seq: &T::Sequence) -> &Type {
     }
 }
 
-// type checking lambda calls inside of a macro body, since they are not inlined
-fn lambda(context: &mut Context, loc: Loc, expected_ty: Type, nlambda: N::Lambda) {
-    let N::Lambda {
-        parameters,
-        break_label,
-        return_label,
-        body,
-    } = nlambda;
-    let arg_tys: Vec<Type> = parameters
-        .value
-        .iter()
-        .map(|sp!(aloc, _)| core::make_tvar(context, *aloc))
-        .collect();
-    let ret_ty = Box::new(core::make_tvar(context, loc));
-    let actual_ty = sp(loc, Type_::Fun(arg_tys.clone(), ret_ty));
-    join(
-        context,
-        loc,
-        || "Invalid lambda expression",
-        actual_ty,
-        expected_ty,
-    );
-    let arg_ty_annot = match parameters.value.len() {
-        0 => sp(loc, Type_::Unit),
-        1 => sp(loc, arg_tys[0].value.clone()),
-        _ => Type_::multiple(loc, arg_tys.clone()),
-    };
-    bind_list(context, parameters, Some(arg_ty_annot));
-    let ret_ty = core::make_tvar(context, body.loc);
-    exp_(context, *body);
-    if let Some(local_return_type) = context.named_block_type_opt(return_label) {
-        join(
-            context,
-            loc,
-            || "Invalid lambda return type",
-            ret_ty,
-            local_return_type,
-        );
-    }
-    if let (Some(macro_break_type), Some(macro_return_type)) = (
-        context.named_block_type_opt(break_label),
-        context.current_macro_call_return_type(),
-    ) {
-        subtype(
-            context,
-            loc,
-            || "Invalid lambda break type",
-            macro_break_type,
-            macro_return_type,
-        );
-    }
-}
-
 fn exp_vec(context: &mut Context, es: Vec<N::Exp>) -> Vec<T::Exp> {
     es.into_iter().map(|e| exp_(context, e)).collect()
 }
@@ -1382,7 +1274,7 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             (sequence_type(&seq).clone(), TE::Block(seq))
         }
 
-        NE::Lambda(lambda) => (core::make_tvar(context, eloc), TE::Lambda(false, lambda)),
+        NE::Lambda(lambda) => (core::make_tvar(context, eloc), TE::Lambda(lambda)),
 
         NE::Assign(na, nr) => {
             let er = exp(context, nr);
@@ -2503,11 +2395,11 @@ fn module_call_impl(
     m: ModuleIdent,
     f: FunctionName,
     is_macro_call: bool,
-    fty: InstantiatedFunctionType,
+    fty: ResolvedFunctionType,
     argloc: Loc,
     args: Vec<T::Exp>,
 ) -> (T::ModuleCall, Type) {
-    let InstantiatedFunctionType {
+    let ResolvedFunctionType {
         declared,
         macro_,
         ty_args,
@@ -2539,7 +2431,7 @@ fn module_call_impl(
             (decl_loc, decl_msg),
         ));
     }
-    let (mut arguments, arg_tys) = call_args(
+    let (arguments, arg_tys) = call_args(
         context,
         loc,
         || format!("Invalid call of '{}::{}'", &m, &f),
@@ -2558,12 +2450,6 @@ fn module_call_impl(
         subtype(context, loc, msg, arg_ty, param_ty);
     }
     let params_ty_list = parameters.into_iter().map(|(_, ty)| ty).collect();
-    if decl_is_macro && context.in_macro_function {
-        // sanity check lambdas inside of a macro since it won't get expanded
-        context.add_macro_call_return_type(return_.clone());
-        solve_lambdas(context, &mut arguments);
-        context.pop_macro_call_return_type();
-    }
     let call = T::ModuleCall {
         module: m,
         name: f,
@@ -2803,104 +2689,6 @@ fn expand_macro(
             ]);
             let e_ = TE::Block(seq);
             (ty, e_)
-        }
-    }
-}
-
-//**************************************************************************************************
-// Lambdas
-//**************************************************************************************************
-
-fn solve_lambdas(context: &mut Context, e: &mut T::Exp) {
-    use T::UnannotatedExp_ as E;
-
-    match &mut e.exp.value {
-        E::Use(_)
-        | E::Value(_)
-        | E::Unit { .. }
-        | E::Constant(_, _)
-        | E::Move { .. }
-        | E::Copy { .. }
-        | E::BorrowLocal(_, _)
-        | E::Continue(_)
-        | E::UnresolvedError => (),
-
-        // don't need to recurse into calls since their lambdas are already solved
-        E::ModuleCall(_) | E::Builtin(_, _) => (),
-
-        E::Vector(_vec_loc, _n, _ty_arg, args) => {
-            solve_lambdas(context, args);
-        }
-
-        E::IfElse(eb, et, ef) => {
-            solve_lambdas(context, eb);
-            solve_lambdas(context, et);
-            solve_lambdas(context, ef);
-        }
-        E::While(eb, _, eloop) => {
-            solve_lambdas(context, eb);
-            solve_lambdas(context, eloop);
-        }
-        E::Loop { body: eloop, .. } => solve_lambdas(context, eloop),
-        E::NamedBlock(_, seq) | E::Block(seq) => solve_lambdas_seq(context, seq),
-        E::Assign(_assigns, _tys, er) => {
-            solve_lambdas(context, er);
-        }
-
-        E::Return(er)
-        | E::Abort(er)
-        | E::Give(_, er)
-        | E::Dereference(er)
-        | E::UnaryExp(_, er)
-        | E::Borrow(_, er, _)
-        | E::TempBorrow(_, er) => solve_lambdas(context, er),
-        E::Mutate(el, er) => {
-            solve_lambdas(context, el);
-            solve_lambdas(context, er)
-        }
-        E::BinopExp(el, _, _operand_ty, er) => {
-            solve_lambdas(context, el);
-            solve_lambdas(context, er);
-        }
-
-        E::Pack(_, _, _bs, fields) => {
-            for (_, _, (_, (_bt, fe))) in fields.iter_mut() {
-                solve_lambdas(context, fe)
-            }
-        }
-        E::ExpList(el) => solve_lambdas_exp_list(context, el),
-        E::Cast(el, _rhs_ty) | E::Annotate(el, _rhs_ty) => {
-            solve_lambdas(context, el);
-        }
-
-        // already expanded
-        E::Lambda(true, _) => (),
-
-        // expand
-        E::Lambda(visited, nlambda) => {
-            assert!(!*visited);
-            *visited = true;
-            lambda(context, e.exp.loc, e.ty.clone(), nlambda.clone());
-        }
-    }
-}
-
-fn solve_lambdas_seq(context: &mut Context, seq: &mut T::Sequence) {
-    use T::SequenceItem_ as SI;
-    for item in seq {
-        match &mut item.value {
-            SI::Seq(e) => solve_lambdas(context, e),
-            SI::Declare(_binds) => (),
-            SI::Bind(_binds, _ty, e) => solve_lambdas(context, e),
-        }
-    }
-}
-
-fn solve_lambdas_exp_list(context: &mut Context, is: &mut [T::ExpListItem]) {
-    for i in is {
-        match i {
-            T::ExpListItem::Single(e, _ty) => solve_lambdas(context, e),
-            T::ExpListItem::Splat(_loc, e, _tys) => solve_lambdas(context, e),
         }
     }
 }

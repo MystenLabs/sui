@@ -229,7 +229,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
         | E::Copy { .. }
         | E::BorrowLocal(_, _)
         | E::Continue(_)
-        | E::Lambda(_, _)
+        | E::Lambda(_)
         | E::UnresolvedError => (),
 
         E::ModuleCall(call) => {
