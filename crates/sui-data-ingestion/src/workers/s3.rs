@@ -62,8 +62,4 @@ impl Worker for S3Worker {
             .await?;
         Ok(())
     }
-
-    fn name(&self) -> &'static str {
-        "s3"
-    }
 }

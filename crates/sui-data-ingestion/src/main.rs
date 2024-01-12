@@ -25,6 +25,7 @@ enum Task {
 struct TaskConfig {
     #[serde(flatten)]
     task: Task,
+    name: String,
     concurrency: usize,
 }
 
@@ -105,13 +106,19 @@ async fn main() -> Result<()> {
     for task_config in config.tasks {
         match task_config.task {
             Task::S3(s3_config) => {
-                let worker_pool =
-                    WorkerPool::new(S3Worker::new(s3_config).await, task_config.concurrency);
+                let worker_pool = WorkerPool::new(
+                    S3Worker::new(s3_config).await,
+                    task_config.name,
+                    task_config.concurrency,
+                );
                 executor.register(worker_pool).await?;
             }
             Task::KV(kv_config) => {
-                let worker_pool =
-                    WorkerPool::new(KVStoreWorker::new(kv_config).await, task_config.concurrency);
+                let worker_pool = WorkerPool::new(
+                    KVStoreWorker::new(kv_config).await,
+                    task_config.name,
+                    task_config.concurrency,
+                );
                 executor.register(worker_pool).await?;
             }
         };

@@ -209,8 +209,4 @@ impl Worker for KVStoreWorker {
         .await?;
         Ok(())
     }
-
-    fn name(&self) -> &'static str {
-        "kv_store"
-    }
 }
