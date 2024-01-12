@@ -19,9 +19,9 @@ pub struct WorkerPool<W: Worker> {
 }
 
 impl<W: Worker + 'static> WorkerPool<W> {
-    pub fn new(worker: W, concurrency: usize) -> Self {
+    pub fn new(worker: W, task_name: String, concurrency: usize) -> Self {
         Self {
-            task_name: worker.name().to_string(),
+            task_name,
             concurrency,
             worker: Arc::new(worker),
         }

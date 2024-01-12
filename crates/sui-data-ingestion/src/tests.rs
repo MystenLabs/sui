@@ -29,7 +29,7 @@ async fn add_worker_pool<W: Worker + 'static>(
     worker: W,
     concurrency: usize,
 ) -> Result<()> {
-    let worker_pool = WorkerPool::new(worker, concurrency);
+    let worker_pool = WorkerPool::new(worker, "test".to_string(), concurrency);
     indexer.register(worker_pool).await?;
     Ok(())
 }
@@ -69,9 +69,6 @@ impl Worker for TestWorker {
     async fn process_checkpoint(&self, _checkpoint: CheckpointData) -> Result<()> {
         Ok(())
     }
-    fn name(&self) -> &'static str {
-        "test"
-    }
 }
 
 #[tokio::test]
@@ -97,7 +94,7 @@ async fn basic_flow() {
     }
     let result = run(bundle.executor, Some(path), Some(Duration::from_secs(1))).await;
     assert!(result.is_ok());
-    assert_eq!(result.unwrap().get(TestWorker.name()), Some(&20));
+    assert_eq!(result.unwrap().get("test"), Some(&20));
 }
 
 fn temp_dir() -> std::path::PathBuf {
