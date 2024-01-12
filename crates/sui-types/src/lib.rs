@@ -172,6 +172,15 @@ pub fn parse_sui_module_id(s: &str) -> anyhow::Result<ModuleId> {
     ParsedModuleId::parse(s)?.into_module_id(&resolve_address)
 }
 
+/// Parse `s` as a fully-qualified name: A Module ID (see `parse_sui_module_id`), followed by `::`,
+/// and then an identifier (for the module member). Parsing succeeds if and only if `s` matches this
+/// format exactly, with no remaining input. This function is intended for use within the authority
+/// codebases.
+pub fn parse_sui_fq_name(s: &str) -> anyhow::Result<(ModuleId, String)> {
+    use move_command_line_common::types::ParsedFqName;
+    ParsedFqName::parse(s)?.into_fq_name(&resolve_address)
+}
+
 /// Parse `s` as a struct type: A fully-qualified name, optionally followed by a list of type
 /// parameters (types -- see `parse_sui_type_tag`, separated by commas, surrounded by angle
 /// brackets). Parsing succeeds if and only if `s` matches this format exactly, with no remaining
@@ -337,6 +346,18 @@ mod tests {
         let expected =
             expect!["0x0000000000000000000000000000000000000000000000000000000000000002::sui"];
         expected.assert_eq(&result.to_canonical_string(/* with_prefix */ true));
+    }
+
+    #[test]
+    fn test_parse_sui_fq_name() {
+        let (module, name) = parse_sui_fq_name("0x2::object::new").expect("should not error");
+        let expected = expect![
+            "0x0000000000000000000000000000000000000000000000000000000000000002::object::new"
+        ];
+        expected.assert_eq(&format!(
+            "{}::{name}",
+            module.to_canonical_display(/* with_prefix */ true)
+        ));
     }
 
     #[test]
