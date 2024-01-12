@@ -42,7 +42,7 @@ Response: {
                   },
                   {
                     "node": {
-                      "amount": "3000"
+                      "amount": "5000"
                     },
                     "cursor": "MQ"
                   },
@@ -54,7 +54,7 @@ Response: {
                   },
                   {
                     "node": {
-                      "amount": "5000"
+                      "amount": "3000"
                     },
                     "cursor": "Mw"
                   },
@@ -98,7 +98,7 @@ Response: {
                 "edges": [
                   {
                     "node": {
-                      "amount": "5000"
+                      "amount": "3000"
                     },
                     "cursor": "Mw"
                   },
@@ -142,7 +142,7 @@ Response: {
                   },
                   {
                     "node": {
-                      "amount": "3000"
+                      "amount": "5000"
                     },
                     "cursor": "MQ"
                   },

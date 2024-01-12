@@ -150,13 +150,19 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x707e432fda538aad9303258dfe579d3a2e4ac429a8c4f76f4ae0d7dda7b0a9c5",
+                    "address": "0x6bd666c4d0e1e2db6a01e6b9d361c16d726305b61da11f417ac4a615a5f243a3",
                     "asMovePackage": null
                   }
                 },
                 {
                   "outputState": {
-                    "address": "0xf374fc0c93a6eee2747b7073c9ae24b6df622a6bddce2a5a793959b4fd834dc5",
+                    "address": "0x8658d229b5663f5c16b4d355e20afbf8a69b25f27bcfb3043859e3815a81eef4",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0x89fd74a119fd0d5b5bda30a6f5c9c77b2cbe60bd421cac7c8e6731620be684b7",
                     "asMovePackage": {
                       "module": {
                         "struct": {
@@ -181,12 +187,6 @@ Response: {
                         }
                       }
                     }
-                  }
-                },
-                {
-                  "outputState": {
-                    "address": "0xffadc9112fa4d072df4d4face7ab185978e0ab53b23a577250583750ecdd741f",
-                    "asMovePackage": null
                   }
                 }
               ]
@@ -217,20 +217,26 @@ Response: {
               "nodes": [
                 {
                   "outputState": {
-                    "address": "0x707e432fda538aad9303258dfe579d3a2e4ac429a8c4f76f4ae0d7dda7b0a9c5",
+                    "address": "0x6bd666c4d0e1e2db6a01e6b9d361c16d726305b61da11f417ac4a615a5f243a3",
                     "asMovePackage": null
                   }
                 },
                 {
                   "outputState": {
-                    "address": "0xc755d93e0954b1edc026cc7cf260d148c94249b212eb4fa1dfb9ea2b9421227b",
+                    "address": "0x8658d229b5663f5c16b4d355e20afbf8a69b25f27bcfb3043859e3815a81eef4",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xd3fb823b7afefb1205983609aaa77c56e7ae8b51b3299f15fa71aaac0adb0d2a",
                     "asMovePackage": {
                       "module": {
                         "s": {
                           "module": {
                             "package": {
                               "asObject": {
-                                "address": "0xf374fc0c93a6eee2747b7073c9ae24b6df622a6bddce2a5a793959b4fd834dc5"
+                                "address": "0x89fd74a119fd0d5b5bda30a6f5c9c77b2cbe60bd421cac7c8e6731620be684b7"
                               }
                             }
                           },
@@ -257,7 +263,7 @@ Response: {
                           "module": {
                             "package": {
                               "asObject": {
-                                "address": "0xc755d93e0954b1edc026cc7cf260d148c94249b212eb4fa1dfb9ea2b9421227b"
+                                "address": "0xd3fb823b7afefb1205983609aaa77c56e7ae8b51b3299f15fa71aaac0adb0d2a"
                               }
                             }
                           },
@@ -285,12 +291,12 @@ Response: {
                             {
                               "name": "s",
                               "type": {
-                                "repr": "0xf374fc0c93a6eee2747b7073c9ae24b6df622a6bddce2a5a793959b4fd834dc5::m::S",
+                                "repr": "0x89fd74a119fd0d5b5bda30a6f5c9c77b2cbe60bd421cac7c8e6731620be684b7::m::S",
                                 "signature": {
                                   "ref": null,
                                   "body": {
                                     "datatype": {
-                                      "package": "0xf374fc0c93a6eee2747b7073c9ae24b6df622a6bddce2a5a793959b4fd834dc5",
+                                      "package": "0x89fd74a119fd0d5b5bda30a6f5c9c77b2cbe60bd421cac7c8e6731620be684b7",
                                       "module": "m",
                                       "type": "S",
                                       "typeParameters": []
@@ -319,19 +325,13 @@ Response: {
                             {
                               "name": "t",
                               "type": {
-                                "repr": "0xf374fc0c93a6eee2747b7073c9ae24b6df622a6bddce2a5a793959b4fd834dc5::m::T<0xf374fc0c93a6eee2747b7073c9ae24b6df622a6bddce2a5a793959b4fd834dc5::m::S>"
+                                "repr": "0x89fd74a119fd0d5b5bda30a6f5c9c77b2cbe60bd421cac7c8e6731620be684b7::m::T<0x89fd74a119fd0d5b5bda30a6f5c9c77b2cbe60bd421cac7c8e6731620be684b7::m::S>"
                               }
                             }
                           ]
                         }
                       }
                     }
-                  }
-                },
-                {
-                  "outputState": {
-                    "address": "0xffadc9112fa4d072df4d4face7ab185978e0ab53b23a577250583750ecdd741f",
-                    "asMovePackage": null
                   }
                 }
               ]
@@ -359,6 +359,11 @@ Response: {
                 },
                 {
                   "outputState": {
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
                     "asMovePackage": {
                       "module": {
                         "s": {
@@ -375,11 +380,6 @@ Response: {
                         }
                       }
                     }
-                  }
-                },
-                {
-                  "outputState": {
-                    "asMovePackage": null
                   }
                 }
               ]
@@ -469,6 +469,40 @@ Response: {
                 ]
               },
               {
+                "name": "DenyCap",
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "RegulatedCoinMetadata",
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                    }
+                  },
+                  {
+                    "name": "coin_metadata_object",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::ID"
+                    }
+                  },
+                  {
+                    "name": "deny_cap_object",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::ID"
+                    }
+                  }
+                ]
+              },
+              {
                 "name": "TreasuryCap",
                 "fields": [
                   {
@@ -506,6 +540,18 @@ Response: {
                 }
               },
               {
+                "cursor": "IkRlbnlDYXAi",
+                "node": {
+                  "name": "DenyCap"
+                }
+              },
+              {
+                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "RegulatedCoinMetadata"
+                }
+              },
+              {
                 "cursor": "IlRyZWFzdXJ5Q2FwIg",
                 "node": {
                   "name": "TreasuryCap"
@@ -535,6 +581,18 @@ Response: {
                 "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
                 "node": {
                   "name": "CurrencyCreated"
+                }
+              },
+              {
+                "cursor": "IkRlbnlDYXAi",
+                "node": {
+                  "name": "DenyCap"
+                }
+              },
+              {
+                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "RegulatedCoinMetadata"
                 }
               }
             ],
@@ -590,14 +648,14 @@ Response: {
                 }
               },
               {
-                "cursor": "IlRyZWFzdXJ5Q2FwIg",
+                "cursor": "IkRlbnlDYXAi",
                 "node": {
-                  "name": "TreasuryCap"
+                  "name": "DenyCap"
                 }
               }
             ],
             "pageInfo": {
-              "hasNextPage": false,
+              "hasNextPage": true,
               "hasPreviousPage": true
             }
           },
@@ -616,6 +674,18 @@ Response: {
                 }
               },
               {
+                "cursor": "IkRlbnlDYXAi",
+                "node": {
+                  "name": "DenyCap"
+                }
+              },
+              {
+                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "RegulatedCoinMetadata"
+                }
+              },
+              {
                 "cursor": "IlRyZWFzdXJ5Q2FwIg",
                 "node": {
                   "name": "TreasuryCap"
@@ -630,15 +700,15 @@ Response: {
           "suffix": {
             "edges": [
               {
-                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "cursor": "IkRlbnlDYXAi",
                 "node": {
-                  "name": "CoinMetadata"
+                  "name": "DenyCap"
                 }
               },
               {
-                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
                 "node": {
-                  "name": "CurrencyCreated"
+                  "name": "RegulatedCoinMetadata"
                 }
               }
             ],
@@ -650,27 +720,27 @@ Response: {
           "suffixAll": {
             "edges": [
               {
-                "cursor": "IkNvaW4i",
-                "node": {
-                  "name": "Coin"
-                }
-              },
-              {
-                "cursor": "IkNvaW5NZXRhZGF0YSI",
-                "node": {
-                  "name": "CoinMetadata"
-                }
-              },
-              {
                 "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
                 "node": {
                   "name": "CurrencyCreated"
+                }
+              },
+              {
+                "cursor": "IkRlbnlDYXAi",
+                "node": {
+                  "name": "DenyCap"
+                }
+              },
+              {
+                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "RegulatedCoinMetadata"
                 }
               }
             ],
             "pageInfo": {
               "hasNextPage": true,
-              "hasPreviousPage": false
+              "hasPreviousPage": true
             }
           },
           "suffixExcess": {
@@ -691,6 +761,18 @@ Response: {
                 "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
                 "node": {
                   "name": "CurrencyCreated"
+                }
+              },
+              {
+                "cursor": "IkRlbnlDYXAi",
+                "node": {
+                  "name": "DenyCap"
+                }
+              },
+              {
+                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "RegulatedCoinMetadata"
                 }
               }
             ],
