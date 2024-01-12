@@ -1752,18 +1752,18 @@ impl sui_types::storage::ObjectStore for IndexerReader {
     fn get_object(
         &self,
         object_id: &ObjectID,
-    ) -> Result<Option<sui_types::object::Object>, sui_types::error::SuiError> {
+    ) -> Result<Option<sui_types::object::Object>, sui_types::storage::error::Error> {
         self.get_object(object_id, None)
-            .map_err(|e| sui_types::error::SuiError::StorageError(e.to_string()))
+            .map_err(sui_types::storage::error::Error::custom)
     }
 
     fn get_object_by_key(
         &self,
         object_id: &ObjectID,
         version: sui_types::base_types::VersionNumber,
-    ) -> Result<Option<sui_types::object::Object>, sui_types::error::SuiError> {
+    ) -> Result<Option<sui_types::object::Object>, sui_types::storage::error::Error> {
         self.get_object(object_id, Some(version))
-            .map_err(|e| sui_types::error::SuiError::StorageError(e.to_string()))
+            .map_err(sui_types::storage::error::Error::custom)
     }
 }
 

@@ -803,7 +803,7 @@ mod tests {
                 error_object.code(),
                 jsonrpsee::types::error::INTERNAL_ERROR_CODE
             );
-            let expected = expect!["Storage error"];
+            let expected = expect!["Storage error: mock rocksdb error"];
             expected.assert_eq(error_object.message());
         }
     }
