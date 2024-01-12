@@ -196,8 +196,7 @@ impl Object {
         ctx: &Context<'_>,
     ) -> Result<Option<TransactionBlock>> {
         let digest = self.native.previous_transaction;
-        ctx.data_unchecked::<PgManager>()
-            .fetch_tx(&digest.into())
+        TransactionBlock::query(ctx.data_unchecked(), digest.into())
             .await
             .extend()
     }

@@ -115,8 +115,7 @@ impl Query {
         ctx: &Context<'_>,
         digest: Digest,
     ) -> Result<Option<TransactionBlock>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_tx(&digest)
+        TransactionBlock::query(ctx.data_unchecked(), digest)
             .await
             .extend()
     }

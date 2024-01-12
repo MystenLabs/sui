@@ -4,8 +4,9 @@ use async_graphql::{
     connection::{Connection, CursorType, Edge},
     *,
 };
+use diesel::{ExpressionMethods, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
-use sui_indexer::models_v2::transactions::StoredTransaction;
+use sui_indexer::{models_v2::transactions::StoredTransaction, schema_v2::transactions};
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,
     transaction::{
@@ -13,7 +14,10 @@ use sui_types::{
     },
 };
 
-use crate::error::Error;
+use crate::{
+    data::{Db, QueryExecutor},
+    error::Error,
+};
 
 use super::{
     address::Address,
@@ -161,6 +165,22 @@ impl TransactionBlock {
     /// Serialized form of this transaction's `SenderSignedData`, BCS serialized and Base64 encoded.
     async fn bcs(&self) -> Option<Base64> {
         Some(Base64::from(&self.stored.raw_transaction))
+    }
+}
+
+impl TransactionBlock {
+    /// Look up a `TransactionBlock` in the database, by its transaction digest.
+    pub(crate) async fn query(db: &Db, digest: Digest) -> Result<Option<Self>, Error> {
+        use transactions::dsl;
+        db.optional::<_, _, _, _, StoredTransaction>(move || {
+            dsl::transactions
+                .filter(dsl::transaction_digest.eq(digest.to_vec()))
+                .into_boxed()
+        })
+        .await
+        .map_err(|e| Error::Internal(format!("Failed to fetch transaction: {e}")))?
+        .map(TransactionBlock::try_from)
+        .transpose()
     }
 }
 
