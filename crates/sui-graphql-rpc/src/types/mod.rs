@@ -47,6 +47,7 @@ pub(crate) mod system_state_summary;
 pub(crate) mod transaction_block;
 pub(crate) mod transaction_block_effects;
 pub(crate) mod transaction_block_kind;
+pub(crate) mod type_filter;
 pub(crate) mod unchanged_shared_object;
 pub(crate) mod validator;
 pub(crate) mod validator_credentials;

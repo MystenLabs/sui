@@ -68,8 +68,6 @@ pub enum Error {
     DynamicFieldOnAddress,
     #[error("Unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
     ProtocolVersionUnsupported(u64, u64),
-    #[error("Invalid filter option or value provided")]
-    InvalidFilter,
     #[error(transparent)]
     DomainParse(#[from] DomainParseError),
     #[error(transparent)]
@@ -102,7 +100,6 @@ impl ErrorExtensions for Error {
         async_graphql::Error::new(format!("{}", self)).extend_with(|_err, e| match self {
             Error::InvalidCoinType(_)
             | Error::DynamicFieldOnAddress
-            | Error::InvalidFilter
             | Error::ProtocolVersionUnsupported { .. }
             | Error::DomainParse(_)
             | Error::DbValidation(_)

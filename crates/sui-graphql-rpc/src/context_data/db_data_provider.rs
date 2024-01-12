@@ -13,7 +13,6 @@ use crate::{
         coin_metadata::CoinMetadata,
         digest::Digest,
         dynamic_field::{DynamicField, DynamicFieldName},
-        event::{Event, EventFilter},
         move_object::MoveObject,
         move_type::MoveType,
         object::{Object, ObjectFilter},
@@ -31,10 +30,7 @@ use std::{collections::BTreeMap, str::FromStr};
 use sui_indexer::{
     apis::GovernanceReadApiV2,
     indexer_reader::IndexerReader,
-    models_v2::{
-        display::StoredDisplay, events::StoredEvent, objects::StoredObject,
-        transactions::StoredTransaction,
-    },
+    models_v2::{display::StoredDisplay, objects::StoredObject, transactions::StoredTransaction},
     schema_v2::transactions,
     types_v2::OwnerType,
     PgConnectionPoolConfig,
@@ -353,67 +349,6 @@ impl PgManager {
             .transpose()
     }
 
-    pub(crate) fn parse_event_cursor(&self, cursor: &str) -> Result<(i64, i64), Error> {
-        let mut parts = cursor.split(':');
-        let tx_sequence_number = parts
-            .next()
-            .ok_or_else(|| {
-                Error::InvalidCursor(
-                    "Failed to parse tx_sequence_number from event cursor".to_string(),
-                )
-            })?
-            .parse::<i64>()
-            .map_err(|_| Error::InvalidCursor("Failed to convert str to i64".to_string()))?;
-        let event_sequence_number = parts
-            .next()
-            .ok_or_else(|| {
-                Error::InvalidCursor(
-                    "Failed to parse event_sequence_number from event cursor".to_string(),
-                )
-            })?
-            .parse::<i64>()
-            .map_err(|_| Error::InvalidCursor("Failed to convert str to i64".to_string()))?;
-        Ok((tx_sequence_number, event_sequence_number))
-    }
-
-    async fn multi_get_events(
-        &self,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        filter: Option<EventFilter>,
-    ) -> Result<Option<(Vec<StoredEvent>, bool)>, Error> {
-        let limit = self.validate_page_limit(first, last)?;
-        let before = before
-            .map(|cursor| self.parse_event_cursor(&cursor))
-            .transpose()?;
-        let after = after
-            .map(|cursor| self.parse_event_cursor(&cursor))
-            .transpose()?;
-
-        let query = move || QueryBuilder::multi_get_events(before, after, limit, filter.clone());
-
-        let result: Option<Vec<StoredEvent>> = self
-            .run_query_async_with_cost(query, |query| move |conn| query.load(conn).optional())
-            .await?;
-
-        result
-            .map(|mut stored_events| {
-                let has_next_page = stored_events.len() as i64 > limit.value();
-                if has_next_page {
-                    stored_events.pop();
-                }
-
-                if last.is_some() {
-                    stored_events.reverse();
-                }
-
-                Ok((stored_events, has_next_page))
-            })
-            .transpose()
-    }
-
     async fn multi_get_objs(
         &self,
         first: Option<u64>,
@@ -475,13 +410,6 @@ impl PgManager {
         Ok(SuiAddress::from_str(cursor)
             .map_err(|e| Error::InvalidCursor(e.to_string()))?
             .into_vec())
-    }
-
-    pub(crate) fn build_event_cursor(&self, event: &StoredEvent) -> String {
-        format!(
-            "{}:{}",
-            event.tx_sequence_number, event.event_sequence_number
-        )
     }
 
     pub(crate) fn validate_package_dependencies(
@@ -1024,31 +952,6 @@ impl PgManager {
         };
 
         Ok(stake)
-    }
-
-    pub(crate) async fn fetch_events(
-        &self,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        filter: Option<EventFilter>,
-    ) -> Result<Option<Connection<String, Event>>, Error> {
-        let events = self
-            .multi_get_events(first, after, last, before, filter)
-            .await?;
-
-        if let Some((stored_events, has_next_page)) = events {
-            let mut connection = Connection::new(false, has_next_page);
-            connection.edges.extend(stored_events.into_iter().map(|e| {
-                let cursor = self.build_event_cursor(&e);
-                let event = Event { stored: e };
-                Edge::new(cursor, event)
-            }));
-            Ok(Some(connection))
-        } else {
-            Err(Error::InvalidFilter)
-        }
     }
 
     pub(crate) async fn fetch_dynamic_fields(

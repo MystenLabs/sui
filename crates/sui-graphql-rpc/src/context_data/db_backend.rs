@@ -3,13 +3,13 @@
 
 use diesel::backend::Backend;
 use sui_indexer::{
-    schema_v2::{display, events, objects, transactions},
+    schema_v2::{display, objects, transactions},
     types_v2::OwnerType,
 };
 
 use crate::{
     error::Error,
-    types::{event::EventFilter, object::ObjectFilter, transaction_block::TransactionBlockFilter},
+    types::{object::ObjectFilter, transaction_block::TransactionBlockFilter},
 };
 use diesel::{
     query_builder::{BoxedSelectStatement, FromClause, QueryId},
@@ -59,12 +59,6 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     ) -> Result<objects::BoxedQuery<'static, DB>, Error>;
     fn multi_get_balances(address: Vec<u8>) -> BalanceQuery<'static, DB>;
     fn get_balance(address: Vec<u8>, coin_type: String) -> BalanceQuery<'static, DB>;
-    fn multi_get_events(
-        before: Option<(i64, i64)>,
-        after: Option<(i64, i64)>,
-        limit: PageLimit,
-        filter: Option<EventFilter>,
-    ) -> Result<events::BoxedQuery<'static, DB>, Error>;
 }
 
 /// The struct returned for query.explain()

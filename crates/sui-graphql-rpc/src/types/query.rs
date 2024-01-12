@@ -17,7 +17,7 @@ use super::{
     cursor::Page,
     digest::Digest,
     epoch::Epoch,
-    event::{Event, EventFilter},
+    event::{self, Event, EventFilter},
     move_type::MoveType,
     object::{Object, ObjectFilter},
     owner::Owner,
@@ -169,17 +169,17 @@ impl Query {
             .extend()
     }
 
-    async fn event_connection(
+    async fn events(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<event::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
+        before: Option<event::Cursor>,
         filter: Option<EventFilter>,
-    ) -> Result<Option<Connection<String, Event>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_events(first, after, last, before, filter)
+    ) -> Result<Connection<String, Event>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        Event::paginate(ctx.data_unchecked(), page, filter.unwrap_or_default())
             .await
             .extend()
     }

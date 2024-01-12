@@ -123,7 +123,7 @@ Response: {
 task 7 'run-graphql'. lines 57-68:
 Response: {
   "data": {
-    "eventConnection": {
+    "events": {
       "nodes": [
         {
           "sendingModule": {
