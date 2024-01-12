@@ -209,7 +209,7 @@ The hardcoded ID for the singleton Clock Object.
 
 <a name="0x2_object_SUI_DENY_LIST_OBJECT_ID"></a>
 
-The hardcoded ID for the singleton Deny list.
+The hardcoded ID for the singleton DenyList.
 
 
 <pre><code><b>const</b> <a href="object.md#0x2_object_SUI_DENY_LIST_OBJECT_ID">SUI_DENY_LIST_OBJECT_ID</a>: <b>address</b> = 403;

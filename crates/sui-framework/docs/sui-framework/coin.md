@@ -831,8 +831,8 @@ type, ensuring that there's only one <code><a href="coin.md#0x2_coin_TreasuryCap
 ## Function `create_regulated_currency`
 
 This creates a new currency, via <code>create_currency</code>, but with an extra capability that
-allows for specific addresses to have their coins frozen. Those addresses will not
-be able to interact with the coin as input objects
+allows for specific addresses to have their coins frozen. Those addresses cannot interact
+with the coin as input objects.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_create_regulated_currency">create_regulated_currency</a>&lt;T: drop&gt;(witness: T, decimals: u8, symbol: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, name: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, description: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, icon_url: <a href="dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="url.md#0x2_url_Url">url::Url</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin_DenyCap">coin::DenyCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;)
@@ -867,8 +867,8 @@ be able to interact with the coin as input objects
     };
     <a href="transfer.md#0x2_transfer_freeze_object">transfer::freeze_object</a>(<a href="coin.md#0x2_coin_RegulatedCoinMetadata">RegulatedCoinMetadata</a>&lt;T&gt; {
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
-        coin_metadata_object: <a href="object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&metadata.id),
-        deny_cap_object: <a href="object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&deny_cap.id),
+        coin_metadata_object: <a href="object.md#0x2_object_id">object::id</a>(&metadata),
+        deny_cap_object: <a href="object.md#0x2_object_id">object::id</a>(&deny_cap),
     });
     (treasury_cap, deny_cap, metadata)
 }

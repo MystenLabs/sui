@@ -818,8 +818,8 @@
     };
     <a href="../../dependencies/sui-framework/transfer.md#0x2_transfer_freeze_object">transfer::freeze_object</a>(<a href="../../dependencies/sui-framework/coin.md#0x2_coin_RegulatedCoinMetadata">RegulatedCoinMetadata</a>&lt;T&gt; {
         id: <a href="../../dependencies/sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
-        coin_metadata_object: <a href="../../dependencies/sui-framework/object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&metadata.id),
-        deny_cap_object: <a href="../../dependencies/sui-framework/object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&deny_cap.id),
+        coin_metadata_object: <a href="../../dependencies/sui-framework/object.md#0x2_object_id">object::id</a>(&metadata),
+        deny_cap_object: <a href="../../dependencies/sui-framework/object.md#0x2_object_id">object::id</a>(&deny_cap),
     });
     (treasury_cap, deny_cap, metadata)
 }

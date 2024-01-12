@@ -6,22 +6,24 @@
 
 
 -  [Resource `DenyList`](#0x2_deny_list_DenyList)
--  [Struct `DenyListV0`](#0x2_deny_list_DenyListV0)
--  [Struct `PerTypeListV0`](#0x2_deny_list_PerTypeListV0)
+-  [Resource `PerTypeList`](#0x2_deny_list_PerTypeList)
 -  [Constants](#@Constants_0)
 -  [Function `add`](#0x2_deny_list_add)
+-  [Function `per_type_list_add`](#0x2_deny_list_per_type_list_add)
 -  [Function `remove`](#0x2_deny_list_remove)
+-  [Function `per_type_list_remove`](#0x2_deny_list_per_type_list_remove)
 -  [Function `contains`](#0x2_deny_list_contains)
+-  [Function `per_type_list_contains`](#0x2_deny_list_per_type_list_contains)
 -  [Function `create`](#0x2_deny_list_create)
 -  [Function `per_type_list`](#0x2_deny_list_per_type_list)
 
 
-<pre><code><b>use</b> <a href="../../dependencies/sui-framework/object.md#0x2_object">0x2::object</a>;
+<pre><code><b>use</b> <a href="../../dependencies/sui-framework/bag.md#0x2_bag">0x2::bag</a>;
+<b>use</b> <a href="../../dependencies/sui-framework/object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="../../dependencies/sui-framework/table.md#0x2_table">0x2::table</a>;
 <b>use</b> <a href="../../dependencies/sui-framework/transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set">0x2::vec_set</a>;
-<b>use</b> <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned">0x2::versioned</a>;
 </code></pre>
 
 
@@ -49,7 +51,7 @@
 
 </dd>
 <dt>
-<code>inner: <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_Versioned">versioned::Versioned</a></code>
+<code>lists: <a href="../../dependencies/sui-framework/bag.md#0x2_bag_Bag">bag::Bag</a></code>
 </dt>
 <dd>
 
@@ -59,13 +61,13 @@
 
 </details>
 
-<a name="0x2_deny_list_DenyListV0"></a>
+<a name="0x2_deny_list_PerTypeList"></a>
 
-## Struct `DenyListV0`
+## Resource `PerTypeList`
 
 
 
-<pre><code><b>struct</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_DenyListV0">DenyListV0</a> <b>has</b> store
+<pre><code><b>struct</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a> <b>has</b> store, key
 </code></pre>
 
 
@@ -76,32 +78,11 @@
 
 <dl>
 <dt>
-<code>lists: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_PerTypeListV0">deny_list::PerTypeListV0</a>&gt;</code>
+<code>id: <a href="../../dependencies/sui-framework/object.md#0x2_object_UID">object::UID</a></code>
 </dt>
 <dd>
 
 </dd>
-</dl>
-
-
-</details>
-
-<a name="0x2_deny_list_PerTypeListV0"></a>
-
-## Struct `PerTypeListV0`
-
-
-
-<pre><code><b>struct</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_PerTypeListV0">PerTypeListV0</a> <b>has</b> store
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
 <dt>
 <code>denied_count: <a href="../../dependencies/sui-framework/table.md#0x2_table_Table">table::Table</a>&lt;<b>address</b>, u64&gt;</code>
 </dt>
@@ -172,8 +153,34 @@
     type: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     addr: <b>address</b>,
 ) {
-    <b>let</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_DenyListV0">DenyListV0</a> = <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_load_value_mut">versioned::load_value_mut</a>(&<b>mut</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.inner);
-    <b>let</b> list = <a href="../../dependencies/move-stdlib/vector.md#0x1_vector_borrow_mut">vector::borrow_mut</a>(&<b>mut</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.lists, per_type_index);
+    <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_per_type_list_add">per_type_list_add</a>(<a href="../../dependencies/sui-framework/bag.md#0x2_bag_borrow_mut">bag::borrow_mut</a>(&<b>mut</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.lists, per_type_index), type, addr)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_deny_list_per_type_list_add"></a>
+
+## Function `per_type_list_add`
+
+
+
+<pre><code><b>fun</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_per_type_list_add">per_type_list_add</a>(list: &<b>mut</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_PerTypeList">deny_list::PerTypeList</a>, type: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, addr: <b>address</b>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_per_type_list_add">per_type_list_add</a>(
+    list: &<b>mut</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a>,
+    type: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    addr: <b>address</b>,
+) {
     <b>if</b> (!<a href="../../dependencies/sui-framework/table.md#0x2_table_contains">table::contains</a>(&list.denied_addresses, type)) {
         <a href="../../dependencies/sui-framework/table.md#0x2_table_add">table::add</a>(&<b>mut</b> list.denied_addresses, type, <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_empty">vec_set::empty</a>());
     };
@@ -215,8 +222,34 @@
     type: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     addr: <b>address</b>,
 ) {
-    <b>let</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_DenyListV0">DenyListV0</a> = <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_load_value_mut">versioned::load_value_mut</a>(&<b>mut</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.inner);
-    <b>let</b> list = <a href="../../dependencies/move-stdlib/vector.md#0x1_vector_borrow_mut">vector::borrow_mut</a>(&<b>mut</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.lists, per_type_index);
+    <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_per_type_list_remove">per_type_list_remove</a>(<a href="../../dependencies/sui-framework/bag.md#0x2_bag_borrow_mut">bag::borrow_mut</a>(&<b>mut</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.lists, per_type_index), type, addr)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_deny_list_per_type_list_remove"></a>
+
+## Function `per_type_list_remove`
+
+
+
+<pre><code><b>fun</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_per_type_list_remove">per_type_list_remove</a>(list: &<b>mut</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_PerTypeList">deny_list::PerTypeList</a>, type: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, addr: <b>address</b>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_per_type_list_remove">per_type_list_remove</a>(
+    list: &<b>mut</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a>,
+    type: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    addr: <b>address</b>,
+) {
     <b>let</b> denied_addresses = <a href="../../dependencies/sui-framework/table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> list.denied_addresses, type);
     <b>assert</b>!(<a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_contains">vec_set::contains</a>(denied_addresses, &addr), <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_ENotDenied">ENotDenied</a>);
     <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_remove">vec_set::remove</a>(denied_addresses, &addr);
@@ -253,8 +286,34 @@
     type: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     addr: <b>address</b>,
 ): bool {
-    <b>let</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_DenyListV0">DenyListV0</a> = <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_load_value">versioned::load_value</a>(&<a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.inner);
-    <b>let</b> list = <a href="../../dependencies/move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&<a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.lists, per_type_index);
+    <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_per_type_list_contains">per_type_list_contains</a>(<a href="../../dependencies/sui-framework/bag.md#0x2_bag_borrow">bag::borrow</a>(&<a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.lists, per_type_index), type, addr)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_deny_list_per_type_list_contains"></a>
+
+## Function `per_type_list_contains`
+
+
+
+<pre><code><b>fun</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_per_type_list_contains">per_type_list_contains</a>(list: &<a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_PerTypeList">deny_list::PerTypeList</a>, type: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, addr: <b>address</b>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_per_type_list_contains">per_type_list_contains</a>(
+    list: &<a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a>,
+    type: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    addr: <b>address</b>,
+): bool {
     <b>if</b> (!<a href="../../dependencies/sui-framework/table.md#0x2_table_contains">table::contains</a>(&list.denied_count, addr)) <b>return</b> <b>false</b>;
 
     <b>let</b> denied_count = <a href="../../dependencies/sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&list.denied_count, addr);
@@ -289,13 +348,11 @@
 <pre><code><b>fun</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_create">create</a>(ctx: &<b>mut</b> TxContext) {
     <b>assert</b>!(<a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_ENotSystemAddress">ENotSystemAddress</a>);
 
-    <b>let</b> v0 = <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_DenyListV0">DenyListV0</a> {
-        lists: <a href="../../dependencies/move-stdlib/vector.md#0x1_vector">vector</a>[<a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_per_type_list">per_type_list</a>(ctx)],
-    };
-    <b>let</b> inner = <a href="../../dependencies/sui-framework/versioned.md#0x2_versioned_create">versioned::create</a>(0, v0, ctx);
+    <b>let</b> lists = <a href="../../dependencies/sui-framework/bag.md#0x2_bag_new">bag::new</a>(ctx);
+    <a href="../../dependencies/sui-framework/bag.md#0x2_bag_add">bag::add</a>(&<b>mut</b> lists, <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_COIN_INDEX">COIN_INDEX</a>, <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_per_type_list">per_type_list</a>(ctx));
     <b>let</b> deny_list_object = <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_DenyList">DenyList</a> {
         id: <a href="../../dependencies/sui-framework/object.md#0x2_object_sui_deny_list_object_id">object::sui_deny_list_object_id</a>(),
-        inner,
+        lists,
     };
     <a href="../../dependencies/sui-framework/transfer.md#0x2_transfer_share_object">transfer::share_object</a>(deny_list_object);
 }
@@ -311,7 +368,7 @@
 
 
 
-<pre><code><b>fun</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_per_type_list">per_type_list</a>(ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_PerTypeListV0">deny_list::PerTypeListV0</a>
+<pre><code><b>fun</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_per_type_list">per_type_list</a>(ctx: &<b>mut</b> <a href="../../dependencies/sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_PerTypeList">deny_list::PerTypeList</a>
 </code></pre>
 
 
@@ -320,8 +377,9 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_per_type_list">per_type_list</a>(ctx: &<b>mut</b> TxContext): <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_PerTypeListV0">PerTypeListV0</a> {
-    <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_PerTypeListV0">PerTypeListV0</a> {
+<pre><code><b>fun</b> <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_per_type_list">per_type_list</a>(ctx: &<b>mut</b> TxContext): <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a> {
+    <a href="../../dependencies/sui-framework/deny_list.md#0x2_deny_list_PerTypeList">PerTypeList</a> {
+        id: <a href="../../dependencies/sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
         denied_count: <a href="../../dependencies/sui-framework/table.md#0x2_table_new">table::new</a>(ctx),
         denied_addresses: <a href="../../dependencies/sui-framework/table.md#0x2_table_new">table::new</a>(ctx),
     }

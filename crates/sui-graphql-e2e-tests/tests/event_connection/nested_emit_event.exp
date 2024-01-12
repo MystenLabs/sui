@@ -26,7 +26,7 @@ Response: {
             "name": "M3"
           },
           "type": {
-            "repr": "0x5d833e26e17f7593285c2d983224bbe50ff46d2244ec0a02eac3b5297596a911::M1::EventA"
+            "repr": "0x8e1da19c6b31c8cc9844a2812b8373b7e00a6e6a3e0e5c0e361d61d3ca65b0fe::M1::EventA"
           },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -51,7 +51,7 @@ Response: {
             "name": "M3"
           },
           "type": {
-            "repr": "0x5d833e26e17f7593285c2d983224bbe50ff46d2244ec0a02eac3b5297596a911::M1::EventA"
+            "repr": "0x8e1da19c6b31c8cc9844a2812b8373b7e00a6e6a3e0e5c0e361d61d3ca65b0fe::M1::EventA"
           },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -94,7 +94,7 @@ Response: {
             "name": "M3"
           },
           "type": {
-            "repr": "0x5d833e26e17f7593285c2d983224bbe50ff46d2244ec0a02eac3b5297596a911::M1::EventA"
+            "repr": "0x8e1da19c6b31c8cc9844a2812b8373b7e00a6e6a3e0e5c0e361d61d3ca65b0fe::M1::EventA"
           },
           "sender": {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
