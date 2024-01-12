@@ -110,12 +110,6 @@ impl<T: TName> UniqueSet<T> {
     }
 }
 
-impl<T: TName> Default for UniqueSet<T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl<T: TName> PartialEq for UniqueSet<T> {
     fn eq(&self, other: &UniqueSet<T>) -> bool {
         self.0 == other.0

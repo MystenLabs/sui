@@ -111,12 +111,6 @@ where
     Ok(())
 }
 
-impl Default for AccountChangeSet {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl AccountChangeSet {
     pub fn from_modules_resources(
         modules: BTreeMap<Identifier, Op<Vec<u8>>>,

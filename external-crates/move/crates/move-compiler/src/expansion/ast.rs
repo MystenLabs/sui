@@ -523,12 +523,6 @@ impl UseFuns {
     }
 }
 
-impl Default for UseFuns {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Address {
     pub const fn anonymous(loc: Loc, address: NumericalAddress) -> Self {
         Self::Numerical {
