@@ -3,6 +3,7 @@
 
 mod base_committer;
 mod block;
+mod block_manager;
 mod block_verifier;
 mod commit;
 mod context;

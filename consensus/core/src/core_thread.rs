@@ -151,13 +151,25 @@ impl CoreThreadDispatcher {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::block_manager::BlockManager;
     use crate::context::Context;
+    use crate::core::CoreSignals;
+    use crate::transactions_client::{TransactionsClient, TransactionsConsumer};
 
     #[tokio::test]
     async fn test_core_thread() {
         let context = Arc::new(Context::new_for_test());
+        let block_manager = BlockManager::new();
+        let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
+        let transactions_consumer = TransactionsConsumer::new(tx_receiver);
+        let (signals, _new_block_receiver, _new_round_receiver) = CoreSignals::new();
+        let core = Core::new(
+            context.clone(),
+            transactions_consumer,
+            block_manager,
+            signals,
+        );
 
-        let core = Core::new(context.clone());
         let (core_dispatcher, handle) = CoreThreadDispatcher::start(core, context);
 
         // Now create some clones of the dispatcher

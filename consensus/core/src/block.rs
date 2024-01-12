@@ -67,6 +67,23 @@ pub struct BlockV1 {
     ancestors: Vec<BlockRef>,
 }
 
+impl BlockV1 {
+    pub(crate) fn new(
+        round: Round,
+        author: AuthorityIndex,
+        timestamp_ms: BlockTimestampMs,
+        ancestors: Vec<BlockRef>,
+    ) -> BlockV1 {
+        Self {
+            round,
+            author,
+            timestamp_ms,
+            ancestors,
+            digest: OnceCell::new(),
+        }
+    }
+}
+
 impl BlockAPI for BlockV1 {
     fn round(&self) -> Round {
         self.round
