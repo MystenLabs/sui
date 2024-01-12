@@ -843,6 +843,7 @@ impl PTB {
     pub fn from_matches(
         &self,
         matches: &ArgMatches,
+        parent_file: Option<String>,
         included_files: &mut BTreeMap<String, Vec<String>>,
     ) -> Result<BTreeMap<usize, PTBCommand>, anyhow::Error> {
         let mut order = BTreeMap::<usize, PTBCommand>::new();
@@ -920,7 +921,7 @@ impl PTB {
                 }
             }
         }
-        Ok(self.build_ptb_for_parsing(order, included_files)?)
+        Ok(self.build_ptb_for_parsing(order, &parent_file, included_files)?)
     }
 
     // fn insert_value<T>(&self, values: ValuesRef<'_, T>) {
@@ -943,6 +944,7 @@ impl PTB {
     pub fn build_ptb_for_parsing(
         &self,
         ptb: BTreeMap<usize, PTBCommand>,
+        parent_file: &Option<String>,
         included_files: &mut BTreeMap<String, Vec<String>>,
     ) -> Result<BTreeMap<usize, PTBCommand>, anyhow::Error> {
         // the ptb input is a list of commands  and values, where the key is the index
@@ -983,6 +985,7 @@ impl PTB {
                 // insert that in the array of PTBCommands
                 if val.name == "file" {
                     let new_index = self.resolve_file(
+                        parent_file,
                         val.values.clone(),
                         included_files,
                         val.values.get(0).unwrap().to_string(),
@@ -1004,6 +1007,7 @@ impl PTB {
     /// next command
     fn resolve_file(
         &self,
+        parent_file: &Option<String>,
         filename: Vec<String>,
         included_files: &mut BTreeMap<String, Vec<String>>,
         current_file: String,
@@ -1016,9 +1020,14 @@ impl PTB {
         let filename = filename.get(0).unwrap();
         let file_path = std::path::Path::new(filename);
         if !file_path.exists() {
-            return Err(anyhow!("File {filename} does not exist"));
+            if let Some(parent_file) = parent_file {
+                return Err(anyhow!(
+                    "{parent_file} includes {filename}, which does not exist"
+                ));
+            } else {
+                return Err(anyhow!("{filename} does not exist"));
+            }
         }
-
         let file_content = std::fs::read_to_string(file_path)?;
 
         // do not allow for circular inclusion of files
@@ -1067,7 +1076,7 @@ impl PTB {
         // and in the file there is no --gas-budget. For now, --gas-budget is always required
         // so we might want to figure out the best way to handle this case
         let args = input.get_matches_from(lines);
-        let ptb_commands = self.from_matches(&args, included_files)?;
+        let ptb_commands = self.from_matches(&args, Some(filename.to_string()), included_files)?;
         let len_cmds = ptb_commands.len();
 
         // add a pseudo command to tag where does the file include start and end
@@ -1137,7 +1146,7 @@ impl PTB {
             .subcommand_matches("ptb")
             .ok_or_else(|| anyhow!("Expected the ptb subcommand but got a different command"))?;
         let json = ptb_args_matches.get_flag("json");
-        let commands = self.from_matches(ptb_args_matches, &mut BTreeMap::new())?;
+        let commands = self.from_matches(ptb_args_matches, None, &mut BTreeMap::new())?;
         for (k, v) in commands.iter() {
             println!("{k}: {v:?}");
         }
