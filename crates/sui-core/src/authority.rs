@@ -106,7 +106,7 @@ use sui_types::messages_grpc::{
 };
 use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
 use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
-use sui_types::storage::{GetSharedLocks, ObjectKey, ObjectStore, WriteKind};
+use sui_types::storage::{GetSharedLocks, ObjectKey, ObjectOrTombstone, ObjectStore, WriteKind};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
@@ -2848,29 +2848,16 @@ impl AuthorityState {
 
     #[instrument(level = "trace", skip_all)]
     pub fn get_object_read(&self, object_id: &ObjectID) -> SuiResult<ObjectRead> {
-        let Some((object_key, store_object)) =
-            self.database.get_latest_object_or_tombstone(*object_id)?
-        else {
-            return Ok(ObjectRead::NotExists(*object_id));
-        };
-        if let Some(object_ref) = self
-            .database
-            .perpetual_tables
-            .tombstone_reference(&object_key, &store_object)?
-        {
-            return Ok(ObjectRead::Deleted(object_ref));
-        };
-        let object = self
-            .database
-            .perpetual_tables
-            .object(&object_key, store_object)?
-            .expect("Non tombstone store object could not be converted to object");
-        let layout = self.get_object_layout(&object)?;
-        Ok(ObjectRead::Exists(
-            object.compute_object_reference(),
-            object,
-            layout,
-        ))
+        Ok(
+            match self.database.get_latest_object_or_tombstone(*object_id)? {
+                Some((_, ObjectOrTombstone::Object(object))) => {
+                    let layout = self.get_object_layout(&object)?;
+                    ObjectRead::Exists(object.compute_object_reference(), object, layout)
+                }
+                Some((_, ObjectOrTombstone::Tombstone(objref))) => ObjectRead::Deleted(objref),
+                None => ObjectRead::NotExists(*object_id),
+            },
+        )
     }
 
     /// Chain Identifier is the digest of the genesis checkpoint.
