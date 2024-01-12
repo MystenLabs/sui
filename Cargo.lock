@@ -887,6 +887,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ce4f10ea3abcd6617873bae9f91d1c5332b4a778bd9ce34d0cd517474c1de82"
 
 [[package]]
+name = "asynchronous-codec"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4057f2c32adbb2fc158e22fb38433c8e9bbf76b75a4732c7c0cbaf695fb65568"
+dependencies = [
+ "bytes",
+ "futures-sink",
+ "futures-util",
+ "memchr",
+ "pin-project-lite",
+]
+
+[[package]]
 name = "atomic_float"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2576,6 +2589,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7144d30dcf0fafbce74250a3963025d8d52177934239851c917d29f1df280c2"
 
 [[package]]
+name = "containers-api"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56082e32f18a6d60f06c736b49e234deffb93b13cb87091a39e0dec053d03819"
+dependencies = [
+ "chrono",
+ "flate2",
+ "futures-util",
+ "http",
+ "hyper",
+ "hyperlocal",
+ "log",
+ "mime",
+ "paste",
+ "pin-project",
+ "serde",
+ "serde_json",
+ "tar",
+ "thiserror",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2990,6 +3027,16 @@ dependencies = [
 
 [[package]]
 name = "darling"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a01d95850c592940db9b8194bc39f4bc0e89dee5c4265e4b1807c34a9aba453c"
+dependencies = [
+ "darling_core 0.13.4",
+ "darling_macro 0.13.4",
+]
+
+[[package]]
+name = "darling"
 version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0dd3cd20dc6b5a876612a6e5accfe7f3dd883db6d07acfbf14c128f61550dfa"
@@ -3006,6 +3053,20 @@ checksum = "0209d94da627ab5605dcccf08bb18afa5009cfbef48d8a8b7d7bdbc79be25c5e"
 dependencies = [
  "darling_core 0.20.3",
  "darling_macro 0.20.3",
+]
+
+[[package]]
+name = "darling_core"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "859d65a907b6852c9361e3185c862aae7fafd2887876799fa55f5f99dc40d610"
+dependencies = [
+ "fnv",
+ "ident_case",
+ "proc-macro2 1.0.66",
+ "quote 1.0.33",
+ "strsim",
+ "syn 1.0.107",
 ]
 
 [[package]]
@@ -3034,6 +3095,17 @@ dependencies = [
  "quote 1.0.33",
  "strsim",
  "syn 2.0.32",
+]
+
+[[package]]
+name = "darling_macro"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c972679f83bdf9c42bd905396b6c3588a843a17f0f16dfcfa3e2c5d57441835"
+dependencies = [
+ "darling_core 0.13.4",
+ "quote 1.0.33",
+ "syn 1.0.107",
 ]
 
 [[package]]
@@ -3474,6 +3546,43 @@ name = "doc-comment"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
+
+[[package]]
+name = "docker-api"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "522a3ae33cf4fc165de192eb9c563b755bc43cda9bd6f442b2d511b84514b917"
+dependencies = [
+ "asynchronous-codec",
+ "base64 0.13.1",
+ "byteorder",
+ "bytes",
+ "chrono",
+ "containers-api",
+ "docker-api-stubs",
+ "futures-util",
+ "http",
+ "hyper",
+ "log",
+ "paste",
+ "serde",
+ "serde_json",
+ "tar",
+ "thiserror",
+ "url",
+]
+
+[[package]]
+name = "docker-api-stubs"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5872f5e057625a972acce1a51b461284eab32b7e594e18f8fc2f63724075da47"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "serde_with",
+]
 
 [[package]]
 name = "dotenvy"
@@ -4327,6 +4436,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0870c84016d4b481be5c9f323c24f65e31e901ae618f0e80f4308fb00de1d2d"
 
 [[package]]
+name = "field_names"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cca4fdab1b9b7e274e7de51202e37f9cfa542b28c77f8d09b817d77a726b4807"
+dependencies = [
+ "darling 0.13.4",
+ "proc-macro2 1.0.66",
+ "quote 1.0.33",
+ "syn 1.0.107",
+]
+
+[[package]]
 name = "filetime"
 version = "0.2.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5152,6 +5273,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperlocal"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0fafdf7b2b2de7c9784f76e02c0935e65a8117ec3b768644379983ab333ac98c"
+dependencies = [
+ "futures-util",
+ "hex",
+ "hyper",
+ "pin-project",
+ "tokio",
+]
+
+[[package]]
 name = "iana-time-zone"
 version = "0.1.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5964,6 +6098,12 @@ checksum = "6d0d1830bcd151a6fc4aea1369af235b36c1528fe976b8ff678683c9995eade8"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "maplit"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
 
 [[package]]
 name = "markdown-gen"
@@ -7178,7 +7318,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde",
- "serde_yaml 0.9.21",
+ "serde_yaml 0.9.29",
  "tabled",
  "tempfile",
  "tokio",
@@ -10375,11 +10515,11 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.95"
+version = "1.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d721eca97ac802aa7777b701877c8004d950fc142651367300d21c1cc0194744"
+checksum = "cb0652c533506ad7a2e353cce269330d6afd8bdfb6d75e0ace5b35aacbd7b9e9"
 dependencies = [
- "indexmap 1.9.3",
+ "indexmap 2.1.0",
  "itoa",
  "ryu",
  "serde",
@@ -10407,9 +10547,9 @@ dependencies = [
 
 [[package]]
 name = "serde_spanned"
-version = "0.6.2"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93107647184f6027e3b7dcb2e11034cf95ffa1e3a682c67951963ac69c1c007d"
+checksum = "eb3622f419d1296904700073ea6cc23ad690adbd66f13ea683df73298736f0c1"
 dependencies = [
  "serde",
 ]
@@ -10477,11 +10617,11 @@ dependencies = [
 
 [[package]]
 name = "serde_yaml"
-version = "0.9.21"
+version = "0.9.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9d684e3ec7de3bf5466b32bd75303ac16f0736426e5a4e0d6e489559ce1249c"
+checksum = "a15e0ef66bf939a7c890a0bf6d5a733c70202225f9888a89ed5c62298b019129"
 dependencies = [
- "indexmap 1.9.3",
+ "indexmap 2.1.0",
  "itoa",
  "ryu",
  "serde",
@@ -10850,6 +10990,17 @@ name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
+
+[[package]]
+name = "spinners"
+version = "4.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0ef947f358b9c238923f764c72a4a9d42f2d637c46e059dbd319d6e7cfb4f82"
+dependencies = [
+ "lazy_static",
+ "maplit",
+ "strum 0.24.1",
+]
 
 [[package]]
 name = "spki"
@@ -11724,7 +11875,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "toml 0.7.4",
- "toml_edit 0.19.10",
+ "toml_edit 0.19.15",
  "workspace-hack",
 ]
 
@@ -12233,7 +12384,7 @@ dependencies = [
  "prometheus-http-query",
  "reqwest",
  "serde",
- "serde_yaml 0.9.21",
+ "serde_yaml 0.9.29",
  "strum_macros 0.24.3",
  "telemetry-subscribers",
  "tokio",
@@ -13442,6 +13593,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "suiop-cli"
+version = "0.1.5"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "colored",
+ "docker-api",
+ "field_names",
+ "inquire",
+ "prettytable-rs",
+ "regex",
+ "reqwest",
+ "semver 1.0.16",
+ "serde",
+ "serde_json",
+ "serde_yaml 0.8.26",
+ "spinners",
+ "strum 0.24.1",
+ "tempfile",
+ "tokio",
+ "toml_edit 0.19.15",
+ "tracing",
+ "tracing-subscriber",
+ "workspace-hack",
+]
+
+[[package]]
 name = "symbolic-common"
 version = "10.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13569,6 +13748,17 @@ name = "tap"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
+
+[[package]]
+name = "tar"
+version = "0.4.40"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b16afcea1f22891c49a00c751c7b63b2233284064f11a200fc624137c51e2ddb"
+dependencies = [
+ "filetime",
+ "libc",
+ "xattr",
+]
 
 [[package]]
 name = "target-lexicon"
@@ -14041,8 +14231,8 @@ dependencies = [
  "indexmap 1.9.3",
  "serde",
  "serde_spanned",
- "toml_datetime 0.6.2",
- "toml_edit 0.19.10",
+ "toml_datetime 0.6.5",
+ "toml_edit 0.19.15",
 ]
 
 [[package]]
@@ -14053,9 +14243,9 @@ checksum = "4553f467ac8e3d374bc9a177a26801e5d0f9b211aa1673fb137a403afd1c9cf5"
 
 [[package]]
 name = "toml_datetime"
-version = "0.6.2"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a76a9312f5ba4c2dec6b9161fdf25d87ad8a09256ccea5a556fef03c706a10f"
+checksum = "3550f4e9685620ac18a50ed434eb3aec30db8ba93b0287467bca5826ea25baf1"
 dependencies = [
  "serde",
 ]
@@ -14086,14 +14276,14 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.19.10"
+version = "0.19.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2380d56e8670370eee6566b0bfd4265f65b3f432e8c6d85623f728d4fa31f739"
+checksum = "1b5bb770da30e5cbfde35a2d7b9b8a2c4b8ef89548a7a6aeab5c9a576e3e7421"
 dependencies = [
- "indexmap 1.9.3",
+ "indexmap 2.1.0",
  "serde",
  "serde_spanned",
- "toml_datetime 0.6.2",
+ "toml_datetime 0.6.5",
  "winnow",
 ]
 
@@ -14635,9 +14825,9 @@ dependencies = [
 
 [[package]]
 name = "unsafe-libyaml"
-version = "0.2.8"
+version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1865806a559042e51ab5414598446a5871b561d21b6764f2eabb0dd481d880a6"
+checksum = "ab4c90930b95a82d00dc9e9ac071b4991924390d46cbd0dfe566148667605e4b"
 
 [[package]]
 name = "unsigned-varint"
@@ -15146,9 +15336,9 @@ checksum = "1a515f5799fe4961cb532f983ce2b23082366b898e52ffbce459c86f67c8378a"
 
 [[package]]
 name = "winnow"
-version = "0.4.6"
+version = "0.5.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61de7bac303dc551fe038e2b3cef0f571087a47571ea6e79a87692ac99b99699"
+checksum = "b7520bbdec7211caa7c4e682eb1fbe07abe20cee6756b6e00f537c82c11816aa"
 dependencies = [
  "memchr",
 ]
@@ -15237,6 +15427,7 @@ dependencies = [
  "async-stream-impl",
  "async-trait",
  "async_once",
+ "asynchronous-codec",
  "atomic_float",
  "atomicwrites",
  "auto_impl",
@@ -15373,6 +15564,7 @@ dependencies = [
  "const-str",
  "constant_time_eq 0.2.4",
  "constant_time_eq 0.3.0",
+ "containers-api",
  "convert_case 0.4.0",
  "convert_case 0.6.0",
  "core-foundation",
@@ -15406,10 +15598,13 @@ dependencies = [
  "curve25519-dalek-derive",
  "curve25519-dalek-fiat",
  "curve25519-dalek-ng",
+ "darling 0.13.4",
  "darling 0.14.2",
  "darling 0.20.3",
+ "darling_core 0.13.4",
  "darling_core 0.14.2",
  "darling_core 0.20.3",
+ "darling_macro 0.13.4",
  "darling_macro 0.14.2",
  "darling_macro 0.20.3",
  "dashmap",
@@ -15451,6 +15646,8 @@ dependencies = [
  "displaydoc",
  "dissimilar",
  "doc-comment",
+ "docker-api",
+ "docker-api-stubs",
  "dotenvy",
  "downcast",
  "dunce",
@@ -15509,6 +15706,7 @@ dependencies = [
  "ff 0.12.1",
  "ff 0.13.0",
  "ff_derive",
+ "field_names",
  "filetime",
  "findshlibs",
  "fixed-hash 0.7.0",
@@ -15586,6 +15784,7 @@ dependencies = [
  "hyper-rustls 0.23.2",
  "hyper-rustls 0.24.0",
  "hyper-timeout",
+ "hyperlocal",
  "iana-time-zone",
  "ident_case",
  "idna",
@@ -15659,6 +15858,7 @@ dependencies = [
  "lz4",
  "lz4-sys",
  "mach2",
+ "maplit",
  "markdown-gen",
  "match_opt",
  "matchers",
@@ -15985,7 +16185,7 @@ dependencies = [
  "serde_with",
  "serde_with_macros",
  "serde_yaml 0.8.26",
- "serde_yaml 0.9.21",
+ "serde_yaml 0.9.29",
  "serial_test",
  "serial_test_derive",
  "sha-1 0.10.1",
@@ -16017,6 +16217,7 @@ dependencies = [
  "soketto",
  "spin 0.5.2",
  "spin 0.9.8",
+ "spinners",
  "spki 0.6.0",
  "spki 0.7.1",
  "stable_deref_trait",
@@ -16043,6 +16244,7 @@ dependencies = [
  "tabled_derive",
  "tabular",
  "tap",
+ "tar",
  "target-lexicon",
  "target-spec",
  "tempfile",
@@ -16079,10 +16281,10 @@ dependencies = [
  "toml 0.5.10",
  "toml 0.7.4",
  "toml_datetime 0.5.1",
- "toml_datetime 0.6.2",
+ "toml_datetime 0.6.5",
  "toml_edit 0.14.4",
  "toml_edit 0.15.0",
- "toml_edit 0.19.10",
+ "toml_edit 0.19.15",
  "tonic 0.10.0",
  "tonic 0.9.2",
  "tonic-build",
@@ -16167,6 +16369,7 @@ dependencies = [
  "wyz 0.2.0",
  "wyz 0.5.1",
  "x509-parser",
+ "xattr",
  "xml-rs",
  "xmlparser",
  "yaml-rust",
@@ -16239,6 +16442,15 @@ dependencies = [
  "rusticata-macros",
  "thiserror",
  "time",
+]
+
+[[package]]
+name = "xattr"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fbc6ab6ec1907d1a901cdbcd2bd4cb9e7d64ce5c9739cbb97d3c391acd8c7fae"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
