@@ -138,7 +138,7 @@ export class ZkSendLinkBuilder {
 			} else {
 				const coins = (await this.#getCoinsByType(coinType)).map((coin) => coin.coinObjectId);
 				const merged =
-					coins.length > 0 ? txb.mergeCoins(coins[0], coins.slice(1)) : txb.object(coins[0]);
+					coins.length > 1 ? txb.mergeCoins(coins[0], coins.slice(1)) : txb.object(coins[0]);
 				const [split] = txb.splitCoins(merged, [amount]);
 				objectsToTransfer.push(split);
 			}
