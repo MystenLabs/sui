@@ -99,7 +99,12 @@ export class ZkSendHost {
 		const parsed = new URL(url);
 
 		const urlHashData = parsed.hash
-			? Object.fromEntries(new URLSearchParams(parsed.hash.slice(1)))
+			? Object.fromEntries(
+					[...new URLSearchParams(parsed.hash.slice(1))].map(([key, value]) => [
+						key,
+						value.replace(/ /g, '+'),
+					]),
+			  )
 			: {};
 
 		const request = parse(ZkSendRequest, {
