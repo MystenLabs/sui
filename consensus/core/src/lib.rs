@@ -15,5 +15,4 @@ mod metrics;
 mod stake_aggregator;
 mod storage;
 mod threshold_clock;
-mod utils;
 mod validator;
