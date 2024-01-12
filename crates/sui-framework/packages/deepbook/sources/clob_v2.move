@@ -628,8 +628,6 @@ module deepbook::clob_v2 {
         clock: &Clock,
         ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
-        assert!(quantity > 0, EInvalidQuantity);
-        assert!(coin::value(&base_coin) >= quantity, EInsufficientBaseCoin);
         let original_val = coin::value(&quote_coin);
         let (ret_base_coin, ret_quote_coin, matched_order_metadata) = place_market_order_int(
             pool,
@@ -847,7 +845,7 @@ module deepbook::clob_v2 {
                     );
                     if(compute_metadata) {
                         vector::push_back(
-                            &mut matched_order_metadata, 
+                            &mut matched_order_metadata,
                             matched_order_metadata(
                                 *object::uid_as_inner(&pool.id),
                                 account_owner(account_cap),
@@ -1011,7 +1009,7 @@ module deepbook::clob_v2 {
                     );
                     if(compute_metadata){
                         vector::push_back(
-                            &mut matched_order_metadata, 
+                            &mut matched_order_metadata,
                             matched_order_metadata(
                                 *object::uid_as_inner(&pool.id),
                                 account_owner(account_cap),
@@ -1172,7 +1170,7 @@ module deepbook::clob_v2 {
                     );
                     if(compute_metadata) {
                         vector::push_back(
-                            &mut matched_order_metadata, 
+                            &mut matched_order_metadata,
                             matched_order_metadata(
                                 *object::uid_as_inner(&pool.id),
                                 account_owner(account_cap),
@@ -1459,6 +1457,11 @@ module deepbook::clob_v2 {
         (base_quantity_filled, quote_quantity_filled, is_success, order_id)
     }
 
+    /// Place a limit order to the order book.
+    /// Returns (base quantity filled, quote quantity filled, whether a maker order is being placed, order id of the maker order).
+    /// When the limit order is not successfully placed, we return false to indicate that and also returns a meaningless order_id 0.
+    /// When the limit order is successfully placed, we return true to indicate that and also the corresponding order_id.
+    /// So please check that boolean value first before using the order id.
     public fun place_limit_order_with_metadata<BaseAsset, QuoteAsset>(
         pool: &mut Pool<BaseAsset, QuoteAsset>,
         client_order_id: u64,
@@ -1489,11 +1492,6 @@ module deepbook::clob_v2 {
         (base_quantity_filled, quote_quantity_filled, is_success, order_id, option::extract(&mut meta_data))
     }
 
-    /// Place a limit order to the order book.
-    /// Returns (base quantity filled, quote quantity filled, whether a maker order is being placed, order id of the maker order).
-    /// When the limit order is not successfully placed, we return false to indicate that and also returns a meaningless order_id 0.
-    /// When the limit order is successfully placed, we return true to indicate that and also the corresponding order_id.
-    /// So please check that boolean value first before using the order id.
     fun place_limit_order_int<BaseAsset, QuoteAsset>(
         pool: &mut Pool<BaseAsset, QuoteAsset>,
         client_order_id: u64,
@@ -1525,9 +1523,7 @@ module deepbook::clob_v2 {
         let original_quantity = quantity;
         let base_quantity_filled;
         let quote_quantity_filled;
-        let meta_data: Option<vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>>;
-
-        if (is_bid) {
+        let meta_data = if (is_bid) {
             let quote_quantity_original = custodian::account_available_balance<QuoteAsset>(
                 &pool.quote_custodian,
                 owner
@@ -1549,7 +1545,6 @@ module deepbook::clob_v2 {
             );
             base_quantity_filled = balance::value(&base_balance_filled);
             quote_quantity_filled = quote_quantity_original - balance::value(&quote_balance_left);
-            meta_data = matched_order_metadata;
 
             custodian::increase_user_available_balance<BaseAsset>(
                 &mut pool.base_custodian,
@@ -1561,6 +1556,8 @@ module deepbook::clob_v2 {
                 owner,
                 quote_balance_left,
             );
+
+            matched_order_metadata
         } else {
             let base_balance = custodian::decrease_user_available_balance<BaseAsset>(
                 &mut pool.base_custodian,
@@ -1579,7 +1576,6 @@ module deepbook::clob_v2 {
 
             base_quantity_filled = quantity - balance::value(&base_balance_left);
             quote_quantity_filled = balance::value(&quote_balance_filled);
-            meta_data = matched_order_metadata;
 
             custodian::increase_user_available_balance<BaseAsset>(
                 &mut pool.base_custodian,
@@ -1591,6 +1587,7 @@ module deepbook::clob_v2 {
                 owner,
                 quote_balance_filled,
             );
+            matched_order_metadata
         };
 
         let order_id;
@@ -2203,7 +2200,7 @@ module deepbook::clob_v2 {
 
     public fun original_quantity(order: &Order): u64 {
         order.original_quantity
-    }  
+    }
 
     public fun quantity(order: &Order): u64 {
         order.quantity
