@@ -21,7 +21,6 @@ use move_compiler::{
 const KEEP_TMP: &str = "KEEP";
 
 const TEST_EXT: &str = "unit_test";
-const VERIFICATION_EXT: &str = "verification";
 const UNUSED_EXT: &str = "unused";
 
 const LINTER_DIR: &str = "linter";
@@ -92,33 +91,6 @@ fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_sta
             Path::new(&test_exp_path),
             Path::new(&test_out_path),
             Flags::testing(),
-            config,
-            lint,
-        )?;
-    }
-
-    // A verification case is marked that it should also be compiled in verification mode by having
-    // a `path.verification` file.
-    if path.with_extension(VERIFICATION_EXT).exists() {
-        let verification_exp_path = format!(
-            "{}.verification.{}",
-            path.with_extension("").to_string_lossy(),
-            EXP_EXT
-        );
-        let verification_out_path = format!(
-            "{}.verification.{}",
-            path.with_extension("").to_string_lossy(),
-            OUT_EXT
-        );
-        let mut config = config.clone();
-        config
-            .warning_filter
-            .union(&WarningFilters::unused_warnings_filter_for_test());
-        run_test(
-            path,
-            Path::new(&verification_exp_path),
-            Path::new(&verification_out_path),
-            Flags::verification(),
             config,
             lint,
         )?;

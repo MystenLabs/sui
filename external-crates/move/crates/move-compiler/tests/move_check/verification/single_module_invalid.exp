@@ -1,18 +1,12 @@
-error[E03004]: unbound type
-  ┌─ tests/move_check/verification/single_module_invalid.move:8:23
+error[E00002]: DEPRECATED. unexpected spec item
+  ┌─ tests/move_check/verification/single_module_invalid.move:3:7
   │
-8 │     public fun foo(): Foo {
-  │                       ^^^ Unbound type 'Foo' in current scope
+3 │     #[verify_only]
+  │       ^^^^^^^^^^^ Specification blocks are deprecated
 
-error[E03004]: unbound type
-  ┌─ tests/move_check/verification/single_module_invalid.move:9:9
-  │
-9 │         Foo {}
-  │         ^^^ Unbound type 'Foo' in current scope
-
-error[E03005]: unbound unscoped name
-   ┌─ tests/move_check/verification/single_module_invalid.move:17:24
+error[E00002]: DEPRECATED. unexpected spec item
+   ┌─ tests/move_check/verification/single_module_invalid.move:12:7
    │
-17 │     public fun baz() { bar() }
-   │                        ^^^ Unbound function 'bar' in current scope
+12 │     #[verify_only]
+   │       ^^^^^^^^^^^ Specification blocks are deprecated
 

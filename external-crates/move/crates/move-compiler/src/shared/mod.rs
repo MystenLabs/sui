@@ -648,13 +648,6 @@ pub struct Flags {
     )]
     test: bool,
 
-    /// Compile in verification mode
-    #[clap(
-        short = cli::VERIFY_SHORT,
-        long = cli::VERIFY,
-    )]
-    verify: bool,
-
     /// If set, warnings become errors.
     #[clap(
         long = cli::WARNINGS_ARE_ERRORS,
@@ -693,7 +686,6 @@ impl Flags {
     pub fn empty() -> Self {
         Self {
             test: false,
-            verify: false,
             shadow: false,
             bytecode_version: None,
             warnings_are_errors: false,
@@ -705,20 +697,7 @@ impl Flags {
     pub fn testing() -> Self {
         Self {
             test: true,
-            verify: false,
             shadow: false,
-            bytecode_version: None,
-            warnings_are_errors: false,
-            silence_warnings: false,
-            keep_testing_functions: false,
-        }
-    }
-
-    pub fn verification() -> Self {
-        Self {
-            test: false,
-            verify: true,
-            shadow: true, // allows overlapping between sources and deps
             bytecode_version: None,
             warnings_are_errors: false,
             silence_warnings: false,
@@ -764,10 +743,6 @@ impl Flags {
 
     pub fn keep_testing_functions(&self) -> bool {
         self.test || self.keep_testing_functions
-    }
-
-    pub fn is_verification(&self) -> bool {
-        self.verify
     }
 
     pub fn sources_shadow_deps(&self) -> bool {
@@ -879,7 +854,7 @@ pub mod known_attributes {
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
     pub enum VerificationAttribute {
-        // The associated AST node will be included in the compilation in prove mode
+        // deprecated spec only annotation
         VerifyOnly,
     }
 

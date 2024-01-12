@@ -1,12 +1,18 @@
-error[E03004]: unbound type
-   ┌─ tests/move_check/verification/cross_module_invalid.move:22:23
+error[E00002]: DEPRECATED. unexpected spec item
+   ┌─ tests/move_check/verification/cross_module_invalid.move:10:7
    │
-22 │     public fun bad(): Foo {
-   │                       ^^^ Unbound type 'Foo' in current scope
+10 │     #[verify_only]
+   │       ^^^^^^^^^^^ Specification blocks are deprecated
 
-error[E03002]: unbound module
-   ┌─ tests/move_check/verification/cross_module_invalid.move:23:9
+error[E00002]: DEPRECATED. unexpected spec item
+   ┌─ tests/move_check/verification/cross_module_invalid.move:13:7
    │
-23 │         A::build_foo()
-   │         ^ Unbound module alias 'A'
+13 │     #[verify_only]
+   │       ^^^^^^^^^^^ Specification blocks are deprecated
+
+error[E00002]: DEPRECATED. unexpected spec item
+   ┌─ tests/move_check/verification/cross_module_invalid.move:16:7
+   │
+16 │     #[verify_only]
+   │       ^^^^^^^^^^^ Specification blocks are deprecated
 

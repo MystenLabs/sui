@@ -12,6 +12,7 @@ use crate::{
         },
         ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_},
         byte_string, hex_string, legacy_aliases,
+        translate::known_attributes::KnownAttribute,
     },
     parser::ast::{
         self as P, Ability, BlockLabel, ConstantName, Field, FieldBindings, FunctionName,
@@ -591,10 +592,13 @@ fn module_(
         attributes,
         loc,
         address,
-        is_spec_module: _,
+        is_spec_module,
         name,
         members,
     } = mdef;
+    if is_spec_module {
+        context.spec_deprecated(name.0.loc, /* is_error */ true)
+    }
     let attributes = flatten_attributes(context, AttributePosition::Module, attributes);
     let mut warning_filter = module_warning_filter(context, &attributes);
     let config = context.env().package_config(package_name);
@@ -824,6 +828,12 @@ fn unique_attributes(
                 E::AttributeName_::Known(known)
             }
         };
+        if matches!(
+            name_,
+            E::AttributeName_::Known(KnownAttribute::Verification(_))
+        ) {
+            context.spec_deprecated(loc, /* is_error */ true)
+        }
         if let Err((_, old_loc)) = attr_map.add(sp(nloc, name_), sp(loc, attr_)) {
             let msg = format!("Duplicate attribute '{}' attached to the same item", name_);
             context.env().add_diag(diag!(

@@ -21,7 +21,7 @@ use crate::{
     },
     to_bytecode,
     typing::{self, visitor::TypingVisitorObj},
-    unit_test, verification,
+    unit_test,
 };
 use move_command_line_common::files::{
     extension_equals, find_filenames, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
@@ -864,9 +864,7 @@ fn run(
 
     match cur {
         PassResult::Parser(prog) => {
-            let prog = parser::merge_spec_modules::program(compilation_env, prog);
             let prog = unit_test::filter_test_members::program(compilation_env, prog);
-            let prog = verification::ast_filter::program(compilation_env, prog);
             let eprog = expansion::translate::program(compilation_env, pre_compiled_lib, prog);
             run(
                 compilation_env,
