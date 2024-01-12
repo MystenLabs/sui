@@ -46,14 +46,14 @@ module sui::deny_list {
         denied_count: Table<address, u64>,
         /// Set of addresses that are banned for a given type.
         /// For example with `sui::coin::Coin`: If addresses A and B are banned from using
-        /// `0x123::my_coin::MY_COIN`, this will be 0x123 -> {A, B}
+        /// "0...0123::my_coin::MY_COIN", this will be "0...0123::my_coin::MY_COIN" -> {A, B}
         denied_addresses: Table<vector<u8>, VecSet<address>>,
     }
 
     /// Adds the given address to the deny list of the specified type, preventing it
     /// from interacting with instances of that type as an input to a transaction. For coins,
     /// the type specified is the type of the coin, not the coin type itself. For example,
-    /// `0x123::my_coin::MY_COIN` would be the type, not `sui::coin::Coin`.
+    /// "00...0123::my_coin::MY_COIN" would be the type, not "00...02::coin::Coin".
     public(friend) fun add(
         deny_list: &mut DenyList,
         per_type_index: u64,
@@ -92,6 +92,9 @@ module sui::deny_list {
         vec_set::remove(denied_addresses, &addr);
         let denied_count = table::borrow_mut(&mut list.denied_count, addr);
         *denied_count = *denied_count - 1;
+        if (*denied_count == 0) {
+            table::remove(&mut list.denied_count, addr);
+        }
     }
 
     /// Returns true iff the given address is denied for the given type.

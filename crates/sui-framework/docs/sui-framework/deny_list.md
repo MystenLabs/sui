@@ -121,7 +121,7 @@ Stores the addresses that are denied for a given core type.
 <dd>
  Set of addresses that are banned for a given type.
  For example with <code>sui::coin::Coin</code>: If addresses A and B are banned from using
- <code>0x123::my_coin::MY_COIN</code>, this will be 0x123 -> {A, B}
+ "0...0123::my_coin::MY_COIN", this will be "0...0123::my_coin::MY_COIN" -> {A, B}
 </dd>
 </dl>
 
@@ -170,7 +170,7 @@ The specified address to be removed is not already in the deny list.
 Adds the given address to the deny list of the specified type, preventing it
 from interacting with instances of that type as an input to a transaction. For coins,
 the type specified is the type of the coin, not the coin type itself. For example,
-<code>0x123::my_coin::MY_COIN</code> would be the type, not <code>sui::coin::Coin</code>.
+"00...0123::my_coin::MY_COIN" would be the type, not "00...02::coin::Coin".
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="deny_list.md#0x2_deny_list_add">add</a>(<a href="deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, per_type_index: u64, type: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, addr: <b>address</b>)
@@ -240,6 +240,9 @@ Aborts with <code><a href="deny_list.md#0x2_deny_list_ENotDenied">ENotDenied</a>
     <a href="vec_set.md#0x2_vec_set_remove">vec_set::remove</a>(denied_addresses, &addr);
     <b>let</b> denied_count = <a href="table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> list.denied_count, addr);
     *denied_count = *denied_count - 1;
+    <b>if</b> (*denied_count == 0) {
+        <a href="table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> list.denied_count, addr);
+    }
 }
 </code></pre>
 

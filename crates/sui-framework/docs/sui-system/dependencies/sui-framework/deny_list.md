@@ -222,6 +222,9 @@
     <a href="../../dependencies/sui-framework/vec_set.md#0x2_vec_set_remove">vec_set::remove</a>(denied_addresses, &addr);
     <b>let</b> denied_count = <a href="../../dependencies/sui-framework/table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> list.denied_count, addr);
     *denied_count = *denied_count - 1;
+    <b>if</b> (*denied_count == 0) {
+        <a href="../../dependencies/sui-framework/table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> list.denied_count, addr);
+    }
 }
 </code></pre>
 
