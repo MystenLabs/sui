@@ -273,11 +273,9 @@ pub async fn metadata(
             sender,
             coins: vec![],
             objects: objects.clone(),
-            // Mock coin have 1B SUI
-            total_coin_value: 1_000_000_000 * 1_000_000_000,
+            total_coin_value: 10_000_000_000,
             gas_price,
-            // MAX BUDGET
-            budget: 50_000_000_000,
+            budget: 5_000_000_000,
         })?;
 
     let dry_run = context

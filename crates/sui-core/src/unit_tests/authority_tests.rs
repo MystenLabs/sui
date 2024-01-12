@@ -39,7 +39,7 @@ use sui_types::error::UserInputError;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages_consensus::{ConsensusCommitPrologue, ConsensusCommitPrologueV2};
-use sui_types::object::Data;
+use sui_types::object::{Data, MoveObject};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
 use sui_types::sui_system_state::SuiSystemStateWrapper;
@@ -831,7 +831,11 @@ async fn test_dev_inspect_gas_coin_argument() {
     assert_eq!(mutable_reference_outputs.len(), 1);
     let (arg, arg_value, arg_type) = &mutable_reference_outputs[0];
     assert_eq!(arg, &SuiArgument::GasCoin);
-    check_coin_value(arg_value, arg_type, protocol_config.max_tx_gas() - amount);
+    check_coin_value(
+        arg_value,
+        arg_type,
+        DEV_INSPECT_GAS_COIN_VALUE - protocol_config.max_tx_gas() - amount,
+    );
 
     assert_eq!(return_values.len(), 1);
     let (ret_value, ret_type) = &return_values[0];
