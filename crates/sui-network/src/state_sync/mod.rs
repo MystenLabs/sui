@@ -50,6 +50,7 @@
 use anemo::{types::PeerEvent, PeerId, Request, Response, Result};
 use futures::{stream::FuturesOrdered, FutureExt, StreamExt};
 use rand::Rng;
+use std::cmp::max;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::{
     collections::{HashMap, VecDeque},
@@ -372,6 +373,12 @@ struct StateSyncEventLoop<S> {
     sync_checkpoint_from_archive_task: Option<AbortHandle>,
 }
 
+#[derive(Default, Copy, Clone, Debug)]
+struct TargetCheckpointInfo {
+    pub highest_synced: CheckpointSequenceNumber,
+    pub highest_verified: CheckpointSequenceNumber,
+}
+
 impl<S> StateSyncEventLoop<S>
 where
     S: WriteStore + Clone + Send + Sync + 'static,
@@ -397,7 +404,7 @@ where
         let (
             target_checkpoint_contents_sequence_sender,
             target_checkpoint_contents_sequence_receiver,
-        ) = watch::channel(0);
+        ) = watch::channel(TargetCheckpointInfo::default());
 
         // Spawn tokio task to update metrics periodically in the background
         let (_sender, receiver) = oneshot::channel();
@@ -699,7 +706,7 @@ where
 
     fn maybe_trigger_checkpoint_contents_sync_task(
         &mut self,
-        target_sequence_channel: &watch::Sender<CheckpointSequenceNumber>,
+        target_sequence_channel: &watch::Sender<TargetCheckpointInfo>,
     ) {
         let highest_verified_checkpoint = self
             .store
@@ -720,12 +727,13 @@ where
                 .highest_known_checkpoint_sequence_number()
                 > Some(*highest_synced_checkpoint.sequence_number())
         {
-            let _ = target_sequence_channel.send_if_modified(|num| {
-                let new_num = *highest_verified_checkpoint.sequence_number();
-                if *num == new_num {
+            let _ = target_sequence_channel.send_if_modified(|info| {
+                let new_highest_verified = *highest_verified_checkpoint.sequence_number();
+                if info.highest_verified == new_highest_verified {
                     return false;
                 }
-                *num = new_num;
+                info.highest_verified = new_highest_verified;
+                info.highest_synced = *highest_synced_checkpoint.sequence_number();
                 true
             });
         }
@@ -1161,7 +1169,7 @@ async fn sync_checkpoint_contents<S>(
     checkpoint_content_download_concurrency: usize,
     checkpoint_content_download_tx_concurrency: u64,
     timeout: Duration,
-    mut target_sequence_channel: watch::Receiver<CheckpointSequenceNumber>,
+    mut target_sequence_channel: watch::Receiver<TargetCheckpointInfo>,
 ) where
     S: WriteStore + Clone,
     <S as ReadStore>::Error: std::error::Error,
@@ -1170,7 +1178,7 @@ async fn sync_checkpoint_contents<S>(
         .get_highest_synced_checkpoint()
         .expect("store operation should not fail");
 
-    let mut current_sequence = highest_synced.sequence_number().saturating_add(1);
+    let mut current_sequence = highest_synced.sequence_number() + 1;
     let mut target_sequence_cursor = 0;
     let mut highest_started_network_total_transactions = highest_synced.network_total_transactions;
     let mut checkpoint_contents_tasks = FuturesOrdered::new();
@@ -1182,7 +1190,14 @@ async fn sync_checkpoint_contents<S>(
             result = target_sequence_channel.changed() => {
                 match result {
                     Ok(()) => {
-                        target_sequence_cursor = (*target_sequence_channel.borrow_and_update()).saturating_add(1);
+                        let target_info = *target_sequence_channel.borrow_and_update();
+                        current_sequence = max(current_sequence, target_info.highest_synced + 1);
+                        target_sequence_cursor = target_info.highest_verified + 1;
+                        debug!(
+                            "Received new target checkpoint info. current_sequence: {}, target_sequence_cursor: {}",
+                            current_sequence,
+                            target_sequence_cursor,
+                        );
                     }
                     Err(_) => {
                         // Watch channel is closed, exit loop.
