@@ -34,13 +34,13 @@ impl Metrics {
             .observe(db_latency);
         if succeeded {
             self.db_metrics
-                .db_fetch_success_rate
-                .with_label_values(&["success_rate", "db"])
+                .db_num_fetches
+                .with_label_values(&["success"])
                 .inc();
         } else {
             self.db_metrics
-                .db_fetch_error_rate
-                .with_label_values(&["error_rate", "db"])
+                .db_num_fetches
+                .with_label_values(&["error"])
                 .inc();
         }
     }
@@ -62,26 +62,23 @@ impl Metrics {
         for err in errors {
             if let Some(ext) = err.extensions {
                 if let Some(code) = ext.get("code") {
-                    match code.clone().into_value() {
-                        async_graphql_value::Value::String(val) => {
-                            if val == code::INTERNAL_SERVER_ERROR {
-                                self.request_metrics
-                                    .num_internal_errors_by_path
-                                    .with_label_values(&[&self.get_query_path(err.path)])
-                                    .inc();
-                            } else if val == code::BAD_USER_INPUT {
-                                self.request_metrics
-                                    .num_bad_input_errors_by_path
-                                    .with_label_values(&[&self.get_query_path(err.path)])
-                                    .inc();
-                            } else {
-                                self.request_metrics
-                                    .num_query_errors_by_path
-                                    .with_label_values(&[&self.get_query_path(err.path)])
-                                    .inc();
-                            }
+                    if let async_graphql_value::Value::String(val) = code.clone().into_value() {
+                        if val == code::INTERNAL_SERVER_ERROR {
+                            self.request_metrics
+                                .num_internal_errors_by_path
+                                .with_label_values(&[&self.get_query_path(err.path)])
+                                .inc();
+                        } else if val == code::BAD_USER_INPUT {
+                            self.request_metrics
+                                .num_bad_input_errors_by_path
+                                .with_label_values(&[&self.get_query_path(err.path)])
+                                .inc();
+                        } else {
+                            self.request_metrics
+                                .num_query_errors_by_path
+                                .with_label_values(&[&self.get_query_path(err.path)])
+                                .inc();
                         }
-                        _ => (),
                     }
                 }
             }
@@ -121,9 +118,10 @@ impl Metrics {
 
 #[derive(Clone)]
 pub(crate) struct DBMetrics {
-    pub db_fetch_success_rate: IntCounterVec,
-    pub db_fetch_error_rate: IntCounterVec,
+    pub db_num_fetches: IntCounterVec,
     pub db_fetch_latency: HistogramVec,
+    // TODO make this work
+    pub _db_query_cost: Histogram,
     // TODO determine if we want this metric, and implement it
     pub _db_fetch_batch_size: HistogramVec,
 }
@@ -139,21 +137,14 @@ const BATCH_SIZE_BUCKETS: &[f64] = &[
 impl DBMetrics {
     pub(crate) fn new(registry: &Registry) -> Self {
         Self {
-            db_fetch_error_rate: register_int_counter_vec_with_registry!(
-                "db_fetch_error_rate",
-                "The total number of DB requests that returned an error",
-                &["error_rate", "type"],
+            db_num_fetches: register_int_counter_vec_with_registry!(
+                "db_fetch",
+                "The total number of DB requests grouped by success or error",
+                &["type"],
                 registry
             )
             .unwrap(),
 
-            db_fetch_success_rate: register_int_counter_vec_with_registry!(
-                "db_fetch_success_rate",
-                "The total number of DB requests that were successful",
-                &["success_rate", "type"],
-                registry
-            )
-            .unwrap(),
             db_fetch_latency: register_histogram_vec_with_registry!(
                 "db_fetch_latency",
                 "Latency of DB requests",
@@ -162,7 +153,13 @@ impl DBMetrics {
                 registry,
             )
             .unwrap(),
-
+            _db_query_cost: register_histogram_with_registry!(
+                "db_query_cost",
+                "Cost of a DB query",
+                DB_QUERY_COST_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
             _db_fetch_batch_size: register_histogram_vec_with_registry!(
                 "db_fetch_batch_size",
                 "Number of ids fetched per batch",
@@ -187,7 +184,6 @@ pub(crate) struct RequestMetrics {
     pub query_payload_size: Histogram,
     /// An error due to too high payload size
     pub query_payload_error: IntCounterVec,
-    pub _db_query_cost: Histogram,
     /// The time it takes to validate the query
     pub query_validation_latency: Histogram,
     /// The time it takes to validate the query
@@ -266,13 +262,6 @@ impl RequestMetrics {
                 "query_payload_error",
                 "The total number of client input errors due to too large payload size",
                 &["path"],
-                registry,
-            )
-            .unwrap(),
-            _db_query_cost: register_histogram_with_registry!(
-                "db_query_cost",
-                "Cost of a DB query",
-                DB_QUERY_COST_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
