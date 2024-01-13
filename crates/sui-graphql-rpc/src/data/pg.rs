@@ -164,9 +164,19 @@ mod query_cost {
         };
 
         if cost > max_db_query_cost as f64 {
-            warn!(cost, max_db_query_cost, exceeds = true, "Estimated cost");
+            warn!(
+                cost,
+                max_db_query_cost,
+                exceeds = true,
+                "[Cost] Estimated cost"
+            );
         } else {
-            info!(cost, max_db_query_cost, exceeds = false, "Estimated cost");
+            info!(
+                cost,
+                max_db_query_cost,
+                exceeds = false,
+                "[Cost] Estimated cost"
+            );
         }
     }
 
