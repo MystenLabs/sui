@@ -677,9 +677,10 @@ pub mod tests {
 
         let binding_address: SocketAddr = "0.0.0.0:9185".parse().unwrap();
         let registry = mysten_metrics::start_prometheus_server(binding_address).default_registry();
-        let metrics = RequestMetrics::new(&registry);
-        let metrics = Arc::new(metrics);
-        let metrics2 = metrics.clone();
+        let db_metrics = DBMetrics::new(&registry);
+        let request_metrics = RequestMetrics::new(&registry);
+        let metrics = Metrics::new(db_metrics, request_metrics);
+        let metrics2 = metrics.request_metrics.clone();
 
         let service_config = ServiceConfig::default();
         let db_url: String = connection_config.db_url.clone();
@@ -690,7 +691,7 @@ pub mod tests {
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)
-            .context_data(metrics)
+            .context_data(metrics.clone())
             .extension(QueryLimitsChecker::default())
             .build_schema();
         let _ = schema.execute("{ chainIdentifier }").await;
