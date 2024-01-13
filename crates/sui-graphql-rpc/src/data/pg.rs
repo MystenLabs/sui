@@ -61,9 +61,9 @@ impl QueryExecutor for PgExecutor {
             .run_query_async(move |conn| txn(&mut PgConnection { max_cost, conn }))
             .await
             .map_err(|e| Error::Internal(e.to_string()));
-        let elapsed = instant.elapsed();
+        let elapsed = instant.elapsed().as_millis() as u64;
         if let Some(metrics) = &self.metrics {
-            metrics.observe_db_data(elapsed.as_secs_f64(), result.is_ok());
+            metrics.observe_db_data(elapsed, result.is_ok());
         }
 <<<<<<< HEAD
         if result.is_err() {
@@ -89,10 +89,9 @@ impl QueryExecutor for PgExecutor {
             .run_query_repeatable_async(move |conn| txn(&mut PgConnection { max_cost, conn }))
             .await
             .map_err(|e| Error::Internal(e.to_string()));
-        let elapsed = instant.elapsed();
-
+        let elapsed = instant.elapsed().as_millis() as u64;
         if let Some(metrics) = &self.metrics {
-            metrics.observe_db_data(elapsed.as_secs_f64(), result.is_ok());
+            metrics.observe_db_data(elapsed, result.is_ok());
         }
 <<<<<<< HEAD
         if result.is_err() {
@@ -138,9 +137,9 @@ impl<'c> super::DbConnection for PgConnection<'c> {
             })
             .await
             .map_err(|e| Error::Internal(e.to_string()));
-        let elapsed = instant.elapsed();
+        let elapsed = instant.elapsed().as_millis() as u64;
         if let Some(metrics) = &self.metrics {
-            metrics.observe_db_data(elapsed.as_secs_f64(), result.is_ok());
+            metrics.observe_db_data(elapsed, result.is_ok());
         }
         result
 >>>>>>> b437b75a45 (Move query cost to db metrics)
