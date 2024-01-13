@@ -6,7 +6,7 @@ use async_graphql::{
     connection::{Connection, CursorType, Edge},
     *,
 };
-use diesel::{ExpressionMethods, QueryDsl};
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer::{
     models_v2::transactions::StoredTransaction,
@@ -22,7 +22,7 @@ use sui_types::{
 };
 
 use crate::{
-    data::{BoxedQuery, Db, QueryExecutor},
+    data::{self, Db, DbConnection, QueryExecutor},
     error::Error,
 };
 
@@ -81,7 +81,7 @@ pub(crate) struct TransactionBlockFilter {
 
 pub(crate) type Cursor = cursor::Cursor<u64>;
 type CEvent = cursor::Cursor<usize>;
-type Query<ST, GB> = BoxedQuery<ST, transactions::table, Db, GB>;
+type Query<ST, GB> = data::Query<ST, transactions::table, GB>;
 
 #[Object]
 impl TransactionBlock {
@@ -183,15 +183,20 @@ impl TransactionBlock {
     /// Look up a `TransactionBlock` in the database, by its transaction digest.
     pub(crate) async fn query(db: &Db, digest: Digest) -> Result<Option<Self>, Error> {
         use transactions::dsl;
-        db.optional::<_, _, _, _, StoredTransaction>(move || {
-            dsl::transactions
-                .filter(dsl::transaction_digest.eq(digest.to_vec()))
-                .into_boxed()
-        })
-        .await
-        .map_err(|e| Error::Internal(format!("Failed to fetch transaction: {e}")))?
-        .map(TransactionBlock::try_from)
-        .transpose()
+
+        let stored: Option<StoredTransaction> = db
+            .execute(move |conn| {
+                conn.result(move || {
+                    dsl::transactions
+                        .filter(dsl::transaction_digest.eq(digest.to_vec()))
+                        .into_boxed()
+                })
+                .optional()
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch transaction: {e}")))?;
+
+        stored.map(TransactionBlock::try_from).transpose()
     }
 
     /// Look up multiple `TransactionBlock`s by their digests. Returns a map from those digests to
@@ -206,10 +211,12 @@ impl TransactionBlock {
         let digests: Vec<_> = digests.into_iter().map(|d| d.to_vec()).collect();
 
         let stored: Vec<StoredTransaction> = db
-            .results(move || {
-                dsl::transactions
-                    .filter(dsl::transaction_digest.eq_any(digests.clone()))
-                    .into_boxed()
+            .execute(move |conn| {
+                conn.results(move || {
+                    dsl::transactions
+                        .filter(dsl::transaction_digest.eq_any(digests.clone()))
+                        .into_boxed()
+                })
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch transactions: {e}")))?;
@@ -231,74 +238,76 @@ impl TransactionBlock {
         page: Page<u64>,
         filter: TransactionBlockFilter,
     ) -> Result<Connection<String, TransactionBlock>, Error> {
-        let (prev, next, results) = page
-            .paginate_query::<StoredTransaction, _, _, _>(db, move || {
-                use transactions as tx;
-                let mut query = tx::dsl::transactions.into_boxed();
+        let (prev, next, results) = db
+            .execute(move |conn| {
+                page.paginate_query::<StoredTransaction, _, _, _>(conn, move || {
+                    use transactions as tx;
+                    let mut query = tx::dsl::transactions.into_boxed();
 
-                if let Some(f) = &filter.function {
-                    let sub_query = tx_calls::dsl::tx_calls
-                        .select(tx_calls::dsl::tx_sequence_number)
-                        .into_boxed();
+                    if let Some(f) = &filter.function {
+                        let sub_query = tx_calls::dsl::tx_calls
+                            .select(tx_calls::dsl::tx_sequence_number)
+                            .into_boxed();
 
-                    query = query.filter(tx::dsl::tx_sequence_number.eq_any(f.apply(
-                        sub_query,
-                        tx_calls::dsl::package,
-                        tx_calls::dsl::module,
-                        tx_calls::dsl::func,
-                    )));
-                }
+                        query = query.filter(tx::dsl::tx_sequence_number.eq_any(f.apply(
+                            sub_query,
+                            tx_calls::dsl::package,
+                            tx_calls::dsl::module,
+                            tx_calls::dsl::func,
+                        )));
+                    }
 
-                if let Some(k) = &filter.kind {
-                    query = query.filter(tx::dsl::transaction_kind.eq(*k as i16))
-                }
+                    if let Some(k) = &filter.kind {
+                        query = query.filter(tx::dsl::transaction_kind.eq(*k as i16))
+                    }
 
-                if let Some(c) = &filter.after_checkpoint {
-                    query = query.filter(tx::dsl::checkpoint_sequence_number.gt(*c as i64));
-                }
+                    if let Some(c) = &filter.after_checkpoint {
+                        query = query.filter(tx::dsl::checkpoint_sequence_number.gt(*c as i64));
+                    }
 
-                if let Some(c) = &filter.at_checkpoint {
-                    query = query.filter(tx::dsl::checkpoint_sequence_number.eq(*c as i64));
-                }
+                    if let Some(c) = &filter.at_checkpoint {
+                        query = query.filter(tx::dsl::checkpoint_sequence_number.eq(*c as i64));
+                    }
 
-                if let Some(c) = &filter.before_checkpoint {
-                    query = query.filter(tx::dsl::checkpoint_sequence_number.lt(*c as i64));
-                }
+                    if let Some(c) = &filter.before_checkpoint {
+                        query = query.filter(tx::dsl::checkpoint_sequence_number.lt(*c as i64));
+                    }
 
-                if let Some(a) = &filter.sign_address {
-                    let sub_query = tx_senders::dsl::tx_senders
-                        .select(tx_senders::dsl::tx_sequence_number)
-                        .filter(tx_senders::dsl::sender.eq(a.into_vec()));
-                    query = query.filter(tx::dsl::tx_sequence_number.eq_any(sub_query));
-                }
+                    if let Some(a) = &filter.sign_address {
+                        let sub_query = tx_senders::dsl::tx_senders
+                            .select(tx_senders::dsl::tx_sequence_number)
+                            .filter(tx_senders::dsl::sender.eq(a.into_vec()));
+                        query = query.filter(tx::dsl::tx_sequence_number.eq_any(sub_query));
+                    }
 
-                if let Some(a) = &filter.recv_address {
-                    let sub_query = tx_recipients::dsl::tx_recipients
-                        .select(tx_recipients::dsl::tx_sequence_number)
-                        .filter(tx_recipients::dsl::recipient.eq(a.into_vec()));
-                    query = query.filter(tx::dsl::tx_sequence_number.eq_any(sub_query));
-                }
+                    if let Some(a) = &filter.recv_address {
+                        let sub_query = tx_recipients::dsl::tx_recipients
+                            .select(tx_recipients::dsl::tx_sequence_number)
+                            .filter(tx_recipients::dsl::recipient.eq(a.into_vec()));
+                        query = query.filter(tx::dsl::tx_sequence_number.eq_any(sub_query));
+                    }
 
-                if let Some(o) = &filter.input_object {
-                    let sub_query = tx_input_objects::dsl::tx_input_objects
-                        .select(tx_input_objects::dsl::tx_sequence_number)
-                        .filter(tx_input_objects::dsl::object_id.eq(o.into_vec()));
-                    query = query.filter(tx::dsl::tx_sequence_number.eq_any(sub_query));
-                }
+                    if let Some(o) = &filter.input_object {
+                        let sub_query = tx_input_objects::dsl::tx_input_objects
+                            .select(tx_input_objects::dsl::tx_sequence_number)
+                            .filter(tx_input_objects::dsl::object_id.eq(o.into_vec()));
+                        query = query.filter(tx::dsl::tx_sequence_number.eq_any(sub_query));
+                    }
 
-                if let Some(o) = &filter.changed_object {
-                    let sub_query = tx_changed_objects::dsl::tx_changed_objects
-                        .select(tx_changed_objects::dsl::tx_sequence_number)
-                        .filter(tx_changed_objects::dsl::object_id.eq(o.into_vec()));
-                    query = query.filter(tx::dsl::tx_sequence_number.eq_any(sub_query));
-                }
+                    if let Some(o) = &filter.changed_object {
+                        let sub_query = tx_changed_objects::dsl::tx_changed_objects
+                            .select(tx_changed_objects::dsl::tx_sequence_number)
+                            .filter(tx_changed_objects::dsl::object_id.eq(o.into_vec()));
+                        query = query.filter(tx::dsl::tx_sequence_number.eq_any(sub_query));
+                    }
 
-                if let Some(txs) = &filter.transaction_ids {
-                    let digests: Vec<_> = txs.iter().map(|d| d.to_vec()).collect();
-                    query = query.filter(tx::dsl::transaction_digest.eq_any(digests));
-                }
+                    if let Some(txs) = &filter.transaction_ids {
+                        let digests: Vec<_> = txs.iter().map(|d| d.to_vec()).collect();
+                        query = query.filter(tx::dsl::transaction_digest.eq_any(digests));
+                    }
 
-                query
+                    query
+                })
             })
             .await?;
 

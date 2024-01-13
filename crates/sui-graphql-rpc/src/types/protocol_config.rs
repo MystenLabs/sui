@@ -7,7 +7,7 @@ use sui_indexer::schema_v2::{checkpoints, epochs};
 use sui_protocol_config::{ProtocolConfig as NativeProtocolConfig, ProtocolVersion};
 
 use crate::{
-    data::{Db, QueryExecutor},
+    data::{Db, DbConnection, QueryExecutor},
     error::Error,
     types::chain_identifier::ChainIdentifier,
 };
@@ -92,17 +92,19 @@ impl ProtocolConfigs {
         use epochs::dsl as e;
 
         let (latest_version, digest_bytes): (i64, Option<Vec<u8>>) = db
-            .first(move || {
-                e::epochs
-                    .select((
-                        e::protocol_version,
-                        c::checkpoints
-                            .select(c::checkpoint_digest)
-                            .filter(c::sequence_number.eq(0))
-                            .single_value(),
-                    ))
-                    .order_by(e::epoch.desc())
-                    .into_boxed()
+            .execute(move |conn| {
+                conn.first(move || {
+                    e::epochs
+                        .select((
+                            e::protocol_version,
+                            c::checkpoints
+                                .select(c::checkpoint_digest)
+                                .filter(c::sequence_number.eq(0))
+                                .single_value(),
+                        ))
+                        .order_by(e::epoch.desc())
+                        .into_boxed()
+                })
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch system details: {e}")))?;

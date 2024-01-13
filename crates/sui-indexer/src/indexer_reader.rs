@@ -128,6 +128,22 @@ impl IndexerReader {
             .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
     }
 
+    pub fn run_query_repeatable<T, E, F>(&self, query: F) -> Result<T, IndexerError>
+    where
+        F: FnOnce(&mut PgConnection) -> Result<T, E>,
+        E: From<diesel::result::Error> + std::error::Error,
+    {
+        blocking_call_is_ok_or_panic();
+
+        let mut connection = self.get_connection()?;
+        connection
+            .build_transaction()
+            .read_only()
+            .repeatable_read()
+            .run(query)
+            .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
+    }
+
     pub async fn spawn_blocking<F, R, E>(&self, f: F) -> Result<R, E>
     where
         F: FnOnce(Self) -> Result<R, E> + Send + 'static,
@@ -153,6 +169,16 @@ impl IndexerReader {
         T: Send + 'static,
     {
         self.spawn_blocking(move |this| this.run_query(query)).await
+    }
+
+    pub async fn run_query_repeatable_async<T, E, F>(&self, query: F) -> Result<T, IndexerError>
+    where
+        F: FnOnce(&mut PgConnection) -> Result<T, E> + Send + 'static,
+        E: From<diesel::result::Error> + std::error::Error + Send + 'static,
+        T: Send + 'static,
+    {
+        self.spawn_blocking(move |this| this.run_query_repeatable(query))
+            .await
     }
 }
 
