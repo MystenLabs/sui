@@ -26,9 +26,9 @@ Response: {
             "objectChanges": {
               "pageInfo": {
                 "hasPreviousPage": false,
-                "hasNextPage": false,
+                "hasNextPage": true,
                 "startCursor": "MA",
-                "endCursor": "MTg"
+                "endCursor": "MTk"
               },
               "edges": [
                 {
@@ -87,6 +87,9 @@ Response: {
                 },
                 {
                   "cursor": "MTg"
+                },
+                {
+                  "cursor": "MTk"
                 }
               ]
             }

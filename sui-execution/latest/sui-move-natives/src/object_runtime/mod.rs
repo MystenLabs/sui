@@ -1,6 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub(crate) mod object_store;
+
+use self::object_store::{ChildObjectEffect, ObjectResult};
+use super::get_object_id;
 use better_any::{Tid, TidAble};
 use indexmap::map::IndexMap;
 use indexmap::set::IndexSet;
@@ -17,6 +21,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{GlobalValue, Value},
 };
+use object_store::ChildObjectStore;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -34,14 +39,6 @@ use sui_types::{
     SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
     SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
-
-pub(crate) mod object_store;
-
-use object_store::ChildObjectStore;
-
-use self::object_store::{ChildObjectEffect, ObjectResult};
-
-use super::get_object_id;
 
 pub enum ObjectEvent {
     /// Transfer to a new address or object. Or make it shared or immutable.
