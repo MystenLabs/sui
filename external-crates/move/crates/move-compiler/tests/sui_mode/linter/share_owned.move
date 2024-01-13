@@ -44,11 +44,11 @@ module a::test2 {
     }
 
     // a linter suppression should not work for regular compiler warnings
-    #[linter_allow(code_suppression_should_not_work)]
+    #[allow(lint(all))]
     fun private_fun_should_not_be_suppressed() {}
 
     // a linter suppression should not work for regular compiler warnings
-    #[linter_allow(category_suppression_should_not_work)]
+    #[allow(lint(all))]
     fun another_private_fun_should_not_be_suppressed() {}
 }
 

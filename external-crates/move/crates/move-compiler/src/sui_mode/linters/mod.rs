@@ -59,7 +59,7 @@ pub const VEC_MAP_STRUCT_NAME: &str = "VecMap";
 pub const VEC_SET_MOD_NAME: &str = "vec_set";
 pub const VEC_SET_STRUCT_NAME: &str = "VecSet";
 
-pub const ALLOW_ATTR_CATEGORY: &str = "lint_allow";
+pub const ALLOW_ATTR_CATEGORY: &str = "lint";
 pub const LINT_WARNING_PREFIX: &str = "Lint ";
 
 pub const SHARE_OWNED_FILTER_NAME: &str = "share_owned";
