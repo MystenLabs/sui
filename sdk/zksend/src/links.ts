@@ -137,9 +137,11 @@ export class ZkSendLinkBuilder {
 				objectsToTransfer.push(sui);
 			} else {
 				const coins = (await this.#getCoinsByType(coinType)).map((coin) => coin.coinObjectId);
-				const merged =
-					coins.length > 1 ? txb.mergeCoins(coins[0], coins.slice(1)) : txb.object(coins[0]);
-				const [split] = txb.splitCoins(merged, [amount]);
+
+				if (coins.length > 1) {
+					txb.mergeCoins(coins[0], coins.slice(1));
+				}
+				const [split] = txb.splitCoins(coins[0], [amount]);
 				objectsToTransfer.push(split);
 			}
 		}
