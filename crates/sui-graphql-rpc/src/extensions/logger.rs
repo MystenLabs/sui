@@ -14,6 +14,8 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
+use crate::server::builder::QueryUuid;
+
 // TODO: mode in-depth logging to debug
 
 #[derive(Clone, Debug)]
@@ -41,6 +43,7 @@ pub struct Logger {
 impl ExtensionFactory for Logger {
     fn create(&self) -> Arc<dyn Extension> {
         Arc::new(LoggerExtension {
+            query_id: "".to_string().into(),
             session_id: "".to_string().into(),
             config: self.config.clone(),
         })
@@ -49,10 +52,22 @@ impl ExtensionFactory for Logger {
 
 struct LoggerExtension {
     session_id: Mutex<String>,
+    query_id: Mutex<String>,
     config: LoggerConfig,
 }
 
 impl LoggerExtension {
+    /// Sets a unique id for each query that comes through
+    async fn set_query_id(&self, query_id: Option<QueryUuid>) {
+        let id = query_id.map(|id| id.uuid).unwrap_or_default();
+        *self.query_id.lock().await = id;
+    }
+
+    /// Get the query uuid
+    async fn query_id(&self) -> String {
+        self.query_id.lock().await.clone()
+    }
+
     async fn set_session_id(&self, ip: Option<SocketAddr>) {
         let ip_component = ip.map(|ip| format!("{}-", ip)).unwrap_or_default();
         let uuid_component = format!("{}", Uuid::new_v4());
@@ -75,6 +90,8 @@ impl Extension for LoggerExtension {
     ) -> ServerResult<Request> {
         self.set_session_id(ctx.data_opt::<SocketAddr>().copied())
             .await;
+        self.set_query_id(ctx.data_opt::<QueryUuid>().cloned())
+            .await;
         next.run(ctx, request).await
     }
 
@@ -91,10 +108,14 @@ impl Extension for LoggerExtension {
             .iter()
             .filter(|(_, operation)| operation.node.ty == OperationType::Query)
             .any(|(_, operation)| operation.node.selection_set.node.items.iter().any(|selection| matches!(&selection.node, Selection::Field(field) if field.node.name.node == "__schema")));
+        // TODO figure out if we can use the query_id call directly in the logging macro
+        let query_uuid = self.query_id().await;
         if !is_schema && self.config.log_request_query {
             info!(
-                target: "async-graphql",
-                "[Query] {}: {}", self.session_id().await, ctx.stringify_execute_doc(&document, variables)
+                query_id = query_uuid,
+                "[Query] {}: {}",
+                self.session_id().await,
+                ctx.stringify_execute_doc(&document, variables)
             );
         }
         Ok(document)
@@ -107,11 +128,14 @@ impl Extension for LoggerExtension {
     ) -> Result<ValidationResult, Vec<ServerError>> {
         let res = next.run(ctx).await?;
         if self.config.log_complexity {
+            let query_uuid = self.query_id().await;
             info!(
-                target: "async-graphql",
+                query_id = query_uuid,
                 complexity = res.complexity,
                 depth = res.depth,
-                "[Validation] {}", self.session_id().await);
+                "[Validation] {}",
+                self.session_id().await
+            );
         }
         Ok(res)
     }
@@ -123,6 +147,7 @@ impl Extension for LoggerExtension {
         next: NextExecute<'_>,
     ) -> Response {
         let resp = next.run(ctx, operation_name).await;
+        let query_uuid = self.query_id().await;
         if resp.is_err() {
             for err in &resp.errors {
                 if !err.path.is_empty() {
@@ -141,27 +166,28 @@ impl Extension for LoggerExtension {
                         }
                     }
                     error!(
-                        target: "async-graphql",
+                        query_id = query_uuid,
                         "[Response] path={} message={}", path, err.message,
                     );
                 } else {
-                    error!(
-                        target: "async-graphql",
-                        "[Response] message={}", err.message,
-                    );
+                    error!(query_id = query_uuid, "[Response] message={}", err.message,);
                 }
             }
         } else if self.config.log_response {
             match operation_name {
                 Some("IntrospectionQuery") => {
                     debug!(
-                        target: "async-graphql",
-                        "[Schema] {}: {}", self.session_id().await, resp.data
+                        query_id = query_uuid,
+                        "[Schema] {}: {}",
+                        self.session_id().await,
+                        resp.data
                     );
                 }
                 _ => info!(
-                    target: "async-graphql",
-                    "[Response] {}: {}", self.session_id().await, resp.data
+                    query_id = query_uuid,
+                    "[Response] {}: {}",
+                    self.session_id().await,
+                    resp.data
                 ),
             }
         }
