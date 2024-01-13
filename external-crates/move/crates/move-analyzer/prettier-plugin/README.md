@@ -79,7 +79,7 @@ be able to format them by choosing `Format Code` command from VSCode's command p
 
 Here is the plugin at work in VSCode:
 
-<video src='./move-format.mov' width=500/>
+file://move-format.mov
 
 
 ## Contribute
