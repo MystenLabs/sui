@@ -1025,19 +1025,18 @@ impl Display for SuiTransactionBlockEvents {
 }
 
 // TODO: this file might not be the best place for this struct.
-/// Arguments supplied to dev inspect with toggles that will essentially simulate both the present day
-/// dry run and dev inspect.
-pub enum DevInspectArgs {
-    TransactionData(TransactionData),
-    TransactionKindWithMeta {
-        kind: TransactionKind,
-        sender: SuiAddress,
-        gas_sponsor: Option<SuiAddress>,
-        gas_price: Option<u64>,
-        gas_budget: Option<u64>,
-        epoch: Option<u64>,
-        gas_objects: Option<Vec<ObjectRef>>,
-    },
+/// Additional rguments supplied to dev inspect beyond what is allowed in today's API.
+#[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "DevInspectArgs", rename_all = "camelCase")]
+pub struct DevInspectArgs {
+    /// The sponsor of the gas for the transaction, might be different from the sender.
+    pub gas_sponsor: Option<SuiAddress>,
+    /// The gas budget for the transaction.
+    pub gas_budget: Option<BigInt<u64>>,
+    /// The gas objects used to pay for the transaction.
+    pub gas_objects: Option<Vec<ObjectRef>>,
+    /// Whether to skip transaction checks for the transaction.
+    pub skip_checks: Option<bool>,
 }
 
 /// The response from processing a dev inspect transaction

@@ -15,7 +15,7 @@ use sui_types::crypto::AccountKeyPair;
 use sui_types::effects::TransactionEvents;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
-use sui_types::object::{GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
+use sui_types::object::GAS_VALUE_FOR_TESTING;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{base_types::dbg_addr, crypto::get_key_pair};

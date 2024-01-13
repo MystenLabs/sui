@@ -17,7 +17,7 @@ use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_json_rpc_api::{JsonRpcMetrics, WriteApiOpenRpc, WriteApiServer};
 use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlock,
+    DevInspectArgs, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlock,
     SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
@@ -286,12 +286,28 @@ impl WriteApiServer for TransactionExecutionApi {
         sender_address: SuiAddress,
         tx_bytes: Base64,
         gas_price: Option<BigInt<u64>>,
-        _epoch: Option<BigInt<u64>>,
+        epoch: Option<BigInt<u64>>,
+        additional_args: Option<DevInspectArgs>,
     ) -> RpcResult<DevInspectResults> {
         with_tracing!(async move {
+            let DevInspectArgs {
+                gas_sponsor,
+                gas_budget,
+                gas_objects,
+                skip_checks,
+            } = additional_args.unwrap_or_default();
             let tx_kind: TransactionKind = self.convert_bytes(tx_bytes)?;
             self.state
-                .dev_inspect_transaction_block(sender_address, tx_kind, gas_price.map(|i| *i))
+                .dev_inspect_transaction_block(
+                    sender_address,
+                    tx_kind,
+                    gas_price.map(|i| *i),
+                    gas_budget.map(|i| *i),
+                    gas_sponsor,
+                    gas_objects,
+                    epoch.map(|i| *i),
+                    skip_checks,
+                )
                 .await
                 .map_err(Error::from)
         })

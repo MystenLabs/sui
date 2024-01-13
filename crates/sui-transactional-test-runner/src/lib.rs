@@ -127,7 +127,16 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         gas_price: Option<u64>,
     ) -> SuiResult<DevInspectResults> {
         self.fullnode
-            .dev_inspect_transaction_block(sender, transaction_kind, gas_price)
+            .dev_inspect_transaction_block(
+                sender,
+                transaction_kind,
+                gas_price,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
             .await
     }
 

@@ -10,7 +10,7 @@ use jsonrpsee::RpcModule;
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_api::{WriteApiClient, WriteApiServer};
 use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockResponse,
+    DevInspectArgs, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
@@ -60,9 +60,16 @@ impl WriteApiServer for WriteApi {
         tx_bytes: Base64,
         gas_price: Option<BigInt<u64>>,
         epoch: Option<BigInt<u64>>,
+        additional_args: Option<DevInspectArgs>,
     ) -> RpcResult<DevInspectResults> {
         self.fullnode
-            .dev_inspect_transaction_block(sender_address, tx_bytes, gas_price, epoch)
+            .dev_inspect_transaction_block(
+                sender_address,
+                tx_bytes,
+                gas_price,
+                epoch,
+                additional_args,
+            )
             .await
     }
 
