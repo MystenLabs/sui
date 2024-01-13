@@ -59,9 +59,6 @@ impl QueryExecutor for PgManager_ {
         if let Some(metrics) = &self.metrics {
             metrics.observe_db_data(elapsed.as_secs_f64(), result.is_ok());
         }
-        if result.is_err() {
-            info!(target: "async-graphql", "DB query error: {:?}", result.as_ref().err());
-        }
         result
     }
 
@@ -89,9 +86,6 @@ impl QueryExecutor for PgManager_ {
         if let Some(metrics) = &self.metrics {
             metrics.observe_db_data(elapsed.as_secs_f64(), result.is_ok());
         }
-        if result.is_err() {
-            info!(target: "async-graphql", "DB query error: {:?}", result.as_ref().err());
-        }
         result
     }
 
@@ -117,9 +111,6 @@ impl QueryExecutor for PgManager_ {
         let elapsed = instant.elapsed();
         if let Some(metrics) = &self.metrics {
             metrics.observe_db_data(elapsed.as_secs_f64(), result.is_ok());
-        }
-        if result.is_err() {
-            error!(target: "async-graphql", "DB query error: {:?}", result.as_ref().err());
         }
         result
     }
