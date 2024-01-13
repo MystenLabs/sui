@@ -178,26 +178,25 @@ impl Extension for LoggerExtension {
                     }
                     if let Some(ext) = &err.extensions {
                         if let Some(code) = ext.get("code") {
-                            match code.clone().into_value() {
-                                async_graphql_value::Value::String(val) => {
-                                    if val == code::INTERNAL_SERVER_ERROR {
-                                        let query = self.query().await.clone();
-                                        error!(
-                                            query_id = query_uuid,
-                                            query = format!("{query}"),
-                                            "[Response] path={} message={}",
-                                            path,
-                                            err.message,
-                                        );
-                                    }
-                                    if val == code::BAD_USER_INPUT {
-                                        warn!(
-                                            query_id = query_uuid,
-                                            "[Response] path={} message={}", path, err.message,
-                                        );
-                                    }
+                            if let async_graphql_value::Value::String(val) =
+                                code.clone().into_value()
+                            {
+                                if val == code::INTERNAL_SERVER_ERROR {
+                                    let query = self.query().await.clone();
+                                    error!(
+                                        query_id = query_uuid,
+                                        query = format!("{query}"),
+                                        "[Response] path={} message={}",
+                                        path,
+                                        err.message,
+                                    );
                                 }
-                                _ => (),
+                                if val == code::BAD_USER_INPUT {
+                                    warn!(
+                                        query_id = query_uuid,
+                                        "[Response] path={} message={}", path, err.message,
+                                    );
+                                }
                             }
                         }
                     } else {
