@@ -79,7 +79,7 @@ be able to format them by choosing `Format Code` command from VSCode's command p
 
 Here is the plugin at work in VSCode:
 
-<img src=move-format.gif> 
+<img src=move-format.gif width="600px" height="429px"> 
 
 
 ## Contribute
