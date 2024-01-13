@@ -37,6 +37,7 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::Instant;
 use sui_graphql_rpc_headers::LIMITS_HEADER;
 use tokio::sync::Mutex;
 use tracing::error;
@@ -136,27 +137,14 @@ impl Extension for QueryLimitsChecker {
         variables: &Variables,
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
-        let latency_timer = ctx
-            .data_opt::<Metrics>()
-            .map(|x| x.request_metrics.query_validation_latency.start_timer());
-        let timer_latency_by_path = ctx.data_opt::<Metrics>().map(|x| {
-            x.request_metrics
-                .query_validation_latency_by_path
-                // TODO make the path here
-                .with_label_values(&["path"])
-                .start_timer()
-        });
+        let instant = Instant::now();
         let cfg = ctx
             .data::<ServiceConfig>()
             .expect("No service config provided in schema data");
 
         if query.len() > cfg.limits.max_query_payload_size as usize {
             if let Some(metrics) = ctx.data_opt::<Arc<Metrics>>() {
-                metrics
-                    .request_metrics
-                    .query_payload_error
-                    .with_label_values(&["validation"])
-                    .inc_by(1);
+                metrics.request_metrics.query_payload_error.inc();
             }
             return Err(graphql_error(
                 code::GRAPHQL_VALIDATION_FAILED,
@@ -207,12 +195,7 @@ impl Extension for QueryLimitsChecker {
             )?;
             max_depth_seen = max_depth_seen.max(running_costs.depth);
         }
-        if let Some(timer) = latency_timer {
-            timer.observe_duration();
-        }
-        if let Some(timer) = timer_latency_by_path {
-            timer.observe_duration();
-        }
+        let elapsed = instant.elapsed().as_millis() as u64;
 
         if ctx.data_opt::<ShowUsage>().is_some() {
             *self.validation_result.lock().await = Some(ValidationRes {
@@ -225,22 +208,23 @@ impl Extension for QueryLimitsChecker {
             });
         }
         if let Some(metrics) = ctx.data_opt::<Metrics>() {
+            metrics.query_validation_latency(elapsed);
             metrics
                 .request_metrics
                 .input_nodes
-                .observe(running_costs.input_nodes as f64);
+                .observe(running_costs.input_nodes as u64);
             metrics
                 .request_metrics
                 .output_nodes
-                .observe(running_costs.output_nodes as f64);
+                .observe(running_costs.output_nodes as u64);
             metrics
                 .request_metrics
                 .query_depth
-                .observe(running_costs.depth as f64);
+                .observe(running_costs.depth as u64);
             metrics
                 .request_metrics
                 .query_payload_size
-                .observe(query.len() as f64);
+                .observe(query.len() as u64);
         }
         Ok(doc)
     }
@@ -368,7 +352,10 @@ fn check_limits(
 ) -> ServerResult<()> {
     if cost.input_nodes > limits.max_query_nodes {
         if let Some(metrics) = ctx.data_opt::<Metrics>() {
-            metrics.inc_num_bad_input_errors("cost");
+            metrics
+                .request_metrics
+                .num_errors
+                .with_label_values(&["max_query_nodes", code::BAD_USER_INPUT]);
         }
         return Err(ServerError::new(
             format!(
@@ -381,7 +368,10 @@ fn check_limits(
 
     if cost.depth > limits.max_query_depth {
         if let Some(metrics) = ctx.data_opt::<Metrics>() {
-            metrics.inc_num_bad_input_errors("cost");
+            metrics
+                .request_metrics
+                .num_errors
+                .with_label_values(&["max_query_depth", code::BAD_USER_INPUT]);
         }
         error!(target: "async-graphql", "Query has too many levels of nesting {}", cost.depth);
         return Err(ServerError::new(
@@ -395,8 +385,10 @@ fn check_limits(
 
     if cost.output_nodes > limits.max_output_nodes {
         if let Some(metrics) = ctx.data_opt::<Metrics>() {
-            // TODO is this a client error though?
-            metrics.inc_num_bad_input_errors("cost");
+            metrics
+                .request_metrics
+                .num_errors
+                .with_label_values(&["max_output_nodes", code::BAD_USER_INPUT]);
         }
         error!(target: "async-graphql", "Query will result in too many output nodes: {}", cost.output_nodes);
         return Err(ServerError::new(
