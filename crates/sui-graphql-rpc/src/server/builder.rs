@@ -4,7 +4,7 @@
 use crate::config::{MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD};
 use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
-use crate::metrics::{DBMetrics, Metrics, RequestMetrics};
+use crate::metrics::Metrics;
 use crate::mutation::Mutation;
 use crate::{
     config::ServerConfig,
@@ -179,9 +179,7 @@ impl ServerBuilder {
         let registry = registry_service.default_registry();
 
         // METRICS
-        let request_metrics = RequestMetrics::new(&registry);
-        let db_metrics = DBMetrics::new(&registry);
-        let metrics = Metrics::new(db_metrics, request_metrics);
+        let metrics = Metrics::new(&registry);
 
         let mut builder = ServerBuilder::new(
             config.connection.port,
@@ -251,17 +249,7 @@ impl ServerBuilder {
         }
 
         // TODO: uncomment once impl
-        // if config.internal_features.open_telemetry {
-        //     let config = opentelemetry::sdk::trace::config()
-        //         .with_resource(Resource::new(vec![opentelemetry::KeyValue::new(
-        //             "service.name",
-        //             "sui-graphql-rpc",
-        //         )]))
-        //         .with_sampler(Sampler::ParentBased(Box::new(sampler.clone())));
-
-        //     let sampler = SamplingFilter::new(config.sample_rate);
-        //     builder = builder.extension(OpenTelemetry::new(tracer));
-        // }
+        // if config.internal_features.open_telemetry { }
 
         Ok(builder)
     }
@@ -336,7 +324,6 @@ pub mod tests {
         context_data::db_data_provider::PgManager,
         extensions::query_limits_checker::QueryLimitsChecker,
         extensions::timeout::Timeout,
-        metrics::RequestMetrics,
         test_infra::cluster::{serve_executor, ExecutorCluster, DEFAULT_INTERNAL_DATA_SOURCE_PORT},
     };
     use async_graphql::{
@@ -677,9 +664,7 @@ pub mod tests {
 
         let binding_address: SocketAddr = "0.0.0.0:9185".parse().unwrap();
         let registry = mysten_metrics::start_prometheus_server(binding_address).default_registry();
-        let db_metrics = DBMetrics::new(&registry);
-        let request_metrics = RequestMetrics::new(&registry);
-        let metrics = Metrics::new(db_metrics, request_metrics);
+        let metrics = Metrics::new(&registry);
         let metrics2 = metrics.request_metrics.clone();
 
         let service_config = ServiceConfig::default();

@@ -19,7 +19,10 @@ pub(crate) struct Metrics {
 }
 
 impl Metrics {
-    pub(crate) fn new(db_metrics: DBMetrics, request_metrics: RequestMetrics) -> Self {
+    pub(crate) fn new(registry: &Registry) -> Self {
+        let db_metrics = DBMetrics::new(&registry);
+        let request_metrics = RequestMetrics::new(&registry);
+
         Self {
             db_metrics: Arc::new(db_metrics),
             request_metrics: Arc::new(request_metrics),
