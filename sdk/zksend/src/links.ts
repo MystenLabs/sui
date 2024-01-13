@@ -16,6 +16,11 @@ import {
 	SUI_TYPE_ARG,
 } from '@mysten/sui.js/utils';
 
+interface ZkSendLinkRedirect {
+	url: string;
+	name?: string;
+}
+
 export interface ZkSendLinkBuilderOptions {
 	host?: string;
 	path?: string;
@@ -23,6 +28,7 @@ export interface ZkSendLinkBuilderOptions {
 	keypair?: Keypair;
 	client?: SuiClient;
 	sender: string;
+	redirect: ZkSendLinkRedirect;
 }
 
 export interface ZkSendLinkOptions {
@@ -53,6 +59,7 @@ export class ZkSendLinkBuilder {
 	#path: string;
 	#keypair: Keypair;
 	#client: SuiClient;
+	#redirect?: ZkSendLinkRedirect;
 	#objects = new Set<TransactionObjectInput>();
 	#balances = new Map<string, bigint>();
 	#sender: string;
@@ -65,9 +72,11 @@ export class ZkSendLinkBuilder {
 		keypair = new Ed25519Keypair(),
 		client = DEFAULT_ZK_SEND_LINK_OPTIONS.client,
 		sender,
+		redirect,
 	}: ZkSendLinkBuilderOptions) {
 		this.#host = host;
 		this.#path = path;
+		this.#redirect = redirect;
 		this.#keypair = keypair;
 		this.#client = client;
 		this.#sender = normalizeSuiAddress(sender);
@@ -89,6 +98,13 @@ export class ZkSendLinkBuilder {
 		const link = new URL(this.#host);
 		link.pathname = this.#path;
 		link.hash = this.#keypair.export().privateKey;
+
+		if (this.#redirect) {
+			link.searchParams.set('redirect_url', this.#redirect.url);
+			if (this.#redirect.name) {
+				link.searchParams.set('name', this.#redirect.name);
+			}
+		}
 
 		return link.toString();
 	}
@@ -256,6 +272,7 @@ export class ZkSendLink {
 	) {
 		const normalizedAddress = normalizeSuiAddress(address);
 		const txb = this.createClaimTransaction(normalizedAddress, options);
+		txb.setGasPayment([]);
 
 		const dryRun = await this.#client.dryRunTransactionBlock({
 			transactionBlock: await txb.build({ client: this.#client }),
