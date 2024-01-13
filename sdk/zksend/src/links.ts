@@ -272,6 +272,7 @@ export class ZkSendLink {
 	) {
 		const normalizedAddress = normalizeSuiAddress(address);
 		const txb = this.createClaimTransaction(normalizedAddress, options);
+		txb.setGasPayment([]);
 
 		const dryRun = await this.#client.dryRunTransactionBlock({
 			transactionBlock: await txb.build({ client: this.#client }),
