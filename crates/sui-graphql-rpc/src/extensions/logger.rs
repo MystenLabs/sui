@@ -60,9 +60,14 @@ struct LoggerExtension {
 }
 
 impl LoggerExtension {
+    /// Set the query as a string to enable later retrieval.
     async fn set_query(&self, query: &str) {
         *self.query.lock().await = query.to_string();
     }
+
+    /// Get the query request as a string.
+    /// This is useful when an internal error occurs and we need to understand
+    /// the actual query.
     async fn query(&self) -> String {
         self.query.lock().await.clone()
     }
@@ -77,12 +82,14 @@ impl LoggerExtension {
         self.query_id.lock().await.clone()
     }
 
+    /// Set a session id based on an IP address and a uuid
     async fn set_session_id(&self, ip: Option<SocketAddr>) {
         let ip_component = ip.map(|ip| format!("{}-", ip)).unwrap_or_default();
         let uuid_component = format!("{}", Uuid::new_v4());
         *self.session_id.lock().await = format!("{}{}", ip_component, uuid_component);
     }
 
+    /// Get the session id
     async fn session_id(&self) -> String {
         self.session_id.lock().await.clone()
     }
@@ -176,6 +183,8 @@ impl Extension for LoggerExtension {
                             }
                         }
                     }
+                    // in case of error, an error code is set which helps us
+                    // distinguish between INTERNAL, BAD REQUEST, BAD INPUT, etc.
                     if let Some(ext) = &err.extensions {
                         if let Some(code) = ext.get("code") {
                             if let async_graphql_value::Value::String(val) =
@@ -190,8 +199,7 @@ impl Extension for LoggerExtension {
                                         path,
                                         err.message,
                                     );
-                                }
-                                if val == code::BAD_USER_INPUT {
+                                } else {
                                     warn!(
                                         query_id = query_uuid,
                                         "[Response] path={} message={}", path, err.message,
@@ -200,6 +208,10 @@ impl Extension for LoggerExtension {
                             }
                         }
                     } else {
+                        warn!(
+                            query_id = query_uuid,
+                            "[Response] path={} message={}", path, err.message,
+                        );
                     }
                 } else {
                     error!(query_id = query_uuid, "[Response] message={}", err.message,);
