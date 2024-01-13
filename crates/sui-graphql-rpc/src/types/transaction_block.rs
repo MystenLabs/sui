@@ -187,9 +187,7 @@ impl TransactionBlock {
         let stored: Option<StoredTransaction> = db
             .execute(move |conn| {
                 conn.result(move || {
-                    dsl::transactions
-                        .filter(dsl::transaction_digest.eq(digest.to_vec()))
-                        .into_boxed()
+                    dsl::transactions.filter(dsl::transaction_digest.eq(digest.to_vec()))
                 })
                 .optional()
             })
@@ -213,9 +211,7 @@ impl TransactionBlock {
         let stored: Vec<StoredTransaction> = db
             .execute(move |conn| {
                 conn.results(move || {
-                    dsl::transactions
-                        .filter(dsl::transaction_digest.eq_any(digests.clone()))
-                        .into_boxed()
+                    dsl::transactions.filter(dsl::transaction_digest.eq_any(digests.clone()))
                 })
             })
             .await
