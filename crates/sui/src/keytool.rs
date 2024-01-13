@@ -66,7 +66,7 @@ pub enum KeyToolCommand {
     #[clap(name = "update-alias")]
     Alias {
         old_alias: String,
-        /// The alias must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_).
+        /// The alias must start with a letter and can contain only letters, digits, dots, hyphens (-), or underscores (_).
         new_alias: Option<String>,
     },
     /// Convert private key from wallet format (hex of 32 byte private key) to sui.keystore format
