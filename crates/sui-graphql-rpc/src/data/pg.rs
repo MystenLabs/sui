@@ -14,8 +14,6 @@ use diesel::{
 };
 use sui_indexer::indexer_reader::IndexerReader;
 
-use tracing::{error, info};
-
 pub(crate) struct PgManager_ {
     pub inner: IndexerReader,
     pub limits: Limits,
