@@ -794,7 +794,7 @@ fn known_attributes(
             );
             context
                 .env()
-                .add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
+                .add_diag(diag!(Declarations::UnknownAttribute, (loc, msg)));
             None
         }
         sp!(loc, E::AttributeName_::Known(n)) => Some((sp(loc, n), attr)),

@@ -1,4 +1,4 @@
-error[E02015]: invalid attribute
+warning[W02018]: unknown attribute
   ┌─ tests/move_check/parser/duplicate_attributes.move:2:7
   │
 2 │     #[a, a(x = 0)]
@@ -12,7 +12,7 @@ error[E02001]: duplicate declaration, item, or annotation
   │       │   
   │       Attribute previously given here
 
-error[E02015]: invalid attribute
+warning[W02018]: unknown attribute
   ┌─ tests/move_check/parser/duplicate_attributes.move:5:7
   │
 5 │     #[b(a, a = 0, a(x = 1))]

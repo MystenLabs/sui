@@ -489,7 +489,7 @@ impl CompiledPackage {
             let (filter_attr_name, filters) = known_filters();
             compiler = compiler
                 .add_visitors(linter_visitors())
-                .add_custom_known_filters(filters, filter_attr_name);
+                .add_custom_known_filters(filter_attr_name, filters);
         }
         let (file_map, all_compiled_units) = compiler_driver(compiler)?;
         let mut root_compiled_units = vec![];
