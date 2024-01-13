@@ -78,7 +78,7 @@ pub type AttributeValue = Spanned<AttributeValue_>;
 pub enum Attribute_ {
     Name(Name),
     Assigned(Name, Box<AttributeValue>),
-    Parameterized(Name, Attributes),
+    Parameterized(Name, InnerAttributes),
 }
 pub type Attribute = Spanned<Attribute_>;
 
@@ -90,7 +90,8 @@ pub enum AttributeName_ {
 
 pub type AttributeName = Spanned<AttributeName_>;
 
-pub type Attributes = UniqueMap<AttributeName, Attribute>;
+pub type InnerAttributes = UniqueMap<AttributeName, Attribute>;
+pub type Attributes = UniqueMap<Spanned<KnownAttribute>, Attribute>;
 
 //**************************************************************************************************
 // Modules
@@ -426,6 +427,25 @@ impl TName for AttributeName {
     }
 }
 
+impl TName for Spanned<KnownAttribute> {
+    type Key = KnownAttribute;
+    type Loc = Loc;
+
+    fn drop_loc(self) -> (Self::Loc, Self::Key) {
+        let sp!(loc, n_) = self;
+        (loc, n_)
+    }
+
+    fn add_loc(loc: Self::Loc, name_: Self::Key) -> Self {
+        sp(loc, name_)
+    }
+
+    fn borrow(&self) -> (&Self::Loc, &Self::Key) {
+        let sp!(loc, n_) = self;
+        (loc, n_)
+    }
+}
+
 impl fmt::Debug for Address {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self)
@@ -490,22 +510,10 @@ impl Attribute_ {
     }
 }
 
-impl AttributeName_ {
-    pub fn name(&self) -> Symbol {
-        match self {
-            Self::Unknown(s) => *s,
-            Self::Known(a) => a.name().into(),
-        }
-    }
-}
-
 impl Attributes {
     pub fn is_test_or_test_only(&self) -> bool {
-        self.contains_key_(&AttributeName_::Known(KnownAttribute::Testing(
-            known_attributes::TestingAttribute::TestOnly,
-        ))) || self.contains_key_(&AttributeName_::Known(KnownAttribute::Testing(
-            known_attributes::TestingAttribute::Test,
-        )))
+        self.contains_key_(&known_attributes::TestingAttribute::TestOnly.into())
+            || self.contains_key_(&known_attributes::TestingAttribute::Test.into())
     }
 }
 
@@ -933,6 +941,17 @@ impl AstDebug for Attribute_ {
                 w.write(")");
             }
         }
+    }
+}
+
+impl AstDebug for InnerAttributes {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write("#[");
+        w.list(self, ", ", |w, (_, _, attr)| {
+            attr.ast_debug(w);
+            false
+        });
+        w.write("]");
     }
 }
 

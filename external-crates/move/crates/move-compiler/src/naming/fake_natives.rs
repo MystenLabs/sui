@@ -9,28 +9,25 @@ use std::convert::TryInto;
 
 use crate::{
     diag,
-    expansion::ast::{Address, AttributeName_, ModuleIdent, ModuleIdent_},
+    expansion::ast::{Address, ModuleIdent, ModuleIdent_},
     naming::ast as N,
     parser::ast::FunctionName,
-    shared::{
-        known_attributes::{KnownAttribute, NativeAttribute},
-        CompilationEnv, Identifier,
-    },
+    shared::{known_attributes::NativeAttribute, CompilationEnv, Identifier},
 };
 use move_ir_types::ast as IR;
 use move_symbol_pool::symbol;
 
-pub const FAKE_NATIVE_ATTR: AttributeName_ =
-    AttributeName_::Known(KnownAttribute::Native(NativeAttribute::BytecodeInstruction));
-
-/// verify `FAKE_NATIVE_ATTR` usage
+/// verify fake native attribute usage usage
 pub fn function(
     env: &mut CompilationEnv,
     module: ModuleIdent,
     function_name: FunctionName,
     function: &N::Function,
 ) {
-    let loc = match function.attributes.get_loc_(&FAKE_NATIVE_ATTR) {
+    let loc = match function
+        .attributes
+        .get_loc_(&NativeAttribute::BytecodeInstruction.into())
+    {
         None => return,
         Some(loc) => *loc,
     };

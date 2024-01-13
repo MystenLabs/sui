@@ -74,9 +74,6 @@ pub enum WarningFilter {
     },
 }
 
-/// The text used in the attribute for warning suppression
-pub const WARNING_FILTER_ATTR: &str = "allow";
-
 //**************************************************************************************************
 // Categories and Codes
 //**************************************************************************************************

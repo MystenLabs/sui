@@ -11,9 +11,8 @@ use crate::{
     hlir::translate::display_var,
     parser::ast::ConstantName,
     shared::{
-        known_attributes::{KnownAttribute, TestingAttribute},
-        unique_map::UniqueMap,
-        CompilationEnv, Identifier, NumericalAddress,
+        known_attributes::TestingAttribute, unique_map::UniqueMap, CompilationEnv, Identifier,
+        NumericalAddress,
     },
     unit_test::{ExpectedFailure, ExpectedMoveError, ModuleTestPlan, TestCase},
 };
@@ -116,9 +115,7 @@ fn build_test_info<'func>(
     function: &'func G::Function,
 ) -> Option<TestCase> {
     let get_attrs = |attr: TestingAttribute| -> Option<&'func E::Attribute> {
-        function
-            .attributes
-            .get_(&E::AttributeName_::Known(KnownAttribute::Testing(attr)))
+        function.attributes.get_(&attr.into())
     };
 
     const PREVIOUSLY_ANNOTATED_MSG: &str = "Previously annotated here";

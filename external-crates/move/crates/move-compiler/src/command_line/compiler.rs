@@ -11,9 +11,7 @@ use crate::{
         codes::{Severity, WarningFilter},
         *,
     },
-    expansion,
-    expansion::ast as E,
-    hlir, interface_generator, naming, parser,
+    expansion, hlir, interface_generator, naming, parser,
     parser::{comments::*, *},
     shared::{
         CompilationEnv, Flags, IndexedPackagePath, NamedAddressMap, NamedAddressMaps,
@@ -29,7 +27,7 @@ use move_command_line_common::files::{
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     fs,
     fs::File,
     io::{Read, Write},
@@ -40,16 +38,6 @@ use tempfile::NamedTempFile;
 //**************************************************************************************************
 // Definitions
 //**************************************************************************************************
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct KnownFiltersInfo {
-    /// An name that identifies attribute used for filtering (e.g. "allow" in
-    /// #[allow(unused_function)].
-    filter_attr_name: expansion::ast::AttributeName_,
-    /// A list of known warning filters that can be suppressed by the compiler suppression warning
-    /// system.
-    filters: Vec<WarningFilter>,
-}
 
 pub struct Compiler<'a> {
     maps: NamedAddressMaps,
@@ -62,7 +50,7 @@ pub struct Compiler<'a> {
     visitors: Vec<Visitor>,
     /// Predefined filter for compiler warnings.
     warning_filter: Option<WarningFilters>,
-    known_warning_filters: BTreeSet<KnownFiltersInfo>,
+    known_warning_filters: Vec<(/* Prefix */ Option<Symbol>, Vec<WarningFilter>)>,
     package_configs: BTreeMap<Symbol, PackageConfig>,
     default_config: Option<PackageConfig>,
 }
@@ -169,7 +157,7 @@ impl<'a> Compiler<'a> {
             flags: Flags::empty(),
             visitors: vec![],
             warning_filter: None,
-            known_warning_filters: BTreeSet::new(),
+            known_warning_filters: vec![],
             package_configs,
             default_config: None,
         })
@@ -253,13 +241,11 @@ impl<'a> Compiler<'a> {
 
     pub fn add_custom_known_filters(
         mut self,
+        prefix: Option<impl Into<Symbol>>,
         filters: Vec<WarningFilter>,
-        filter_attr_name: E::AttributeName_,
     ) -> Self {
-        self.known_warning_filters.insert(KnownFiltersInfo {
-            filter_attr_name,
-            filters,
-        });
+        self.known_warning_filters
+            .push((prefix.map(|s| s.into()), filters));
         self
     }
 
@@ -300,12 +286,8 @@ impl<'a> Compiler<'a> {
         if let Some(filter) = warning_filter {
             compilation_env.add_warning_filter_scope(filter);
         }
-        for KnownFiltersInfo {
-            filter_attr_name,
-            filters,
-        } in known_warning_filters
-        {
-            compilation_env.add_custom_known_filters(filters, filter_attr_name)?;
+        for (prefix, filters) in known_warning_filters {
+            compilation_env.add_custom_known_filters(prefix, filters)?;
         }
 
         let (source_text, pprog, comments) =

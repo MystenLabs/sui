@@ -160,10 +160,10 @@ pub fn run_test(
         .set_default_config(default_config);
 
     if lint {
-        let (filter_attr_name, filters) = known_filters();
+        let (prefix, filters) = known_filters();
         compiler = compiler
             .add_visitors(linter_visitors())
-            .add_custom_known_filters(filters, filter_attr_name);
+            .add_custom_known_filters(prefix, filters);
     }
 
     let (files, comments_and_compiler_res) = compiler.run::<PASS_PARSER>()?;

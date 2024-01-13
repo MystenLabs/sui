@@ -36,7 +36,7 @@ module a::test2 {
         object::delete(id);
     }
 
-    #[lint_allow(share_owned)]
+    #[allow(lint(share_owned))]
     public entry fun unpack_obj_suppressed(w: Wrapper) {
         let Wrapper { id, i: _, o } = w;
         transfer::public_share_object(o);
