@@ -251,12 +251,19 @@ pub fn derive_dynamic_field_id<T>(
 where
     T: Into<SuiAddress>,
 {
+    let parent: SuiAddress = parent.into();
     let k_tag_bytes = bcs::to_bytes(key_type_tag)?;
+    tracing::trace!(
+        "Deriving dynamic field ID for parent={:?}, key={:?}, key_type_tag={:?}",
+        parent,
+        key_bytes,
+        key_type_tag,
+    );
 
     // hash(parent || len(key) || key || key_type_tag)
     let mut hasher = DefaultHash::default();
     hasher.update([HashingIntentScope::ChildObjectId as u8]);
-    hasher.update(parent.into());
+    hasher.update(parent);
     hasher.update(key_bytes.len().to_le_bytes());
     hasher.update(key_bytes);
     hasher.update(k_tag_bytes);
@@ -264,7 +271,9 @@ where
 
     // truncate into an ObjectID and return
     // OK to access slice because digest should never be shorter than ObjectID::LENGTH.
-    Ok(ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap())
+    let id = ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap();
+    tracing::trace!("derive_dynamic_field_id result: {:?}", id);
+    Ok(id)
 }
 
 /// Given a parent object ID (e.g. a table), and a `key`, retrieve the corresponding dynamic field object

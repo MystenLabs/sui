@@ -226,6 +226,12 @@ pub trait MoveTypeTagTrait {
     fn get_type_tag() -> TypeTag;
 }
 
+impl MoveTypeTagTrait for u8 {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::U8
+    }
+}
+
 impl MoveTypeTagTrait for u64 {
     fn get_type_tag() -> TypeTag {
         TypeTag::U64
@@ -241,6 +247,12 @@ impl MoveTypeTagTrait for ObjectID {
 impl MoveTypeTagTrait for SuiAddress {
     fn get_type_tag() -> TypeTag {
         TypeTag::Address
+    }
+}
+
+impl<T: MoveTypeTagTrait> MoveTypeTagTrait for Vec<T> {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::Vector(Box::new(T::get_type_tag()))
     }
 }
 

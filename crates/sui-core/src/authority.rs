@@ -26,7 +26,7 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -77,6 +77,7 @@ use sui_storage::IndexStore;
 use sui_types::authenticator_state::get_authenticator_state;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{default_hash, AuthoritySignInfo, Signer};
+use sui_types::deny_list::DenyList;
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType};
@@ -747,9 +748,13 @@ impl AuthorityState {
             epoch_store.reference_gas_price(),
             tx_data,
             input_objects,
-            receiving_objects,
+            &receiving_objects,
             &self.metrics.bytecode_verifier_metrics,
         )?;
+
+        if epoch_store.coin_deny_list_state_enabled() {
+            self.check_coin_deny(tx_data.sender(), &checked_input_objects, &receiving_objects)?;
+        }
 
         let owned_objects = checked_input_objects.inner().filter_owned_objects();
 
@@ -1489,7 +1494,7 @@ impl AuthorityState {
                     epoch_store.reference_gas_price(),
                     &transaction,
                     input_objects,
-                    receiving_objects,
+                    &receiving_objects,
                     &self.metrics.bytecode_verifier_metrics,
                 )?,
                 None,
@@ -4380,6 +4385,26 @@ impl AuthorityState {
             self.database.revert_state_update(&digest).await?;
         }
         info!("All uncommitted local transactions reverted");
+        Ok(())
+    }
+
+    fn check_coin_deny(
+        &self,
+        sender: SuiAddress,
+        input_objects: &CheckedInputObjects,
+        receiving_objects: &ReceivingObjects,
+    ) -> SuiResult {
+        let all_objects = input_objects
+            .inner()
+            .iter_objects()
+            .chain(receiving_objects.iter_objects());
+        let coin_types = all_objects
+            .filter_map(|obj| {
+                obj.coin_type_maybe()
+                    .map(|type_tag| type_tag.to_canonical_string(false))
+            })
+            .collect::<BTreeSet<_>>();
+        DenyList::check_coin_deny_list(sender, coin_types, &self.database)?;
         Ok(())
     }
 

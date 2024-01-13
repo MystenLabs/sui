@@ -1,16 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::SequenceNumber;
-use crate::collection_types::{Bag, Table};
+use crate::base_types::{SequenceNumber, SuiAddress};
+use crate::collection_types::{Bag, Table, VecSet};
 use crate::dynamic_field::get_dynamic_field_from_store;
-use crate::id::UID;
+use crate::error::{UserInputError, UserInputResult};
+use crate::id::{ID, UID};
 use crate::object::{Object, Owner};
 use crate::storage::ObjectStore;
 use crate::SUI_DENY_LIST_OBJECT_ID;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
+use tracing::debug;
 use tracing::error;
 
 pub const DENY_LIST_MODULE: &IdentStr = ident_str!("deny_list");
@@ -41,6 +44,73 @@ pub struct PerTypeDenyList {
     pub denied_count: Table,
     // Table<vec<u8>, VecSet<address>>
     pub denied_addresses: Table,
+}
+
+impl DenyList {
+    pub fn check_coin_deny_list(
+        address: SuiAddress,
+        coin_types: BTreeSet<String>,
+        object_store: &dyn ObjectStore,
+    ) -> UserInputResult {
+        let Some(deny_list) = get_coin_deny_list(object_store) else {
+            // TODO: This is where we should fire an invariant violation metric.
+            if cfg!(debug_assertions) {
+                panic!("Failed to get the coin deny list");
+            } else {
+                return Ok(());
+            }
+        };
+        Self::check_deny_list(deny_list, address, coin_types, object_store)
+    }
+
+    fn check_deny_list(
+        deny_list: PerTypeDenyList,
+        address: SuiAddress,
+        coin_types: BTreeSet<String>,
+        object_store: &dyn ObjectStore,
+    ) -> UserInputResult {
+        // TODO: Add caches to avoid repeated DF reads.
+        let Ok(count) = get_dynamic_field_from_store::<SuiAddress, u64>(
+            object_store,
+            deny_list.denied_count.id,
+            &address,
+        ) else {
+            return Ok(());
+        };
+        if count == 0 {
+            return Ok(());
+        }
+        for coin_type in coin_types {
+            let Ok(denied_addresses) = get_dynamic_field_from_store::<Vec<u8>, VecSet<SuiAddress>>(
+                object_store,
+                deny_list.denied_addresses.id,
+                &coin_type.clone().into_bytes(),
+            ) else {
+                continue;
+            };
+            let denied_addresses: BTreeSet<_> = denied_addresses.contents.into_iter().collect();
+            if denied_addresses.contains(&address) {
+                debug!(
+                    "Address {} is denied for coin package {:?}",
+                    address, coin_type
+                );
+                return Err(UserInputError::AddressDeniedForCoin { address, coin_type });
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CoinDenyCap {
+    pub id: UID,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RegulatedCoinMetadata {
+    pub id: UID,
+    pub coin_metadata_object: ID,
+    pub deny_cap_object: ID,
 }
 
 pub fn get_deny_list_root_object(object_store: &dyn ObjectStore) -> Option<Object> {
