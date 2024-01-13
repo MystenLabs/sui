@@ -280,7 +280,7 @@ pub mod checked {
             temporary_store.ensure_active_inputs_mutated();
             let rebate_info = temporary_store.collect_storage_and_rebate(self);
             #[skip_checked_arithmetic]
-            trace!(target: "replay", "{}", rebate_info);
+            trace!(target: "replay_gas_info", "{}", rebate_info);
 
             match &self.gas_status {
                 SuiGasStatus::V2(s) => {
@@ -289,7 +289,7 @@ pub mod checked {
             };
             if self.smashed_gas_coin.is_some() {
                 #[skip_checked_arithmetic]
-                trace!(target: "replay", "Gas smashing has occurred for this transaction");
+                trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
             }
 
             // system transactions (None smashed_gas_coin)  do not have gas and so do not charge

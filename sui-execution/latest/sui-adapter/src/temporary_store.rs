@@ -841,7 +841,7 @@ impl<'backing> TemporaryStore<'backing> {
             gas_charger.track_storage_mutation(0, storage_rebate);
 
             rows.push(RebateInfo {
-                object_id: object_id.clone(),
+                object_id: *object_id,
                 size: 0,
                 old_rebate: storage_rebate,
                 new_rebate: 0,

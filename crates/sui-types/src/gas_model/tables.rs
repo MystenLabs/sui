@@ -340,9 +340,9 @@ impl GasStatus {
     }
 
     pub fn log_for_replay(&self) {
-        trace!(target: "replay", "Gas Price: {}", self.gas_price);
-        trace!(target: "replay", "Max Gas Stack Height: {}", self.stack_height_high_water_mark);
-        trace!(target: "replay", "Number of Bytecode Instructions Executed: {}", self.instructions_executed);
+        trace!(target: "replay_gas_info", "Gas Price: {}", self.gas_price);
+        trace!(target: "replay_gas_info", "Max Gas Stack Height: {}", self.stack_height_high_water_mark);
+        trace!(target: "replay_gas_info", "Number of Bytecode Instructions Executed: {}", self.instructions_executed);
     }
 }
 
