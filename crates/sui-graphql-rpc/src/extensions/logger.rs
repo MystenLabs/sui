@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::error::code;
+use crate::server::builder::QueryUuid;
 use async_graphql::{
     extensions::{
         Extension, ExtensionContext, ExtensionFactory, NextExecute, NextParseQuery,
@@ -11,10 +13,9 @@ use async_graphql::{
 };
 use std::{fmt::Write, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
+use tracing::warn;
 use tracing::{debug, error, info};
 use uuid::Uuid;
-
-use crate::server::builder::QueryUuid;
 
 // TODO: mode in-depth logging to debug
 
@@ -43,6 +44,7 @@ pub struct Logger {
 impl ExtensionFactory for Logger {
     fn create(&self) -> Arc<dyn Extension> {
         Arc::new(LoggerExtension {
+            query: "".to_string().into(),
             query_id: "".to_string().into(),
             session_id: "".to_string().into(),
             config: self.config.clone(),
@@ -51,12 +53,19 @@ impl ExtensionFactory for Logger {
 }
 
 struct LoggerExtension {
-    session_id: Mutex<String>,
-    query_id: Mutex<String>,
     config: LoggerConfig,
+    query: Mutex<String>,
+    query_id: Mutex<String>,
+    session_id: Mutex<String>,
 }
 
 impl LoggerExtension {
+    async fn set_query(&self, query: &str) {
+        *self.query.lock().await = query.to_string();
+    }
+    async fn query(&self) -> String {
+        self.query.lock().await.clone()
+    }
     /// Sets a unique id for each query that comes through
     async fn set_query_id(&self, query_id: Option<QueryUuid>) {
         let id = query_id.map(|id| id.uuid).unwrap_or_default();
@@ -118,6 +127,7 @@ impl Extension for LoggerExtension {
                 ctx.stringify_execute_doc(&document, variables)
             );
         }
+        self.set_query(query).await;
         Ok(document)
     }
 
@@ -148,6 +158,7 @@ impl Extension for LoggerExtension {
     ) -> Response {
         let resp = next.run(ctx, operation_name).await;
         let query_uuid = self.query_id().await;
+        println!("{:?}", operation_name);
         if resp.is_err() {
             for err in &resp.errors {
                 if !err.path.is_empty() {
@@ -165,10 +176,32 @@ impl Extension for LoggerExtension {
                             }
                         }
                     }
-                    error!(
-                        query_id = query_uuid,
-                        "[Response] path={} message={}", path, err.message,
-                    );
+                    if let Some(ext) = &err.extensions {
+                        if let Some(code) = ext.get("code") {
+                            match code.clone().into_value() {
+                                async_graphql_value::Value::String(val) => {
+                                    if val == code::INTERNAL_SERVER_ERROR {
+                                        let query = self.query().await.clone();
+                                        error!(
+                                            query_id = query_uuid,
+                                            query = format!("{query}"),
+                                            "[Response] path={} message={}",
+                                            path,
+                                            err.message,
+                                        );
+                                    }
+                                    if val == code::BAD_USER_INPUT {
+                                        warn!(
+                                            query_id = query_uuid,
+                                            "[Response] path={} message={}", path, err.message,
+                                        );
+                                    }
+                                }
+                                _ => (),
+                            }
+                        }
+                    } else {
+                    }
                 } else {
                     error!(query_id = query_uuid, "[Response] message={}", err.message,);
                 }
