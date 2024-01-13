@@ -1051,9 +1051,9 @@ impl AuthorityStore {
             markers,
             wrapped,
             deleted,
-            locks_to_delete,
             written,
             events,
+            ..
         } = tx_outputs;
 
         let _locks = self.acquire_read_locks_for_indirect_objects(&written).await;
@@ -1139,16 +1139,8 @@ impl AuthorityStore {
 
         write_batch.insert_batch(&self.perpetual_tables.events, events)?;
 
-        let new_locks_to_init: Vec<_> = written
-            .values()
-            .filter_map(|new_object| {
-                if new_object.is_address_owned() {
-                    Some(new_object.compute_object_reference())
-                } else {
-                    None
-                }
-            })
-            .collect();
+        // TODO: once we cache locks (see TODO in in_mem_execution_cache.rs
+        /*
 
         // NOTE: We just check here that locks exist, not that they are locked to a specific TX. Why?
         // 1. Lock existence prevents re-execution of old certs when objects have been upgraded
@@ -1166,6 +1158,7 @@ impl AuthorityStore {
         // Note: deletes locks for received objects as well (but not for objects that were in
         // `Receiving` arguments which were not received)
         self.delete_locks(&mut write_batch, &locks_to_delete)?;
+        */
 
         write_batch
             .insert_batch(
@@ -1431,7 +1424,11 @@ impl AuthorityStore {
     }
 
     /// Removes locks for a given list of ObjectRefs.
-    fn delete_locks(&self, write_batch: &mut DBBatch, objects: &[ObjectRef]) -> SuiResult {
+    pub(crate) fn delete_locks(
+        &self,
+        write_batch: &mut DBBatch,
+        objects: &[ObjectRef],
+    ) -> SuiResult {
         trace!(?objects, "delete_locks");
         write_batch.delete_batch(
             &self.perpetual_tables.owned_object_transaction_locks,

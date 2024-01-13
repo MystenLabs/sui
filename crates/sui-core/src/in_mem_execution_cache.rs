@@ -208,7 +208,7 @@ pub trait ExecutionCacheRead: Send + Sync {
 }
 
 pub trait ExecutionCacheWrite: Send + Sync {
-    fn update_state(&self, epoch_id: EpochId, tx_outputs: TransactionOutputs) -> SuiResult;
+    fn update_state(&self, epoch_id: EpochId, tx_outputs: TransactionOutputs);
 }
 
 enum ObjectEntry {
@@ -660,7 +660,7 @@ impl ExecutionCacheRead for InMemoryCache {
 }
 
 impl ExecutionCacheWrite for InMemoryCache {
-    fn update_state(&self, _epoch_id: EpochId, tx_outputs: TransactionOutputs) -> SuiResult {
+    fn update_state(&self, _epoch_id: EpochId, tx_outputs: TransactionOutputs) {
         let TransactionOutputs {
             transaction,
             effects,
@@ -668,6 +668,8 @@ impl ExecutionCacheWrite for InMemoryCache {
             written,
             deleted,
             wrapped,
+            locks_to_delete,
+            new_locks_to_init,
             ..
         } = &tx_outputs;
 
@@ -720,6 +722,22 @@ impl ExecutionCacheWrite for InMemoryCache {
             }
         }
 
+        // TODO: this is not safe, because now we are committing persistent state to the db, while the rest
+        // of the transaction outputs could simply be lost if the validator restarts. To fix this we must
+        // cache locks (which we want to do anyway) but that's a big enough change for it to be worth
+        // saving for a separate PR.
+        self.store
+            .check_owned_object_locks_exist(locks_to_delete)
+            .expect("locks must exist for certificate to be executed");
+        let lock_table = &self.store.perpetual_tables.owned_object_transaction_locks;
+        let mut batch = lock_table.batch();
+        AuthorityStore::initialize_locks(lock_table, &mut batch, new_locks_to_init, false)
+            .expect("Failed to initialize locks");
+        self.store
+            .delete_locks(&mut batch, locks_to_delete)
+            .expect("Failed to delete locks");
+        batch.write().expect("Failed to write locks");
+
         let tx_digest = *transaction.digest();
         let effects_digest = effects.digest();
 
@@ -737,8 +755,6 @@ impl ExecutionCacheWrite for InMemoryCache {
 
         self.executed_effects_digests_notify_read
             .notify(&tx_digest, &effects_digest);
-
-        Ok(())
     }
 }
 

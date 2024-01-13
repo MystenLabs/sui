@@ -3007,6 +3007,7 @@ impl AuthorityState {
         object_id: &ObjectID,
         version: SequenceNumber,
     ) -> SuiResult<PastObjectRead> {
+        dbg!(object_id, version);
         // Firstly we see if the object ever existed by getting its latest data
         let Some(obj_ref) = self
             .execution_cache
@@ -3076,6 +3077,7 @@ impl AuthorityState {
             .map(|object| {
                 self.load_epoch_store_one_call_per_task()
                     .executor()
+                    // XXX
                     .type_layout_resolver(Box::new(self.database.as_ref()))
                     .get_annotated_layout(&object.type_().clone().into())
             })
@@ -3794,6 +3796,7 @@ impl AuthorityState {
         let tx_digest = *transaction.digest();
 
         // Acquire the lock on input objects
+        // XXX
         self.database
             .acquire_transaction_locks(epoch_store.epoch(), owned_input_objects, tx_digest)
             .await?;
@@ -3857,6 +3860,7 @@ impl AuthorityState {
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<Option<VerifiedSignedTransaction>> {
         let lock_info = self
+            // XXX
             .database
             .get_lock(*object_ref, epoch_store.epoch())
             .map_err(SuiError::from)?;
@@ -4406,6 +4410,7 @@ impl AuthorityState {
         }
 
         let execution_guard = self
+            // XXX
             .database
             .execution_lock_for_executable_transaction(&executable_tx)
             .await?;

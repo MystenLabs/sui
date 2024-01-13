@@ -22,6 +22,7 @@ pub struct TransactionOutputs {
     pub wrapped: Vec<ObjectKey>,
     pub deleted: Vec<ObjectKey>,
     pub locks_to_delete: Vec<ObjectRef>,
+    pub new_locks_to_init: Vec<ObjectRef>,
     pub written: WrittenObjects,
 }
 
@@ -66,7 +67,8 @@ impl TransactionOutputWriter {
         self.cache.update_state(
             epoch_id,
             Self::build_transaction_outputs(transaction, effects, inner_temporary_store),
-        )
+        );
+        Ok(())
     }
 }
 
@@ -145,6 +147,17 @@ impl TransactionOutputWriter {
             .chain(received_objects)
             .collect();
 
+        let new_locks_to_init: Vec<_> = written
+            .values()
+            .filter_map(|new_object| {
+                if new_object.is_address_owned() {
+                    Some(new_object.compute_object_reference())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
         let deleted = effects
             .deleted()
             .into_iter()
@@ -162,6 +175,7 @@ impl TransactionOutputWriter {
             wrapped,
             deleted,
             locks_to_delete,
+            new_locks_to_init,
             written,
         }
     }
