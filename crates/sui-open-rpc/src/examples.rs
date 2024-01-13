@@ -18,6 +18,7 @@ use serde_json::json;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc::error::Error;
+use sui_json_rpc_types::DevInspectArgs;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, CheckpointPage, Coin, CoinPage, DelegatedStake,
     DevInspectResults, DynamicFieldPage, EventFilter, EventPage, MoveCallParams,
@@ -297,6 +298,7 @@ impl RpcExampleProvider {
                     ("tx_bytes", json!(tx_bytes.tx_bytes)),
                     ("gas_price", json!(1000)),
                     ("epoch", json!(8888)),
+                    ("additional_args", json!(None::<DevInspectArgs>)),
                 ],
                 json!(dev_inspect_results),
             )],
