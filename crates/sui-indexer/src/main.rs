@@ -8,9 +8,7 @@ use sui_indexer::errors::IndexerError;
 use sui_indexer::indexer_v2::IndexerV2;
 use sui_indexer::metrics::IndexerMetrics;
 use sui_indexer::start_prometheus_server;
-use sui_indexer::store::PgIndexerAnalyticalStore;
-use sui_indexer::store::PgIndexerStore;
-use sui_indexer::store::PgIndexerStoreV2;
+use sui_indexer::store::{PgIndexerAnalyticalStore, PgIndexerStore, PgIndexerStoreV2};
 use sui_indexer::utils::reset_database;
 use sui_indexer::{get_pg_pool_connection, new_pg_connection_pool, Indexer, IndexerConfig};
 

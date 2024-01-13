@@ -13,7 +13,7 @@ use tracing::info;
 
 use crate::errors::IndexerError;
 use crate::indexer_v2::IndexerV2;
-use crate::store::{PgIndexerStore, PgIndexerStoreV2};
+use crate::store::{PgIndexerStore, PgIndexerStoreV2, PgIndexerStoreV2Config};
 use crate::utils::reset_database;
 use crate::{new_pg_connection_pool, Indexer, IndexerConfig};
 use crate::{new_pg_connection_pool_impl, IndexerMetrics};
@@ -23,6 +23,7 @@ pub async fn start_test_indexer_v2(
     rpc_url: String,
     reader_mode_rpc_url: Option<String>,
     use_indexer_experimental_methods: bool,
+    store_config: PgIndexerStoreV2Config,
 ) -> (PgIndexerStoreV2, JoinHandle<Result<(), IndexerError>>) {
     // Reduce the connection pool size to 10 for testing
     // to prevent maxing out
@@ -76,7 +77,8 @@ pub async fn start_test_indexer_v2(
 
     let indexer_metrics = IndexerMetrics::new(&registry);
 
-    let store = PgIndexerStoreV2::new(blocking_pool, indexer_metrics.clone());
+    let store =
+        PgIndexerStoreV2::new_with_config(blocking_pool, indexer_metrics.clone(), store_config);
     let store_clone = store.clone();
     let handle = if reader_mode_rpc_url.is_some() {
         tokio::spawn(async move { IndexerV2::start_reader(&config, &registry, db_url).await })

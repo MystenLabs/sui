@@ -13,7 +13,7 @@ use std::time::Duration;
 use sui_graphql_rpc_client::simple_client::SimpleClient;
 use sui_indexer::errors::IndexerError;
 use sui_indexer::store::indexer_store_v2::IndexerStoreV2;
-use sui_indexer::store::PgIndexerStoreV2;
+use sui_indexer::store::{PgIndexerStoreV2, PgIndexerStoreV2Config};
 use sui_indexer::test_utils::start_test_indexer_v2;
 use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
@@ -48,14 +48,21 @@ pub struct Cluster {
 pub async fn start_cluster(
     graphql_connection_config: ConnectionConfig,
     internal_data_source_rpc_port: Option<u16>,
+    store_config: PgIndexerStoreV2Config,
 ) -> Cluster {
     let db_url = graphql_connection_config.db_url.clone();
     // Starts validator+fullnode
     let val_fn = start_validator_with_fullnode(internal_data_source_rpc_port).await;
 
     // Starts indexer
-    let (pg_store, pg_handle) =
-        start_test_indexer_v2(Some(db_url), val_fn.rpc_url().to_string(), None, true).await;
+    let (pg_store, pg_handle) = start_test_indexer_v2(
+        Some(db_url),
+        val_fn.rpc_url().to_string(),
+        None,
+        true,
+        store_config,
+    )
+    .await;
 
     // Starts graphql server
     let fn_rpc_url = val_fn.rpc_url().to_string();
@@ -86,6 +93,7 @@ pub async fn serve_executor(
     internal_data_source_rpc_port: u16,
     executor: Arc<dyn NodeStateGetter>,
     env_vars: BTreeMap<String, String>,
+    store_config: PgIndexerStoreV2Config,
 ) -> ExecutorCluster {
     for (k, v) in env_vars {
         std::env::set_var(k, v);
@@ -106,6 +114,7 @@ pub async fn serve_executor(
         format!("http://{}", executor_server_url),
         None,
         true,
+        store_config,
     )
     .await;
 
