@@ -41,6 +41,7 @@ use sui_sdk::SuiClientBuilder;
 use tokio::sync::OnceCell;
 use tower::{Layer, Service};
 use tracing::{info, warn};
+use uuid::Uuid;
 
 pub struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
@@ -255,6 +256,18 @@ impl ServerBuilder {
     }
 }
 
+#[derive(Clone)]
+pub(crate) struct QueryUuid {
+    pub uuid: String,
+}
+impl QueryUuid {
+    pub(crate) fn new() -> Self {
+        Self {
+            uuid: format!("{}", Uuid::new_v4()),
+        }
+    }
+}
+
 async fn graphql_handler(
     State(metrics): State<Option<Metrics>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -273,6 +286,7 @@ async fn graphql_handler(
     // Capture the IP address of the client
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
+    req.data.insert(QueryUuid::new());
     let result = schema.execute(req).await;
     let elapsed = instant.elapsed().as_millis() as u64;
     if let Some(m) = metrics {

@@ -8,6 +8,7 @@ use crate::error::code::INTERNAL_SERVER_ERROR;
 use crate::error::graphql_error;
 use crate::error::graphql_error_at_pos;
 use crate::metrics::Metrics;
+use crate::server::builder::QueryUuid;
 use async_graphql::extensions::NextParseQuery;
 use async_graphql::extensions::NextRequest;
 use async_graphql::parser::types::Directive;
@@ -40,7 +41,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use sui_graphql_rpc_headers::LIMITS_HEADER;
 use tokio::sync::Mutex;
-use tracing::error;
+use tracing::warn;
 
 /// Only display usage information if this header was in the request.
 pub(crate) struct ShowUsage;
@@ -354,6 +355,10 @@ fn check_limits(
     pos: Option<Pos>,
     metrics: Option<&Arc<Metrics>>,
 ) -> ServerResult<()> {
+    let query_uuid = ctx
+        .data_opt::<QueryUuid>()
+        .map(|id| id.uuid.clone())
+        .unwrap_or_default();
     if cost.input_nodes > limits.max_query_nodes {
         if let Some(metrics) = metrics {
             metrics
@@ -361,6 +366,11 @@ fn check_limits(
                 .num_errors
                 .with_label_values(&["max_query_nodes", code::BAD_USER_INPUT]);
         }
+        warn!(
+            query_id = query_uuid,
+            "[Limits check] Query has too many nodes. The maximum allowed is {}",
+            limits.max_query_nodes
+        );
         return Err(ServerError::new(
             format!(
                 "Query has too many nodes. The maximum allowed is {}",
@@ -377,7 +387,10 @@ fn check_limits(
                 .num_errors
                 .with_label_values(&["max_query_depth", code::BAD_USER_INPUT]);
         }
-        error!(target: "async-graphql", "Query has too many levels of nesting {}", cost.depth);
+        warn!(
+            query_id = query_uuid,
+            "[Limits check] Query has too many levels of nesting {}", cost.depth
+        );
         return Err(ServerError::new(
             format!(
                 "Query has too many levels of nesting. The maximum allowed is {}",
@@ -394,7 +407,11 @@ fn check_limits(
                 .num_errors
                 .with_label_values(&["max_output_nodes", code::BAD_USER_INPUT]);
         }
-        error!(target: "async-graphql", "Query will result in too many output nodes: {}", cost.output_nodes);
+
+        warn!(
+            query_id = query_uuid,
+            "[Limits check] Query will result in too many output nodes: {}", cost.output_nodes
+        );
         return Err(ServerError::new(
             format!(
                 "Query will result in too many output nodes. The maximum allowed is {}, estimated {}",
