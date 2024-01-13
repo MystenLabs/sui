@@ -79,7 +79,7 @@ be able to format them by choosing `Format Code` command from VSCode's command p
 
 Here is the plugin at work in VSCode:
 
-https://github.com/MystenLabs/sui/blob/aw/prettier-plugin/external-crates/move/crates/move-analyzer/prettier-plugin/move-format.mov
+https://github.com/MystenLabs/sui/blob/aw/prettier-plugin/external-crates/move/crates/move-analyzer/prettier-plugin/move-format.mp4
 
 
 ## Contribute
