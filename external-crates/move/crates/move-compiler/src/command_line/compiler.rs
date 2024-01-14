@@ -239,6 +239,8 @@ impl<'a> Compiler<'a> {
         self
     }
 
+    /// `prefix` is None for the default 'allow'.
+    /// Some(prefix) for a custom set of warnings, e.g. 'allow(lint(_))'.
     pub fn add_custom_known_filters(
         mut self,
         prefix: Option<impl Into<Symbol>>,

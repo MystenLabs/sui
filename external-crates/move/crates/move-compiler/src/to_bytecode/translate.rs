@@ -146,7 +146,7 @@ fn module(
     let G::ModuleDefinition {
         warning_filter: _warning_filter,
         package_name,
-        attributes: _attributes,
+        attributes,
         is_source_module: _is_source_module,
         dependency_order: _dependency_order,
         friends: gfriends,
@@ -221,6 +221,7 @@ fn module(
     };
     Some(AnnotatedCompiledModule {
         loc: ident_loc,
+        attributes,
         address_name: addr_name,
         module_name_loc: module_name.loc(),
         named_module: module,

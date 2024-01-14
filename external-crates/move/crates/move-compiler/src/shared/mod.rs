@@ -12,7 +12,6 @@ use crate::{
     editions::{check_feature_or_error as edition_check_feature, Edition, FeatureGate, Flavor},
     expansion::ast as E,
     naming::ast as N,
-    naming::ast::ModuleDefinition,
     sui_mode,
     typing::visitor::{TypingVisitor, TypingVisitorObj},
 };
@@ -202,7 +201,10 @@ pub struct IndexedPackagePath {
     pub named_address_map: NamedAddressMapIndex,
 }
 
-pub type AttributeDeriver = dyn Fn(&mut CompilationEnv, &mut ModuleDefinition);
+/// None for the default 'allow'.
+/// Some(prefix) for a custom set of warnings, e.g. 'allow(lint(_))'.
+pub type FilterPrefix = Option<Symbol>;
+pub type FilterName = Symbol;
 
 pub struct CompilationEnv {
     flags: Flags,
@@ -214,9 +216,9 @@ pub struct CompilationEnv {
     /// Config for any package not found in `package_configs`, or for inputs without a package.
     default_config: PackageConfig,
     /// Maps warning filter key (filter name and filter attribute name) to the filter itself.
-    known_filters: BTreeMap<Option<Symbol>, BTreeMap<Symbol, BTreeSet<WarningFilter>>>,
+    known_filters: BTreeMap<FilterPrefix, BTreeMap<FilterName, BTreeSet<WarningFilter>>>,
     /// Maps a diagnostics ID to a known filter name.
-    known_filter_names: BTreeMap<DiagnosticsID, (Option<Symbol>, Symbol)>,
+    known_filter_names: BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
     prim_definers:
         BTreeMap<crate::naming::ast::BuiltinTypeName_, crate::expansion::ast::ModuleIdent>,
     // TODO(tzakian): Remove the global counter and use this counter instead
@@ -249,7 +251,7 @@ impl CompilationEnv {
             sui_mode::id_leak::IDLeakVerifier.visitor(),
             sui_mode::typing::SuiTypeChecks.visitor(),
         ]);
-        let known_filters_: BTreeMap<Symbol, BTreeSet<WarningFilter>> = BTreeMap::from([
+        let known_filters_: BTreeMap<FilterName, BTreeSet<WarningFilter>> = BTreeMap::from([
             (
                 FILTER_ALL.into(),
                 BTreeSet::from([WarningFilter::All(None)]),
@@ -294,10 +296,10 @@ impl CompilationEnv {
             known_code_filter!(FILTER_UNUSED_MUT_PARAM, UnusedItem::MutParam),
             known_code_filter!(FILTER_IMPLICIT_CONST_COPY, TypeSafety::ImplicitConstantCopy),
         ]);
-        let known_filters: BTreeMap<Option<Symbol>, BTreeMap<Symbol, BTreeSet<WarningFilter>>> =
+        let known_filters: BTreeMap<FilterPrefix, BTreeMap<FilterName, BTreeSet<WarningFilter>>> =
             BTreeMap::from([(None, known_filters_)]);
 
-        let known_filter_names: BTreeMap<DiagnosticsID, (Option<Symbol>, Symbol)> = known_filters
+        let known_filter_names: BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)> = known_filters
             .iter()
             .flat_map(|(attr, all_filters)| {
                 all_filters.iter().flat_map(|(name, filters)| {
@@ -433,7 +435,7 @@ impl CompilationEnv {
         self.warning_filter.pop().unwrap();
     }
 
-    pub fn known_filter_names<'a>(&'a self) -> impl IntoIterator<Item = Option<Symbol>> + 'a {
+    pub fn known_filter_names<'a>(&'a self) -> impl IntoIterator<Item = FilterPrefix> + 'a {
         self.known_filters.keys().copied()
     }
 
@@ -450,7 +452,7 @@ impl CompilationEnv {
 
     pub fn add_custom_known_filters(
         &mut self,
-        attr_name: Option<Symbol>,
+        attr_name: FilterPrefix,
         filters: Vec<WarningFilter>,
     ) -> anyhow::Result<()> {
         let prev = self.known_filters.insert(attr_name, BTreeMap::new());
@@ -460,13 +462,13 @@ impl CompilationEnv {
         );
         let filter_attr = self.known_filters.get_mut(&attr_name).unwrap();
         for filter in filters {
-            let n = match filter {
-                WarningFilter::All(_) => Symbol::from(FILTER_ALL),
-                WarningFilter::Category { name, .. } => {
+            let (prefix, n) = match filter {
+                WarningFilter::All(prefix) => (prefix, Symbol::from(FILTER_ALL)),
+                WarningFilter::Category { name, prefix, .. } => {
                     let Some(n) = name else {
                         anyhow::bail!("A known Category warning filter must have a name specified");
                     };
-                    Symbol::from(n)
+                    (prefix, Symbol::from(n))
                 }
                 WarningFilter::Code {
                     prefix,
@@ -480,9 +482,14 @@ impl CompilationEnv {
                     let n = Symbol::from(n);
                     self.known_filter_names
                         .insert((prefix, category, code), (attr_name, n));
-                    n
+                    (prefix, n)
                 }
             };
+            anyhow::ensure!(
+                attr_name.is_some() == prefix.is_some(),
+                "If the attribute name is specified, e.g. Some(_), the external prefix must also \
+                be specified. attribute name: {attr_name:?}, external prefix: {prefix:?}",
+            );
             filter_attr.entry(n).or_default().insert(filter);
         }
         Ok(())
@@ -533,7 +540,7 @@ impl CompilationEnv {
     }
 }
 
-pub fn format_allow_attr(attr_name: Option<Symbol>, filter: Symbol) -> String {
+pub fn format_allow_attr(attr_name: FilterPrefix, filter: FilterName) -> String {
     match attr_name {
         None => filter.to_string(),
         Some(attr_name) => format!("{attr_name}({filter})"),

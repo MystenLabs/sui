@@ -321,7 +321,7 @@ module deepbook::clob_v2 {
         mint_account_cap(ctx)
     }
 
-    #[lint_allow(self_transfer, share_owned)]
+    #[allow(lint(self_transfer, share_owned))]
     fun create_pool_<BaseAsset, QuoteAsset>(
         taker_fee_rate: u64,
         maker_rebate_rate: u64,
