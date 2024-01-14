@@ -638,12 +638,11 @@ impl<
 
                     // println!("Sending TxResults message for tx {}", txid);
                     // TODO send only to owners of objects in deleted & written
-                    // for ew_id in &ew_ids {
-                    for ew_id in get_ews_for_tx_results(&tx_with_results, &ew_ids) {
-                        if ew_id == my_id {
+                    for ew_id in &ew_ids {
+                        if *ew_id == my_id {
                             continue;
                         }
-                        let msg = NetworkMessage { src: 0, dst: ew_id, payload: SailfishMessage::TxResults {
+                        let msg = NetworkMessage { src: 0, dst: *ew_id, payload: SailfishMessage::TxResults {
                             txid,
                             deleted: tx_with_results.deleted.clone(),
                             written: tx_with_results.written.clone(),
