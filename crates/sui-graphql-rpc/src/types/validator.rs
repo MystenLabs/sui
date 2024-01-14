@@ -18,17 +18,16 @@ pub(crate) struct Validator {
     pub report_records: Option<Vec<Address>>,
 }
 
-/// All the fields relevant and associated with a validator.
 #[Object]
 impl Validator {
-    /// Validator's address.
+    /// Look-up a Validator by its SuiAddress.
     async fn address(&self) -> Address {
         Address {
             address: SuiAddress::from(self.validator_summary.sui_address),
         }
     }
 
-    /// Validator's set of credentials.
+    /// Validator's set of credentials such as public keys, network addresses and others.
     async fn credentials(&self) -> Option<ValidatorCredentials> {
         let v = &self.validator_summary;
         let credentials = ValidatorCredentials {

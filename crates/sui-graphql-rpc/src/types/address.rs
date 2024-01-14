@@ -33,6 +33,7 @@ pub(crate) enum AddressTransactionBlockRelationship {
     Recv,
 }
 
+/// The 32-byte address that is an account address (corresponding to a public key).
 #[Object]
 impl Address {
     /// Similar behavior to the `transactionBlocks` in Query but supporting the additional

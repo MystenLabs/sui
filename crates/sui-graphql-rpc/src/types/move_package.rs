@@ -54,7 +54,8 @@ pub(crate) struct MovePackageDowncastError;
 
 pub(crate) type CModule = Cursor<String>;
 
-/// The representation of a move package.
+/// The representation of a Move Package, which provides more information about previous package
+/// versions, type layouts, the modules defined in this package and others.
 #[Object]
 impl MovePackage {
     /// A representation of the module called `name` in this package, including the

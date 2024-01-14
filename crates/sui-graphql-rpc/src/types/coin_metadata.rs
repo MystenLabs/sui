@@ -9,7 +9,6 @@ use async_graphql::*;
 
 use sui_types::coin::CoinMetadata as NativeCoinMetadata;
 
-/// The metadata for an object of type Coin.
 pub(crate) struct CoinMetadata {
     pub super_: MoveObject,
     pub native: NativeCoinMetadata,
@@ -20,6 +19,7 @@ pub(crate) enum CoinMetadataDowncastError {
     Bcs(bcs::Error),
 }
 
+/// The metadata for an object of type Coin.
 #[Object]
 impl CoinMetadata {
     /// The number of decimal places used to represent the token.

@@ -80,7 +80,7 @@ impl Query {
             .extend()
     }
 
-    /// The address objects corresponding to this address.
+    /// Look-up an Account by its SuiAddress.
     async fn address(&self, address: SuiAddress) -> Option<Address> {
         Some(Address { address })
     }
@@ -142,7 +142,7 @@ impl Query {
             .extend()
     }
 
-    /// The checkpoints that exist in the network.
+    /// Fetch and paginate the information on multiple checkpoints.
     async fn checkpoints(
         &self,
         ctx: &Context<'_>,

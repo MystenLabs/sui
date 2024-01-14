@@ -62,6 +62,9 @@ type ActiveJwkEdge {
 	cursor: String!
 }
 
+"""
+The 32-byte address that is an account address (corresponding to a public key).
+"""
 type Address implements IOwner {
 	"""
 	Similar behavior to the `transactionBlocks` in Query but supporting the additional
@@ -416,7 +419,7 @@ input CheckpointId {
 }
 
 """
-The general Coin type.
+Some 0x2::coin::Coin Move object.
 """
 type Coin {
 	"""
@@ -465,6 +468,9 @@ type CoinEdge {
 	cursor: String!
 }
 
+"""
+The metadata for an object of type Coin.
+"""
 type CoinMetadata {
 	"""
 	The number of decimal places used to represent the token.
@@ -571,6 +577,18 @@ type DisplayEntry {
 	error: String
 }
 
+"""
+Dynamic fields are heterogeneous fields that can be added or removed at runtime,
+and can have arbitrary user-assigned names. There are two sub-types of dynamic
+fields:
+
+1) Dynamic Fields can store any value that has the `store` ability, however an object
+stored in this kind of field will be considered wrapped and will not be accessible
+directly via its ID by external tools (explorers, wallets, etc) accessing storage.
+2) Dynamic Object Fields values must be Sui objects (have the `key` and `store`
+abilities, and id: UID as the first field), but will still be directly accessible off-chain
+via their object ID after being attached.
+"""
 type DynamicField {
 	"""
 	The string type, data, and serialized value of the DynamicField's 'name' field.
@@ -671,6 +689,11 @@ type EndOfEpochTransactionKindEdge {
 	cursor: String!
 }
 
+"""
+Operation of the Sui network is temporally partitioned into non-overlapping epochs,
+and the network aims to keep epochs roughly the same time length as each other.
+During a particular epoch, the set of validators participating in the network is fixed.
+"""
 type Epoch {
 	"""
 	The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change
@@ -784,7 +807,7 @@ type Event {
 	"""
 	timestamp: DateTime
 	"""
-	The value's move type
+	The value's Move type
 	"""
 	type: MoveType!
 	"""
@@ -866,7 +889,7 @@ input EventFilter {
 }
 
 """
-The result of an execution, including errors that occurred during said exeuction.
+The result of an execution, including errors that occurred during said execution.
 """
 type ExecutionResult {
 	"""
@@ -938,7 +961,7 @@ type GasCoin {
 }
 
 """
-The summary of the gas cost.
+Breakdown of gas costs in effects.
 """
 type GasCostSummary {
 	"""
@@ -963,7 +986,7 @@ type GasCostSummary {
 }
 
 """
-The gas effects (cost summary, gas object id, etc.)
+Effects related to gas (costs incurred and the identity of the smashed gas object returned).
 """
 type GasEffects {
 	gasObject: Object
@@ -971,7 +994,7 @@ type GasEffects {
 }
 
 """
-The metadata for the gas that is required to build the gas object for used in a transaction.
+Configuration for this transaction's gas price and the coins used to pay for gas.
 """
 type GasInput {
 	"""
@@ -1157,7 +1180,7 @@ type MoveData =
 scalar MoveData
 
 """
-Description of a field, defined in a Move type.
+Information for a particular field on a Move struct.
 """
 type MoveField {
 	name: String!
@@ -1314,7 +1337,8 @@ type MoveModuleEdge {
 }
 
 """
-The representation of an object as a Move Object.
+The representation of an object as a Move Object, which enables additional information
+(content, module that governs it, version, is transferrable, etc.) about this object.
 """
 type MoveObject {
 	"""
@@ -1349,7 +1373,8 @@ type MoveObject {
 }
 
 """
-The representation of a move package.
+The representation of a Move Package, which provides more information about previous package
+versions, type layouts, the modules defined in this package and others.
 """
 type MovePackage {
 	"""
@@ -1529,7 +1554,7 @@ scalar MoveTypeSignature
 
 type MoveValue {
 	"""
-	The value's move type
+	The value's Move type
 	"""
 	type: MoveType!
 	"""
@@ -1597,18 +1622,9 @@ type Mutation {
 }
 
 """
-The basic unit of storage in Sui is object. In contrast to many other blockchains,
-where storage is centered around address and each address contains a key-value store,
-Sui's storage is centered around objects. Sui objects have one of the following primary states:
-
-Immutable - the object cannot be modified.
-Mutable - the object can be changed.
-
-Further, mutable objects are divided into these categories:
-
-Owned - the object can be modified only by its owner.
-Shared - the object can be modified by anyone.
-Immutable objects do not need this distinction because they have no owner.
+An object in Sui is a package (set of Move bytecode modules) or object (typed data structure
+with fields) with additional metadata detailing its id, version, transaction digest, owner
+field indicating how this object can be accessed.
 """
 type Object implements IOwner {
 	version: Int!
@@ -1661,8 +1677,8 @@ type Object implements IOwner {
 	"""
 	balance(type: String): Balance
 	"""
-	The balances of all coin types owned by the object.
-	Coins of the same type are grouped together into one Balance.
+	The balances of all coin types owned by the object. Coins of the same type are grouped
+	together into one Balance.
 	"""
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
@@ -1891,18 +1907,9 @@ type OwnedOrImmutable {
 }
 
 """
-The basic unit of storage in Sui is object. In contrast to many other blockchains,
-where storage is centered around address and each address contains a key-value store,
-Sui's storage is centered around objects. Sui objects have one of the following primary states:
-
-Immutable - the object cannot be modified.
-Mutable - the object can be changed.
-
-Further, mutable objects are divided into these categories:
-
-Owned - the object can be modified only by its owner.
-Shared - the object can be modified by anyone.
-Immutable objects do not need this distinction because they have no owner.
+An Owner is an entity that can own an object. Each Owner is identified by a SuiAddress which
+represents either an Address (corresponding to a public key of an account) or an Object, but
+never both (it is not known up-front whether a given Owner is an Address or an Object).
 """
 type Owner implements IOwner {
 	asAddress: Address
@@ -1910,12 +1917,12 @@ type Owner implements IOwner {
 	address: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	"""
-	The coin's balance
+	Total balance of all coins with marker type owned by this Owner. If type is not supplied,
+	it defaults to 0x2::sui::SUI.
 	"""
 	balance(type: String): Balance
 	"""
-	The balances of all coin types owned by the object.
-	Coins of the same type are grouped together into one Balance.
+	The balances of all coin types owned by this Owner.
 	"""
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
@@ -2131,7 +2138,7 @@ type Query {
 	"""
 	object(address: SuiAddress!, version: Int): Object
 	"""
-	The address objects corresponding to this address.
+	Look-up an Account by its SuiAddress.
 	"""
 	address(address: SuiAddress!): Address
 	"""
@@ -2160,7 +2167,7 @@ type Query {
 	"""
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	"""
-	The checkpoints that exist in the network.
+	Fetch and paginate the information on multiple checkpoints.
 	"""
 	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
@@ -2268,8 +2275,7 @@ type SafeMode {
 }
 
 """
-Service configuration that holds information about enabled features,
-service limits, and any other useful service-related metadata.
+The enabled features and service limits configured by the server.
 """
 type ServiceConfig {
 	"""
@@ -2951,16 +2957,13 @@ type UpgradeTransaction {
 	upgradeTicket: TransactionArgument!
 }
 
-"""
-All the fields relevant and associated with a validator.
-"""
 type Validator {
 	"""
-	Validator's address.
+	Look-up a Validator by its SuiAddress.
 	"""
 	address: Address!
 	"""
-	Validator's set of credentials.
+	Validator's set of credentials such as public keys, network addresses and others.
 	"""
 	credentials: ValidatorCredentials
 	"""

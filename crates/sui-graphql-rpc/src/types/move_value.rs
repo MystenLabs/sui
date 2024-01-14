@@ -32,7 +32,7 @@ const TYP_UID: &IdentStr = ident_str!("UID");
 #[derive(SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct MoveValue {
-    /// The value's move type
+    /// The value's Move type
     #[graphql(name = "type")]
     type_: MoveType,
     /// The BCS representation of this value Base64 encoded
@@ -77,7 +77,7 @@ pub(crate) struct MoveField {
     value: MoveData,
 }
 
-/// The value representation of a move object.
+/// The value representation of a Move Object.
 #[ComplexObject]
 impl MoveValue {
     /// Structured contents of a Move value.

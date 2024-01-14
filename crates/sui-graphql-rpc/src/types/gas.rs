@@ -39,7 +39,7 @@ pub(crate) struct GasEffects {
     pub object_version: u64,
 }
 
-/// The metadata for the gas that is required to build the gas object for used in a transaction.
+/// Configuration for this transaction's gas price and the coins used to pay for gas.
 #[Object]
 impl GasInput {
     /// Address of the owner of the gas object(s) used
@@ -86,7 +86,7 @@ impl GasInput {
     }
 }
 
-/// The summary of the gas cost.
+/// Breakdown of gas costs in effects.
 #[Object]
 impl GasCostSummary {
     /// Gas paid for executing this transaction (in MIST).
@@ -113,7 +113,7 @@ impl GasCostSummary {
     }
 }
 
-/// The gas effects (cost summary, gas object id, etc.)
+/// Effects related to gas (costs incurred and the identity of the smashed gas object returned).
 #[Object]
 impl GasEffects {
     async fn gas_object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {

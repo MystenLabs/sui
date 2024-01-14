@@ -19,13 +19,13 @@ use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
 use sui_indexer::models_v2::epoch::QueryableEpochInfo;
 use sui_indexer::schema_v2::epochs;
 
-/// Operation of the Sui network is temporally partitioned into non-overlapping,
-/// fixed-duration epochs.
-/// During a particular epoch, the set of validators participating in the network is fixed.
 pub(crate) struct Epoch {
     pub stored: QueryableEpochInfo,
 }
 
+/// Operation of the Sui network is temporally partitioned into non-overlapping epochs,
+/// and the network aims to keep epochs roughly the same time length as each other.
+/// During a particular epoch, the set of validators participating in the network is fixed.
 #[Object]
 impl Epoch {
     /// The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change
