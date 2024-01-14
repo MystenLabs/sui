@@ -1,17 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-use std::{borrow::BorrowMut, marker::PhantomData, str::FromStr};
-
-use crate::client_commands::PTBCommand;
+use crate::ptb::ptb::PTBCommand;
 use move_command_line_common::{
     address::NumericalAddress,
     parser::{parse_u128, parse_u16, parse_u256, parse_u32, parse_u64, parse_u8, Parser, Token},
     types::{ParsedType, TypeToken},
 };
 use move_core_types::{identifier::Identifier, runtime_value::MoveValue};
+use std::{borrow::BorrowMut, marker::PhantomData, str::FromStr};
 
-use crate::ptb_parser::argument_token::ArgumentToken;
+use crate::ptb::ptb_parser::argument_token::ArgumentToken;
 use anyhow::{anyhow, bail, Context, Result};
 
 use super::command_token::CommandToken;

@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // TODO:
 // * [x] Handle more pure arguments (especially addresses)
 // * [ ] Handle passing non-direct arrays of values to commands.
@@ -32,7 +35,7 @@ use sui_types::{
 
 use crate::{
     client_commands::{compile_package, upgrade_package},
-    ptb_parser::{
+    ptb::ptb_parser::{
         command_token::CommandToken,
         parser::{Argument as PTBArg, ParsedPTBCommand},
     },
