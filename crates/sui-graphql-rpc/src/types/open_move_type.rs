@@ -26,7 +26,7 @@ pub(crate) enum MoveAbility {
 }
 
 /// The visibility modifier describes which modules can access this module member.
-/// A module member, by default, can only be called within the same module.
+/// By default, a module member can be called only within the same module.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum MoveVisibility {
     /// A public member can be accessed by any module.

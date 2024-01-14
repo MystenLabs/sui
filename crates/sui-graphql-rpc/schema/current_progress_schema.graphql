@@ -1482,7 +1482,7 @@ type MoveValue {
 
 """
 The visibility modifier describes which modules can access this module member.
-A module member, by default, can only be called within the same module.
+By default, a module member can be called only within the same module.
 """
 enum MoveVisibility {
 	"""
