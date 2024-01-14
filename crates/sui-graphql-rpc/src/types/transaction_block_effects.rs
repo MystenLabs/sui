@@ -11,7 +11,6 @@ use sui_indexer::models_v2::transactions::StoredTransaction;
 use sui_types::{
     effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
     execution_status::ExecutionStatus as NativeExecutionStatus,
-    transaction::TransactionData as NativeTransactionData,
 };
 
 use super::{
@@ -22,6 +21,7 @@ use super::{
     date_time::DateTime,
     digest::Digest,
     epoch::Epoch,
+    execution_result::ExecutedTransaction,
     gas::GasEffects,
     object_change::ObjectChange,
     transaction_block::TransactionBlock,
@@ -32,7 +32,7 @@ use super::{
 pub(crate) struct TransactionBlockEffects {
     /// Representation of transaction effects in the Indexer's Store or
     /// the native representation of transaction effects.
-    pub tx_data: Either<StoredTransaction, NativeTransactionData>,
+    pub tx_data: Either<StoredTransaction, ExecutedTransaction>,
 
     /// Deserialized representation of `stored.raw_effects`.
     pub native: NativeTransactionEffects,
@@ -61,11 +61,13 @@ pub(crate) type CBalanceChange = JsonCursor<usize>;
 impl TransactionBlockEffects {
     /// The transaction that ran to produce these effects.
     async fn transaction_block(&self) -> Result<Option<TransactionBlock>> {
-        self.tx_data
-            .as_ref()
-            .left()
-            .map(|stored_tx| TransactionBlock::try_from(stored_tx.clone()).extend())
-            .transpose()
+        match &self.tx_data {
+            Either::Left(stored) => Ok(Some(TransactionBlock::try_from(stored.clone()).extend()?)),
+            Either::Right(executed) => Ok(Some(TransactionBlock {
+                tx_data: Either::Right(executed.clone()),
+                native: executed.sender_signed_data.clone(),
+            })),
+        }
     }
 
     /// Whether the transaction executed successfully or not.
@@ -259,11 +261,18 @@ impl TransactionBlockEffects {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let mut connection = Connection::new(false, false);
 
-        let Some(stored_tx) = self.tx_data.as_ref().left() else {
-            return Ok(connection);
+        let (balance_changes, len) = match &self.tx_data {
+            Either::Left(stored) => (
+                Either::Left(&stored.balance_changes),
+                stored.balance_changes.len(),
+            ),
+            Either::Right(executed) => (
+                Either::Right(&executed.balance_changes),
+                executed.balance_changes.len(),
+            ),
         };
 
-        let Some((prev, next, cs)) = page.paginate_indices(stored_tx.balance_changes.len()) else {
+        let Some((prev, next, cs)) = page.paginate_indices(len) else {
             return Ok(connection);
         };
 
@@ -271,11 +280,16 @@ impl TransactionBlockEffects {
         connection.has_next_page = next;
 
         for c in cs {
-            let Some(serialized) = &stored_tx.balance_changes[*c] else {
-                continue;
+            let balance_change = match balance_changes {
+                Either::Left(balance_changes) => {
+                    let Some(serialized) = &balance_changes[*c] else {
+                        continue;
+                    };
+                    BalanceChange::read(serialized).extend()?
+                }
+                Either::Right(balance_changes) => BalanceChange::new(balance_changes[*c].clone()),
             };
 
-            let balance_change = BalanceChange::read(serialized).extend()?;
             connection
                 .edges
                 .push(Edge::new(c.encode_cursor(), balance_change));
@@ -288,6 +302,7 @@ impl TransactionBlockEffects {
     async fn timestamp(&self) -> Result<Option<DateTime>, Error> {
         self.tx_data
             .as_ref()
+            // We can only get the checkpoint timestamp from a stored transaction so using `left` is fine here.
             .left()
             .map(|ts| DateTime::from_ms(ts.timestamp_ms))
             .transpose()
@@ -302,6 +317,7 @@ impl TransactionBlockEffects {
 
     /// The checkpoint this transaction was finalized in.
     async fn checkpoint(&self, ctx: &Context<'_>) -> Result<Option<Checkpoint>> {
+        // If the transaction data is not a stored transaction, it's not in the checkpoint yet so we return None.
         let Some(stored_tx) = self.tx_data.as_ref().left() else {
             return Ok(None);
         };
@@ -342,17 +358,25 @@ impl EdgeNameType for DependencyConnectionNames {
     }
 }
 
-impl TryFrom<StoredTransaction> for TransactionBlockEffects {
+impl TryFrom<TransactionBlock> for TransactionBlockEffects {
     type Error = Error;
 
-    fn try_from(stored: StoredTransaction) -> Result<Self, Error> {
-        let native = bcs::from_bytes(&stored.raw_effects).map_err(|e| {
-            Error::Internal(format!("Error deserializing transaction effects: {e}"))
-        })?;
+    fn try_from(block: TransactionBlock) -> Result<Self, Error> {
+        match block.tx_data {
+            Either::Left(stored) => {
+                let native = bcs::from_bytes(&stored.raw_effects).map_err(|e| {
+                    Error::Internal(format!("Error deserializing transaction effects: {e}"))
+                })?;
 
-        Ok(TransactionBlockEffects {
-            tx_data: Either::Left(stored),
-            native,
-        })
+                Ok(TransactionBlockEffects {
+                    tx_data: Either::Left(stored),
+                    native,
+                })
+            }
+            Either::Right(executed) => Ok(Self {
+                native: executed.raw_effects.clone(),
+                tx_data: Either::Right(executed),
+            }),
+        }
     }
 }
