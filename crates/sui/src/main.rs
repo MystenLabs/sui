@@ -3,9 +3,8 @@
 
 use clap::*;
 use colored::Colorize;
-use sui::client_commands::SuiClientCommands::ReplayTransaction;
 use sui::client_commands::SuiClientCommands::{ProfileTransaction, ReplayTransaction};
-use sui::client_commands::PTB;
+use sui::ptb::ptb::PTB;
 use sui::sui_commands::SuiCommand;
 use sui_types::exit_main;
 use tracing::debug;
