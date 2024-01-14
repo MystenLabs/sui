@@ -11,10 +11,26 @@ use clap::CommandFactory;
 use clap::Parser;
 use petgraph::prelude::DiGraphMap;
 use serde::Serialize;
+use shared_crypto::intent::Intent;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use sui_json_rpc_types::SuiTransactionBlockResponse;
+use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
+use sui_keys::keystore::AccountKeystore;
 use sui_sdk::wallet_context::WalletContext;
+use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
+use sui_types::transaction::ProgrammableTransaction;
+use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
+
+use json_to_table::json_to_table;
+use tabled::{
+    builder::Builder as TableBuilder,
+    settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
+};
+
 /// The ProgrammableTransactionBlock structure used in the CLI ptb command
 #[derive(Parser, Debug, Default)]
 pub struct PTB {
@@ -367,41 +383,7 @@ impl PTB {
         Ok(start_index + len_cmds + 1)
     }
 
-    /*
-    def isCyclicUtil(self, v, visited, recStack):
-
-        # Mark current node as visited and
-        # adds to recursion stack
-        visited[v] = True
-        recStack[v] = True
-
-        # Recur for all neighbours
-        # if any neighbour is visited and in
-        # recStack then graph is cyclic
-        for neighbour in self.graph[v]:
-            if visited[neighbour] == False:
-                if self.isCyclicUtil(neighbour, visited, recStack) == True:
-                    return True
-            elif recStack[neighbour] == True:
-                return True
-
-        # The node needs to be popped from
-        # recursion stack before function ends
-        recStack[v] = False
-        return False
-
-    # Returns true if graph is cyclic else false
-    def isCyclic(self):
-        visited = [False] * (self.V + 1)
-        recStack = [False] * (self.V + 1)
-        for node in range(self.V):
-            if visited[node] == False:
-                if self.isCyclicUtil(node, visited, recStack) == True:
-                    return True
-        return False
-
-     */
-
+    /// Parses and executes the PTB with the current active address
     pub async fn execute(self, matches: ArgMatches) -> Result<(), anyhow::Error> {
         let ptb_args_matches = matches
             .subcommand_matches("client")
@@ -410,20 +392,26 @@ impl PTB {
             .ok_or_else(|| anyhow!("Expected the ptb subcommand but got a different command"))?;
         let json = ptb_args_matches.get_flag("json");
         let commands = self.from_matches(ptb_args_matches, None, &mut BTreeMap::new())?;
-        for (k, v) in commands.iter() {
-            println!("{k}: {v:?}");
+
+        // Preview the PTB instead of executing if preview flag is set
+        if ptb_args_matches.get_flag("preview") {
+            let ptb_preview = PTBPreview {
+                cmds: commands.clone().into_values().collect::<Vec<_>>(),
+            };
+            println!("{}", ptb_preview);
+            return Ok(());
         }
 
-        let config_path = sui_config::sui_config_dir()?.join(sui_config::SUI_CLIENT_CONFIG);
-        // prompt_if_no_config(&config_path, true).await?;
-        let mut context = WalletContext::new(&config_path, None, None).await?;
+        // Build the PTB
         let mut parsed = vec![];
-
         for command in &commands {
             let p = ParsedPTBCommand::parse(command.1)?;
-            println!("{:#?}", p);
             parsed.push(p);
         }
+
+        // We need to resolve object IDs, so we need a fullnode to access
+        let config_path = sui_config::sui_config_dir()?.join(sui_config::SUI_CLIENT_CONFIG);
+        let context = WalletContext::new(&config_path, None, None).await?;
 
         let client = context.get_client().await?;
         let mut builder = PTBBuilder::new(client.read_api());
@@ -432,18 +420,96 @@ impl PTB {
             builder.handle_command(p).await?;
         }
 
-        let (ptb, budget, should_preview) = builder.finish()?;
-        println!("---------\nPTB\n---------\n{:#?}", ptb);
+        println!("Successfully parsed the PTB");
+        let (ptb, budget, preview) = builder.finish()?;
 
-        let result = SuiClientCommandResult::PTB(PTBResult {
-            result: "ptb".to_string(),
-        });
-        result.print(json);
+        // get all the metadata needed for executing the PTB: sender, gas, signing tx
+        // get sender's address -- active address
+        let Some(sender) = context.config.active_address else {
+            anyhow::bail!("No active address, cannot execute ptb");
+        };
+
+        // TODO change this logic to actually use the given gas
+        // find the gas coins if we have no gas coin given
+        let coins = context
+            .gas_for_owner_budget(sender, budget, BTreeSet::new())
+            .await?;
+        // get the gas price
+        let gas_price = context
+            .get_client()
+            .await?
+            .read_api()
+            .get_reference_gas_price()
+            .await?;
+        // create the transaction data that will be sent to the network
+        let tx_data = TransactionData::new_programmable(
+            sender,
+            vec![coins.1.object_ref()],
+            ptb,
+            budget,
+            gas_price,
+        );
+        // sign the tx
+        let signature =
+            context
+                .config
+                .keystore
+                .sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+
+        // execute the transaction
+        println!("Executing the transaction...");
+        let transaction_response = context
+            .get_client()
+            .await?
+            .quorum_driver_api()
+            .execute_transaction_block(
+                Transaction::from_data(tx_data, vec![signature]),
+                SuiTransactionBlockResponseOptions::full_content(),
+                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+            )
+            .await?;
+
+        if json {
+            let json_string =
+                serde_json::to_string_pretty(&serde_json::json!(transaction_response))
+                    .map_err(|_| anyhow!("Cannot serialize PTB result to json"))?;
+            println!("{}", json_string);
+        } else {
+            println!("{}", transaction_response);
+        }
         Ok(())
     }
 }
 
-#[derive(Serialize)]
-pub struct PTBResult {
-    pub result: String,
+pub struct PTBPreview {
+    cmds: Vec<PTBCommand>,
+}
+
+impl Display for PTBPreview {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut builder = TableBuilder::default();
+        builder.set_header(vec!["command", "value(s)"]);
+        for cmd in &self.cmds {
+            builder.push_record([cmd.name.to_string(), cmd.values.join(" ").to_string()]);
+        }
+        let mut table = builder.build();
+        table.with(TablePanel::header(format!("PTB Preview")));
+        table.with(TableStyle::rounded().horizontals([
+            HorizontalLine::new(1, TableStyle::modern().get_horizontal()),
+            HorizontalLine::new(2, TableStyle::modern().get_horizontal()),
+            HorizontalLine::new(2, TableStyle::modern().get_horizontal()),
+        ]));
+        table.with(tabled::settings::style::BorderSpanCorrection);
+
+        write!(f, "{}", table)
+    }
+    // fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    //     let cmd_name = &self.name;
+    //     let vals = &self.values.join(" ");
+    //     write!(
+    //         f,
+    //         " ┌──\n │ Command: {cmd_name}\n │ Value(s): {}\n └──\n",
+    //         vals
+    //     )
+    // }
 }
