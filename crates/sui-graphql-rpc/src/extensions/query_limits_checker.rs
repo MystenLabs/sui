@@ -216,7 +216,7 @@ impl Extension for QueryLimitsChecker {
             metrics
                 .request_metrics
                 .output_nodes
-                .observe(running_costs.output_nodes as u64);
+                .observe(running_costs.output_nodes);
             metrics
                 .request_metrics
                 .query_depth
