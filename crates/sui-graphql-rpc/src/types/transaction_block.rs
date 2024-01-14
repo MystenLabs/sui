@@ -376,7 +376,7 @@ impl TransactionBlockFilter {
         }
 
         Some(Self {
-            function: merge!(function, by_eq)?,
+            function: merge!(function, FqNameFilter::intersect)?,
             kind: merge!(kind, by_eq)?,
 
             after_checkpoint: merge!(after_checkpoint, by_max)?,
