@@ -26,10 +26,7 @@ use std::{
 
 use crate::{
     ptb::ptb::PTB,
-    ptb::{
-        ptb::PTBResult,
-        ptb_parser::{build_ptb::PTBBuilder, parser::ParsedPTBCommand},
-    },
+    ptb::ptb_parser::{build_ptb::PTBBuilder, parser::ParsedPTBCommand},
 };
 
 use json_to_table::json_to_table;
@@ -2208,7 +2205,7 @@ pub enum SuiClientCommandResult {
     Pay(SuiTransactionBlockResponse),
     PayAllSui(SuiTransactionBlockResponse),
     PaySui(SuiTransactionBlockResponse),
-    PTB(PTBResult),
+    PTB(SuiTransactionBlockResponse),
     Publish(SuiTransactionBlockResponse),
     RawObject(SuiObjectResponse),
     SerializedSignedTransaction(SenderSignedData),
