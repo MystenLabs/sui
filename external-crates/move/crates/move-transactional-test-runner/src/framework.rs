@@ -143,6 +143,8 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
         subcommand: TaskInput<Self::Subcommand>,
     ) -> Result<Option<String>>;
 
+    async fn process_error(&self, error: anyhow::Error) -> anyhow::Error;
+
     async fn handle_command(
         &mut self,
         task: TaskInput<
@@ -771,7 +773,7 @@ async fn handle_known_task<'a, Adapter: MoveTestAdapter<'a>>(
     let result_string = match result {
         Ok(None) => return,
         Ok(Some(s)) => s,
-        Err(e) => format!("Error: {}", e),
+        Err(e) => format!("Error: {}", adapter.process_error(e).await),
     };
     assert!(!result_string.is_empty());
 
