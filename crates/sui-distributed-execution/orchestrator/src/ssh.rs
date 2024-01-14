@@ -80,17 +80,13 @@ impl CommandContext {
     }
 
     /// Apply the context to a base command.
-    pub fn apply<S: Into<String>>(&self, base_command: S, suffix: Option<String>) -> String {
+    pub fn apply<S: Into<String>>(&self, base_command: S) -> String {
         let mut str = base_command.into();
         if let Some(log_file) = &self.log_file {
             str = format!("{str} |& tee {}", log_file.as_path().display());
         }
         if let Some(id) = &self.background {
-            str = format!(
-                "tmux new -d -s \"{id}-{}\" \"{str}\"",
-                suffix.unwrap_or("".to_string())
-            );
-            println!("Running command in background: {}", str);
+            str = format!("tmux new -d -s \"{id}\" \"{str}\"");
         }
         if let Some(exec_path) = &self.path {
             str = format!("(cd {} && {str})", exec_path.as_path().display());
@@ -205,9 +201,7 @@ impl SshConnectionManager {
                     let connection = ssh_manager.connect(instance.ssh_address()).await?;
                     // SshConnection::execute is a blocking call, needs to go to blocking pool
                     Handle::current()
-                        .spawn_blocking(move || {
-                            connection.execute(context.apply(command, Some(instance.id)))
-                        })
+                        .spawn_blocking(move || connection.execute(context.apply(command)))
                         .await
                         .unwrap()
                 })

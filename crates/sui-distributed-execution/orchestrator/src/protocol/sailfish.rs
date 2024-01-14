@@ -159,12 +159,10 @@ impl ProtocolCommands<SailfishBenchmarkType> for SailfishProtocol {
                     ),
                 ]
                 .join(" ");
-                    
-                let script_name = format!("ew-start-{}.sh", id);
 
                 let command = ["#!/bin/bash -e", "source $HOME/.cargo/env", &run].join("\\n");
                 let command = format!(
-                    "echo -e '{command}' > {script_name} && chmod +x {script_name} && ./{script_name}"
+                    "echo -e '{command}' > ew-start.sh && chmod +x ew-start.sh && ./ew-start.sh"
                 );
 
                 (instance, command)

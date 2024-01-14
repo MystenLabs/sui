@@ -28,8 +28,6 @@ use crate::{
     ssh::{CommandContext, CommandStatus, SshConnectionManager},
 };
 
-const NODES_PER_INSTANCE: usize = 1;
-
 /// An orchestrator to run benchmarks on a testbed.
 pub struct Orchestrator<P, T> {
     /// The testbed's settings.
@@ -192,16 +190,12 @@ impl<P, T> Orchestrator<P, T> {
         // Select the instances to host the nodes.
         let mut nodes_instances = Vec::new();
         for region in self.settings.regions.iter().cycle() {
-            if nodes_instances.len() >= parameters.nodes * NODES_PER_INSTANCE {
+            if nodes_instances.len() == parameters.nodes {
                 break;
             }
             if let Some(regional_instances) = instances_by_regions.get_mut(region) {
                 if let Some(instance) = regional_instances.pop_front() {
-                    for i in 0..NODES_PER_INSTANCE {
-                        let mut instance_clone = instance.clone();
-                        instance_clone.id = format!("{}-{}", instance.id, i);
-                        nodes_instances.push(instance_clone);
-                    }
+                    nodes_instances.push(instance.clone());
                 }
             }
         }
@@ -227,7 +221,6 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics<T>, T: BenchmarkType> Orchestrator
         let targets = self
             .protocol_commands
             .node_command(instances.clone(), parameters);
-        println!("targets: {:?}", targets);
 
         let repo = self.settings.repository_name();
         let context = CommandContext::new()
