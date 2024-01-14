@@ -12,18 +12,29 @@ pub(crate) struct OpenMoveType {
     signature: OpenMoveTypeSignature,
 }
 
+/// Abilities are keywords in Sui Move that define how types behave at the compiler level.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum MoveAbility {
+    /// Enables values to be copied.
     Copy,
+    /// Enables values to be popped/dropped.
     Drop,
+    /// Enables values to be held directly in global storage.
     Key,
+    /// Enables values to be held inside a struct in global storage.
     Store,
 }
 
+/// The visibility modifier describes which modules can access this module member.
+/// By default, a module member can be called only within the same module.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum MoveVisibility {
+    /// A public member can be accessed by any module.
     Public,
+    /// A private member can be accessed in the module it is defined in.
     Private,
+    /// A friend member can be accessed in the module it is defined in and any other module in
+    /// its package that is explicitly specified in its friend list.
     Friend,
 }
 

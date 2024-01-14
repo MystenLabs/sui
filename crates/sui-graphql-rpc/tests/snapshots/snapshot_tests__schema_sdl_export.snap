@@ -108,10 +108,25 @@ type AddressOwner {
 	owner: Owner
 }
 
+"""
+The possible relationship types for a transaction block: sign, sent, received, or paid.
+"""
 enum AddressTransactionBlockRelationship {
+	"""
+	Transactions this address has signed either as a sender or as a sponsor
+	"""
 	SIGN
+	"""
+	Transactions that transferred objects from this address
+	"""
 	SENT
+	"""
+	Transactions that sent objects to this addres
+	"""
 	RECV
+	"""
+	Transactions that were paid for by this address either as a sender or as a sponsor
+	"""
 	PAID
 }
 
@@ -815,8 +830,17 @@ type ExecutionResult {
 	digest: String!
 }
 
+"""
+The execution status of this transaction block: success or failure.
+"""
 enum ExecutionStatus {
+	"""
+	The transaction block was successfully executed
+	"""
 	SUCCESS
+	"""
+	The transaction block could not be executed
+	"""
 	FAILURE
 }
 
@@ -1006,10 +1030,25 @@ type MergeCoinsTransaction {
 	coins: [TransactionArgument!]!
 }
 
+"""
+Abilities are keywords in Sui Move that define how types behave at the compiler level.
+"""
 enum MoveAbility {
+	"""
+	Enables values to be copied.
+	"""
 	COPY
+	"""
+	Enables values to be popped/dropped.
+	"""
 	DROP
+	"""
+	Enables values to be held directly in global storage.
+	"""
 	KEY
+	"""
+	Enables values to be held inside a struct in global storage.
+	"""
 	STORE
 }
 
@@ -1445,9 +1484,23 @@ type MoveValue {
 	json: JSON!
 }
 
+"""
+The visibility modifier describes which modules can access this module member.
+By default, a module member can be called only within the same module.
+"""
 enum MoveVisibility {
+	"""
+	A public member can be accessed by any module.
+	"""
 	PUBLIC
+	"""
+	A private member can be accessed in the module it is defined in.
+	"""
 	PRIVATE
+	"""
+	A friend member can be accessed in the module it is defined in and any other module in
+	its package that is explicitly specified in its friend list.
+	"""
 	FRIEND
 }
 
@@ -2243,6 +2296,9 @@ type SplitCoinsTransaction {
 	amounts: [TransactionArgument!]!
 }
 
+"""
+The stake's possible status: active, pending, or unstaked.
+"""
 enum StakeStatus {
 	"""
 	The stake object is active in a staking pool and it is generating rewards
@@ -2602,6 +2658,9 @@ input TransactionBlockFilter {
 	package: SuiAddress
 	module: String
 	function: String
+	"""
+	An input filter selecting for either system or programmable transactions.
+	"""
 	kind: TransactionBlockKindInput
 	afterCheckpoint: Int
 	atCheckpoint: Int
@@ -2615,10 +2674,23 @@ input TransactionBlockFilter {
 	transactionIds: [String!]
 }
 
+"""
+The kind of transaction block, either a programmable transaction or a system transaction.
+"""
 union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransactionBlock | AuthenticatorStateUpdateTransaction | RandomnessStateUpdateTransaction | EndOfEpochTransaction
 
+"""
+An input filter selecting for either system or programmable transactions.
+"""
 enum TransactionBlockKindInput {
+	"""
+	A system transaction can be one of several types of transactions.
+	See [unions/transaction-block-kind] for more details.
+	"""
 	SYSTEM_TX
+	"""
+	A user submitted transaction block
+	"""
 	PROGRAMMABLE_TX
 }
 

@@ -10,6 +10,7 @@ use sui_json_rpc_types::{Stake as RpcStakedSui, StakeStatus as RpcStakeStatus};
 use sui_types::governance::StakedSui as NativeStakedSui;
 
 #[derive(Copy, Clone, Enum, PartialEq, Eq)]
+/// The stake's possible status: active, pending, or unstaked.
 pub(crate) enum StakeStatus {
     /// The stake object is active in a staking pool and it is generating rewards
     Active,

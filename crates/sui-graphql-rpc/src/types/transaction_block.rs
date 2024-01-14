@@ -42,9 +42,13 @@ pub(crate) struct TransactionBlock {
     pub native: NativeSenderSignedData,
 }
 
+/// An input filter selecting for either system or programmable transactions.
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 pub(crate) enum TransactionBlockKindInput {
+    /// A system transaction can be one of several types of transactions.
+    /// See [unions/transaction-block-kind] for more details.
     SystemTx = 0,
+    /// A user submitted transaction block
     ProgrammableTx = 1,
 }
 
@@ -54,6 +58,7 @@ pub(crate) struct TransactionBlockFilter {
     pub module: Option<String>,
     pub function: Option<String>,
 
+    /// An input filter selecting for either system or programmable transactions.
     pub kind: Option<TransactionBlockKindInput>,
     pub after_checkpoint: Option<u64>,
     pub at_checkpoint: Option<u64>,
