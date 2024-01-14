@@ -326,10 +326,12 @@ pub mod tests {
         extensions::{Extension, ExtensionContext, NextExecute},
         Response,
     };
+    use prometheus::proto::MetricFamily;
+    use prometheus::Registry;
     use rand::{rngs::StdRng, SeedableRng};
     use simulacrum::Simulacrum;
-    use std::sync::Arc;
     use std::time::Duration;
+    use std::{collections::HashMap, sync::Arc};
 
     async fn prep_cluster() -> (ConnectionConfig, ExecutorCluster) {
         let rng = StdRng::from_seed([12; 32]);
@@ -661,7 +663,7 @@ pub mod tests {
         let binding_address: SocketAddr = "0.0.0.0:9185".parse().unwrap();
         let registry = mysten_metrics::start_prometheus_server(binding_address).default_registry();
         let metrics = Metrics::new(&registry);
-        let metrics2 = metrics.request_metrics.clone();
+        let _metrics2 = metrics.request_metrics.clone();
 
         let service_config = ServiceConfig::default();
         let db_url: String = connection_config.db_url.clone();
@@ -677,7 +679,9 @@ pub mod tests {
             .build_schema();
         let _ = schema.execute("{ chainIdentifier }").await;
 
-        // assert_eq!(metrics2.input_nodes.get_sample_count(), 1);
+        /// changing this to Histogram (mysten-metrics) rather than prometheus::Histogram makes it very difficult to test.
+        let (input_hist, input_sum, input_count) = get_sample("input_nodes", &registry);
+        // assert_eq!(input_sum.get("")
         // assert_eq!(metrics2.output_nodes.get_sample_count(), 1);
         // assert_eq!(metrics2.query_depth.get_sample_count(), 1);
         // assert_eq!(metrics2.input_nodes.get_sample_sum(), 1.);
@@ -693,5 +697,60 @@ pub mod tests {
         // assert_eq!(metrics2.input_nodes.get_sample_sum(), 2. + 4.);
         // assert_eq!(metrics2.output_nodes.get_sample_sum(), 2. + 4.);
         // assert_eq!(metrics2.query_depth.get_sample_sum(), 1. + 3.);
+    }
+
+    fn get_sample(
+        name: &str,
+        registry: &Registry,
+    ) -> (
+        HashMap<String, f64>,
+        HashMap<String, f64>,
+        HashMap<String, f64>,
+    ) {
+        let gather = registry.gather();
+        let gather: HashMap<_, _> = gather
+            .into_iter()
+            .map(|f| (f.get_name().to_string(), f))
+            .collect();
+        let hist = gather.get(name).unwrap();
+        let sum = gather.get("{name}_sum").unwrap();
+        let count = gather.get("{name}_count").unwrap();
+        let hist = aggregate_gauge_by_label(hist);
+        let sum = aggregate_counter_by_label(sum);
+        let count = aggregate_counter_by_label(count);
+        (hist, sum, count)
+    }
+    // copied from mysten-metrics histogram tests
+
+    fn aggregate_gauge_by_label(family: &MetricFamily) -> HashMap<String, f64> {
+        family
+            .get_metric()
+            .iter()
+            .map(|m| {
+                let value = m.get_gauge().get_value();
+                let mut key = String::new();
+                for label in m.get_label() {
+                    key.push_str("::");
+                    key.push_str(label.get_value());
+                }
+                (key, value)
+            })
+            .collect()
+    }
+
+    fn aggregate_counter_by_label(family: &MetricFamily) -> HashMap<String, f64> {
+        family
+            .get_metric()
+            .iter()
+            .map(|m| {
+                let value = m.get_counter().get_value();
+                let mut key = String::new();
+                for label in m.get_label() {
+                    key.push_str("::");
+                    key.push_str(label.get_value());
+                }
+                (key, value)
+            })
+            .collect()
     }
 }
