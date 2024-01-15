@@ -24,6 +24,7 @@ use sui_types::{
 use crate::{
     data::{self, Db, DbConnection, QueryExecutor},
     error::Error,
+    types::intersect,
 };
 
 use super::{
@@ -79,8 +80,8 @@ pub(crate) struct TransactionBlockFilter {
     pub transaction_ids: Option<Vec<Digest>>,
 }
 
-pub(crate) type Cursor = cursor::Cursor<u64>;
-type CEvent = cursor::Cursor<usize>;
+pub(crate) type Cursor = cursor::JsonCursor<u64>;
+type CEvent = cursor::JsonCursor<usize>;
 type Query<ST, GB> = data::Query<ST, transactions::table, GB>;
 
 #[Object]
@@ -357,38 +358,26 @@ impl TransactionBlockFilter {
     /// resulting filter is inconsistent in some way (e.g. a filter that requires one field to be
     /// two different values simultaneously).
     pub(crate) fn intersect(self, other: Self) -> Option<Self> {
-        fn by_eq<T: Eq>(a: T, b: T) -> Option<T> {
-            (a == b).then_some(a)
-        }
-
-        fn by_max<T: Ord>(a: T, b: T) -> Option<T> {
-            Some(a.max(b))
-        }
-
-        fn by_min<T: Ord>(a: T, b: T) -> Option<T> {
-            Some(a.min(b))
-        }
-
-        macro_rules! merge {
+        macro_rules! intersect {
             ($field:ident, $body:expr) => {
-                merge_filter(self.$field, other.$field, $body)
+                intersect::field(self.$field, other.$field, $body)
             };
         }
 
         Some(Self {
-            function: merge!(function, FqNameFilter::intersect)?,
-            kind: merge!(kind, by_eq)?,
+            function: intersect!(function, FqNameFilter::intersect)?,
+            kind: intersect!(kind, intersect::by_eq)?,
 
-            after_checkpoint: merge!(after_checkpoint, by_max)?,
-            at_checkpoint: merge!(at_checkpoint, by_eq)?,
-            before_checkpoint: merge!(before_checkpoint, by_min)?,
+            after_checkpoint: intersect!(after_checkpoint, intersect::by_max)?,
+            at_checkpoint: intersect!(at_checkpoint, intersect::by_eq)?,
+            before_checkpoint: intersect!(before_checkpoint, intersect::by_min)?,
 
-            sign_address: merge!(sign_address, by_eq)?,
-            recv_address: merge!(recv_address, by_eq)?,
-            input_object: merge!(input_object, by_eq)?,
-            changed_object: merge!(changed_object, by_eq)?,
+            sign_address: intersect!(sign_address, intersect::by_eq)?,
+            recv_address: intersect!(recv_address, intersect::by_eq)?,
+            input_object: intersect!(input_object, intersect::by_eq)?,
+            changed_object: intersect!(changed_object, intersect::by_eq)?,
 
-            transaction_ids: merge!(transaction_ids, |a, b| {
+            transaction_ids: intersect!(transaction_ids, |a, b| {
                 let a = BTreeSet::from_iter(a.into_iter());
                 let b = BTreeSet::from_iter(b.into_iter());
                 Some(a.intersection(&b).cloned().collect())
@@ -430,22 +419,5 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
             .map_err(|e| Error::Internal(format!("Error deserializing transaction block: {e}")))?;
 
         Ok(TransactionBlock { stored, native })
-    }
-}
-
-/// Merges two optional filter values. If both values exist, `merge` is used to combine them, which
-/// returns some combined value if there is some consistent combination, and `None` otherwise. The
-/// overall function returns `Some(None)`, if the filters combined to no filter, `Some(Some(f))` if
-/// the filters combined to `f`, and `None` if the filters couldn't be combined.
-fn merge_filter<T>(
-    this: Option<T>,
-    that: Option<T>,
-    merge: impl FnOnce(T, T) -> Option<T>,
-) -> Option<Option<T>> {
-    match (this, that) {
-        (None, None) => Some(None),
-        (Some(this), None) => Some(Some(this)),
-        (None, Some(that)) => Some(Some(that)),
-        (Some(this), Some(that)) => merge(this, that).map(Some),
     }
 }

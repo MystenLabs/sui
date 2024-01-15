@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base64::Base64;
-use super::cursor::{Cursor, Page};
+use super::cursor::{JsonCursor, Page};
 use super::move_module::MoveModule;
 use super::object::Object;
 use super::sui_address::SuiAddress;
@@ -52,7 +52,7 @@ struct TypeOrigin {
 
 pub(crate) struct MovePackageDowncastError;
 
-pub(crate) type CModule = Cursor<String>;
+pub(crate) type CModule = JsonCursor<String>;
 
 /// A MovePackage is a kind of Move object that represents code that has been published on chain.
 /// It exposes information about its modules, type definitions, functions, and dependencies.
@@ -116,7 +116,7 @@ impl MovePackage {
                 .extend());
             };
 
-            let cursor = Cursor::new(name.clone()).encode_cursor();
+            let cursor = JsonCursor::new(name.clone()).encode_cursor();
             connection.edges.push(Edge::new(
                 cursor,
                 MoveModule {

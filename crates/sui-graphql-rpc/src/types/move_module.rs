@@ -12,7 +12,7 @@ use crate::data::Db;
 use crate::error::Error;
 use sui_package_resolver::Module as ParsedMoveModule;
 
-use super::cursor::{Cursor, Page};
+use super::cursor::{JsonCursor, Page};
 use super::move_function::MoveFunction;
 use super::move_struct::MoveStruct;
 use super::{base64::Base64, move_package::MovePackage, sui_address::SuiAddress};
@@ -24,9 +24,9 @@ pub(crate) struct MoveModule {
     pub parsed: ParsedMoveModule,
 }
 
-pub(crate) type CFriend = Cursor<usize>;
-pub(crate) type CStruct = Cursor<String>;
-pub(crate) type CFunction = Cursor<String>;
+pub(crate) type CFriend = JsonCursor<usize>;
+pub(crate) type CStruct = JsonCursor<String>;
+pub(crate) type CFunction = JsonCursor<String>;
 
 /// Represents a module in Move, a library that defines struct types
 /// and functions that operate on these types.
@@ -170,7 +170,7 @@ impl MoveModule {
                 .extend();
             };
 
-            let cursor = Cursor::new(name.to_string()).encode_cursor();
+            let cursor = JsonCursor::new(name.to_string()).encode_cursor();
             connection.edges.push(Edge::new(cursor, struct_));
         }
 
@@ -227,7 +227,7 @@ impl MoveModule {
                 .extend();
             };
 
-            let cursor = Cursor::new(name.to_string()).encode_cursor();
+            let cursor = JsonCursor::new(name.to_string()).encode_cursor();
             connection.edges.push(Edge::new(cursor, function));
         }
 

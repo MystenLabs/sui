@@ -10,6 +10,7 @@ use async_graphql::{
 use diesel::{
     query_builder::QueryFragment, query_dsl::LoadQuery, QueryDsl, QueryResult, QuerySource,
 };
+use fastcrypto::encoding::{Base64, Encoding};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -18,8 +19,11 @@ use crate::{
     error::Error,
 };
 
-/// Wrap the `OpaqueCursor` type to implement Scalar for it.
-pub(crate) struct Cursor<C>(OpaqueCursor<C>);
+/// Cursor that hides its value by encoding it as JSON and then Base64.
+pub(crate) struct JsonCursor<C>(OpaqueCursor<C>);
+
+/// Cursor that hides its value by encoding it as BCS and then Base64.
+pub(crate) struct BcsCursor<C>(C);
 
 /// Connection field parameters parsed into a single type that encodes the bounds of a single page
 /// in a paginated response.
@@ -75,9 +79,15 @@ pub(crate) trait Target<C: CursorType> {
     fn cursor(&self) -> C;
 }
 
-impl<C> Cursor<C> {
+impl<C> JsonCursor<C> {
     pub(crate) fn new(cursor: C) -> Self {
-        Cursor(OpaqueCursor(cursor))
+        JsonCursor(OpaqueCursor(cursor))
+    }
+}
+
+impl<C> BcsCursor<C> {
+    pub(crate) fn new(cursor: C) -> Self {
+        BcsCursor(cursor)
     }
 }
 
@@ -144,14 +154,14 @@ impl<C> Page<C> {
     }
 }
 
-impl Page<Cursor<usize>> {
+impl Page<JsonCursor<usize>> {
     /// Treat the cursors of this Page as indices into a range [0, total). Returns two booleans
     /// indicating whether there is a previous or next page in the range, followed by an iterator of
     /// cursors within that Page.
     pub(crate) fn paginate_indices(
         &self,
         total: usize,
-    ) -> Option<(bool, bool, impl Iterator<Item = Cursor<usize>>)> {
+    ) -> Option<(bool, bool, impl Iterator<Item = JsonCursor<usize>>)> {
         let mut lo = self.after().map_or(0, |a| **a + 1);
         let mut hi = self.before().map_or(total, |b| **b);
 
@@ -165,7 +175,7 @@ impl Page<Cursor<usize>> {
             }
         }
 
-        Some((0 < lo, hi < total, (lo..hi).map(Cursor::new)))
+        Some((0 < lo, hi < total, (lo..hi).map(JsonCursor::new)))
     }
 }
 
@@ -297,7 +307,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
 }
 
 #[Scalar(name = "String", visible = false)]
-impl<C> ScalarType for Cursor<C>
+impl<C> ScalarType for JsonCursor<C>
 where
     C: Send + Sync,
     C: Serialize + DeserializeOwned,
@@ -307,7 +317,7 @@ where
             return Err(InputValueError::expected_type(value));
         };
 
-        Ok(Cursor(OpaqueCursor::decode_cursor(&s)?))
+        Ok(JsonCursor(OpaqueCursor::decode_cursor(&s)?))
     }
 
     /// Just check that the value is a string, as we'll do more involved tests during parsing.
@@ -320,8 +330,32 @@ where
     }
 }
 
+#[Scalar(name = "String", visible = false)]
+impl<C> ScalarType for BcsCursor<C>
+where
+    C: Send + Sync,
+    C: Serialize + DeserializeOwned,
+{
+    fn parse(value: Value) -> InputValueResult<Self> {
+        let Value::String(s) = value else {
+            return Err(InputValueError::expected_type(value));
+        };
+
+        Ok(Self::decode_cursor(&s)?)
+    }
+
+    /// Just check that the value is a string, as we'll do more involved tests during parsing.
+    fn is_valid(value: &Value) -> bool {
+        matches!(value, Value::String(_))
+    }
+
+    fn to_value(&self) -> Value {
+        Value::String(self.encode_cursor())
+    }
+}
+
 /// Wrapping implementation of `CursorType` directly forwarding to `OpaqueCursor`.
-impl<C> CursorType for Cursor<C>
+impl<C> CursorType for JsonCursor<C>
 where
     C: Send + Sync,
     C: Serialize + DeserializeOwned,
@@ -329,7 +363,7 @@ where
     type Error = <OpaqueCursor<C> as CursorType>::Error;
 
     fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
-        Ok(Cursor(OpaqueCursor::decode_cursor(s)?))
+        Ok(JsonCursor(OpaqueCursor::decode_cursor(s)?))
     }
 
     fn encode_cursor(&self) -> String {
@@ -337,7 +371,25 @@ where
     }
 }
 
-impl<C> Deref for Cursor<C> {
+impl<C> CursorType for BcsCursor<C>
+where
+    C: Send + Sync,
+    C: Serialize + DeserializeOwned,
+{
+    type Error = <OpaqueCursor<C> as CursorType>::Error;
+
+    fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
+        let data = Base64::decode(s)?;
+        Ok(Self(bcs::from_bytes(&data)?))
+    }
+
+    fn encode_cursor(&self) -> String {
+        let value = bcs::to_bytes(&self.0).unwrap_or_default();
+        Base64::encode(value)
+    }
+}
+
+impl<C> Deref for JsonCursor<C> {
     type Target = C;
 
     fn deref(&self) -> &Self::Target {
@@ -345,25 +397,52 @@ impl<C> Deref for Cursor<C> {
     }
 }
 
-impl<C: fmt::Debug> fmt::Debug for Cursor<C> {
+impl<C> Deref for BcsCursor<C> {
+    type Target = C;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<C: fmt::Debug> fmt::Debug for JsonCursor<C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", *self.0)
     }
 }
 
-impl<C: Clone> Clone for Cursor<C> {
-    fn clone(&self) -> Self {
-        Cursor::new(self.0 .0.clone())
+impl<C: fmt::Debug> fmt::Debug for BcsCursor<C> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.0)
     }
 }
 
-impl<C: PartialEq> PartialEq for Cursor<C> {
+impl<C: Clone> Clone for JsonCursor<C> {
+    fn clone(&self) -> Self {
+        JsonCursor::new(self.0 .0.clone())
+    }
+}
+
+impl<C: Clone> Clone for BcsCursor<C> {
+    fn clone(&self) -> Self {
+        BcsCursor::new(self.0.clone())
+    }
+}
+
+impl<C: PartialEq> PartialEq for JsonCursor<C> {
     fn eq(&self, other: &Self) -> bool {
         self.deref() == other.deref()
     }
 }
 
-impl<C: Eq> Eq for Cursor<C> {}
+impl<C: PartialEq> PartialEq for BcsCursor<C> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<C: Eq> Eq for JsonCursor<C> {}
+impl<C: Eq> Eq for BcsCursor<C> {}
 
 #[cfg(test)]
 mod tests {
@@ -373,7 +452,8 @@ mod tests {
     #[test]
     fn test_default_page() {
         let config = ServiceConfig::default();
-        let page: Page<Cursor<u64>> = Page::from_params(&config, None, None, None, None).unwrap();
+        let page: Page<JsonCursor<u64>> =
+            Page::from_params(&config, None, None, None, None).unwrap();
 
         let expect = expect![[r#"
             Page {
@@ -388,8 +468,8 @@ mod tests {
     #[test]
     fn test_prefix_page() {
         let config = ServiceConfig::default();
-        let page: Page<Cursor<u64>> =
-            Page::from_params(&config, None, Some(Cursor::new(42)), None, None).unwrap();
+        let page: Page<JsonCursor<u64>> =
+            Page::from_params(&config, None, Some(JsonCursor::new(42)), None, None).unwrap();
 
         let expect = expect![[r#"
             Page {
@@ -406,8 +486,8 @@ mod tests {
     #[test]
     fn test_prefix_page_limited() {
         let config = ServiceConfig::default();
-        let page: Page<Cursor<u64>> =
-            Page::from_params(&config, Some(10), Some(Cursor::new(42)), None, None).unwrap();
+        let page: Page<JsonCursor<u64>> =
+            Page::from_params(&config, Some(10), Some(JsonCursor::new(42)), None, None).unwrap();
 
         let expect = expect![[r#"
             Page {
@@ -424,8 +504,8 @@ mod tests {
     #[test]
     fn test_suffix_page() {
         let config = ServiceConfig::default();
-        let page: Page<Cursor<u64>> =
-            Page::from_params(&config, None, None, None, Some(Cursor::new(42))).unwrap();
+        let page: Page<JsonCursor<u64>> =
+            Page::from_params(&config, None, None, None, Some(JsonCursor::new(42))).unwrap();
 
         let expect = expect![[r#"
             Page {
@@ -442,8 +522,8 @@ mod tests {
     #[test]
     fn test_suffix_page_limited() {
         let config = ServiceConfig::default();
-        let page: Page<Cursor<u64>> =
-            Page::from_params(&config, None, None, Some(10), Some(Cursor::new(42))).unwrap();
+        let page: Page<JsonCursor<u64>> =
+            Page::from_params(&config, None, None, Some(10), Some(JsonCursor::new(42))).unwrap();
 
         let expect = expect![[r#"
             Page {
@@ -460,12 +540,12 @@ mod tests {
     #[test]
     fn test_between_page_prefix() {
         let config = ServiceConfig::default();
-        let page: Page<Cursor<u64>> = Page::from_params(
+        let page: Page<JsonCursor<u64>> = Page::from_params(
             &config,
             Some(10),
-            Some(Cursor::new(40)),
+            Some(JsonCursor::new(40)),
             None,
-            Some(Cursor::new(42)),
+            Some(JsonCursor::new(42)),
         )
         .unwrap();
 
@@ -486,12 +566,12 @@ mod tests {
     #[test]
     fn test_between_page_suffix() {
         let config = ServiceConfig::default();
-        let page: Page<Cursor<u64>> = Page::from_params(
+        let page: Page<JsonCursor<u64>> = Page::from_params(
             &config,
             None,
-            Some(Cursor::new(40)),
+            Some(JsonCursor::new(40)),
             Some(10),
-            Some(Cursor::new(42)),
+            Some(JsonCursor::new(42)),
         )
         .unwrap();
 
@@ -512,12 +592,12 @@ mod tests {
     #[test]
     fn test_between_page() {
         let config = ServiceConfig::default();
-        let page: Page<Cursor<u64>> = Page::from_params(
+        let page: Page<JsonCursor<u64>> = Page::from_params(
             &config,
             None,
-            Some(Cursor::new(40)),
+            Some(JsonCursor::new(40)),
             None,
-            Some(Cursor::new(42)),
+            Some(JsonCursor::new(42)),
         )
         .unwrap();
 
@@ -538,8 +618,8 @@ mod tests {
     #[test]
     fn test_err_first_and_last() {
         let config = ServiceConfig::default();
-        let err =
-            Page::<Cursor<u64>>::from_params(&config, Some(1), None, Some(1), None).unwrap_err();
+        let err = Page::<JsonCursor<u64>>::from_params(&config, Some(1), None, Some(1), None)
+            .unwrap_err();
 
         let expect = expect![[r#"
             Error {
@@ -561,8 +641,8 @@ mod tests {
     fn test_err_page_too_big() {
         let config = ServiceConfig::default();
         let too_big = config.limits.max_page_size + 1;
-        let err =
-            Page::<Cursor<u64>>::from_params(&config, Some(too_big), None, None, None).unwrap_err();
+        let err = Page::<JsonCursor<u64>>::from_params(&config, Some(too_big), None, None, None)
+            .unwrap_err();
 
         let expect = expect![[r#"
             Error {

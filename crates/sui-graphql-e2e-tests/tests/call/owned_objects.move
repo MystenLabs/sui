@@ -1,16 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Tests objectConnection on address, object, and owner
-// The initial query for objectConnection under address should yield no objects
-// After object creation, the same query for address.objectConnection should now have one object
-// The address of the parent field takes precedence when querying an address's objects with a filter
-// So if a different owner address is provided, it is overwritten
-// The same query on the address as an owner should return the same result
-// The same query on the address as an object should return a null result, since the address is not an object
-
-
 //# init --addresses Test=0x0 A=0x42 --simulator
+
+// Tests objects on address, object, and owner.
+//
+// - The initial query for objects under address should yield no
+//   objects.
+// - After object creation, the same query for address.objects should
+//   now have one object
+// - A query for transactions belonging to an address that also
+//   supplies an address filter will combine the two filters.
+// - If the two filters suggest two different addresses, they will
+//   combine to form an inconsistent query, which will yield no
+//   results.
+// - The same query on the address as an owner should return the same
+//   result
+// - The same query on the address as an object should return a null
+//   result, since the address is not an object
 
 //# publish
 module Test::M1 {
@@ -39,7 +46,7 @@ module Test::M1 {
 //# run-graphql
 {
   address(address: "0x42") {
-    objectConnection{
+    objects {
       edges {
         node {
           owner {
@@ -65,7 +72,7 @@ module Test::M1 {
 //# run-graphql
 {
   address(address: "0x42") {
-    objectConnection{
+    objects {
       edges {
         node {
           owner {
@@ -85,7 +92,7 @@ module Test::M1 {
 //# run-graphql
 {
   address(address: "0x42") {
-    objectConnection(filter: {owner: "0x42"}) {
+    objects(filter: {owner: "0x42"}) {
       edges {
         node {
           owner {
@@ -105,7 +112,7 @@ module Test::M1 {
 //# run-graphql
 {
   address(address: "0x42") {
-    objectConnection(filter: {owner: "0x888"}) {
+    objects(filter: {owner: "0x888"}) {
       edges {
         node {
           owner {
@@ -125,7 +132,7 @@ module Test::M1 {
 //# run-graphql
 {
   owner(address: "0x42") {
-    objectConnection{
+    objects {
       edges {
         node {
           owner {
@@ -145,7 +152,7 @@ module Test::M1 {
 //# run-graphql
 {
   object(address: "0x42") {
-    objectConnection{
+    objects {
       edges {
         node {
           owner {

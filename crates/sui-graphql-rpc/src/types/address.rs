@@ -11,7 +11,7 @@ use super::{
     coin::Coin,
     cursor::Page,
     dynamic_field::{DynamicField, DynamicFieldName},
-    object::{Object, ObjectFilter},
+    object::{self, Object, ObjectFilter},
     stake::StakedSui,
     sui_address::SuiAddress,
     suins_registration::SuinsRegistration,
@@ -77,17 +77,25 @@ impl Address {
     }
 
     /// The objects that are owned by this address.
-    pub async fn object_connection(
+    pub async fn objects(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<object::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
+        before: Option<object::Cursor>,
         filter: Option<ObjectFilter>,
-    ) -> Result<Option<Connection<String, Object>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_owned_objs(first, after, last, before, filter, self.address)
+    ) -> Result<Connection<String, Object>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+
+        let Some(filter) = filter.unwrap_or_default().intersect(ObjectFilter {
+            owner: Some(self.address),
+            ..Default::default()
+        }) else {
+            return Ok(Connection::new(false, false));
+        };
+
+        Object::paginate(ctx.data_unchecked(), page, None, filter)
             .await
             .extend()
     }

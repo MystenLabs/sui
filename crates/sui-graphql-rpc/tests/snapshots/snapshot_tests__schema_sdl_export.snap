@@ -75,7 +75,7 @@ type Address implements IOwner {
 	"""
 	The objects that are owned by this address.
 	"""
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
 	"""
 	The balance that this address holds.
 	"""
@@ -1043,7 +1043,7 @@ type GenesisTransaction {
 
 interface IOwner {
 	address: SuiAddress!
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
 	balance(type: String): Balance
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
@@ -1685,7 +1685,7 @@ type Object implements IOwner {
 	"""
 	The objects owned by this object
 	"""
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
 	"""
 	The balance of coin objects of a particular coin type owned by the object.
 	"""
@@ -1821,6 +1821,14 @@ type ObjectEdge {
 	cursor: String!
 }
 
+"""
+Constrains the set of objects returned. All filters are optional, and the resulting set of
+objects are ones whose
+
+- Type matches the `type` filter,
+- AND, whose owner matches the `owner` filter,
+- AND, whose ID is in `objectIds` OR whose ID and version is in `objectKeys`.
+"""
 input ObjectFilter {
 	"""
 	This field is used to specify the type of objects that should be included in the query
@@ -1929,7 +1937,7 @@ type Owner implements IOwner {
 	asAddress: Address
 	asObject: Object
 	address: SuiAddress!
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
 	"""
 	Total balance of all coins with marker type owned by this Owner. If type is not supplied,
 	it defaults to 0x2::sui::SUI.
@@ -2195,7 +2203,7 @@ type Query {
 	"""
 	The objects that exist in the network.
 	"""
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
 	"""
 	Fetch the protocol config by protocol version (defaults to the latest protocol
 	version known to the GraphQL service).
