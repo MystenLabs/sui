@@ -94,7 +94,7 @@ To verify a proof, you also need two more inputs, `proof_inputs_bytes` and `proo
 
 ```rust
 let mut proof_inputs_bytes = Vec::new();
-inputs.serialize_compressed(&mut proof_inputs_bytes).unwrap();
+inputs[0].serialize_compressed(&mut proof_inputs_bytes).unwrap();
 
 let mut proof_points_bytes = Vec::new();
 proof.a.serialize_compressed(&mut proof_points_bytes).unwrap();
