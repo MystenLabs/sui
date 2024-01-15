@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{QueryExecutor, Query_};
+use super::QueryExecutor;
 use crate::{config::Limits, error::Error};
 use async_trait::async_trait;
 use diesel::{
     pg::Pg,
     query_builder::{Query, QueryFragment, QueryId},
     query_dsl::LoadQuery,
-    QueryResult, QuerySource, RunQueryDsl,
+    QueryResult, RunQueryDsl,
 };
 use sui_indexer::indexer_reader::IndexerReader;
 
@@ -69,23 +69,21 @@ impl<'c> super::DbConnection for PgConnection<'c> {
     type Connection = diesel::PgConnection;
     type Backend = Pg;
 
-    fn result<Q, ST, QS, GB, U>(&mut self, query: Q) -> QueryResult<U>
+    fn result<Q, U>(&mut self, query: impl Fn() -> Q) -> QueryResult<U>
     where
-        Q: Fn() -> Query_<ST, QS, Pg, GB>,
-        Query_<ST, QS, Pg, GB>: LoadQuery<'static, Self::Connection, U>,
-        Query_<ST, QS, Pg, GB>: QueryFragment<Self::Backend>,
-        QS: QuerySource,
+        Q: diesel::query_builder::Query,
+        Q: LoadQuery<'static, Self::Connection, U>,
+        Q: QueryId + QueryFragment<Self::Backend>,
     {
         query_cost::log(self.conn, self.max_cost, query());
         query().get_result(self.conn)
     }
 
-    fn results<Q, ST, QS, GB, U>(&mut self, query: Q) -> QueryResult<Vec<U>>
+    fn results<Q, U>(&mut self, query: impl Fn() -> Q) -> QueryResult<Vec<U>>
     where
-        Q: Fn() -> Query_<ST, QS, Pg, GB>,
-        Query_<ST, QS, Pg, GB>: LoadQuery<'static, Self::Connection, U>,
-        Query_<ST, QS, Pg, GB>: QueryFragment<Self::Backend>,
-        QS: QuerySource,
+        Q: diesel::query_builder::Query,
+        Q: LoadQuery<'static, Self::Connection, U>,
+        Q: QueryId + QueryFragment<Self::Backend>,
     {
         query_cost::log(self.conn, self.max_cost, query());
         query().get_results(self.conn)

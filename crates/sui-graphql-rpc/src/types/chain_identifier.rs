@@ -25,7 +25,6 @@ impl ChainIdentifier {
                     dsl::checkpoints
                         .select(dsl::checkpoint_digest)
                         .order_by(dsl::sequence_number.asc())
-                        .into_boxed()
                 })
             })
             .await
