@@ -27,10 +27,10 @@ pub(crate) struct Cursor<C>(OpaqueCursor<C>);
 pub(crate) struct Page<C> {
     /// The exclusive lower bound of the page (no bound means start from the beginning of the
     /// data-set).
-    after: Option<Cursor<C>>,
+    after: Option<C>,
 
     /// The exclusive upper bound of the page (no bound means continue to the end of the data-set).
-    before: Option<Cursor<C>>,
+    before: Option<C>,
 
     /// Maximum number of entries in the page.
     limit: u64,
@@ -49,7 +49,7 @@ enum End {
 }
 
 /// Results from the database that are pointed to by cursors.
-pub(crate) trait Target<C> {
+pub(crate) trait Target<C: CursorType> {
     type Source: QuerySource;
 
     /// Adds a filter to `query` to bound its result to be greater than or equal to `cursor`
@@ -97,9 +97,9 @@ impl<C> Page<C> {
     pub(crate) fn from_params(
         config: &ServiceConfig,
         first: Option<u64>,
-        after: Option<Cursor<C>>,
+        after: Option<C>,
         last: Option<u64>,
-        before: Option<Cursor<C>>,
+        before: Option<C>,
     ) -> Result<Self> {
         let limits = &config.limits;
         let page = match (first, after, last, before) {
@@ -128,11 +128,11 @@ impl<C> Page<C> {
     }
 
     pub(crate) fn after(&self) -> Option<&C> {
-        self.after.as_deref()
+        self.after.as_ref()
     }
 
     pub(crate) fn before(&self) -> Option<&C> {
-        self.before.as_deref()
+        self.before.as_ref()
     }
 
     pub(crate) fn limit(&self) -> usize {
@@ -144,7 +144,7 @@ impl<C> Page<C> {
     }
 }
 
-impl Page<usize> {
+impl Page<Cursor<usize>> {
     /// Treat the cursors of this Page as indices into a range [0, total). Returns two booleans
     /// indicating whether there is a previous or next page in the range, followed by an iterator of
     /// cursors within that Page.
@@ -152,8 +152,8 @@ impl Page<usize> {
         &self,
         total: usize,
     ) -> Option<(bool, bool, impl Iterator<Item = Cursor<usize>>)> {
-        let mut lo = self.after().map_or(0, |a| *a + 1);
-        let mut hi = self.before().map_or(total, |b| *b);
+        let mut lo = self.after().map_or(0, |a| **a + 1);
+        let mut hi = self.before().map_or(total, |b| **b);
 
         if hi <= lo {
             return None;
@@ -169,7 +169,7 @@ impl Page<usize> {
     }
 }
 
-impl<C: Eq + Clone + Send + Sync + 'static> Page<C> {
+impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
     /// Treat the cursors of this page as upper- and lowerbound filters for a database `query`.
     /// Returns two booleans indicating whether there is a previous or next page in the range,
     /// followed by an iterator of values in the page, fetched from the database.
@@ -357,6 +357,14 @@ impl<C: Clone> Clone for Cursor<C> {
     }
 }
 
+impl<C: PartialEq> PartialEq for Cursor<C> {
+    fn eq(&self, other: &Self) -> bool {
+        self.deref() == other.deref()
+    }
+}
+
+impl<C: Eq> Eq for Cursor<C> {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -365,7 +373,7 @@ mod tests {
     #[test]
     fn test_default_page() {
         let config = ServiceConfig::default();
-        let page: Page<u64> = Page::from_params(&config, None, None, None, None).unwrap();
+        let page: Page<Cursor<u64>> = Page::from_params(&config, None, None, None, None).unwrap();
 
         let expect = expect![[r#"
             Page {
@@ -380,7 +388,7 @@ mod tests {
     #[test]
     fn test_prefix_page() {
         let config = ServiceConfig::default();
-        let page: Page<u64> =
+        let page: Page<Cursor<u64>> =
             Page::from_params(&config, None, Some(Cursor::new(42)), None, None).unwrap();
 
         let expect = expect![[r#"
@@ -398,7 +406,7 @@ mod tests {
     #[test]
     fn test_prefix_page_limited() {
         let config = ServiceConfig::default();
-        let page: Page<u64> =
+        let page: Page<Cursor<u64>> =
             Page::from_params(&config, Some(10), Some(Cursor::new(42)), None, None).unwrap();
 
         let expect = expect![[r#"
@@ -416,7 +424,7 @@ mod tests {
     #[test]
     fn test_suffix_page() {
         let config = ServiceConfig::default();
-        let page: Page<u64> =
+        let page: Page<Cursor<u64>> =
             Page::from_params(&config, None, None, None, Some(Cursor::new(42))).unwrap();
 
         let expect = expect![[r#"
@@ -434,7 +442,7 @@ mod tests {
     #[test]
     fn test_suffix_page_limited() {
         let config = ServiceConfig::default();
-        let page: Page<u64> =
+        let page: Page<Cursor<u64>> =
             Page::from_params(&config, None, None, Some(10), Some(Cursor::new(42))).unwrap();
 
         let expect = expect![[r#"
@@ -452,7 +460,7 @@ mod tests {
     #[test]
     fn test_between_page_prefix() {
         let config = ServiceConfig::default();
-        let page: Page<u64> = Page::from_params(
+        let page: Page<Cursor<u64>> = Page::from_params(
             &config,
             Some(10),
             Some(Cursor::new(40)),
@@ -478,7 +486,7 @@ mod tests {
     #[test]
     fn test_between_page_suffix() {
         let config = ServiceConfig::default();
-        let page: Page<u64> = Page::from_params(
+        let page: Page<Cursor<u64>> = Page::from_params(
             &config,
             None,
             Some(Cursor::new(40)),
@@ -504,7 +512,7 @@ mod tests {
     #[test]
     fn test_between_page() {
         let config = ServiceConfig::default();
-        let page: Page<u64> = Page::from_params(
+        let page: Page<Cursor<u64>> = Page::from_params(
             &config,
             None,
             Some(Cursor::new(40)),
@@ -530,7 +538,8 @@ mod tests {
     #[test]
     fn test_err_first_and_last() {
         let config = ServiceConfig::default();
-        let err = Page::<u64>::from_params(&config, Some(1), None, Some(1), None).unwrap_err();
+        let err =
+            Page::<Cursor<u64>>::from_params(&config, Some(1), None, Some(1), None).unwrap_err();
 
         let expect = expect![[r#"
             Error {
@@ -552,7 +561,8 @@ mod tests {
     fn test_err_page_too_big() {
         let config = ServiceConfig::default();
         let too_big = config.limits.max_page_size + 1;
-        let err = Page::<u64>::from_params(&config, Some(too_big), None, None, None).unwrap_err();
+        let err =
+            Page::<Cursor<u64>>::from_params(&config, Some(too_big), None, None, None).unwrap_err();
 
         let expect = expect![[r#"
             Error {

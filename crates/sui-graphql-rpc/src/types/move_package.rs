@@ -79,8 +79,8 @@ impl MovePackage {
 
         let parsed = self.parsed_package()?;
         let module_range = parsed.modules().range::<String, _>((
-            page.after().map_or(B::Unbounded, B::Excluded),
-            page.before().map_or(B::Unbounded, B::Excluded),
+            page.after().map_or(B::Unbounded, |a| B::Excluded(&**a)),
+            page.before().map_or(B::Unbounded, |b| B::Excluded(&**b)),
         ));
 
         let mut connection = Connection::new(false, false);
