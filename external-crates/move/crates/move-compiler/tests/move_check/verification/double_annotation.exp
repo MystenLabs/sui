@@ -1,52 +1,24 @@
-error[E00002]: DEPRECATED. unexpected spec item
+warning[W00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/verification/double_annotation.move:3:7
   │
 3 │     #[verify_only]
-  │       ^^^^^^^^^^^ Specification blocks are deprecated
+  │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
 
-error[E00002]: DEPRECATED. unexpected spec item
+warning[W00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/verification/double_annotation.move:7:7
   │
 7 │     #[verify_only]
-  │       ^^^^^^^^^^^ Specification blocks are deprecated
+  │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
 
-error[E00002]: DEPRECATED. unexpected spec item
-  ┌─ tests/move_check/verification/double_annotation.move:8:7
-  │
-8 │     #[verify_only]
-  │       ^^^^^^^^^^^ Specification blocks are deprecated
-
-error[E02001]: duplicate declaration, item, or annotation
-  ┌─ tests/move_check/verification/double_annotation.move:8:7
-  │
-7 │     #[verify_only]
-  │       ----------- Attribute previously given here
-8 │     #[verify_only]
-  │       ^^^^^^^^^^^ Duplicate attribute 'verify_only' attached to the same item
-
-error[E00002]: DEPRECATED. unexpected spec item
+warning[W00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/verification/double_annotation.move:13:7
    │
 13 │     #[verify_only]
-   │       ^^^^^^^^^^^ Specification blocks are deprecated
+   │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
 
-error[E00002]: DEPRECATED. unexpected spec item
+warning[W00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/verification/double_annotation.move:17:7
    │
 17 │     #[verify_only]
-   │       ^^^^^^^^^^^ Specification blocks are deprecated
-
-error[E00002]: DEPRECATED. unexpected spec item
-   ┌─ tests/move_check/verification/double_annotation.move:18:7
-   │
-18 │     #[verify_only]
-   │       ^^^^^^^^^^^ Specification blocks are deprecated
-
-error[E02001]: duplicate declaration, item, or annotation
-   ┌─ tests/move_check/verification/double_annotation.move:18:7
-   │
-17 │     #[verify_only]
-   │       ----------- Attribute previously given here
-18 │     #[verify_only]
-   │       ^^^^^^^^^^^ Duplicate attribute 'verify_only' attached to the same item
+   │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
 

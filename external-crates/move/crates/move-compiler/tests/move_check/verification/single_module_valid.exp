@@ -1,18 +1,18 @@
-error[E00002]: DEPRECATED. unexpected spec item
+warning[W00001]: DEPRECATED. will be removed
   ┌─ tests/move_check/verification/single_module_valid.move:4:7
   │
 4 │     #[verify_only]
-  │       ^^^^^^^^^^^ Specification blocks are deprecated
+  │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
 
-error[E00002]: DEPRECATED. unexpected spec item
+warning[W00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/verification/single_module_valid.move:10:7
    │
 10 │     #[verify_only]
-   │       ^^^^^^^^^^^ Specification blocks are deprecated
+   │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
 
-error[E00002]: DEPRECATED. unexpected spec item
+warning[W00001]: DEPRECATED. will be removed
    ┌─ tests/move_check/verification/single_module_valid.move:14:7
    │
 14 │     #[verify_only]
-   │       ^^^^^^^^^^^ Specification blocks are deprecated
+   │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
 
