@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{string_input::impl_string_input, sui_address::SuiAddress};
-use crate::data::{BoxedQuery, Db, DbBackend};
+use crate::data::{DieselBackend, Query};
 use async_graphql::*;
 use diesel::{
     expression::{is_aggregate::No, ValidGrouping},
@@ -62,13 +62,13 @@ impl TypeFilter {
     /// Modify `query` to apply this filter to `field`, returning the new query.
     pub(crate) fn apply<E, QS, ST, GB>(
         &self,
-        query: BoxedQuery<ST, QS, Db, GB>,
+        query: Query<ST, QS, GB>,
         field: E,
-    ) -> BoxedQuery<ST, QS, Db, GB>
+    ) -> Query<ST, QS, GB>
     where
-        BoxedQuery<ST, QS, Db, GB>: QueryDsl,
+        Query<ST, QS, GB>: QueryDsl,
         E: ExpressionMethods + TextExpressionMethods,
-        E: Expression<SqlType = Text> + QueryFragment<DbBackend>,
+        E: Expression<SqlType = Text> + QueryFragment<DieselBackend>,
         E: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
         E: Clone + Send + 'static,
         QS: QuerySource,
@@ -106,16 +106,16 @@ impl FqNameFilter {
     /// containing the module member name.
     pub(crate) fn apply<P, M, N, QS, ST, GB>(
         &self,
-        query: BoxedQuery<ST, QS, Db, GB>,
+        query: Query<ST, QS, GB>,
         package: P,
         module: M,
         name: N,
-    ) -> BoxedQuery<ST, QS, Db, GB>
+    ) -> Query<ST, QS, GB>
     where
-        BoxedQuery<ST, QS, Db, GB>: QueryDsl,
-        P: ExpressionMethods + Expression<SqlType = Binary> + QueryFragment<DbBackend>,
-        M: ExpressionMethods + Expression<SqlType = Text> + QueryFragment<DbBackend>,
-        N: ExpressionMethods + Expression<SqlType = Text> + QueryFragment<DbBackend>,
+        Query<ST, QS, GB>: QueryDsl,
+        P: ExpressionMethods + Expression<SqlType = Binary> + QueryFragment<DieselBackend>,
+        M: ExpressionMethods + Expression<SqlType = Text> + QueryFragment<DieselBackend>,
+        N: ExpressionMethods + Expression<SqlType = Text> + QueryFragment<DieselBackend>,
         P: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
         M: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
         N: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
@@ -139,14 +139,14 @@ impl ModuleFilter {
     /// address and `module` as the module containing the module name.
     pub(crate) fn apply<P, M, QS, ST, GB>(
         &self,
-        query: BoxedQuery<ST, QS, Db, GB>,
+        query: Query<ST, QS, GB>,
         package: P,
         module: M,
-    ) -> BoxedQuery<ST, QS, Db, GB>
+    ) -> Query<ST, QS, GB>
     where
-        BoxedQuery<ST, QS, Db, GB>: QueryDsl,
-        P: ExpressionMethods + Expression<SqlType = Binary> + QueryFragment<DbBackend>,
-        M: ExpressionMethods + Expression<SqlType = Text> + QueryFragment<DbBackend>,
+        Query<ST, QS, GB>: QueryDsl,
+        P: ExpressionMethods + Expression<SqlType = Binary> + QueryFragment<DieselBackend>,
+        M: ExpressionMethods + Expression<SqlType = Text> + QueryFragment<DieselBackend>,
         P: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
         M: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
         P: Send + 'static,

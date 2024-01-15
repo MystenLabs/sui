@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data::{Db, QueryExecutor},
+    data::{Db, DbConnection, QueryExecutor},
     error::Error,
 };
 use async_graphql::*;
@@ -20,11 +20,13 @@ impl ChainIdentifier {
         use checkpoints::dsl;
 
         let digest_bytes = db
-            .first(move || {
-                dsl::checkpoints
-                    .select(dsl::checkpoint_digest)
-                    .order_by(dsl::sequence_number.asc())
-                    .into_boxed()
+            .execute(move |conn| {
+                conn.first(move || {
+                    dsl::checkpoints
+                        .select(dsl::checkpoint_digest)
+                        .order_by(dsl::sequence_number.asc())
+                        .into_boxed()
+                })
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch genesis digest: {e}")))?;
@@ -32,7 +34,7 @@ impl ChainIdentifier {
         Self::from_bytes(digest_bytes)
     }
 
-    /// TODO Docs
+    /// Treat `bytes` as a checkpoint digest and extract a chain identifier from it.
     pub(crate) fn from_bytes(bytes: Vec<u8>) -> Result<NativeChainIdentifier, Error> {
         let genesis_digest = CheckpointDigest::try_from(bytes)
             .map_err(|e| Error::Internal(format!("Failed to deserialize genesis digest: {e}")))?;

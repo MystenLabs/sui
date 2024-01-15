@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::context_data::db_data_provider::{convert_to_validators, PgManager};
-use crate::data::{Db, QueryExecutor};
+use crate::data::{Db, DbConnection, QueryExecutor};
 use crate::error::Error;
 
 use super::big_int::BigInt;
@@ -15,7 +15,7 @@ use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
 use async_graphql::*;
-use diesel::{ExpressionMethods, QueryDsl, SelectableHelper};
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
 use sui_indexer::models_v2::epoch::QueryableEpochInfo;
 use sui_indexer::schema_v2::epochs;
 
@@ -203,18 +203,20 @@ impl Epoch {
 
         let id = filter.map(|id| id as i64);
         let stored: Option<QueryableEpochInfo> = db
-            .optional(move || {
-                let mut query = dsl::epochs
-                    .select(QueryableEpochInfo::as_select())
-                    .order_by(dsl::epoch.desc())
-                    .limit(1)
-                    .into_boxed();
+            .execute(move |conn| {
+                conn.first(move || {
+                    let mut query = dsl::epochs
+                        .select(QueryableEpochInfo::as_select())
+                        .order_by(dsl::epoch.desc())
+                        .into_boxed();
 
-                if let Some(id) = id {
-                    query = query.filter(dsl::epoch.eq(id));
-                }
+                    if let Some(id) = id {
+                        query = query.filter(dsl::epoch.eq(id));
+                    }
 
-                query
+                    query
+                })
+                .optional()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch epoch: {e}")))?;

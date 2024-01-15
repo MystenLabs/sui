@@ -1,87 +1,94 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{BoxedQuery, QueryExecutor};
+use super::{QueryExecutor, Query_};
 use crate::{config::Limits, error::Error};
 use async_trait::async_trait;
 use diesel::{
     pg::Pg,
     query_builder::{Query, QueryFragment, QueryId},
     query_dsl::LoadQuery,
-    OptionalExtension, PgConnection, QuerySource, RunQueryDsl,
+    QueryResult, QuerySource, RunQueryDsl,
 };
 use sui_indexer::indexer_reader::IndexerReader;
 
-pub(crate) struct PgManager_ {
+pub(crate) struct PgExecutor {
     pub inner: IndexerReader,
     pub limits: Limits,
 }
 
-impl PgManager_ {
+pub(crate) struct PgConnection<'c> {
+    max_cost: u64,
+    conn: &'c mut diesel::PgConnection,
+}
+
+impl PgExecutor {
     pub(crate) fn new(inner: IndexerReader, limits: Limits) -> Self {
         Self { inner, limits }
     }
 }
 
 #[async_trait]
-impl QueryExecutor for PgManager_ {
-    type Connection = PgConnection;
+impl QueryExecutor for PgExecutor {
+    type Connection = diesel::PgConnection;
+    type Backend = Pg;
+    type DbConnection<'c> = PgConnection<'c>;
 
-    async fn result<Q, ST, QS, GB, U>(&self, query: Q) -> Result<U, Error>
+    async fn execute<T, U, E>(&self, txn: T) -> Result<U, Error>
     where
-        Q: Fn() -> BoxedQuery<ST, QS, Self, GB>,
-        BoxedQuery<ST, QS, Self, GB>: LoadQuery<'static, PgConnection, U>,
-        BoxedQuery<ST, QS, Self, GB>: QueryFragment<Pg>,
-        QS: QuerySource,
-        Q: Send + 'static,
+        T: FnOnce(&mut Self::DbConnection<'_>) -> Result<U, E>,
+        E: From<diesel::result::Error> + std::error::Error,
+        T: Send + 'static,
         U: Send + 'static,
+        E: Send + 'static,
     {
         let max_cost = self.limits.max_db_query_cost;
         self.inner
-            .run_query_async(move |conn| {
-                query_cost::log(conn, max_cost, query());
-                query().get_result(conn)
-            })
+            .run_query_async(move |conn| txn(&mut PgConnection { max_cost, conn }))
             .await
             .map_err(|e| Error::Internal(e.to_string()))
     }
 
-    async fn results<Q, ST, QS, GB, U>(&self, query: Q) -> Result<Vec<U>, Error>
+    async fn execute_repeatable<T, U, E>(&self, txn: T) -> Result<U, Error>
     where
-        Q: Fn() -> BoxedQuery<ST, QS, Self, GB>,
-        BoxedQuery<ST, QS, Self, GB>: LoadQuery<'static, PgConnection, U>,
-        BoxedQuery<ST, QS, Self, GB>: QueryFragment<Pg>,
-        QS: QuerySource,
-        Q: Send + 'static,
+        T: FnOnce(&mut Self::DbConnection<'_>) -> Result<U, E>,
+        E: From<diesel::result::Error> + std::error::Error,
+        T: Send + 'static,
         U: Send + 'static,
+        E: Send + 'static,
     {
         let max_cost = self.limits.max_db_query_cost;
         self.inner
-            .run_query_async(move |conn| {
-                query_cost::log(conn, max_cost, query());
-                query().get_results(conn)
-            })
+            .run_query_repeatable_async(move |conn| txn(&mut PgConnection { max_cost, conn }))
             .await
             .map_err(|e| Error::Internal(e.to_string()))
     }
+}
 
-    async fn optional<Q, ST, QS, GB, U>(&self, query: Q) -> Result<Option<U>, Error>
+impl<'c> super::DbConnection for PgConnection<'c> {
+    type Connection = diesel::PgConnection;
+    type Backend = Pg;
+
+    fn result<Q, ST, QS, GB, U>(&mut self, query: Q) -> QueryResult<U>
     where
-        Q: Fn() -> BoxedQuery<ST, QS, Self, GB>,
-        BoxedQuery<ST, QS, Self, GB>: LoadQuery<'static, PgConnection, U>,
-        BoxedQuery<ST, QS, Self, GB>: QueryFragment<Pg>,
+        Q: Fn() -> Query_<ST, QS, Pg, GB>,
+        Query_<ST, QS, Pg, GB>: LoadQuery<'static, Self::Connection, U>,
+        Query_<ST, QS, Pg, GB>: QueryFragment<Self::Backend>,
         QS: QuerySource,
-        Q: Send + 'static,
-        U: Send + 'static,
     {
-        let max_cost = self.limits.max_db_query_cost;
-        self.inner
-            .run_query_async(move |conn| {
-                query_cost::log(conn, max_cost, query());
-                query().get_result(conn).optional()
-            })
-            .await
-            .map_err(|e| Error::Internal(e.to_string()))
+        query_cost::log(self.conn, self.max_cost, query());
+        query().get_result(self.conn)
+    }
+
+    fn results<Q, ST, QS, GB, U>(&mut self, query: Q) -> QueryResult<Vec<U>>
+    where
+        Q: Fn() -> Query_<ST, QS, Pg, GB>,
+        Query_<ST, QS, Pg, GB>: LoadQuery<'static, Self::Connection, U>,
+        Query_<ST, QS, Pg, GB>: QueryFragment<Self::Backend>,
+        QS: QuerySource,
+    {
+        query_cost::log(self.conn, self.max_cost, query());
+        query().get_results(self.conn)
     }
 }
 
