@@ -809,6 +809,8 @@ pub mod known_attributes {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
     pub enum DiagnosticAttribute {
         Allow,
+        // Deprecated lint allow syntax
+        LintAllow,
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -856,6 +858,7 @@ pub mod known_attributes {
                     NativeAttribute::BytecodeInstruction.into()
                 }
                 DiagnosticAttribute::ALLOW => DiagnosticAttribute::Allow.into(),
+                DiagnosticAttribute::LINT_ALLOW => DiagnosticAttribute::LintAllow.into(),
                 DefinesPrimitive::DEFINES_PRIM => DefinesPrimitive.into(),
                 ExternalAttribute::EXTERNAL => ExternalAttribute.into(),
                 _ => return None,
@@ -986,10 +989,12 @@ pub mod known_attributes {
 
     impl DiagnosticAttribute {
         pub const ALLOW: &'static str = "allow";
+        pub const LINT_ALLOW: &'static str = "lint_allow";
 
         pub const fn name(&self) -> &str {
             match self {
                 DiagnosticAttribute::Allow => Self::ALLOW,
+                DiagnosticAttribute::LintAllow => Self::LINT_ALLOW,
             }
         }
 
@@ -1003,7 +1008,9 @@ pub mod known_attributes {
                 ])
             });
             match self {
-                DiagnosticAttribute::Allow => &ALLOW_WARNING_POSITIONS,
+                DiagnosticAttribute::Allow | DiagnosticAttribute::LintAllow => {
+                    &ALLOW_WARNING_POSITIONS
+                }
             }
         }
     }

@@ -911,18 +911,80 @@ fn module_warning_filter(context: &mut Context, attributes: &E::Attributes) -> W
     }
 }
 
+/// Finds the warning filters from the #[allow(_)] attribute and the deprecated #[lint_allow(_)]
+/// attribute.
 fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
-    use crate::diagnostics::codes::Category;
     let mut warning_filters = WarningFilters::new_for_source();
-    let Some(allow_attr) = attributes.get_(&DiagnosticAttribute::Allow.into()) else {
-        return warning_filters;
-    };
-    let inners = match &allow_attr.value {
-        E::Attribute_::Parameterized(_, inner) if !inner.is_empty() => inner,
+    let mut prefixed_filters: Vec<(Option<Symbol>, Vec<Name>)> = vec![];
+    // Gather lint_allow warnings
+    if let Some(lint_allow_attr) = attributes.get_(&DiagnosticAttribute::LintAllow.into()) {
+        // get the individual filters
+        let inners =
+            get_allow_attribute_inners(context, DiagnosticAttribute::LINT_ALLOW, lint_allow_attr);
+        if let Some(inners) = inners {
+            let names = prefixed_warning_filters(context, DiagnosticAttribute::LINT_ALLOW, inners);
+            prefixed_filters.push((Some(symbol!("lint")), names));
+        }
+    }
+    // Gather allow warnings
+    if let Some(allow_attr) = attributes.get_(&DiagnosticAttribute::Allow.into()) {
+        // get the individual filters, or nested filters
+        let inners = get_allow_attribute_inners(context, DiagnosticAttribute::ALLOW, allow_attr);
+        for (inner_attr_loc, _, inner_attr) in inners.into_iter().flatten() {
+            let (prefix, names) = match &inner_attr.value {
+                // a filter, e.g. allow(unused_variables)
+                E::Attribute_::Name(n) => (None, vec![*n]),
+                // a nested filter, e.g. allow(lint(_))
+                E::Attribute_::Parameterized(prefix, inners) => (
+                    Some(prefix.value),
+                    prefixed_warning_filters(context, prefix, inners),
+                ),
+                E::Attribute_::Assigned(n, _) => {
+                    let msg = format!(
+                        "Expected a stand alone warning filter identifier, e.g. '{}({})'",
+                        DiagnosticAttribute::ALLOW,
+                        n
+                    );
+                    context
+                        .env()
+                        .add_diag(diag!(Attributes::ValueWarning, (inner_attr_loc, msg)));
+                    (None, vec![*n])
+                }
+            };
+            prefixed_filters.push((prefix, names));
+        }
+    }
+    // Find the warning filter for each prefix+name instance
+    for (prefix, names) in prefixed_filters {
+        for sp!(nloc, n_) in names {
+            let filters = context.env().filter_from_str(prefix, n_);
+            if filters.is_empty() {
+                let msg = format!("Unknown warning filter '{}'", format_allow_attr(prefix, n_));
+                context
+                    .env()
+                    .add_diag(diag!(Attributes::ValueWarning, (nloc, msg)));
+                continue;
+            };
+            for f in filters {
+                warning_filters.add(f);
+            }
+        }
+    }
+    warning_filters
+}
+
+fn get_allow_attribute_inners<'a>(
+    context: &mut Context,
+    name: &'static str,
+    allow_attr: &'a E::Attribute,
+) -> Option<&'a E::InnerAttributes> {
+    use crate::diagnostics::codes::Category;
+    match &allow_attr.value {
+        E::Attribute_::Parameterized(_, inner) if !inner.is_empty() => Some(inner),
         _ => {
             let msg = format!(
                 "Expected list of warnings, e.g. '{}({})'",
-                DiagnosticAttribute::ALLOW,
+                name,
                 WarningFilter::Category {
                     prefix: None,
                     category: Category::UnusedItem as u8,
@@ -933,64 +995,38 @@ fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningF
             );
             context
                 .env()
-                .add_diag(diag!(Attributes::InvalidValue, (allow_attr.loc, msg)));
-            return warning_filters;
+                .add_diag(diag!(Attributes::ValueWarning, (allow_attr.loc, msg)));
+            None
         }
-    };
-    for (inner_attr_loc, _, inner_attr) in inners {
-        let (prefix, names) = match &inner_attr.value {
-            E::Attribute_::Name(n) => (None, vec![*n]),
-            E::Attribute_::Parameterized(prefix, inners) => {
-                let names = inners
-                    .key_cloned_iter()
-                    .map(|(_, inner_attr)| match inner_attr {
-                        sp!(_, E::Attribute_::Name(n)) => *n,
-                        sp!(
-                            loc,
-                            E::Attribute_::Assigned(n, _) | E::Attribute_::Parameterized(n, _)
-                        ) => {
-                            let msg = format!(
-                                "Expected a warning filter identifier, e.g. '{}({}({}))'",
-                                DiagnosticAttribute::ALLOW,
-                                prefix,
-                                n
-                            );
-                            context
-                                .env()
-                                .add_diag(diag!(Attributes::InvalidValue, (*loc, msg)));
-                            *n
-                        }
-                    })
-                    .collect();
-                (Some(prefix.value), names)
-            }
-            E::Attribute_::Assigned(n, _) => {
+    }
+}
+
+fn prefixed_warning_filters(
+    context: &mut Context,
+    prefix: impl std::fmt::Display,
+    inners: &E::InnerAttributes,
+) -> Vec<Name> {
+    inners
+        .key_cloned_iter()
+        .map(|(_, inner_attr)| match inner_attr {
+            sp!(_, E::Attribute_::Name(n)) => *n,
+            sp!(
+                loc,
+                E::Attribute_::Assigned(n, _) | E::Attribute_::Parameterized(n, _)
+            ) => {
                 let msg = format!(
-                    "Expected a stand alone warning filter identifier, e.g. '{}({})'",
+                    "Expected a warning filter identifier, e.g. '{}({}({}))'",
                     DiagnosticAttribute::ALLOW,
+                    prefix,
                     n
                 );
                 context
                     .env()
-                    .add_diag(diag!(Attributes::InvalidValue, (inner_attr_loc, msg)));
-                (None, vec![*n])
+                    .add_diag(diag!(Attributes::ValueWarning, (*loc, msg)));
+                *n
             }
-        };
-        for sp!(nloc, n_) in names {
-            let filters = context.env().filter_from_str(prefix, n_);
-            if filters.is_empty() {
-                let msg = format!("Unknown warning filter '{}'", format_allow_attr(prefix, n_));
-                context
-                    .env()
-                    .add_diag(diag!(Attributes::InvalidValue, (nloc, msg)));
-                continue;
-            };
-            for f in filters {
-                warning_filters.add(f);
-            }
-        }
-    }
-    warning_filters
+        })
+        .collect()
 }
 
 //**************************************************************************************************
