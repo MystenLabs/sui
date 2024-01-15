@@ -28,7 +28,7 @@ export interface ZkSendLinkBuilderOptions {
 	keypair?: Keypair;
 	client?: SuiClient;
 	sender: string;
-	redirect: ZkSendLinkRedirect;
+	redirect?: ZkSendLinkRedirect;
 }
 
 export interface ZkSendLinkOptions {
