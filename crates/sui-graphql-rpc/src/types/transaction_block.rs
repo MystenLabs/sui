@@ -6,7 +6,7 @@ use async_graphql::{
     connection::{Connection, CursorType, Edge},
     *,
 };
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
+use diesel::{alias, ExpressionMethods, NullableExpressionMethods, OptionalExtension, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer::{
     models_v2::transactions::StoredTransaction,
@@ -258,7 +258,27 @@ impl TransactionBlock {
                     }
 
                     if let Some(c) = &filter.after_checkpoint {
-                        query = query.filter(tx::dsl::checkpoint_sequence_number.gt(*c as i64));
+                        // Translate bound on checkpoint number into a bound on transaction sequence
+                        // number to make better use of indices. Experimentally, postgres struggles
+                        // to use the index on checkpoint sequence number to handle inequality
+                        // constraints -- it still uses the index on transaction sequence number --
+                        // but it's fine to use that index on an equality query.
+                        //
+                        // Diesel also does not like the same table appearing multiple times in a
+                        // single query, so we create an alias of the `transactions` table to query
+                        // for the transaction sequence number bound.
+                        let tx_ = alias!(tx as tx_after);
+                        let sub_query = tx_
+                            .select(tx_.field(tx::dsl::tx_sequence_number))
+                            .filter(tx_.field(tx::dsl::checkpoint_sequence_number).eq(*c as i64))
+                            .order(tx_.field(tx::dsl::tx_sequence_number).desc())
+                            .limit(1);
+
+                        query = query.filter(
+                            tx::dsl::tx_sequence_number
+                                .nullable()
+                                .gt(sub_query.single_value()),
+                        );
                     }
 
                     if let Some(c) = &filter.at_checkpoint {
@@ -266,7 +286,19 @@ impl TransactionBlock {
                     }
 
                     if let Some(c) = &filter.before_checkpoint {
-                        query = query.filter(tx::dsl::checkpoint_sequence_number.lt(*c as i64));
+                        // See comment on handling `after_checkpoint` filter (above) for context.
+                        let tx_ = alias!(tx as tx_before);
+                        let sub_query = tx_
+                            .select(tx_.field(tx::dsl::tx_sequence_number))
+                            .filter(tx_.field(tx::dsl::checkpoint_sequence_number).eq(*c as i64))
+                            .order(tx_.field(tx::dsl::tx_sequence_number).asc())
+                            .limit(1);
+
+                        query = query.filter(
+                            tx::dsl::tx_sequence_number
+                                .nullable()
+                                .lt(sub_query.single_value()),
+                        );
                     }
 
                     if let Some(a) = &filter.sign_address {
