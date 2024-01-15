@@ -11,7 +11,7 @@ use diesel::{
     AppearsOnTable, BoolExpressionMethods, Expression, ExpressionMethods, QueryDsl, QuerySource,
     TextExpressionMethods,
 };
-use std::str::FromStr;
+use std::{fmt, str::FromStr};
 use sui_types::{
     parse_sui_address, parse_sui_fq_name, parse_sui_module_id, parse_sui_type_tag, TypeTag,
 };
@@ -304,6 +304,35 @@ impl FromStr for ModuleFilter {
     }
 }
 
+impl fmt::Display for ModuleFilter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ModuleFilter::ByPackage(p) => write!(f, "{p}::"),
+            ModuleFilter::ByModule(p, m) => write!(f, "{p}::{m}::"),
+        }
+    }
+}
+
+impl fmt::Display for FqNameFilter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FqNameFilter::ByModule(m) => write!(f, "{m}"),
+            FqNameFilter::ByFqName(p, m, n) => write!(f, "{p}::{m}::{n}"),
+        }
+    }
+}
+
+impl fmt::Display for TypeFilter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TypeFilter::ByModule(m) => write!(f, "{m}"),
+            TypeFilter::ByType(t) => {
+                write!(f, "{}", t.to_canonical_display(/* with_prefix */ true))
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,164 +353,21 @@ mod tests {
         ]
         .into_iter();
 
-        let filters: Vec<_> = inputs.map(|i| TypeFilter::from_str(i).unwrap()).collect();
+        let filters: Vec<_> = inputs
+            .map(|i| TypeFilter::from_str(i).unwrap().to_string())
+            .collect();
 
         let expect = expect![[r#"
-            [
-                ByType(
-                    U8,
-                ),
-                ByType(
-                    Address,
-                ),
-                ByType(
-                    Bool,
-                ),
-                ByModule(
-                    ByPackage(
-                        SuiAddress(
-                            [
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                2,
-                            ],
-                        ),
-                    ),
-                ),
-                ByModule(
-                    ByModule(
-                        SuiAddress(
-                            [
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                2,
-                            ],
-                        ),
-                        "coin",
-                    ),
-                ),
-                ByType(
-                    Struct(
-                        StructTag {
-                            address: 0000000000000000000000000000000000000000000000000000000000000002,
-                            module: Identifier(
-                                "coin",
-                            ),
-                            name: Identifier(
-                                "Coin",
-                            ),
-                            type_params: [],
-                        },
-                    ),
-                ),
-                ByType(
-                    Struct(
-                        StructTag {
-                            address: 0000000000000000000000000000000000000000000000000000000000000002,
-                            module: Identifier(
-                                "coin",
-                            ),
-                            name: Identifier(
-                                "Coin",
-                            ),
-                            type_params: [
-                                Struct(
-                                    StructTag {
-                                        address: 0000000000000000000000000000000000000000000000000000000000000002,
-                                        module: Identifier(
-                                            "sui",
-                                        ),
-                                        name: Identifier(
-                                            "SUI",
-                                        ),
-                                        type_params: [],
-                                    },
-                                ),
-                            ],
-                        },
-                    ),
-                ),
-                ByType(
-                    Vector(
-                        U256,
-                    ),
-                ),
-                ByType(
-                    Vector(
-                        Struct(
-                            StructTag {
-                                address: 0000000000000000000000000000000000000000000000000000000000000003,
-                                module: Identifier(
-                                    "staking_pool",
-                                ),
-                                name: Identifier(
-                                    "StakedSui",
-                                ),
-                                type_params: [],
-                            },
-                        ),
-                    ),
-                ),
-            ]"#]];
-        expect.assert_eq(&format!("{filters:#?}"))
+            u8
+            address
+            bool
+            0x0000000000000000000000000000000000000000000000000000000000000002::
+            0x0000000000000000000000000000000000000000000000000000000000000002::coin::
+            0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin
+            0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>
+            vector<u256>
+            vector<0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui>"#]];
+        expect.assert_eq(&filters.join("\n"))
     }
 
     #[test]
@@ -494,173 +380,16 @@ mod tests {
         ]
         .into_iter();
 
-        let filters: Vec<_> = inputs.map(|i| FqNameFilter::from_str(i).unwrap()).collect();
+        let filters: Vec<_> = inputs
+            .map(|i| FqNameFilter::from_str(i).unwrap().to_string())
+            .collect();
 
         let expect = expect![[r#"
-            [
-                ByModule(
-                    ByPackage(
-                        SuiAddress(
-                            [
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                2,
-                            ],
-                        ),
-                    ),
-                ),
-                ByModule(
-                    ByModule(
-                        SuiAddress(
-                            [
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                                2,
-                            ],
-                        ),
-                        "coin",
-                    ),
-                ),
-                ByFqName(
-                    SuiAddress(
-                        [
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            2,
-                        ],
-                    ),
-                    "object",
-                    "new",
-                ),
-                ByFqName(
-                    SuiAddress(
-                        [
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            2,
-                        ],
-                    ),
-                    "tx_context",
-                    "TxContext",
-                ),
-            ]"#]];
-        expect.assert_eq(&format!("{filters:#?}"));
+            0x0000000000000000000000000000000000000000000000000000000000000002::
+            0x0000000000000000000000000000000000000000000000000000000000000002::coin::
+            0x0000000000000000000000000000000000000000000000000000000000000002::object::new
+            0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"#]];
+        expect.assert_eq(&filters.join("\n"));
     }
 
     #[test]
