@@ -22,13 +22,13 @@ pub type Round = u32;
 /// The transaction serialised bytes
 #[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Default, Debug)]
 pub(crate) struct Transaction {
-    data: Vec<u8>,
+    data: bytes::Bytes,
 }
 
 #[allow(dead_code)]
 impl Transaction {
     pub fn new(data: Vec<u8>) -> Self {
-        Self { data }
+        Self { data: data.into() }
     }
 
     pub fn data(&self) -> &[u8] {
@@ -36,7 +36,7 @@ impl Transaction {
     }
 
     pub fn into_data(self) -> Vec<u8> {
-        self.data
+        self.data.to_vec()
     }
 }
 

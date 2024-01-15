@@ -7,7 +7,7 @@ use mysten_metrics::metered_channel::channel_with_total;
 use std::sync::Arc;
 use tap::tap::TapFallible;
 use thiserror::Error;
-use tracing::warn;
+use tracing::error;
 
 /// Maximum number of transactions to be fetched per request of `next`
 const MAX_FETCHED_TRANSACTIONS: usize = 100;
@@ -75,12 +75,12 @@ impl TransactionsClient {
         (Self { sender }, receiver)
     }
 
-    // Submits a transaction to be sequenced. The
+    // Submits a transaction to be sequenced.
     pub async fn submit(&self, transaction: Vec<u8>) -> Result<(), ClientError> {
         self.sender
             .send(Transaction::new(transaction))
             .await
-            .tap_err(|e| warn!("Submit transaction failed with {:?}", e))
+            .tap_err(|e| error!("Submit transaction failed with {:?}", e))
             .map_err(|e| ClientError::SubmitError(e.to_string()))
     }
 }

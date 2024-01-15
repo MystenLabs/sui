@@ -43,6 +43,7 @@ impl<T> Sender<T> {
         }
     }
 }
+
 /// An [`mpsc::WeakSender`] with an [`IntGauge`]
 /// counting the number of currently queued items.
 #[derive(Debug)]
