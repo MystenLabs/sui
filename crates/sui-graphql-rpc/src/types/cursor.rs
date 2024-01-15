@@ -7,12 +7,14 @@ use async_graphql::{
     connection::{CursorType, OpaqueCursor},
     *,
 };
-use diesel::{query_builder::QueryFragment, query_dsl::LoadQuery, QueryDsl, QuerySource};
+use diesel::{
+    query_builder::QueryFragment, query_dsl::LoadQuery, QueryDsl, QueryResult, QuerySource,
+};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     config::ServiceConfig,
-    data::{BoxedQuery, Db, DbBackend, DbConnection, QueryExecutor},
+    data::{Conn, DbConnection, DieselBackend, DieselConn, Query},
     error::Error,
 };
 
@@ -54,23 +56,20 @@ pub(crate) trait Target<C> {
     /// (returning the new query).
     fn filter_ge<ST, GB>(
         cursor: &C,
-        query: BoxedQuery<ST, Self::Source, Db, GB>,
-    ) -> BoxedQuery<ST, Self::Source, Db, GB>;
+        query: Query<ST, Self::Source, GB>,
+    ) -> Query<ST, Self::Source, GB>;
 
     /// Adds a filter to `query` to bound its results to be less than or equal to `cursor`
     /// (returning the new query).
     fn filter_le<ST, GB>(
         cursor: &C,
-        query: BoxedQuery<ST, Self::Source, Db, GB>,
-    ) -> BoxedQuery<ST, Self::Source, Db, GB>;
+        query: Query<ST, Self::Source, GB>,
+    ) -> Query<ST, Self::Source, GB>;
 
     /// Adds an `ORDER BY` clause to `query` to order rows according to their cursor values
     /// (returning the new query). The `asc` parameter controls whether the ordering is ASCending
     /// (`true`) or descending (`false`).
-    fn order<ST, GB>(
-        asc: bool,
-        query: BoxedQuery<ST, Self::Source, Db, GB>,
-    ) -> BoxedQuery<ST, Self::Source, Db, GB>;
+    fn order<ST, GB>(asc: bool, query: Query<ST, Self::Source, GB>) -> Query<ST, Self::Source, GB>;
 
     /// The cursor pointing at this target value.
     fn cursor(&self) -> C;
@@ -176,15 +175,15 @@ impl<C: Eq + Clone + Send + Sync + 'static> Page<C> {
     /// followed by an iterator of values in the page, fetched from the database.
     ///
     /// The values returned implement `Target<C>`, so are able to compute their own cursors.
-    pub(crate) async fn paginate_query<T, Q, ST, GB>(
+    pub(crate) fn paginate_query<T, Q, ST, GB>(
         &self,
-        db: &Db,
+        conn: &mut Conn<'_>,
         query: Q,
-    ) -> Result<(bool, bool, impl Iterator<Item = T>), Error>
+    ) -> QueryResult<(bool, bool, impl Iterator<Item = T>)>
     where
-        Q: Fn() -> BoxedQuery<ST, T::Source, Db, GB>,
-        BoxedQuery<ST, T::Source, Db, GB>: LoadQuery<'static, DbConnection, T>,
-        BoxedQuery<ST, T::Source, Db, GB>: QueryFragment<DbBackend>,
+        Q: Fn() -> Query<ST, T::Source, GB>,
+        Query<ST, T::Source, GB>: LoadQuery<'static, DieselConn, T>,
+        Query<ST, T::Source, GB>: QueryFragment<DieselBackend>,
         <T as Target<C>>::Source: Send + 'static,
         <<T as Target<C>>::Source as QuerySource>::FromClause: Send + 'static,
         Q: Send + 'static,
@@ -212,7 +211,7 @@ impl<C: Eq + Clone + Send + Sync + 'static> Page<C> {
             // Avoid the database roundtrip in the degenerate case.
             vec![]
         } else {
-            let mut results = db.results(query).await?;
+            let mut results = conn.results(query)?;
             if !self.is_from_front() {
                 results.reverse();
             }

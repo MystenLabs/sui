@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{connection::Connection, *};
-use diesel::{ExpressionMethods, QueryDsl};
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
@@ -25,7 +25,7 @@ use super::{
 };
 use crate::context_data::db_data_provider::PgManager;
 use crate::context_data::package_cache::PackageCache;
-use crate::data::{Db, QueryExecutor};
+use crate::data::{Db, DbConnection, QueryExecutor};
 use crate::error::Error;
 use crate::types::base64::Base64;
 use sui_types::object::{
@@ -423,18 +423,21 @@ impl Object {
         let version = version.map(|v| v as i64);
 
         let stored_obj: Option<StoredObject> = db
-            .optional(move || {
-                let mut query = dsl::objects
-                    .filter(dsl::object_id.eq(address.clone()))
-                    .limit(1)
-                    .into_boxed();
+            .execute(move |conn| {
+                conn.first(move || {
+                    let mut query = dsl::objects
+                        .filter(dsl::object_id.eq(address.clone()))
+                        .limit(1)
+                        .into_boxed();
 
-                // TODO: leverage objects_history
-                if let Some(version) = version {
-                    query = query.filter(dsl::object_version.eq(version));
-                }
+                    // TODO: leverage objects_history
+                    if let Some(version) = version {
+                        query = query.filter(dsl::object_version.eq(version));
+                    }
 
-                query
+                    query
+                })
+                .optional()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))?;

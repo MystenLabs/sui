@@ -8,7 +8,7 @@ use super::{
     address::Address, base64::Base64, date_time::DateTime, move_module::MoveModule,
     move_value::MoveValue, sui_address::SuiAddress,
 };
-use crate::data::BoxedQuery;
+use crate::data::{self, QueryExecutor};
 use crate::{data::Db, error::Error};
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
@@ -36,7 +36,7 @@ pub(crate) struct EventKey {
 }
 
 pub(crate) type Cursor = cursor::Cursor<EventKey>;
-type Query<ST, GB> = BoxedQuery<ST, events::table, Db, GB>;
+type Query<ST, GB> = data::Query<ST, events::table, GB>;
 
 #[derive(InputObject, Clone, Default)]
 pub(crate) struct EventFilter {
@@ -129,41 +129,45 @@ impl Event {
         page: Page<EventKey>,
         filter: EventFilter,
     ) -> Result<Connection<String, Event>, Error> {
-        let (prev, next, results) = page
-            .paginate_query::<StoredEvent, _, _, _>(db, move || {
-                let mut query = events::dsl::events.into_boxed();
+        let (prev, next, results) = db
+            .execute(move |conn| {
+                page.paginate_query::<StoredEvent, _, _, _>(conn, move || {
+                    let mut query = events::dsl::events.into_boxed();
 
-                // The transactions table doesn't have an index on the senders column, so use
-                // `tx_senders`.
-                if let Some(sender) = &filter.sender {
-                    query = query.filter(
-                        events::dsl::tx_sequence_number.eq_any(
-                            tx_senders::dsl::tx_senders
-                                .select(tx_senders::dsl::tx_sequence_number)
-                                .filter(tx_senders::dsl::sender.eq(sender.into_vec())),
-                        ),
-                    )
-                }
+                    // The transactions table doesn't have an index on the senders column, so use
+                    // `tx_senders`.
+                    if let Some(sender) = &filter.sender {
+                        query = query.filter(
+                            events::dsl::tx_sequence_number.eq_any(
+                                tx_senders::dsl::tx_senders
+                                    .select(tx_senders::dsl::tx_sequence_number)
+                                    .filter(tx_senders::dsl::sender.eq(sender.into_vec())),
+                            ),
+                        )
+                    }
 
-                if let Some(digest) = &filter.transaction_digest {
-                    query = query.filter(
-                        events::dsl::tx_sequence_number.eq_any(
-                            transactions::dsl::transactions
-                                .select(transactions::dsl::tx_sequence_number)
-                                .filter(transactions::dsl::transaction_digest.eq(digest.to_vec())),
-                        ),
-                    )
-                }
+                    if let Some(digest) = &filter.transaction_digest {
+                        query = query.filter(
+                            events::dsl::tx_sequence_number.eq_any(
+                                transactions::dsl::transactions
+                                    .select(transactions::dsl::tx_sequence_number)
+                                    .filter(
+                                        transactions::dsl::transaction_digest.eq(digest.to_vec()),
+                                    ),
+                            ),
+                        )
+                    }
 
-                if let Some(module_filter) = &filter.emitting_module {
-                    query = module_filter.apply(query, events::dsl::package, events::dsl::module);
-                }
+                    if let Some(module) = &filter.emitting_module {
+                        query = module.apply(query, events::dsl::package, events::dsl::module);
+                    }
 
-                if let Some(type_filter) = &filter.event_type {
-                    query = type_filter.apply(query, events::dsl::event_type);
-                }
+                    if let Some(type_) = &filter.event_type {
+                        query = type_.apply(query, events::dsl::event_type);
+                    }
 
-                query
+                    query
+                })
             })
             .await?;
 

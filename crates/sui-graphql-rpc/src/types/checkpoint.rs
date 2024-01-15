@@ -11,14 +11,14 @@ use super::{
     transaction_block::{self, TransactionBlock, TransactionBlockFilter},
 };
 use crate::{
-    data::{BoxedQuery, Db, QueryExecutor},
+    data::{self, Db, DbConnection, QueryExecutor},
     error::Error,
 };
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
     *,
 };
-use diesel::{ExpressionMethods, QueryDsl};
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer::{models_v2::checkpoints::StoredCheckpoint, schema_v2::checkpoints};
 use sui_types::messages_checkpoint::{CheckpointCommitment, CheckpointDigest};
@@ -38,7 +38,7 @@ pub(crate) struct Checkpoint {
 }
 
 pub(crate) type Cursor = cursor::Cursor<u64>;
-type Query<ST, GB> = BoxedQuery<ST, checkpoints::table, Db, GB>;
+type Query<ST, GB> = data::Query<ST, checkpoints::table, GB>;
 
 #[Object]
 impl Checkpoint {
@@ -173,21 +173,23 @@ impl Checkpoint {
         let seq_num = filter.sequence_number.map(|n| n as i64);
 
         let stored = db
-            .optional(move || {
-                let mut query = dsl::checkpoints
-                    .order_by(dsl::sequence_number.desc())
-                    .limit(1)
-                    .into_boxed();
+            .execute(move |conn| {
+                conn.first(move || {
+                    let mut query = dsl::checkpoints
+                        .order_by(dsl::sequence_number.desc())
+                        .into_boxed();
 
-                if let Some(digest) = digest.clone() {
-                    query = query.filter(dsl::checkpoint_digest.eq(digest));
-                }
+                    if let Some(digest) = digest.clone() {
+                        query = query.filter(dsl::checkpoint_digest.eq(digest));
+                    }
 
-                if let Some(seq_num) = seq_num {
-                    query = query.filter(dsl::sequence_number.eq(seq_num));
-                }
+                    if let Some(seq_num) = seq_num {
+                        query = query.filter(dsl::sequence_number.eq(seq_num));
+                    }
 
-                query
+                    query
+                })
+                .optional()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch checkpoint: {e}")))?;
@@ -205,14 +207,15 @@ impl Checkpoint {
     ) -> Result<Connection<String, Checkpoint>, Error> {
         use checkpoints::dsl;
 
-        let (prev, next, results) = page
-            .paginate_query::<StoredCheckpoint, _, _, _>(db, move || {
-                let mut query = dsl::checkpoints.into_boxed();
-                if let Some(epoch) = filter {
-                    query = query.filter(dsl::epoch.eq(epoch as i64));
-                }
-
-                query
+        let (prev, next, results) = db
+            .execute(move |conn| {
+                page.paginate_query::<StoredCheckpoint, _, _, _>(conn, move || {
+                    let mut query = dsl::checkpoints.into_boxed();
+                    if let Some(epoch) = filter {
+                        query = query.filter(dsl::epoch.eq(epoch as i64));
+                    }
+                    query
+                })
             })
             .await?;
 
