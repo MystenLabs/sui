@@ -103,7 +103,6 @@ impl TypeFilter {
     /// filters (`self` and `other`). This may not be possible if the resulting filter is
     /// inconsistent (e.g. a filter that requires the module member's package to be at two different
     /// addresses simultaneously), in which case `None` is returned.
-    #[allow(dead_code)]
     pub(crate) fn intersect(self, other: Self) -> Option<Self> {
         use ModuleFilter as M;
         use TypeFilter as T;

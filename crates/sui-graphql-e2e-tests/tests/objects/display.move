@@ -148,7 +148,7 @@ module Test::boars {
 //# run-graphql
 {
   address(address: "@{A}") {
-    objectConnection(filter: {type: "@{Test}::boars::Boar"}) {
+    objects(filter: {type: "@{Test}::boars::Boar"}) {
       nodes {
         display {
           key
@@ -169,7 +169,7 @@ module Test::boars {
 //# run-graphql
 {
   address(address: "@{A}") {
-    objectConnection(filter: {type: "@{Test}::boars::Boar"}) {
+    objects(filter: {type: "@{Test}::boars::Boar"}) {
       nodes {
         display {
           key
@@ -190,7 +190,7 @@ module Test::boars {
 //# run-graphql
 {
   address(address: "@{A}") {
-    objectConnection(filter: {type: "@{Test}::boars::Boar"}) {
+    objects(filter: {type: "@{Test}::boars::Boar"}) {
       nodes {
         display {
           key

@@ -14,7 +14,7 @@ use crate::{
         dynamic_field::{DynamicField, DynamicFieldName},
         move_object::MoveObject,
         move_type::MoveType,
-        object::{Object, ObjectFilter},
+        object::{DeprecatedObjectFilter, Object},
         stake::StakedSui,
         sui_address::SuiAddress,
         suins_registration::SuinsRegistration,
@@ -262,7 +262,7 @@ impl PgManager {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-        filter: Option<ObjectFilter>,
+        filter: Option<DeprecatedObjectFilter>,
         owner_type: Option<OwnerType>,
     ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
         let limit = self.validate_page_limit(first, last)?;
@@ -312,7 +312,7 @@ impl PgManager {
             .into_vec())
     }
 
-    pub(crate) fn validate_obj_filter(&self, filter: &ObjectFilter) -> Result<(), Error> {
+    pub(crate) fn validate_obj_filter(&self, filter: &DeprecatedObjectFilter) -> Result<(), Error> {
         if filter.object_keys.is_some() {
             return Err(DbValidationError::UnsupportedObjectKeys.into());
         }
@@ -365,35 +365,13 @@ impl PgManager {
         self.get_display_by_obj_type(object_type).await
     }
 
-    pub(crate) async fn fetch_owned_objs(
-        &self,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        filter: Option<ObjectFilter>,
-        owner: SuiAddress,
-    ) -> Result<Option<Connection<String, Object>>, Error> {
-        let filter = filter
-            .map(|mut f| {
-                f.owner = Some(owner);
-                f
-            })
-            .unwrap_or_else(|| ObjectFilter {
-                owner: Some(owner),
-                ..Default::default()
-            });
-        self.fetch_objs(first, after, last, before, Some(filter))
-            .await
-    }
-
     pub(crate) async fn fetch_objs(
         &self,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-        filter: Option<ObjectFilter>,
+        filter: Option<DeprecatedObjectFilter>,
     ) -> Result<Option<Connection<String, Object>>, Error> {
         validate_cursor_pagination(&first, &after, &last, &before)?;
         if let Some(filter) = &filter {
@@ -628,7 +606,7 @@ impl PgManager {
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Option<Connection<String, StakedSui>>, Error> {
-        let obj_filter = ObjectFilter {
+        let obj_filter = DeprecatedObjectFilter {
             type_: Some(MoveObjectType::staked_sui().to_canonical_string(/* with_prefix */ true)),
             owner: Some(address),
             object_ids: None,
@@ -715,7 +693,7 @@ impl PgManager {
         before: Option<String>,
         address: SuiAddress,
     ) -> Result<Option<Connection<String, DynamicField>>, Error> {
-        let filter = ObjectFilter {
+        let filter = DeprecatedObjectFilter {
             owner: Some(address),
             ..Default::default()
         };
@@ -879,7 +857,7 @@ impl PgManager {
         let struct_tag = parse_to_struct_tag(&suins_registration_type)
             .map_err(|e| Error::Internal(e.to_string()))?;
 
-        let obj_filter = ObjectFilter {
+        let obj_filter = DeprecatedObjectFilter {
             type_: Some(suins_registration_type),
             owner: Some(owner),
             object_ids: None,

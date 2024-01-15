@@ -1,5 +1,5 @@
 {
-  objectConnection {
+  objects {
     nodes {
       version
       digest

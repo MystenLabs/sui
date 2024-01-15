@@ -603,22 +603,26 @@ pub mod tests {
     pub async fn test_query_max_page_limit_impl() {
         let (connection_config, _cluster) = prep_cluster().await;
 
+        let service_config = ServiceConfig::default();
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-        let pg_conn_pool = PgManager::new(reader, Limits::default());
+        let db = Db::new(reader.clone(), service_config.limits);
+        let pg_conn_pool = PgManager::new(reader, service_config.limits);
         let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+            .context_data(db)
             .context_data(pg_conn_pool)
+            .context_data(service_config)
             .build_schema();
 
         // Should complete successfully
         let resp = schema
-            .execute("{ objectConnection(first: 1) { nodes { version } } }")
+            .execute("{ objects(first: 1) { nodes { version } } }")
             .await;
         assert!(resp.is_ok());
 
         // Should fail
         let err: Vec<_> = schema
-            .execute("{ objectConnection(first: 51) { nodes { version } } }")
+            .execute("{ objects(first: 51) { nodes { version } } }")
             .await
             .into_result()
             .unwrap_err()
@@ -627,7 +631,7 @@ pub mod tests {
             .collect();
         assert_eq!(
             err,
-            vec!["Page size exceeded - requested: 51, limit: 50".to_string()]
+            vec!["Connection's page size of 51 exceeds max of 50".to_string()]
         );
     }
 
@@ -641,7 +645,6 @@ pub mod tests {
         let metrics2 = metrics.clone();
 
         let service_config = ServiceConfig::default();
-
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
         let db = Db::new(reader.clone(), service_config.limits);

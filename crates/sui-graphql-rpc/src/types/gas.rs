@@ -13,7 +13,7 @@ use sui_types::{
     transaction::GasData,
 };
 
-use super::object::ObjectFilter;
+use super::object::DeprecatedObjectFilter;
 use super::{address::Address, big_int::BigInt, sui_address::SuiAddress};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -58,7 +58,7 @@ impl GasInput {
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Option<Connection<String, Object>>> {
-        let filter = ObjectFilter {
+        let filter = DeprecatedObjectFilter {
             object_ids: Some(
                 self.payment_obj_ids
                     .iter()

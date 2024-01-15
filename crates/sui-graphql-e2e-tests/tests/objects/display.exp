@@ -37,7 +37,7 @@ task 8 'run-graphql'. lines 148-161:
 Response: {
   "data": {
     "address": {
-      "objectConnection": {
+      "objects": {
         "nodes": [
           {
             "display": [
@@ -80,7 +80,7 @@ task 12 'run-graphql'. lines 169-182:
 Response: {
   "data": {
     "address": {
-      "objectConnection": {
+      "objects": {
         "nodes": [
           {
             "display": [
@@ -128,7 +128,7 @@ task 16 'run-graphql'. lines 190-203:
 Response: {
   "data": {
     "address": {
-      "objectConnection": {
+      "objects": {
         "nodes": [
           {
             "display": [

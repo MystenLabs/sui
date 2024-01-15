@@ -20,6 +20,7 @@ pub(crate) mod epoch;
 pub(crate) mod event;
 pub(crate) mod execution_result;
 pub(crate) mod gas;
+pub(crate) mod intersect;
 pub(crate) mod json;
 pub(crate) mod move_function;
 pub(crate) mod move_module;
