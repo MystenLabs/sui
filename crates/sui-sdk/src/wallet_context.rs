@@ -188,7 +188,7 @@ impl WalletContext {
             }
         }
         Err(anyhow!(
-            "No non-argument gas objects found with value >= budget {budget}"
+            "No non-argument gas objects found for this address with value >= budget {budget}"
         ))
     }
 

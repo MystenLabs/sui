@@ -393,20 +393,24 @@ impl PTB {
         let json = ptb_args_matches.get_flag("json");
         let commands = self.from_matches(ptb_args_matches, None, &mut BTreeMap::new())?;
 
+        let mut preview = ptb_args_matches.get_flag("json");
+        // Build the PTB
+        let mut parsed = vec![];
+        for command in &commands {
+            let p = ParsedPTBCommand::parse(command.1)?;
+            if command.1.name == "preview" {
+                preview = true
+            }
+            parsed.push(p);
+        }
+
         // Preview the PTB instead of executing if preview flag is set
-        if ptb_args_matches.get_flag("preview") {
+        if preview {
             let ptb_preview = PTBPreview {
                 cmds: commands.clone().into_values().collect::<Vec<_>>(),
             };
             println!("{}", ptb_preview);
             return Ok(());
-        }
-
-        // Build the PTB
-        let mut parsed = vec![];
-        for command in &commands {
-            let p = ParsedPTBCommand::parse(command.1)?;
-            parsed.push(p);
         }
 
         // We need to resolve object IDs, so we need a fullnode to access
@@ -421,12 +425,12 @@ impl PTB {
         }
 
         println!("Successfully parsed the PTB");
-        let (ptb, budget, preview) = builder.finish()?;
+        let (ptb, budget, _preview) = builder.finish()?;
 
         // get all the metadata needed for executing the PTB: sender, gas, signing tx
         // get sender's address -- active address
         let Some(sender) = context.config.active_address else {
-            anyhow::bail!("No active address, cannot execute ptb");
+            anyhow::bail!("No active address, cannot execute PTB");
         };
 
         // TODO change this logic to actually use the given gas
@@ -457,7 +461,7 @@ impl PTB {
                 .sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
 
         // execute the transaction
-        println!("Executing the transaction...");
+        print!("Executing the transaction...");
         let transaction_response = context
             .get_client()
             .await?
@@ -469,6 +473,7 @@ impl PTB {
             )
             .await?;
 
+        println!("done");
         if json {
             let json_string =
                 serde_json::to_string_pretty(&serde_json::json!(transaction_response))
@@ -488,9 +493,24 @@ pub struct PTBPreview {
 impl Display for PTBPreview {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut builder = TableBuilder::default();
-        builder.set_header(vec!["command", "value(s)"]);
-        for cmd in &self.cmds {
-            builder.push_record([cmd.name.to_string(), cmd.values.join(" ").to_string()]);
+        let columns = vec!["command", "from", "value(s)"];
+        builder.set_header(columns);
+        let mut from = "console";
+        let num_cmds = &self.cmds.len();
+
+        for cmd in &self.cmds[0..num_cmds - 2] {
+            if cmd.name == "file-include-start" {
+                from = cmd.values.get(0).unwrap();
+                continue;
+            } else if cmd.name == "file-include-end" {
+                from = "console";
+                continue;
+            }
+            builder.push_record([
+                cmd.name.to_string(),
+                from.to_string(),
+                cmd.values.join(" ").to_string(),
+            ]);
         }
         let mut table = builder.build();
         table.with(TablePanel::header(format!("PTB Preview")));
