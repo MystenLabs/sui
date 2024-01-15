@@ -998,6 +998,8 @@ impl IndexStore {
         limit: usize,
         descending: bool,
     ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
+
+        tracing::info!("[EVENT_QUERY_DEBUG] tx_seq: {:?}, event_seq: {}, limit: {}, descending: {}", tx_seq, event_seq, limit, descending);
         Ok(if descending {
             index
                 .unbounded_iter()

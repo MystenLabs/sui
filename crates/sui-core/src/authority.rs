@@ -3427,6 +3427,7 @@ impl AuthorityState {
         } else {
             (0, 0)
         };
+        tracing::info!("[EVENT_QUERY_DEBUG] cursor: {:?}, tx_seq: {:?}, event_num: {:?}", cursor, tx_num, event_num);
 
         let limit = limit + 1;
         let mut event_keys = match query {
@@ -3487,6 +3488,7 @@ impl AuthorityState {
             }
         };
 
+        tracing::info!("[EVENT_QUERY_DEBUG] event keys: {:?}", event_keys);
         // skip one event if exclusive cursor is provided,
         // otherwise truncate to the original limit.
         if cursor.is_some() {
@@ -3496,6 +3498,7 @@ impl AuthorityState {
         } else {
             event_keys.truncate(limit - 1);
         }
+        tracing::info!("[EVENT_QUERY_DEBUG] event keys after truncation: {:?}", event_keys);
 
         // get the unique set of digests from the event_keys
         let event_digests = event_keys
