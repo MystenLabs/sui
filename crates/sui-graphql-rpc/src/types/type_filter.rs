@@ -17,7 +17,7 @@ use sui_types::{
 };
 
 /// GraphQL scalar containing a filter on types.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum TypeFilter {
     /// Filter the type by the package or module it's from.
     ByModule(ModuleFilter),
@@ -98,6 +98,58 @@ impl TypeFilter {
             }
         }
     }
+
+    /// Try to create a filter whose results are the intersection of the results of the input
+    /// filters (`self` and `other`). This may not be possible if the resulting filter is
+    /// inconsistent (e.g. a filter that requires the module member's package to be at two different
+    /// addresses simultaneously), in which case `None` is returned.
+    #[allow(dead_code)]
+    pub(crate) fn intersect(self, other: Self) -> Option<Self> {
+        use ModuleFilter as M;
+        use TypeFilter as T;
+        use TypeTag as TT;
+
+        match (&self, &other) {
+            (T::ByModule(m), T::ByModule(n)) => m.clone().intersect(n.clone()).map(T::ByModule),
+
+            (T::ByType(TT::Struct(s)), T::ByType(TT::Struct(t))) if s.type_params.is_empty() => {
+                ((&s.address, &s.module, &s.name) == (&t.address, &t.module, &t.name))
+                    .then_some(other)
+            }
+
+            (T::ByType(TT::Struct(s)), T::ByType(TT::Struct(t))) if t.type_params.is_empty() => {
+                ((&s.address, &s.module, &s.name) == (&t.address, &t.module, &t.name))
+                    .then_some(self)
+            }
+
+            // If both sides are type filters, then at this point, we know that if they are both
+            // struct tags, neither has empty type parameters and otherwise, at least one of them is
+            // a primitive type. In either case we can treat both filters as exact type queries
+            // which must be equal to each other to intersect.
+            (T::ByType(_), T::ByType(_)) => (self == other).then_some(self),
+
+            (T::ByType(TT::Struct(s)), T::ByModule(M::ByPackage(q))) => {
+                (SuiAddress::from(s.address) == *q).then_some(self)
+            }
+
+            (T::ByType(TT::Struct(s)), T::ByModule(M::ByModule(q, n))) => {
+                ((SuiAddress::from(s.address), s.module.as_str()) == (*q, n.as_str()))
+                    .then_some(self)
+            }
+
+            (T::ByModule(M::ByPackage(p)), T::ByType(TT::Struct(t))) => {
+                (SuiAddress::from(t.address) == *p).then_some(other)
+            }
+
+            (T::ByModule(M::ByModule(p, m)), T::ByType(TT::Struct(t))) => {
+                ((SuiAddress::from(t.address), t.module.as_str()) == (*p, m.as_str()))
+                    .then_some(other)
+            }
+
+            // Intersecting a module-level filter with a primitive type, which will never work.
+            (T::ByType(_), T::ByModule(_)) | (T::ByModule(_), T::ByType(_)) => None,
+        }
+    }
 }
 
 impl FqNameFilter {
@@ -142,7 +194,7 @@ impl FqNameFilter {
         use ModuleFilter as M;
 
         match (&self, &other) {
-            (F::ByModule(m), F::ByModule(n)) => m.clone().intersect(n.clone()).map(Self::ByModule),
+            (F::ByModule(m), F::ByModule(n)) => m.clone().intersect(n.clone()).map(F::ByModule),
             (F::ByFqName(_, _, _), F::ByFqName(_, _, _)) => (self == other).then_some(self),
 
             (F::ByFqName(p, _, _), F::ByModule(M::ByPackage(q))) => (p == q).then_some(self),
@@ -630,6 +682,7 @@ mod tests {
             "0x1:missing::colon",
             "0x2::trailing::",
             "0x3::mismatched::bra<0x4::ke::ts",
+            "vector",
         ] {
             assert!(TypeFilter::from_str(invalid_type_filter).is_err());
         }
@@ -651,7 +704,7 @@ mod tests {
     }
 
     #[test]
-    fn test_intersection() {
+    fn test_fqname_intersection() {
         let sui = FqNameFilter::from_str("0x2").unwrap();
         let coin = FqNameFilter::from_str("0x2::coin").unwrap();
         let take = FqNameFilter::from_str("0x2::coin::take").unwrap();
@@ -668,5 +721,49 @@ mod tests {
         assert_eq!(sui.clone().intersect(std.clone()), None);
         assert_eq!(sui.clone().intersect(string.clone()), None);
         assert_eq!(utf8.clone().intersect(coin.clone()), None);
+    }
+
+    #[test]
+    fn test_type_intersection() {
+        let address = TypeFilter::from_str("address").unwrap();
+        let vec_u8 = TypeFilter::from_str("vector<u8>").unwrap();
+
+        let sui = TypeFilter::from_str("0x2").unwrap();
+        let coin_mod = TypeFilter::from_str("0x2::coin").unwrap();
+        let coin_typ = TypeFilter::from_str("0x2::coin::Coin").unwrap();
+        let coin_sui = TypeFilter::from_str("0x2::coin::Coin<0x2::sui::SUI>").unwrap();
+        let coin_usd = TypeFilter::from_str("0x2::coin::Coin<0x3::usd::USD>").unwrap();
+        let std_utf8 = TypeFilter::from_str("0x1::string::String").unwrap();
+
+        assert_eq!(
+            address.clone().intersect(address.clone()),
+            Some(address.clone())
+        );
+
+        assert_eq!(
+            vec_u8.clone().intersect(vec_u8.clone()),
+            Some(vec_u8.clone())
+        );
+
+        assert_eq!(
+            sui.clone().intersect(coin_mod.clone()),
+            Some(coin_mod.clone())
+        );
+
+        assert_eq!(
+            coin_typ.clone().intersect(coin_mod.clone()),
+            Some(coin_typ.clone())
+        );
+
+        assert_eq!(
+            coin_sui.clone().intersect(coin_typ.clone()),
+            Some(coin_sui.clone())
+        );
+
+        assert_eq!(sui.clone().intersect(vec_u8.clone()), None);
+        assert_eq!(coin_typ.clone().intersect(address.clone()), None);
+        assert_eq!(coin_sui.clone().intersect(coin_usd.clone()), None);
+        assert_eq!(coin_typ.clone().intersect(std_utf8.clone()), None);
+        assert_eq!(coin_sui.clone().intersect(std_utf8.clone()), None);
     }
 }
