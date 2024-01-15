@@ -132,6 +132,31 @@ impl FqNameFilter {
                 .filter(name.eq(n.clone())),
         }
     }
+
+    /// Try to create a filter whose results are the intersection of the results of the input
+    /// filters (`self` and `other`). This may not be possible if the resulting filter is
+    /// inconsistent (e.g. a filter that requires the module member's package to be at two different
+    /// addresses simultaneously), in which case `None` is returned.
+    pub(crate) fn intersect(self, other: Self) -> Option<Self> {
+        use FqNameFilter as F;
+        use ModuleFilter as M;
+
+        match (&self, &other) {
+            (F::ByModule(m), F::ByModule(n)) => m.clone().intersect(n.clone()).map(Self::ByModule),
+            (F::ByFqName(_, _, _), F::ByFqName(_, _, _)) => (self == other).then_some(self),
+
+            (F::ByFqName(p, _, _), F::ByModule(M::ByPackage(q))) => (p == q).then_some(self),
+            (F::ByModule(M::ByPackage(p)), F::ByFqName(q, _, _)) => (p == q).then_some(other),
+
+            (F::ByFqName(p, m, _), F::ByModule(M::ByModule(q, n))) => {
+                ((p, m) == (q, n)).then_some(self)
+            }
+
+            (F::ByModule(M::ByModule(p, m)), F::ByFqName(q, n, _)) => {
+                ((p, m) == (q, n)).then_some(other)
+            }
+        }
+    }
 }
 
 impl ModuleFilter {
@@ -158,6 +183,20 @@ impl ModuleFilter {
             ModuleFilter::ByModule(p, m) => query
                 .filter(package.eq(p.into_vec()))
                 .filter(module.eq(m.clone())),
+        }
+    }
+
+    /// Try to create a filter whose results are the intersection of the results of the input
+    /// filters (`self` and `other`). This may not be possible if the resulting filter is
+    /// inconsistent (e.g. a filter that requires the module's package to be at two different
+    /// addresses simultaneously), in which case `None` is returned.
+    pub(crate) fn intersect(self, other: Self) -> Option<Self> {
+        match (&self, &other) {
+            (Self::ByPackage(_), Self::ByPackage(_))
+            | (Self::ByModule(_, _), Self::ByModule(_, _)) => (self == other).then_some(self),
+
+            (Self::ByPackage(p), Self::ByModule(q, _)) => (p == q).then_some(other),
+            (Self::ByModule(p, _), Self::ByPackage(q)) => (p == q).then_some(self),
         }
     }
 }
@@ -609,5 +648,25 @@ mod tests {
         ] {
             assert!(ModuleFilter::from_str(invalid_module_filter).is_err());
         }
+    }
+
+    #[test]
+    fn test_intersection() {
+        let sui = FqNameFilter::from_str("0x2").unwrap();
+        let coin = FqNameFilter::from_str("0x2::coin").unwrap();
+        let take = FqNameFilter::from_str("0x2::coin::take").unwrap();
+
+        let std = FqNameFilter::from_str("0x1").unwrap();
+        let string = FqNameFilter::from_str("0x1::string").unwrap();
+        let utf8 = FqNameFilter::from_str("0x1::string::utf8").unwrap();
+
+        assert_eq!(sui.clone().intersect(sui.clone()), Some(sui.clone()));
+        assert_eq!(sui.clone().intersect(coin.clone()), Some(coin.clone()));
+        assert_eq!(sui.clone().intersect(take.clone()), Some(take.clone()));
+        assert_eq!(take.clone().intersect(coin.clone()), Some(take.clone()));
+
+        assert_eq!(sui.clone().intersect(std.clone()), None);
+        assert_eq!(sui.clone().intersect(string.clone()), None);
+        assert_eq!(utf8.clone().intersect(coin.clone()), None);
     }
 }
