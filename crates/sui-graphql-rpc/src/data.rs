@@ -5,9 +5,9 @@ pub(crate) mod pg;
 
 use async_trait::async_trait;
 use diesel::{
-    query_builder::{BoxedSelectStatement, FromClause, QueryFragment},
+    query_builder::{BoxedSelectStatement, FromClause, QueryFragment, QueryId},
     query_dsl::{methods::LimitDsl, LoadQuery},
-    QueryResult, QuerySource,
+    QueryResult,
 };
 
 use crate::error::Error;
@@ -27,12 +27,8 @@ pub(crate) type DieselBackend = <Db as QueryExecutor>::Backend;
 /// - GB is the GroupBy clause.
 ///
 /// These type parameters should usually be inferred by context.
-pub(crate) type Query<ST, QS, GB> = Query_<ST, QS, DieselBackend, GB>;
-
-/// Generic boxed query type that is also generic over the database backend. Used in the signatures
-/// of `QueryExecutor` and `DbConnection` and their implementations. (Clients can use the `Query`
-/// type above, which is specialised to the DB Backend in use.)
-pub(crate) type Query_<ST, QS, DB, GB> = BoxedSelectStatement<'static, ST, FromClause<QS>, DB, GB>;
+pub(crate) type Query<ST, QS, GB> =
+    BoxedSelectStatement<'static, ST, FromClause<QS>, DieselBackend, GB>;
 
 /// Interface for accessing relational data written by the Indexer, agnostic of the database
 /// back-end being used.
@@ -71,33 +67,29 @@ pub(crate) trait DbConnection {
     type Backend: diesel::backend::Backend;
     type Connection: diesel::Connection<Backend = Self::Backend>;
 
-    /// Run a query that fetches a single value. `query` is a thunk that returns a boxed query when
+    /// Run a query that fetches a single value. `query` is a thunk that returns a query when
     /// called.
-    fn result<Q, ST, QS, GB, U>(&mut self, query: Q) -> QueryResult<U>
+    fn result<Q, U>(&mut self, query: impl Fn() -> Q) -> QueryResult<U>
     where
-        Q: Fn() -> Query_<ST, QS, Self::Backend, GB>,
-        Query_<ST, QS, Self::Backend, GB>: LoadQuery<'static, Self::Connection, U>,
-        Query_<ST, QS, Self::Backend, GB>: QueryFragment<Self::Backend>,
-        QS: QuerySource;
+        Q: diesel::query_builder::Query,
+        Q: LoadQuery<'static, Self::Connection, U>,
+        Q: QueryId + QueryFragment<Self::Backend>;
 
-    /// Run a query that fetches multiple values. `query` is a thunk that returns a boxed query when
+    /// Run a query that fetches multiple values. `query` is a thunk that returns a query when
     /// called.
-    fn results<Q, ST, QS, GB, U>(&mut self, query: Q) -> QueryResult<Vec<U>>
+    fn results<Q, U>(&mut self, query: impl Fn() -> Q) -> QueryResult<Vec<U>>
     where
-        Q: Fn() -> Query_<ST, QS, Self::Backend, GB>,
-        Query_<ST, QS, Self::Backend, GB>: LoadQuery<'static, Self::Connection, U>,
-        Query_<ST, QS, Self::Backend, GB>: QueryFragment<Self::Backend>,
-        QS: QuerySource;
+        Q: diesel::query_builder::Query,
+        Q: LoadQuery<'static, Self::Connection, U>,
+        Q: QueryId + QueryFragment<Self::Backend>;
 
     /// Helper to limit a query that fetches multiple values to return only its first value. `query`
-    /// is a thunk that returns a boxed query when called.
-    fn first<Q, ST, QS, GB, U>(&mut self, query: Q) -> QueryResult<U>
+    /// is a thunk that returns a query when called.
+    fn first<Q: LimitDsl, U>(&mut self, query: impl Fn() -> Q) -> QueryResult<U>
     where
-        Q: Fn() -> Query_<ST, QS, Self::Backend, GB>,
-        Query_<ST, QS, Self::Backend, GB>: LoadQuery<'static, Self::Connection, U>,
-        Query_<ST, QS, Self::Backend, GB>: QueryFragment<Self::Backend>,
-        Query_<ST, QS, Self::Backend, GB>: LimitDsl<Output = Query_<ST, QS, Self::Backend, GB>>,
-        QS: QuerySource,
+        <Q as LimitDsl>::Output: diesel::query_builder::Query,
+        <Q as LimitDsl>::Output: LoadQuery<'static, Self::Connection, U>,
+        <Q as LimitDsl>::Output: QueryId + QueryFragment<Self::Backend>,
     {
         self.result(move || query().limit(1i64))
     }

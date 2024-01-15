@@ -103,7 +103,6 @@ impl ProtocolConfigs {
                                 .single_value(),
                         ))
                         .order_by(e::epoch.desc())
-                        .into_boxed()
                 })
             })
             .await
