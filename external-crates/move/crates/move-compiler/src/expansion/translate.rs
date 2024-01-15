@@ -947,7 +947,7 @@ fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningF
                     );
                     context
                         .env()
-                        .add_diag(diag!(Attributes::ValueWarning, (inner_attr_loc, msg)));
+                        .add_diag(diag!(Declarations::InvalidAttribute, (inner_attr_loc, msg)));
                     (None, vec![*n])
                 }
             };

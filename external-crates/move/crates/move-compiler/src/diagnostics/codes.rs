@@ -314,7 +314,7 @@ codes!(
         InvalidTest: { msg: "unable to generate test", severity: NonblockingError },
         InvalidBytecodeInst:
             { msg: "unknown bytecode instruction function", severity: NonblockingError },
-        ValueWarning: { msg: "potential issue with attribute value", severity: Warning }
+        ValueWarning: { msg: "issue with attribute value", severity: Warning }
     ],
     Tests: [
         TestFailed: { msg: "test failure", severity: BlockingError },

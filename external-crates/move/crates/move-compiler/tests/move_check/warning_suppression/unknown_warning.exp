@@ -1,4 +1,4 @@
-error[E10003]: invalid attribute value
+warning[W10007]: issue with attribute value
   ┌─ tests/move_check/warning_suppression/unknown_warning.move:3:9
   │
 3 │ #[allow(who_am_i)]
