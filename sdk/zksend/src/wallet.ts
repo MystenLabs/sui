@@ -91,10 +91,12 @@ export class ZkSendWallet implements Wallet {
 	constructor({
 		client,
 		name,
+		address,
 		origin = DEFAULT_ZKSEND_ORIGIN,
 	}: {
 		client: SuiClient;
 		origin?: string;
+		address?: string | null;
 		name: string;
 	}) {
 		this.#accounts = [];
@@ -102,6 +104,10 @@ export class ZkSendWallet implements Wallet {
 		this.#client = client;
 		this.#origin = origin;
 		this.#name = name;
+
+		if (address) {
+			this.#setAccount(address);
+		}
 	}
 
 	#signTransactionBlock: SuiSignTransactionBlockMethod = async ({ transactionBlock, account }) => {
@@ -207,5 +213,20 @@ export function registerZkSendWallet(
 	const wallets = getWallets();
 	const client = new SuiClient({ url: getFullnodeUrl('mainnet') });
 
-	return wallets.register(new ZkSendWallet({ client, name, origin }));
+	let addressFromRedirect: string | null = null;
+	try {
+		const params = new URLSearchParams(window.location.search);
+		addressFromRedirect = params.get('zksend_address');
+	} catch {
+		// Ignore errors
+	}
+
+	return wallets.register(
+		new ZkSendWallet({
+			client,
+			name,
+			origin,
+			address: addressFromRedirect,
+		}),
+	);
 }
