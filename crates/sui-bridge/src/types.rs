@@ -171,7 +171,7 @@ pub enum BridgeChainId {
     EthSepolia = 11,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TryFromPrimitive)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TryFromPrimitive, Hash)]
 #[repr(u8)]
 pub enum TokenId {
     Sui = 0,
@@ -296,7 +296,7 @@ impl BridgeActionDigest {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BridgeCommitteeValiditySignInfo {
     pub signatures: BTreeMap<BridgeAuthorityPublicKeyBytes, BridgeAuthorityRecoverableSignature>,
 }

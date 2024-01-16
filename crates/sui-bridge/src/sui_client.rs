@@ -11,6 +11,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use axum::response::sse::Event;
 use ethers::types::{Address, U256};
+use fastcrypto::traits::KeyPair;
 use fastcrypto::traits::ToFromBytes;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
@@ -21,6 +22,7 @@ use sui_json_rpc_types::{
 };
 use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
 use sui_types::base_types::ObjectRef;
+use sui_types::crypto::get_key_pair;
 use sui_types::dynamic_field::Field;
 use sui_types::error::UserInputError;
 use sui_types::event;
@@ -200,7 +202,6 @@ where
                 BridgeError::InternalError(format!("Can't get bridge committee: {e}"))
             })?;
         let mut authorities = vec![];
-
         // TODO: move this to MoveTypeBridgeCommittee
         for member in move_type_bridge_committee.members.contents {
             let MoveTypeCommitteeMember {
@@ -242,6 +243,10 @@ where
         self.inner
             .get_gas_data_panic_if_not_gas(gas_object_id)
             .await
+    }
+
+    pub async fn get_committee(&self) -> BridgeResult<BridgeCommittee> {
+        self.get_bridge_committee().await
     }
 }
 
@@ -362,7 +367,8 @@ impl SuiClientInner for SuiSdkClient {
             {
                 Ok(Some(gas_obj)) => {
                     let owner = gas_obj.owner.expect("Owner is requested");
-                    let gas_coin = GasCoin::try_from(&gas_obj).expect("Not a gas coin");
+                    let gas_coin = GasCoin::try_from(&gas_obj)
+                        .unwrap_or_else(|err| panic!("{} is not a gas coin: {err}", gas_object_id));
                     return (gas_coin, gas_obj.object_ref(), owner);
                 }
                 other => {

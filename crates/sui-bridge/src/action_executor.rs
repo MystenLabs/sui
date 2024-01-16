@@ -16,8 +16,7 @@ use sui_types::{
     digests::TransactionDigest,
     gas_coin::GasCoin,
     object::Owner,
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{Transaction, TransactionData},
+    transaction::Transaction,
 };
 
 use crate::{
@@ -25,6 +24,7 @@ use crate::{
     error::BridgeError,
     storage::BridgeOrchestratorTables,
     sui_client::{SuiClient, SuiClientInner},
+    sui_transaction_builder::build_transaction,
     types::{BridgeAction, VerifiedCertifiedBridgeAction},
 };
 use std::sync::Arc;
@@ -219,15 +219,32 @@ where
         >,
     ) {
         info!("Starting run_onchain_execution_loop");
-        while let Some(certificate) = execution_queue_receiver.recv().await {
-            info!("Received certified action for execution: {:?}", certificate);
-            let CertifiedBridgeActionExecutionWrapper(certificate, attempt_times) = certificate;
+        while let Some(certificate_wrapper) = execution_queue_receiver.recv().await {
+            info!(
+                "Received certified action for execution: {:?}",
+                certificate_wrapper
+            );
+            let CertifiedBridgeActionExecutionWrapper(certificate, attempt_times) =
+                certificate_wrapper;
 
             // TODO check gas coin balance here. If gas balance too low, do not proceed.
             let (_gas_coin, gas_object_ref) =
                 Self::get_gas_data_assert_ownership(sui_address, gas_object_id, &sui_client).await;
-
-            let tx_data = build_transaction(&gas_object_ref);
+            let action = certificate.data();
+            let ceriticate_clone = certificate.clone();
+            let tx_data = match build_transaction(sui_address, &gas_object_ref, ceriticate_clone) {
+                Ok(tx_data) => tx_data,
+                Err(err) => {
+                    // TODO: add mertrics
+                    error!(
+                        "Failed to build transaction for action {:?}: {:?}",
+                        certificate, err
+                    );
+                    // This should not happen, but in case it does, we do not want to
+                    // panic, instead we log here for manual intervention.
+                    continue;
+                }
+            };
             let sig = Signature::new_secure(
                 &IntentMessage::new(Intent::sui_transaction(), &tx_data),
                 &sui_key,
@@ -242,7 +259,7 @@ where
             {
                 Ok(effects) => {
                     let effects = effects.effects.expect("We requested effects but got None.");
-                    Self::handle_execution_effects(tx_digest, effects, &store, certificate).await
+                    Self::handle_execution_effects(tx_digest, effects, &store, action).await
                 }
 
                 // If the transaction did not go through, retry up to a certain times.
@@ -277,14 +294,14 @@ where
         tx_digest: TransactionDigest,
         effects: SuiTransactionBlockEffects,
         store: &Arc<BridgeOrchestratorTables>,
-        certificate: VerifiedCertifiedBridgeAction,
+        action: &BridgeAction,
     ) {
         let status = effects.status();
         match status {
             SuiExecutionStatus::Success => {
                 info!(?tx_digest, "Sui transaction executed successfully");
                 store
-                    .remove_pending_actions(&[certificate.data().digest()])
+                    .remove_pending_actions(&[action.digest()])
                     .unwrap_or_else(|e| {
                         panic!("Write to DB should not fail: {:?}", e);
                     })
@@ -334,31 +351,29 @@ pub async fn submit_to_executor(
         .map_err(|e| BridgeError::Generic(e.to_string()))
 }
 
-pub fn build_transaction(gas_object_ref: &ObjectRef) -> TransactionData {
-    let sender = SuiAddress::ZERO;
-    let mut builder = ProgrammableTransactionBuilder::new();
-    builder.pay_sui(vec![SuiAddress::ZERO], vec![1u64]).unwrap();
-    let pt = builder.finish();
-    TransactionData::new_programmable(sender, vec![*gas_object_ref], pt, 15_000_000, 1500)
-}
-
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
+    use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
     use sui_json_rpc_types::SuiTransactionBlockResponse;
-    use sui_types::base_types::random_object_ref;
     use sui_types::crypto::get_key_pair;
     use sui_types::gas_coin::GasCoin;
+    use sui_types::{base_types::random_object_ref, transaction::TransactionData};
 
     use crate::{
-        crypto::BridgeAuthorityKeyPair,
+        crypto::{
+            BridgeAuthorityKeyPair, BridgeAuthorityPublicKeyBytes,
+            BridgeAuthorityRecoverableSignature,
+        },
         server::mock_handler::BridgeRequestMockHandler,
         sui_mock_client::SuiMockClient,
         test_utils::{
             get_test_authorities_and_run_mock_bridge_server, get_test_sui_to_eth_bridge_action,
             sign_action_with_key,
         },
-        types::BridgeCommittee,
+        types::{BridgeCommittee, BridgeCommitteeValiditySignInfo, CertifiedBridgeAction},
     };
 
     use super::*;
@@ -381,12 +396,18 @@ mod tests {
             sui_address,
         ) = setup();
 
-        let (action, _, _) = get_bridge_authority_approved_action(
+        // TODO: remove once we don't rely on env var to get object id
+        std::env::set_var("ROOT_BRIDGE_OBJECT_ID", "0x09");
+        std::env::set_var("ROOT_BRIDGE_OBJECT_INITIAL_SHARED_VERSION", "1");
+
+        let (action_certificate, _, _) = get_bridge_authority_approved_action(
             vec![&mock0, &mock1, &mock2, &mock3],
             vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
         );
+        let action = action_certificate.data().clone();
 
-        let tx_data = build_transaction(&gas_object_ref);
+        let tx_data = build_transaction(sui_address, &gas_object_ref, action_certificate).unwrap();
+
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
 
         let gas_coin = GasCoin::new_for_testing(1_000_000_000_000); // dummy gas coin
@@ -397,7 +418,12 @@ mod tests {
         );
 
         // Mock the transaction to be successfully executed
-        mock_transaction_response(&sui_client_mock, tx_digest, SuiExecutionStatus::Success);
+        mock_transaction_response(
+            &sui_client_mock,
+            tx_digest,
+            SuiExecutionStatus::Success,
+            true,
+        );
 
         store.insert_pending_actions(&[action.clone()]).unwrap();
         assert_eq!(
@@ -409,19 +435,21 @@ mod tests {
         submit_to_executor(&tx, action.clone()).await.unwrap();
 
         // Expect to see the transaction to be requested and successfully executed hence removed from WAL
-        assert_eq!(tx_subscription.recv().await.unwrap(), tx_digest);
+        tx_subscription.recv().await.unwrap();
         assert!(store.get_all_pending_actions().unwrap().is_empty());
 
         /////////////////////////////////////////////////////////////////////////////////////////////////
         ////////////////////////////////////// Test execution failure ///////////////////////////////////
         /////////////////////////////////////////////////////////////////////////////////////////////////
 
-        let (action, _, _) = get_bridge_authority_approved_action(
+        let (action_certificate, _, _) = get_bridge_authority_approved_action(
             vec![&mock0, &mock1, &mock2, &mock3],
             vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
         );
 
-        let tx_data = build_transaction(&gas_object_ref);
+        let action = action_certificate.data().clone();
+
+        let tx_data = build_transaction(sui_address, &gas_object_ref, action_certificate).unwrap();
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
 
         // Mock the transaction to fail
@@ -431,6 +459,7 @@ mod tests {
             SuiExecutionStatus::Failure {
                 error: "failure is mother of success".to_string(),
             },
+            true,
         );
 
         store.insert_pending_actions(&[action.clone()]).unwrap();
@@ -443,7 +472,7 @@ mod tests {
         submit_to_executor(&tx, action.clone()).await.unwrap();
 
         // Expect to see the transaction to be requested and but failed
-        assert_eq!(tx_subscription.recv().await.unwrap(), tx_digest);
+        tx_subscription.recv().await.unwrap();
         // The action is not removed from WAL because the transaction failed
         assert_eq!(
             store.get_all_pending_actions().unwrap()[&action.digest()],
@@ -454,17 +483,20 @@ mod tests {
         //////////////////////////// Test transaction failed at signing stage ///////////////////////////
         /////////////////////////////////////////////////////////////////////////////////////////////////
 
-        let (action, _, _) = get_bridge_authority_approved_action(
+        let (action_certificate, _, _) = get_bridge_authority_approved_action(
             vec![&mock0, &mock1, &mock2, &mock3],
             vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
         );
 
-        let tx_data = build_transaction(&gas_object_ref);
+        let action = action_certificate.data().clone();
+
+        let tx_data = build_transaction(sui_address, &gas_object_ref, action_certificate).unwrap();
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
         mock_transaction_error(
             &sui_client_mock,
             tx_digest,
             BridgeError::Generic("some random error".to_string()),
+            true,
         );
 
         store.insert_pending_actions(&[action.clone()]).unwrap();
@@ -477,8 +509,9 @@ mod tests {
         submit_to_executor(&tx, action.clone()).await.unwrap();
 
         // Failure will trigger retry, we wait for 2 requests before checking WAL log
+        let tx_digest = tx_subscription.recv().await.unwrap();
         assert_eq!(tx_subscription.recv().await.unwrap(), tx_digest);
-        assert_eq!(tx_subscription.recv().await.unwrap(), tx_digest);
+
         // The retry is still going on, action still in WAL
         assert!(store
             .get_all_pending_actions()
@@ -486,7 +519,12 @@ mod tests {
             .contains_key(&action.digest()));
 
         // Now let it succeed
-        mock_transaction_response(&sui_client_mock, tx_digest, SuiExecutionStatus::Success);
+        mock_transaction_response(
+            &sui_client_mock,
+            tx_digest,
+            SuiExecutionStatus::Success,
+            true,
+        );
 
         // Give it 1 second to retry and succeed
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
@@ -515,16 +553,22 @@ mod tests {
             sui_address,
         ) = setup();
 
-        let (action, sui_tx_digest, sui_tx_event_index) = get_bridge_authority_approved_action(
-            vec![&mock0, &mock1, &mock2, &mock3],
-            vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
-        );
+        // TODO: remove once we don't rely on env var to get object id
+        std::env::set_var("ROOT_BRIDGE_OBJECT_ID", "0x09");
+        std::env::set_var("ROOT_BRIDGE_OBJECT_INITIAL_SHARED_VERSION", "1");
+
+        let (action_certificate, sui_tx_digest, sui_tx_event_index) =
+            get_bridge_authority_approved_action(
+                vec![&mock0, &mock1, &mock2, &mock3],
+                vec![&secrets[0], &secrets[1], &secrets[2], &secrets[3]],
+            );
+        let action = action_certificate.data().clone();
         mock_bridge_authority_signing_errors(
             vec![&mock0, &mock1, &mock2],
             sui_tx_digest,
             sui_tx_event_index,
         );
-        mock_bridge_authority_sigs(
+        let mut sigs = mock_bridge_authority_sigs(
             vec![&mock3],
             &action,
             vec![&secrets[3]],
@@ -569,18 +613,29 @@ mod tests {
         );
 
         // Let authorities to sign the action too. Now we are above the threshold
-        mock_bridge_authority_sigs(
+        let sig_from_2 = mock_bridge_authority_sigs(
             vec![&mock2],
             &action,
             vec![&secrets[2]],
             sui_tx_digest,
             sui_tx_event_index,
         );
+        sigs.extend(sig_from_2);
+        let certified_action = CertifiedBridgeAction::new_from_data_and_sig(
+            action.clone(),
+            BridgeCommitteeValiditySignInfo { signatures: sigs },
+        );
+        let action_certificate = VerifiedCertifiedBridgeAction::new_from_verified(certified_action);
 
-        let tx_data = build_transaction(&gas_object_ref);
+        let tx_data = build_transaction(sui_address, &gas_object_ref, action_certificate).unwrap();
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
 
-        mock_transaction_response(&sui_client_mock, tx_digest, SuiExecutionStatus::Success);
+        mock_transaction_response(
+            &sui_client_mock,
+            tx_digest,
+            SuiExecutionStatus::Success,
+            true,
+        );
 
         // Expect to see the transaction to be requested and succeed
         assert_eq!(tx_subscription.recv().await.unwrap(), tx_digest);
@@ -597,15 +652,19 @@ mod tests {
         secrets: Vec<&BridgeAuthorityKeyPair>,
         sui_tx_digest: TransactionDigest,
         sui_tx_event_index: u16,
-    ) {
+    ) -> BTreeMap<BridgeAuthorityPublicKeyBytes, BridgeAuthorityRecoverableSignature> {
         assert_eq!(mocks.len(), secrets.len());
+        let mut signed_actions = BTreeMap::new();
         for (mock, secret) in mocks.iter().zip(secrets.iter()) {
+            let signed_action = sign_action_with_key(action, secret);
             mock.add_sui_event_response(
                 sui_tx_digest,
                 sui_tx_event_index,
-                Ok(sign_action_with_key(action, secret)),
+                Ok(signed_action.clone()),
             );
+            signed_actions.insert(secret.public().into(), signed_action.into_sig().signature);
         }
+        signed_actions
     }
 
     fn mock_bridge_authority_signing_errors(
@@ -626,7 +685,7 @@ mod tests {
     fn get_bridge_authority_approved_action(
         mocks: Vec<&BridgeRequestMockHandler>,
         secrets: Vec<&BridgeAuthorityKeyPair>,
-    ) -> (BridgeAction, TransactionDigest, u16) {
+    ) -> (VerifiedCertifiedBridgeAction, TransactionDigest, u16) {
         let sui_tx_digest = TransactionDigest::random();
         let sui_tx_event_index = 1;
         let action = get_test_sui_to_eth_bridge_action(
@@ -636,8 +695,17 @@ mod tests {
             None,
         );
 
-        mock_bridge_authority_sigs(mocks, &action, secrets, sui_tx_digest, sui_tx_event_index);
-        (action, sui_tx_digest, sui_tx_event_index)
+        let sigs =
+            mock_bridge_authority_sigs(mocks, &action, secrets, sui_tx_digest, sui_tx_event_index);
+        let certified_action = CertifiedBridgeAction::new_from_data_and_sig(
+            action,
+            BridgeCommitteeValiditySignInfo { signatures: sigs },
+        );
+        (
+            VerifiedCertifiedBridgeAction::new_from_verified(certified_action),
+            sui_tx_digest,
+            sui_tx_event_index,
+        )
     }
 
     fn get_tx_digest(tx_data: TransactionData, dummy_sui_key: &SuiKeyPair) -> TransactionDigest {
@@ -649,23 +717,36 @@ mod tests {
         *signed_tx.digest()
     }
 
+    /// Why is `wildcard` needed? This is because authority signatures
+    /// are part of transaction data. Depending on whose signatures
+    /// are included in what order, this may change the tx digest.
     fn mock_transaction_response(
         sui_client_mock: &SuiMockClient,
         tx_digest: TransactionDigest,
         status: SuiExecutionStatus,
+        wildcard: bool,
     ) {
         let mut response = SuiTransactionBlockResponse::new(tx_digest);
         let effects = SuiTransactionBlockEffects::new_for_testing(tx_digest, status);
         response.effects = Some(effects);
-        sui_client_mock.add_transaction_response(tx_digest, Ok(response));
+        if wildcard {
+            sui_client_mock.set_wildcard_transaction_response(Ok(response));
+        } else {
+            sui_client_mock.add_transaction_response(tx_digest, Ok(response));
+        }
     }
 
     fn mock_transaction_error(
         sui_client_mock: &SuiMockClient,
         tx_digest: TransactionDigest,
         error: BridgeError,
+        wildcard: bool,
     ) {
-        sui_client_mock.add_transaction_response(tx_digest, Err(error));
+        if wildcard {
+            sui_client_mock.set_wildcard_transaction_response(Err(error));
+        } else {
+            sui_client_mock.add_transaction_response(tx_digest, Err(error));
+        }
     }
 
     #[allow(clippy::type_complexity)]
