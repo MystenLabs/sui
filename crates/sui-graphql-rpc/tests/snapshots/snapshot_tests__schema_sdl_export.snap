@@ -72,8 +72,17 @@ type Address implements IOwner {
 	"""
 	transactionBlocks(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection!
 	address: SuiAddress!
+	"""
+	The objects that are owned by this address.
+	"""
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	"""
+	The balance that this address holds.
+	"""
 	balance(type: String): Balance
+	"""
+	The balance objects for this address.
+	"""
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
 	The coin objects for the given address.
@@ -116,11 +125,11 @@ The possible relationship types for a transaction block: sign, sent, received, o
 """
 enum AddressTransactionBlockRelationship {
 	"""
-	Transactions this address has signed either as a sender or as a sponsor
+	Transactions this address has signed either as a sender or as a sponsor.
 	"""
 	SIGN
 	"""
-	Transactions that sent objects to this addres
+	Transactions that sent objects to this address.
 	"""
 	RECV
 }
@@ -271,7 +280,7 @@ type BalanceEdge {
 }
 
 """
-String containing a Base64-encoded binary data.
+String containing Base64-encoded binary data.
 """
 scalar Base64
 
@@ -469,7 +478,7 @@ type CoinEdge {
 }
 
 """
-The metadata for an object of type Coin.
+The metadata for a coin type.
 """
 type CoinMetadata {
 	"""
@@ -691,28 +700,32 @@ type EndOfEpochTransactionKindEdge {
 
 """
 Operation of the Sui network is temporally partitioned into non-overlapping epochs,
-and the network aims to keep epochs roughly the same time length as each other.
-During a particular epoch, the set of validators participating in the network is fixed.
+and the network aims to keep epochs roughly the same duration as each other.
+During a particular epoch the following data is fixed:
+
+- the protocol version
+- the reference gas price
+- the set of participating validators
 """
 type Epoch {
 	"""
-	The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change
+	The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change.
 	"""
 	epochId: Int!
 	"""
-	The minimum gas price that a quorum of validators are guaranteed to sign a transaction for
+	The minimum gas price that a quorum of validators are guaranteed to sign a transaction for.
 	"""
 	referenceGasPrice: BigInt
 	"""
-	Validator related properties, including the active validators
+	Validator related properties, including the active validators.
 	"""
 	validatorSet: ValidatorSet
 	"""
-	The epoch's starting timestamp
+	The epoch's starting timestamp.
 	"""
 	startTimestamp: DateTime!
 	"""
-	The epoch's ending timestamp
+	The epoch's ending timestamp.
 	"""
 	endTimestamp: DateTime
 	"""
@@ -747,12 +760,13 @@ type Epoch {
 	"""
 	fundInflow: BigInt
 	"""
-	The storage fee rebates paid to users
-	who deleted the data associated with past transactions.
+	The storage fee rebates paid to users who deleted the data associated with past
+	transactions.
 	"""
 	fundOutflow: BigInt
 	"""
-	The epoch's corresponding protocol configuration, including the feature flags and the configuration options
+	The epoch's corresponding protocol configuration, including the feature flags and the
+	configuration options.
 	"""
 	protocolConfigs: ProtocolConfigs!
 	"""
@@ -780,11 +794,11 @@ type Epoch {
 	"""
 	systemStakeSubsidy: StakeSubsidy
 	"""
-	The epoch's corresponding checkpoints
+	The epoch's corresponding checkpoints.
 	"""
 	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	"""
-	The epoch's corresponding transaction blocks
+	The epoch's corresponding transaction blocks.
 	"""
 	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
 }
@@ -807,11 +821,11 @@ type Event {
 	"""
 	timestamp: DateTime
 	"""
-	The value's Move type
+	The value's Move type.
 	"""
 	type: MoveType!
 	"""
-	The BCS representation of this value Base64 encoded
+	The BCS representation of this value, Base64 encoded.
 	"""
 	bcs: Base64!
 	"""
@@ -1337,7 +1351,7 @@ type MoveModuleEdge {
 }
 
 """
-The representation of an object as a Move Object, which enables additional information
+The representation of an object as a Move Object, which exposes additional information
 (content, module that governs it, version, is transferrable, etc.) about this object.
 """
 type MoveObject {
@@ -1373,8 +1387,8 @@ type MoveObject {
 }
 
 """
-The representation of a Move Package, which provides more information about previous package
-versions, type layouts, the modules defined in this package and others.
+A MovePackage is a kind of Move object that represents code that has been published on chain.
+It exposes information about its modules, type definitions, functions, and dependencies.
 """
 type MovePackage {
 	"""
@@ -1495,7 +1509,7 @@ type MoveStructTypeParameter {
 }
 
 """
-Represents concrete types (no type parameters, no references)
+Represents concrete types (no type parameters, no references).
 """
 type MoveType {
 	"""
@@ -1554,11 +1568,11 @@ scalar MoveTypeSignature
 
 type MoveValue {
 	"""
-	The value's Move type
+	The value's Move type.
 	"""
 	type: MoveType!
 	"""
-	The BCS representation of this value Base64 encoded
+	The BCS representation of this value, Base64 encoded.
 	"""
 	bcs: Base64!
 	"""
@@ -2167,10 +2181,16 @@ type Query {
 	"""
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	"""
-	Fetch and paginate the information on multiple checkpoints.
+	The checkpoints that exist in the network.
 	"""
 	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
+	"""
+	The transaction blocks that exist in the network.
+	"""
 	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	"""
+	The events that exist in the network.
+	"""
 	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection!
 	"""
 	The objects that exist in the network.
@@ -2178,7 +2198,7 @@ type Query {
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	"""
 	Fetch the protocol config by protocol version (defaults to the latest protocol
-	version known to the GraphQL).
+	version known to the GraphQL service).
 	"""
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
 	"""
@@ -2186,7 +2206,7 @@ type Query {
 	"""
 	resolveNameServiceAddress(name: String!): Address
 	"""
-	The coin metadata associated with the given coin ype.
+	The coin metadata associated with the given coin type.
 	"""
 	coinMetadata(coinType: String!): CoinMetadata
 }
@@ -2829,7 +2849,7 @@ enum TransactionBlockKindInput {
 	"""
 	SYSTEM_TX
 	"""
-	A user submitted transaction block
+	A user submitted transaction block.
 	"""
 	PROGRAMMABLE_TX
 }
@@ -2959,7 +2979,7 @@ type UpgradeTransaction {
 
 type Validator {
 	"""
-	Look-up a Validator by its SuiAddress.
+	The validator's address.
 	"""
 	address: Address!
 	"""
