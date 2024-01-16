@@ -916,9 +916,9 @@ type ExecutionResult {
 	"""
 	errors: [String!]
 	"""
-	The digest field captures the digest of the transaction block
+	The effects of the executed transaction.
 	"""
-	digest: String!
+	effects: TransactionBlockEffects!
 }
 
 """

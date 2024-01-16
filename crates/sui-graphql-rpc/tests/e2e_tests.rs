@@ -18,7 +18,6 @@ mod tests {
     use sui_types::DEEPBOOK_ADDRESS;
     use sui_types::SUI_FRAMEWORK_ADDRESS;
     use tokio::time::sleep;
-    use tracing::error;
 
     #[tokio::test]
     #[serial]
@@ -345,7 +344,6 @@ mod tests {
             .execute_mutation_to_graphql(mutation.to_string(), variables)
             .await
             .unwrap();
-        error!("{:?}", res);
         let binding = res.response_body().data.clone().into_json().unwrap();
         let res = binding.get("executeTransactionBlock").unwrap();
 
