@@ -11336,6 +11336,7 @@ dependencies = [
  "rocksdb",
  "serde",
  "serde_json",
+ "simulacrum",
  "strum 0.24.1",
  "strum_macros 0.24.3",
  "sui-analytics-indexer-derive",
