@@ -16,14 +16,17 @@ const GIT_REVISION: &str = {
             args = ["--always", "--dirty", "--exclude", "*"],
             fallback = ""
         );
-
-        if version.is_empty() {
-            panic!("unable to query git revision");
-        }
         version
     }
 };
-const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
+
+const VERSION: &str = {
+    if GIT_REVISION.is_empty() {
+        env!("CARGO_PKG_VERSION")
+    } else {
+        const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION)
+    }
+};
 
 #[derive(Parser)]
 #[clap(
