@@ -15,6 +15,7 @@ pub mod server;
 pub mod storage;
 pub mod sui_client;
 pub mod sui_syncer;
+pub mod sui_transaction_builder;
 pub mod types;
 
 #[cfg(test)]
