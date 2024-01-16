@@ -383,7 +383,7 @@ impl PTB {
         Ok(start_index + len_cmds + 1)
     }
 
-    /// Parses and executes the PTB with the current active address
+    /// Parses and executes the PTB with the sender as the current active address
     pub async fn execute(self, matches: ArgMatches) -> Result<(), anyhow::Error> {
         let ptb_args_matches = matches
             .subcommand_matches("client")
@@ -393,24 +393,38 @@ impl PTB {
         let json = ptb_args_matches.get_flag("json");
         let commands = self.from_matches(ptb_args_matches, None, &mut BTreeMap::new())?;
 
-        let mut preview = ptb_args_matches.get_flag("json");
-        // Build the PTB
-        let mut parsed = vec![];
-        for command in &commands {
-            let p = ParsedPTBCommand::parse(command.1)?;
-            if command.1.name == "preview" {
-                preview = true
-            }
-            parsed.push(p);
+        // If there are only 2 commands, they are likely the default
+        // --preview and --warn-shadows set to false by clap,
+        // so we can return early because there's no input
+        if commands.len() == 2 {
+            if let (Some(a), Some(b)) = (commands.get(&1), commands.get(&2)) {
+                if a.name == "preview" && b.name == "warn_shadows" {
+                    println!("No PTB to process. See the help menu for more information.");
+                    return Ok(());
+                }
+            };
         }
 
         // Preview the PTB instead of executing if preview flag is set
+        let preview = commands
+            .values()
+            .find(|x| {
+                x.name == "preview" && x.values.iter().find(|x| x.as_str() == "true").is_some()
+            })
+            .is_some();
         if preview {
             let ptb_preview = PTBPreview {
                 cmds: commands.clone().into_values().collect::<Vec<_>>(),
             };
             println!("{}", ptb_preview);
             return Ok(());
+        }
+
+        // Build the PTB
+        let mut parsed = vec![];
+        for command in &commands {
+            let p = ParsedPTBCommand::parse(command.1)?;
+            parsed.push(p);
         }
 
         // We need to resolve object IDs, so we need a fullnode to access
@@ -461,7 +475,7 @@ impl PTB {
                 .sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
 
         // execute the transaction
-        print!("Executing the transaction...");
+        println!("Executing the transaction...");
         let transaction_response = context
             .get_client()
             .await?
@@ -473,7 +487,7 @@ impl PTB {
             )
             .await?;
 
-        println!("done");
+        println!("Transaction executed");
         if json {
             let json_string =
                 serde_json::to_string_pretty(&serde_json::json!(transaction_response))
@@ -482,6 +496,7 @@ impl PTB {
         } else {
             println!("{}", transaction_response);
         }
+
         Ok(())
     }
 }
