@@ -107,7 +107,7 @@ pub(crate) struct MoveFieldLayout {
     layout: MoveTypeLayout,
 }
 
-/// Represents concrete types (no type parameters, no references)
+/// Represents concrete types (no type parameters, no references).
 #[Object]
 impl MoveType {
     /// Flat representation of the type signature, as a displayable string.

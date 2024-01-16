@@ -20,7 +20,7 @@ pub(crate) struct Validator {
 
 #[Object]
 impl Validator {
-    /// Look-up a Validator by its SuiAddress.
+    /// The validator's address.
     async fn address(&self) -> Address {
         Address {
             address: SuiAddress::from(self.validator_summary.sui_address),

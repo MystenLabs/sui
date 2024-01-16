@@ -56,7 +56,7 @@ pub(crate) enum TransactionBlockKindInput {
     /// A system transaction can be one of several types of transactions.
     /// See [unions/transaction-block-kind] for more details.
     SystemTx = 0,
-    /// A user submitted transaction block
+    /// A user submitted transaction block.
     ProgrammableTx = 1,
 }
 

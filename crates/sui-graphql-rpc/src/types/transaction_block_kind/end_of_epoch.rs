@@ -213,7 +213,6 @@ impl AuthenticatorStateExpireTransaction {
     }
 }
 
-/// System transaction corresponding to an expired JWK.
 impl From<NativeEndOfEpochTransactionKind> for EndOfEpochTransactionKind {
     fn from(kind: NativeEndOfEpochTransactionKind) -> Self {
         use EndOfEpochTransactionKind as K;
