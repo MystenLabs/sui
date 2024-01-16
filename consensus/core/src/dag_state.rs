@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-    block::{BlockAPI as _, BlockRef, Round, VerifiedBlock},
+    block::{BlockAPI as _, BlockRef, Round, Slot, VerifiedBlock},
     context::Context,
     storage::Store,
 };
@@ -21,8 +21,8 @@ const BLOCK_CACHED_ROUNDS: Round = 100;
 /// The rest of blocks are stored on disk.
 /// Refs to cached blocks and additional refs are cached as well, to speed up existence checks.
 ///
-/// Note: DagState should be wrapped with Arc<RwMutex<_>>, to allow concurrent access from
-/// multiple components.
+/// Note: DagState should be wrapped with Arc<parking_lot::RwLock<_>>, to allow
+/// concurrent access from multiple components.
 #[allow(unused)]
 pub(crate) struct DagState {
     context: Arc<Context>,
@@ -62,8 +62,28 @@ impl DagState {
     }
 
     pub(crate) fn add_block(&mut self, block: VerifiedBlock) {
-        let block_ref = block.block.reference();
+        let block_ref = block.reference();
         self.recent_blocks.insert(block_ref, block);
         self.cached_refs[block_ref.author].insert(block_ref);
+    }
+
+    pub(crate) fn get_block(&self, _reference: BlockRef) -> Option<VerifiedBlock> {
+        unimplemented!()
+    }
+
+    pub(crate) fn get_blocks_at_slot(&self, _slot: Slot) -> Vec<VerifiedBlock> {
+        unimplemented!()
+    }
+
+    pub(crate) fn linked_to_round(
+        &self,
+        _later_block: &VerifiedBlock,
+        _earlier_round: Round,
+    ) -> Vec<VerifiedBlock> {
+        unimplemented!()
+    }
+
+    pub(crate) fn get_blocks_by_round(&self, _round: Round) -> Vec<VerifiedBlock> {
+        unimplemented!()
     }
 }

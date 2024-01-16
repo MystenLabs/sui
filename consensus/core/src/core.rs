@@ -1,11 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::block::{Block, BlockAPI, BlockRef, BlockV1, Round};
-use crate::context::Context;
-use crate::threshold_clock::ThresholdClock;
-use mysten_metrics::monitored_scope;
 use std::sync::Arc;
+
+use crate::{
+    block::{Block, BlockAPI, BlockRef, BlockV1, Round},
+    context::Context,
+    threshold_clock::ThresholdClock,
+};
+
+use mysten_metrics::monitored_scope;
 
 #[allow(dead_code)]
 pub(crate) struct Core {

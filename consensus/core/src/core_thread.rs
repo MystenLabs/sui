@@ -1,18 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::block::{Block, BlockRef, Round};
-use crate::context::Context;
-use crate::core::Core;
-use crate::core_thread::CoreError::Shutdown;
+use std::{collections::HashSet, fmt::Debug, sync::Arc, thread};
+
 use mysten_metrics::monitored_scope;
-use std::fmt::Debug;
-use std::sync::Arc;
-use std::{collections::HashSet, thread};
 use thiserror::Error;
 use tokio::sync::oneshot::error::RecvError;
 use tokio::sync::{mpsc, oneshot};
 use tracing::warn;
+
+use crate::{
+    block::{Block, BlockRef, Round},
+    context::Context,
+    core::Core,
+    core_thread::CoreError::Shutdown,
+};
 
 #[allow(unused)]
 pub(crate) struct CoreThreadDispatcherHandle {

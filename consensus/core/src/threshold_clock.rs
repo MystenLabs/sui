@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::block::{BlockRef, Round};
-use crate::context::Context;
-use crate::stake_aggregator::{QuorumThreshold, StakeAggregator};
-use std::cmp::Ordering;
-use std::sync::Arc;
-use std::time::Instant;
+use std::{cmp::Ordering, sync::Arc, time::Instant};
+
+use crate::{
+    block::{BlockRef, Round},
+    context::Context,
+    stake_aggregator::{QuorumThreshold, StakeAggregator},
+};
 
 #[allow(unused)]
 
