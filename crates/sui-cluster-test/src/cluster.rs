@@ -230,6 +230,7 @@ impl Cluster for LocalNewCluster {
                     fullnode_url.clone(),
                     None,
                     options.use_indexer_experimental_methods,
+                    None,
                 )
                 .await;
 
@@ -239,6 +240,7 @@ impl Cluster for LocalNewCluster {
                     fullnode_url.clone(),
                     Some(indexer_address.to_string()),
                     options.use_indexer_experimental_methods,
+                    None,
                 )
                 .await;
             } else {

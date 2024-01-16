@@ -23,7 +23,7 @@ pub async fn start_test_indexer_v2(
     rpc_url: String,
     reader_mode_rpc_url: Option<String>,
     use_indexer_experimental_methods: bool,
-    store_config: PgIndexerStoreV2Config,
+    store_config: Option<PgIndexerStoreV2Config>,
 ) -> (PgIndexerStoreV2, JoinHandle<Result<(), IndexerError>>) {
     // Reduce the connection pool size to 10 for testing
     // to prevent maxing out
@@ -42,6 +42,8 @@ pub async fn start_test_indexer_v2(
     } else {
         vec![]
     };
+
+    let store_config = store_config.unwrap_or_else(|| PgIndexerStoreV2Config::default());
 
     // Default writer mode
     let mut config = IndexerConfig {

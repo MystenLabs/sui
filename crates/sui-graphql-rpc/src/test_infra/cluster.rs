@@ -6,7 +6,6 @@ use crate::config::Limits;
 use crate::config::ServerConfig;
 use crate::config::ServiceConfig;
 use crate::server::graphiql_server::start_graphiql_server;
-use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -48,7 +47,7 @@ pub struct Cluster {
 pub async fn start_cluster(
     graphql_connection_config: ConnectionConfig,
     internal_data_source_rpc_port: Option<u16>,
-    store_config: PgIndexerStoreV2Config,
+    store_config: Option<PgIndexerStoreV2Config>,
 ) -> Cluster {
     let db_url = graphql_connection_config.db_url.clone();
     // Starts validator+fullnode
@@ -92,13 +91,8 @@ pub async fn serve_executor(
     graphql_connection_config: ConnectionConfig,
     internal_data_source_rpc_port: u16,
     executor: Arc<dyn NodeStateGetter>,
-    env_vars: BTreeMap<String, String>,
-    store_config: PgIndexerStoreV2Config,
+    store_config: Option<PgIndexerStoreV2Config>,
 ) -> ExecutorCluster {
-    for (k, v) in env_vars {
-        std::env::set_var(k, v);
-    }
-
     let db_url = graphql_connection_config.db_url.clone();
 
     let executor_server_url: SocketAddr = format!("127.0.0.1:{}", internal_data_source_rpc_port)

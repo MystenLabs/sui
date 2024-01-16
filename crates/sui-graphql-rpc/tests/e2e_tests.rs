@@ -14,7 +14,6 @@ mod tests {
     use sui_graphql_rpc::client::ClientError;
     use sui_graphql_rpc::config::ConnectionConfig;
     use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
-    use sui_indexer::store::PgIndexerStoreV2Config;
     use sui_types::digests::ChainIdentifier;
     use sui_types::DEEPBOOK_ADDRESS;
     use sui_types::SUI_FRAMEWORK_ADDRESS;
@@ -85,7 +84,7 @@ mod tests {
             connection_config,
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
-            PgIndexerStoreV2Config::default(),
+            None,
         )
         .await;
 
@@ -117,7 +116,7 @@ mod tests {
             connection_config,
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
-            PgIndexerStoreV2Config::default(),
+            None,
         )
         .await;
 
@@ -159,7 +158,7 @@ mod tests {
             connection_config,
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
-            PgIndexerStoreV2Config::default(),
+            None,
         )
         .await;
 
