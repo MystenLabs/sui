@@ -13,7 +13,9 @@ module bridge::chain_ids {
     const EthMainnet: u8 = 10;
     const EthSepolia: u8 = 11;
 
-    struct BridgeRoute has drop {
+    const EInvalidBridgeRoute: u64 = 0;
+
+    struct BridgeRoute has copy, drop, store {
         source: u8,
         destination: u8,
     }
@@ -38,7 +40,7 @@ module bridge::chain_ids {
         EthSepolia
     }
 
-    public fun valid_routes(): vector<BridgeRoute> {
+    fun valid_routes(): vector<BridgeRoute> {
         vector[
             BridgeRoute { source: SuiMainnet, destination: EthMainnet },
             BridgeRoute { source: SuiDevnet, destination: EthSepolia },
@@ -48,8 +50,13 @@ module bridge::chain_ids {
             BridgeRoute { source: EthSepolia, destination: SuiTestnet }]
     }
 
-    public fun is_valid_route(source: u8, destination: u8): bool {
+    // Checks and return BridgeRoute if the route is supported by the bridge.
+    public fun get_route(source: u8, destination: u8): BridgeRoute {
         let route = BridgeRoute { source, destination };
-        return vector::contains(&valid_routes(), &route)
+        return if (vector::contains(&valid_routes(), &route)) {
+            route
+        } else {
+            abort EInvalidBridgeRoute
+        }
     }
 }

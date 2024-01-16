@@ -4,6 +4,8 @@
 module bridge::bridge {
     use std::option;
     use std::option::{none, Option, some};
+    use std::type_name;
+    use std::type_name::TypeName;
 
     use sui::address;
     use sui::balance;
@@ -15,6 +17,7 @@ module bridge::bridge {
     use sui::tx_context::{Self, TxContext};
     use sui::vec_map::{Self, VecMap};
     use sui::versioned::{Self, Versioned};
+    use bridge::chain_ids::BridgeRoute;
 
     use bridge::chain_ids;
     use bridge::committee::{Self, BridgeCommittee};
@@ -37,6 +40,9 @@ module bridge::bridge {
         // Bridge treasury for mint/burn bridged tokens
         treasury: BridgeTreasury,
         bridge_records: LinkedTable<BridgeMessageKey, BridgeRecord>,
+        transfer_limits: VecMap<TypeName, VecMap<BridgeRoute, u64>>,
+        // Per epoch transfer audit
+        transfer_audit: LinkedTable<u64, VecMap<TypeName, VecMap<BridgeRoute, u64>>>,
         frozen: bool,
     }
 
@@ -69,11 +75,14 @@ module bridge::bridge {
     const ENotSystemAddress: u64 = 5;
     const EUnexpectedSeqNum: u64 = 6;
     const EWrongInnerVersion: u64 = 7;
-    const EBridgeUnavailable: u64 = 8;
-    const EUnexpectedOperation: u64 = 9;
-    const EInvalidBridgeRoute: u64 = 10;
-    const EInvariantSuiInitializedTokenTransferShouldNotBeClaimed: u64 = 11;
-    const EMessageNotFoundInRecords: u64 = 12;
+    const EAlreadyClaimed: u64 = 8;
+    const ERecordAlreadyExists: u64 = 9;
+    const EBridgeUnavailable: u64 = 10;
+    const EUnexpectedOperation: u64 = 11;
+    const ETransferAmountExceedLimit: u64 = 12;
+
+    const EInvariantSuiInitializedTokenTransferShouldNotBeClaimed: u64 = 13;
+    const EMessageNotFoundInRecords: u64 = 14;
 
     const CURRENT_VERSION: u64 = 1;
 
@@ -93,6 +102,9 @@ module bridge::bridge {
         message_key: BridgeMessageKey,
     }
 
+    // TODO: Make this configurable
+    const DEFAULT_TRANSFER_LIMIT: u64 = 18_446_744_073_709_551_615;
+
     // this method is called once in end of epoch tx to create the bridge
     #[allow(unused_function)]
     fun create(id: UID, chain_id: u8, ctx: &mut TxContext) {
@@ -100,10 +112,12 @@ module bridge::bridge {
         let bridge_inner = BridgeInner {
             bridge_version: CURRENT_VERSION,
             chain_id,
-            sequence_nums: vec_map::empty<u8, u64>(),
+            sequence_nums: vec_map::empty(),
             committee: committee::create(ctx),
             treasury: treasury::create(ctx),
-            bridge_records: linked_table::new<BridgeMessageKey, BridgeRecord>(ctx),
+            bridge_records: linked_table::new(ctx),
+            transfer_limits: vec_map::empty(),
+            transfer_audit: linked_table::new(ctx),
             frozen: false,
         };
         let bridge = Bridge {
@@ -147,8 +161,11 @@ module bridge::bridge {
         ctx: &mut TxContext
     ) {
         let inner = load_inner_mut(self);
-        assert!(chain_ids::is_valid_route(inner.chain_id, target_chain), EInvalidBridgeRoute);
+        let route = chain_ids::get_route(inner.chain_id, target_chain);
         assert!(!inner.frozen, EBridgeUnavailable);
+        let amount = balance::value(coin::balance(&token));
+        // Make sure transfer is within limit.
+        check_and_record_transfer<T>(inner, route, amount, ctx);
         let bridge_seq_num = next_seq_num(inner, message_types::token());
         let token_id = treasury::token_id<T>();
         let token_amount = balance::value(coin::balance(&token));
@@ -161,7 +178,7 @@ module bridge::bridge {
             target_chain,
             target_address,
             token_id,
-            token_amount,
+            amount,
         );
 
         // burn / escrow token, unsupported coins will fail in this step
@@ -271,18 +288,61 @@ module bridge::bridge {
         // TODO: why do we check validity of the route here? what if inconsistency?
         // Ensure route is valid
         // TODO: add unit tests
-        assert!(chain_ids::is_valid_route(source_chain, target_chain), EInvalidBridgeRoute);
-
+        let route = chain_ids::get_route(source_chain, target_chain);
         // get owner address
         let owner = address::from_bytes(message::token_target_address(&token_payload));
         // check token type
         assert!(treasury::token_id<T>() == message::token_type(&token_payload), EUnexpectedTokenType);
+        let amount = message::token_amount(&token_payload);
+        // Make sure transfer is within limit.
+        check_and_record_transfer<T>(inner, route, amount, ctx);
         // claim from treasury
-        let token = treasury::mint<T>(&mut inner.treasury, message::token_amount(&token_payload), ctx);
+        let token = treasury::mint<T>(&mut inner.treasury, amount, ctx);
         // Record changes
         record.claimed = true;
         emit(TokenTransferClaimed { message_key: key });
         (option::some(token), owner)
+    }
+
+    fun check_and_record_transfer<T>(self: &mut BridgeInner, route: BridgeRoute, amount: u64, ctx: &TxContext) {
+        let coin_type = type_name::get<T>();
+
+        // Get current transferred amount
+        if (linked_table::contains(&self.transfer_audit, tx_context::epoch(ctx))) {
+            // Create audit entry for new epoch
+            linked_table::push_back(&mut self.transfer_audit, tx_context::epoch(ctx), vec_map::empty())
+        };
+        let audits = linked_table::borrow_mut(&mut self.transfer_audit, tx_context::epoch(ctx));
+
+        if (!vec_map::contains(audits, &coin_type)) {
+            vec_map::insert(audits, coin_type, vec_map::empty())
+        };
+
+        let audit = vec_map::get_mut(audits, &coin_type);
+
+        let transferred_amount = if (vec_map::contains(audit, &route)) {
+            let (_, amount) = vec_map::remove(audit, &route);
+            amount
+        }else {
+            0
+        };
+
+        // Check transfer amount is within limit
+        let transfer_limit = if (vec_map::contains(&self.transfer_limits, &coin_type)) {
+            let per_token_limit = vec_map::get(&self.transfer_limits, &coin_type);
+            if (vec_map::contains(per_token_limit, &route)) {
+                *vec_map::get(per_token_limit, &route)
+            } else {
+                DEFAULT_TRANSFER_LIMIT
+            }
+        } else {
+            DEFAULT_TRANSFER_LIMIT
+        };
+
+        assert!((transfer_limit - transferred_amount) >= amount, ETransferAmountExceedLimit);
+
+        // Record transfer amount
+        vec_map::insert(audit, route, transferred_amount + amount)
     }
 
     // This function can only be called by the token recipient
