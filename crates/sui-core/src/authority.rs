@@ -4400,8 +4400,12 @@ impl AuthorityState {
             .chain(receiving_objects.iter_objects());
         let coin_types = all_objects
             .filter_map(|obj| {
-                obj.coin_type_maybe()
-                    .map(|type_tag| type_tag.to_canonical_string(false))
+                if obj.is_gas_coin() {
+                    None
+                } else {
+                    obj.coin_type_maybe()
+                        .map(|type_tag| type_tag.to_canonical_string(false))
+                }
             })
             .collect::<BTreeSet<_>>();
         DenyList::check_coin_deny_list(sender, coin_types, &self.database)?;
