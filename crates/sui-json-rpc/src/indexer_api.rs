@@ -31,14 +31,14 @@ use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
     dynamic_field::{DynamicFieldName, Field},
-    error::{SuiObjectResponseError, UserInputError},
+    error::SuiObjectResponseError,
     event::EventID,
 };
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tracing::{debug, instrument, warn};
 
 use crate::{
-    authority_state::{StateRead, StateReadError, StateReadResult},
+    authority_state::{StateRead, StateReadResult},
     error::{Error, SuiRpcInputError},
     name_service::{Domain, NameRecord, NameServiceConfig, NameServiceError},
     with_tracing, SuiRpcModule,
@@ -128,14 +128,9 @@ impl<R: ReadApiServer> IndexerApi<R> {
 
         let checkpoint = self
             .state
-            .get_checkpoint_by_sequence_number(latest_checkpoint)?;
+            .get_verified_checkpoint_by_sequence_number(latest_checkpoint)?;
 
-        match checkpoint {
-            Some(data) => Ok(data.timestamp_ms),
-            None => Err(StateReadError::from(
-                UserInputError::VerifiedCheckpointNotFound(latest_checkpoint),
-            )),
-        }
+        Ok(checkpoint.timestamp_ms)
     }
 }
 
@@ -416,9 +411,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
 
             let name_record = NameRecord::try_from(object)?;
 
-            // Handling SLD names & node subdomains is the same.
+            // Handling SLD names & node subdomains is the same (we handle them as `node`` records)
             // We check their expiration, and and if not expired, return the target address.
-            if !domain.is_subdomain() || !name_record.is_leaf_record() {
+            if !name_record.is_leaf_record() {
                 if name_record.is_node_expired(current_timestamp_ms) {
                     return Err(Error::from(NameServiceError::NameExpired));
                 }
