@@ -30,6 +30,8 @@ type WalletEventsMap = {
 
 const ZKSEND_RECENT_ADDRESS_KEY = 'zksend:recentAddress';
 
+export const ZKSEND_WALLET_NAME = 'zkSend' as const;
+
 export class ZkSendWallet implements Wallet {
 	#events: Emitter<WalletEventsMap>;
 	#accounts: ReadonlyWalletAccount[];
@@ -38,7 +40,7 @@ export class ZkSendWallet implements Wallet {
 	#name: string;
 
 	get name() {
-		return 'zkSend';
+		return ZKSEND_WALLET_NAME;
 	}
 
 	get icon() {
