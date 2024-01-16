@@ -81,9 +81,9 @@ When working with the online GraphQL IDE, paste the variables' values in the `Va
 
 ### Headers
 
-The service accepts as input for each request the following header(s):
+The service accepts (optionally) the following header(s):
 * `x-sui-rpc-version` to specify which RPC version to use (note that this is currently not available)
-* `x-sui-rpc-show-usage` will return the query complexity information. 
+* `x-sui-rpc-show-usage` will return the response with extra query complexity information. 
 
 By default, each request will return the service's version in the response header: `x-sui-rpc-version`.
 
@@ -122,13 +122,13 @@ x-sui-rpc-version: 0.1.0
 ### Multiple data in one query
 The RPC service previous to GraphQL required multiple queries for more complex data retrieval. Now, with GraphQL you can specify the fields you need and get that information in one single query. 
 
-For example, the following query retrieves the first 20 transaction blocks (along with the sender's address, the gas object used to pay for the transaction, the gas price, and the gas budget) after a specific one, at epoch `97`. Previously, in JSON RPC, this required multiple steps.
+For example, the following query retrieves the first 20 transaction blocks (along with the sender's address, the gas object used to pay for the transaction, the gas price, and the gas budget) after a specific one, at epoch `97`. With the previous JSON RPC this required multiple steps.
 
 ```graphql
 # Fetch the first 20 transactions after 231220100 for epoch 97
 {
   epoch(id:97) {
-    transactionBlockConnection(first: 20, after:"231220100") {
+    transactionBlocks(first: 20, after:"231220100") {
       pageInfo {
         hasNextPage
         endCursor
@@ -156,14 +156,89 @@ For example, the following query retrieves the first 20 transaction blocks (alon
     }
   }
 }
-  
+```
+:::info
+
+By default, the number of results is limited to 50 items. To learn more about how GraphQL works with pagination, check out the original [documentation](https://graphql.org/learn/pagination/) and our following section on pagination. 
+
+:::
+
+### Pagination
+The Sui GraphQL RPC limits the number of items that are returned in a request. The default page limit size is set to 50 items. If there are more items requested than the max default page limit, use `cursors` to navigate between pages. A cursor refers to a specific position in the dataset. To access the start and end cursors of a page, use the `pageInfo` field  that exposes the cursor data and two additional fields indicating if there is a previous or next page. For example, if we want to get the `checkpoints` data:
+
+```graphql
+{
+  checkpoints {
+    pageInfo {
+      hasPreviousPage
+      hasNextPage
+      startCursor
+      endCursor
+    }
+  }
+}
+```
+The query's result is:
+```json
+{
+  "data": {
+    "checkpointConnection": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true,
+        "startCursor": "0",
+        "endCursor": "49"
+      }
+    }
+  }
+}
+```
+
+
+The `pageInfo.startCursor` and `pageInfo.endCursor` indicate the index of the first and last element in the response. You can use `pageInfo.hasNextPage` to determine if there is a next page, and then use the `endCursor`'s value and pass it to the `after` filter in the connection to traverse the next set of elements: 
+```graphql
+checkpoints(after: "49") {
+  [...]
+}
 ```
 
 ### Fragments
 
-Fragments are reusable units that can be included in the queries as needed. The official [docs](https://graphql.org/learn/queries/#fragments) contain more information about fragments. Below you can find an advanced example of how fragments are used for querying a dynamic field of an owner.
+Fragments are reusable units that can be included in the queries as needed. The official [docs](https://graphql.org/learn/queries/#fragments) contain more information about fragments. Below you can find an example of how fragments are used for querying a dynamic field of an owner.
 
 ```graphql
+query DynamicField {
+  object(
+    address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
+  ) {
+    dynamicField(
+      name: {
+        type: "0x2::kiosk::Listing",
+        bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1VhfwA",
+      }
+    ) {
+      ...DynamicFieldSelect
+    }
+  }
+}
+
+fragment DynamicFieldSelect on DynamicField {
+  name {
+    ...DynamicFieldNameSelection
+  }
+  value {
+    ...DynamicFieldValueSelection
+  }
+}
+
+fragment DynamicFieldNameSelection on MoveValue {
+  type {
+    repr
+  }
+  data
+  bcs
+}
+
 fragment DynamicFieldValueSelection on DynamicFieldValue {
   ... on MoveValue {
     type {
@@ -181,38 +256,6 @@ fragment DynamicFieldValueSelection on DynamicFieldValue {
       data
     }
     __typename
-  }
-}
-
-fragment DynamicFieldNameSelection on MoveValue {
-  type {
-    repr
-  }
-  data
-  bcs
-}
-
-fragment DynamicFieldSelect on DynamicField {
-  name {
-    ...DynamicFieldNameSelection
-  }
-  value {
-    ...DynamicFieldValueSelection
-  }
-}
-
-query DynamicField {
-  object(
-    address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
-  ) {
-    dynamicField(
-      name: {
-        type: "0x2::kiosk::Listing",
-        bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1VhfwA",
-      }
-    ) {
-      ...DynamicFieldSelect
-    }
   }
 }
 ```
