@@ -56,21 +56,21 @@ async fn main() {
                 .init()
         }
         SuiCommand::Client {
-            cmd: Some(ReplayTransaction { gas_info, .. }),
+            cmd: Some(ReplayTransaction {
+                gas_info, ptb_info, ..
+            }),
             ..
         } => {
+            let mut config = telemetry_subscribers::TelemetryConfig::new()
+                .with_log_level("info")
+                .with_env();
             if gas_info {
-                telemetry_subscribers::TelemetryConfig::new()
-                    .with_log_level("info")
-                    .with_trace_target("replay")
-                    .with_env()
-                    .init()
-            } else {
-                telemetry_subscribers::TelemetryConfig::new()
-                    .with_log_level("info")
-                    .with_env()
-                    .init()
+                config = config.with_trace_target("replay_gas_info");
             }
+            if ptb_info {
+                config = config.with_trace_target("replay_ptb_info");
+            }
+            config.init()
         }
         _ => telemetry_subscribers::TelemetryConfig::new()
             .with_log_level("error")
