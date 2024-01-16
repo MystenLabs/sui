@@ -16,8 +16,7 @@ GraphQL offers an introspection-like service that allows you to query for the sc
 Use the following approaches to interact with the Sui GraphQL RPC service. 
 
 ### Interactive online IDE
-The interactive online IDE is a great resource for learning how to interact with GraphQL service. It is available for [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql). Note that the IDE offers features such as auto-completion (use Ctrl-Space or just start typing), multi-tabs, and more.
-
+The interactive online IDE is a great resource for learning how to interact with GraphQL service. It is available for [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql). Note that the IDE offers features such as auto-completion (use Ctrl-Space or just start typing), built-in documentation, multi-tabs, and more.
 
 :::info
 
@@ -87,7 +86,7 @@ The service accepts (optionally) the following header(s):
 
 By default, each request will return the service's version in the response header: `x-sui-rpc-version`.
 
-```
+```bash
 curl -v -X POST https://graphql-beta.mainnet.sui.io \
      --header 'x-sui-rpc-show-usage: true' \
      --header 'Content-Type: application/json' \
@@ -97,7 +96,7 @@ curl -v -X POST https://graphql-beta.mainnet.sui.io \
 ```
 
 The response for the request above will look similary to the following:
-```
+```json
 [...]
 x-sui-rpc-version: 0.1.0
 [...]
@@ -126,7 +125,7 @@ For example, the following query retrieves the first 20 transaction blocks (alon
 
 ```graphql
 # Fetch the first 20 transactions after 231220100 for epoch 97
-{
+query {
   epoch(id:97) {
     transactionBlocks(first: 20, after:"231220100") {
       pageInfo {
@@ -167,7 +166,7 @@ By default, the number of results is limited to 50 items. To learn more about ho
 The Sui GraphQL RPC limits the number of items that are returned in a request. The default page limit size is set to 50 items. If there are more items requested than the max default page limit, use `cursors` to navigate between pages. A cursor refers to a specific position in the dataset. To access the start and end cursors of a page, use the `pageInfo` field  that exposes the cursor data and two additional fields indicating if there is a previous or next page. For example, if we want to get the `checkpoints` data:
 
 ```graphql
-{
+query {
   checkpoints {
     pageInfo {
       hasPreviousPage
@@ -194,13 +193,16 @@ The query's result is:
 }
 ```
 
-
 The `pageInfo.startCursor` and `pageInfo.endCursor` indicate the index of the first and last element in the response. You can use `pageInfo.hasNextPage` to determine if there is a next page, and then use the `endCursor`'s value and pass it to the `after` filter in the connection to traverse the next set of elements: 
 ```graphql
-checkpoints(after: "49") {
-  [...]
+query {
+  checkpoints(after: "49") {
+    [...]
 }
 ```
+
+When working with connections, cursors, and filters, you can only specify `first` or `last`, but not both filters. 
+
 
 ### Fragments
 
@@ -270,7 +272,7 @@ The former JSON RPC API provided several individual endpoints to get specific da
 
 :::info
 
-While a one-on-one mapping from JSON RPC to GraphQL is most likely possible, we recommend avoiding that route and instead model your queries to leverage the full power of GraphQL.
+While a one-on-one mapping from JSON RPC to GraphQL is most likely possible, we recommend avoiding that route and to, instead, model your queries to leverage the full power of GraphQL.
 :::
 
 
@@ -294,7 +296,7 @@ The goal is to get the total number of transaction blocks in the network.
 <TabItem value="graphql1" label="GraphQL">
 
 ```graphql
-{
+query {
   checkpoint {
     networkTotalTransactions
   }
@@ -334,7 +336,7 @@ The goal is to get the transaction block by its digest.
 <TabItem value="graphql2" label="GraphQL">
 
 ```graphql
-{
+query {
   transactionBlock(digest: "Hay2tj3GcDYcE3AMHrej5WDsHGPVAYsegcubixLUvXUF") {
     gasInput {
       gasSponsor {
@@ -368,7 +370,7 @@ The goal is to return all `Coin<0x2::sui::SUI>` objects an address owns.
 <TabItem value="json-rpc3" label="JSON-RPC">
 
 ```json
-{
+query {
   "jsonrpc": "2.0",
   "id": 1,
   "method": "suix_getCoins",
@@ -385,7 +387,7 @@ The goal is to return all `Coin<0x2::sui::SUI>` objects an address owns.
 <TabItem value="graphql3" label="GraphQL">
 
 ```graphql
-{
+query {
   address(address: "0x5094652429957619e6efa79a404a6714d1126e63f551f4b6c7fb76440f8118c9") {
     coinConnection(
       first: 3, 
