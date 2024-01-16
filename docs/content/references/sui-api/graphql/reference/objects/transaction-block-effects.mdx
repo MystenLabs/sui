@@ -40,7 +40,7 @@ export const Details = ({ dataOpen, dataClose, children, startOpen = false }) =>
 
 
 
-No description
+The effects representing the result of executing a transaction block.
 
 
 ```graphql
@@ -54,7 +54,7 @@ type TransactionBlockEffects {
     after: String
     last: Int
     before: String
-  ): TransactionBlockConnection!
+  ): DependencyConnection!
   gasEffects: GasEffects
   unchangedSharedObjects(
     first: Int
@@ -111,7 +111,7 @@ type TransactionBlockEffects {
 > The reason for a transaction failure, if it did fail.
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.<b>dependencies</b></code>](#)<Bullet />[`TransactionBlockConnection!`](/references/sui-api/graphql/reference/objects/transaction-block-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockEffects.<b>dependencies</b></code>](#)<Bullet />[`DependencyConnection!`](/references/sui-api/graphql/reference/objects/dependency-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
 > Transactions whose outputs this transaction depends upon.

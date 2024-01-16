@@ -46,9 +46,7 @@ The possible relationship types for a transaction block: sign, sent, received, o
 ```graphql
 enum AddressTransactionBlockRelationship {
   SIGN
-  SENT
   RECV
-  PAID
 }
 ```
 
@@ -60,25 +58,13 @@ enum AddressTransactionBlockRelationship {
 #### [<code style={{ fontWeight: 'normal' }}>AddressTransactionBlockRelationship.<b>SIGN</b></code>](#)  
 > 
 > 
-> Transactions this address has signed either as a sender or as a sponsor
-> 
-
-#### [<code style={{ fontWeight: 'normal' }}>AddressTransactionBlockRelationship.<b>SENT</b></code>](#)  
-> 
-> 
-> Transactions that transferred objects from this address
+> Transactions this address has signed either as a sender or as a sponsor.
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>AddressTransactionBlockRelationship.<b>RECV</b></code>](#)  
 > 
 > 
-> Transactions that sent objects to this addres
-> 
-
-#### [<code style={{ fontWeight: 'normal' }}>AddressTransactionBlockRelationship.<b>PAID</b></code>](#)  
-> 
-> 
-> Transactions that were paid for by this address either as a sender or as a sponsor
+> Transactions that sent objects to this address.
 > 
 
 

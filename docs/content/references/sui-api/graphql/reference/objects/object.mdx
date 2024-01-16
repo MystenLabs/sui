@@ -40,7 +40,9 @@ export const Details = ({ dataOpen, dataClose, children, startOpen = false }) =>
 
 
 
-No description
+An object in Sui is a package (set of Move bytecode modules) or object (typed data structure
+with fields) with additional metadata detailing its id, version, transaction digest, owner
+field indicating how this object can be accessed.
 
 
 ```graphql
@@ -222,7 +224,8 @@ type Object implements IOwner {
 #### [<code style={{ fontWeight: 'normal' }}>Object.<b>balanceConnection</b></code>](#)<Bullet />[`BalanceConnection`](/references/sui-api/graphql/reference/objects/balance-connection) <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
-> The balances of all coin types owned by the object. Coins of the same type are grouped together into one Balance.
+> The balances of all coin types owned by the object. Coins of the same type are grouped
+> together into one Balance.
 > ##### [<code style={{ fontWeight: 'normal' }}>Object.balanceConnection.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 

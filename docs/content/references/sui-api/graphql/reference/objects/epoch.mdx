@@ -40,7 +40,13 @@ export const Details = ({ dataOpen, dataClose, children, startOpen = false }) =>
 
 
 
-No description
+Operation of the Sui network is temporally partitioned into non-overlapping epochs,
+and the network aims to keep epochs roughly the same duration as each other.
+During a particular epoch the following data is fixed:
+
+- the protocol version
+- the reference gas price
+- the set of participating validators
 
 
 ```graphql
@@ -70,13 +76,13 @@ type Epoch {
     last: Int
     before: String
   ): CheckpointConnection!
-  transactionBlockConnection(
+  transactionBlocks(
     first: Int
     after: String
     last: Int
     before: String
     filter: TransactionBlockFilter
-  ): TransactionBlockConnection
+  ): TransactionBlockConnection!
 }
 ```
 
@@ -88,31 +94,31 @@ type Epoch {
 #### [<code style={{ fontWeight: 'normal' }}>Epoch.<b>epochId</b></code>](#)<Bullet />[`Int!`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
-> The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change
+> The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change.
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>Epoch.<b>referenceGasPrice</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
-> The minimum gas price that a quorum of validators are guaranteed to sign a transaction for
+> The minimum gas price that a quorum of validators are guaranteed to sign a transaction for.
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>Epoch.<b>validatorSet</b></code>](#)<Bullet />[`ValidatorSet`](/references/sui-api/graphql/reference/objects/validator-set) <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
-> Validator related properties, including the active validators
+> Validator related properties, including the active validators.
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>Epoch.<b>startTimestamp</b></code>](#)<Bullet />[`DateTime!`](/references/sui-api/graphql/reference/scalars/date-time) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
-> The epoch's starting timestamp
+> The epoch's starting timestamp.
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>Epoch.<b>endTimestamp</b></code>](#)<Bullet />[`DateTime`](/references/sui-api/graphql/reference/scalars/date-time) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
-> The epoch's ending timestamp
+> The epoch's ending timestamp.
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>Epoch.<b>totalCheckpoints</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
@@ -163,14 +169,15 @@ type Epoch {
 #### [<code style={{ fontWeight: 'normal' }}>Epoch.<b>fundOutflow</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
-> The storage fee rebates paid to users
-> who deleted the data associated with past transactions.
+> The storage fee rebates paid to users who deleted the data associated with past
+> transactions.
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>Epoch.<b>protocolConfigs</b></code>](#)<Bullet />[`ProtocolConfigs!`](/references/sui-api/graphql/reference/objects/protocol-configs) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
-> The epoch's corresponding protocol configuration, including the feature flags and the configuration options
+> The epoch's corresponding protocol configuration, including the feature flags and the
+> configuration options.
 > 
 
 #### [<code style={{ fontWeight: 'normal' }}>Epoch.<b>storageFund</b></code>](#)<Bullet />[`StorageFund`](/references/sui-api/graphql/reference/objects/storage-fund) <Badge class="badge badge--secondary" text="object"/> 
@@ -210,7 +217,7 @@ type Epoch {
 #### [<code style={{ fontWeight: 'normal' }}>Epoch.<b>checkpoints</b></code>](#)<Bullet />[`CheckpointConnection!`](/references/sui-api/graphql/reference/objects/checkpoint-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
-> The epoch's corresponding checkpoints
+> The epoch's corresponding checkpoints.
 > ##### [<code style={{ fontWeight: 'normal' }}>Epoch.checkpoints.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
@@ -235,35 +242,35 @@ type Epoch {
 > 
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>Epoch.<b>transactionBlockConnection</b></code>](#)<Bullet />[`TransactionBlockConnection`](/references/sui-api/graphql/reference/objects/transaction-block-connection) <Badge class="badge badge--secondary" text="object"/> 
+#### [<code style={{ fontWeight: 'normal' }}>Epoch.<b>transactionBlocks</b></code>](#)<Bullet />[`TransactionBlockConnection!`](/references/sui-api/graphql/reference/objects/transaction-block-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
-> The epoch's corresponding transaction blocks
-> ##### [<code style={{ fontWeight: 'normal' }}>Epoch.transactionBlockConnection.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
-> 
-> 
-> 
-> 
-
-##### [<code style={{ fontWeight: 'normal' }}>Epoch.transactionBlockConnection.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> The epoch's corresponding transaction blocks.
+> ##### [<code style={{ fontWeight: 'normal' }}>Epoch.transactionBlocks.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
 > 
 
-##### [<code style={{ fontWeight: 'normal' }}>Epoch.transactionBlockConnection.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+##### [<code style={{ fontWeight: 'normal' }}>Epoch.transactionBlocks.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
 > 
 
-##### [<code style={{ fontWeight: 'normal' }}>Epoch.transactionBlockConnection.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+##### [<code style={{ fontWeight: 'normal' }}>Epoch.transactionBlocks.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
 > 
 
-##### [<code style={{ fontWeight: 'normal' }}>Epoch.transactionBlockConnection.<b>filter</b></code>](#)<Bullet />[`TransactionBlockFilter`](/references/sui-api/graphql/reference/inputs/transaction-block-filter) <Badge class="badge badge--secondary" text="input"/> 
+##### [<code style={{ fontWeight: 'normal' }}>Epoch.transactionBlocks.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Epoch.transactionBlocks.<b>filter</b></code>](#)<Bullet />[`TransactionBlockFilter`](/references/sui-api/graphql/reference/inputs/transaction-block-filter) <Badge class="badge badge--secondary" text="input"/> 
 > 
 > 
 > 

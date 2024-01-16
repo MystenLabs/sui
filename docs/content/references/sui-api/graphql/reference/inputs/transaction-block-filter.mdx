@@ -45,17 +45,13 @@ No description
 
 ```graphql
 input TransactionBlockFilter {
-  package: SuiAddress
-  module: String
   function: String
   kind: TransactionBlockKindInput
   afterCheckpoint: Int
   atCheckpoint: Int
   beforeCheckpoint: Int
   signAddress: SuiAddress
-  sentAddress: SuiAddress
   recvAddress: SuiAddress
-  paidAddress: SuiAddress
   inputObject: SuiAddress
   changedObject: SuiAddress
   transactionIds: [String!]
@@ -66,18 +62,6 @@ input TransactionBlockFilter {
 
 
 ### Fields
-
-#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>package</b></code>](#)<Bullet />[`SuiAddress`](/references/sui-api/graphql/reference/scalars/sui-address) <Badge class="badge badge--secondary" text="scalar"/> 
-> 
-> 
-> 
-> 
-
-#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>module</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
-> 
-> 
-> 
-> 
 
 #### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>function</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
@@ -115,19 +99,7 @@ input TransactionBlockFilter {
 > 
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>sentAddress</b></code>](#)<Bullet />[`SuiAddress`](/references/sui-api/graphql/reference/scalars/sui-address) <Badge class="badge badge--secondary" text="scalar"/> 
-> 
-> 
-> 
-> 
-
 #### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>recvAddress</b></code>](#)<Bullet />[`SuiAddress`](/references/sui-api/graphql/reference/scalars/sui-address) <Badge class="badge badge--secondary" text="scalar"/> 
-> 
-> 
-> 
-> 
-
-#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>paidAddress</b></code>](#)<Bullet />[`SuiAddress`](/references/sui-api/graphql/reference/scalars/sui-address) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
@@ -155,5 +127,5 @@ input TransactionBlockFilter {
 
 ### Member Of
 
-[`transactionBlockConnection`](/references/sui-api/graphql/reference/queries/transaction-block-connection)  <Badge class="badge badge--secondary" text="query"/>
+[`transactionBlocks`](/references/sui-api/graphql/reference/queries/transaction-blocks)  <Badge class="badge badge--secondary" text="query"/>
 

@@ -1,6 +1,6 @@
 ---
-id: gas-effects
-title: GasEffects
+id: dependency-connection
+title: DependencyConnection
 hide_table_of_contents: false
 ---
 
@@ -40,13 +40,14 @@ export const Details = ({ dataOpen, dataClose, children, startOpen = false }) =>
 
 
 
-Effects related to gas (costs incurred and the identity of the smashed gas object returned).
+No description
 
 
 ```graphql
-type GasEffects {
-  gasObject: Object
-  gasSummary: GasCostSummary
+type DependencyConnection {
+  pageInfo: PageInfo!
+  edges: [DependencyEdge!]!
+  nodes: [TransactionBlock!]!
 }
 ```
 
@@ -55,16 +56,22 @@ type GasEffects {
 
 ### Fields
 
-#### [<code style={{ fontWeight: 'normal' }}>GasEffects.<b>gasObject</b></code>](#)<Bullet />[`Object`](/references/sui-api/graphql/reference/objects/object) <Badge class="badge badge--secondary" text="object"/> 
+#### [<code style={{ fontWeight: 'normal' }}>DependencyConnection.<b>pageInfo</b></code>](#)<Bullet />[`PageInfo!`](/references/sui-api/graphql/reference/objects/page-info) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
-> 
+> Information to aid in pagination.
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>GasEffects.<b>gasSummary</b></code>](#)<Bullet />[`GasCostSummary`](/references/sui-api/graphql/reference/objects/gas-cost-summary) <Badge class="badge badge--secondary" text="object"/> 
+#### [<code style={{ fontWeight: 'normal' }}>DependencyConnection.<b>edges</b></code>](#)<Bullet />[`[DependencyEdge!]!`](/references/sui-api/graphql/reference/objects/dependency-edge) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
+> A list of edges.
 > 
+
+#### [<code style={{ fontWeight: 'normal' }}>DependencyConnection.<b>nodes</b></code>](#)<Bullet />[`[TransactionBlock!]!`](/references/sui-api/graphql/reference/objects/transaction-block) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> A list of nodes.
 > 
 
 

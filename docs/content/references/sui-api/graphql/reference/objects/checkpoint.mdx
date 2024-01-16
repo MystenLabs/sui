@@ -40,7 +40,8 @@ export const Details = ({ dataOpen, dataClose, children, startOpen = false }) =>
 
 
 
-No description
+Checkpoints contain finalized transactions and are used for node synchronization
+and global transaction ordering.
 
 
 ```graphql
@@ -54,13 +55,13 @@ type Checkpoint {
   networkTotalTransactions: Int
   rollingGasSummary: GasCostSummary
   epoch: Epoch
-  transactionBlockConnection(
+  transactionBlocks(
     first: Int
     after: String
     last: Int
     before: String
     filter: TransactionBlockFilter
-  ): TransactionBlockConnection
+  ): TransactionBlockConnection!
 }
 ```
 
@@ -131,35 +132,35 @@ type Checkpoint {
 > The epoch this checkpoint is part of.
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>Checkpoint.<b>transactionBlockConnection</b></code>](#)<Bullet />[`TransactionBlockConnection`](/references/sui-api/graphql/reference/objects/transaction-block-connection) <Badge class="badge badge--secondary" text="object"/> 
+#### [<code style={{ fontWeight: 'normal' }}>Checkpoint.<b>transactionBlocks</b></code>](#)<Bullet />[`TransactionBlockConnection!`](/references/sui-api/graphql/reference/objects/transaction-block-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
 > Transactions in this checkpoint.
-> ##### [<code style={{ fontWeight: 'normal' }}>Checkpoint.transactionBlockConnection.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> ##### [<code style={{ fontWeight: 'normal' }}>Checkpoint.transactionBlocks.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
 > 
 
-##### [<code style={{ fontWeight: 'normal' }}>Checkpoint.transactionBlockConnection.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+##### [<code style={{ fontWeight: 'normal' }}>Checkpoint.transactionBlocks.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
 > 
 
-##### [<code style={{ fontWeight: 'normal' }}>Checkpoint.transactionBlockConnection.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+##### [<code style={{ fontWeight: 'normal' }}>Checkpoint.transactionBlocks.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
 > 
 
-##### [<code style={{ fontWeight: 'normal' }}>Checkpoint.transactionBlockConnection.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+##### [<code style={{ fontWeight: 'normal' }}>Checkpoint.transactionBlocks.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
 > 
 > 
 
-##### [<code style={{ fontWeight: 'normal' }}>Checkpoint.transactionBlockConnection.<b>filter</b></code>](#)<Bullet />[`TransactionBlockFilter`](/references/sui-api/graphql/reference/inputs/transaction-block-filter) <Badge class="badge badge--secondary" text="input"/> 
+##### [<code style={{ fontWeight: 'normal' }}>Checkpoint.transactionBlocks.<b>filter</b></code>](#)<Bullet />[`TransactionBlockFilter`](/references/sui-api/graphql/reference/inputs/transaction-block-filter) <Badge class="badge badge--secondary" text="input"/> 
 > 
 > 
 > 

@@ -1,6 +1,6 @@
 ---
-id: gas-effects
-title: GasEffects
+id: dependency-edge
+title: DependencyEdge
 hide_table_of_contents: false
 ---
 
@@ -40,13 +40,13 @@ export const Details = ({ dataOpen, dataClose, children, startOpen = false }) =>
 
 
 
-Effects related to gas (costs incurred and the identity of the smashed gas object returned).
+An edge in a connection.
 
 
 ```graphql
-type GasEffects {
-  gasObject: Object
-  gasSummary: GasCostSummary
+type DependencyEdge {
+  node: TransactionBlock
+  cursor: String!
 }
 ```
 
@@ -55,21 +55,21 @@ type GasEffects {
 
 ### Fields
 
-#### [<code style={{ fontWeight: 'normal' }}>GasEffects.<b>gasObject</b></code>](#)<Bullet />[`Object`](/references/sui-api/graphql/reference/objects/object) <Badge class="badge badge--secondary" text="object"/> 
+#### [<code style={{ fontWeight: 'normal' }}>DependencyEdge.<b>node</b></code>](#)<Bullet />[`TransactionBlock`](/references/sui-api/graphql/reference/objects/transaction-block) <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
-> 
+> The item at the end of the edge
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>GasEffects.<b>gasSummary</b></code>](#)<Bullet />[`GasCostSummary`](/references/sui-api/graphql/reference/objects/gas-cost-summary) <Badge class="badge badge--secondary" text="object"/> 
+#### [<code style={{ fontWeight: 'normal' }}>DependencyEdge.<b>cursor</b></code>](#)<Bullet />[`String!`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
 > 
 > 
-> 
+> A cursor for use in pagination
 > 
 
 
 
 ### Member Of
 
-[`TransactionBlockEffects`](/references/sui-api/graphql/reference/objects/transaction-block-effects)  <Badge class="badge badge--secondary" text="object"/>
+[`DependencyConnection`](/references/sui-api/graphql/reference/objects/dependency-connection)  <Badge class="badge badge--secondary" text="object"/>
 
