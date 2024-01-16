@@ -1563,9 +1563,9 @@ dependencies = [
 
 [[package]]
 name = "bcs"
-version = "0.1.4"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b06b4c1f053002b70e7084ac944c77d58d5d92b2110dbc5e852735e00ad3ccc"
+checksum = "85b6598a2f5d564fb7855dc6b06fd1c38cff5a72bd8b863a4d021938497b440a"
 dependencies = [
  "serde",
  "thiserror",
@@ -7174,7 +7174,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "serde",
- "serde_yaml 0.9.21",
+ "serde_yaml 0.9.29",
  "tabled",
  "tempfile",
  "tokio",
@@ -10371,11 +10371,11 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.95"
+version = "1.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d721eca97ac802aa7777b701877c8004d950fc142651367300d21c1cc0194744"
+checksum = "cb0652c533506ad7a2e353cce269330d6afd8bdfb6d75e0ace5b35aacbd7b9e9"
 dependencies = [
- "indexmap 1.9.3",
+ "indexmap 2.1.0",
  "itoa",
  "ryu",
  "serde",
@@ -10403,9 +10403,9 @@ dependencies = [
 
 [[package]]
 name = "serde_spanned"
-version = "0.6.2"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93107647184f6027e3b7dcb2e11034cf95ffa1e3a682c67951963ac69c1c007d"
+checksum = "eb3622f419d1296904700073ea6cc23ad690adbd66f13ea683df73298736f0c1"
 dependencies = [
  "serde",
 ]
@@ -10473,11 +10473,11 @@ dependencies = [
 
 [[package]]
 name = "serde_yaml"
-version = "0.9.21"
+version = "0.9.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9d684e3ec7de3bf5466b32bd75303ac16f0736426e5a4e0d6e489559ce1249c"
+checksum = "a15e0ef66bf939a7c890a0bf6d5a733c70202225f9888a89ed5c62298b019129"
 dependencies = [
- "indexmap 1.9.3",
+ "indexmap 2.1.0",
  "itoa",
  "ryu",
  "serde",
@@ -10968,7 +10968,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "1.16.1"
+version = "1.16.2"
 dependencies = [
  "anemo",
  "anyhow",
@@ -11156,7 +11156,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer"
-version = "1.16.1"
+version = "1.16.2"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -11204,7 +11204,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer-derive"
-version = "1.16.1"
+version = "1.16.2"
 dependencies = [
  "proc-macro2 1.0.66",
  "quote 1.0.33",
@@ -11718,13 +11718,13 @@ dependencies = [
  "tempfile",
  "thiserror",
  "toml 0.7.4",
- "toml_edit 0.19.10",
+ "toml_edit 0.19.15",
  "workspace-hack",
 ]
 
 [[package]]
 name = "sui-faucet"
-version = "1.16.1"
+version = "1.16.2"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -11946,7 +11946,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer"
-version = "1.16.1"
+version = "1.16.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12250,7 +12250,7 @@ dependencies = [
  "prometheus-http-query",
  "reqwest",
  "serde",
- "serde_yaml 0.9.21",
+ "serde_yaml 0.9.29",
  "strum_macros 0.24.3",
  "telemetry-subscribers",
  "tokio",
@@ -12260,7 +12260,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move"
-version = "1.16.1"
+version = "1.16.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -12302,7 +12302,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-build"
-version = "1.16.1"
+version = "1.16.2"
 dependencies = [
  "anyhow",
  "datatest-stable",
@@ -12444,7 +12444,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "1.16.1"
+version = "1.16.2"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -12495,7 +12495,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.16.1"
+version = "1.16.2"
 dependencies = [
  "anyhow",
  "bcs",
@@ -12533,7 +12533,7 @@ dependencies = [
 
 [[package]]
 name = "sui-oracle"
-version = "1.16.1"
+version = "1.16.2"
 dependencies = [
  "anyhow",
  "bcs",
@@ -12766,7 +12766,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-loadgen"
-version = "1.16.1"
+version = "1.16.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12796,7 +12796,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "1.16.1"
+version = "1.16.2"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -13035,7 +13035,7 @@ dependencies = [
 
 [[package]]
 name = "sui-surfer"
-version = "1.16.1"
+version = "1.16.2"
 dependencies = [
  "async-trait",
  "bcs",
@@ -13181,7 +13181,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "1.16.1"
+version = "1.16.2"
 dependencies = [
  "anemo",
  "anemo-cli",
@@ -14054,8 +14054,8 @@ dependencies = [
  "indexmap 1.9.3",
  "serde",
  "serde_spanned",
- "toml_datetime 0.6.2",
- "toml_edit 0.19.10",
+ "toml_datetime 0.6.5",
+ "toml_edit 0.19.15",
 ]
 
 [[package]]
@@ -14066,9 +14066,9 @@ checksum = "4553f467ac8e3d374bc9a177a26801e5d0f9b211aa1673fb137a403afd1c9cf5"
 
 [[package]]
 name = "toml_datetime"
-version = "0.6.2"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a76a9312f5ba4c2dec6b9161fdf25d87ad8a09256ccea5a556fef03c706a10f"
+checksum = "3550f4e9685620ac18a50ed434eb3aec30db8ba93b0287467bca5826ea25baf1"
 dependencies = [
  "serde",
 ]
@@ -14099,15 +14099,15 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.19.10"
+version = "0.19.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2380d56e8670370eee6566b0bfd4265f65b3f432e8c6d85623f728d4fa31f739"
+checksum = "1b5bb770da30e5cbfde35a2d7b9b8a2c4b8ef89548a7a6aeab5c9a576e3e7421"
 dependencies = [
- "indexmap 1.9.3",
+ "indexmap 2.1.0",
  "serde",
  "serde_spanned",
- "toml_datetime 0.6.2",
- "winnow",
+ "toml_datetime 0.6.5",
+ "winnow 0.5.33",
 ]
 
 [[package]]
@@ -14648,9 +14648,9 @@ dependencies = [
 
 [[package]]
 name = "unsafe-libyaml"
-version = "0.2.8"
+version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1865806a559042e51ab5414598446a5871b561d21b6764f2eabb0dd481d880a6"
+checksum = "ab4c90930b95a82d00dc9e9ac071b4991924390d46cbd0dfe566148667605e4b"
 
 [[package]]
 name = "unsigned-varint"
@@ -15159,9 +15159,18 @@ checksum = "1a515f5799fe4961cb532f983ce2b23082366b898e52ffbce459c86f67c8378a"
 
 [[package]]
 name = "winnow"
-version = "0.4.6"
+version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61de7bac303dc551fe038e2b3cef0f571087a47571ea6e79a87692ac99b99699"
+checksum = "656953b22bcbfb1ec8179d60734981d1904494ecc91f8a3f0ee5c7389bb8eb4b"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
+name = "winnow"
+version = "0.5.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7520bbdec7211caa7c4e682eb1fbe07abe20cee6756b6e00f537c82c11816aa"
 dependencies = [
  "memchr",
 ]
@@ -15998,7 +16007,7 @@ dependencies = [
  "serde_with",
  "serde_with_macros",
  "serde_yaml 0.8.26",
- "serde_yaml 0.9.21",
+ "serde_yaml 0.9.29",
  "serial_test",
  "serial_test_derive",
  "sha-1 0.10.1",
@@ -16092,10 +16101,10 @@ dependencies = [
  "toml 0.5.10",
  "toml 0.7.4",
  "toml_datetime 0.5.1",
- "toml_datetime 0.6.2",
+ "toml_datetime 0.6.5",
  "toml_edit 0.14.4",
  "toml_edit 0.15.0",
- "toml_edit 0.19.10",
+ "toml_edit 0.19.15",
  "tonic 0.10.0",
  "tonic 0.9.2",
  "tonic-build",
@@ -16175,7 +16184,7 @@ dependencies = [
  "windows-targets 0.48.0",
  "windows_x86_64_msvc 0.42.2",
  "windows_x86_64_msvc 0.48.0",
- "winnow",
+ "winnow 0.4.11",
  "winreg",
  "wyz 0.2.0",
  "wyz 0.5.1",
