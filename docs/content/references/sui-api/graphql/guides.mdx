@@ -12,11 +12,11 @@ For an introduction to GraphQL, see [GitHub's Introduction to GraphQL](https://d
 ## Discovering the schema
 GraphQL offers an introspection-like service that allows you to query for the schema that is loaded by a service instance. The [official documentation](https://graphql.org/learn/introspection/) provides an overview on introspection.
 
-## Querying the service
+## Interacting with the GraphQL service
 Use the following approaches to interact with the Sui GraphQL RPC service. 
 
 ### Interactive online IDE
-The interactive online IDE is a great resource for learning how to interact with GraphQL service. It is available for [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql). Note that the IDE offers features such as auto-completion (use Ctrl-Space or just start typing), built-in documentation, multi-tabs, and more.
+The interactive online IDE is a great resource for learning how to interact with GraphQL service. It is available for [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql). Note that the IDE offers features such as auto-completion (use Ctrl-Space or just start typing), built-in documentation (click on the top-left icon), multi-tabs, and more.
 
 :::info
 
@@ -24,9 +24,9 @@ Both [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https:/
 
 :::
 
-### cURL like querying
+### Querying using cURL
 
-Include the `query` information in the `data` parameter of the cURL call to query the endpoint using REST:
+Include the `query` information in the `data` parameter of the cURL `POST` request to query the endpoint:
 ```shell
 # basic query
 curl -X POST https://sui-mainnet.mystenlabs.com/graphql \
@@ -34,6 +34,9 @@ curl -X POST https://sui-mainnet.mystenlabs.com/graphql \
      --data '{
           "query": "query { epoch { referenceGasPrice } }"
      }'
+```
+GraphQL supports passing in [variables](#working-with-variables) for ease of reuse, and these need to be added in their own `variables` field as below.
+```bash
 # query with variables
 curl -X POST https://sui-mainnet.mystenlabs.com/graphql \
      --header "Content-Type: application/json" \
@@ -44,39 +47,6 @@ curl -X POST https://sui-mainnet.mystenlabs.com/graphql \
   }
 }'
 ```
-
-### Working with variables in GraphQL
-
-Variables are a powerful way for passing different object IDs, Digests, Sui addresses, and other kinds of data for full flexibility. The following is an example for querying the reference gas price for epoch `100`, by passing the epoch as a variable:
-
-```graphql
-query ($epochID: Int!) {
-  epoch(id: $epochID) {
-    referenceGasPrice
-  }
-}
-variables {
-   "epochID": 100
-}
-```
-
-And the result is:
-
-```json
-{
-  "data": {
-    "epoch": {
-      "referenceGasPrice": "780"
-    }
-  }
-}
-```
-
-:::info
-
-When working with the online GraphQL IDE, paste the variables' values in the `Variables` pane on the bottom left of the window, without the `variables` keyword.
-
-:::
 
 ### Headers
 
@@ -118,10 +88,31 @@ x-sui-rpc-version: 0.1.0
 }
 ```
 
-### Multiple data in one query
-The RPC service previous to GraphQL required multiple queries for more complex data retrieval. Now, with GraphQL you can specify the fields you need and get that information in one single query. 
+### Working with variables
 
-For example, the following query retrieves the first 20 transaction blocks (along with the sender's address, the gas object used to pay for the transaction, the gas price, and the gas budget) after a specific one, at epoch `97`. With the previous JSON RPC this required multiple steps.
+Variables are a powerful way for passing different object IDs, Digests, Sui addresses, and other kinds of data for full flexibility. The following is an example for querying the reference gas price for epoch `100`, by passing the epoch as a variable:
+
+```graphql
+query ($epochID: Int!) {
+  epoch(id: $epochID) {
+    referenceGasPrice
+  }
+}
+variables {
+   "epochID": 100
+}
+```
+
+:::info
+
+When working with the online GraphQL IDE, paste the variables' values in the `Variables` pane on the bottom left of the window, without the `variables` keyword.
+
+:::
+
+### Multiple data in one query
+The previous RPC service required multiple queries for more complex data retrieval. Now, with GraphQL, you can specify the data you need in one single query. 
+
+For example, the following query retrieves the first 20 transaction blocks (along with the digest, the sender's address, the gas object used to pay for the transaction, the gas price, and the gas budget) after a specific transaction block at epoch `97`. In the previous RPC, this would have required multiple API calls.
 
 ```graphql
 # Fetch the first 20 transactions after 231220100 for epoch 97
@@ -158,7 +149,7 @@ query {
 ```
 :::info
 
-By default, the number of results is limited to 50 items. To learn more about how GraphQL works with pagination, check out the original [documentation](https://graphql.org/learn/pagination/) and our following section on pagination. 
+By default, the number of results is limited to 50 items. To learn more about how GraphQL works with pagination, check out the official [documentation](https://graphql.org/learn/pagination/) and our following section on pagination. 
 
 :::
 
@@ -181,7 +172,7 @@ The query's result is:
 ```json
 {
   "data": {
-    "checkpointConnection": {
+    "checkpoints": {
       "pageInfo": {
         "hasPreviousPage": false,
         "hasNextPage": true,
@@ -193,7 +184,7 @@ The query's result is:
 }
 ```
 
-The `pageInfo.startCursor` and `pageInfo.endCursor` indicate the index of the first and last element in the response. You can use `pageInfo.hasNextPage` to determine if there is a next page, and then use the `endCursor`'s value and pass it to the `after` filter in the connection to traverse the next set of elements: 
+The `pageInfo.startCursor` and `pageInfo.endCursor` indicate the index of the first and last item in the response. You can use `pageInfo.hasNextPage` to determine if there is a next page, and then use the `endCursor`'s value and pass it to the `after` filter in the connection to traverse the next set of elements: 
 ```graphql
 query {
   checkpoints(after: "49") {
@@ -201,8 +192,9 @@ query {
 }
 ```
 
-When working with connections, cursors, and filters, you can only specify `first` or `last`, but not both filters. 
-
+:::info
+When using pagination filters, you can only specify `first` or `last`, but not both. 
+:::
 
 ### Fragments
 
@@ -266,9 +258,9 @@ fragment DynamicFieldValueSelection on DynamicFieldValue {
 ## Migrating guides
 The following sections highlight the steps necessary for you to take to migrate your codebase to leverage the Sui GraphQL RPC.
 
-### From JSON RPC API & examples
+### From JSON RPC & examples
 
-The former JSON RPC API provided several individual endpoints to get specific data (for example, `get_totalTransactionBlocks`). While this can be achieved similarly with GraphQL, it is more powerful to determine the data you need in one query that involves multiple aspects (for example, transactions, balance, coins), execute that query, and get the results. This guide showcases how to use GraphQL instead of JSON RPC on a few original endpoints.
+The former RPC API provided several individual endpoints to get specific data (for example, `get_totalTransactionBlocks`). While this can be achieved similarly with GraphQL, it is more powerful to determine the data you need in one query that involves multiple aspects (for example, transactions, balance, coins), execute that query, and get the results. This guide showcases how to (naively) use GraphQL instead of JSON RPC on a few original endpoints.
 
 :::info
 
