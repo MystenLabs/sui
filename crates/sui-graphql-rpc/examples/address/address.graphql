@@ -11,7 +11,7 @@
       coinObjectCount
       totalBalance
     }
-    coinConnection {
+    coins {
       nodes {
         asMoveObject {
           contents {

@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 use async_graphql::{connection::Connection, *};
 use sui_json_rpc::name_service::NameServiceConfig;
-use sui_types::TypeTag;
+use sui_types::{gas_coin::GAS, TypeTag};
 
 use super::{
     address::Address,
@@ -24,6 +24,7 @@ use super::{
     protocol_config::ProtocolConfigs,
     sui_address::SuiAddress,
     transaction_block::{self, TransactionBlock, TransactionBlockFilter},
+    type_filter::ExactTypeFilter,
 };
 use crate::{
     config::ServiceConfig, context_data::db_data_provider::PgManager, error::Error,
@@ -125,19 +126,20 @@ impl Query {
 
     /// The coin objects that exist in the network.
     ///
-    /// The type field is a string of the inner type of the coin by which to filter
-    /// (e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
-    async fn coin_connection(
+    /// The type field is a string of the inner type of the coin by which to filter (e.g.
+    /// `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
+    async fn coins(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<object::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
-        type_: Option<String>,
-    ) -> Result<Option<Connection<String, Coin>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_coins(None, type_, first, after, last, before)
+        before: Option<object::Cursor>,
+        type_: Option<ExactTypeFilter>,
+    ) -> Result<Connection<String, Coin>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        let coin = type_.map_or_else(GAS::type_tag, |t| t.0);
+        Coin::paginate(ctx.data_unchecked(), page, coin, /* owner */ None)
             .await
             .extend()
     }

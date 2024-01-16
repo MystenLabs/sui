@@ -31,13 +31,6 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn get_obj(address: Vec<u8>, version: Option<i64>) -> objects::BoxedQuery<'static, DB>;
     fn get_obj_by_type(object_type: String) -> objects::BoxedQuery<'static, DB>;
     fn get_display_by_obj_type(object_type: String) -> display::BoxedQuery<'static, DB>;
-    fn multi_get_coins(
-        before: Option<Vec<u8>>,
-        after: Option<Vec<u8>>,
-        limit: PageLimit,
-        address: Option<Vec<u8>>,
-        coin_type: String,
-    ) -> objects::BoxedQuery<'static, DB>;
     fn multi_get_objs(
         before: Option<Vec<u8>>,
         after: Option<Vec<u8>>,

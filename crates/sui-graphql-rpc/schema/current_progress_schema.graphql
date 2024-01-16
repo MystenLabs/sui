@@ -81,11 +81,12 @@ type Address implements IOwner {
 	"""
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
-	The coin objects for the given address.
-	The type field is a string of the inner type of the coin
-	by which to filter (e.g., 0x2::sui::SUI).
+	The coin objects for this address.
+	
+	The type field is a string of the inner type of the coin by which to filter (e.g.
+	`0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
-	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	coins(first: Int, after: String, last: Int, before: String, type: String): CoinConnection!
 	"""
 	The `0x3::staking_pool::StakedSui` objects owned by the given address.
 	"""
@@ -1042,7 +1043,7 @@ interface IOwner {
 	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
 	balance(type: String): Balance
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
-	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	coins(first: Int, after: String, last: Int, before: String, type: String): CoinConnection!
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
@@ -1692,12 +1693,12 @@ type Object implements IOwner {
 	"""
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
-	The coin objects for the given address.
+	The coin objects for this object.
 	
-	The type field is a string of the inner type of the coin by which to filter
-	(e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
+	The type field is a string of the inner type of the coin by which to filter (e.g.
+	`0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
-	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	coins(first: Int, after: String, last: Int, before: String, type: String): CoinConnection!
 	"""
 	The `0x3::staking_pool::StakedSui` objects owned by the given object.
 	"""
@@ -1946,10 +1947,10 @@ type Owner implements IOwner {
 	"""
 	The coin objects for the given address or object.
 	
-	The type field is a string of the inner type of the coin by which to filter
-	(e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
+	The type field is a string of the inner type of the coin by which to filter (e.g.
+	`0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
-	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	coins(first: Int, after: String, last: Int, before: String, type: String): CoinConnection!
 	"""
 	The `0x3::staking_pool::StakedSui` objects owned by the given object.
 	"""
@@ -2180,10 +2181,10 @@ type Query {
 	"""
 	The coin objects that exist in the network.
 	
-	The type field is a string of the inner type of the coin by which to filter
-	(e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
+	The type field is a string of the inner type of the coin by which to filter (e.g.
+	`0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
-	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	coins(first: Int, after: String, last: Int, before: String, type: String): CoinConnection!
 	"""
 	The checkpoints that exist in the network.
 	"""

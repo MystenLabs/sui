@@ -18,6 +18,7 @@ use sui_indexer::types_v2::OwnerType;
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_package_resolver::Resolver;
 use sui_types::dynamic_field::DynamicFieldType;
+use sui_types::gas_coin::GAS;
 use sui_types::TypeTag;
 
 use super::big_int::BigInt;
@@ -27,7 +28,7 @@ use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::MoveObject;
 use super::move_package::MovePackage;
 use super::suins_registration::SuinsRegistration;
-use super::type_filter::TypeFilter;
+use super::type_filter::{ExactTypeFilter, TypeFilter};
 use super::{
     balance::Balance, coin::Coin, owner::Owner, stake::StakedSui, sui_address::SuiAddress,
     transaction_block::TransactionBlock,
@@ -341,21 +342,22 @@ impl Object {
             .extend()
     }
 
-    /// The coin objects for the given address.
+    /// The coin objects for this object.
     ///
-    /// The type field is a string of the inner type of the coin by which to filter
-    /// (e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
-    pub async fn coin_connection(
+    /// The type field is a string of the inner type of the coin by which to filter (e.g.
+    /// `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
+    pub async fn coins(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<Cursor>,
         last: Option<u64>,
-        before: Option<String>,
-        type_: Option<String>,
-    ) -> Result<Option<Connection<String, Coin>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_coins(Some(self.address), type_, first, after, last, before)
+        before: Option<Cursor>,
+        type_: Option<ExactTypeFilter>,
+    ) -> Result<Connection<String, Coin>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        let coin = type_.map_or_else(GAS::type_tag, |t| t.0);
+        Coin::paginate(ctx.data_unchecked(), page, coin, Some(self.address))
             .await
             .extend()
     }

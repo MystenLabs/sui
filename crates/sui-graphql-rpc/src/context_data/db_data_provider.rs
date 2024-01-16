@@ -9,7 +9,6 @@ use crate::{
         address::Address,
         balance::Balance,
         big_int::BigInt,
-        coin::Coin,
         coin_metadata::CoinMetadata,
         dynamic_field::{DynamicField, DynamicFieldName},
         move_object::MoveObject,
@@ -164,58 +163,6 @@ impl PgManager {
             |query| move |conn| query.get_result::<StoredDisplay>(conn).optional(),
         )
         .await
-    }
-
-    /// Fetches the coins owned by the address and filters them by the given coin type.
-    /// If no address is given, it fetches all available coin objects matching the coin type.
-    async fn multi_get_coins(
-        &self,
-        address: Option<Vec<u8>>,
-        coin_type: String,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
-        let limit = self.validate_page_limit(first, last)?;
-        let before = before
-            .map(|cursor| self.parse_obj_cursor(&cursor))
-            .transpose()?;
-        let after = after
-            .map(|cursor| self.parse_obj_cursor(&cursor))
-            .transpose()?;
-        let coin_type = parse_to_type_tag(Some(coin_type))
-            .map_err(|e| Error::InvalidCoinType(e.to_string()))?
-            .to_canonical_string(/* with_prefix */ true);
-        let result: Option<Vec<StoredObject>> = self
-            .run_query_async_with_cost(
-                move || {
-                    Ok(QueryBuilder::multi_get_coins(
-                        before.clone(),
-                        after.clone(),
-                        limit,
-                        address.clone(),
-                        coin_type.clone(),
-                    ))
-                },
-                |query| move |conn| query.load(conn).optional(),
-            )
-            .await?;
-
-        result
-            .map(|mut stored_objs| {
-                let has_next_page = stored_objs.len() as i64 > limit.value();
-                if has_next_page {
-                    stored_objs.pop();
-                }
-
-                if last.is_some() {
-                    stored_objs.reverse();
-                }
-
-                Ok((stored_objs, has_next_page))
-            })
-            .transpose()
     }
 
     async fn get_balance(
@@ -422,60 +369,6 @@ impl PgManager {
                     coin_type: Some(MoveType::new(coin_tag)),
                 },
             ));
-        }
-
-        Ok(Some(connection))
-    }
-
-    /// Fetches all coins owned by the given address that match the given coin type.
-    /// If no address is given, then it will fetch all coin objects of the given type.
-    /// If no coin type is provided, it will use the default gas coin (SUI).
-    pub(crate) async fn fetch_coins(
-        &self,
-        address: Option<SuiAddress>,
-        coin_type: Option<String>,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, Coin>>, Error> {
-        let address = address.map(|addr| addr.into_vec());
-        let coin_type = coin_type.unwrap_or_else(|| {
-            GAS::type_().to_canonical_string(/* with_prefix */ true)
-        });
-
-        let coins = self
-            .multi_get_coins(address, coin_type, first, after, last, before)
-            .await?;
-
-        let Some((stored_objs, has_next_page)) = coins else {
-            return Ok(None);
-        };
-
-        let mut connection = Connection::new(false, has_next_page);
-        for stored_obj in stored_objs {
-            let object = Object::try_from(stored_obj)?;
-
-            let move_object = MoveObject::try_from(&object).map_err(|_| {
-                Error::Internal(format!(
-                    "Expected {} to be a coin, but it's not an object",
-                    object.address,
-                ))
-            })?;
-
-            let coin_object = Coin::try_from(&move_object).map_err(|_| {
-                Error::Internal(format!(
-                    "Expected {} to be a coin, but it is not",
-                    object.address,
-                ))
-            })?;
-
-            let cursor = move_object
-                .native
-                .id()
-                .to_canonical_string(/* with_prefix */ true);
-
-            connection.edges.push(Edge::new(cursor, coin_object));
         }
 
         Ok(Some(connection))
