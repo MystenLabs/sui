@@ -5,7 +5,7 @@ use crate::block::Slot;
 
 use consensus_config::AuthorityIndex;
 
-pub fn format_authority_round(author_round: &Slot) -> String {
+pub(crate) fn format_authority_round(author_round: &Slot) -> String {
     format!(
         "{}{}",
         format_authority_index(author_round.authority),

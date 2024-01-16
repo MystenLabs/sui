@@ -266,7 +266,7 @@ impl fmt::Debug for VerifiedBlock {
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Default, Hash)]
-pub struct Slot {
+pub(crate) struct Slot {
     pub authority: AuthorityIndex,
     pub round: Round,
 }

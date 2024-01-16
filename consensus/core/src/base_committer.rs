@@ -177,12 +177,11 @@ impl BaseCommitter {
         (wave * wave_length) + wave_length - 1 + self.options.round_offset
     }
 
-    /// Find which block is supported at (author, round) by the given block.
-    /// Blocks can indirectly reference multiple other blocks at (author, round),
-    /// but only one block at (author, round) will be supported by the given block.
-    /// If block A supports B at (author, round), it is guaranteed that any
-    /// processed block by the same author that directly or indirectly includes
-    /// A will also support B at (author, round).
+    /// Find which block is supported at a slot (author, round) by the given block.
+    /// Blocks can indirectly reference multiple other blocks at a slot, but only
+    /// one block at a slot will be supported by the given block. If block A supports B
+    /// at a slot, it is guaranteed that any processed block by the same author that
+    /// directly or indirectly includes A will also support B at that slot.
     fn find_supported_block(&self, leader_slot: Slot, from: &VerifiedBlock) -> Option<BlockRef> {
         if from.round() < leader_slot.round {
             return None;
