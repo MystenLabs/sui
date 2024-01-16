@@ -37,7 +37,6 @@ impl<W: Worker + 'static> WorkerPool<W> {
             self.task_name, self.concurrency, current_checkpoint_number
         );
         let mut updates: HashSet<u64> = HashSet::new();
-        let mut in_progress = 0;
 
         let (progress_sender, mut progress_receiver) = mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
         let mut workers = vec![];
@@ -81,19 +80,17 @@ impl<W: Worker + 'static> WorkerPool<W> {
         // main worker pool loop
         loop {
             tokio::select! {
-                Some(checkpoint) = checkpoint_receiver.recv(), if in_progress < MAX_CHECKPOINTS_IN_PROGRESS => {
+                Some(checkpoint) = checkpoint_receiver.recv() => {
                     let sequence_number = checkpoint.checkpoint_summary.sequence_number;
                     if sequence_number < current_checkpoint_number {
                         continue;
                     }
                     let worker_id = (sequence_number % self.concurrency as u64) as usize;
                     info!("received checkpoint for processing {} for workflow {}", sequence_number, self.task_name);
-                    in_progress += 1;
                     workers[worker_id].0.send(checkpoint).await.expect("failed to dispatch a task");
                 }
                 Some(status_update) = progress_receiver.recv() => {
                     info!("finished checkpoint processing {} for workflow {}", status_update, self.task_name);
-                    in_progress -= 1;
                     updates.insert(status_update);
                     if status_update == current_checkpoint_number {
                         while updates.remove(&current_checkpoint_number) {
