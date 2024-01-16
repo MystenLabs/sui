@@ -105,7 +105,6 @@ impl Store for MemStore {
         Ok(blocks)
     }
 
-    /// Reads the last commit.
     fn read_last_commit(&self) -> ConsensusResult<Option<Commit>> {
         let inner = self.inner.read();
         Ok(inner
@@ -126,5 +125,3 @@ impl Store for MemStore {
         Ok(commits)
     }
 }
-
-// TODO: parameterize tests from RocksDBStore.

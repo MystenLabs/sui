@@ -150,9 +150,9 @@ impl BaseCommitter {
         }
 
         Some(Slot::new(
+            round,
             self.leader_schedule
                 .elect_leader(round, self.options.leader_offset),
-            round,
         ))
     }
 
@@ -317,7 +317,7 @@ impl BaseCommitter {
             {
                 tracing::trace!(
                     "[{self}] {voting_block:?} is a blame for leader {}",
-                    Slot::new(leader, voting_round - 1)
+                    Slot::new(voting_round - 1, leader)
                 );
                 if blame_stake_aggregator.add(voter, &self.context.committee) {
                     return true;

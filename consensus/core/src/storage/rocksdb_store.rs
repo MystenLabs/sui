@@ -153,7 +153,6 @@ impl Store for RocksDBStore {
         Ok(blocks)
     }
 
-    /// Reads the last commit.
     fn read_last_commit(&self) -> ConsensusResult<Option<Commit>> {
         let Some(commit) = self.commits.safe_iter().skip_to_last().next() else {
             return Ok(None);

@@ -24,16 +24,10 @@ pub type Round = u32;
 /// considers valid.
 /// Well behaved validators produce at most one block per round, but malicious validators can
 /// equivocate.
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, PartialEq)]
 #[enum_dispatch(BlockAPI)]
 pub enum Block {
     V1(BlockV1),
-}
-
-impl PartialEq for Block {
-    fn eq(&self, other: &Self) -> bool {
-        self.digest() == other.digest()
-    }
 }
 
 impl Eq for Block {}
@@ -201,22 +195,23 @@ impl fmt::Debug for BlockDigest {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Default, Hash)]
+/// Slot is the position of blocks in the DAG. It can contain 0, 1 or multiple blocks
+/// from the same authority at the same round.
+#[derive(Clone, Copy, PartialEq, PartialOrd, Default, Hash)]
 pub(crate) struct Slot {
     pub round: Round,
     pub authority: AuthorityIndex,
 }
 
-#[allow(unused)]
 impl Slot {
-    pub fn new(authority: AuthorityIndex, round: Round) -> Self {
-        Self { authority, round }
+    pub fn new(round: Round, authority: AuthorityIndex) -> Self {
+        Self { round, authority }
     }
 }
 
 impl From<BlockRef> for Slot {
     fn from(value: BlockRef) -> Self {
-        Slot::new(value.author, value.round)
+        Slot::new(value.round, value.author)
     }
 }
 
@@ -248,7 +243,6 @@ impl SignedBlock {
 }
 
 /// Verifiied block allows full access to its content.
-#[allow(unused)]
 #[derive(Clone, Deserialize, PartialEq)]
 pub(crate) struct VerifiedBlock {
     block: Block,

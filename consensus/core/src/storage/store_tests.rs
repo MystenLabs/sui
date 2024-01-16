@@ -11,6 +11,7 @@ use crate::{
     commit::Commit,
 };
 
+/// Test fixture for store tests. Wraps around various store implementations.
 enum TestStore {
     RocksDB((RocksDBStore, TempDir)),
     Mem(MemStore),
