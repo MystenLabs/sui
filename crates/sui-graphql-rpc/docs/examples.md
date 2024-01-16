@@ -94,7 +94,7 @@
 >      coinObjectCount
 >      totalBalance
 >    }
->    coinConnection {
+>    coins {
 >      nodes {
 >        asMoveObject {
 >          contents {
@@ -449,13 +449,13 @@
 ## Coin Connection
 ### <a id=327675></a>
 ### Coin Connection
-####  Get last 3 coins before coins at cursor 13034947
+####  Get last 3 coins owned by `0x0`.
 
 ><pre>{
 >  address(
 >    address: "0x0000000000000000000000000000000000000000000000000000000000000000"
 >  ) {
->    coinConnection(last: 3, before: "0x13034947") {
+>    coins(last: 3) {
 >      nodes {
 >        balance
 >      }

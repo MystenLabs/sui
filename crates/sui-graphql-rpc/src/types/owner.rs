@@ -12,11 +12,13 @@ use crate::types::balance::*;
 use crate::types::coin::*;
 use crate::types::object::{self, *};
 use crate::types::sui_address::SuiAddress;
+use crate::types::type_filter::ExactTypeFilter;
 
 use async_graphql::connection::Connection;
 use async_graphql::*;
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_types::dynamic_field::DynamicFieldType;
+use sui_types::gas_coin::GAS;
 
 #[derive(Interface)]
 #[graphql(
@@ -44,13 +46,13 @@ use sui_types::dynamic_field::DynamicFieldType;
         arg(name = "before", ty = "Option<String>")
     ),
     field(
-        name = "coin_connection",
-        ty = "Option<Connection<String, Coin>>",
+        name = "coins",
+        ty = "Connection<String, Coin>",
         arg(name = "first", ty = "Option<u64>"),
-        arg(name = "after", ty = "Option<String>"),
+        arg(name = "after", ty = "Option<object::Cursor>"),
         arg(name = "last", ty = "Option<u64>"),
-        arg(name = "before", ty = "Option<String>"),
-        arg(name = "type", ty = "Option<String>")
+        arg(name = "before", ty = "Option<object::Cursor>"),
+        arg(name = "type", ty = "Option<ExactTypeFilter>")
     ),
     field(
         name = "staked_sui_connection",
@@ -178,19 +180,20 @@ impl Owner {
 
     /// The coin objects for the given address or object.
     ///
-    /// The type field is a string of the inner type of the coin by which to filter
-    /// (e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
-    pub async fn coin_connection(
+    /// The type field is a string of the inner type of the coin by which to filter (e.g.
+    /// `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
+    pub async fn coins(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<object::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
-        type_: Option<String>,
-    ) -> Result<Option<Connection<String, Coin>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_coins(Some(self.address), type_, first, after, last, before)
+        before: Option<object::Cursor>,
+        type_: Option<ExactTypeFilter>,
+    ) -> Result<Connection<String, Coin>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        let coin = type_.map_or_else(GAS::type_tag, |t| t.0);
+        Coin::paginate(ctx.data_unchecked(), page, coin, Some(self.address))
             .await
             .extend()
     }

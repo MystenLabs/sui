@@ -54,26 +54,6 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
             .into_boxed()
     }
 
-    fn multi_get_coins(
-        before: Option<Vec<u8>>,
-        after: Option<Vec<u8>>,
-        limit: PageLimit,
-        address: Option<Vec<u8>>,
-        coin_type: String,
-    ) -> objects::BoxedQuery<'static, Pg> {
-        let mut query = order_objs(before, after, &limit);
-        query = query.limit(limit.value() + 1);
-
-        if let Some(address) = address {
-            query = query
-                .filter(objects::dsl::owner_id.eq(address))
-                // Leverage index on objects table
-                .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16));
-        }
-        query = query.filter(objects::dsl::coin_type.eq(coin_type));
-
-        query
-    }
     fn multi_get_objs(
         before: Option<Vec<u8>>,
         after: Option<Vec<u8>>,
