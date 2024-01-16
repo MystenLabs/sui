@@ -312,14 +312,6 @@ impl PgManager {
             .into_vec())
     }
 
-    pub(crate) fn validate_obj_filter(&self, filter: &DeprecatedObjectFilter) -> Result<(), Error> {
-        if filter.object_keys.is_some() {
-            return Err(DbValidationError::UnsupportedObjectKeys.into());
-        }
-
-        Ok(())
-    }
-
     pub(crate) fn validate_page_limit(
         &self,
         first: Option<u64>,
@@ -363,38 +355,6 @@ impl PgManager {
     ) -> Result<Option<StoredDisplay>, Error> {
         let object_type = object_type.to_canonical_string(/* with_prefix */ true);
         self.get_display_by_obj_type(object_type).await
-    }
-
-    pub(crate) async fn fetch_objs(
-        &self,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        filter: Option<DeprecatedObjectFilter>,
-    ) -> Result<Option<Connection<String, Object>>, Error> {
-        validate_cursor_pagination(&first, &after, &last, &before)?;
-        if let Some(filter) = &filter {
-            self.validate_obj_filter(filter)?;
-        }
-        let objects = self
-            .multi_get_objs(first, after, last, before, filter, None)
-            .await?;
-
-        if let Some((stored_objs, has_next_page)) = objects {
-            let mut connection = Connection::new(false, has_next_page);
-            connection
-                .edges
-                .extend(stored_objs.into_iter().filter_map(|stored_obj| {
-                    Object::try_from(stored_obj)
-                        .map_err(|e| eprintln!("Error converting object: {:?}", e))
-                        .ok()
-                        .map(|obj| Edge::new(obj.address.to_string(), obj))
-                }));
-            Ok(Some(connection))
-        } else {
-            Ok(None)
-        }
     }
 
     pub(crate) async fn fetch_balance(
@@ -610,7 +570,6 @@ impl PgManager {
             type_: Some(MoveObjectType::staked_sui().to_canonical_string(/* with_prefix */ true)),
             owner: Some(address),
             object_ids: None,
-            object_keys: None,
         };
 
         let objs = self
@@ -861,7 +820,6 @@ impl PgManager {
             type_: Some(suins_registration_type),
             owner: Some(owner),
             object_ids: None,
-            object_keys: None,
         };
 
         let objs = self
@@ -908,32 +866,6 @@ impl PgManager {
 
         Ok(Some(connection))
     }
-}
-
-/// TODO: enfroce limits on first and last
-pub(crate) fn validate_cursor_pagination(
-    first: &Option<u64>,
-    after: &Option<String>,
-    last: &Option<u64>,
-    before: &Option<String>,
-) -> Result<(), Error> {
-    if first.is_some() && before.is_some() {
-        return Err(DbValidationError::FirstAfter.into());
-    }
-
-    if last.is_some() && after.is_some() {
-        return Err(DbValidationError::LastBefore.into());
-    }
-
-    if before.is_some() && after.is_some() {
-        return Err(Error::CursorNoBeforeAfter);
-    }
-
-    if first.is_some() && last.is_some() {
-        return Err(Error::CursorNoFirstLast);
-    }
-
-    Ok(())
 }
 
 pub(crate) fn convert_to_validators(
