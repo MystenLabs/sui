@@ -2,16 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { WalletWithFeatures, WalletWithRequiredFeatures } from '@mysten/wallet-standard';
-import { ZKSEND_WALLET_NAME } from '@mysten/zksend';
 import type { ReactNode } from 'react';
 import { useRef } from 'react';
 import type { StateStorage } from 'zustand/middleware';
 
 import {
+	DEFAULT_PREFERRED_WALLETS,
 	DEFAULT_REQUIRED_FEATURES,
 	DEFAULT_STORAGE,
 	DEFAULT_STORAGE_KEY,
-	SUI_WALLET_NAME,
 } from '../constants/walletDefaults.js';
 import { WalletContext } from '../contexts/walletContext.js';
 import { useAutoConnectWallet } from '../hooks/wallet/useAutoConnectWallet.js';
@@ -58,7 +57,7 @@ export type WalletProviderProps = {
 export type { WalletWithFeatures };
 
 export function WalletProvider({
-	preferredWallets = [SUI_WALLET_NAME, ZKSEND_WALLET_NAME],
+	preferredWallets = DEFAULT_PREFERRED_WALLETS,
 	requiredFeatures = DEFAULT_REQUIRED_FEATURES,
 	storage = DEFAULT_STORAGE,
 	storageKey = DEFAULT_STORAGE_KEY,
@@ -93,17 +92,15 @@ export function WalletProvider({
 	);
 }
 
-type WalletConnectionManagerProps = Required<
-	Pick<
-		WalletProviderProps,
-		'preferredWallets' | 'requiredFeatures' | 'enableUnsafeBurner' | 'zkSend' | 'children'
-	>
+type WalletConnectionManagerProps = Pick<
+	WalletProviderProps,
+	'preferredWallets' | 'requiredFeatures' | 'enableUnsafeBurner' | 'zkSend' | 'children'
 >;
 
 function WalletConnectionManager({
-	preferredWallets,
-	requiredFeatures,
-	enableUnsafeBurner,
+	preferredWallets = DEFAULT_PREFERRED_WALLETS,
+	requiredFeatures = DEFAULT_REQUIRED_FEATURES,
+	enableUnsafeBurner = false,
 	zkSend,
 	children,
 }: WalletConnectionManagerProps) {

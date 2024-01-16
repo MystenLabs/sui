@@ -35,7 +35,15 @@ export class ZkSendPopup {
 	): Promise<ZkSendResponseTypes[T['type']]> {
 		const { promise, resolve, reject } = withResolvers<ZkSendResponseTypes[T['type']]>();
 
+		let interval: NodeJS.Timer | null = null;
 		let popup: Window | null = null;
+
+		function cleanup() {
+			if (interval) {
+				clearInterval(interval);
+			}
+			window.removeEventListener('message', listener);
+		}
 
 		const listener = (event: MessageEvent) => {
 			if (event.origin !== this.#origin) {
@@ -44,7 +52,7 @@ export class ZkSendPopup {
 			const { success, output } = safeParse(ZkSendResponse, event.data);
 			if (!success || output.id !== this.#id) return;
 
-			window.removeEventListener('message', listener);
+			cleanup();
 
 			if (output.payload.type === 'reject') {
 				reject(new Error('User rejected the request'));
@@ -54,8 +62,8 @@ export class ZkSendPopup {
 		};
 
 		this.#close = () => {
+			cleanup();
 			popup?.close();
-			window.removeEventListener('message', listener);
 		};
 
 		window.addEventListener('message', listener);
@@ -73,6 +81,17 @@ export class ZkSendPopup {
 		if (!popup) {
 			throw new Error('Failed to open zkSend window');
 		}
+
+		interval = setInterval(() => {
+			try {
+				if (popup?.closed) {
+					cleanup();
+					reject(new Error('User closed the zkSend window'));
+				}
+			} catch {
+				// This can error during the login flow, but that's fine.
+			}
+		}, 1000);
 
 		return promise;
 	}
