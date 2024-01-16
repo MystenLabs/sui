@@ -38,7 +38,6 @@ use tower::ServiceBuilder;
 use tracing::{debug, error, warn};
 use tracing::{error_span, info, Instrument};
 
-use checkpoint_executor::CheckpointExecutor;
 use fastcrypto_zkp::bn254::zk_login::JWK;
 pub use handle::SuiNodeHandle;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
@@ -47,7 +46,7 @@ use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_archival::writer::ArchiveWriter;
-use sui_config::node::{ConsensusProtocol, DBCheckpointConfig};
+use sui_config::node::{ConsensusProtocol, DBCheckpointConfig, RunWithRange};
 use sui_config::node_config_metrics::NodeConfigMetrics;
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -56,7 +55,7 @@ use sui_core::authority::epoch_start_configuration::EpochStartConfigTrait;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_server::{ValidatorService, ValidatorServiceMetrics};
-use sui_core::checkpoints::checkpoint_executor;
+use sui_core::checkpoints::checkpoint_executor::{CheckpointExecutor, StopReason};
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
     SubmitCheckpointToConsensus,
@@ -227,6 +226,8 @@ pub struct SuiNode {
     _state_archive_handle: Option<broadcast::Sender<()>>,
 
     _state_snapshot_uploader_handle: Option<broadcast::Sender<()>>,
+    // Channel to allow signaling upstream to shutdown sui-node
+    shutdown_channel_tx: broadcast::Sender<Option<RunWithRange>>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -398,6 +399,7 @@ impl SuiNode {
             config.supported_protocol_versions = Some(SupportedProtocolVersions::SYSTEM_DEFAULT);
         }
 
+        let run_with_range = config.run_with_range;
         let is_validator = config.consensus_config().is_some();
         let is_full_node = !is_validator;
         let prometheus_registry = registry_service.default_registry();
@@ -620,7 +622,7 @@ impl SuiNode {
         let (end_of_epoch_channel, end_of_epoch_receiver) =
             broadcast::channel(config.end_of_epoch_broadcast_channel_capacity);
 
-        let transaction_orchestrator = if is_full_node {
+        let transaction_orchestrator = if is_full_node && run_with_range.is_none() {
             Some(Arc::new(
                 TransactiondOrchestrator::new_with_network_clients(
                     state.clone(),
@@ -690,6 +692,9 @@ impl SuiNode {
             None
         };
 
+        // setup shutdown channel
+        let (shutdown_channel, _) = broadcast::channel::<Option<RunWithRange>>(1);
+
         let node = Self {
             config,
             validator_components: Mutex::new(validator_components),
@@ -714,6 +719,7 @@ impl SuiNode {
 
             _state_archive_handle: state_archive_handle,
             _state_snapshot_uploader_handle: state_snapshot_handle,
+            shutdown_channel_tx: shutdown_channel,
         };
 
         info!("SuiNode started!");
@@ -726,6 +732,10 @@ impl SuiNode {
 
     pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<SuiSystemState> {
         self.end_of_epoch_channel.subscribe()
+    }
+
+    pub fn subscribe_to_shutdown_channel(&self) -> broadcast::Receiver<Option<RunWithRange>> {
+        self.shutdown_channel_tx.subscribe()
     }
 
     pub fn current_epoch_for_testing(&self) -> EpochId {
@@ -1340,6 +1350,7 @@ impl SuiNode {
             &self.registry_service.default_registry(),
         );
 
+        let run_with_range = self.config.run_with_range;
         loop {
             let cur_epoch_store = self.state.load_epoch_store_one_call_per_task();
 
@@ -1370,7 +1381,17 @@ impl SuiNode {
                     .submit(transaction, None, &cur_epoch_store)?;
             }
 
-            checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
+            let stop_condition = checkpoint_executor
+                .run_epoch(cur_epoch_store.clone(), run_with_range)
+                .await;
+
+            if stop_condition == StopReason::RunWithRangeCondition {
+                self.shutdown_channel_tx
+                    .send(run_with_range)
+                    .expect("RunWithRangeCondition met but failed to send shutdown message");
+                return Ok(());
+            }
+
             let latest_system_state = self
                 .state
                 .get_sui_system_state_object_during_reconfig()
@@ -1719,7 +1740,12 @@ pub fn build_http_server(
             kv_store.clone(),
             metrics.clone(),
         ))?;
-        server.register_module(TransactionBuilderApi::new(state.clone()))?;
+
+        // if run_with_range is enabled we want to prevent any transactions
+        // run_with_range = None is normal operating conditions
+        if config.run_with_range.is_none() {
+            server.register_module(TransactionBuilderApi::new(state.clone()))?;
+        }
         server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;
 
         if let Some(transaction_orchestrator) = transaction_orchestrator {

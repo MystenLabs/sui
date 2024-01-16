@@ -13,7 +13,7 @@ use std::{
     mem, ops,
     path::{Path, PathBuf},
 };
-use sui_config::node::{DBCheckpointConfig, OverloadThresholdConfig};
+use sui_config::node::{DBCheckpointConfig, OverloadThresholdConfig, RunWithRange};
 use sui_config::NodeConfig;
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
@@ -46,6 +46,7 @@ pub struct SwarmBuilder<R = OsRng> {
     num_unpruned_validators: Option<usize>,
     overload_threshold_config: Option<OverloadThresholdConfig>,
     data_ingestion_dir: Option<PathBuf>,
+    fullnode_run_with_range: Option<RunWithRange>,
 }
 
 impl SwarmBuilder {
@@ -68,6 +69,7 @@ impl SwarmBuilder {
             num_unpruned_validators: None,
             overload_threshold_config: None,
             data_ingestion_dir: None,
+            fullnode_run_with_range: None,
         }
     }
 }
@@ -92,6 +94,7 @@ impl<R> SwarmBuilder<R> {
             num_unpruned_validators: self.num_unpruned_validators,
             overload_threshold_config: self.overload_threshold_config,
             data_ingestion_dir: self.data_ingestion_dir,
+            fullnode_run_with_range: self.fullnode_run_with_range,
         }
     }
 
@@ -227,6 +230,13 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
+    pub fn with_fullnode_run_with_range(mut self, run_with_range: Option<RunWithRange>) -> Self {
+        if let Some(run_with_range) = run_with_range {
+            self.fullnode_run_with_range = Some(run_with_range);
+        }
+        self
+    }
+
     fn get_or_init_genesis_config(&mut self) -> &mut GenesisConfig {
         if self.genesis_config.is_none() {
             assert!(self.network_config.is_none());
@@ -288,7 +298,8 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 
         let mut fullnode_config_builder = FullnodeConfigBuilder::new()
             .with_config_directory(dir.as_ref().into())
-            .with_db_checkpoint_config(self.db_checkpoint_config.clone());
+            .with_db_checkpoint_config(self.db_checkpoint_config.clone())
+            .with_run_with_range(self.fullnode_run_with_range);
         if let Some(spvc) = &self.fullnode_supported_protocol_versions_config {
             let supported_versions = match spvc {
                 ProtocolVersionsConfig::Default => SupportedProtocolVersions::SYSTEM_DEFAULT,

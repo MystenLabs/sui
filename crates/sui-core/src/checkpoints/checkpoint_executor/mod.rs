@@ -29,7 +29,7 @@ use futures::stream::FuturesOrdered;
 use itertools::izip;
 use mysten_metrics::{spawn_monitored_task, MonitoredFutureExt};
 use prometheus::Registry;
-use sui_config::node::CheckpointExecutorConfig;
+use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::{fail_point, fail_point_async};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -68,6 +68,12 @@ type CheckpointExecutionBuffer = FuturesOrdered<JoinHandle<VerifiedCheckpoint>>;
 
 /// The interval to log checkpoint progress, in # of checkpoints processed.
 const CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL: u64 = 5000;
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum StopReason {
+    EpochComplete,
+    RunWithRangeCondition,
+}
 
 pub struct CheckpointExecutor {
     mailbox: broadcast::Receiver<VerifiedCheckpoint>,
@@ -121,7 +127,23 @@ impl CheckpointExecutor {
     /// Ensure that all checkpoints in the current epoch will be executed.
     /// We don't technically need &mut on self, but passing it to make sure only one instance is
     /// running at one time.
-    pub async fn run_epoch(&mut self, epoch_store: Arc<AuthorityPerEpochStore>) {
+    pub async fn run_epoch(
+        &mut self,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        run_with_range: Option<RunWithRange>,
+    ) -> StopReason {
+        // check if we want to run this epoch based on RunWithRange condition value
+        // we want to be inclusive of the defined RunWithRangeEpoch::Epoch
+        // i.e Epoch(N) means we will execute epoch N and stop when reaching N+1
+        if run_with_range.map_or(false, |rwr| rwr.is_epoch_gt(epoch_store.epoch())) {
+            info!(
+                "RunWithRange condition satisfied at {:?}, run_epoch={:?}",
+                run_with_range,
+                epoch_store.epoch()
+            );
+            return StopReason::RunWithRangeCondition;
+        };
+
         debug!(
             "Checkpoint executor running for epoch {}",
             epoch_store.epoch(),
@@ -170,14 +192,16 @@ impl CheckpointExecutor {
                     "Pending checkpoint execution buffer should be empty after processing last checkpoint of epoch",
                 );
                 fail_point_async!("crash");
-                return;
+                return StopReason::EpochComplete;
             }
+
             self.schedule_synced_checkpoints(
                 &mut pending,
                 // next_to_schedule will be updated to the next checkpoint to schedule.
                 // This makes sure we don't re-schedule the same checkpoint multiple times.
                 &mut next_to_schedule,
                 epoch_store.clone(),
+                run_with_range,
             );
 
             self.metrics
@@ -190,7 +214,8 @@ impl CheckpointExecutor {
                 // guarantees that we will also ratchet the watermarks in order.
                 Some(Ok(checkpoint)) = pending.next() => {
                     self.process_executed_checkpoint(&checkpoint);
-                    highest_executed = Some(checkpoint);
+                    highest_executed = Some(checkpoint.clone());
+
 
                     // Estimate TPS every 10k transactions or 30 sec
                     let elapsed = now_time.elapsed().as_millis();
@@ -201,7 +226,14 @@ impl CheckpointExecutor {
                         now_time = Instant::now();
                         now_transaction_num = current_transaction_num;
                     }
-
+                     // we want to be inclusive of checkpoints in RunWithRange::Checkpoint type
+                    if run_with_range.map_or(false, |rwr| rwr.matches_checkpoint(checkpoint.sequence_number)) {
+                        info!(
+                            "RunWithRange condition satisifed after checkpoint sequence number {:?}",
+                            checkpoint.sequence_number
+                        );
+                        return StopReason::RunWithRangeCondition;
+                    }
                 }
                 // Check for newly synced checkpoints from StateSync.
                 received = self.mailbox.recv() => match received {
@@ -291,6 +323,7 @@ impl CheckpointExecutor {
         pending: &mut CheckpointExecutionBuffer,
         next_to_schedule: &mut CheckpointSequenceNumber,
         epoch_store: Arc<AuthorityPerEpochStore>,
+        run_with_range: Option<RunWithRange>,
     ) {
         let Some(latest_synced_checkpoint) = self
             .checkpoint_store
@@ -317,9 +350,19 @@ impl CheckpointExecutor {
             if checkpoint.epoch() > epoch_store.epoch() {
                 return;
             }
-
-            self.schedule_checkpoint(checkpoint, pending, epoch_store.clone());
-            *next_to_schedule += 1;
+            match run_with_range {
+                Some(RunWithRange::Checkpoint(seq)) if *next_to_schedule > seq => {
+                    debug!(
+                        "RunWithRange Checkpoint {} is set, not scheduling checkpoint {}",
+                        seq, *next_to_schedule
+                    );
+                    return;
+                }
+                _ => {
+                    self.schedule_checkpoint(checkpoint, pending, epoch_store.clone());
+                    *next_to_schedule += 1;
+                }
+            }
         }
     }
 

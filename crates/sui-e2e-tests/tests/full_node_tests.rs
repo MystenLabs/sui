@@ -11,6 +11,7 @@ use rand::rngs::OsRng;
 use serde_json::json;
 use std::sync::Arc;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
+use sui_config::node::RunWithRange;
 use sui_core::authority::EffectsNotifyRead;
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, EventPage, SuiEvent, SuiExecutionStatus,
@@ -1386,4 +1387,95 @@ async fn transfer_coin(
     );
     let resp = context.execute_transaction_must_succeed(txn).await;
     Ok((object_to_send.0, sender, receiver, resp.digest, gas_object))
+}
+
+#[sim_test]
+async fn test_full_node_run_with_range_checkpoint() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+    let stop_after_checkpoint_seq = 5;
+    let want_run_with_range = Some(RunWithRange::Checkpoint(stop_after_checkpoint_seq));
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(10_000)
+        .with_fullnode_run_with_range(want_run_with_range)
+        .build()
+        .await;
+
+    // wait for node to signal that we reached and processed our desired epoch
+    let got_run_with_range = test_cluster.wait_for_run_with_range_shutdown_signal().await;
+
+    // ensure we got the expected RunWithRange on shutdown channel
+    assert_eq!(got_run_with_range, want_run_with_range);
+
+    // ensure the highest synced checkpoint matches
+    assert!(test_cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .get_checkpoint_store()
+            .get_highest_executed_checkpoint_seq_number()
+            .unwrap()
+            == Some(stop_after_checkpoint_seq)
+    }));
+
+    // sleep some time to ensure we don't see further ccheckpoints executed
+    tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+
+    // verify again execution has not progressed beyond expectations
+    assert!(test_cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .get_checkpoint_store()
+            .get_highest_executed_checkpoint_seq_number()
+            .unwrap()
+            == Some(stop_after_checkpoint_seq)
+    }));
+
+    // we dont want transaction orchestrator enabled when run_with_range != None
+    assert!(test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.transaction_orchestrator())
+        .is_none());
+    Ok(())
+}
+
+#[sim_test]
+async fn test_full_node_run_with_range_epoch() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+    let stop_after_epoch = 2;
+    let want_run_with_range = Some(RunWithRange::Epoch(stop_after_epoch));
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(10_000)
+        .with_fullnode_run_with_range(want_run_with_range)
+        .build()
+        .await;
+
+    // wait for node to signal that we reached and processed our desired epoch
+    let got_run_with_range = test_cluster.wait_for_run_with_range_shutdown_signal().await;
+
+    // ensure we get the shutdown signal
+    assert_eq!(got_run_with_range, want_run_with_range);
+
+    // ensure we end up at epoch + 1
+    // this is because we execute the target epoch, reconfigure, and then send shutdown signal at
+    // epoch + 1
+    assert!(test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.current_epoch_for_testing() == stop_after_epoch + 1));
+
+    // epoch duration is 10s for testing, lets sleep long enough that epoch would normally progress
+    tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+
+    // ensure we are still at epoch + 1
+    assert!(test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.current_epoch_for_testing() == stop_after_epoch + 1));
+
+    // we dont want transaction orchestrator enabled when run_with_range != None
+    assert!(test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.transaction_orchestrator())
+        .is_none());
+
+    Ok(())
 }

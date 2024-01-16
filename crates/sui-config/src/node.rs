@@ -23,10 +23,13 @@ use sui_keys::keypair_file::{read_authority_keypair_from_file, read_keypair_from
 use sui_protocol_config::{Chain, SupportedProtocolVersions};
 use sui_storage::object_store::ObjectStoreConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::committee::EpochId;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::NetworkKeyPair;
 use sui_types::crypto::SuiKeyPair;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair};
 use sui_types::multiaddr::Multiaddr;
 use tracing::info;
@@ -162,6 +165,9 @@ pub struct NodeConfig {
 
     #[serde(default = "default_overload_threshold_config")]
     pub overload_threshold_config: OverloadThresholdConfig,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_with_range: Option<RunWithRange>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -949,5 +955,24 @@ mod tests {
             template.worker_key_pair().public(),
             worker_key_pair.public()
         );
+    }
+}
+
+// RunWithRange is used to specify the ending epoch/checkpoint to process.
+// this is intended for use with disaster recovery debugging and verification workflows, never in normal operations
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+pub enum RunWithRange {
+    Epoch(EpochId),
+    Checkpoint(CheckpointSequenceNumber),
+}
+
+impl RunWithRange {
+    // is epoch_id > RunWithRange::Epoch
+    pub fn is_epoch_gt(&self, epoch_id: EpochId) -> bool {
+        matches!(self, RunWithRange::Epoch(e) if epoch_id > *e)
+    }
+
+    pub fn matches_checkpoint(&self, seq_num: CheckpointSequenceNumber) -> bool {
+        matches!(self, RunWithRange::Checkpoint(seq) if *seq == seq_num)
     }
 }
