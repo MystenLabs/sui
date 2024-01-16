@@ -125,6 +125,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 show_events: true,
                 show_object_changes: true,
                 show_balance_changes: true,
+                show_raw_effects: true,
             },
         )
         .await?;

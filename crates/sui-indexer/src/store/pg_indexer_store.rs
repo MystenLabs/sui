@@ -581,6 +581,7 @@ impl PgIndexerStore {
             object_changes,
             balance_changes,
             errors: vec![],
+            raw_effects: vec![],
         })
     }
 

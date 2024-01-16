@@ -193,6 +193,12 @@ impl TransactionExecutionApi {
             None
         };
 
+        let raw_effects = if opts.show_raw_effects {
+            bcs::to_bytes(&effects.effects)?
+        } else {
+            vec![]
+        };
+
         Ok(SuiTransactionBlockResponse {
             digest,
             transaction,
@@ -205,6 +211,7 @@ impl TransactionExecutionApi {
             confirmed_local_execution: Some(is_executed_locally),
             checkpoint: None,
             errors: vec![],
+            raw_effects,
         })
     }
 

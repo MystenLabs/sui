@@ -942,6 +942,7 @@ impl SuiClientCommands {
                             show_events: true,
                             show_object_changes: true,
                             show_balance_changes: false,
+                            show_raw_effects: false,
                         },
                     )
                     .await?;

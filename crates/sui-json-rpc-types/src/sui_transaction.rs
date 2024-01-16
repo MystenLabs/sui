@@ -105,6 +105,8 @@ pub struct SuiTransactionBlockResponseOptions {
     pub show_object_changes: bool,
     /// Whether to show balance_changes. Default to be False
     pub show_balance_changes: bool,
+    /// Whether to show raw transaction effects. Default to be False
+    pub show_raw_effects: bool,
 }
 
 impl SuiTransactionBlockResponseOptions {
@@ -120,6 +122,7 @@ impl SuiTransactionBlockResponseOptions {
             show_events: true,
             show_object_changes: true,
             show_balance_changes: true,
+            show_raw_effects: true,
         }
     }
 
@@ -153,6 +156,11 @@ impl SuiTransactionBlockResponseOptions {
         self
     }
 
+    pub fn with_raw_effects(mut self) -> Self {
+        self.show_raw_effects = true;
+        self
+    }
+
     /// default to return `WaitForEffectsCert` unless some options require
     /// local execution
     pub fn default_execution_request_type(&self) -> ExecuteTransactionRequestType {
@@ -177,6 +185,7 @@ impl SuiTransactionBlockResponseOptions {
             || self.show_events
             || self.show_balance_changes
             || self.show_object_changes
+            || self.show_raw_effects
     }
 
     pub fn only_digest(&self) -> bool {
@@ -220,6 +229,8 @@ pub struct SuiTransactionBlockResponse {
     pub checkpoint: Option<CheckpointSequenceNumber>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub errors: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub raw_effects: Vec<u8>,
 }
 
 impl SuiTransactionBlockResponse {

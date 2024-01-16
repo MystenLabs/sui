@@ -58,6 +58,7 @@ impl TryFrom<SuiTransactionBlockResponse> for CheckpointTransactionBlockResponse
             confirmed_local_execution,
             checkpoint,
             errors,
+            raw_effects: _,
         } = response;
 
         let transaction = transaction.ok_or_else(|| {
@@ -344,6 +345,10 @@ impl From<SuiTransactionBlockResponseWithOptions> for SuiTransactionBlockRespons
             confirmed_local_execution: response.confirmed_local_execution,
             checkpoint: response.checkpoint,
             errors: vec![],
+            raw_effects: options
+                .show_raw_effects
+                .then_some(response.raw_effects)
+                .unwrap_or_default(),
         }
     }
 }
