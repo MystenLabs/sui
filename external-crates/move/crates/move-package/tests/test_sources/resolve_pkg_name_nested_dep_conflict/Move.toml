@@ -16,7 +16,7 @@
 #                 +----+
 
 [package]
-name = "Root"
+name = "Root-rename"
 
 [dependencies]
 B = { local = "./deps_only/B" }

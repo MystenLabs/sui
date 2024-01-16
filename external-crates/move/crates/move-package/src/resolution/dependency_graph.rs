@@ -218,9 +218,11 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 root_manifest.package.name
             )
         })?;
+        let root_pkg_orig_name = root_manifest.package.name;
         let (mut dep_graphs, resolved_name_deps, mut dep_orig_names) = self.collect_graphs(
             parent,
             root_pkg_name,
+            root_pkg_orig_name,
             root_path.clone(),
             DependencyMode::Always,
             root_manifest.dependencies.clone(),
@@ -232,6 +234,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         let (dev_dep_graphs, dev_resolved_name_deps, dev_dep_orig_names) = self.collect_graphs(
             parent,
             root_pkg_name,
+            root_pkg_orig_name,
             root_path.clone(),
             DependencyMode::DevOnly,
             root_manifest.dev_dependencies.clone(),
@@ -294,6 +297,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         {
             g.prune_subgraph(
                 root_pkg_name,
+                root_pkg_orig_name,
                 *dep_name,
                 *dep_orig_names.get(dep_name).unwrap(),
                 *is_override,
@@ -309,7 +313,14 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         // we can mash overrides together as the sets cannot overlap (it's asserted during pruning)
         overrides.extend(dev_overrides);
 
-        combined_graph.merge(dep_graphs, parent, &all_deps, &overrides, &dep_orig_names)?;
+        combined_graph.merge(
+            dep_graphs,
+            parent,
+            &all_deps,
+            &overrides,
+            &dep_orig_names,
+            root_pkg_orig_name,
+        )?;
 
         combined_graph.check_acyclic()?;
         combined_graph.discover_always_deps();
@@ -323,6 +334,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         &mut self,
         parent: &PM::DependencyKind,
         parent_pkg: PM::PackageName,
+        parent_pkg_orig_name: PM::PackageName,
         root_path: PathBuf,
         mode: DependencyMode,
         dependencies: PM::Dependencies,
@@ -347,7 +359,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 .with_context(|| {
                     format!(
                         "Failed to resolve dependencies for package '{}'",
-                        parent_pkg
+                        parent_pkg_orig_name
                     )
                 })?;
             dep_graphs.insert(
@@ -458,6 +470,7 @@ impl DependencyGraph {
     fn prune_subgraph(
         &mut self,
         root_package: PM::PackageName,
+        root_package_orig_name: PM::PackageName,
         dep_name: PM::PackageName,
         dep_orig_name: PM::PackageName,
         is_override: bool,
@@ -480,9 +493,9 @@ impl DependencyGraph {
                 &mut dev_o,
                 mode == DependencyMode::DevOnly,
             )?;
-            self.prune_overriden_pkgs(root_package, mode, &o, &dev_o)?;
+            self.prune_overriden_pkgs(root_package_orig_name, mode, &o, &dev_o)?;
         } else {
-            self.prune_overriden_pkgs(root_package, mode, overrides, dev_overrides)?;
+            self.prune_overriden_pkgs(root_package_orig_name, mode, overrides, dev_overrides)?;
         }
         Ok(())
     }
@@ -493,7 +506,7 @@ impl DependencyGraph {
         &self,
         pruned_pkgs: &mut BTreeSet<PM::PackageName>,
         reachable_pkgs: &mut BTreeSet<PM::PackageName>,
-        root_pkg_name: PM::PackageName,
+        root_pkg_orig_name: PM::PackageName,
         from_pkg_name: PM::PackageName,
         from_pkg_orig_name: PM::PackageName,
         mode: DependencyMode,
@@ -513,7 +526,7 @@ impl DependencyGraph {
         if !override_found {
             override_found = self
                 .get_dep_override(
-                    root_pkg_name,
+                    root_pkg_orig_name,
                     from_pkg_name,
                     from_pkg_orig_name,
                     overrides,
@@ -547,7 +560,7 @@ impl DependencyGraph {
             self.find_pruned_pkgs(
                 pruned_pkgs,
                 reachable_pkgs,
-                root_pkg_name,
+                root_pkg_orig_name,
                 to_pkg_name,
                 to_pkg_orig_name,
                 mode,
@@ -562,7 +575,7 @@ impl DependencyGraph {
     /// Prunes packages in a sub-graph based on the overrides information from the outer graph.
     fn prune_overriden_pkgs(
         &mut self,
-        root_pkg_name: PM::PackageName,
+        root_pkg_orig_name: PM::PackageName,
         mode: DependencyMode,
         overrides: &BTreeMap<PM::PackageName, Package>,
         dev_overrides: &BTreeMap<PM::PackageName, Package>,
@@ -573,7 +586,7 @@ impl DependencyGraph {
         self.find_pruned_pkgs(
             &mut pruned_pkgs,
             &mut reachable_pkgs,
-            root_pkg_name,
+            root_pkg_orig_name,
             from_pkg_name,
             from_pkg_name,
             mode,
@@ -602,6 +615,7 @@ impl DependencyGraph {
         dependencies: &PM::Dependencies,
         overrides: &BTreeMap<PM::PackageName, Package>,
         dep_orig_names: &BTreeMap<Symbol, PM::PackageName>,
+        root_pkg_orig_name: Symbol,
     ) -> Result<()> {
         if !self.always_deps.is_empty() {
             bail!("Merging dependencies into a graph after calculating its 'always' dependencies");
@@ -688,15 +702,15 @@ impl DependencyGraph {
                         get_original_dep_name(&graph_info.g, pkg_name).to_string();
 
                     bail!(
-                        "When resolving dependencies for package {0}, conflicting versions \
+                        "When resolving dependencies for package {root_pkg_orig_name}, conflicting versions \
                          of package {conflict_dep_orig_name} found:\
-                         \nAt {3}\n\t{existing_conflict_dep_orig_name} = {1}\
-                         \nAt {4}\n\t{conflict_dep_orig_name} = {2}",
-                        self.root_package,
+                         \nAt {2}\n\t{existing_conflict_dep_orig_name} = {0}\
+                         \nAt {3}\n\t{conflict_dep_orig_name} = {1}",
                         PackageWithResolverTOML(existing_pkg),
                         PackageWithResolverTOML(pkg),
                         dep_path_from_root(
                             self.root_package,
+                            root_pkg_orig_name,
                             existing_graph,
                             *existing_immediate_dep_orig_name,
                             pkg_name,
@@ -704,6 +718,7 @@ impl DependencyGraph {
                         )?,
                         dep_path_from_root(
                             self.root_package,
+                            root_pkg_orig_name,
                             &graph_info.g,
                             *immediate_dep_orig_name,
                             pkg_name,
@@ -735,12 +750,12 @@ impl DependencyGraph {
                     Ok(_) => continue,
                     Err((existing_pkg_deps, pkg_deps)) => {
                         bail!(
-                            "When resolving dependencies for package {}, \
+                            "When resolving dependencies for package {root_pkg_orig_name}, \
                              conflicting dependencies found:{}{}",
-                            self.root_package,
                             format_deps(
                                 dep_path_from_root(
                                     self.root_package,
+                                    root_pkg_orig_name,
                                     existing_graph,
                                     *existing_immediate_dep_orig_name,
                                     pkg_name,
@@ -751,6 +766,7 @@ impl DependencyGraph {
                             format_deps(
                                 dep_path_from_root(
                                     self.root_package,
+                                    root_pkg_orig_name,
                                     &graph_info.g,
                                     *immediate_dep_orig_name,
                                     pkg_name,
@@ -875,7 +891,7 @@ impl DependencyGraph {
     /// dependencies (`dev_only` is true).
     fn get_dep_override<'a>(
         &self,
-        root_pkg_name: PM::PackageName,
+        root_pkg_orig_name: PM::PackageName,
         pkg_name: PM::PackageName,
         pkg_orig_name: PM::PackageName,
         overrides: &'a BTreeMap<Symbol, Package>,
@@ -889,7 +905,7 @@ impl DependencyGraph {
             if let Some(dev_pkg) = dev_overrides.get(&pkg_name) {
                 bail!(
                     "Conflicting \"regular\" and \"dev\" overrides found in {0}:\n{1} = {2}\n{1} = {3}",
-                    root_pkg_name,
+                    root_pkg_orig_name,
                     pkg_orig_name,
                     PackageWithResolverTOML(pkg),
                     PackageWithResolverTOML(dev_pkg),
@@ -1645,6 +1661,7 @@ fn check_for_dep_cycles(
 /// format.
 fn dep_path_from_root(
     root_package: PM::PackageName,
+    root_package_orig_name: PM::PackageName,
     graph: &DependencyGraph,
     orig_dep_name: PM::PackageName,
     pkg_name: PM::PackageName,
@@ -1660,7 +1677,7 @@ fn dep_path_from_root(
         None => bail!(
             "When resolving dependencies for package {}, \
              expected a dependency path between {} and {} which does not exist",
-            root_package,
+            root_package_orig_name,
             graph.root_package,
             pkg_name
         ),

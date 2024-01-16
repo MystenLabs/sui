@@ -1,9 +1,9 @@
 ResolvedGraph {
     graph: DependencyGraph {
         root_path: "tests/test_sources/resolve_pkg_name",
-        root_package: "Root",
+        root_package: "Root-resolved",
         package_graph: {
-            "Root": [
+            "Root-resolved": [
                 (
                     "A-resolved",
                     Outgoing,
@@ -15,7 +15,7 @@ ResolvedGraph {
             ],
             "A-resolved": [
                 (
-                    "Root",
+                    "Root-resolved",
                     Incoming,
                 ),
                 (
@@ -35,7 +35,7 @@ ResolvedGraph {
             ],
             "B-resolved": [
                 (
-                    "Root",
+                    "Root-resolved",
                     Incoming,
                 ),
                 (
@@ -68,9 +68,9 @@ ResolvedGraph {
             "A-resolved",
             "B-resolved",
             "C-resolved",
-            "Root",
+            "Root-resolved",
         },
-        manifest_digest: "FFDFB5D629DD7F369748C7836229CEDDDA69C469BAA5E822212BE53BE968F042",
+        manifest_digest: "6F18190939664D7ECC8F2DC327E079037A743E0CFF3FA5F72DABD2B6B5C3D200",
         deps_digest: "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600",
     },
     build_options: BuildConfig {
@@ -212,10 +212,10 @@ ResolvedGraph {
             },
             source_digest: "ELIDED_FOR_TEST",
         },
-        "Root": Package {
+        "Root-resolved": Package {
             source_package: SourceManifest {
                 package: PackageInfo {
-                    name: "Root",
+                    name: "Root-rename",
                     authors: [],
                     license: None,
                     edition: None,

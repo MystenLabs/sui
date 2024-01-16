@@ -240,6 +240,7 @@ fn merge_simple() {
             dependencies,
             &BTreeMap::new(),
             &orig_names,
+            Symbol::from("Root")
         )
         .is_ok(),);
     assert_eq!(
@@ -291,7 +292,8 @@ fn merge_into_root() {
             &DependencyKind::default(),
             dependencies,
             &BTreeMap::new(),
-            &orig_names
+            &orig_names,
+            Symbol::from("Root")
         )
         .is_ok());
 
@@ -335,6 +337,7 @@ fn merge_detached() {
         &BTreeMap::new(),
         &BTreeMap::new(),
         &orig_names,
+        Symbol::from("Root"),
     ) else {
         panic!("Inner's root is not part of outer's graph, so this should fail");
     };
@@ -372,6 +375,7 @@ fn merge_after_calculating_always_deps() {
         &BTreeMap::new(),
         &BTreeMap::new(),
         &orig_names,
+        Symbol::from("Root"),
     ) else {
         panic!("Outer's always deps have already been calculated so this should fail");
     };
@@ -448,7 +452,8 @@ fn merge_overlapping() {
             &DependencyKind::default(),
             dependencies,
             &BTreeMap::new(),
-            &orig_names
+            &orig_names,
+            Symbol::from("Root")
         )
         .is_ok());
 }
@@ -522,6 +527,7 @@ fn merge_overlapping_different_deps() {
         dependencies,
         &BTreeMap::new(),
         &orig_names,
+        Symbol::from("Root"),
     ) else {
         panic!("Outer and inner mention package A which has different dependencies in both.");
     };
