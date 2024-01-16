@@ -16,19 +16,19 @@ along with the actual `coin` for the payment.
 ```move
 /// A unique payment for a good or service that can be uniquely identified by
 /// `payment_id`.
-struct IdentifiedPayment has key {
-    // Object ID
+struct IdentifiedPayment has key, store {
+    /// Object ID
     id: UID,
-    // The unique id for the good/service being paid for
+    /// The unique id for the good/service being paid for
     payment_id: u64,
-    // The payment
+    /// The payment
     coin: Coin<SUI>,
 }
 ```
 
 Using this, customers can make a payment with a unique payment ID to an address
-using the function `fun make_payment(payment_id: u64, coin: Coin<SUI>, to:
-address)`. This function creates an `IdentifiedPayment`, sends it to the `to`
+using the function `fun make_payment(payment_id: u64, coin: Coin<SUI>, to: address)`.
+This function creates an `IdentifiedPayment`, sends it to the `to`
 address, and emits an event with the payment's ID, the recipient, the amount
 paid, and the payer.
 
@@ -94,14 +94,19 @@ would involve taking the shared `Register` object for the restaurant and adding
 the payment as a dynamic object field under it:
 
 ```move
-public fun make_shared_payment(register_uid: &mut UID, payment_id: u64, coin: Coin<SUI>, ctx: &mut TxContext) {
+public fun make_shared_payment(
+    register_uid: &mut UID,
+    payment_id: u64,
+    coin: Coin<SUI>,
+    ctx: &mut TxContext
+) {
     let identified_payment = IdentifiedPayment {
         id: object::new(ctx),
         payment_id,
         coin,
     };
     // Add the payment as a dynamic field under the register object
-    dynamic_object_field::add(register_uid, payment_id, identified_payment)
+    dynamic_field::add(register_uid, payment_id, identified_payment)
 }
 ```
 
@@ -126,7 +131,8 @@ You can see the Move implementation for this section [here](./shared-no-tto/sour
 With transfer-to-object, we can combine the benefits of the two previous implementations:
 
 - The object ID stability of the shared object register.
-- The ability to transfer the ownership of the object in case of key compromise.
+- The ability to set a different owner of the `Register` object in case of key
+  compromise (or e.g., selling the business) by changing the `owner` field.
 - An easy way of dynamically adding, removing, and enforcing permissions on who
   can withdraw payments.
 - Payments can still be made using the `identified_payment::make_payment`
@@ -167,10 +173,18 @@ of `handle_payment`:
 /// We take the `Register` shared object mutably, along with a "ticket"
 // `handle_payment` that we can exchange for the actual `IdentifiedPayment` object
 // that it is associated with.
-public fun handle_payment(register: &mut Register, handle_payment: Receiving<IdentifiedPayment>, ctx: &TxContext): IdentifiedPayment {
-    // If the sender of the transaction that wants to handle this payment is in the list of authorized employees in the `Register` object
-    // then we will permit them to withdraw the `IdentifiedPayment` object.
-    assert!(vector::contains(&register.authorized_employees, tx_context::sender(ctx)), ENotAuthorized);
+public fun handle_payment(
+    register: &mut Register,
+    handle_payment: Receiving<IdentifiedPayment>,
+    ctx: &TxContext
+): IdentifiedPayment {
+    // If the sender of the transaction that wants to handle this payment is in
+    // the list of authorized employees in the `Register` object then we will
+    // permit them to withdraw the `IdentifiedPayment` object.
+    assert!(
+        vector::contains(&register.authorized_employees, tx_context::sender(ctx)),
+        ENotAuthorized
+    );
     // Authorization check successful -- exchange the `handle_payment` ticket
     // for the `IdentifiedPayment` object and return it.
     transfer::public_receive(&mut register.id, handle_payment)
@@ -205,7 +219,11 @@ rule for it so that only the address that we specified for it can receive the
 payment:
 
 ```move
-public fun receive(parent: &mut UID, ticket: Receiving<EarmarkedPayment>, ctx: &TxContext): IdentifiedPayment {
+public fun receive(
+    parent: &mut UID,
+    ticket: Receiving<EarmarkedPayment>,
+    ctx: &TxContext
+): IdentifiedPayment {
     let EarmarkedPayment { id, payment, for } = transfer::receive(parent, ticket);
     // If the sender isn't the address we specified, the transaction will abort.
     assert!(tx_context::sender(ctx) == for, ENotEarmarkedForSender);

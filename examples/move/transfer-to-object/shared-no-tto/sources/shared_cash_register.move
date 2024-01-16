@@ -8,7 +8,7 @@ module shared_no_tto::shared_cash_register {
     use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
-    use sui::dynamic_object_field;
+    use sui::dynamic_field;
     use sui::vec_set::{Self, VecSet};
     use std::vector;
     use std::string::String;
@@ -90,8 +90,8 @@ module shared_no_tto::shared_cash_register {
     public fun process_payment(register: &mut CashRegister, payment_id: u64, ctx: &TxContext): Coin<SUI> {
         let sender = tx_context::sender(ctx);
         assert!(vec_set::contains(&register.authorized_individuals, &sender) || sender == register.register_owner, ENotAuthorized);
-        assert!(dynamic_object_field::exists_(&register.id, payment_id), EInvalidPaymentID);
-        let payment: IdentifiedPayment = dynamic_object_field::remove(&mut register.id, payment_id);
+        assert!(dynamic_field::exists_(&register.id, payment_id), EInvalidPaymentID);
+        let payment: IdentifiedPayment = dynamic_field::remove(&mut register.id, payment_id);
         let (_, coin) = identified_payment::unpack(payment);
         coin
     }

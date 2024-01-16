@@ -9,7 +9,7 @@ module common::identified_payment {
     use sui::transfer::{Self, Receiving};
     use sui::tx_context::{Self, TxContext};
     use sui::event;
-    use sui::dynamic_object_field;
+    use sui::dynamic_field;
 
     const ENotEarmarkedForSender: u64 = 0;
 
@@ -87,7 +87,7 @@ module common::identified_payment {
             payment_amount,
             originator: tx_context::sender(ctx),
         });
-        dynamic_object_field::add(register_uid, payment_id, identified_payment)
+        dynamic_field::add(register_uid, payment_id, identified_payment)
     }
 
     /// Process an `IdentifiedPayment` payment returning back the payments ID,
