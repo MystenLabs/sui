@@ -222,7 +222,7 @@ in the `splitStrategies.ts` file.
 
 ## Tying it all together: end-to-end examples
 
-> **Tip**: You can find the code and run each use case in the [test/unit/executorServiceHandler.test.ts](https://github.com/MystenLabs/Sui_Owned_Object_Pools/blob/3d5c984d9754b9da0f0081964ac4ca590c6e2e95/src/executorServiceHandler.ts) file.
+> **Tip**: You can find the code and run each use case in the [test/unit/executorServiceHandler.test.ts](./test/unit/executorServiceHandler.test.ts) file.
 
 ### Use case 1: Parallel coin transfers service—Multiple Coins
 
@@ -475,7 +475,7 @@ const sponsorLambda = async (
 // (...)
 ```
 
-You can find the full code of this example [here](https://github.com/MystenLabs/Sui_Owned_Object_Pools/blob/3d5c984d9754b9da0f0081964ac4ca590c6e2e95/test/unit/executorServiceHandler.test.ts#L124).
+You can find the full code of this example [here](./test/unit/executorServiceHandler.test.ts#L124).
 
 ## Processing Flow
 
@@ -505,7 +505,7 @@ When the script is complete you only need to add a `ADMIN_SECRET_KEY` and a `TES
 
 Usually we use the testnet network for testing. Switch to testnet with: `sui client switch --env testnet`
 
-At the end of the setup your .env should look like the template [.test.env.example](./test/.env.example).
+At the end of the setup your .env should look like the template [.test.env.example](./test/.test.env.example).
 i.e.
 
 ```[.env]
