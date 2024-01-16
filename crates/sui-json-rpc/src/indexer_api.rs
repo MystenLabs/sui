@@ -31,16 +31,16 @@ use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
     dynamic_field::{DynamicFieldName, Field},
-    error::SuiObjectResponseError,
+    error::{SuiObjectResponseError, UserInputError},
     event::EventID,
 };
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tracing::{debug, instrument, warn};
 
 use crate::{
-    authority_state::StateRead,
+    authority_state::{StateRead, StateReadError, StateReadResult},
     error::{Error, SuiRpcInputError},
-    name_service::{Domain, NameRecord, NameServiceConfig, NameServiceError, SubNameRecord},
+    name_service::{Domain, NameRecord, NameServiceConfig, NameServiceError},
     with_tracing, SuiRpcModule,
 };
 
@@ -120,6 +120,21 @@ impl<R: ReadApiServer> IndexerApi<R> {
         match self.subscription_semaphore.clone().try_acquire_owned() {
             Ok(p) => Ok(p),
             Err(_) => bail!("Resources exhausted"),
+        }
+    }
+
+    async fn get_latest_checkpoint_timestamp_ms(&self) -> StateReadResult<u64> {
+        let latest_checkpoint = self.state.get_latest_checkpoint_sequence_number()?;
+
+        let checkpoint = self
+            .state
+            .get_checkpoint_by_sequence_number(latest_checkpoint)?;
+
+        match checkpoint {
+            Some(data) => Ok(data.timestamp_ms),
+            None => Err(StateReadError::from(
+                UserInputError::VerifiedCheckpointNotFound(latest_checkpoint),
+            )),
         }
     }
 }
@@ -370,103 +385,60 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
     #[instrument(skip(self))]
     async fn resolve_name_service_address(&self, name: String) -> RpcResult<Option<SuiAddress>> {
         with_tracing!(async move {
-            let requested_domain = name.parse::<Domain>().map_err(Error::from)?;
+            // prepare the requested domain's field id.
+            let domain = name.parse::<Domain>().map_err(Error::from)?;
+            let record_id = self.name_service_config.record_field_id(&domain);
 
-            // Get the SLD name, if we're operating on a subdomain, or use the requested as is.
-            let sld = if requested_domain.is_subdomain() {
-                requested_domain.sld()
-            } else {
-                requested_domain.clone()
-            };
+            // prepare the parent's field id.
+            let parent_domain = domain.parent();
+            let parent_record_id = self.name_service_config.record_field_id(&parent_domain);
 
-            let sld_record_id = self.name_service_config.record_field_id(&sld, None);
+            let current_timestamp_ms = self.get_latest_checkpoint_timestamp_ms().await?;
 
-            let Some(field_record_object) = self.state.get_object(&sld_record_id).await? else {
-                return Ok(None);
-            };
+            // Do these two reads in parallel.
+            let mut requests = vec![self.state.get_object(&record_id)];
 
-            let sld_record = NameRecord::try_from(field_record_object)?;
-
-            // Check if the record is expired.
-            if sld_record.is_expired() {
-                return Err(Error::from(NameServiceError::NameExpired));
+            // Also add the parent in the DB reads if the requested domain is a subdomain.
+            if domain.is_subdomain() {
+                requests.push(self.state.get_object(&parent_record_id));
             }
 
-            // For SLD, we can resolve here.
-            if !requested_domain.is_subdomain() {
-                return Ok(sld_record.target_address);
-            }
-            // == Doing a subdomain lookup from this point forward ==
-
-            // Find the namespace from the name record's metadata.
-            let namespace_table_id = sld_record.namespace_table_id();
-
-            if namespace_table_id.is_none() {
-                return Ok(None);
-            }
-
-            // Look-up the subdomain record object.
-            let sub_record_object_id = self
-                .name_service_config
-                .record_field_id(&requested_domain, namespace_table_id);
-
-            let subdomain_parent = requested_domain.parent();
-
-            let sub_parent_record_object_id = self
-                .name_service_config
-                .record_field_id(&subdomain_parent, namespace_table_id);
-
-            // Flag if the subdomain's parent is also a subdomain.
-            let parent_is_subdomain = requested_domain.depth() > 3;
-
-            // Gather all requests to execute concurrently.
-            let mut requests = vec![self.state.get_object(&sub_record_object_id)];
-
-            // We only query the parent if we're looking at a subdomain whose parent is also a subdomain.
-            // Subdomains on the first level (depth === 3) have the SLD as their parent, and we already have the SLD fetched & validated.
-            if parent_is_subdomain {
-                requests.push(self.state.get_object(&sub_parent_record_object_id));
-            }
-
-            // Base indexer crate seems to fetch multiple objects similarly so this shouldn't affect performance.
+            // Couldn't find a `multi_get_object` for this crate (looks like it uses a k,v db)
+            // Always fetching both parent + child at the same time (even for node subdomains),
+            // to avoid sequential db reads.
             let mut results = future::try_join_all(requests).await?;
 
-            // Removing without checking vector len, since it is known (== 1 or 2 depending on `has_subdomain_parent` flag).
-            let Some(requested_domain) = results.remove(0) else {
+            // Removing without checking vector len, since it is known (== 1 or 2 depending on whether
+            // it is a subdomain or not).
+            let Some(object) = results.remove(0) else {
                 return Ok(None);
             };
 
-            let sub_record = SubNameRecord::try_from(requested_domain)?;
+            let name_record = NameRecord::try_from(object)?;
 
-            // Subdomain record is a node record and has expired.
-            if sub_record.is_node_expired() {
-                return Err(Error::from(NameServiceError::NameExpired));
+            // Handling SLD names & node subdomains is the same.
+            // We check their expiration, and and if not expired, return the target address.
+            if !domain.is_subdomain() || !name_record.is_leaf_record() {
+                if name_record.is_node_expired(current_timestamp_ms) {
+                    return Err(Error::from(NameServiceError::NameExpired));
+                }
+                return Ok(name_record.target_address);
             }
 
-            // For node records (non-leaf), we can resolve at this point.
-            if !sub_record.is_leaf {
-                return Ok(sub_record.name_record.target_address);
-            }
-
-            // If the subdomain is a leaf, but has a SLD parent, we can resolve.
-            // At this point, we have already checked that the SLD is valid.
-            if !parent_is_subdomain {
-                return Ok(sub_record.name_record.target_address);
-            }
-
-            // For leaf names with subdomain parents, we also need to check the parent's state.
-            // If the parent doesn't exist, the name has expired.
-            let Some(sub_parent_object) = results.remove(0) else {
+            // == Handle leaf subdomains case ==
+            // We can remove since we know that if we're here, we have a parent
+            // (which also means we queried it in the future above).
+            let Some(parent_object) = results.remove(0) else {
                 return Err(Error::from(NameServiceError::NameExpired));
             };
 
-            let sub_parent_record = SubNameRecord::try_from(sub_parent_object)?;
+            let parent_name_record = NameRecord::try_from(parent_object)?;
 
-            if sub_record.is_leaf_expired(&sub_parent_record.name_record) {
+            if name_record.is_leaf_expired(&parent_name_record, current_timestamp_ms) {
                 return Err(Error::from(NameServiceError::NameExpired));
             }
 
-            Ok(sub_record.name_record.target_address)
+            Ok(name_record.target_address)
         })
     }
 

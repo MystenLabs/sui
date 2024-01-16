@@ -296,7 +296,7 @@ impl IndexerApiServer for IndexerApiV2 {
             .parse::<Domain>()
             .map_err(IndexerError::NameServiceError)?;
 
-        let record_id = self.name_service_config.record_field_id(&domain, None);
+        let record_id = self.name_service_config.record_field_id(&domain);
 
         let field_record_object = match self.inner.get_object_in_blocking_task(record_id).await? {
             Some(o) => o,

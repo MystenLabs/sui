@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::marker::PhantomData;
 use std::str::FromStr;
-use std::time::SystemTime;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::collection_types::VecMap;
 use sui_types::dynamic_field::Field;
@@ -26,7 +25,7 @@ const NAME_SERVICE_DEFAULT_REVERSE_REGISTRY: &str =
     "0x2fd099e17a292d2bc541df474f9fafa595653848cbabb2d7a4656ec786a1969f";
 const _NAME_SERVICE_OBJECT_ADDRESS: &str =
     "0x6e0ddefc0ad98889c04bab9639e512c21766c5e6366f89e696956d9be6952871";
-const NAMESPACE_TABLE_KEY: &str = "NS_TABLE_ID";
+const LEAF_EXPIRATION_TIMESTAMP: u64 = 0;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Registry {
@@ -62,14 +61,6 @@ impl Domain {
             module: NAME_SERVICE_DOMAIN_MODULE.to_owned(),
             name: NAME_SERVICE_DOMAIN_STRUCT.to_owned(),
             type_params: vec![],
-        }
-    }
-
-    /// Returns the SLD (second level domain) for a domain.
-    /// E.g. `test.test.test.example.sui` -> `example.sui`
-    pub fn sld(&self) -> Domain {
-        Domain {
-            labels: self.labels[0..2].to_vec(),
         }
     }
 
@@ -116,11 +107,11 @@ impl NameServiceConfig {
         }
     }
 
-    pub fn record_field_id(&self, domain: &Domain, registry_id: Option<ObjectID>) -> ObjectID {
+    pub fn record_field_id(&self, domain: &Domain) -> ObjectID {
         let domain_bytes = bcs::to_bytes(domain).unwrap();
 
         sui_types::dynamic_field::derive_dynamic_field_id(
-            registry_id.unwrap_or(self.registry_id),
+            self.registry_id,
             &self.domain_type_tag,
             &domain_bytes,
         )
@@ -167,7 +158,7 @@ impl FromStr for Domain {
             .map(validate_label)
             .collect::<Result<Vec<_>, Self::Err>>()?;
 
-        if labels.is_empty() {
+        if labels.len() < 2 {
             return Err(NameServiceError::LabelsEmpty);
         }
 
@@ -243,25 +234,26 @@ pub struct NameRecord {
 }
 
 impl NameRecord {
-    /// Parses the name record's metadata and returns the `objectId` of the registry table.
-    pub fn namespace_table_id(&self) -> Option<ObjectID> {
-        let table_id_entry = self
-            .data
-            .contents
-            .iter()
-            .find(|entry| entry.key == NAMESPACE_TABLE_KEY)?;
-
-        ObjectID::from_str(&table_id_entry.value).ok()
+    /// Leaf records expire when their parent expires.
+    pub fn is_leaf_record(&self) -> bool {
+        self.expiration_timestamp_ms == LEAF_EXPIRATION_TIMESTAMP
     }
 
-    /// Checks if a name record has expired.
-    pub fn is_expired(&self) -> bool {
-        let current_timestamp_ms = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_millis();
+    /// Checks if a leaf record has expired.
+    pub fn is_leaf_expired(&self, parent: &NameRecord, checkpoint_timestamp_ms: u64) -> bool {
+        self.is_leaf_record()
+            && (parent.is_node_expired(checkpoint_timestamp_ms) || !self.has_valid_parent(parent))
+    }
 
-        (self.expiration_timestamp_ms as u128) < current_timestamp_ms
+    /// Validate that a leaf record's NFT_ID is equal to the parent's NFT_ID.
+    pub fn has_valid_parent(&self, parent: &NameRecord) -> bool {
+        self.nft_id == parent.nft_id
+    }
+
+    /// Checks if a `node` name record has expired.
+    /// Expects the latest checkpoint's timestamp.
+    pub fn is_node_expired(&self, checkpoint_timestamp_ms: u64) -> bool {
+        self.expiration_timestamp_ms < checkpoint_timestamp_ms
     }
 }
 
@@ -272,49 +264,6 @@ impl TryFrom<Object> for NameRecord {
         object
             .to_rust::<Field<Domain, Self>>()
             .map(|record| record.value)
-            .ok_or_else(|| NameServiceError::MalformedObject(object.id()))
-    }
-}
-
-/// A single record in a Namespace registry.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct SubNameRecord {
-    /// NameRecord for the Subdomain
-    pub name_record: NameRecord,
-    /// Whether the subdomain is a `leaf` or a `node`
-    pub is_leaf: bool,
-    /// Whether the subdomain can extend the expiration based on the parent's
-    pub allow_extension: bool,
-    /// Whether the creation of children is allowed for that subdomain.
-    pub allow_creation: bool,
-}
-
-impl SubNameRecord {
-    /// Validate that the leaf record's NFT_ID is equal to the parent's NFT_ID.
-    pub fn has_valid_parent(&self, parent: &NameRecord) -> bool {
-        self.name_record.nft_id == parent.nft_id
-    }
-
-    /// Check if a leaf subdomain has expired by passing the parent's name record.
-    /// Also is expired when the parent has changed.
-    pub fn is_leaf_expired(&self, parent: &NameRecord) -> bool {
-        self.is_leaf && (parent.is_expired() || !self.has_valid_parent(parent))
-    }
-
-    /// Check if a non-leaf (node) subdomain has expired.
-    /// Returns false for leaf names as expiration check has extra business logic (parent's expiration).
-    pub fn is_node_expired(&self) -> bool {
-        !self.is_leaf && self.name_record.is_expired()
-    }
-}
-
-impl TryFrom<Object> for SubNameRecord {
-    type Error = NameServiceError;
-
-    fn try_from(object: Object) -> Result<Self, NameServiceError> {
-        object
-            .to_rust::<Field<Domain, Self>>()
-            .map(|record: Field<Domain, SubNameRecord>| record.value)
             .ok_or_else(|| NameServiceError::MalformedObject(object.id()))
     }
 }
