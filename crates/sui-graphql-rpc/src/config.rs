@@ -191,6 +191,7 @@ impl ServiceConfig {
     }
 }
 
+/// The enabled features and service limits configured by the server.
 #[Object]
 impl ServiceConfig {
     /// Check whether `feature` is enabled on this GraphQL service.

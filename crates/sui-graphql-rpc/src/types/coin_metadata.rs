@@ -19,6 +19,7 @@ pub(crate) enum CoinMetadataDowncastError {
     Bcs(bcs::Error),
 }
 
+/// The metadata for a coin type.
 #[Object]
 impl CoinMetadata {
     /// The number of decimal places used to represent the token.

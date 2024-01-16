@@ -56,6 +56,7 @@ pub(crate) type CUnchangedSharedObject = Cursor<usize>;
 pub(crate) type CObjectChange = Cursor<usize>;
 pub(crate) type CBalanceChange = Cursor<usize>;
 
+/// The effects representing the result of executing a transaction block.
 #[Object]
 impl TransactionBlockEffects {
     /// The transaction that ran to produce these effects.

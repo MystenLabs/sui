@@ -54,6 +54,8 @@ pub(crate) struct MovePackageDowncastError;
 
 pub(crate) type CModule = Cursor<String>;
 
+/// A MovePackage is a kind of Move object that represents code that has been published on chain.
+/// It exposes information about its modules, type definitions, functions, and dependencies.
 #[Object]
 impl MovePackage {
     /// A representation of the module called `name` in this package, including the

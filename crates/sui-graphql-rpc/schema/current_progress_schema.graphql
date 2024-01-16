@@ -58,6 +58,9 @@ type ActiveJwkEdge {
 	cursor: String!
 }
 
+"""
+The 32-byte address that is an account address (corresponding to a public key).
+"""
 type Address implements IOwner {
 	"""
 	Similar behavior to the `transactionBlocks` in Query but supporting the additional
@@ -65,8 +68,17 @@ type Address implements IOwner {
 	"""
 	transactionBlocks(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection!
 	address: SuiAddress!
+	"""
+	The objects that are owned by this address.
+	"""
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	"""
+	The balance that this address holds.
+	"""
 	balance(type: String): Balance
+	"""
+	The balance objects for this address.
+	"""
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
 	The coin objects for the given address.
@@ -109,15 +121,18 @@ The possible relationship types for a transaction block: sign, sent, received, o
 """
 enum AddressTransactionBlockRelationship {
 	"""
-	Transactions this address has signed either as a sender or as a sponsor
+	Transactions this address has signed either as a sender or as a sponsor.
 	"""
 	SIGN
 	"""
-	Transactions that sent objects to this addres
+	Transactions that sent objects to this address.
 	"""
 	RECV
 }
 
+"""
+System transaction for creating the on-chain state used by zkLogin.
+"""
 type AuthenticatorStateCreateTransaction {
 	"""
 	A workaround to define an empty variant of a GraphQL union.
@@ -158,11 +173,17 @@ type AuthenticatorStateUpdateTransaction {
 	authenticatorObjInitialSharedVersion: Int!
 }
 
+"""
+Range of checkpoints that the RPC is guaranteed to produce a consistent response for.
+"""
 type AvailableRange {
 	first: Checkpoint
 	last: Checkpoint
 }
 
+"""
+The total balance for a particular coin type.
+"""
 type Balance {
 	"""
 	Coin type for the balance, such as 0x2::sui::SUI
@@ -254,6 +275,9 @@ type BalanceEdge {
 	cursor: String!
 }
 
+"""
+String containing Base64-encoded binary data.
+"""
 scalar Base64
 
 """
@@ -307,6 +331,10 @@ type ChangeEpochTransaction {
 	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection!
 }
 
+"""
+Checkpoints contain finalized transactions and are used for node synchronization
+and global transaction ordering.
+"""
 type Checkpoint {
 	"""
 	A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58. This
@@ -395,6 +423,9 @@ input CheckpointId {
 	sequenceNumber: Int
 }
 
+"""
+Some 0x2::coin::Coin Move object.
+"""
 type Coin {
 	"""
 	Balance of the coin object
@@ -442,6 +473,9 @@ type CoinEdge {
 	cursor: String!
 }
 
+"""
+The metadata for a coin type.
+"""
 type CoinMetadata {
 	"""
 	The number of decimal places used to represent the token.
@@ -548,6 +582,18 @@ type DisplayEntry {
 	error: String
 }
 
+"""
+Dynamic fields are heterogeneous fields that can be added or removed at runtime,
+and can have arbitrary user-assigned names. There are two sub-types of dynamic
+fields:
+
+1) Dynamic Fields can store any value that has the `store` ability, however an object
+stored in this kind of field will be considered wrapped and will not be accessible
+directly via its ID by external tools (explorers, wallets, etc) accessing storage.
+2) Dynamic Object Fields values must be Sui objects (have the `key` and `store`
+abilities, and id: UID as the first field), but will still be directly accessible off-chain
+via their object ID after being attached.
+"""
 type DynamicField {
 	"""
 	The string type, data, and serialized value of the DynamicField's 'name' field.
@@ -648,25 +694,34 @@ type EndOfEpochTransactionKindEdge {
 	cursor: String!
 }
 
+"""
+Operation of the Sui network is temporally partitioned into non-overlapping epochs,
+and the network aims to keep epochs roughly the same duration as each other.
+During a particular epoch the following data is fixed:
+
+- the protocol version
+- the reference gas price
+- the set of participating validators
+"""
 type Epoch {
 	"""
-	The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change
+	The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change.
 	"""
 	epochId: Int!
 	"""
-	The minimum gas price that a quorum of validators are guaranteed to sign a transaction for
+	The minimum gas price that a quorum of validators are guaranteed to sign a transaction for.
 	"""
 	referenceGasPrice: BigInt
 	"""
-	Validator related properties, including the active validators
+	Validator related properties, including the active validators.
 	"""
 	validatorSet: ValidatorSet
 	"""
-	The epoch's starting timestamp
+	The epoch's starting timestamp.
 	"""
 	startTimestamp: DateTime!
 	"""
-	The epoch's ending timestamp
+	The epoch's ending timestamp.
 	"""
 	endTimestamp: DateTime
 	"""
@@ -701,12 +756,13 @@ type Epoch {
 	"""
 	fundInflow: BigInt
 	"""
-	The storage fee rebates paid to users
-	who deleted the data associated with past transactions.
+	The storage fee rebates paid to users who deleted the data associated with past
+	transactions.
 	"""
 	fundOutflow: BigInt
 	"""
-	The epoch's corresponding protocol configuration, including the feature flags and the configuration options
+	The epoch's corresponding protocol configuration, including the feature flags and the
+	configuration options.
 	"""
 	protocolConfigs: ProtocolConfigs!
 	"""
@@ -734,11 +790,11 @@ type Epoch {
 	"""
 	systemStakeSubsidy: StakeSubsidy
 	"""
-	The epoch's corresponding checkpoints
+	The epoch's corresponding checkpoints.
 	"""
 	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	"""
-	The epoch's corresponding transaction blocks
+	The epoch's corresponding transaction blocks.
 	"""
 	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
 }
@@ -760,7 +816,13 @@ type Event {
 	UTC timestamp in milliseconds since epoch (1/1/1970)
 	"""
 	timestamp: DateTime
+	"""
+	The value's Move type.
+	"""
 	type: MoveType!
+	"""
+	The BCS representation of this value, Base64 encoded.
+	"""
 	bcs: Base64!
 	"""
 	Structured contents of a Move value.
@@ -836,6 +898,9 @@ input EventFilter {
 	eventType: String
 }
 
+"""
+The result of an execution, including errors that occurred during said execution.
+"""
 type ExecutionResult {
 	"""
 	The errors field captures any errors that occurred during execution
@@ -905,6 +970,9 @@ type GasCoin {
 	_: Boolean
 }
 
+"""
+Breakdown of gas costs in effects.
+"""
 type GasCostSummary {
 	"""
 	Gas paid for executing this transaction (in MIST).
@@ -927,11 +995,17 @@ type GasCostSummary {
 	nonRefundableStorageFee: BigInt
 }
 
+"""
+Effects related to gas (costs incurred and the identity of the smashed gas object returned).
+"""
 type GasEffects {
 	gasObject: Object
 	gasSummary: GasCostSummary
 }
 
+"""
+Configuration for this transaction's gas price and the coins used to pay for gas.
+"""
 type GasInput {
 	"""
 	Address of the owner of the gas object(s) used
@@ -1115,6 +1189,9 @@ type MoveData =
 """
 scalar MoveData
 
+"""
+Information for a particular field on a Move struct.
+"""
 type MoveField {
 	name: String!
 	type: OpenMoveType
@@ -1269,6 +1346,10 @@ type MoveModuleEdge {
 	cursor: String!
 }
 
+"""
+The representation of an object as a Move Object, which exposes additional information
+(content, module that governs it, version, is transferrable, etc.) about this object.
+"""
 type MoveObject {
 	"""
 	Displays the contents of the MoveObject in a JSON string and through graphql types.  Also
@@ -1301,6 +1382,10 @@ type MoveObject {
 	asCoinMetadata: CoinMetadata
 }
 
+"""
+A MovePackage is a kind of Move object that represents code that has been published on chain.
+It exposes information about its modules, type definitions, functions, and dependencies.
+"""
 type MovePackage {
 	"""
 	A representation of the module called `name` in this package, including the
@@ -1420,7 +1505,7 @@ type MoveStructTypeParameter {
 }
 
 """
-Represents concrete types (no type parameters, no references)
+Represents concrete types (no type parameters, no references).
 """
 type MoveType {
 	"""
@@ -1478,7 +1563,13 @@ type MoveTypeSignature =
 scalar MoveTypeSignature
 
 type MoveValue {
+	"""
+	The value's Move type.
+	"""
 	type: MoveType!
+	"""
+	The BCS representation of this value, Base64 encoded.
+	"""
 	bcs: Base64!
 	"""
 	Structured contents of a Move value.
@@ -1521,6 +1612,9 @@ enum MoveVisibility {
 	FRIEND
 }
 
+"""
+Mutations are used to write to the Sui network.
+"""
 type Mutation {
 	"""
 	Execute a transaction, committing its effects on chain.
@@ -1537,6 +1631,11 @@ type Mutation {
 	executeTransactionBlock(txBytes: String!, signatures: [String!]!): ExecutionResult!
 }
 
+"""
+An object in Sui is a package (set of Move bytecode modules) or object (typed data structure
+with fields) with additional metadata detailing its id, version, transaction digest, owner
+field indicating how this object can be accessed.
+"""
 type Object implements IOwner {
 	version: Int!
 	"""
@@ -1588,7 +1687,8 @@ type Object implements IOwner {
 	"""
 	balance(type: String): Balance
 	"""
-	The balances of all coin types owned by the object. Coins of the same type are grouped together into one Balance.
+	The balances of all coin types owned by the object. Coins of the same type are grouped
+	together into one Balance.
 	"""
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
@@ -1816,12 +1916,24 @@ type OwnedOrImmutable {
 	object: Object
 }
 
+"""
+An Owner is an entity that can own an object. Each Owner is identified by a SuiAddress which
+represents either an Address (corresponding to a public key of an account) or an Object, but
+never both (it is not known up-front whether a given Owner is an Address or an Object).
+"""
 type Owner implements IOwner {
 	asAddress: Address
 	asObject: Object
 	address: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	"""
+	Total balance of all coins with marker type owned by this Owner. If type is not supplied,
+	it defaults to 0x2::sui::SUI.
+	"""
 	balance(type: String): Balance
+	"""
+	The balances of all coin types owned by this Owner.
+	"""
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
 	The coin objects for the given address or object.
@@ -2030,7 +2142,14 @@ type Query {
 	"""
 	serviceConfig: ServiceConfig!
 	owner(address: SuiAddress!): Owner
+	"""
+	The object corresponding to the given address at the (optionally) given version.
+	When no version is given, the latest version is returned.
+	"""
 	object(address: SuiAddress!, version: Int): Object
+	"""
+	Look-up an Account by its SuiAddress.
+	"""
 	address(address: SuiAddress!): Address
 	"""
 	Fetch a structured representation of a concrete type, including its layout information.
@@ -2057,19 +2176,34 @@ type Query {
 	(e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	"""
+	The checkpoints that exist in the network.
+	"""
 	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
+	"""
+	The transaction blocks that exist in the network.
+	"""
 	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	"""
+	The events that exist in the network.
+	"""
 	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection!
+	"""
+	The objects that exist in the network.
+	"""
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	"""
 	Fetch the protocol config by protocol version (defaults to the latest protocol
-	version known to the GraphQL)
+	version known to the GraphQL service).
 	"""
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
 	"""
-	Resolves the owner address of the provided domain name
+	Resolves the owner address of the provided domain name.
 	"""
 	resolveNameServiceAddress(name: String!): Address
+	"""
+	The coin metadata associated with the given coin type.
+	"""
 	coinMetadata(coinType: String!): CoinMetadata
 }
 
@@ -2156,6 +2290,9 @@ type SafeMode {
 	gasSummary: GasCostSummary
 }
 
+"""
+The enabled features and service limits configured by the server.
+"""
 type ServiceConfig {
 	"""
 	Check whether `feature` is enabled on this GraphQL service.
@@ -2318,21 +2455,21 @@ The stake's possible status: active, pending, or unstaked.
 """
 enum StakeStatus {
 	"""
-	The stake object is active in a staking pool and it is generating rewards
+	The stake object is active in a staking pool and it is generating rewards.
 	"""
 	ACTIVE
 	"""
-	The stake awaits to join a staking pool in the next epoch
+	The stake awaits to join a staking pool in the next epoch.
 	"""
 	PENDING
 	"""
-	The stake is no longer active in any staking pool
+	The stake is no longer active in any staking pool.
 	"""
 	UNSTAKED
 }
 
 """
-Parameters related to subsiding staking rewards
+Parameters that control the distribution of the stake subsidy.
 """
 type StakeSubsidy {
 	"""
@@ -2361,17 +2498,20 @@ type StakeSubsidy {
 	decreaseRate: Int
 }
 
+"""
+Represents a 0x3::staking_pool::StakedSui Move object on-chain.
+"""
 type StakedSui {
 	"""
 	A stake can be pending, active, or unstaked
 	"""
 	status: StakeStatus!
 	"""
-	The epoch at which this stake became active
+	The epoch at which this stake became active.
 	"""
 	activatedEpoch: Epoch
 	"""
-	The epoch at which this object was requested to join a stake pool
+	The epoch at which this object was requested to join a stake pool.
 	"""
 	requestedEpoch: Epoch
 	"""
@@ -2614,6 +2754,9 @@ type TransactionBlockEdge {
 	cursor: String!
 }
 
+"""
+The effects representing the result of executing a transaction block.
+"""
 type TransactionBlockEffects {
 	"""
 	The transaction that ran to produce these effects.
@@ -2702,7 +2845,7 @@ enum TransactionBlockKindInput {
 	"""
 	SYSTEM_TX
 	"""
-	A user submitted transaction block
+	A user submitted transaction block.
 	"""
 	PROGRAMMABLE_TX
 }
@@ -2832,11 +2975,11 @@ type UpgradeTransaction {
 
 type Validator {
 	"""
-	Validator's address.
+	The validator's address.
 	"""
 	address: Address!
 	"""
-	Validator's set of credentials.
+	Validator's set of credentials such as public keys, network addresses and others.
 	"""
 	credentials: ValidatorCredentials
 	"""
@@ -2948,6 +3091,9 @@ type Validator {
 	apy: Int
 }
 
+"""
+The credentials related fields associated with a validator.
+"""
 type ValidatorCredentials {
 	protocolPubKey: Base64
 	networkPubKey: Base64

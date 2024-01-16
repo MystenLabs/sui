@@ -11,6 +11,7 @@ pub(crate) struct AvailableRange {
 }
 
 // TODO: do both in one query?
+/// Range of checkpoints that the RPC is guaranteed to produce a consistent response for.
 #[Object]
 impl AvailableRange {
     async fn first(&self, ctx: &Context<'_>) -> Result<Option<Checkpoint>> {

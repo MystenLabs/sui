@@ -40,6 +40,8 @@ pub(crate) struct Checkpoint {
 pub(crate) type Cursor = cursor::Cursor<u64>;
 type Query<ST, GB> = data::Query<ST, checkpoints::table, GB>;
 
+/// Checkpoints contain finalized transactions and are used for node synchronization
+/// and global transaction ordering.
 #[Object]
 impl Checkpoint {
     /// A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58. This

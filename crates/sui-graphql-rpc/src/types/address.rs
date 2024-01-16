@@ -26,12 +26,13 @@ pub(crate) struct Address {
 /// The possible relationship types for a transaction block: sign, sent, received, or paid.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum AddressTransactionBlockRelationship {
-    /// Transactions this address has signed either as a sender or as a sponsor
+    /// Transactions this address has signed either as a sender or as a sponsor.
     Sign,
-    /// Transactions that sent objects to this addres
+    /// Transactions that sent objects to this address.
     Recv,
 }
 
+/// The 32-byte address that is an account address (corresponding to a public key).
 #[Object]
 impl Address {
     /// Similar behavior to the `transactionBlocks` in Query but supporting the additional
@@ -75,6 +76,7 @@ impl Address {
         self.address
     }
 
+    /// The objects that are owned by this address.
     pub async fn object_connection(
         &self,
         ctx: &Context<'_>,
@@ -90,6 +92,7 @@ impl Address {
             .extend()
     }
 
+    /// The balance that this address holds.
     pub async fn balance(
         &self,
         ctx: &Context<'_>,
@@ -101,6 +104,7 @@ impl Address {
             .extend()
     }
 
+    /// The balance objects for this address.
     pub async fn balance_connection(
         &self,
         ctx: &Context<'_>,

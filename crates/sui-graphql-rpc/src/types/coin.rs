@@ -21,6 +21,7 @@ pub(crate) enum CoinDowncastError {
     Bcs(bcs::Error),
 }
 
+/// Some 0x2::coin::Coin Move object.
 #[Object]
 impl Coin {
     /// Balance of the coin object

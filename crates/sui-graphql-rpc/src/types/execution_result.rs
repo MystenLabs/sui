@@ -3,6 +3,7 @@
 
 use async_graphql::*;
 
+/// The result of an execution, including errors that occurred during said execution.
 #[derive(SimpleObject, Clone)]
 pub(crate) struct ExecutionResult {
     /// The errors field captures any errors that occurred during execution

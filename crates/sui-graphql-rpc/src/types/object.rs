@@ -111,6 +111,9 @@ pub struct AddressOwner {
     owner: Option<Owner>,
 }
 
+/// An object in Sui is a package (set of Move bytecode modules) or object (typed data structure
+/// with fields) with additional metadata detailing its id, version, transaction digest, owner
+/// field indicating how this object can be accessed.
 #[Object]
 impl Object {
     async fn version(&self) -> u64 {
@@ -274,7 +277,8 @@ impl Object {
             .extend()
     }
 
-    /// The balances of all coin types owned by the object. Coins of the same type are grouped together into one Balance.
+    /// The balances of all coin types owned by the object. Coins of the same type are grouped
+    /// together into one Balance.
     pub async fn balance_connection(
         &self,
         ctx: &Context<'_>,

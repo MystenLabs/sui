@@ -23,19 +23,26 @@ pub(crate) struct Epoch {
     pub stored: QueryableEpochInfo,
 }
 
+/// Operation of the Sui network is temporally partitioned into non-overlapping epochs,
+/// and the network aims to keep epochs roughly the same duration as each other.
+/// During a particular epoch the following data is fixed:
+///
+/// - the protocol version
+/// - the reference gas price
+/// - the set of participating validators
 #[Object]
 impl Epoch {
-    /// The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change
+    /// The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change.
     async fn epoch_id(&self) -> u64 {
         self.stored.epoch as u64
     }
 
-    /// The minimum gas price that a quorum of validators are guaranteed to sign a transaction for
+    /// The minimum gas price that a quorum of validators are guaranteed to sign a transaction for.
     async fn reference_gas_price(&self) -> Option<BigInt> {
         Some(BigInt::from(self.stored.reference_gas_price as u64))
     }
 
-    /// Validator related properties, including the active validators
+    /// Validator related properties, including the active validators.
     async fn validator_set(&self, ctx: &Context<'_>) -> Result<Option<ValidatorSet>> {
         let system_state = ctx
             .data_unchecked::<PgManager>()
@@ -51,12 +58,12 @@ impl Epoch {
         Ok(Some(validator_set))
     }
 
-    /// The epoch's starting timestamp
+    /// The epoch's starting timestamp.
     async fn start_timestamp(&self) -> Result<DateTime, Error> {
         DateTime::from_ms(self.stored.epoch_start_timestamp)
     }
 
-    /// The epoch's ending timestamp
+    /// The epoch's ending timestamp.
     async fn end_timestamp(&self) -> Result<Option<DateTime>, Error> {
         self.stored
             .epoch_end_timestamp
@@ -121,13 +128,14 @@ impl Epoch {
         self.stored.storage_charge.map(BigInt::from)
     }
 
-    /// The storage fee rebates paid to users
-    /// who deleted the data associated with past transactions.
+    /// The storage fee rebates paid to users who deleted the data associated with past
+    /// transactions.
     async fn fund_outflow(&self) -> Option<BigInt> {
         self.stored.storage_rebate.map(BigInt::from)
     }
 
-    /// The epoch's corresponding protocol configuration, including the feature flags and the configuration options
+    /// The epoch's corresponding protocol configuration, including the feature flags and the
+    /// configuration options.
     async fn protocol_configs(&self, ctx: &Context<'_>) -> Result<ProtocolConfigs> {
         ProtocolConfigs::query(ctx.data_unchecked(), Some(self.protocol_version()))
             .await
@@ -143,7 +151,7 @@ impl Epoch {
         Ok(SystemStateSummary { native: state })
     }
 
-    /// The epoch's corresponding checkpoints
+    /// The epoch's corresponding checkpoints.
     async fn checkpoints(
         &self,
         ctx: &Context<'_>,
@@ -159,7 +167,7 @@ impl Epoch {
             .extend()
     }
 
-    /// The epoch's corresponding transaction blocks
+    /// The epoch's corresponding transaction blocks.
     async fn transaction_blocks(
         &self,
         ctx: &Context<'_>,
@@ -191,7 +199,7 @@ impl Epoch {
 }
 
 impl Epoch {
-    /// The epoch's protocol version
+    /// The epoch's protocol version.
     pub(crate) fn protocol_version(&self) -> u64 {
         self.stored.protocol_version as u64
     }

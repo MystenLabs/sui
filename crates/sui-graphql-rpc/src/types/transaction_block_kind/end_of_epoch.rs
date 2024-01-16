@@ -40,6 +40,7 @@ pub(crate) enum EndOfEpochTransactionKind {
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct ChangeEpochTransaction(pub NativeChangeEpochTransaction);
 
+/// System transaction for creating the on-chain state used by zkLogin.
 #[derive(SimpleObject, Clone, PartialEq, Eq)]
 pub(crate) struct AuthenticatorStateCreateTransaction {
     /// A workaround to define an empty variant of a GraphQL union.

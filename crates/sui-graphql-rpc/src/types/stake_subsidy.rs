@@ -4,7 +4,7 @@
 use super::big_int::BigInt;
 use async_graphql::*;
 
-/// Parameters related to subsiding staking rewards
+/// Parameters that control the distribution of the stake subsidy.
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 pub(crate) struct StakeSubsidy {
     /// SUI set aside for stake subsidies -- reduces over time as stake subsidies are paid out over
