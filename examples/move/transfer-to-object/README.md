@@ -46,9 +46,10 @@ customer-to-business type transactions on-chain.
 
 ## Implementation 1: Using an Account Address
 
-Imagine you run a restaurant called Bill's Burgers. Your business will have an
-address `A` on-chain. When an order is taken, the customer will make a payment
-with the payment ID provided by Bill's Burgers to `A`.
+Imagine you run a restaurant. Your business will have an
+address `A` on-chain. When an order is taken, the customer will simply make a
+payment by transferring an `IdentifiedPayment` object with the payment ID you provided
+to them to your address `A`.
 
 Whenever an `IdentifiedPayment` is sent, you'll be able to track it and mark
 the bill as paid when you see the `SentPaymentEvent` with the given payment ID
@@ -74,9 +75,9 @@ You can see the Move implementation for this section [here](./owned-no-tto/sourc
 
 ## Implementation 2: Using a Shared Object
 
-To address some of the issues mentioned above, you could have Bill's Burgers
-use a shared object and have customers pay into the shared object. In
-particular:
+To address some of the issues mentioned above, you could instead have your restaurant
+use a shared "cash register" object for payments and have customers pay into
+this shared object. In particular:
 
 1. If the private key(s) of the register owner are compromised, a new address
    can be created and the `owner` field of the shared `Register` object can be
@@ -87,9 +88,9 @@ particular:
    object that customers interact with.
 
 However, with the shared `Register`, payments must be made differently than
-simply transferring the coins to the Bill's Burgers shared object. In
+simply transferring the coins to the shared object. In
 particular, without transfer-to-object, a payment to the `Register` object
-would involve taking the shared `Register` object for Bill's Burgers and adding
+would involve taking the shared `Register` object for the restaurant and adding
 the payment as a dynamic object field under it:
 
 ```move
@@ -104,13 +105,13 @@ public fun make_shared_payment(register_uid: &mut UID, payment_id: u64, coin: Co
 }
 ```
 
-Because of this, if Bill's Burgers becomes incredibly popular across all their
-locations and they need to serve hundreds or thousands of customers at once,
+Because of this, if your restaurant becomes incredibly popular across multiple
+locations and you need to serve hundreds or thousands of customers at once,
 those customers' payments must all be processed serially since they would all
 be using the same shared object. This could lead to contention over the
 `Register` object and delays in payment processing. In contrast, with
 Implementation 1, since it uses only owned objects, all payments across all of
-the Bill's Burgers locations could be processed in parallel and not effect each
+your restaurant locations could be processed in parallel and not effect each
 other.
 
 Luckily, transfer-to-object can help parallelize the payment process to the
@@ -130,7 +131,7 @@ With transfer-to-object, we can combine the benefits of the two previous impleme
   can withdraw payments.
 - Payments can still be made using the `identified_payment::make_payment`
   function that uses `sui::transfer::transfer` under the hood, so payments can
-  happen in parallel across all Bill's Burgers locations without needing to be
+  happen in parallel across all restaurant locations without needing to be
   sequenced against the shared `Register` object.
 
 You can see the entire implementation for the shared object register using
@@ -143,8 +144,8 @@ two implementations.
 
 To make a payment, nothing changes from Implementation 1. In particular,
 customers will still use `identified_payment::make_payment` and simply set the
-address they want to send to be the object ID of the Bill's Burgers `Register`
-object. If Bill's Burgers changes the ownership of the `Register` object, this
+address they want to send to be the object ID of the restaurant's `Register`
+object. If the restaurant changes the ownership of the `Register` object, this
 will be opaque to the customers – they will always send their payment to the
 same `Register` object.
 
