@@ -44,8 +44,8 @@ impl<T: Agent<M>, M: Debug + Message + Send + 'static> Server<T, M> {
         mpsc::Sender<NetworkMessage>,
         mpsc::Receiver<NetworkMessage>,
     ) {
-        let (in_send, in_recv) = mpsc::channel(1_000_000);
-        let (out_send, out_recv) = mpsc::channel(1_000_000);
+        let (in_send, in_recv) = mpsc::channel(1_000);
+        let (out_send, out_recv) = mpsc::channel(1_000);
         let agent = T::new(id, in_recv, out_send, conf, metrics);
         return (agent, in_send, out_recv);
     }
@@ -158,6 +158,7 @@ impl NetworkManager {
                     payload: SailfishMessage::Handshake {},
                 };
                 tracing::debug!("[{}] Sending handshake to {:?}", self.my_id, addr);
+                println!("[{}] Sending handshake to {:?}", self.my_id, addr);
                 let cancel_handler = sender
                     .send(
                         *addr,

@@ -38,7 +38,7 @@ use crate::{metrics::Metrics, types::WritableObjectStore};
 
 use super::types::*;
 
-const MANAGER_CHANNEL_SIZE: usize = 1024;
+const MANAGER_CHANNEL_SIZE: usize = 1_000;
 
 pub struct QueuesManager {
     tx_store: HashMap<TransactionDigest, TransactionWithEffects>,
