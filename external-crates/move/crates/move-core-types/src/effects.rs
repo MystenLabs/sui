@@ -196,6 +196,12 @@ pub struct ChangeSet {
     accounts: BTreeMap<AccountAddress, AccountChangeSet>,
 }
 
+impl Default for ChangeSet {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ChangeSet {
     pub fn new() -> Self {
         Self {

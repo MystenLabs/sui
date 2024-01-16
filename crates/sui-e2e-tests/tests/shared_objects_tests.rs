@@ -485,7 +485,7 @@ async fn access_clock_object_test() {
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
 
     assert_eq!(1, events.data.len());
-    let event = events.data.get(0).unwrap();
+    let event = events.data.first().unwrap();
     let Event { contents, .. } = event;
 
     use serde::{Deserialize, Serialize};

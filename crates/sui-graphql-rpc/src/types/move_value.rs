@@ -126,12 +126,11 @@ impl MoveValue {
         // TODO: If this becomes a performance bottleneck, it can be made more efficient by not
         // deserializing via `value::MoveValue` (but this is significantly more code).
         bcs::from_bytes_seed(&layout, &self.bcs.0[..]).map_err(|_| {
-            let type_tag: Option<TypeTag> = (&layout).try_into().ok();
-            Error::Internal(if let Some(type_tag) = type_tag {
-                format!("Failed to deserialize Move value for type: {}", type_tag)
-            } else {
-                "Failed to deserialize Move value for type: <unknown>".to_string()
-            })
+            let type_tag: TypeTag = (&layout).into();
+            Error::Internal(format!(
+                "Failed to deserialize Move value for type: {}",
+                type_tag
+            ))
         })
     }
 
@@ -454,7 +453,7 @@ mod tests {
     }
 
     fn data<T: Serialize>(layout: A::MoveTypeLayout, data: T) -> Result<MoveData, Error> {
-        let tag: TypeTag = (&layout).try_into().expect("Error fetching type tag");
+        let tag: TypeTag = (&layout).into();
 
         // The format for type from its `Display` impl does not technically match the format that
         // the RPC expects from the data layer (where a type's package should be canonicalized), but
@@ -474,7 +473,7 @@ mod tests {
     }
 
     fn json<T: Serialize>(layout: A::MoveTypeLayout, data: T) -> Result<Json, Error> {
-        let tag: TypeTag = (&layout).try_into().expect("Error fetching type tag");
+        let tag: TypeTag = (&layout).into();
         let type_ = MoveType::new(tag);
         let bcs = Base64(bcs::to_bytes(&data).unwrap());
         MoveValue { type_, bcs }.json_impl(layout)

@@ -320,7 +320,7 @@ fn test_build_and_verify_programmability_examples() {
     let examples =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../sui_programmability/examples");
 
-    for example in std::fs::read_dir(&examples).unwrap() {
+    for example in std::fs::read_dir(examples).unwrap() {
         let Ok(example) = example else { continue };
         let path = example.path();
 

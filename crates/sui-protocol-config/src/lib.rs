@@ -1254,16 +1254,16 @@ impl ProtocolConfig {
             max_event_emit_size: Some(250 * 1024),
             max_move_vector_len: Some(256 * 1024),
 
-            /// TODO: Is this too low/high?
+            // TODO: Is this too low/high?
             max_back_edges_per_function: Some(10_000),
 
-            /// TODO:  Is this too low/high?
+            // TODO:  Is this too low/high?
             max_back_edges_per_module: Some(10_000),
 
-            /// TODO: Is this too low/high?
+            // TODO: Is this too low/high?
             max_verifier_meter_ticks_per_function: Some(6_000_000),
 
-            /// TODO: Is this too low/high?
+            // TODO: Is this too low/high?
             max_meter_ticks_per_module: Some(6_000_000),
 
             object_runtime_max_num_cached_objects: Some(1000),
@@ -1292,7 +1292,7 @@ impl ProtocolConfig {
             // MUSTFIX: This number should be increased to at least 2000 (20%) for mainnet.
             buffer_stake_for_protocol_upgrade_bps: Some(0),
 
-            /// === Native Function Costs ===
+            // === Native Function Costs ===
             // `address` module
             // Cost params for the Move native function `address::from_bytes(bytes: vector<u8>)`
             address_from_bytes_cost_base: Some(52),
@@ -1316,7 +1316,7 @@ impl ProtocolConfig {
             dynamic_field_borrow_child_object_cost_base: Some(100),
             dynamic_field_borrow_child_object_child_ref_cost_per_byte: Some(10),
             dynamic_field_borrow_child_object_type_cost_per_byte: Some(10),
-             // Cost params for the Move native function `remove_child_object<Child: key>(parent: address, id: address): Child`
+            // Cost params for the Move native function `remove_child_object<Child: key>(parent: address, id: address): Child`
             dynamic_field_remove_child_object_cost_base: Some(100),
             dynamic_field_remove_child_object_child_cost_per_byte: Some(2),
             dynamic_field_remove_child_object_type_cost_per_byte: Some(2),
@@ -1332,7 +1332,7 @@ impl ProtocolConfig {
             event_emit_cost_base: Some(52),
             event_emit_value_size_derivation_cost_per_byte: Some(2),
             event_emit_tag_size_derivation_cost_per_byte: Some(5),
-            event_emit_output_cost_per_byte:Some(10),
+            event_emit_output_cost_per_byte: Some(10),
 
             //  `object` module
             // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
@@ -1480,7 +1480,6 @@ impl ProtocolConfig {
             max_age_of_jwk_in_epochs: None,
 
             random_beacon_reduction_allowed_delta: None,
-
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };

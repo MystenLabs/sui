@@ -148,8 +148,7 @@ fn encode_compress(request: &WriteRequest) -> Result<Vec<u8>, (StatusCode, &'sta
             timer.observe_duration();
         }
     }();
-    let mut buf = Vec::new();
-    buf.reserve(request.encoded_len());
+    let mut buf = Vec::with_capacity(request.encoded_len());
     if request.encode(&mut buf).is_err() {
         observe();
         CONSUMER_OPS

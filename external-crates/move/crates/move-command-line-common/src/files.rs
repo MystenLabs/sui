@@ -5,7 +5,7 @@
 use anyhow::{anyhow, bail, *};
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
-use std::{collections::BTreeMap, convert::TryInto, path::Path};
+use std::{collections::BTreeMap, path::Path};
 
 /// Result of sha256 hash of a file's contents.
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
@@ -13,11 +13,7 @@ pub struct FileHash(pub [u8; 32]);
 
 impl FileHash {
     pub fn new(file_contents: &str) -> Self {
-        Self(
-            sha2::Sha256::digest(file_contents.as_bytes())
-                .try_into()
-                .expect("Length of sha256 digest must always be 32 bytes"),
-        )
+        Self(sha2::Sha256::digest(file_contents.as_bytes()).into())
     }
 
     pub const fn empty() -> Self {

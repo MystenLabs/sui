@@ -259,7 +259,7 @@ impl StressTestRunner {
             })
             .collect();
         assert!(found.len() <= 1, "Multiple objects of type {name} found");
-        found.get(0).cloned()
+        found.first().cloned()
     }
 }
 

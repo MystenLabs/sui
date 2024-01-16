@@ -64,7 +64,7 @@ impl<Loc: Copy, Lbl: Clone + Ord> BorrowGraph<Loc, Lbl> {
         for (borrower, edges) in &borrowed_by.0 {
             let borrower = *borrower;
             for edge in edges {
-                match edge.path.get(0) {
+                match edge.path.first() {
                     None => full_borrows.insert(borrower, edge.loc),
                     Some(f) => field_borrows
                         .entry(f.clone())

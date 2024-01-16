@@ -79,7 +79,7 @@ fn many_backedges() {
         }
         for i in 0..MAX_LOCALS {
             code.push(Bytecode::Call(FunctionHandleIndex(0))); // calls returns_bool_and_u64
-            code.push(Bytecode::StLoc(i as u8)); // i'th local is now available for the first time
+            code.push(Bytecode::StLoc(i)); // i'th local is now available for the first time
             code.push(Bytecode::BrTrue(0));
         }
         code.push(Bytecode::Ret);

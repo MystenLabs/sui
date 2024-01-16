@@ -1950,7 +1950,7 @@ impl SuiCallArg {
     ) -> Result<Self, anyhow::Error> {
         Ok(match value {
             CallArg::Pure(p) => SuiCallArg::Pure(SuiPureValue {
-                value_type: layout.map(|l| l.try_into()).transpose()?,
+                value_type: layout.map(|l| l.into()),
                 value: SuiJsonValue::from_bcs_bytes(layout, &p)?,
             }),
             CallArg::Object(ObjectArg::ImmOrOwnedObject((id, version, digest))) => {

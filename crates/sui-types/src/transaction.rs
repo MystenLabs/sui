@@ -2073,7 +2073,7 @@ impl SenderSignedData {
         // assert is safe - SenderSignedTransaction::verify ensures length is 1.
         assert_eq!(self.0.len(), 1);
         self.0
-            .get(0)
+            .first()
             .expect("SenderSignedData must contain exactly one transaction")
     }
 

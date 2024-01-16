@@ -150,7 +150,7 @@ pub fn create_and_process_bytecode(options: &Options, env: &GlobalEnv) -> Functi
     let output_dir = Path::new(&options.output_path)
         .parent()
         .expect("expect the parent directory of the output path to exist");
-    let output_prefix = options.move_sources.get(0).map_or("bytecode", |s| {
+    let output_prefix = options.move_sources.first().map_or("bytecode", |s| {
         Path::new(s).file_name().unwrap().to_str().unwrap()
     });
 

@@ -52,7 +52,7 @@
 //! definitions. For local definitions, TypingSymbolicator builds a scope stack, entering
 //! encountered definitions and matching uses to a definition in the innermost scope.
 
-#![allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
+#![allow(clippy::non_canonical_partial_ord_impl)]
 
 use crate::{
     context::Context,
@@ -212,7 +212,7 @@ pub struct UseDef {
 }
 
 /// Definition of a struct field
-#[allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
+#[allow(clippy::non_canonical_partial_ord_impl)]
 #[derive(Derivative, Debug, Clone, PartialEq, Eq)]
 #[derivative(PartialOrd, Ord)]
 struct FieldDef {
@@ -224,7 +224,7 @@ struct FieldDef {
 }
 
 /// Definition of a struct
-#[allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
+#[allow(clippy::non_canonical_partial_ord_impl)]
 #[derive(Derivative, Debug, Clone, PartialEq, Eq)]
 #[derivative(PartialOrd, Ord)]
 struct StructDef {
@@ -235,7 +235,7 @@ struct StructDef {
     on_hover: IdentOnHover,
 }
 
-#[allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
+#[allow(clippy::non_canonical_partial_ord_impl)]
 #[derive(Derivative, Debug, Clone, PartialEq, Eq)]
 #[derivative(PartialOrd, Ord)]
 pub struct FunctionDef {
@@ -248,7 +248,7 @@ pub struct FunctionDef {
 }
 
 /// Definition of a local (or parameter)
-#[allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
+#[allow(clippy::non_canonical_partial_ord_impl)]
 #[derive(Derivative, Debug, Clone, Eq, PartialEq)]
 #[derivative(PartialOrd, Ord)]
 struct LocalDef {
@@ -263,7 +263,7 @@ struct LocalDef {
 }
 
 /// Definition of a constant
-#[allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
+#[allow(clippy::non_canonical_partial_ord_impl)]
 #[derive(Derivative, Debug, Clone, PartialEq, Eq)]
 #[derivative(PartialOrd, Ord)]
 struct ConstDef {

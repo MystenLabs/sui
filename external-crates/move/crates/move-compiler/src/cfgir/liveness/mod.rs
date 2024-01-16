@@ -443,7 +443,7 @@ fn release_dead_refs_block(
         return;
     }
 
-    let cmd_loc = block.get(0).unwrap().loc;
+    let cmd_loc = block.front().unwrap().loc;
     let cur_state = {
         let mut s = liveness_pre_state.clone();
         for cmd in block.iter().rev() {

@@ -32,7 +32,7 @@ macro_rules! assert_error_contains {
 fn no_dep_graph() {
     let pkg = no_dep_test_package();
 
-    let manifest_string = std::fs::read_to_string(&pkg.join(SourcePackageLayout::Manifest.path()))
+    let manifest_string = std::fs::read_to_string(pkg.join(SourcePackageLayout::Manifest.path()))
         .expect("Loading manifest");
     let mut dep_graph_builder = DependencyGraphBuilder::new(
         /* skip_fetch_latest_git_deps */ true,
@@ -64,7 +64,7 @@ fn no_dep_graph_from_lock() {
     let graph = DependencyGraph::read_from_lock(
         pkg,
         Symbol::from("Root"),
-        &mut File::open(&snapshot).expect("Opening snapshot"),
+        &mut File::open(snapshot).expect("Opening snapshot"),
         None,
     )
     .expect("Reading DependencyGraph");
@@ -145,7 +145,7 @@ fn lock_file_missing_dependency() {
 fn always_deps() {
     let pkg = dev_dep_test_package();
 
-    let manifest_string = std::fs::read_to_string(&pkg.join(SourcePackageLayout::Manifest.path()))
+    let manifest_string = std::fs::read_to_string(pkg.join(SourcePackageLayout::Manifest.path()))
         .expect("Loading manifest");
     let mut dep_graph_builder = DependencyGraphBuilder::new(
         /* skip_fetch_latest_git_deps */ true,
@@ -180,7 +180,7 @@ fn always_deps_from_lock() {
     let graph = DependencyGraph::read_from_lock(
         pkg,
         Symbol::from("Root"),
-        &mut File::open(&snapshot).expect("Opening snapshot"),
+        &mut File::open(snapshot).expect("Opening snapshot"),
         None,
     )
     .expect("Creating DependencyGraph");
@@ -533,7 +533,7 @@ fn merge_overlapping_different_deps() {
 fn immediate_dependencies() {
     let pkg = dev_dep_test_package();
 
-    let manifest_string = std::fs::read_to_string(&pkg.join(SourcePackageLayout::Manifest.path()))
+    let manifest_string = std::fs::read_to_string(pkg.join(SourcePackageLayout::Manifest.path()))
         .expect("Loading manifest");
     let mut dep_graph_builder = DependencyGraphBuilder::new(
         /* skip_fetch_latest_git_deps */ true,

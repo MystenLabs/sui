@@ -213,11 +213,11 @@ pub fn extract_field_from_move_struct<'a>(
 
 fn extract_object_id(value: &MoveStruct) -> Option<ObjectID> {
     // id:UID is the first value in an object
-    let uid_value = &value.fields.get(0)?.1;
+    let uid_value = &value.fields.first()?.1;
 
     // id is the first value in UID
     let id_value = match uid_value {
-        MoveValue::Struct(MoveStruct { fields, .. }) => &fields.get(0)?.1,
+        MoveValue::Struct(MoveStruct { fields, .. }) => &fields.first()?.1,
         _ => return None,
     };
     extract_id_value(id_value)
@@ -226,7 +226,7 @@ fn extract_object_id(value: &MoveStruct) -> Option<ObjectID> {
 fn extract_id_value(id_value: &MoveValue) -> Option<ObjectID> {
     // the id struct has a single bytes field
     let id_bytes_value = match id_value {
-        MoveValue::Struct(MoveStruct { fields, .. }) => &fields.get(0)?.1,
+        MoveValue::Struct(MoveStruct { fields, .. }) => &fields.first()?.1,
         _ => return None,
     };
     // the bytes field should be an address

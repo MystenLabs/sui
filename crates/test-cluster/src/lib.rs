@@ -971,7 +971,7 @@ impl TestClusterBuilder {
         let wallet_path = dir.join(SUI_CLIENT_CONFIG);
         let keystore_path = dir.join(SUI_KEYSTORE_FILENAME);
 
-        swarm.config().save(&network_path)?;
+        swarm.config().save(network_path)?;
         let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
         for key in &swarm.config().account_keys {
             keystore.add_key(None, SuiKeyPair::Ed25519(key.copy()))?;
