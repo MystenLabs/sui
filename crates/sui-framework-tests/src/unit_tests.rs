@@ -74,7 +74,7 @@ fn run_docs_examples_move_unit_tests() -> io::Result<()> {
 
     for entry in fs::read_dir(examples)? {
         let entry = entry?;
-        if entry.file_type()?.is_dir() {
+        if entry.file_type()?.is_dir() && entry.path().join("Move.toml").exists() {
             check_package_builds(entry.path());
             check_move_unit_tests(entry.path());
         }
