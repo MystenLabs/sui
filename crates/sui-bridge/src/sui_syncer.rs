@@ -96,6 +96,7 @@ where
         interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
+            tracing::info!(?module, ?next_cursor, "Querying Sui events");
             let Ok(events) = retry_with_max_delay!(
                 sui_client.query_events_by_module(
                     *get_bridge_package_id(),
@@ -108,6 +109,7 @@ where
                 continue;
             };
 
+            tracing::info!(?module, ?next_cursor, "Got {} Sui events", events.data.len());
             let len = events.data.len();
             if len != 0 {
                 // Note: it's extremely critical to make sure the SuiEvents we send via this channel

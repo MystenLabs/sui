@@ -124,7 +124,9 @@ where
         let mut is_first_page = true;
         let mut all_events: Vec<sui_json_rpc_types::SuiEvent> = vec![];
         loop {
+            tracing::info!("Sui Client querying events: {:?}, cursor {:?}", filter, cursor);
             let events = self.inner.query_events(filter.clone(), cursor).await?;
+            tracing::info!("Sui Client got events: {:?}", events.data);
             if events.data.is_empty() {
                 return Ok(Page {
                     data: all_events,

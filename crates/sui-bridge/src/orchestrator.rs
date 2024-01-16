@@ -187,6 +187,7 @@ where
 
             // Unwrap safe: in the beginning of the loop we checked that events is not empty
             let cursor = logs.last().unwrap().block_number;
+            tracing::info!("update_eth_event_cursor: {:?}, {:?}", contract, cursor);
             store
                 .update_eth_event_cursor(contract, cursor)
                 .expect("Store operation should not fail");
