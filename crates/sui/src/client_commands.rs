@@ -622,6 +622,10 @@ pub enum SuiClientCommands {
         /// Log extra gas-related information
         #[arg(long, short)]
         gas_info: bool,
+
+        /// Log information about each programmable transaction command
+        #[arg(long, short)]
+        ptb_info: bool,
     },
 
     /// Replay transactions listed in a file.
@@ -662,6 +666,7 @@ impl SuiClientCommands {
             SuiClientCommands::ReplayTransaction {
                 tx_digest,
                 gas_info: _,
+                ptb_info: _,
             } => {
                 let cmd = ReplayToolCommand::ReplayTransaction {
                     tx_digest,

@@ -21,6 +21,7 @@ use crate::messages_consensus::{ConsensusCommitPrologue, ConsensusCommitPrologue
 use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
+use crate::transaction::CallArg::Pure;
 use crate::{
     SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
     SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID,
@@ -45,6 +46,10 @@ use std::{
 };
 use strum::IntoStaticStr;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use tabled::{
+    builder::Builder as TableBuilder,
+    settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
+};
 use tap::Pipe;
 use tracing::trace;
 
@@ -868,11 +873,13 @@ fn write_sep<T: Display>(
     items: impl IntoIterator<Item = T>,
     sep: &str,
 ) -> std::fmt::Result {
-    let mut xs = items.into_iter().peekable();
-    while let Some(x) = xs.next() {
-        if xs.peek().is_some() {
+    let mut start = true;
+    let xs = items.into_iter().peekable();
+    for x in xs {
+        if !start {
             write!(f, "{sep}")?;
         }
+        start = false;
         write!(f, "{x}")?;
     }
     Ok(())
@@ -992,12 +999,13 @@ impl ProgrammableTransaction {
 
 impl Display for Argument {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Argument::GasCoin => write!(f, "GasCoin"),
-            Argument::Input(i) => write!(f, "Input({i})"),
-            Argument::Result(i) => write!(f, "Result({i})"),
-            Argument::NestedResult(i, j) => write!(f, "NestedResult({i},{j})"),
-        }
+        let output = match self {
+            Argument::GasCoin => "GasCoin".to_string(),
+            Argument::Input(i) => format!("Input  {}", i),
+            Argument::Result(i) => format!("Result {}", i),
+            Argument::NestedResult(j, k) => format!("Nested Result {}: {}", j, k),
+        };
+        write!(f, "{}", output)
     }
 }
 
@@ -1010,15 +1018,22 @@ impl Display for ProgrammableMoveCall {
             type_arguments,
             arguments,
         } = self;
-        write!(f, "{package}::{module}::{function}")?;
+        write!(
+            f,
+            "MoveCall:\n ┌\n │ Function:  {} \n │ Module:    {}\n │ Package:   {}",
+            function, module, package
+        )?;
+
         if !type_arguments.is_empty() {
-            write!(f, "<")?;
-            write_sep(f, type_arguments, ",")?;
-            write!(f, ">")?;
+            write!(f, "\n │ Type Arguments: \n │   ")?;
+            write_sep(f, type_arguments, "\n │   ")?;
         }
-        write!(f, "(")?;
-        write_sep(f, arguments, ",")?;
-        write!(f, ")")
+        if !arguments.is_empty() {
+            write!(f, "\n │ Arguments: \n │   ")?;
+            write_sep(f, arguments, "\n │   ")?;
+        }
+
+        write!(f, "\n └")
     }
 }
 
@@ -1026,45 +1041,43 @@ impl Display for Command {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Command::MoveCall(p) => {
-                write!(f, "MoveCall({p})")
+                write!(f, "{p}")
             }
             Command::MakeMoveVec(ty_opt, elems) => {
-                write!(f, "MakeMoveVec(")?;
+                write!(f, "MakeMoveVec:\n ┌")?;
                 if let Some(ty) = ty_opt {
-                    write!(f, "Some{ty}")?;
-                } else {
-                    write!(f, "None")?;
+                    write!(f, "\n │ Type Tag: {ty}")?;
                 }
-                write!(f, ",[")?;
-                write_sep(f, elems, ",")?;
-                write!(f, "])")
+                write!(f, "\n │ Arguments:\n │   ")?;
+                write_sep(f, elems, "\n │   ")?;
+                write!(f, "\n └")
             }
             Command::TransferObjects(objs, addr) => {
-                write!(f, "TransferObjects([")?;
-                write_sep(f, objs, ",")?;
-                write!(f, "],{addr})")
+                write!(f, "TransferObjects:\n ┌\n │ Arguments: \n │   ")?;
+                write_sep(f, objs, "\n │   ")?;
+                write!(f, "\n │ Address: {addr}\n └")
             }
             Command::SplitCoins(coin, amounts) => {
-                write!(f, "SplitCoins({coin}")?;
-                write_sep(f, amounts, ",")?;
-                write!(f, ")")
+                write!(f, "SplitCoins:\n ┌\n │ Coin: {coin}\n │ Amounts: \n │   ")?;
+                write_sep(f, amounts, "\n │   ")?;
+                write!(f, "\n └")
             }
             Command::MergeCoins(target, coins) => {
-                write!(f, "MergeCoins({target},")?;
-                write_sep(f, coins, ",")?;
-                write!(f, ")")
+                write!(f, "MergeCoins:\n ┌\n │ Target: {target}\n │ Coins: \n │   ")?;
+                write_sep(f, coins, "\n │   ")?;
+                write!(f, "\n └")
             }
             Command::Publish(_bytes, deps) => {
-                write!(f, "Publish(_,")?;
-                write_sep(f, deps, ",")?;
-                write!(f, ")")
+                write!(f, "Publish:\n ┌\n │ Dependencies: \n │   ")?;
+                write_sep(f, deps, "\n │   ")?;
+                write!(f, "\n └")
             }
             Command::Upgrade(_bytes, deps, current_package_id, ticket) => {
-                write!(f, "Upgrade(_,")?;
-                write_sep(f, deps, ",")?;
-                write!(f, ", {current_package_id}")?;
-                write!(f, ", {ticket}")?;
-                write!(f, ")")
+                write!(f, "Upgrade:\n ┌\n │ Dependencies: \n │   ")?;
+                write_sep(f, deps, "\n │   ")?;
+                write!(f, "\n │ Current Package ID: {current_package_id}")?;
+                write!(f, "\n │ Ticket: {ticket}")?;
+                write!(f, "\n └")
             }
         }
     }
@@ -1072,13 +1085,72 @@ impl Display for Command {
 
 impl Display for ProgrammableTransaction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut builder = TableBuilder::default();
+
         let ProgrammableTransaction { inputs, commands } = self;
-        writeln!(f, "Inputs: {inputs:?}")?;
-        writeln!(f, "Commands: [")?;
-        for c in commands {
-            writeln!(f, "  {c},")?;
+
+        for (i, input) in inputs.iter().enumerate() {
+            match input {
+                Pure(v) => {
+                    if v.len() <= 16 {
+                        builder.push_record(vec![format!("{i:<3} Pure Arg          {:?}", v)]);
+                    } else {
+                        builder.push_record(vec![format!(
+                            "{i:<3} Pure Arg          [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, ...]",
+                            v[0],
+                            v[1],
+                            v[2],
+                            v[3],
+                            v[4],
+                            v[5],
+                            v[6],
+                            v[7],
+                            v[8],
+                            v[9],
+                            v[10],
+                            v[11],
+                            v[12],
+                            v[13],
+                            v[14],
+                        )]);
+                    }
+                }
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(o)) => {
+                    builder.push_record(vec![format!("{i:<3} Imm/Owned Object  ID: {}", o.0)]);
+                }
+                CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
+                    builder.push_record(vec![format!("{i:<3} Shared Object     ID: {}", id)]);
+                }
+                CallArg::Object(ObjectArg::Receiving(o)) => {
+                    builder.push_record(vec![format!("{i:<3} Receiving Object  ID: {}", o.0)]);
+                }
+            };
         }
-        writeln!(f, "]")
+
+        let mut table = builder.build();
+        table.with(TablePanel::header("Input Objects"));
+        table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+            1,
+            TableStyle::modern().get_horizontal(),
+        )]));
+        write!(f, "\n{}\n", table)?;
+
+        let mut builder = TableBuilder::default();
+
+        for (i, c) in commands.iter().enumerate() {
+            if i == commands.len() - 1 {
+                builder.push_record(vec![format!("{i:<2} {}", c)]);
+            } else {
+                builder.push_record(vec![format!("{i:<2} {}\n", c)]);
+            }
+        }
+        let mut table = builder.build();
+        table.with(TablePanel::header("Commands"));
+        table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+            1,
+            TableStyle::modern().get_horizontal(),
+        )]));
+        write!(f, "\n{}\n", table)
     }
 }
 
