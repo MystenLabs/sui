@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module shared_no_tto::shared_cash_register {
     use common::identified_payment::{Self, IdentifiedPayment};
     use sui::sui::SUI;

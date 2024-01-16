@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 #[lint_allow(coin_field)]
 module common::identified_payment {
     use sui::sui::SUI;

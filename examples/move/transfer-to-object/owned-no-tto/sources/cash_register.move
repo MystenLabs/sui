@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Note that there isn't any cash register for this and while the code is
 /// small it hides the complexity elsewhere. In particular-- the authentication
 /// for the address is all held behind a 1-of-N multisig where each authorized user has a key.
