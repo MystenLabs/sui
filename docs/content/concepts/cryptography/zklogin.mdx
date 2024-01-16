@@ -180,6 +180,49 @@ _Go to Settings_
 
 	*Set Redirect URL*
 
+### Apple
+
+1. Register for an [Apple developer account](https://developer.apple.com/). Go to the **Certificates, Identifiers and Profiles** section.
+
+	![1](images/zklogin-apple1.png "Click on Certificates, Identifiers and Profiles")
+	
+	*This is where you can create Certificates, Identifiers and Profiles*
+
+1. Create an App ID
+    - From the sidebar, select **Identifiers** and click the blue plus icon to create a new one.
+    - Choose **App IDs** as the identifier type and click **Continue**.
+    - In the next screen, enter a descriptive name for your App ID and a unique Bundle ID in reverse-dns format (for example, `com.example.app`).
+    - Scroll down to the list of capabilities and enable **Sign In with Apple** by checking the box next to it.
+
+	![1](images/zklogin-apple2.png "Create an App ID")
+	
+	*This is how you can enable Sign In with Apple for your App ID*
+
+1. Create a Services ID
+
+	A Services ID identifies a specific instance of your app and is used as the OAuth `client_id`. You need a Services ID if you want to use **Sign In with Apple** for your web app.
+
+	![1](images/zklogin-apple3.png "Create a Services ID")
+
+	*This is where you Create a Services ID*
+
+1. Create a new identifier and select **Services IDs** as the identifier type.
+
+    - In the next step, enter a name for your app that will be displayed to the users during the sign-in process and a unique identifier that will be used as the OAuth `client_id`. Make sure to enable **Sign In with Apple** by checking the box next to it.
+	- Click the **Configure** button next to **Sign In with Apple** to set up the domain and redirect URLs for your app. You need to specify the domain name where your app is hosted and the redirect URL that will handle the OAuth response from Apple.
+
+	Select the App ID that you created in the previous step as the Primary App ID. This will associate your Services ID with your App ID.
+
+	Enter the domain name of your app (for example, example-app.com) and the redirect URL that will receive the authorization code from Apple (for example, https://example-app.com/redirect). Note that Apple does not allow localhost or IP addresses as valid domains or redirect URLs.
+
+	Click **Save** and then **Continue** and **Register** until you complete this step.
+
+	You have now created an App ID and a Services ID for your app. The identifier of your Services ID is your OAuth `client_id`. In my example, that is com.example.client.
+
+	![1](images/zklogin-apple4.png "Set Redirect URL")
+	
+	*This is where you Set Redirect URL*
+
 ## Get JWT Token
 
 1. Generate an ephemeral KeyPair. Follow the same process as you would generating a KeyPair in a traditional wallet. See [Sui SDK](https://sdk.mystenlabs.com/typescript/cryptography/keypairs) for details.
