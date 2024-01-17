@@ -4,12 +4,11 @@
 use std::{time::Duration, vec};
 
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::executable_transaction::{PendingCertificate, VerifiedExecutableTransaction};
 use sui_types::transaction::VerifiedTransaction;
 use sui_types::{
     base_types::ObjectID,
     crypto::deterministic_random_account_key,
-    digests::TransactionEffectsDigest,
     object::Object,
     storage::InputKey,
     transaction::{CallArg, ObjectArg},
@@ -28,13 +27,7 @@ use crate::{
 #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
 fn make_transaction_manager(
     state: &AuthorityState,
-) -> (
-    TransactionManager,
-    UnboundedReceiver<(
-        VerifiedExecutableTransaction,
-        Option<TransactionEffectsDigest>,
-    )>,
-) {
+) -> (TransactionManager, UnboundedReceiver<PendingCertificate>) {
     // Create a new transaction manager instead of reusing the authority's, to examine
     // transaction_manager output from rx_ready_certificates.
     let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
@@ -302,9 +295,9 @@ async fn transaction_manager_object_dependency() {
     );
 
     // TM should output the 3 transactions that are only waiting for this object.
-    let tx_0 = rx_ready_certificates.recv().await.unwrap().0;
-    let tx_1 = rx_ready_certificates.recv().await.unwrap().0;
-    let tx_2 = rx_ready_certificates.recv().await.unwrap().0;
+    let tx_0 = rx_ready_certificates.recv().await.unwrap().certificate;
+    let tx_1 = rx_ready_certificates.recv().await.unwrap().certificate;
+    let tx_2 = rx_ready_certificates.recv().await.unwrap().certificate;
     {
         let mut want_digests = vec![
             transaction_read_0.digest(),
@@ -339,7 +332,7 @@ async fn transaction_manager_object_dependency() {
     );
 
     // Now, the transaction waiting for both shared objects can be executed.
-    let tx_3 = rx_ready_certificates.recv().await.unwrap().0;
+    let tx_3 = rx_ready_certificates.recv().await.unwrap().certificate;
     assert_eq!(transaction_read_2.digest(), tx_3.digest());
 
     sleep(Duration::from_secs(1)).await;
