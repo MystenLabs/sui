@@ -81,7 +81,7 @@ module examples::regcoin {
     struct REGCOIN has drop {}
 
     fun init(witness: REGCOIN, ctx: &mut TxContext) {
-        let (treasury, denylist, metadata) = coin::create_regulated_currency(witness, 6, b"REGCOIN", b"", b"", option::none(), ctx);
+        let (treasury, deny_cap, metadata) = coin::create_regulated_currency(witness, 6, b"REGCOIN", b"", b"", option::none(), ctx);
         transfer::public_freeze_object(metadata);
         transfer::public_transfer(treasury, tx_context::sender(ctx));
         transfer::public_transfer(deny_cap, tx_context::sender(ctx))
