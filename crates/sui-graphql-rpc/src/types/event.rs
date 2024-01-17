@@ -133,7 +133,7 @@ impl Event {
     /// `EventFilter`.
     pub(crate) async fn paginate(
         db: &Db,
-        page: Page<EventKey>,
+        page: Page<Cursor>,
         filter: EventFilter,
     ) -> Result<Connection<String, Event>, Error> {
         let (prev, next, results) = db
@@ -181,7 +181,7 @@ impl Event {
         let mut conn = Connection::new(prev, next);
 
         for stored in results {
-            let cursor = Cursor::new(stored.cursor()).encode_cursor();
+            let cursor = stored.cursor().encode_cursor();
             conn.edges.push(Edge::new(cursor, Event { stored }));
         }
 
@@ -227,10 +227,10 @@ impl Event {
     }
 }
 
-impl Target<EventKey> for StoredEvent {
+impl Target<Cursor> for StoredEvent {
     type Source = events::table;
 
-    fn filter_ge<ST, GB>(cursor: &EventKey, query: Query<ST, GB>) -> Query<ST, GB> {
+    fn filter_ge<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
         use events::dsl::{event_sequence_number as event, tx_sequence_number as tx};
         query.filter(
             tx.gt(cursor.tx as i64)
@@ -238,7 +238,7 @@ impl Target<EventKey> for StoredEvent {
         )
     }
 
-    fn filter_le<ST, GB>(cursor: &EventKey, query: Query<ST, GB>) -> Query<ST, GB> {
+    fn filter_le<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
         use events::dsl::{event_sequence_number as event, tx_sequence_number as tx};
         query.filter(
             tx.lt(cursor.tx as i64)
@@ -259,10 +259,10 @@ impl Target<EventKey> for StoredEvent {
         }
     }
 
-    fn cursor(&self) -> EventKey {
-        EventKey {
+    fn cursor(&self) -> Cursor {
+        Cursor::new(EventKey {
             tx: self.tx_sequence_number as u64,
             e: self.event_sequence_number as u64,
-        }
+        })
     }
 }

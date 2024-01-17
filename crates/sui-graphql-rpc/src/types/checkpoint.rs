@@ -204,7 +204,7 @@ impl Checkpoint {
     /// checkpoints within that epoch).
     pub(crate) async fn paginate(
         db: &Db,
-        page: Page<u64>,
+        page: Page<Cursor>,
         filter: Option<u64>,
     ) -> Result<Connection<String, Checkpoint>, Error> {
         use checkpoints::dsl;
@@ -223,7 +223,7 @@ impl Checkpoint {
 
         let mut conn = Connection::new(prev, next);
         for stored in results {
-            let cursor = Cursor::new(stored.cursor()).encode_cursor();
+            let cursor = stored.cursor().encode_cursor();
             conn.edges.push(Edge::new(cursor, Checkpoint { stored }));
         }
 
@@ -231,15 +231,15 @@ impl Checkpoint {
     }
 }
 
-impl Target<u64> for StoredCheckpoint {
+impl Target<Cursor> for StoredCheckpoint {
     type Source = checkpoints::table;
 
-    fn filter_ge<ST, GB>(cursor: &u64, query: Query<ST, GB>) -> Query<ST, GB> {
-        query.filter(checkpoints::dsl::sequence_number.ge(*cursor as i64))
+    fn filter_ge<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
+        query.filter(checkpoints::dsl::sequence_number.ge(**cursor as i64))
     }
 
-    fn filter_le<ST, GB>(cursor: &u64, query: Query<ST, GB>) -> Query<ST, GB> {
-        query.filter(checkpoints::dsl::sequence_number.le(*cursor as i64))
+    fn filter_le<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
+        query.filter(checkpoints::dsl::sequence_number.le(**cursor as i64))
     }
 
     fn order<ST, GB>(asc: bool, query: Query<ST, GB>) -> Query<ST, GB> {
@@ -251,7 +251,7 @@ impl Target<u64> for StoredCheckpoint {
         }
     }
 
-    fn cursor(&self) -> u64 {
-        self.sequence_number as u64
+    fn cursor(&self) -> Cursor {
+        Cursor::new(self.sequence_number as u64)
     }
 }

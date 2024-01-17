@@ -231,7 +231,7 @@ impl TransactionBlock {
 
     pub(crate) async fn paginate(
         db: &Db,
-        page: Page<u64>,
+        page: Page<Cursor>,
         filter: TransactionBlockFilter,
     ) -> Result<Connection<String, TransactionBlock>, Error> {
         let (prev, next, results) = db
@@ -342,7 +342,7 @@ impl TransactionBlock {
         let mut conn = Connection::new(prev, next);
 
         for stored in results {
-            let cursor = Cursor::new(stored.cursor()).encode_cursor();
+            let cursor = stored.cursor().encode_cursor();
             let transaction = TransactionBlock::try_from(stored)?;
             conn.edges.push(Edge::new(cursor, transaction));
         }
@@ -397,15 +397,15 @@ impl TransactionBlockFilter {
     }
 }
 
-impl Target<u64> for StoredTransaction {
+impl Target<Cursor> for StoredTransaction {
     type Source = transactions::table;
 
-    fn filter_ge<ST, GB>(cursor: &u64, query: Query<ST, GB>) -> Query<ST, GB> {
-        query.filter(transactions::dsl::tx_sequence_number.ge(*cursor as i64))
+    fn filter_ge<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
+        query.filter(transactions::dsl::tx_sequence_number.ge(**cursor as i64))
     }
 
-    fn filter_le<ST, GB>(cursor: &u64, query: Query<ST, GB>) -> Query<ST, GB> {
-        query.filter(transactions::dsl::tx_sequence_number.le(*cursor as i64))
+    fn filter_le<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
+        query.filter(transactions::dsl::tx_sequence_number.le(**cursor as i64))
     }
 
     fn order<ST, GB>(asc: bool, query: Query<ST, GB>) -> Query<ST, GB> {
@@ -417,8 +417,8 @@ impl Target<u64> for StoredTransaction {
         }
     }
 
-    fn cursor(&self) -> u64 {
-        self.tx_sequence_number as u64
+    fn cursor(&self) -> Cursor {
+        Cursor::new(self.tx_sequence_number as u64)
     }
 }
 
