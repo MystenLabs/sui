@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ClientError;
+use crate::get_coins::get_coins;
+use crate::{get_coins::GetCoins, ClientError};
 use axum::http::HeaderValue;
+use graphql_client::reqwest::post_graphql;
+use graphql_client::GraphQLQuery;
 use hyper::header;
 use reqwest::Response;
 use serde_json::Value;
@@ -32,6 +35,33 @@ impl SimpleClient {
         }
     }
 
+    pub async fn get_coins(
+        &self,
+        owner: String,
+        cursor: Option<String>,
+        coin_type: Option<String>,
+    ) {
+        let coin_type = coin_type.unwrap_or("0x2::sui::SUI".to_string());
+
+        let variables = get_coins::Variables {
+            owner,
+            first: Some(50),
+            cursor,
+            type_: Some(coin_type),
+        };
+        let response_body = post_graphql::<GetCoins, _>(&self.inner, &self.url, variables)
+            .await
+            .unwrap();
+
+        // or we can do:
+        // let request_body = GetCoins::build_query(variables);
+        // let mut res = self.inner.post(&self.url).json(&request_body).send().await.unwrap();
+        // let response_body: Response<get_coins::ResponseData> = res.json().await?;
+
+        println!("{:?}", response_body);
+    }
+
+    // TODO (wlmyng): doc this
     pub async fn execute(
         &self,
         query: String,
@@ -44,6 +74,7 @@ impl SimpleClient {
             .map_err(|e| e.into())
     }
 
+    // TODO (wlmyng): doc this
     pub async fn execute_to_graphql(
         &self,
         query: String,
@@ -95,6 +126,7 @@ impl SimpleClient {
         builder.send().await.map_err(|e| e.into())
     }
 
+    // TODO (wlmyng): doc this
     pub async fn execute_mutation_to_graphql(
         &self,
         mutation: String,

@@ -12,7 +12,10 @@ axum.workspace = true
 hyper.workspace = true
 reqwest.workspace = true
 serde_json.workspace = true
+serde.workspace = true
 sui-graphql-rpc-headers.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
+graphql_client = { version = "0.13.0", features = ["reqwest"]}
 
 workspace-hack.workspace = true

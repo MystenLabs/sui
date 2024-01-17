@@ -8,6 +8,8 @@ use serde_json::Number;
 pub mod response;
 pub mod simple_client;
 
+pub mod get_coins;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ClientError {
     #[error("Service version header not found")]
