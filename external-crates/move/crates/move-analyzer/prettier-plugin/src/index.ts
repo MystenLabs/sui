@@ -22,9 +22,9 @@ export const parsers = {
             return (async (): Promise<SyntaxNode> => {
                 await Parser.init();
                 const parser = new Parser();
-                const Lang = await Parser.Language.load(path.join(__dirname,
-                                                                  '..',
-                                                                  'tree-sitter-move.wasm'));
+                const Lang = await Parser.Language.load(
+                    path.join(__dirname, '..', 'tree-sitter-move.wasm')
+                );
                 parser.setLanguage(Lang);
                 return parser.parse(text).rootNode;
             })();

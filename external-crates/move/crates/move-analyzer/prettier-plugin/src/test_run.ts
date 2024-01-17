@@ -20,7 +20,6 @@ if (process.argv.length !== 3) {
 const filepath = process.argv[2]
 
 if (filepath != null) {
-
     const text = readFileSync(filepath, { encoding: 'utf8'});
     const result = prettier.format(text, {
         plugins: [plugin],
