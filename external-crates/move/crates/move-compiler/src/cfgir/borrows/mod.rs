@@ -13,7 +13,7 @@ use crate::{
         translate::{display_var, DisplayVar},
     },
     parser::ast::BinOp_,
-    shared::{ast_debug::AstDebug, unique_map::UniqueMap, CompilationEnv},
+    shared::{unique_map::UniqueMap, CompilationEnv},
 };
 use move_ir_types::ast::UnpackType;
 use state::{Value, *};

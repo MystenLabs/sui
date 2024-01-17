@@ -741,20 +741,27 @@ pub type MatchArm = Spanned<MatchArm_>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MatchPattern_ {
+    // T<t1, ..., tn>(pat1, ..., patn)
     PositionalConstructor(
         NameAccessChain,
         Option<Vec<Type>>,
         Spanned<Vec<MatchPattern>>,
     ),
+    // T<t1, ..., tn> { x1: pat1, ..., xn: patn }
     FieldConstructor(
         NameAccessChain,
         Option<Vec<Type>>,
         Spanned<Vec<(Field, MatchPattern)>>,
     ),
+    // T<t1, ..., tn>
     Name(NameAccessChain, Option<Vec<Type>>),
+    //
     Literal(Value),
+    // _
     Wildcard,
+    // pat1 | pat2
     Or(Box<MatchPattern>, Box<MatchPattern>),
+    // x @ pat
     At(Var, Box<MatchPattern>),
 }
 

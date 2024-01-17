@@ -308,7 +308,7 @@ impl PatternMatrix {
                     let xloc = x.loc;
                     if let Some(y) = env.get(&x) {
                         TP::At(
-                            sp(xloc, y.value.clone()),
+                            sp(xloc, y.value),
                             Box::new(apply_pattern_subst(*inner, env)),
                         )
                     } else {
@@ -318,7 +318,7 @@ impl PatternMatrix {
                 TP::Binder(x) => {
                     let xloc = x.loc;
                     if let Some(y) = env.get(&x) {
-                        TP::Binder(sp(xloc, y.value.clone()))
+                        TP::Binder(sp(xloc, y.value))
                     } else {
                         TP::Wildcard
                     }
@@ -662,7 +662,7 @@ pub fn compile_match(
         let subject_borrow_rhs = make_var_ref(subject_entry.clone());
 
         let match_entry = FringeEntry {
-            var: match_var.clone(),
+            var: match_var,
             ty: subject_borrow_rhs.ty.clone(),
         };
 
@@ -1049,11 +1049,10 @@ fn resolve_result(
             let false_arm = resolve_result(context, init_subject, false_arm_result);
             let result_type = true_arm.ty.clone();
 
-            let result = make_copy_bindings(
+            make_copy_bindings(
                 bindings,
                 make_if_else(lit_subject, true_arm, false_arm, result_type),
-            );
-            result
+            )
         }
         WorkResult::LiteralSwitch {
             subject,
@@ -1161,15 +1160,12 @@ fn make_arm_unpack(
         match pat.pat.value {
             TP::Constructor(mident, enum_, variant, tyargs, fields)
             | TP::BorrowConstructor(mident, enum_, variant, tyargs, fields) => {
-                if matches!(entry.ty.value, N::Type_::Ref(_, _)) {
-                    if fields
-                        .iter()
-                        .all(|(_, _, (_, (_, pat)))| matches!(pat.pat.value, TP::Wildcard))
-                        || fields.is_empty()
-                    {
-                        continue;
-                    }
-                }
+                let all_wild = fields
+                         .iter()
+                         .all(|(_, _, (_, (_, pat)))| matches!(pat.pat.value, TP::Wildcard)) || fields.is_empty();
+                if matches!(entry.ty.value, N::Type_::Ref(_, _)) && all_wild {
+                     continue;
+                 }
                 let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
 
                 let field_tys = fields.map(|_key, (ndx, (ty, _))| (ndx, ty));
@@ -1185,7 +1181,7 @@ fn make_arm_unpack(
 
                 let mut unpack_fields: Vec<(Field, Var, Type)> = vec![];
                 for (fringe_exp, (_, field, _)) in fringe_exps.iter().zip(ordered_pats.iter()) {
-                    unpack_fields.push((*field, fringe_exp.var.clone(), fringe_exp.ty.clone()));
+                    unpack_fields.push((*field, fringe_exp.var, fringe_exp.ty.clone()));
                 }
                 for (fringe_exp, (_, _, ordered_pat)) in
                     fringe_exps.into_iter().zip(ordered_pats.into_iter()).rev()

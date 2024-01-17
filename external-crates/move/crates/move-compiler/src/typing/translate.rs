@@ -841,11 +841,11 @@ fn visit_type_params(
                 }
             }
             TypeName_::ModuleType(m, n) => {
-                let param_is_phantom: Vec<_> = context
-                    .struct_tparams(m, n)
-                    .iter()
-                    .map(|param| param.is_phantom)
-                    .collect();
+                let tparams = match context.datatype_kind(m, n) {
+                    DatatypeKind::Enum => context.enum_tparams(m, n),
+                    DatatypeKind::Struct => context.struct_tparams(m, n),
+                };
+                let param_is_phantom: Vec<_> = tparams.iter().map(|p| p.is_phantom).collect();
                 // Length of params and args may be different but we can still report errors
                 // for parameters with information
                 for (is_phantom, ty_arg) in param_is_phantom.into_iter().zip(ty_args) {

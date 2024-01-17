@@ -77,6 +77,13 @@ pub fn write_module_to_string(
         members.push("".to_string());
     }
 
+    for _edef in module.enum_defs() {
+        todo!();
+    }
+    if !module.enum_defs().is_empty() {
+        members.push("".to_string());
+    }
+
     let mut externally_visible_funs = module
         .function_defs()
         .iter()

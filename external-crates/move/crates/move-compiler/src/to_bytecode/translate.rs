@@ -39,11 +39,8 @@ fn extract_decls(
     prog: &G::Program,
 ) -> (
     HashMap<ModuleIdent, usize>,
-    HashMap<(ModuleIdent, DatatypeName), (BTreeSet<IR::Ability>, Vec<IR::DatatypeTypeParameter>)>,
-    HashMap<
-        (ModuleIdent, FunctionName),
-        (BTreeSet<(ModuleIdent, DatatypeName)>, IR::FunctionSignature),
-    >,
+    DatatypeDeclarations,
+    HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
 ) {
     let pre_compiled_modules = || {
         pre_compiled_lib.iter().flat_map(|pre_compiled| {
@@ -67,16 +64,27 @@ fn extract_decls(
     }
 
     let all_modules = || prog.modules.key_cloned_iter().chain(pre_compiled_modules());
-    let sdecls = all_modules()
+    let sdecls: DatatypeDeclarations = all_modules()
         .flat_map(|(m, mdef)| {
             mdef.structs.key_cloned_iter().map(move |(s, sdef)| {
                 let key = (m, s);
                 let abilities = abilities(&sdef.abilities);
-                let type_parameters = struct_type_parameters(sdef.type_parameters.clone());
+                let type_parameters = datatype_type_parameters(sdef.type_parameters.clone());
                 (key, (abilities, type_parameters))
             })
         })
         .collect();
+    let edecls: DatatypeDeclarations = all_modules()
+        .flat_map(|(m, mdef)| {
+            mdef.enums.key_cloned_iter().map(move |(e, edef)| {
+                let key = (m, e);
+                let abilities = abilities(&edef.abilities);
+                let type_parameters = datatype_type_parameters(edef.type_parameters.clone());
+                (key, (abilities, type_parameters))
+            })
+        })
+        .collect();
+    let ddecls: DatatypeDeclarations = sdecls.into_iter().chain(edecls).collect();
     let context = &mut Context::new(compilation_env, None, None);
     let fdecls = all_modules()
         .flat_map(|(m, mdef)| {
@@ -92,14 +100,22 @@ fn extract_decls(
                 // })
                 .map(move |(f, fdef)| {
                     let key = (m, f);
-                    let seen = seen_structs(&fdef.signature);
+                    let seen_datatypes = seen_datatypes(&fdef.signature);
                     let gsig = fdef.signature.clone();
-                    (key, (seen, gsig))
+                    (key, (seen_datatypes, gsig))
                 })
         })
-        .map(|(key, (seen, gsig))| (key, (seen, function_signature(context, gsig))))
+        .map(|(key, (seen_datatypes, sig))| {
+            (
+                key,
+                FunctionDeclaration {
+                    seen_datatypes,
+                    signature: function_signature(context, sig),
+                },
+            )
+        })
         .collect();
-    (orderings, sdecls, fdecls)
+    (orderings, ddecls, fdecls)
 }
 
 //**************************************************************************************************
@@ -113,7 +129,7 @@ pub fn program(
 ) -> Vec<AnnotatedCompiledUnit> {
     let mut units = vec![];
 
-    let (orderings, sdecls, fdecls) = extract_decls(compilation_env, pre_compiled_lib, &prog);
+    let (orderings, ddecls, fdecls) = extract_decls(compilation_env, pre_compiled_lib, &prog);
     let G::Program { modules: gmodules } = prog;
 
     let mut source_modules = gmodules
@@ -122,7 +138,7 @@ pub fn program(
         .collect::<Vec<_>>();
     source_modules.sort_by_key(|(_, mdef)| mdef.dependency_order);
     for (m, mdef) in source_modules {
-        if let Some(unit) = module(compilation_env, m, mdef, &orderings, &sdecls, &fdecls) {
+        if let Some(unit) = module(compilation_env, m, mdef, &orderings, &ddecls, &fdecls) {
             units.push(unit)
         }
     }
@@ -134,14 +150,11 @@ fn module(
     ident: ModuleIdent,
     mdef: G::ModuleDefinition,
     dependency_orderings: &HashMap<ModuleIdent, usize>,
-    struct_declarations: &HashMap<
+    datatype_declarations: &HashMap<
         (ModuleIdent, DatatypeName),
         (BTreeSet<IR::Ability>, Vec<IR::DatatypeTypeParameter>),
     >,
-    function_declarations: &HashMap<
-        (ModuleIdent, FunctionName),
-        (BTreeSet<(ModuleIdent, DatatypeName)>, IR::FunctionSignature),
-    >,
+    function_declarations: &HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
 ) -> Option<AnnotatedCompiledUnit> {
     let G::ModuleDefinition {
         warning_filter: _warning_filter,
@@ -176,7 +189,8 @@ fn module(
     let addr_bytes = context.resolve_address(ident.value.address);
     let (imports, explicit_dependency_declarations) = context.materialize(
         dependency_orderings,
-        struct_declarations,
+        datatype_declarations,
+        // enum_declarations,
         function_declarations,
     );
 
@@ -341,7 +355,7 @@ fn struct_def(
     let loc = s.loc();
     let name = context.struct_definition_name(m, s);
     let abilities = abilities(&abs);
-    let type_formals = struct_type_parameters(tys);
+    let type_formals = datatype_type_parameters(tys);
     let fields = struct_fields(context, loc, fields);
     sp(
         loc,
@@ -415,7 +429,7 @@ fn enum_def(
     let loc = e.loc();
     let name = context.enum_definition_name(m, e);
     let abilities = abilities(&abs);
-    let type_formals = struct_type_parameters(tys);
+    let type_formals = datatype_type_parameters(tys);
     let variants = enum_variants(context, variants);
     sp(
         loc,
@@ -591,35 +605,37 @@ fn function_signature(context: &mut Context, sig: H::FunctionSignature) -> IR::F
     }
 }
 
-fn seen_structs(sig: &H::FunctionSignature) -> BTreeSet<(ModuleIdent, DatatypeName)> {
+fn seen_datatypes(sig: &H::FunctionSignature) -> BTreeSet<(ModuleIdent, DatatypeName)> {
     let mut seen = BTreeSet::new();
-    seen_structs_type(&mut seen, &sig.return_type);
+    seen_datatypes_type(&mut seen, &sig.return_type);
     sig.parameters
         .iter()
-        .for_each(|(_, st)| seen_structs_single_type(&mut seen, st));
+        .for_each(|(_, st)| seen_datatypes_single_type(&mut seen, st));
     seen
 }
 
-fn seen_structs_type(seen: &mut BTreeSet<(ModuleIdent, DatatypeName)>, sp!(_, t_): &H::Type) {
+fn seen_datatypes_type(seen: &mut BTreeSet<(ModuleIdent, DatatypeName)>, sp!(_, t_): &H::Type) {
     use H::Type_ as T;
     match t_ {
         T::Unit => (),
-        T::Single(st) => seen_structs_single_type(seen, st),
-        T::Multiple(ss) => ss.iter().for_each(|st| seen_structs_single_type(seen, st)),
+        T::Single(st) => seen_datatypes_single_type(seen, st),
+        T::Multiple(ss) => ss
+            .iter()
+            .for_each(|st| seen_datatypes_single_type(seen, st)),
     }
 }
 
-fn seen_structs_single_type(
+fn seen_datatypes_single_type(
     seen: &mut BTreeSet<(ModuleIdent, DatatypeName)>,
     sp!(_, st_): &H::SingleType,
 ) {
     use H::SingleType_ as S;
     match st_ {
-        S::Base(bt) | S::Ref(_, bt) => seen_structs_base_type(seen, bt),
+        S::Base(bt) | S::Ref(_, bt) => seen_datatypes_base_type(seen, bt),
     }
 }
 
-fn seen_structs_base_type(
+fn seen_datatypes_base_type(
     seen: &mut BTreeSet<(ModuleIdent, DatatypeName)>,
     sp!(_, bt_): &H::BaseType,
 ) {
@@ -632,7 +648,7 @@ fn seen_structs_base_type(
             if let TN::ModuleType(m, s) = tn_ {
                 seen.insert((*m, *s));
             }
-            tys.iter().for_each(|st| seen_structs_base_type(seen, st))
+            tys.iter().for_each(|st| seen_datatypes_base_type(seen, st))
         }
         B::Param(TParam { .. }) => (),
     }
@@ -769,7 +785,7 @@ fn fun_type_parameters(tps: Vec<TParam>) -> Vec<(IR::TypeVar, BTreeSet<IR::Abili
         .collect()
 }
 
-fn struct_type_parameters(tps: Vec<DatatypeTypeParameter>) -> Vec<IR::DatatypeTypeParameter> {
+fn datatype_type_parameters(tps: Vec<DatatypeTypeParameter>) -> Vec<IR::DatatypeTypeParameter> {
     tps.into_iter()
         .map(|DatatypeTypeParameter { is_phantom, param }| {
             let name = type_var(param.user_specified_name);
@@ -809,7 +825,7 @@ fn base_type(context: &mut Context, sp!(_, bt_): H::BaseType) -> IR::Type {
             IRT::Vector(Box::new(base_type(context, args.pop().unwrap())))
         }
         B::Apply(_, sp!(_, TN::ModuleType(m, s)), tys) => {
-            let n = context.qualified_struct_name(&m, s);
+            let n = context.qualified_datatype_name(&m, s);
             let tys = base_types(context, tys);
             IRT::Datatype(n, tys)
         }

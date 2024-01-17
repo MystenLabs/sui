@@ -227,9 +227,7 @@ impl<'env> Context<'env> {
                             (ename, type_info)
                         })
                         .collect::<BTreeMap<_, _>>();
-                    let emems_set = emems.keys().collect::<BTreeSet<_>>();
-                    let smems_set = smems.keys().collect::<BTreeSet<_>>();
-                    assert!(emems_set.intersection(&smems_set).count() == 0);
+                    /* duplicates were already reported by expasion */
                     smems.append(&mut emems);
                     smems
                 };
@@ -934,13 +932,29 @@ fn module(
     let unscoped = context.save_unscoped();
     let use_funs = use_funs(context, euse_funs);
     let friends = efriends.filter_map(|mident, f| friend(context, mident, f));
+    let struct_names = estructs
+        .key_cloned_iter()
+        .map(|(k, _)| k)
+        .collect::<BTreeSet<_>>();
+    let enum_names = eenums
+        .key_cloned_iter()
+        .map(|(k, _)| k)
+        .collect::<BTreeSet<_>>();
+    let enum_struct_intersection = enum_names
+        .intersection(&struct_names)
+        .collect::<BTreeSet<_>>();
     let structs = estructs.map(|name, s| {
         context.restore_unscoped(unscoped.clone());
         struct_def(context, name, s)
     });
-    let enums = eenums.map(|name, e| {
+    // simply for compilation to continue in the presence of errors, we remove the duplicates
+    let enums = eenums.filter_map(|name, e| {
         context.restore_unscoped(unscoped.clone());
-        enum_def(context, name, e)
+        if enum_struct_intersection.contains(&name) {
+            None
+        } else {
+            Some(enum_def(context, name, e))
+        }
     });
     let functions = efunctions.map(|name, f| {
         context.restore_unscoped(unscoped.clone());
