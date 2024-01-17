@@ -122,7 +122,9 @@ impl SuiTransactionBlockResponseOptions {
             show_events: true,
             show_object_changes: true,
             show_balance_changes: true,
-            show_raw_effects: true,
+            // This field is added for graphql execution. We keep it false here
+            // so current users of `full_content` will not get raw effects unexpectedly.
+            show_raw_effects: false,
         }
     }
 
