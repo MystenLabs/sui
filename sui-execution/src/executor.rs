@@ -67,6 +67,7 @@ pub trait Executor {
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
+        skip_all_checks: bool,
     ) -> (
         InnerTemporaryStore,
         TransactionEffects,

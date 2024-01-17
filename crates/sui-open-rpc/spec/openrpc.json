@@ -52,6 +52,13 @@
           "schema": {
             "$ref": "#/components/schemas/BigInt_for_uint64"
           }
+        },
+        {
+          "name": "additional_args",
+          "description": "Additional arguments including gas_budget, gas_objects, gas_sponsor and skip_checks.",
+          "schema": {
+            "$ref": "#/components/schemas/DevInspectArgs"
+          }
         }
       ],
       "result": {
@@ -80,6 +87,10 @@
             {
               "name": "epoch",
               "value": 8888
+            },
+            {
+              "name": "additional_args",
+              "value": null
             }
           ],
           "result": {
@@ -5605,6 +5616,64 @@
               {
                 "$ref": "#/components/schemas/SuiAddress"
               }
+            ]
+          }
+        }
+      },
+      "DevInspectArgs": {
+        "description": "Additional rguments supplied to dev inspect beyond what is allowed in today's API.",
+        "type": "object",
+        "properties": {
+          "gasBudget": {
+            "description": "The gas budget for the transaction.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gasObjects": {
+            "description": "The gas objects used to pay for the transaction.",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/ObjectID"
+                },
+                {
+                  "$ref": "#/components/schemas/SequenceNumber"
+                },
+                {
+                  "$ref": "#/components/schemas/ObjectDigest"
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3
+            }
+          },
+          "gasSponsor": {
+            "description": "The sponsor of the gas for the transaction, might be different from the sender.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SuiAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skipChecks": {
+            "description": "Whether to skip transaction checks for the transaction.",
+            "type": [
+              "boolean",
+              "null"
             ]
           }
         }

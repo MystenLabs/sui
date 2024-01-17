@@ -574,7 +574,7 @@ async fn test_dev_inspect_dynamic_field() {
     };
     let kind = TransactionKind::programmable(pt);
     let DevInspectResults { error, .. } = fullnode
-        .dev_inspect_transaction_block(sender, kind, None)
+        .dev_inspect_transaction_block(sender, kind, None, None, None, None, None, None)
         .await
         .unwrap();
     // produces an error
@@ -816,7 +816,7 @@ async fn test_dev_inspect_gas_coin_argument() {
     };
     let kind = TransactionKind::programmable(pt);
     let results = fullnode
-        .dev_inspect_transaction_block(sender, kind, None)
+        .dev_inspect_transaction_block(sender, kind, None, None, None, None, None, None)
         .await
         .unwrap()
         .results
@@ -831,7 +831,11 @@ async fn test_dev_inspect_gas_coin_argument() {
     assert_eq!(mutable_reference_outputs.len(), 1);
     let (arg, arg_value, arg_type) = &mutable_reference_outputs[0];
     assert_eq!(arg, &SuiArgument::GasCoin);
-    check_coin_value(arg_value, arg_type, protocol_config.max_tx_gas() - amount);
+    check_coin_value(
+        arg_value,
+        arg_type,
+        DEV_INSPECT_GAS_COIN_VALUE - protocol_config.max_tx_gas() - amount,
+    );
 
     assert_eq!(return_values.len(), 1);
     let (ret_value, ret_type) = &return_values[0];
@@ -861,7 +865,7 @@ async fn test_dev_inspect_gas_price() {
     };
     let kind = TransactionKind::programmable(pt);
     let error = fullnode
-        .dev_inspect_transaction_block(sender, kind.clone(), Some(1))
+        .dev_inspect_transaction_block(sender, kind.clone(), Some(1), None, None, None, None, None)
         .await
         .unwrap_err();
     assert!(
@@ -875,7 +879,16 @@ async fn test_dev_inspect_gas_price() {
     let epoch_store = fullnode.epoch_store_for_testing();
     let protocol_config = epoch_store.protocol_config();
     let error = fullnode
-        .dev_inspect_transaction_block(sender, kind, Some(protocol_config.max_gas_price() + 1))
+        .dev_inspect_transaction_block(
+            sender,
+            kind,
+            Some(protocol_config.max_gas_price() + 1),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
         .await
         .unwrap_err();
     assert!(
@@ -924,6 +937,11 @@ async fn test_dev_inspect_uses_unbound_object() {
             sender,
             kind,
             Some(fullnode.reference_gas_price_for_testing().unwrap()),
+            None,
+            None,
+            None,
+            None,
+            None,
         )
         .await;
     let Err(err) = result else { panic!() };
@@ -1065,7 +1083,7 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
     let rgp = fullnode.reference_gas_price_for_testing().unwrap();
     // dev inspect
     let DevInspectResults { effects, .. } = fullnode
-        .dev_inspect_transaction_block(sender, kind, Some(rgp))
+        .dev_inspect_transaction_block(sender, kind, Some(rgp), None, None, None, None, None)
         .await
         .unwrap();
     assert_eq!(effects.deleted().len(), 0);
@@ -1118,7 +1136,7 @@ async fn test_dry_run_dev_inspect_max_gas_version() {
     let kind = TransactionKind::programmable(pt.clone());
     // dev inspect
     let DevInspectResults { effects, .. } = fullnode
-        .dev_inspect_transaction_block(sender, kind, Some(rgp + 100))
+        .dev_inspect_transaction_block(sender, kind, Some(rgp + 100), None, None, None, None, None)
         .await
         .unwrap();
     assert_eq!(effects.status(), &SuiExecutionStatus::Success);
@@ -4589,7 +4607,7 @@ pub async fn call_dev_inspect(
     let kind = TransactionKind::programmable(builder.finish());
     let rgp = authority.reference_gas_price_for_testing().unwrap();
     authority
-        .dev_inspect_transaction_block(*sender, kind, Some(rgp))
+        .dev_inspect_transaction_block(*sender, kind, Some(rgp), None, None, None, None, None)
         .await
 }
 
@@ -5261,6 +5279,11 @@ async fn test_for_inc_201_dev_inspect() {
             sender,
             kind,
             Some(fullnode.reference_gas_price_for_testing().unwrap() + 1000),
+            None,
+            None,
+            None,
+            None,
+            None,
         )
         .await
         .unwrap();

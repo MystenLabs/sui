@@ -144,12 +144,10 @@ mod checked {
     pub fn check_dev_inspect_input(
         config: &ProtocolConfig,
         kind: &TransactionKind,
-        mut input_objects: InputObjects,
+        input_objects: InputObjects,
         // TODO: check ReceivingObjects for dev inspect?
         _receiving_objects: ReceivingObjects,
-        gas_object: Object,
-    ) -> SuiResult<(ObjectRef, CheckedInputObjects)> {
-        let gas_object_ref = gas_object.compute_object_reference();
+    ) -> SuiResult<CheckedInputObjects> {
         kind.validity_check(config)?;
         if kind.is_system_tx() {
             return Err(UserInputError::Unsupported(format!(
@@ -176,12 +174,7 @@ mod checked {
             }
         }
 
-        input_objects.push(ObjectReadResult::new(
-            InputObjectKind::ImmOrOwnedMoveObject(gas_object_ref),
-            gas_object.into(),
-        ));
-
-        Ok((gas_object_ref, input_objects.into_checked()))
+        Ok(input_objects.into_checked())
     }
 
     // Common checks performed for transactions and certificates.

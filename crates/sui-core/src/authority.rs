@@ -54,7 +54,7 @@ pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 
 use once_cell::sync::OnceCell;
-use shared_crypto::intent::{Intent, IntentScope};
+use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
@@ -270,6 +270,8 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 20.,
     30., 60., 90.,
 ];
+
+pub const DEV_INSPECT_GAS_COIN_VALUE: u64 = 1_000_000_000_000;
 
 impl AuthorityMetrics {
     pub fn new(registry: &prometheus::Registry) -> AuthorityMetrics {
@@ -1596,49 +1598,70 @@ impl AuthorityState {
     }
 
     /// The object ID for gas can be any object ID, even for an uncreated object
+    #[allow(clippy::collapsible_else_if)]
     pub async fn dev_inspect_transaction_block(
         &self,
         sender: SuiAddress,
         transaction_kind: TransactionKind,
         gas_price: Option<u64>,
+        gas_budget: Option<u64>,
+        gas_sponsor: Option<SuiAddress>,
+        gas_objects: Option<Vec<ObjectRef>>,
+        epoch: Option<u64>,
+        skip_checks: Option<bool>,
     ) -> SuiResult<DevInspectResults> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
+
         if !self.is_fullnode(&epoch_store) {
             return Err(SuiError::UnsupportedFeatureError {
                 error: "dev-inspect is only supported on fullnodes".to_string(),
             });
         }
 
-        let protocol_config = epoch_store.protocol_config();
-        transaction_kind.check_version_supported(protocol_config)?;
-        transaction_kind.validity_check(protocol_config)?;
-
-        let max_tx_gas = protocol_config.max_tx_gas();
+        if transaction_kind.is_system_tx() {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "system transactions are not supported".to_string(),
+            });
+        }
+        let skip_checks = skip_checks.unwrap_or(true);
         let reference_gas_price = epoch_store.reference_gas_price();
-        let gas_price = match gas_price {
-            None => reference_gas_price,
-            Some(gas) => {
-                if gas == 0 {
-                    reference_gas_price
-                } else {
-                    gas
-                }
-            }
-        };
-        let gas_status =
-            SuiGasStatus::new(max_tx_gas, gas_price, reference_gas_price, protocol_config)?;
+        let protocol_config = epoch_store.protocol_config();
+        let max_tx_gas = protocol_config.max_tx_gas();
 
-        let gas_object_id = ObjectID::random();
-        // give the gas object 2x the max gas to have coin balance to play with during execution
-        let gas_object = Object::new_move(
-            MoveObject::new_gas_coin(SequenceNumber::new(), gas_object_id, max_tx_gas * 2),
-            Owner::AddressOwner(sender),
-            TransactionDigest::genesis_marker(),
-        );
+        let price = gas_price.unwrap_or(reference_gas_price);
+        let budget = gas_budget.unwrap_or(max_tx_gas);
+        let owner = gas_sponsor.unwrap_or(sender);
+        // Payment might be empty here, but it's fine we'll have to deal with it later after reading all the input objects.
+        let payment = gas_objects.unwrap_or_default();
+        let expiration = epoch.map_or(TransactionExpiration::None, TransactionExpiration::Epoch);
+        let transaction = TransactionData::V1(TransactionDataV1 {
+            kind: transaction_kind.clone(),
+            sender,
+            gas_data: GasData {
+                payment,
+                owner,
+                price,
+                budget,
+            },
+            expiration,
+        });
 
-        let input_object_kinds = transaction_kind.input_objects()?;
-        let receiving_object_refs = transaction_kind.receiving_objects();
-        let (input_objects, receiving_objects) = self
+        transaction.check_version_supported(protocol_config)?;
+        transaction.validity_check_no_gas_check(protocol_config)?;
+
+        let input_object_kinds = transaction.input_objects()?;
+        let receiving_object_refs = transaction.receiving_objects();
+
+        sui_transaction_checks::deny::check_transaction_for_signing(
+            &transaction,
+            &[],
+            &input_object_kinds,
+            &receiving_object_refs,
+            &self.transaction_deny_config,
+            &self.database,
+        )?;
+
+        let (mut input_objects, receiving_objects) = self
             .input_loader
             .read_objects_for_dev_inspect(
                 &input_object_kinds,
@@ -1646,35 +1669,85 @@ impl AuthorityState {
                 protocol_config,
             )
             .await?;
-        let (gas_object_ref, checked_input_objects) =
-            sui_transaction_checks::check_dev_inspect_input(
+
+        // Create and use a dummy gas object if there is no gas object provided.
+        let dummy_gas_object = Object::new_gas_with_balance_and_owner_for_testing(
+            DEV_INSPECT_GAS_COIN_VALUE,
+            transaction.gas_owner(),
+        );
+
+        let gas_objects = if transaction.gas().is_empty() {
+            let gas_object_ref = dummy_gas_object.compute_object_reference();
+            vec![gas_object_ref]
+        } else {
+            transaction.gas().to_vec()
+        };
+
+        let (gas_status, checked_input_objects) = if skip_checks {
+            // If we are skipping checks, then we call the check_dev_inspect_input function which will perform
+            // only lightweight checks on the transaction input. And if the gas field is empty, that means we will
+            // use the dummy gas object so we need to add it to the input objects vector.
+            if transaction.gas().is_empty() {
+                input_objects.push(ObjectReadResult::new(
+                    InputObjectKind::ImmOrOwnedMoveObject(gas_objects[0]),
+                    dummy_gas_object.into(),
+                ));
+            }
+            let checked_input_objects = sui_transaction_checks::check_dev_inspect_input(
                 protocol_config,
                 &transaction_kind,
                 input_objects,
                 receiving_objects,
-                gas_object,
+            )?;
+            let gas_status = SuiGasStatus::new(
+                max_tx_gas,
+                transaction.gas_price(),
+                reference_gas_price,
+                protocol_config,
             )?;
 
-        let gas_budget = max_tx_gas;
-        let data = TransactionData::new(
-            transaction_kind,
-            sender,
-            gas_object_ref,
-            gas_price,
-            gas_budget,
-        );
+            (gas_status, checked_input_objects)
+        } else {
+            // If we are not skipping checks, then we call the check_transaction_input function and its dummy gas
+            // variant which will perform full fledged checks just like a real transaction execution.
+            if transaction.gas().is_empty() {
+                sui_transaction_checks::check_transaction_input_with_given_gas(
+                    epoch_store.protocol_config(),
+                    epoch_store.reference_gas_price(),
+                    &transaction,
+                    input_objects,
+                    receiving_objects,
+                    dummy_gas_object,
+                    &self.metrics.bytecode_verifier_metrics,
+                )?
+            } else {
+                sui_transaction_checks::check_transaction_input(
+                    epoch_store.protocol_config(),
+                    epoch_store.reference_gas_price(),
+                    &transaction,
+                    input_objects,
+                    &receiving_objects,
+                    &self.metrics.bytecode_verifier_metrics,
+                )?
+            }
+        };
 
-        let transaction_digest = TransactionDigest::new(default_hash(&data));
-        let transaction_kind = data.into_kind();
-        let silent = true;
-        let executor = sui_execution::executor(protocol_config, silent)
+        let executor = sui_execution::executor(protocol_config, /* silent */ true)
             .expect("Creating an executor should not fail here");
-        let expensive_checks = false;
+        let intent_msg = IntentMessage::new(
+            Intent {
+                version: IntentVersion::V0,
+                scope: IntentScope::TransactionData,
+                app_id: AppId::Sui,
+            },
+            transaction,
+        );
+        let transaction_digest = TransactionDigest::new(default_hash(&intent_msg.value));
         let (inner_temp_store, effects, execution_result) = executor.dev_inspect_transaction(
             &self.database,
             protocol_config,
             self.metrics.limits_metrics.clone(),
-            expensive_checks,
+            /* expensive checks */ false,
             self.certificate_deny_config.certificate_deny_set(),
             &epoch_store.epoch_start_config().epoch_data().epoch_id(),
             epoch_store
@@ -1682,14 +1755,16 @@ impl AuthorityState {
                 .epoch_data()
                 .epoch_start_timestamp(),
             checked_input_objects,
-            vec![gas_object_ref],
+            gas_objects,
             gas_status,
             transaction_kind,
             sender,
             transaction_digest,
+            skip_checks,
         );
 
         let package_store = TemporaryPackageStore::new(&inner_temp_store, self.database.clone());
+
         let mut layout_resolver = epoch_store
             .executor()
             .type_layout_resolver(Box::new(package_store));

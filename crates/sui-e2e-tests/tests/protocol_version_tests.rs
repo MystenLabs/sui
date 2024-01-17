@@ -570,6 +570,7 @@ mod sim_only_tests {
                 Base64::from_bytes(&bcs::to_bytes(&txn).unwrap()),
                 /* gas_price */ None,
                 /* epoch_id */ None,
+                /* additional_args */ None,
             )
             .await
             .unwrap();

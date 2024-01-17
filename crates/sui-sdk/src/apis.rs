@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use std::future;
 use std::sync::Arc;
 use std::time::Instant;
+use sui_json_rpc_types::DevInspectArgs;
 
 use crate::error::{Error, SuiRpcResult};
 use crate::RpcClient;
@@ -651,6 +652,7 @@ impl ReadApi {
         tx: TransactionKind,
         gas_price: Option<BigInt<u64>>,
         epoch: Option<BigInt<u64>>,
+        additional_args: Option<DevInspectArgs>,
     ) -> SuiRpcResult<DevInspectResults> {
         Ok(self
             .api
@@ -660,6 +662,7 @@ impl ReadApi {
                 Base64::from_bytes(&bcs::to_bytes(&tx)?),
                 gas_price,
                 epoch,
+                additional_args,
             )
             .await?)
     }

@@ -1024,6 +1024,21 @@ impl Display for SuiTransactionBlockEvents {
     }
 }
 
+// TODO: this file might not be the best place for this struct.
+/// Additional rguments supplied to dev inspect beyond what is allowed in today's API.
+#[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "DevInspectArgs", rename_all = "camelCase")]
+pub struct DevInspectArgs {
+    /// The sponsor of the gas for the transaction, might be different from the sender.
+    pub gas_sponsor: Option<SuiAddress>,
+    /// The gas budget for the transaction.
+    pub gas_budget: Option<BigInt<u64>>,
+    /// The gas objects used to pay for the transaction.
+    pub gas_objects: Option<Vec<ObjectRef>>,
+    /// Whether to skip transaction checks for the transaction.
+    pub skip_checks: Option<bool>,
+}
+
 /// The response from processing a dev inspect transaction
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "DevInspectResults", rename_all = "camelCase")]
