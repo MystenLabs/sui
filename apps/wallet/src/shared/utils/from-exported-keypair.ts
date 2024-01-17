@@ -10,14 +10,24 @@ import {
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { Secp256k1Keypair } from '@mysten/sui.js/keypairs/secp256k1';
 import { Secp256r1Keypair } from '@mysten/sui.js/keypairs/secp256r1';
+import { fromB64 } from '@mysten/sui.js/utils';
 
 export function validateExportedKeypair(keypair: ExportedKeypair): ExportedKeypair {
 	const _kp = decodeSuiPrivateKey(keypair.privateKey);
 	return keypair;
 }
 
-export function fromExportedKeypair(keypair: ExportedKeypair): Keypair {
-	const { schema, secretKey } = decodeSuiPrivateKey(keypair.privateKey);
+export function fromExportedKeypair(keypair: ExportedKeypair, legacySupport = false): Keypair {
+	const { privateKey } = keypair;
+	let schema = keypair.schema;
+	let secretKey = null;
+	if (!legacySupport || privateKey.startsWith('suiprivkey')) {
+		const decoded = decodeSuiPrivateKey(keypair.privateKey);
+		schema = decoded?.schema;
+		secretKey = decoded.secretKey;
+	} else {
+		secretKey = fromB64(privateKey);
+	}
 
 	switch (schema) {
 		case 'ED25519':
