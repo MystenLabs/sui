@@ -6,8 +6,8 @@ use std::sync::Arc;
 use async_graphql::{PathSegment, ServerError};
 use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::{
-    register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
-    IntCounterVec, Registry,
+    register_gauge_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, Gauge, IntCounter, IntCounterVec, Registry,
 };
 use std::fmt::Write;
 
@@ -165,6 +165,10 @@ pub(crate) struct RequestMetrics {
     pub num_errors: IntCounterVec,
     /// Number of queries
     pub num_queries: IntCounter,
+    /// Number of queries by top level path
+    pub num_queries_top_level: IntCounterVec,
+    /// Total inflight requests
+    pub inflight_requests: Gauge,
 }
 
 impl RequestMetrics {
@@ -229,6 +233,19 @@ impl RequestMetrics {
             num_queries: register_int_counter_with_registry!(
                 "num_queries",
                 "Total number of queries",
+                registry
+            )
+            .unwrap(),
+            num_queries_top_level: register_int_counter_vec_with_registry!(
+                "num_queries_top_level",
+                "Number of queries for each top level node",
+                &["path"],
+                registry
+            )
+            .unwrap(),
+            inflight_requests: register_gauge_with_registry!(
+                "inflight_requests",
+                "Number of queries that are being resolved at a moment in time",
                 registry
             )
             .unwrap(),
