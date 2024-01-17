@@ -123,7 +123,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         &self,
         _request: SystemStateRequest,
     ) -> Result<SuiSystemState, SuiError> {
-        Ok(self.state.database.get_sui_system_state_object()?)
+        self.state.get_sui_system_state_object_for_testing()
     }
 }
 

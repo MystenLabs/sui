@@ -591,7 +591,7 @@ impl Validator for ValidatorService {
         &self,
         _request: tonic::Request<SystemStateRequest>,
     ) -> Result<tonic::Response<SuiSystemState>, tonic::Status> {
-        let response = self.state.database.get_sui_system_state_object()?;
+        let response = self.state.database.get_sui_system_state_object_unsafe()?;
 
         return Ok(tonic::Response::new(response));
     }

@@ -628,7 +628,10 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: AuthAggMetrics,
     ) -> anyhow::Result<Self> {
-        let sui_system_state = store.get_sui_system_state_object()?;
+        // TODO: We should get the committee from the epoch store instead to ensure consistency.
+        // Instead of this function use AuthorityEpochStore::epoch_start_configuration() to access this object everywhere
+        // besides when we are reading fields for the current epoch
+        let sui_system_state = store.get_sui_system_state_object_unsafe()?;
         let committee = sui_system_state.get_current_epoch_committee();
         let validator_display_names = sui_system_state
             .into_sui_system_state_summary()

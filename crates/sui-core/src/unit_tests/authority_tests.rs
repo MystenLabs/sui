@@ -3281,8 +3281,7 @@ async fn test_genesis_sui_system_state_object() {
         bcs::from_bytes::<SuiSystemStateWrapper>(move_object.contents()).unwrap();
     assert!(move_object.type_().is(&SuiSystemStateWrapper::type_()));
     let sui_system_state = authority_state
-        .database
-        .get_sui_system_state_object()
+        .get_sui_system_state_object_for_testing()
         .unwrap();
     assert_eq!(
         &sui_system_state.get_current_epoch_committee().committee,

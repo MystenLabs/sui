@@ -1532,7 +1532,7 @@ async fn diagnose_split_brain(
 
     let sui_system_state = state
         .database
-        .get_sui_system_state_object()
+        .get_sui_system_state_object_unsafe()
         .expect("Failed to get system state object");
     let committee = sui_system_state.get_current_epoch_committee();
     let network_config = default_mysten_network_config();
@@ -1639,10 +1639,10 @@ async fn diagnose_split_brain(
                 .unzip();
             let summary_patch = create_patch(&local_summary_text, &other_summary_text);
             let contents_patch = create_patch(&local_contents_text, &other_contents_text);
-            let local_transcations_text = format!("{local_transactions:#?}");
+            let local_transactions_text = format!("{local_transactions:#?}");
             let other_transactions_text = format!("{other_transactions:#?}");
             let transactions_patch =
-                create_patch(&local_transcations_text, &other_transactions_text);
+                create_patch(&local_transactions_text, &other_transactions_text);
             let local_effects_text = format!("{local_effects:#?}");
             let other_effects_text = format!("{other_effects:#?}");
             let effects_patch = create_patch(&local_effects_text, &other_effects_text);

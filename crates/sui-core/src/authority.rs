@@ -2868,16 +2868,9 @@ impl AuthorityState {
             .compute_object_reference())
     }
 
-    /// This function should be called once and exactly once during reconfiguration.
-    /// Instead of this function use AuthorityEpochStore::epoch_start_configuration() to access this object everywhere
-    /// besides when we are reading fields for the current epoch
-    pub fn get_sui_system_state_object_during_reconfig(&self) -> SuiResult<SuiSystemState> {
-        self.database.get_sui_system_state_object()
-    }
-
     // This function is only used for testing.
     pub fn get_sui_system_state_object_for_testing(&self) -> SuiResult<SuiSystemState> {
-        self.database.get_sui_system_state_object()
+        self.database.get_sui_system_state_object_unsafe()
     }
 
     #[instrument(level = "trace", skip_all)]

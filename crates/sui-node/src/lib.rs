@@ -1392,9 +1392,11 @@ impl SuiNode {
                 return Ok(());
             }
 
+            // Safe to call because we are in the middle of reconfiguration.
             let latest_system_state = self
                 .state
-                .get_sui_system_state_object_during_reconfig()
+                .database
+                .get_sui_system_state_object_unsafe()
                 .expect("Read Sui System State object cannot fail");
 
             #[cfg(msim)]
