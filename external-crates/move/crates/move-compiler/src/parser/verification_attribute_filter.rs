@@ -52,9 +52,12 @@ pub fn program(compilation_env: &mut CompilationEnv, prog: P::Program) -> P::Pro
 fn should_remove_node(env: &mut CompilationEnv, attrs: &[P::Attributes]) -> bool {
     use known_attributes::VerificationAttribute;
     let flattened_attrs: Vec<_> = attrs.iter().flat_map(verification_attributes).collect();
-    let is_verify_only_loc = flattened_attrs.iter().find_map(|attr| match attr {
-        (loc, VerificationAttribute::VerifyOnly) => Some(loc),
-    });
+    let is_verify_only_loc = flattened_attrs
+        .iter()
+        .map(|attr| match attr {
+            (loc, VerificationAttribute::VerifyOnly) => loc,
+        })
+        .next();
     if let Some(loc) = is_verify_only_loc {
         let msg = format!(
             "The '{}' attribute has been deprecated along with specification blocks",
