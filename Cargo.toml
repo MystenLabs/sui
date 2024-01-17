@@ -73,6 +73,7 @@ members = [
   "crates/anemo-benchmark",
   "crates/data-transform",
   "crates/mysten-common",
+  "crates/mysten-enoki-gas-pool",
   "crates/mysten-metrics",
   "crates/mysten-network",
   "crates/mysten-service",
@@ -553,6 +554,7 @@ anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
 mysten-common = { path = "crates/mysten-common" }
+mysten-enoki-gas-pool = { path = "crates/mysten-enoki-gas-pool" }
 mysten-metrics = { path = "crates/mysten-metrics" }
 mysten-network = { path = "crates/mysten-network" }
 mysten-util-mem = { path = "crates/mysten-util-mem" }

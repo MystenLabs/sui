@@ -7246,6 +7246,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "mysten-enoki-gas-pool"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "bcs",
+ "chrono",
+ "clap",
+ "eyre",
+ "fastcrypto",
+ "mysten-metrics",
+ "parking_lot 0.12.1",
+ "prometheus",
+ "rand 0.8.5",
+ "reqwest",
+ "rocksdb",
+ "schemars",
+ "serde",
+ "serde_with",
+ "shared-crypto",
+ "sui-config",
+ "sui-json-rpc-types",
+ "sui-sdk",
+ "sui-swarm-config",
+ "sui-types",
+ "tap",
+ "telemetry-subscribers",
+ "tempfile",
+ "test-cluster",
+ "tokio",
+ "tokio-retry",
+ "tracing",
+ "typed-store",
+ "typed-store-derive",
+ "workspace-hack",
+]
+
+[[package]]
 name = "mysten-metrics"
 version = "0.7.0"
 dependencies = [
