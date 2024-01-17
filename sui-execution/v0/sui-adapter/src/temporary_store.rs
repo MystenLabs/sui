@@ -63,6 +63,9 @@ pub struct TemporaryStore<'backing> {
     /// Every package that was loaded from DB store during execution.
     /// These packages were not previously loaded into the temporary store.
     runtime_packages_loaded_from_db: RwLock<BTreeMap<ObjectID, PackageObject>>,
+
+    /// Info about the storage rebate per object
+    transaction_rebate_info: TransactionRebateInfo,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -90,6 +93,7 @@ impl<'backing> TemporaryStore<'backing> {
             protocol_config: protocol_config.clone(),
             loaded_child_objects: BTreeMap::new(),
             runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
+            transaction_rebate_info: TransactionRebateInfo::default(),
         }
     }
 
@@ -157,6 +161,7 @@ impl<'backing> TemporaryStore<'backing> {
             no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
             lamport_version: self.lamport_timestamp,
+            transaction_rebate_info: self.transaction_rebate_info,
         }
     }
 
@@ -679,10 +684,7 @@ impl<'backing> TemporaryStore<'backing> {
     /// All objects will be updated with their new (current) storage rebate/cost.
     /// `SuiGasStatus` `storage_rebate` and `storage_gas_units` track the transaction
     /// overall storage rebate and cost.
-    pub(crate) fn collect_storage_and_rebate(
-        &mut self,
-        gas_charger: &mut GasCharger,
-    ) -> TransactionRebateInfo {
+    pub(crate) fn collect_storage_and_rebate(&mut self, gas_charger: &mut GasCharger) {
         let mut rows = Vec::new();
         let mut objects_to_update = vec![];
         for (object_id, (object, write_kind)) in &mut self.written {
@@ -732,9 +734,9 @@ impl<'backing> TemporaryStore<'backing> {
             self.write_object(object, write_kind);
         }
 
-        TransactionRebateInfo {
+        self.transaction_rebate_info = TransactionRebateInfo {
             per_object_info: rows,
-        }
+        };
     }
 
     pub(crate) fn collect_rebate(&self, gas_charger: &mut GasCharger) -> Vec<RebateInfo> {

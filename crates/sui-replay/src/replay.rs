@@ -43,6 +43,7 @@ use sui_framework::BuiltInFramework;
 use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_types::gas::TransactionRebateInfo;
 use sui_types::storage::{get_module, PackageObject};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
@@ -64,7 +65,11 @@ use sui_types::{
     },
     DEEPBOOK_PACKAGE_ID,
 };
-use tracing::{error, info, warn};
+use tabled::{
+    builder::Builder as TableBuilder,
+    settings::{style::HorizontalLine, Style as TableStyle},
+};
+use tracing::{error, info, trace, warn};
 
 // TODO: add persistent cache. But perf is good enough already.
 
@@ -757,6 +762,8 @@ impl LocalExec {
         } else {
             unreachable!("Transaction was valid so gas status must be valid");
         };
+
+        trace!(target: "replay_gas_info", "{}", format_transaction_rebate_info(&res.0.transaction_rebate_info));
 
         let all_required_objects = self.storage.all_objects();
         let effects =
@@ -2142,4 +2149,24 @@ async fn create_epoch_store(
         // work with chain specific configs
         ChainIdentifier::from(CheckpointDigest::random()),
     )
+}
+
+fn format_transaction_rebate_info(transaction_rebate_info: &TransactionRebateInfo) -> String {
+    let mut builder = TableBuilder::default();
+    builder.push_record(vec!["Object ID", "Bytes", "Old Rebate", "New Rebate"]);
+    for object_info in &transaction_rebate_info.per_object_info {
+        builder.push_record(vec![
+            object_info.object_id.to_string(),
+            object_info.size.to_string(),
+            object_info.old_rebate.to_string(),
+            object_info.new_rebate.to_string(),
+        ]);
+    }
+    let mut table = builder.build();
+
+    table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+        1,
+        TableStyle::modern().get_horizontal(),
+    )]));
+    format!("Per Object Sizes and Storage Rebates\n{}", table)
 }

@@ -269,9 +269,7 @@ pub mod checked {
 
             // compute and collect storage charges
             temporary_store.ensure_gas_and_input_mutated(self);
-            let rebate_info = temporary_store.collect_storage_and_rebate(self);
-            #[skip_checked_arithmetic]
-            trace!(target: "replay_gas_info", "{}", rebate_info);
+            temporary_store.collect_storage_and_rebate(self);
 
             match &self.gas_status {
                 SuiGasStatus::V2(s) => {

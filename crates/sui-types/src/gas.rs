@@ -21,13 +21,7 @@ pub mod checked {
     use schemars::JsonSchema;
     use serde::{Deserialize, Serialize};
     use serde_with::serde_as;
-    use std::fmt::{self, Display, Formatter};
     use sui_protocol_config::ProtocolConfig;
-
-    use tabled::{
-        builder::Builder as TableBuilder,
-        settings::{style::HorizontalLine, Style as TableStyle},
-    };
 
     #[enum_dispatch]
     pub trait SuiGasStatusAPI {
@@ -286,37 +280,15 @@ pub mod checked {
         pub size: usize,
         /// The old storage rebate before the transaction
         pub old_rebate: u64,
-        /// The new storage rebate after the transaction c
+        /// The new storage rebate after the transaction
         pub new_rebate: u64,
     }
 
     /// TransactionRebateInfo contains the per object rebate info and is used for providing
     /// additional gas information during transaction replay
-    #[derive(Eq, PartialEq, Clone, Debug)]
+    #[derive(Eq, PartialEq, Clone, Debug, Default)]
     pub struct TransactionRebateInfo {
         /// RebateInfo for all objects in transaction
         pub per_object_info: Vec<RebateInfo>,
-    }
-
-    impl Display for TransactionRebateInfo {
-        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-            let mut builder = TableBuilder::default();
-            builder.push_record(vec!["Object ID", "Bytes", "Old Rebate", "New Rebate"]);
-            for object_info in &self.per_object_info {
-                builder.push_record(vec![
-                    object_info.object_id.to_string(),
-                    object_info.size.to_string(),
-                    object_info.old_rebate.to_string(),
-                    object_info.new_rebate.to_string(),
-                ]);
-            }
-            let mut table = builder.build();
-
-            table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
-                1,
-                TableStyle::modern().get_horizontal(),
-            )]));
-            write!(f, "Per Object Sizes and Storage Rebates\n{}", table)
-        }
     }
 }

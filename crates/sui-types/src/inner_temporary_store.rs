@@ -5,6 +5,7 @@ use crate::base_types::{SequenceNumber, VersionDigest};
 use crate::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use crate::error::SuiResult;
 use crate::execution::DynamicallyLoadedObjectMetadata;
+use crate::gas::TransactionRebateInfo;
 use crate::storage::PackageObject;
 use crate::storage::{BackingPackageStore, InputKey};
 use crate::{
@@ -34,6 +35,7 @@ pub struct InnerTemporaryStore {
     pub no_extraneous_module_bytes: bool,
     pub runtime_packages_loaded_from_db: BTreeMap<ObjectID, PackageObject>,
     pub lamport_version: SequenceNumber,
+    pub transaction_rebate_info: TransactionRebateInfo,
 }
 
 impl InnerTemporaryStore {

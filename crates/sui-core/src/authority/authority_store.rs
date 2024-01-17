@@ -1131,6 +1131,7 @@ impl AuthorityStore {
             no_extraneous_module_bytes: _,
             runtime_packages_loaded_from_db: _,
             lamport_version,
+            transaction_rebate_info: _,
         } = inner_temporary_store;
         trace!(written =? written.iter().map(|(obj_id, obj)| (obj_id, obj.version())).collect::<Vec<_>>(),
                "batch_update_objects: temp store written");
