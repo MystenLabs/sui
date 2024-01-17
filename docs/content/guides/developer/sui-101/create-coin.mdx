@@ -4,7 +4,7 @@ title: Create a Coin
 
 Publishing a coin on Sui is nearly as straightforward as publishing a new type. The main difference is the requirement of a [one-time witness](/concepts/sui-move-concepts/one-time-witness.mdx) when creating a coin.
 
-```rust
+```move
 module examples::mycoin {
     use std::option;
     use sui::coin::{Self, Coin, TreasuryCap};
@@ -21,7 +21,7 @@ module examples::mycoin {
     fun init(witness: MYCOIN, ctx: &mut TxContext) {
         let (treasury, metadata) = coin::create_currency(witness, 6, b"MYCOIN", b"", b"", option::none(), ctx);
         transfer::public_freeze_object(metadata);
-        transfer::public_transfer(treasury, tx_context::sender(ctx));
+        transfer::public_transfer(treasury, tx_context::sender(ctx))
     }
 }
 ```
@@ -30,7 +30,7 @@ The `Coin<T>` is a generic implementation of a coin on Sui. The owner of the `Tr
 
 Extending the example further, add a `mint` function to the module. Use the `mint_and_transfer` function of the `Coin` module to create (mint) a coin and transfer it to an address. 
 
-```rust
+```move
 public fun mint(
     treasury_cap: &mut TreasuryCap<MYCOIN>, 
     amount: u64, 
@@ -57,7 +57,7 @@ The `DenyList` object and regulated coins are currently available in Devnet only
 
 :::
 
-The Sui framework provides a `DenyList` singleton, shared object that the bearer of a `DenyCap` can use to specify a list of addresses that are unable to use the specified object. This is useful, for example, when creating a regulated coin on Sui that requires the ability to block certain addresses from using it as inputs to transactions. Regulated coins on Sui satisfy any regulations that require the ability to prevent known bad actors from having access to those coins. 
+The Sui framework provides a `DenyList` singleton, shared object that the bearer of a `DenyCap` can access to specify a list of addresses that are unable to use a Sui core type. The initial use case for `DenyList`, however, focuses on limiting access to coins of a specified type. This is useful, for example, when creating a regulated coin on Sui that requires the ability to block certain addresses from using it as inputs to transactions. Regulated coins on Sui satisfy any regulations that require the ability to prevent known bad actors from having access to those coins. 
 
 :::info
 
@@ -71,7 +71,7 @@ If you need the ability to deny specific addresses from having access to your co
 
 Behind the scenes, `create_regulated_currency` uses the `create_currency` function to create the coin, but also produces a `DenyCap` object that allows its bearer to control access to the coin's deny list in a `DenyList` object. Consequently, the way to create a coin using `create_regulated_currency` is similar to the previous example, with the addition of a transfer of the `DenyCap` object to the module publisher.
 
-```rust title="regcoin.move"
+```move title="regcoin.move"
 module examples::regcoin {
     use std::option;
     use sui::coin;
@@ -145,7 +145,7 @@ The output also shows the three objects that the publisher now owns: `UpgradeCap
 
 For the ability to manipulate the addresses assigned to the deny list for your coin, you must add a few functions to the previous example.
 
-```rust
+```move
 public fun add_addr_from_deny_list(denylist: &mut DenyList, denycap: &mut DenyCap<REGCOIN>, denyaddy: address, ctx: &mut TxContext){
     coin::deny_list_add(denylist, denycap, denyaddy, ctx );
 }
