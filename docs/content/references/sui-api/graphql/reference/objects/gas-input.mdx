@@ -51,7 +51,7 @@ type GasInput {
     after: String
     last: Int
     before: String
-  ): ObjectConnection
+  ): ObjectConnection!
   gasPrice: BigInt
   gasBudget: BigInt
 }
@@ -68,7 +68,7 @@ type GasInput {
 > Address of the owner of the gas object(s) used
 > 
 
-#### [<code style={{ fontWeight: 'normal' }}>GasInput.<b>gasPayment</b></code>](#)<Bullet />[`ObjectConnection`](/references/sui-api/graphql/reference/objects/object-connection) <Badge class="badge badge--secondary" text="object"/> 
+#### [<code style={{ fontWeight: 'normal' }}>GasInput.<b>gasPayment</b></code>](#)<Bullet />[`ObjectConnection!`](/references/sui-api/graphql/reference/objects/object-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
 > 
 > 
 > Objects used to pay for a transaction's execution and storage

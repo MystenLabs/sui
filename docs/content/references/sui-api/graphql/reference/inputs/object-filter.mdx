@@ -40,7 +40,12 @@ export const Details = ({ dataOpen, dataClose, children, startOpen = false }) =>
 
 
 
-No description
+Constrains the set of objects returned. All filters are optional, and the resulting set of
+objects are ones whose
+
+- Type matches the `type` filter,
+- AND, whose owner matches the `owner` filter,
+- AND, whose ID is in `objectIds` OR whose ID and version is in `objectKeys`.
 
 
 ```graphql
@@ -92,5 +97,5 @@ input ObjectFilter {
 
 ### Member Of
 
-[`objectConnection`](/references/sui-api/graphql/reference/queries/object-connection)  <Badge class="badge badge--secondary" text="query"/>
+[`objects`](/references/sui-api/graphql/reference/queries/objects)  <Badge class="badge badge--secondary" text="query"/>
 
