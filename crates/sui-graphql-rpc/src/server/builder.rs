@@ -679,8 +679,10 @@ pub mod tests {
             .build_schema();
         let _ = schema.execute("{ chainIdentifier }").await;
 
-        /// changing this to Histogram (mysten-metrics) rather than prometheus::Histogram makes it very difficult to test.
-        let (input_hist, input_sum, input_count) = get_sample("input_nodes", &registry);
+        // changing this to Histogram (mysten-metrics) rather than prometheus::Histogram makes it very difficult to test.
+        let (_input_hist, input_sum, input_count) = get_sample("input_nodes", &registry);
+        assert_eq!(input_sum.len(), 1);
+        assert_eq!(input_count.len(), 1);
         // assert_eq!(input_sum.get("")
         // assert_eq!(metrics2.output_nodes.get_sample_count(), 1);
         // assert_eq!(metrics2.query_depth.get_sample_count(), 1);

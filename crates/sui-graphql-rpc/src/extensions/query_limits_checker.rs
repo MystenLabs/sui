@@ -141,10 +141,14 @@ impl Extension for QueryLimitsChecker {
         let cfg = ctx
             .data::<ServiceConfig>()
             .expect("No service config provided in schema data");
-
+        let metrics = ctx.data_opt::<Arc<Metrics>>();
         if query.len() > cfg.limits.max_query_payload_size as usize {
-            if let Some(metrics) = ctx.data_opt::<Arc<Metrics>>() {
+            if let Some(metrics) = metrics {
                 metrics.request_metrics.query_payload_error.inc();
+                metrics
+                    .request_metrics
+                    .query_payload_too_large_size
+                    .observe(query.len() as u64);
             }
             return Err(graphql_error(
                 code::GRAPHQL_VALIDATION_FAILED,
@@ -191,7 +195,7 @@ impl Extension for QueryLimitsChecker {
                 sel_set,
                 &mut running_costs,
                 variables,
-                ctx,
+                metrics,
             )?;
             max_depth_seen = max_depth_seen.max(running_costs.depth);
         }
@@ -239,7 +243,7 @@ impl QueryLimitsChecker {
         sel_set: &Positioned<SelectionSet>,
         cost: &mut ComponentCost,
         variables: &Variables,
-        ctx: &ExtensionContext<'_>,
+        metrics: Option<&Arc<Metrics>>,
     ) -> ServerResult<()> {
         // Use BFS to analyze the query and count the number of nodes and the depth of the query
         struct ToVisit<'s> {
@@ -256,7 +260,7 @@ impl QueryLimitsChecker {
                 parent_node_count: 1,
             });
             cost.input_nodes += 1;
-            check_limits(limits, cost, Some(selection.pos), ctx)?;
+            check_limits(limits, cost, Some(selection.pos), metrics)?;
         }
 
         // Track the number of nodes at first level if any
@@ -265,7 +269,7 @@ impl QueryLimitsChecker {
         while !que.is_empty() {
             // Signifies the start of a new level
             cost.depth += 1;
-            check_limits(limits, cost, None, ctx)?;
+            check_limits(limits, cost, None, metrics)?;
             while level_len > 0 {
                 // Ok to unwrap since we checked for empty queue
                 // and level_len > 0
@@ -292,7 +296,7 @@ impl QueryLimitsChecker {
                                 parent_node_count: current_count,
                             });
                             cost.input_nodes += 1;
-                            check_limits(limits, cost, Some(field_sel.pos), ctx)?;
+                            check_limits(limits, cost, Some(field_sel.pos), metrics)?;
                         }
                     }
 
@@ -319,7 +323,7 @@ impl QueryLimitsChecker {
                                 parent_node_count,
                             });
                             cost.input_nodes += 1;
-                            check_limits(limits, cost, Some(selection.pos), ctx)?;
+                            check_limits(limits, cost, Some(selection.pos), metrics)?;
                         }
                     }
 
@@ -331,7 +335,7 @@ impl QueryLimitsChecker {
                                 parent_node_count,
                             });
                             cost.input_nodes += 1;
-                            check_limits(limits, cost, Some(selection.pos), ctx)?;
+                            check_limits(limits, cost, Some(selection.pos), metrics)?;
                         }
                     }
                 }
@@ -348,10 +352,10 @@ fn check_limits(
     limits: &Limits,
     cost: &ComponentCost,
     pos: Option<Pos>,
-    ctx: &ExtensionContext<'_>,
+    metrics: Option<&Arc<Metrics>>,
 ) -> ServerResult<()> {
     if cost.input_nodes > limits.max_query_nodes {
-        if let Some(metrics) = ctx.data_opt::<Metrics>() {
+        if let Some(metrics) = metrics {
             metrics
                 .request_metrics
                 .num_errors
@@ -367,7 +371,7 @@ fn check_limits(
     }
 
     if cost.depth > limits.max_query_depth {
-        if let Some(metrics) = ctx.data_opt::<Metrics>() {
+        if let Some(metrics) = metrics {
             metrics
                 .request_metrics
                 .num_errors
@@ -384,7 +388,7 @@ fn check_limits(
     }
 
     if cost.output_nodes > limits.max_output_nodes {
-        if let Some(metrics) = ctx.data_opt::<Metrics>() {
+        if let Some(metrics) = metrics {
             metrics
                 .request_metrics
                 .num_errors
