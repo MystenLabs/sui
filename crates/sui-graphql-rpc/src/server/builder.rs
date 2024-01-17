@@ -262,6 +262,9 @@ async fn graphql_handler(
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
+    if let Some(ref m) = metrics {
+        m.request_metrics.inflight_requests.inc();
+    }
     let instant = Instant::now();
     let mut req = req.into_inner();
     if headers.contains_key(ShowUsage::name()) {
@@ -277,6 +280,19 @@ async fn graphql_handler(
         m.inc_num_queries();
         if !result.is_ok() {
             m.inc_errors(result.errors.clone());
+        }
+        m.request_metrics.inflight_requests.dec();
+
+        // TODO Is this the right way to get the top level query path names?
+        if let Ok(json_value) = result.data.clone().into_json() {
+            if let Some(k) = json_value.as_object().map(|x| x.keys().collect::<Vec<_>>()) {
+                for path in k {
+                    m.request_metrics
+                        .num_queries_top_level
+                        .with_label_values(&[path.as_str()])
+                        .inc();
+                }
+            }
         }
     }
     result.into()
@@ -679,20 +695,28 @@ pub mod tests {
             .build_schema();
         let _ = schema.execute("{ chainIdentifier }").await;
 
-        // changing this to Histogram (mysten-metrics) rather than prometheus::Histogram makes it very difficult to test.
         let (_input_hist, input_sum, input_count) = get_sample("input_nodes", &registry);
         assert_eq!(input_sum.len(), 1);
         assert_eq!(input_count.len(), 1);
-        // assert_eq!(input_sum.get("")
-        // assert_eq!(metrics2.output_nodes.get_sample_count(), 1);
-        // assert_eq!(metrics2.query_depth.get_sample_count(), 1);
-        // assert_eq!(metrics2.input_nodes.get_sample_sum(), 1.);
-        // assert_eq!(metrics2.output_nodes.get_sample_sum(), 1.);
-        // assert_eq!(metrics2.query_depth.get_sample_sum(), 1.);
+        let (_input_hist, input_sum, input_count) = get_sample("output_nodes", &registry);
+        assert_eq!(input_sum.len(), 1);
+        assert_eq!(input_count.len(), 1);
+        let (_input_hist, input_sum, input_count) = get_sample("query_depth", &registry);
+        assert_eq!(input_sum.len(), 1);
+        assert_eq!(input_count.len(), 1);
+        let _ = schema
+            .execute("{ chainIdentifier protocolConfig { configs { value key }} }")
+            .await;
 
-        // let _ = schema
-        //     .execute("{ chainIdentifier protocolConfig { configs { value key }} }")
-        //     .await;
+        let (_input_hist, input_sum, input_count) = get_sample("input_nodes", &registry);
+        assert_eq!(input_sum.len(), 2);
+        assert_eq!(input_count.len(), 2);
+        let (_input_hist, input_sum, input_count) = get_sample("output_nodes", &registry);
+        assert_eq!(input_sum.len(), 2);
+        assert_eq!(input_count.len(), 2);
+        let (_input_hist, input_sum, input_count) = get_sample("query_depth", &registry);
+        assert_eq!(input_sum.len(), 2);
+        assert_eq!(input_count.len(), 2);
         // assert_eq!(metrics2.input_nodes.get_sample_count(), 2);
         // assert_eq!(metrics2.output_nodes.get_sample_count(), 2);
         // assert_eq!(metrics2.query_depth.get_sample_count(), 2);
@@ -701,6 +725,8 @@ pub mod tests {
         // assert_eq!(metrics2.query_depth.get_sample_sum(), 1. + 3.);
     }
 
+    // TODO Add these convenience functions to mysten-metrics/src/histogram.rs to enable
+    // easier testing
     fn get_sample(
         name: &str,
         registry: &Registry,
@@ -714,6 +740,7 @@ pub mod tests {
             .into_iter()
             .map(|f| (f.get_name().to_string(), f))
             .collect();
+        println!("gather {:?}", gather);
         let hist = gather.get(name).unwrap();
         let sum = gather.get("{name}_sum").unwrap();
         let count = gather.get("{name}_count").unwrap();
