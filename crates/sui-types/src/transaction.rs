@@ -2148,14 +2148,17 @@ impl SenderSignedData {
         SenderSignedDataDigest::new(hash.into())
     }
 
+    pub fn serialized_size(&self) -> SuiResult<usize> {
+        bcs::serialized_size(self).map_err(|e| SuiError::TransactionSerializationError {
+            error: e.to_string(),
+        })
+    }
+
     /// Perform cheap validity checks on the sender signed transaction, including its size,
     /// input count, command count, etc.
     pub fn validity_check(&self, config: &ProtocolConfig) -> SuiResult {
         // Enforce overall transaction size limit.
-        let tx_size =
-            bcs::serialized_size(self).map_err(|e| SuiError::TransactionSerializationError {
-                error: e.to_string(),
-            })?;
+        let tx_size = self.serialized_size()?;
         let max_tx_size_bytes = config.max_tx_size_bytes();
 
         fp_ensure!(

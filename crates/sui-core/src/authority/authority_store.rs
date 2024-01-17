@@ -34,7 +34,6 @@ use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentS
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tokio::time::Instant;
 use tracing::{debug, info, trace};
-use typed_store::rocks::errors::typed_store_err_from_bcs_err;
 use typed_store::traits::Map;
 use typed_store::{
     rocks::{DBBatch, DBMap},
@@ -1695,28 +1694,6 @@ impl AuthorityStore {
             .transactions
             .get(tx_digest)
             .map(|v| v.map(|v| v.into()))
-    }
-
-    pub fn get_transactions_and_serialized_sizes<'a>(
-        &self,
-        digests: impl IntoIterator<Item = &'a TransactionDigest>,
-    ) -> Result<Vec<Option<(VerifiedTransaction, usize)>>, TypedStoreError> {
-        self.perpetual_tables
-            .transactions
-            .multi_get_raw_bytes(digests)?
-            .into_iter()
-            .map(|raw_bytes_option| {
-                raw_bytes_option
-                    .map(|tx_bytes| {
-                        let tx: VerifiedTransaction =
-                            bcs::from_bytes::<TrustedTransaction>(&tx_bytes)
-                                .map_err(typed_store_err_from_bcs_err)?
-                                .into();
-                        Ok((tx, tx_bytes.len()))
-                    })
-                    .transpose()
-            })
-            .collect()
     }
 
     // TODO: Transaction Orchestrator also calls this, which is not ideal.
