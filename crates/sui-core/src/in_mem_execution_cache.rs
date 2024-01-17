@@ -707,6 +707,7 @@ impl ExecutionCacheWrite for InMemoryCache {
             self.insert_wrapped_tombstone(id, *version);
         }
 
+        /* TODO: Objects cannot be removed until they are committed to the db
         // remove dead objects from cache
         for (id, version) in effects.modified_at_versions().iter() {
             // delete the given id, version from self.objects. if no versions remain, remove the
@@ -721,6 +722,7 @@ impl ExecutionCacheWrite for InMemoryCache {
                 dashmap::mapref::entry::Entry::Vacant(_) => panic!("object not found"),
             }
         }
+        */
 
         // TODO: this is not safe, because now we are committing persistent state to the db, while the rest
         // of the transaction outputs could simply be lost if the validator restarts. To fix this we must
