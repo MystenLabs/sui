@@ -61,15 +61,15 @@ module kiosk_mail::mail {
     struct MAIL has drop {}
 
     #[lint_allow(freeze_wrapped)]
-    /// Claim publisher object in the `MailboxRegistry`,
-    /// so we can create `Display` for `Mail<T>` as the publisher.
+    /// Claim publisher object in the `MailboxRegistry`.
+    /// Using this, we can create `Display` for `Mail<T>` as the publisher of `T`.
     /// It converts that to a frozen object so we can use in fast path.
     fun init(otw: MAIL, ctx: &mut TxContext) {
         let publisher = package::claim(otw, ctx);
 
         let registry = MailBoxRegistry {
             id: object::new(ctx),
-            publisher: publisher
+            publisher
         };
 
         transfer::freeze_object(registry);
@@ -132,7 +132,7 @@ module kiosk_mail::mail {
             item,
         } = mail;
 
-        if(requires_personal_kiosk) {
+        if (requires_personal_kiosk) {
             assert!(personal_kiosk::is_personal(kiosk), ENotPersonalKiosk);
         };
 
@@ -143,6 +143,9 @@ module kiosk_mail::mail {
     /// Returns `T` back to the sender of the `Mail<T>` object
     /// and deletes the Mail box. Good to get storage rebates 
     /// when handling spam mail.
+    /// 
+    /// We can safely return `T` without any kiosk-related operations,
+    /// considering that the sender already had access to the item by value.
     public fun return_to_sender<T: key + store>(
         mail: Mail<T>,
         _ctx: &mut TxContext
@@ -161,7 +164,7 @@ module kiosk_mail::mail {
         transfer::public_transfer(item, sender);
     }
 
-    /// check that the mail we're working with has the correct version.
+    /// Check that the mail we're working with has the correct version.
     fun assert_is_valid_version<T: key + store>(mail: &Mail<T>) {
         assert!(CURRENT_VERSION >= mail.version, EInvalidVersion);
     }
