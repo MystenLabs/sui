@@ -59,6 +59,21 @@ impl SimpleClient {
         // let response_body: Response<get_coins::ResponseData> = res.json().await?;
 
         println!("{:?}", response_body);
+
+        println!(
+            "balance: {}",
+            response_body
+                .data
+                .unwrap()
+                .address
+                .unwrap()
+                .coin_connection
+                .unwrap()
+                .nodes[0]
+                .balance
+                .as_ref()
+                .unwrap()
+        );
     }
 
     // TODO (wlmyng): doc this
