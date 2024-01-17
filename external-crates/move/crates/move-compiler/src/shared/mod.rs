@@ -820,7 +820,7 @@ pub mod known_attributes {
     pub struct ExternalAttribute;
 
     impl AttributePosition {
-        const ALL: &[Self] = &[
+        const ALL: &'static [Self] = &[
             Self::AddressBlock,
             Self::Module,
             Self::Use,
