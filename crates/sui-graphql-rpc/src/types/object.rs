@@ -72,9 +72,6 @@ pub(crate) struct DeprecatedObjectFilter {
 
     /// Filter for live objects by their IDs.
     pub object_ids: Option<Vec<SuiAddress>>,
-
-    /// Filter for live or potentially historical objects by their ID and version.
-    pub object_keys: Option<Vec<ObjectKey>>,
 }
 
 /// Constrains the set of objects returned. All filters are optional, and the resulting set of
@@ -107,8 +104,8 @@ pub(crate) struct ObjectFilter {
 
 #[derive(InputObject, Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ObjectKey {
-    object_id: SuiAddress,
-    version: u64,
+    pub object_id: SuiAddress,
+    pub version: u64,
 }
 
 /// The object's owner type: Immutable, Shared, Parent, or Address.
