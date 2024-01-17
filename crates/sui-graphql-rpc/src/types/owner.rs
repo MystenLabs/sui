@@ -8,6 +8,7 @@ use super::dynamic_field::DynamicFieldName;
 use super::stake::StakedSui;
 use super::suins_registration::SuinsRegistration;
 use crate::context_data::db_data_provider::PgManager;
+use crate::data::Db;
 use crate::types::balance::*;
 use crate::types::coin::*;
 use crate::types::object::{self, *};
@@ -62,7 +63,7 @@ use sui_types::gas_coin::GAS;
         arg(name = "last", ty = "Option<u64>"),
         arg(name = "before", ty = "Option<String>")
     ),
-    field(name = "default_name_service_name", ty = "Option<String>"),
+    field(name = "default_suins_name", ty = "Option<String>"),
     field(
         name = "suins_registrations",
         ty = "Option<Connection<String, SuinsRegistration>>",
@@ -213,11 +214,16 @@ impl Owner {
             .extend()
     }
 
-    pub async fn default_name_service_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        ctx.data_unchecked::<PgManager>()
-            .default_name_service_name(ctx.data_unchecked::<NameServiceConfig>(), self.address)
-            .await
-            .extend()
+    /// The domain that a user address has explicitly configured as their default domain.
+    pub async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+        Ok(SuinsRegistration::reverse_resolve_to_name(
+            ctx.data_unchecked::<Db>(),
+            ctx.data_unchecked::<NameServiceConfig>(),
+            self.address,
+        )
+        .await
+        .extend()?
+        .map(|d| d.to_string()))
     }
 
     /// The SuinsRegistration NFTs owned by the given object. These grant the owner

@@ -6,9 +6,7 @@
       storageRebate
       previousTransactionBlock {
         digest
-        sender {
-          defaultNameServiceName
-        }
+        sender { defaultSuinsName }
         gasInput {
           gasPrice
           gasBudget

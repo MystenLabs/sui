@@ -95,7 +95,10 @@ type Address implements IOwner {
 	The `0x3::staking_pool::StakedSui` objects owned by the given address.
 	"""
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
-	defaultNameServiceName: String
+	"""
+	The domain that a user address has explicitly configured as their default domain.
+	"""
+	defaultSuinsName: String
 	"""
 	The SuinsRegistration NFTs owned by the given object. These grant the owner
 	the capability to manage the associated domain.
@@ -1049,7 +1052,7 @@ interface IOwner {
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coins(first: Int, after: String, last: Int, before: String, type: String): CoinConnection!
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
-	defaultNameServiceName: String
+	defaultSuinsName: String
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
 	dynamicField(name: DynamicFieldName!): DynamicField
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
@@ -1712,9 +1715,9 @@ type Object implements IOwner {
 	"""
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	"""
-	The domain that a user address has explicitly configured as their default domain
+	The domain that a user address has explicitly configured as their default domain.
 	"""
-	defaultNameServiceName: String
+	defaultSuinsName: String
 	"""
 	The SuinsRegistration NFTs owned by the given object. These grant the owner
 	the capability to manage the associated domain.
@@ -1963,7 +1966,10 @@ type Owner implements IOwner {
 	The `0x3::staking_pool::StakedSui` objects owned by the given object.
 	"""
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
-	defaultNameServiceName: String
+	"""
+	The domain that a user address has explicitly configured as their default domain.
+	"""
+	defaultSuinsName: String
 	"""
 	The SuinsRegistration NFTs owned by the given object. These grant the owner
 	the capability to manage the associated domain.
