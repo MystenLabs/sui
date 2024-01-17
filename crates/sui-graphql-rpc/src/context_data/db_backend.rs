@@ -7,7 +7,7 @@ use sui_indexer::{
     types_v2::OwnerType,
 };
 
-use crate::{error::Error, types::object::ObjectFilter};
+use crate::{error::Error, types::object::DeprecatedObjectFilter};
 use diesel::{
     query_builder::{BoxedSelectStatement, FromClause, QueryId},
     sql_types::Text,
@@ -42,7 +42,7 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
         before: Option<Vec<u8>>,
         after: Option<Vec<u8>>,
         limit: PageLimit,
-        filter: Option<ObjectFilter>,
+        filter: Option<DeprecatedObjectFilter>,
         owner_type: Option<OwnerType>,
     ) -> Result<objects::BoxedQuery<'static, DB>, Error>;
     fn multi_get_balances(address: Vec<u8>) -> BalanceQuery<'static, DB>;

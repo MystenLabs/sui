@@ -108,7 +108,7 @@ task 18 'run-graphql'. lines 80-95:
 Response: {
   "data": {
     "address": {
-      "objectConnection": {
+      "objects": {
         "edges": [
           {
             "node": {
@@ -129,12 +129,12 @@ task 19 'run-graphql'. lines 97-152:
 Response: {
   "data": {
     "address": {
-      "objectConnection": {
+      "objects": {
         "edges": []
       }
     },
     "second": {
-      "objectConnection": {
+      "objects": {
         "edges": [
           {
             "node": {
@@ -149,7 +149,7 @@ Response: {
       }
     },
     "val_objs": {
-      "objectConnection": {
+      "objects": {
         "edges": [
           {
             "node": {

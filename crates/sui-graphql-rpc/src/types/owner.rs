@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::address::Address;
+use super::cursor::Page;
 use super::dynamic_field::DynamicField;
 use super::dynamic_field::DynamicFieldName;
 use super::stake::StakedSui;
@@ -9,7 +10,7 @@ use super::suins_registration::SuinsRegistration;
 use crate::context_data::db_data_provider::PgManager;
 use crate::types::balance::*;
 use crate::types::coin::*;
-use crate::types::object::*;
+use crate::types::object::{self, *};
 use crate::types::sui_address::SuiAddress;
 
 use async_graphql::connection::Connection;
@@ -21,12 +22,12 @@ use sui_types::dynamic_field::DynamicFieldType;
 #[graphql(
     field(name = "address", ty = "SuiAddress"),
     field(
-        name = "object_connection",
-        ty = "Option<Connection<String, Object>>",
+        name = "objects",
+        ty = "Connection<String, Object>",
         arg(name = "first", ty = "Option<u64>"),
-        arg(name = "after", ty = "Option<String>"),
+        arg(name = "after", ty = "Option<object::Cursor>"),
         arg(name = "last", ty = "Option<u64>"),
-        arg(name = "before", ty = "Option<String>"),
+        arg(name = "before", ty = "Option<object::Cursor>"),
         arg(name = "filter", ty = "Option<ObjectFilter>")
     ),
     field(
@@ -124,17 +125,25 @@ impl Owner {
         self.address
     }
 
-    pub async fn object_connection(
+    pub async fn objects(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<object::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
+        before: Option<object::Cursor>,
         filter: Option<ObjectFilter>,
-    ) -> Result<Option<Connection<String, Object>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_owned_objs(first, after, last, before, filter, self.address)
+    ) -> Result<Connection<String, Object>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+
+        let Some(filter) = filter.unwrap_or_default().intersect(ObjectFilter {
+            owner: Some(self.address),
+            ..Default::default()
+        }) else {
+            return Ok(Connection::new(false, false));
+        };
+
+        Object::paginate(ctx.data_unchecked(), page, None, filter)
             .await
             .extend()
     }

@@ -18,7 +18,7 @@ use super::{
     balance_change::BalanceChange,
     base64::Base64,
     checkpoint::{Checkpoint, CheckpointId},
-    cursor::{Cursor, Page},
+    cursor::{JsonCursor, Page},
     date_time::DateTime,
     digest::Digest,
     epoch::Epoch,
@@ -51,10 +51,10 @@ pub enum ExecutionStatus {
 /// therefore must be a different types to the default `TransactionBlockConnection`).
 struct DependencyConnectionNames;
 
-pub(crate) type CDependencies = Cursor<usize>;
-pub(crate) type CUnchangedSharedObject = Cursor<usize>;
-pub(crate) type CObjectChange = Cursor<usize>;
-pub(crate) type CBalanceChange = Cursor<usize>;
+pub(crate) type CDependencies = JsonCursor<usize>;
+pub(crate) type CUnchangedSharedObject = JsonCursor<usize>;
+pub(crate) type CObjectChange = JsonCursor<usize>;
+pub(crate) type CBalanceChange = JsonCursor<usize>;
 
 /// The effects representing the result of executing a transaction block.
 #[Object]

@@ -30,7 +30,7 @@ Epoch advanced: 1
 task 7 'run-graphql'. lines 22-37:
 Response: {
   "data": {
-    "objectConnection": {
+    "objects": {
       "edges": [
         {
           "node": {
@@ -73,7 +73,7 @@ Response: {
 task 8 'run-graphql'. lines 39-54:
 Response: {
   "data": {
-    "objectConnection": {
+    "objects": {
       "edges": [
         {
           "node": {
@@ -259,7 +259,7 @@ Response: {
 task 9 'run-graphql'. lines 56-71:
 Response: {
   "data": {
-    "objectConnection": {
+    "objects": {
       "edges": [
         {
           "node": {
@@ -313,7 +313,7 @@ Response: {
 task 10 'run-graphql'. lines 73-88:
 Response: {
   "data": {
-    "objectConnection": {
+    "objects": {
       "edges": [
         {
           "node": {
@@ -356,7 +356,7 @@ Response: {
 task 11 'run-graphql'. lines 90-106:
 Response: {
   "data": {
-    "objectConnection": {
+    "objects": {
       "edges": [
         {
           "node": {
@@ -401,19 +401,16 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Invalid type provided as filter: Invalid struct type: 0x2::coin::Coin<ye>. Got error: expected token ::, got >",
+      "message": "Failed to parse \"String\": Invalid filter, expected: package[::module[::type[<type_params>]]] or primitive type (occurred while parsing \"ObjectFilter\")",
       "locations": [
         {
           "line": 3,
-          "column": 3
+          "column": 19
         }
       ],
       "path": [
-        "objectConnection"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
+        "objects"
+      ]
     }
   ]
 }
@@ -423,19 +420,16 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Invalid type provided as filter: Invalid struct type: 0x2::coin::Coin<. Got error: unexpected end of tokens",
+      "message": "Failed to parse \"String\": Invalid filter, expected: package[::module[::type[<type_params>]]] or primitive type (occurred while parsing \"ObjectFilter\")",
       "locations": [
         {
           "line": 3,
-          "column": 3
+          "column": 19
         }
       ],
       "path": [
-        "objectConnection"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
+        "objects"
+      ]
     }
   ]
 }
@@ -445,19 +439,16 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Invalid type provided as filter: Invalid struct type: 0x2::a%::B&. Got error: unrecognized token: %::B&",
+      "message": "Failed to parse \"String\": Invalid filter, expected: package[::module[::type[<type_params>]]] or primitive type (occurred while parsing \"ObjectFilter\")",
       "locations": [
         {
           "line": 3,
-          "column": 3
+          "column": 19
         }
       ],
       "path": [
-        "objectConnection"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
+        "objects"
+      ]
     }
   ]
 }
@@ -467,19 +458,16 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Invalid type provided as filter: Invalid format in '::::' - if '::' is present, there must be a non-empty string on both sides. Expected format like 'package[::module[::type[<type_params>]]]'",
+      "message": "Failed to parse \"String\": Invalid filter, expected: package[::module[::type[<type_params>]]] or primitive type (occurred while parsing \"ObjectFilter\")",
       "locations": [
         {
           "line": 3,
-          "column": 3
+          "column": 19
         }
       ],
       "path": [
-        "objectConnection"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
+        "objects"
+      ]
     }
   ]
 }
@@ -487,7 +475,7 @@ Response: {
 task 16 'run-graphql'. lines 180-196:
 Response: {
   "data": {
-    "objectConnection": {
+    "objects": {
       "edges": []
     }
   }

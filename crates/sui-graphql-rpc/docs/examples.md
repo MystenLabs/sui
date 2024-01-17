@@ -828,13 +828,9 @@
 ####  Filter on objectIds
 
 ><pre>{
->  objectConnection(
->    filter: {
->      objectIds: [
->        "0x4bba2c7b9574129c272bca8f58594eba933af8001257aa6e0821ad716030f149"
->      ]
->    }
->  ) {
+>  objects(filter: { objectIds: [
+>    "0x4bba2c7b9574129c272bca8f58594eba933af8001257aa6e0821ad716030f149"
+>  ]}) {
 >    edges {
 >      node {
 >        storageRebate
@@ -865,7 +861,7 @@
 ### Filter On Generic Type
 
 ><pre>{
->  objectConnection(filter: {type: "0x2::coin::Coin"}) {
+>  objects(filter: {type: "0x2::coin::Coin"}) {
 >    edges {
 >      node {
 >        asMoveObject {
@@ -884,7 +880,7 @@
 ### Filter On Type
 
 ><pre>{
->  objectConnection(filter: {type: "0x3::staking_pool::StakedSui"}) {
+>  objects(filter: {type: "0x3::staking_pool::StakedSui"}) {
 >    edges {
 >      node {
 >        asMoveObject {
@@ -904,11 +900,9 @@
 ####  Filter on owner
 
 ><pre>{
->  objectConnection(
->    filter: {
->      owner: "0x23b7b0e2badb01581ba9b3ab55587d8d9fdae087e0cfc79f2c72af36f5059439"
->    }
->  ) {
+>  objects(filter: {
+>    owner: "0x23b7b0e2badb01581ba9b3ab55587d8d9fdae087e0cfc79f2c72af36f5059439"
+>  }) {
 >    edges {
 >      node {
 >        storageRebate
@@ -939,7 +933,7 @@
 ### Object Connection
 
 ><pre>{
->  objectConnection {
+>  objects {
 >    nodes {
 >      version
 >      digest
