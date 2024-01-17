@@ -196,7 +196,6 @@ async fn check_response(
             Ok(())
         }
         reqwest::StatusCode::BAD_REQUEST => {
-            error!("TRIED: {:?}", request);
             let body = response
                 .text()
                 .await
@@ -224,7 +223,6 @@ async fn check_response(
             ))
         }
         code => {
-            error!("TRIED: {:?}", request);
             let body = response
                 .text()
                 .await
