@@ -26,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use sui_macros::fail_point;
 use sui_network::default_mysten_network_config;
 use sui_types::base_types::ConciseableName;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::SequencedConsensusTransactionKey;
@@ -1530,11 +1531,10 @@ async fn diagnose_split_brain(
         );
     }
 
-    let sui_system_state = state
-        .database
-        .get_sui_system_state_object_unsafe()
-        .expect("Failed to get system state object");
-    let committee = sui_system_state.get_current_epoch_committee();
+    let epoch_store = state.load_epoch_store_one_call_per_task();
+    let committee = epoch_store
+        .epoch_start_state()
+        .get_sui_committee_with_network_metadata();
     let network_config = default_mysten_network_config();
     let network_clients =
         make_network_authority_clients_with_network_config(&committee, &network_config)
