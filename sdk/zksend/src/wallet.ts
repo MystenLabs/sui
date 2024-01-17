@@ -221,12 +221,18 @@ export function registerZkSendWallet(
 		// Ignore errors
 	}
 
-	return wallets.register(
-		new ZkSendWallet({
-			client,
-			name,
-			origin,
-			address: addressFromRedirect,
-		}),
-	);
+	const wallet = new ZkSendWallet({
+		client,
+		name,
+		origin,
+		address: addressFromRedirect,
+	});
+
+	const unregister = wallets.register(wallet);
+
+	return {
+		wallet,
+		unregister,
+		addressFromRedirect,
+	};
 }
