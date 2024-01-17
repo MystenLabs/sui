@@ -933,8 +933,9 @@ pub fn make_function_type(
         Some(current) => m == current,
         None => false,
     };
-    let constraints: Vec<_> = context
-        .function_info(m, f)
+    let finfo = context.function_info(m, f);
+    let macro_ = finfo.macro_;
+    let constraints: Vec<_> = finfo
         .signature
         .type_parameters
         .iter()
@@ -943,10 +944,20 @@ pub fn make_function_type(
 
     let ty_args = match ty_args_opt {
         None => {
+            let case = if macro_.is_some() {
+                TVarCase::Macro
+            } else {
+                TVarCase::Base
+            };
             let locs_constraints = constraints.into_iter().map(|k| (loc, k)).collect();
-            make_tparams(context, loc, TVarCase::Base, locs_constraints)
+            make_tparams(context, loc, case, locs_constraints)
         }
         Some(ty_args) => {
+            let case = if macro_.is_some() {
+                TArgCase::Macro
+            } else {
+                TArgCase::Fun
+            };
             let ty_args = check_type_argument_arity(
                 context,
                 loc,
@@ -954,7 +965,7 @@ pub fn make_function_type(
                 ty_args,
                 &constraints,
             );
-            instantiate_type_args(context, loc, None, ty_args, constraints)
+            instantiate_type_args(context, loc, case, ty_args, constraints)
         }
     };
 
@@ -969,7 +980,6 @@ pub fn make_function_type(
     let return_ty = subst_tparams(tparam_subst, finfo.signature.return_type.clone());
 
     let defined_loc = finfo.defined_loc;
-    let macro_ = finfo.macro_;
     let public_for_testing =
         public_testing_visibility(context.env, context.current_package, f, finfo.entry);
     let is_testing_context = context.is_testing_context();
@@ -1568,7 +1578,13 @@ fn instantiate_apply(
         }
     };
 
-    let tys = instantiate_type_args(context, loc, Some(&n.value), ty_args, tparam_constraints);
+    let tys = instantiate_type_args(
+        context,
+        loc,
+        TArgCase::Apply(&n.value),
+        ty_args,
+        tparam_constraints,
+    );
     Type_::Apply(abilities_opt, n, tys)
 }
 
@@ -1580,7 +1596,7 @@ fn instantiate_apply(
 fn instantiate_type_args(
     context: &mut Context,
     loc: Loc,
-    n: Option<&TypeName_>,
+    case: TArgCase,
     mut ty_args: Vec<Type>,
     constraints: Vec<AbilitySet>,
 ) -> Vec<Type> {
@@ -1590,11 +1606,14 @@ fn instantiate_type_args(
         .zip(&ty_args)
         .map(|(abilities, t)| (t.loc, abilities))
         .collect();
-    let tvar_case = match n {
-        Some(TypeName_::Multiple(_)) => {
+    let tvar_case = match case {
+        TArgCase::Apply(TypeName_::Multiple(_)) => {
             TVarCase::Single("Invalid expression list type argument".to_owned())
         }
-        None | Some(TypeName_::Builtin(_)) | Some(TypeName_::ModuleType(_, _)) => TVarCase::Base,
+        TArgCase::Fun
+        | TArgCase::Apply(TypeName_::Builtin(_))
+        | TArgCase::Apply(TypeName_::ModuleType(_, _)) => TVarCase::Base,
+        TArgCase::Macro => TVarCase::Macro,
     };
     let tvars = make_tparams(context, loc, tvar_case, locs_constraints);
     ty_args = ty_args
@@ -1655,6 +1674,13 @@ fn check_type_argument_arity<F: FnOnce() -> String>(
 enum TVarCase {
     Single(String),
     Base,
+    Macro,
+}
+
+enum TArgCase<'a> {
+    Apply(&'a TypeName_),
+    Fun,
+    Macro,
 }
 
 fn make_tparams(
@@ -1673,6 +1699,7 @@ fn make_tparams(
                 TVarCase::Base => {
                     context.add_base_type_constraint(loc, "Invalid type argument", tvar.clone())
                 }
+                TVarCase::Macro => (),
             };
             tvar
         })
