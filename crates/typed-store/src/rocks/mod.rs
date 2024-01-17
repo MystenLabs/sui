@@ -1184,6 +1184,7 @@ impl<K, V> DBMap<K, V> {
     }
 
     // Creates a RocksDB read option with specified lower and upper bounds.
+    /// Lower bound is inclusive, and upper bound is exclusive.
     fn create_read_options_with_bounds(
         &self,
         lower_bound: Option<K>,
