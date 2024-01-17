@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    cell::OnceCell,
     fmt,
     hash::{Hash, Hasher},
     ops::Deref,
+    sync::Arc,
 };
 
 use bytes::Buf as _;
@@ -24,38 +24,14 @@ pub type Round = u32;
 /// considers valid.
 /// Well behaved validators produce at most one block per round, but malicious validators can
 /// equivocate.
-#[derive(Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Deserialize, Serialize)]
 #[enum_dispatch(BlockAPI)]
 pub enum Block {
     V1(BlockV1),
 }
 
-impl Eq for Block {}
-
-impl fmt::Debug for Block {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Block {:?} {{", self.reference())?;
-        write!(
-            f,
-            "ancestors({})={:?},",
-            self.ancestors().len(),
-            self.ancestors()
-        )?;
-        // TODO: add printing of transactions.
-        writeln!(f, "}}")
-    }
-}
-
-impl fmt::Display for Block {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.reference())
-    }
-}
-
 #[enum_dispatch]
 pub trait BlockAPI {
-    fn reference(&self) -> BlockRef;
-    fn digest(&self) -> BlockDigest;
     fn round(&self) -> Round;
     fn author(&self) -> AuthorityIndex;
     fn timestamp_ms(&self) -> BlockTimestampMs;
@@ -69,28 +45,9 @@ pub struct BlockV1 {
     author: AuthorityIndex,
     timestamp_ms: BlockTimestampMs,
     ancestors: Vec<BlockRef>,
-
-    #[serde(skip)]
-    digest: OnceCell<BlockDigest>,
 }
 
 impl BlockAPI for BlockV1 {
-    fn reference(&self) -> BlockRef {
-        BlockRef {
-            round: self.round,
-            author: self.author,
-            digest: self.digest(),
-        }
-    }
-
-    fn digest(&self) -> BlockDigest {
-        *self.digest.get_or_init(|| {
-            let mut hasher = DefaultHashFunction::new();
-            hasher.update(bcs::to_bytes(&self).expect("Serialization should not fail"));
-            BlockDigest(hasher.finalize().into())
-        })
-    }
-
     fn round(&self) -> Round {
         self.round
     }
@@ -105,12 +62,6 @@ impl BlockAPI for BlockV1 {
 
     fn ancestors(&self) -> &[BlockRef] {
         &self.ancestors
-    }
-}
-
-impl PartialEq for BlockV1 {
-    fn eq(&self, other: &Self) -> bool {
-        self.digest() == other.digest()
     }
 }
 
@@ -232,6 +183,9 @@ impl fmt::Debug for Slot {
 #[derive(Deserialize)]
 pub(crate) struct SignedBlock {
     block: Block,
+
+    #[serde(skip)]
+    digest: BlockDigest,
     signature: bytes::Bytes,
 
     #[serde(skip)]
@@ -242,10 +196,15 @@ impl SignedBlock {
     // TODO: add deserialization and verification.
 }
 
-/// Verifiied block allows full access to its content.
-#[derive(Clone, Deserialize, PartialEq)]
+/// VerifiiedBlock allows full access to its content.
+/// It should be relatively cheap to copy.
+#[allow(unused)]
+#[derive(Clone, Deserialize)]
 pub(crate) struct VerifiedBlock {
-    block: Block,
+    block: Arc<Block>,
+
+    #[serde(skip)]
+    digest: BlockDigest,
     signature: bytes::Bytes,
 
     #[serde(skip)]
@@ -257,24 +216,47 @@ impl VerifiedBlock {
     /// This should never be called on unverified data received over the network.
     pub fn parse_from_storage(serialized: bytes::Bytes) -> Result<Self, bcs::Error> {
         let mut block: VerifiedBlock = bcs::from_bytes(serialized.chunk())?;
+        block.digest = Self::compute_digest(&block.block)?;
         block.serialized = serialized;
         Ok(block)
     }
 
-    pub fn serialized(&self) -> &bytes::Bytes {
-        &self.serialized
-    }
-
     #[cfg(test)]
     pub(crate) fn new_for_test(block: Block) -> Self {
+        let digest = Self::compute_digest(&block).unwrap();
         let serialized: bytes::Bytes = bcs::to_bytes(&(&block, bytes::Bytes::default()))
             .expect("Serialization should not fail")
             .into();
         VerifiedBlock {
-            block,
+            block: Arc::new(block),
+            digest,
             signature: Default::default(),
             serialized,
         }
+    }
+
+    /// Returns reference to the block.
+    pub fn reference(&self) -> BlockRef {
+        BlockRef {
+            round: self.block.round(),
+            author: self.block.author(),
+            digest: self.digest(),
+        }
+    }
+
+    pub fn digest(&self) -> BlockDigest {
+        self.digest
+    }
+
+    /// Returns the serialized block with signature.
+    pub fn serialized(&self) -> &bytes::Bytes {
+        &self.serialized
+    }
+
+    fn compute_digest(block: &Block) -> Result<BlockDigest, bcs::Error> {
+        let mut hasher = DefaultHashFunction::new();
+        hasher.update(bcs::to_bytes(block)?);
+        Ok(BlockDigest(hasher.finalize().into()))
     }
 }
 
@@ -286,9 +268,15 @@ impl Deref for VerifiedBlock {
     }
 }
 
+impl PartialEq for VerifiedBlock {
+    fn eq(&self, other: &Self) -> bool {
+        self.digest() == other.digest()
+    }
+}
+
 impl fmt::Display for VerifiedBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", self.block.reference())
+        write!(f, "{}", self.reference())
     }
 }
 

@@ -7,7 +7,7 @@ use tempfile::TempDir;
 
 use super::{mem_store::MemStore, rocksdb_store::RocksDBStore, Store};
 use crate::{
-    block::{BlockAPI as _, BlockDigest, BlockRef, TestBlock, VerifiedBlock},
+    block::{BlockDigest, BlockRef, TestBlock, VerifiedBlock},
     commit::Commit,
 };
 

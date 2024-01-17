@@ -16,7 +16,7 @@ use typed_store::{
 
 use super::Store;
 use crate::{
-    block::{BlockAPI, BlockDigest, BlockRef, Round, VerifiedBlock},
+    block::{BlockDigest, BlockRef, Round, VerifiedBlock},
     commit::{Commit, CommitIndex},
     error::ConsensusResult,
 };

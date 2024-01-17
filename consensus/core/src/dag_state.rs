@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-    block::{BlockAPI as _, BlockRef, Round, Slot, VerifiedBlock},
+    block::{BlockRef, Round, Slot, VerifiedBlock},
     commit::Commit,
     context::Context,
     storage::Store,
