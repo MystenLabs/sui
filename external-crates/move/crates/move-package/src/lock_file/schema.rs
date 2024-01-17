@@ -132,6 +132,21 @@ impl ToolchainVersion {
     }
 }
 
+impl Header {
+    pub fn read(lock: &mut impl Read) -> Result<Header> {
+        let contents = {
+            let mut buf = String::new();
+            lock.read_to_string(&mut buf).context("Reading lock file")?;
+            buf
+        };
+
+        let Schema { move_: header } =
+            toml::de::from_str::<Schema<Header>>(&contents).context("Deserializing lock header")?;
+
+        Ok(header)
+    }
+}
+
 /// Read lock file header after verifying that the version of the lock is not newer than the version
 /// supported by this library.
 #[allow(clippy::ptr_arg)] // Allowed to avoid interface changes.

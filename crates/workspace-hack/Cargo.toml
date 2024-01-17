@@ -444,7 +444,8 @@ mime = { version = "0.3", default-features = false }
 mime_guess = { version = "2", default-features = false }
 minibytes = { git = "https://github.com/MystenLabs/mysticeti", rev = "318d61d27f47d257d99a86983d835e9e9756bc59", default-features = false, features = ["frommmap"] }
 minimal-lexical = { version = "0.2", default-features = false, features = ["std"] }
-miniz_oxide = { version = "0.6", default-features = false, features = ["with-alloc"] }
+miniz_oxide-3b31131e45eafb45 = { package = "miniz_oxide", version = "0.6", default-features = false }
+miniz_oxide-ca01ad9e24f5d932 = { package = "miniz_oxide", version = "0.7", default-features = false, features = ["with-alloc"] }
 mio-c38e5c1d305a1b54 = { package = "mio", version = "0.8", features = ["net", "os-ext"] }
 mockall = { version = "0.11", default-features = false }
 more-asserts = { version = "0.3", default-features = false }
@@ -800,6 +801,7 @@ universal-hash = { version = "0.5", default-features = false }
 unsafe-libyaml = { version = "0.2", default-features = false }
 unsigned-varint = { version = "0.7", default-features = false, features = ["std"] }
 untrusted = { version = "0.7", default-features = false }
+ureq = { version = "2" }
 url = { version = "2", features = ["serde"] }
 urlencoding = { version = "2", default-features = false }
 utf-8 = { version = "0.7", default-features = false }
@@ -814,10 +816,11 @@ walkdir = { version = "2", default-features = false }
 want = { version = "0.3", default-features = false }
 wasm-bindgen = { version = "0.2" }
 webpki = { version = "0.22", default-features = false, features = ["std"] }
+webpki-roots-2ffb4c3fe830441c = { package = "webpki-roots", version = "0.25", default-features = false }
 webpki-roots-3c51e837cfc5589a = { package = "webpki-roots", version = "0.22", default-features = false }
 whoami = { version = "1" }
 winapi = { version = "0.3", default-features = false, features = ["basetsd", "memoryapi", "minwindef"] }
-winnow = { version = "0.5" }
+winnow = { version = "0.4" }
 wyz-6f8ce4dd05d13bba = { package = "wyz", version = "0.2", default-features = false, features = ["alloc"] }
 wyz-d8f496e17d97b5cb = { package = "wyz", version = "0.5", default-features = false }
 x509-parser = { version = "0.14" }
@@ -1322,7 +1325,8 @@ mime = { version = "0.3", default-features = false }
 mime_guess = { version = "2", default-features = false }
 minibytes = { git = "https://github.com/MystenLabs/mysticeti", rev = "318d61d27f47d257d99a86983d835e9e9756bc59", default-features = false, features = ["frommmap"] }
 minimal-lexical = { version = "0.2", default-features = false, features = ["std"] }
-miniz_oxide = { version = "0.6", default-features = false, features = ["with-alloc"] }
+miniz_oxide-3b31131e45eafb45 = { package = "miniz_oxide", version = "0.6", default-features = false }
+miniz_oxide-ca01ad9e24f5d932 = { package = "miniz_oxide", version = "0.7", default-features = false, features = ["with-alloc"] }
 mio-c38e5c1d305a1b54 = { package = "mio", version = "0.8", features = ["net", "os-ext"] }
 mockall = { version = "0.11", default-features = false }
 mockall_derive = { version = "0.11", default-features = false }
@@ -1747,6 +1751,7 @@ unsafe-libyaml = { version = "0.2", default-features = false }
 unsigned-varint = { version = "0.7", default-features = false, features = ["std"] }
 untrusted = { version = "0.7", default-features = false }
 unzip-n = { version = "0.1", default-features = false }
+ureq = { version = "2" }
 url = { version = "2", features = ["serde"] }
 urlencoding = { version = "2", default-features = false }
 utf-8 = { version = "0.7", default-features = false }
@@ -1768,11 +1773,12 @@ wasm-bindgen-macro = { version = "0.2", default-features = false, features = ["s
 wasm-bindgen-macro-support = { version = "0.2", default-features = false, features = ["spans"] }
 wasm-bindgen-shared = { version = "0.2", default-features = false }
 webpki = { version = "0.22", default-features = false, features = ["std"] }
+webpki-roots-2ffb4c3fe830441c = { package = "webpki-roots", version = "0.25", default-features = false }
 webpki-roots-3c51e837cfc5589a = { package = "webpki-roots", version = "0.22", default-features = false }
 which = { version = "4", default-features = false }
 whoami = { version = "1" }
 winapi = { version = "0.3", default-features = false, features = ["basetsd", "memoryapi", "minwindef"] }
-winnow = { version = "0.5" }
+winnow = { version = "0.4" }
 wyz-6f8ce4dd05d13bba = { package = "wyz", version = "0.2", default-features = false, features = ["alloc"] }
 wyz-d8f496e17d97b5cb = { package = "wyz", version = "0.5", default-features = false }
 x509-parser = { version = "0.14" }
@@ -1795,7 +1801,7 @@ core-foundation-sys = { version = "0.8", default-features = false }
 cpp_demangle = { version = "0.4" }
 cpufeatures = { version = "0.2", default-features = false }
 debugid = { version = "0.8", default-features = false }
-errno-468e82937335b1c9 = { package = "errno", version = "0.3", default-features = false }
+errno-468e82937335b1c9 = { package = "errno", version = "0.3", default-features = false, features = ["std"] }
 errno-6f8ce4dd05d13bba = { package = "errno", version = "0.2", default-features = false }
 eth-keystore = { version = "0.5", default-features = false }
 findshlibs = { version = "0.10", default-features = false }
@@ -1829,7 +1835,6 @@ stable_deref_trait = { version = "1" }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 uuid-c38e5c1d305a1b54 = { package = "uuid", version = "0.8", features = ["serde", "v4"] }
-webpki-roots-2ffb4c3fe830441c = { package = "webpki-roots", version = "0.25", default-features = false }
 xattr = { version = "1" }
 
 [target.aarch64-apple-darwin.build-dependencies]
@@ -1841,7 +1846,7 @@ core-foundation-sys = { version = "0.8", default-features = false }
 cpp_demangle = { version = "0.4" }
 cpufeatures = { version = "0.2", default-features = false }
 debugid = { version = "0.8", default-features = false }
-errno-468e82937335b1c9 = { package = "errno", version = "0.3", default-features = false }
+errno-468e82937335b1c9 = { package = "errno", version = "0.3", default-features = false, features = ["std"] }
 errno-6f8ce4dd05d13bba = { package = "errno", version = "0.2", default-features = false }
 eth-keystore = { version = "0.5", default-features = false }
 findshlibs = { version = "0.10", default-features = false }
@@ -1876,7 +1881,6 @@ stable_deref_trait = { version = "1" }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 uuid-c38e5c1d305a1b54 = { package = "uuid", version = "0.8", features = ["serde", "v4"] }
-webpki-roots-2ffb4c3fe830441c = { package = "webpki-roots", version = "0.25", default-features = false }
 xattr = { version = "1" }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
@@ -1896,7 +1900,7 @@ jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5" }
 libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
 linux-raw-sys-468e82937335b1c9 = { package = "linux-raw-sys", version = "0.3", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
-linux-raw-sys-9fbad63c4bcf4a8f = { package = "linux-raw-sys", version = "0.4", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
+linux-raw-sys-9fbad63c4bcf4a8f = { package = "linux-raw-sys", version = "0.4", default-features = false, features = ["elf", "errno", "general", "ioctl", "no_std", "std"] }
 linux-raw-sys-c65f7effa3be6d31 = { package = "linux-raw-sys", version = "0.1", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
 memmap2-d8f496e17d97b5cb = { package = "memmap2", version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
@@ -1920,7 +1924,6 @@ stable_deref_trait = { version = "1" }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 uuid-c38e5c1d305a1b54 = { package = "uuid", version = "0.8", features = ["serde", "v4"] }
-webpki-roots-2ffb4c3fe830441c = { package = "webpki-roots", version = "0.25", default-features = false }
 xattr = { version = "1" }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
@@ -1942,7 +1945,7 @@ jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5" }
 libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
 linux-raw-sys-468e82937335b1c9 = { package = "linux-raw-sys", version = "0.3", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
-linux-raw-sys-9fbad63c4bcf4a8f = { package = "linux-raw-sys", version = "0.4", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
+linux-raw-sys-9fbad63c4bcf4a8f = { package = "linux-raw-sys", version = "0.4", default-features = false, features = ["elf", "errno", "general", "ioctl", "no_std", "std"] }
 linux-raw-sys-c65f7effa3be6d31 = { package = "linux-raw-sys", version = "0.1", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
 memmap2-d8f496e17d97b5cb = { package = "memmap2", version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
@@ -1967,7 +1970,6 @@ stable_deref_trait = { version = "1" }
 symbolic-common = { version = "10", default-features = false }
 symbolic-demangle = { version = "10", default-features = false, features = ["cpp", "rust"] }
 uuid-c38e5c1d305a1b54 = { package = "uuid", version = "0.8", features = ["serde", "v4"] }
-webpki-roots-2ffb4c3fe830441c = { package = "webpki-roots", version = "0.25", default-features = false }
 xattr = { version = "1" }
 
 [target.x86_64-pc-windows-msvc.dependencies]
@@ -1991,7 +1993,6 @@ schannel = { version = "0.1", default-features = false }
 scrypt = { version = "0.10", default-features = false }
 str-buf = { version = "1", default-features = false }
 uuid-c38e5c1d305a1b54 = { package = "uuid", version = "0.8", features = ["serde", "v4"] }
-webpki-roots-2ffb4c3fe830441c = { package = "webpki-roots", version = "0.25", default-features = false }
 widestring = { version = "0.5" }
 winapi = { version = "0.3", default-features = false, features = ["cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "minwinbase", "namedpipeapi", "netioapi", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
@@ -2026,7 +2027,6 @@ scrypt = { version = "0.10", default-features = false }
 str-buf = { version = "1", default-features = false }
 uuid-c38e5c1d305a1b54 = { package = "uuid", version = "0.8", features = ["serde", "v4"] }
 vcpkg = { version = "0.2", default-features = false }
-webpki-roots-2ffb4c3fe830441c = { package = "webpki-roots", version = "0.25", default-features = false }
 widestring = { version = "0.5" }
 winapi = { version = "0.3", default-features = false, features = ["cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "minwinbase", "namedpipeapi", "netioapi", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }

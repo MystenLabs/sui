@@ -1,18 +1,42 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::{anyhow, bail, ensure};
+use colored::Colorize;
 use core::fmt;
 use futures::future;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
+use move_bytecode_source_map::utils::source_map_from_file;
+use move_compiler::editions::{Edition, Flavor};
+use move_compiler::shared::NumericalAddress;
+use move_package::compilation::package_layout::CompiledPackageLayout;
+use move_package::lock_file::schema::{Header, ToolchainVersion};
+use move_package::source_package::layout::SourcePackageLayout;
+use move_package::source_package::parsed_manifest::{FileName, PackageName};
+use std::collections::HashSet;
+use std::ffi::OsStr;
+use std::fs::File;
+use std::io::{self, Seek};
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::{collections::HashMap, fmt::Debug};
 use sui_move_build::CompiledPackage;
 use sui_types::error::SuiObjectResponseError;
+use tar::Archive;
 use thiserror::Error;
+use tracing::{debug, info};
 
+use move_command_line_common::env::MOVE_HOME;
+use move_command_line_common::files::MOVE_COMPILED_EXTENSION;
+use move_command_line_common::files::{
+    extension_equals, find_filenames, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
+};
 use move_compiler::compiled_unit::NamedCompiledModule;
 use move_core_types::account_address::AccountAddress;
-use move_package::compilation::compiled_package::CompiledPackage as MoveCompiledPackage;
+use move_package::compilation::compiled_package::{
+    CompiledPackage as MoveCompiledPackage, CompiledUnitWithSource,
+};
 use move_symbol_pool::Symbol;
 use sui_sdk::apis::ReadApi;
 use sui_sdk::error::Error;
@@ -22,6 +46,10 @@ use sui_types::base_types::ObjectID;
 
 #[cfg(test)]
 mod tests;
+
+const CURRENT_COMPILER_VERSION: &str = env!("CARGO_PKG_VERSION");
+const LEGACY_COMPILER_VERSION: &str = CURRENT_COMPILER_VERSION; /* TODO: update this when Move 2024 is released */
+const LEGACY_MOVE_LOCK_VERSION: u64 = 0;
 
 #[derive(Debug, Error)]
 pub enum SourceVerificationError {
@@ -57,6 +85,9 @@ pub enum SourceVerificationError {
         package: Symbol,
         module: Symbol,
     },
+
+    #[error("Cannot check local module for {module}: {message}")]
+    CannotCheckLocalModules { module: Symbol, message: String },
 
     #[error("On-chain address cannot be zero")]
     ZeroOnChainAddresSpecifiedFailure,
@@ -331,7 +362,18 @@ fn local_modules(
     let mut map = LocalModules::new();
 
     if include_deps {
-        for (package, local_unit) in &compiled_package.deps_compiled_units {
+        // Compile dependencies with prior compilers if needed.
+        let deps_compiled_units = match units_for_toolchain(&compiled_package.deps_compiled_units) {
+            Ok(result) => result,
+            Err(e) => {
+                return Err(SourceVerificationError::CannotCheckLocalModules {
+                    module: compiled_package.compiled_package_info.package_name,
+                    message: e.to_string(),
+                })
+            }
+        };
+
+        for (package, local_unit) in deps_compiled_units {
             let m = &local_unit.unit;
             let module = m.name;
             let address = m.address.into_inner();
@@ -339,7 +381,7 @@ fn local_modules(
                 continue;
             }
 
-            map.insert((address, module), (*package, m.module.clone()));
+            map.insert((address, module), (package, m.module.clone()));
         }
     }
 
@@ -349,7 +391,25 @@ fn local_modules(
 
         // Include the root compiled units, at their current addresses.
         SourceMode::Verify => {
-            for local_unit in &compiled_package.root_compiled_units {
+            // Compile root modules with prior compiler if needed.
+            let root_compiled_units = {
+                let root_compiled_units = compiled_package
+                    .root_compiled_units
+                    .iter()
+                    .map(|u| ("root".into(), u.clone()))
+                    .collect::<Vec<_>>();
+                match units_for_toolchain(&root_compiled_units) {
+                    Ok(result) => result,
+                    Err(e) => {
+                        return Err(SourceVerificationError::CannotCheckLocalModules {
+                            module: compiled_package.compiled_package_info.package_name,
+                            message: e.to_string(),
+                        })
+                    }
+                }
+            };
+
+            for (_, local_unit) in root_compiled_units {
                 let m = &local_unit.unit;
 
                 let module = m.name;
@@ -368,7 +428,25 @@ fn local_modules(
         // Include the root compiled units, and any unpublished dependencies with their
         // addresses substituted
         SourceMode::VerifyAt(root_address) => {
-            for local_unit in &compiled_package.root_compiled_units {
+            // Compile root modules with prior compiler if needed.
+            let root_compiled_units = {
+                let root_compiled_units = compiled_package
+                    .root_compiled_units
+                    .iter()
+                    .map(|u| ("root".into(), u.clone()))
+                    .collect::<Vec<_>>();
+                match units_for_toolchain(&root_compiled_units) {
+                    Ok(result) => result,
+                    Err(e) => {
+                        return Err(SourceVerificationError::CannotCheckLocalModules {
+                            module: compiled_package.compiled_package_info.package_name,
+                            message: e.to_string(),
+                        })
+                    }
+                }
+            };
+
+            for (_, local_unit) in root_compiled_units {
                 let m = &local_unit.unit;
 
                 let module = m.name;
@@ -395,4 +473,274 @@ fn local_modules(
     }
 
     Ok(map)
+}
+
+/// Ensures `compiled_units` are compiled with the right compiler version, based on
+/// Move.lock contents. This works by detecting if a compiled unit requires a prior compiler version:
+/// - If so, download the compiler, recompile the unit, and return that unit in the result.
+/// - If not, simply keep the current compiled unit.
+fn units_for_toolchain(
+    compiled_units: &Vec<(PackageName, CompiledUnitWithSource)>,
+) -> anyhow::Result<Vec<(PackageName, CompiledUnitWithSource)>> {
+    if std::env::var("VERIFIED_SOURCE_BUILD").is_err() {
+        return Ok(compiled_units.clone());
+    }
+    let mut package_version_map: HashMap<Symbol, ToolchainVersion> = HashMap::new();
+    // First iterate over packages, mapping the required version for each package in `package_version_map`.
+    for (package, local_unit) in compiled_units {
+        if package_version_map.contains_key(package) {
+            continue;
+        }
+        let current_toolchain = ToolchainVersion {
+            compiler_version: CURRENT_COMPILER_VERSION.into(),
+            edition: Edition::LEGACY, /* does not matter, unused for current_toolchain */
+            flavor: Flavor::Sui,      /* does not matter, unused for current_toolchain */
+        };
+
+        if sui_types::is_system_package(local_unit.unit.address.into_inner()) {
+            // System packages are always compiled with the current compiler.
+            package_version_map.insert(*package, current_toolchain);
+            continue;
+        }
+
+        let package_root = SourcePackageLayout::try_find_root(&local_unit.source_path)?;
+        let lock_file = package_root.join("Move.lock");
+        if !lock_file.exists() {
+            // No lock file implies current compiler for this package.
+            package_version_map.insert(*package, current_toolchain);
+            continue;
+        }
+
+        let mut lock_file = File::open(lock_file)?;
+        let toolchain_version = ToolchainVersion::read(&mut lock_file)?;
+        lock_file.rewind()?;
+        let lock_version = Header::read(&mut lock_file)?.version;
+        match toolchain_version {
+            // No ToolchainVersion and old Move.lock version implies legacy compiler.
+            None if lock_version == LEGACY_MOVE_LOCK_VERSION => {
+                debug!("{package} on legacy compiler",);
+                let legacy_toolchain = ToolchainVersion {
+                    compiler_version: LEGACY_COMPILER_VERSION.into(),
+                    edition: Edition::LEGACY,
+                    flavor: Flavor::Sui,
+                };
+                package_version_map.insert(*package, legacy_toolchain);
+            }
+            // No ToolchainVersion and new Move.lock version implies current compiler.
+            None => {
+                debug!("{package} on current compiler @ {CURRENT_COMPILER_VERSION}",);
+                package_version_map.insert(*package, current_toolchain);
+            }
+            // This dependency uses the current compiler.
+            Some(ToolchainVersion {
+                compiler_version, ..
+            }) if compiler_version == CURRENT_COMPILER_VERSION => {
+                debug!("{package} on current compiler @ {CURRENT_COMPILER_VERSION}",);
+                package_version_map.insert(*package, current_toolchain);
+            }
+            // This dependency needs a prior compiler. Mark it and compile.
+            Some(toolchain_version) => {
+                println!(
+                    "{} {package} compiler @ {}",
+                    "REQUIRE".bold().green(),
+                    toolchain_version.compiler_version.yellow(),
+                );
+                package_version_map.insert(*package, toolchain_version);
+            }
+        }
+    }
+
+    let mut units = vec![];
+    let mut package_compiled: HashSet<Symbol> = HashSet::new();
+    // Iterate over compiled units, and determine whether they need to be recompiled and replaced by a prior compiler.
+    for (package, local_unit) in compiled_units {
+        match package_version_map.get(package) {
+            Some(ToolchainVersion {
+                compiler_version, ..
+            }) if compiler_version == CURRENT_COMPILER_VERSION => {
+                units.push((*package, local_unit.clone()));
+                continue;
+            }
+            Some(toolchain_version) if !package_compiled.contains(package) => {
+                let package_root = SourcePackageLayout::try_find_root(&local_unit.source_path)?;
+                download_and_compile(package_root.clone(), toolchain_version, package)?;
+                package_compiled.insert(*package);
+
+                let compiled_unit_paths = vec![package_root.clone()];
+                let compiled_units = find_filenames(&compiled_unit_paths, |path| {
+                    extension_equals(path, MOVE_COMPILED_EXTENSION)
+                })?;
+                let build_path = package_root.clone().join("build").join(package.as_str());
+                // If we compiled units with a previous compiler, add *all* those units at once, so that
+                // we don't need to resolve them by path one-by-one.
+                for bytecode_path in compiled_units {
+                    info!("bytecode path {bytecode_path}, {package}");
+                    let local_unit =
+                        decode_bytecode_file(build_path.clone(), package, &bytecode_path)?;
+                    units.push((*package, local_unit))
+                }
+                continue;
+            }
+            Some(_) => {
+                // If a toolchain version for a previous compiler exists, we
+                // already added all compiled units to deps_compiled_units.
+                continue;
+            }
+            None => bail!("Expected a version for {package} but none found"),
+        }
+    }
+    Ok(units)
+}
+
+fn download_and_compile(
+    root: PathBuf,
+    ToolchainVersion {
+        compiler_version,
+        edition,
+        flavor,
+    }: &ToolchainVersion,
+    dep_name: &Symbol,
+) -> anyhow::Result<()> {
+    let binaries_path = &*MOVE_HOME; // E.g., ~/.move/binaries
+    let mut dest_dir = PathBuf::from(binaries_path);
+    dest_dir = dest_dir.join("binaries");
+    let dest_version = dest_dir.join(compiler_version.clone());
+    let platform = detect_platform()?;
+    let dest_binary = dest_version.join(format!("target/release/sui-{}", platform));
+    let dest_binary_os = OsStr::new(dest_binary.as_path());
+
+    if !dest_binary.exists() {
+        // Download if binary does not exist.
+        let url = format!("https://github.com/MystenLabs/sui/releases/download/mainnet-v{}/sui-mainnet-v{}-{}.tgz", compiler_version, compiler_version, platform);
+
+        println!(
+            "{} compiler @ {} (this may take a while)",
+            "DOWNLOADING".bold().green(),
+            compiler_version.yellow()
+        );
+
+        let mut response = ureq::get(&url).call()?.into_reader();
+        let dest_tarball = dest_version.join(format!("{}.tgz", compiler_version));
+        debug!("tarball destination: {} ", dest_tarball.display());
+        if let Some(parent) = dest_tarball.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| anyhow!("failed to create directory for tarball: {e}"))?;
+        }
+        let mut dest_file = File::create(&dest_tarball)?;
+        io::copy(&mut response, &mut dest_file)?;
+
+        // Extract the tarball using the tar crate
+        let tar_gz = File::open(&dest_tarball)?;
+        let tar = flate2::read::GzDecoder::new(tar_gz);
+        let mut archive = Archive::new(tar);
+        archive
+            .unpack(&dest_version)
+            .map_err(|e| anyhow!("failed to untar compiler binary: {e}"))?;
+
+        set_executable_permission(dest_binary_os)?;
+    }
+
+    debug!(
+        "sui move build --default-move-edition {} --default-move-flavor {} -p {}",
+        edition.to_string().as_str(),
+        flavor.to_string().as_str(),
+        root.display()
+    );
+    info!(
+        "{} {} (compiler @ {})",
+        "BUILDING".bold().green(),
+        dep_name.as_str(),
+        compiler_version.yellow()
+    );
+    Command::new(dest_binary_os)
+        .args([
+            OsStr::new("move"),
+            OsStr::new("build"),
+            OsStr::new("--default-move-edition"),
+            OsStr::new(edition.to_string().as_str()),
+            OsStr::new("--default-move-flavor"),
+            OsStr::new(flavor.to_string().as_str()),
+            OsStr::new("-p"),
+            OsStr::new(root.as_path()),
+        ])
+        .output()
+        .map_err(|e| {
+            anyhow!("failed to build package from compiler binary {compiler_version}: {e}",)
+        })?;
+    Ok(())
+}
+
+fn detect_platform() -> anyhow::Result<String> {
+    let s = match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("macos", "aarch64") => "macos-arm64",
+        ("macos", "x86_64") => "macos-x86_64",
+        ("linux", "x86_64") => "ubuntu-x86_64",
+        ("windows", "x86_64") => "windows-x86_64",
+        (os, arch) => bail!("unsupported os {os} and arch {arch}"),
+    };
+    Ok(s.into())
+}
+
+#[cfg(unix)]
+fn set_executable_permission(path: &OsStr) -> anyhow::Result<()> {
+    use std::fs;
+    use std::os::unix::prelude::PermissionsExt;
+    let mut perms = fs::metadata(path)?.permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(path, perms)?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn set_executable_permission(path: &OsStr) -> anyhow::Result<()> {
+    Command::new("icacls")
+        .args([path, OsStr::new("/grant"), OsStr::new("Everyone:(RX)")])
+        .status()?;
+    Ok(())
+}
+
+fn decode_bytecode_file(
+    root_path: PathBuf,
+    package_name: &Symbol,
+    bytecode_path_str: &str,
+) -> anyhow::Result<CompiledUnitWithSource> {
+    let package_name_opt = Some(*package_name);
+    let bytecode_path = Path::new(bytecode_path_str);
+    let path_to_file = CompiledPackageLayout::path_to_file_after_category(bytecode_path);
+    let bytecode_bytes = std::fs::read(bytecode_path)?;
+    let source_map = source_map_from_file(
+        &root_path
+            .join(CompiledPackageLayout::SourceMaps.path())
+            .join(&path_to_file)
+            .with_extension(SOURCE_MAP_EXTENSION),
+    )?;
+    let source_path = &root_path
+        .join(CompiledPackageLayout::Sources.path())
+        .join(path_to_file)
+        .with_extension(MOVE_EXTENSION);
+    ensure!(
+        source_path.is_file(),
+        "Error decoding package: Unable to find corresponding source file for '{bytecode_path_str}' in package {package_name}"
+    );
+    let module = CompiledModule::deserialize_with_defaults(&bytecode_bytes)?;
+    let (address_bytes, module_name) = {
+        let id = module.self_id();
+        let parsed_addr = NumericalAddress::new(
+            id.address().into_bytes(),
+            move_compiler::shared::NumberFormat::Hex,
+        );
+        let module_name = FileName::from(id.name().as_str());
+        (parsed_addr, module_name)
+    };
+    let unit = NamedCompiledModule {
+        package_name: package_name_opt,
+        address: address_bytes,
+        name: module_name,
+        module,
+        source_map,
+    };
+    Ok(CompiledUnitWithSource {
+        unit,
+        source_path: source_path.clone(),
+    })
 }
