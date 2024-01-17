@@ -69,7 +69,7 @@ The `DenyList` object is a system object that has the address `0x403`. You canno
 
 If you need the ability to deny specific addresses from having access to your coin, you can use the `create_regulated_currency` function (instead of `create_currency`) to create it.
 
-Behind the scenes, `create_regulated_currency` uses the `create_currency` function to create the coin, but produces a `DenyCap` object that allows its bearer to control access to the coin through a `DenyList` object. Consequently, the way to create a coin using `create_regulated_currency` is similar to the previous example, with the addition of a transfer of the `DenyList` object to the module publisher.
+Behind the scenes, `create_regulated_currency` uses the `create_currency` function to create the coin, but also produces a `DenyCap` object that allows its bearer to control access to the coin's deny list in a `DenyList` object. Consequently, the way to create a coin using `create_regulated_currency` is similar to the previous example, with the addition of a transfer of the `DenyCap` object to the module publisher.
 
 ```rust title="regcoin.move"
 module examples::regcoin {
