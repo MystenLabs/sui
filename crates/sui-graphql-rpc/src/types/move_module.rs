@@ -139,8 +139,8 @@ impl MoveModule {
         before: Option<CStruct>,
     ) -> Result<Option<Connection<String, MoveStruct>>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        let after = page.after().map(String::as_str);
-        let before = page.before().map(String::as_str);
+        let after = page.after().map(|a| (*a).as_str());
+        let before = page.before().map(|b| (*b).as_str());
         let struct_range = self.parsed.structs(after, before);
 
         let mut connection = Connection::new(false, false);
@@ -196,8 +196,8 @@ impl MoveModule {
         before: Option<CFunction>,
     ) -> Result<Option<Connection<String, MoveFunction>>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        let after = page.after().map(String::as_str);
-        let before = page.before().map(String::as_str);
+        let after = page.after().map(|a| (*a).as_str());
+        let before = page.before().map(|b| (*b).as_str());
         let function_range = self.parsed.functions(after, before);
 
         let mut connection = Connection::new(false, false);
