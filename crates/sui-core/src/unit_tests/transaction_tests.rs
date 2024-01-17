@@ -4,8 +4,10 @@
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::traits::{EncodeDecodeBase64, KeyPair};
 use fastcrypto_zkp::bn254::zk_login::{parse_jwks, OIDCProvider, ZkLoginInputs};
+use mysten_network::Multiaddr;
 use rand::{rngs::StdRng, SeedableRng};
 use shared_crypto::intent::{Intent, IntentMessage};
+use std::ops::Deref;
 use sui_types::{
     authenticator_state::ActiveJwk,
     base_types::dbg_addr,
@@ -1000,4 +1002,160 @@ async fn test_very_large_certificate() {
         matches!(err, SuiError::RpcError(..))
             && err.to_string().contains("message length too large")
     );
+}
+
+#[tokio::test]
+async fn test_handle_certificate_errors() {
+    telemetry_subscribers::init_for_testing();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let gas_object_id = ObjectID::random();
+    let authority_state =
+        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let transfer_transaction = init_transfer_transaction(
+        |_| {},
+        sender,
+        &sender_key,
+        recipient,
+        object.compute_object_reference(),
+        gas_object.compute_object_reference(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
+    );
+
+    let consensus_address: Multiaddr = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
+
+    let server = AuthorityServer::new_for_test(
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
+        authority_state.clone(),
+        consensus_address.clone(),
+    );
+
+    let server_handle = server.spawn_for_test().await.unwrap();
+
+    let client = NetworkAuthorityClient::connect(server_handle.address())
+        .await
+        .unwrap();
+
+    // Test handle certificate from the wrong epoch
+    let epoch_store = authority_state.epoch_store_for_testing();
+    let next_epoch = epoch_store.epoch() + 1;
+    let signed_transaction = VerifiedSignedTransaction::new(
+        next_epoch,
+        VerifiedTransaction::new_unchecked(transfer_transaction.clone()),
+        authority_state.name,
+        &*authority_state.secret,
+    );
+
+    let mut committee_1 = epoch_store.committee().deref().clone();
+    committee_1.epoch = next_epoch;
+    let ct = CertifiedTransaction::new(
+        transfer_transaction.data().clone(),
+        vec![signed_transaction.auth_sig().clone()],
+        &committee_1,
+    )
+    .unwrap();
+
+    let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+    assert_matches!(
+        err,
+        SuiError::WrongEpoch {
+            expected_epoch: 0,
+            actual_epoch: 1
+        }
+    );
+
+    // Test handle certificate with invalid user input
+    let signed_transaction = VerifiedSignedTransaction::new(
+        epoch_store.epoch(),
+        VerifiedTransaction::new_unchecked(transfer_transaction.clone()),
+        authority_state.name,
+        &*authority_state.secret,
+    );
+
+    let mut empty_tx = transfer_transaction.clone();
+    let data = empty_tx.data_mut_for_testing();
+    data.inner_vec_mut_for_testing().clear();
+
+    let committee = epoch_store.committee().deref().clone();
+    let ct = CertifiedTransaction::new(
+        data.clone(),
+        vec![signed_transaction.auth_sig().clone()],
+        &committee,
+    )
+    .unwrap();
+
+    let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+
+    assert_matches!(
+        err,
+        SuiError::UserInputError {
+            error: UserInputError::Unsupported(message)
+        } if message == "SenderSignedData must contain exactly one transaction"
+    );
+
+    let tx = VerifiedTransaction::new_consensus_commit_prologue(0, 0, 42);
+    let ct = CertifiedTransaction::new(
+        tx.data().clone(),
+        vec![signed_transaction.auth_sig().clone()],
+        &committee,
+    )
+    .unwrap();
+
+    let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+
+    assert_matches!(
+        err,
+        SuiError::UserInputError {
+            error: UserInputError::Unsupported(message)
+        } if message == "SenderSignedData must not contain system transaction"
+    );
+
+    let mut invalid_sig_count_tx = transfer_transaction.clone();
+    let data = invalid_sig_count_tx.data_mut_for_testing();
+    data.tx_signatures_mut_for_testing().clear();
+    let ct = CertifiedTransaction::new(
+        data.clone(),
+        vec![signed_transaction.auth_sig().clone()],
+        &committee,
+    )
+    .unwrap();
+    let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+
+    assert_matches!(
+        err,
+        SuiError::SignerSignatureNumberMismatch {
+            expected: 1,
+            actual: 0
+        }
+    );
+
+    let mut absent_sig_tx = transfer_transaction.clone();
+    let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
+    let data = absent_sig_tx.data_mut_for_testing();
+    *data.tx_signatures_mut_for_testing() =
+        vec![Signature::new_secure(data.intent_message(), &unknown_key).into()];
+    let ct = CertifiedTransaction::new(
+        data.clone(),
+        vec![signed_transaction.auth_sig().clone()],
+        &committee,
+    )
+    .unwrap();
+
+    let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+
+    assert_matches!(err, SuiError::SignerSignatureAbsent { .. });
 }

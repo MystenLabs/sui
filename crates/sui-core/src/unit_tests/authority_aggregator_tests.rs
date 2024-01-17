@@ -41,6 +41,20 @@ use sui_types::messages_grpc::{
     HandleTransactionResponse, TransactionStatus, VerifiedObjectInfoResponse,
 };
 
+macro_rules! assert_matches {
+    ($expression:expr, $pattern:pat $(if $guard: expr)?) => {
+        match $expression {
+            $pattern $(if $guard)? => {}
+            ref e => panic!(
+                "assertion failed: `(left == right)` \
+                 (left: `{:?}`, right: `{:?}`)",
+                e,
+                stringify!($pattern $(if $guard)?)
+            ),
+        }
+    };
+}
+
 pub fn set_local_client_config(
     authorities: &mut AuthorityAggregator<LocalAuthorityClient>,
     index: usize,
@@ -767,6 +781,75 @@ async fn test_handle_transaction_fork() {
         err,
         AggregatorProcessTransactionError::FatalTransaction { .. }
     ));
+}
+#[tokio::test]
+async fn test_handle_certificate_response() {
+    telemetry_subscribers::init_for_testing();
+    let mut authorities = BTreeMap::new();
+    let mut clients = BTreeMap::new();
+    let mut authority_keys = Vec::new();
+    for _ in 0..4 {
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let name: AuthorityName = sec.public().into();
+        authorities.insert(name, 1);
+        authority_keys.push((name, sec));
+        clients.insert(name, HandleTransactionTestAuthorityClient::new());
+    }
+
+    let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
+    let gas_object = random_object_ref();
+    let tx = VerifiedTransaction::new_unchecked(make_transfer_sui_transaction(
+        gas_object,
+        SuiAddress::default(),
+        None,
+        sender,
+        &sender_kp,
+        666, // this is a dummy value which does not matter
+    ));
+    // All Validators gives signed-tx
+    set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx, 0);
+
+    // Validators now gives valid signed tx and we get TxCert
+    let mut agg = get_genesis_agg(authorities.clone(), clients.clone());
+    let cert_epoch_0 = agg
+        .process_transaction(tx.clone().into())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
+
+    println!("Case 1 - RetryableExecuteCertificate (WrongEpoch Error)");
+    // Validators return cert with epoch 0, client expects 1
+    // Update client to epoch 1
+    let committee_1 =
+        Committee::new_for_testing_with_normalized_voting_power(1, authorities.clone());
+    agg.committee_store
+        .insert_new_committee(&committee_1)
+        .unwrap();
+    agg.committee = Arc::new(committee_1.clone());
+
+    assert_resp_err(&agg, tx.clone().into(), |e| matches!(e, AggregatorProcessTransactionError::RetryableTransaction { .. }),
+        |e| matches!(e, SuiError::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 1 && *actual_epoch == 0)
+    ).await;
+
+    set_cert_response_with_certified_tx(&mut clients, &authority_keys, &cert_epoch_0, 0);
+    let mut agg = get_genesis_agg(authorities.clone(), clients.clone());
+    agg.committee_store
+        .insert_new_committee(&committee_1)
+        .unwrap();
+    agg.committee = Arc::new(committee_1);
+
+    let err = agg
+        .process_certificate(cert_epoch_0.clone())
+        .await
+        .unwrap_err();
+    assert_matches!(
+        err,
+        AggregatorProcessCertificateError::RetryableExecuteCertificate {
+            retryable_errors, ..
+        } if retryable_errors.iter().any(|(error, _, _)| matches!(error, SuiError::WrongEpoch {
+            expected_epoch: 1, actual_epoch: 0
+        }))
+    );
 }
 
 #[tokio::test]
@@ -2214,6 +2297,23 @@ fn set_tx_info_response_with_signed_tx(
             status: TransactionStatus::Signed(signed_tx.into_sig()),
         };
         clients.get_mut(name).unwrap().set_tx_info_response(resp);
+    }
+}
+
+fn set_cert_response_with_certified_tx(
+    clients: &mut BTreeMap<AuthorityName, HandleTransactionTestAuthorityClient>,
+    authority_keys: &Vec<(AuthorityName, AuthorityKeyPair)>,
+    cert: &CertifiedTransaction,
+    epoch: EpochId,
+) {
+    let effects = effects_with_tx(*cert.digest());
+    for (name, secret) in authority_keys {
+        let resp = HandleCertificateResponseV2 {
+            signed_effects: sign_tx_effects(effects.clone(), epoch, *name, secret),
+            events: TransactionEvents::default(),
+            fastpath_input_objects: vec![],
+        };
+        clients.get_mut(name).unwrap().set_cert_resp_to_return(resp);
     }
 }
 
