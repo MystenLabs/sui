@@ -41,9 +41,9 @@ module kiosk_mail::mail {
     /// Tries to claim a mail with an invalid version for the module.
     const EInvalidVersion: u64 = 3;
 
-    /// A Mailbox is a registry that holds the `publisher` object
+    /// The registry that holds the `publisher` object
     /// of the mail service, in order to create `Mail<T>` Display objects!
-    struct MailBoxRegistry has key {
+    struct MailRegistry has key {
         id: UID,
         publisher: Publisher
     }
@@ -67,7 +67,7 @@ module kiosk_mail::mail {
     fun init(otw: MAIL, ctx: &mut TxContext) {
         let publisher = package::claim(otw, ctx);
 
-        let registry = MailBoxRegistry {
+        let registry = MailRegistry {
             id: object::new(ctx),
             publisher
         };
@@ -88,7 +88,7 @@ module kiosk_mail::mail {
     ///    e.g. We could create different visuals, by adding params in our Mail<T> display (`{item.image_url}?in_mail=true`)
     /// 
     public fun create_display<T: key + store>(
-        registry: &MailBoxRegistry,
+        registry: &MailRegistry,
         publisher: &Publisher,
         ctx: &mut TxContext
     ): Display<Mail<T>> {
@@ -173,7 +173,7 @@ module kiosk_mail::mail {
     public fun init_for_testing<T: drop>(fake_otw: T, ctx: &mut TxContext) {
       let publisher = package::test_claim(fake_otw, ctx);
 
-        let registry = MailBoxRegistry {
+        let registry = MailRegistry {
             id: object::new(ctx),
             publisher: publisher
         };
