@@ -37,22 +37,22 @@ task 8 'run-graphql'. lines 37-47:
 Response: {
   "data": {
     "address": {
-      "objectConnection": {
+      "objects": {
         "edges": [
           {
-            "cursor": "0x12c9486e45e705b85abc9dee0ece401b9e3f69e0287185c92e442210d1a5f0df"
+            "cursor": "IBLJSG5F5wW4Wryd7g7OQBueP2ngKHGFyS5EIhDRpfDf"
           },
           {
-            "cursor": "0x52ca6a82406f3bc1b840368752f8311ccfb800cddbb0d34dbad003031a11397b"
+            "cursor": "IFLKaoJAbzvBuEA2h1L4MRzPuADN27DTTbrQAwMaETl7"
           },
           {
-            "cursor": "0x894edad69269658ba1acf4601e77441eeaee84a233efd62006a4a1a57586d80e"
+            "cursor": "IIlO2taSaWWLoaz0YB53RB7q7oSiM+/WIAakoaV1htgO"
           },
           {
-            "cursor": "0xe92e3023cd035b3963bf453474b5eda40b8c9964c01e9ab6c04522efdb0d5fa0"
+            "cursor": "IOkuMCPNA1s5Y79FNHS17aQLjJlkwB6atsBFIu/bDV+g"
           },
           {
-            "cursor": "0xfa5a6bd6d2a740a1829f36715f13a6805090bae7f5a7f2ac66d70b63105e7c5a"
+            "cursor": "IPpaa9bSp0Chgp82cV8TpoBQkLrn9afyrGbXC2MQXnxa"
           }
         ]
       }
@@ -64,13 +64,13 @@ task 9 'run-graphql'. lines 49-59:
 Response: {
   "data": {
     "address": {
-      "objectConnection": {
+      "objects": {
         "edges": [
           {
-            "cursor": "0x12c9486e45e705b85abc9dee0ece401b9e3f69e0287185c92e442210d1a5f0df"
+            "cursor": "IBLJSG5F5wW4Wryd7g7OQBueP2ngKHGFyS5EIhDRpfDf"
           },
           {
-            "cursor": "0x52ca6a82406f3bc1b840368752f8311ccfb800cddbb0d34dbad003031a11397b"
+            "cursor": "IFLKaoJAbzvBuEA2h1L4MRzPuADN27DTTbrQAwMaETl7"
           }
         ]
       }
@@ -82,10 +82,10 @@ task 10 'run-graphql'. lines 61-73:
 Response: {
   "data": {
     "address": {
-      "objectConnection": {
+      "objects": {
         "edges": [
           {
-            "cursor": "0xfa5a6bd6d2a740a1829f36715f13a6805090bae7f5a7f2ac66d70b63105e7c5a"
+            "cursor": "IPpaa9bSp0Chgp82cV8TpoBQkLrn9afyrGbXC2MQXnxa"
           }
         ]
       }
@@ -97,13 +97,13 @@ task 11 'run-graphql'. lines 75-85:
 Response: {
   "data": {
     "address": {
-      "objectConnection": {
+      "objects": {
         "edges": [
           {
-            "cursor": "0x894edad69269658ba1acf4601e77441eeaee84a233efd62006a4a1a57586d80e"
+            "cursor": "IIlO2taSaWWLoaz0YB53RB7q7oSiM+/WIAakoaV1htgO"
           },
           {
-            "cursor": "0xe92e3023cd035b3963bf453474b5eda40b8c9964c01e9ab6c04522efdb0d5fa0"
+            "cursor": "IOkuMCPNA1s5Y79FNHS17aQLjJlkwB6atsBFIu/bDV+g"
           }
         ]
       }
@@ -115,7 +115,7 @@ task 12 'run-graphql'. lines 87-97:
 Response: {
   "data": {
     "address": {
-      "objectConnection": {
+      "objects": {
         "edges": []
       }
     }
@@ -126,13 +126,13 @@ task 13 'run-graphql'. lines 99-108:
 Response: {
   "data": {
     "address": {
-      "objectConnection": {
+      "objects": {
         "edges": [
           {
-            "cursor": "0xe92e3023cd035b3963bf453474b5eda40b8c9964c01e9ab6c04522efdb0d5fa0"
+            "cursor": "IOkuMCPNA1s5Y79FNHS17aQLjJlkwB6atsBFIu/bDV+g"
           },
           {
-            "cursor": "0xfa5a6bd6d2a740a1829f36715f13a6805090bae7f5a7f2ac66d70b63105e7c5a"
+            "cursor": "IPpaa9bSp0Chgp82cV8TpoBQkLrn9afyrGbXC2MQXnxa"
           }
         ]
       }

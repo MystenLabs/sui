@@ -12,7 +12,7 @@ use sui_types::{
 };
 
 use crate::types::{
-    cursor::{Cursor, Page},
+    cursor::{JsonCursor, Page},
     object::Object,
     sui_address::SuiAddress,
 };
@@ -20,7 +20,7 @@ use crate::types::{
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct GenesisTransaction(pub NativeGenesisTransaction);
 
-pub(crate) type CObject = Cursor<usize>;
+pub(crate) type CObject = JsonCursor<usize>;
 
 /// System transaction that initializes the network and writes the initial set of objects on-chain.
 #[Object]

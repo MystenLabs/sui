@@ -15,7 +15,7 @@ use sui_types::{
     },
 };
 
-use crate::types::cursor::{Cursor, Page};
+use crate::types::cursor::{JsonCursor, Page};
 use crate::types::sui_address::SuiAddress;
 use crate::{
     error::Error,
@@ -67,8 +67,8 @@ pub(crate) struct CoinDenyListStateCreateTransaction {
     dummy: Option<bool>,
 }
 
-pub(crate) type CTxn = Cursor<usize>;
-pub(crate) type CPackage = Cursor<usize>;
+pub(crate) type CTxn = JsonCursor<usize>;
+pub(crate) type CPackage = JsonCursor<usize>;
 
 /// System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions
 /// at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other

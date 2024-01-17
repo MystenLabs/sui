@@ -19,7 +19,7 @@ use super::{
     epoch::Epoch,
     event::{self, Event, EventFilter},
     move_type::MoveType,
-    object::{Object, ObjectFilter},
+    object::{self, Object, ObjectFilter},
     owner::Owner,
     protocol_config::ProtocolConfigs,
     sui_address::SuiAddress,
@@ -190,17 +190,17 @@ impl Query {
     }
 
     /// The objects that exist in the network.
-    async fn object_connection(
+    async fn objects(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<object::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
+        before: Option<object::Cursor>,
         filter: Option<ObjectFilter>,
-    ) -> Result<Option<Connection<String, Object>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_objs(first, after, last, before, filter)
+    ) -> Result<Connection<String, Object>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        Object::paginate(ctx.data_unchecked(), page, None, filter.unwrap_or_default())
             .await
             .extend()
     }

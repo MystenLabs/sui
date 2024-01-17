@@ -80,7 +80,7 @@ module Test::M1 {
 //# run-graphql
 {
   address(address: "@{A}") {
-    objectConnection{
+    objects {
       edges {
         node {
           address
@@ -97,7 +97,7 @@ module Test::M1 {
 //# run-graphql
 {
   address(address: "@{Test}") {
-    objectConnection{
+    objects {
       edges {
         node {
           address
@@ -110,7 +110,7 @@ module Test::M1 {
     }
   }
   second: address(address: "@{A}") {
-    objectConnection{
+    objects {
       edges {
         node {
           address
@@ -124,7 +124,7 @@ module Test::M1 {
   }
 
   val_objs: address(address: "@{validator_0}") {
-    objectConnection{
+    objects {
       edges {
         node {
           address

@@ -37,7 +37,7 @@ pub(crate) struct Checkpoint {
     pub stored: StoredCheckpoint,
 }
 
-pub(crate) type Cursor = cursor::Cursor<u64>;
+pub(crate) type Cursor = cursor::JsonCursor<u64>;
 type Query<ST, GB> = data::Query<ST, checkpoints::table, GB>;
 
 /// Checkpoints contain finalized transactions and are used for node synchronization

@@ -13,7 +13,7 @@ use sui_types::transaction::{
 
 use crate::types::{
     base64::Base64,
-    cursor::{Cursor, Page},
+    cursor::{JsonCursor, Page},
     move_function::MoveFunction,
     move_type::MoveType,
     object_read::ObjectRead,
@@ -23,8 +23,8 @@ use crate::types::{
 #[derive(Clone, Eq, PartialEq)]
 pub(crate) struct ProgrammableTransactionBlock(pub NativeProgrammableTransactionBlock);
 
-pub(crate) type CInput = Cursor<usize>;
-pub(crate) type CTxn = Cursor<usize>;
+pub(crate) type CInput = JsonCursor<usize>;
+pub(crate) type CTxn = JsonCursor<usize>;
 
 #[derive(Union, Clone, Eq, PartialEq)]
 enum TransactionInput {
