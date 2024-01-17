@@ -32,8 +32,11 @@ Extending the example further, add a `mint` function to the module. Use the `min
 
 ```rust
 public fun mint(
-        treasury_cap: &mut TreasuryCap<MYCOIN>, amount: u64, recipient: address, ctx: &mut TxContext
-    ) {
+    treasury_cap: &mut TreasuryCap<MYCOIN>, 
+    amount: u64, 
+    recipient: address, 
+    ctx: &mut TxContext,
+) {
         coin::mint_and_transfer(treasury_cap, amount, recipient, ctx)
     }
 ``` 
