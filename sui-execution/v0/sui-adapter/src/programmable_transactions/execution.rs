@@ -52,6 +52,7 @@ mod checked {
             UpgradeReceipt, UpgradeTicket,
         },
         transaction::{Argument, Command, ProgrammableMoveCall, ProgrammableTransaction},
+        transaction_displays::Pretty,
         Identifier, SUI_FRAMEWORK_ADDRESS,
     };
     use sui_types::{
@@ -77,7 +78,7 @@ mod checked {
         pt: ProgrammableTransaction,
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
         #[skip_checked_arithmetic]
-        trace!(target: "replay_ptb_info", "{}", pt);
+        trace!(target: "replay_ptb_info", "{}", Pretty(&pt));
 
         let ProgrammableTransaction { inputs, commands } = pt;
         let mut context = ExecutionContext::new(
