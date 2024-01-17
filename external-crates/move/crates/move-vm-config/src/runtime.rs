@@ -76,7 +76,7 @@ pub struct VMProfilerConfig {
     pub use_long_function_name: bool,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(feature = "gas-profiler")]
 impl std::default::Default for VMProfilerConfig {
     fn default() -> Self {
         Self {
