@@ -115,7 +115,7 @@ type Query {
     filter: ObjectFilter,
   ): ObjectConnection!
 
-  resolveNameServiceAddress(name: String!): Address
+  resolveSuinsAddress(name: String!): Address
 
   # NB. Will be moved into a private, explorer-specific extension.
   networkMetrics: NetworkMetrics
@@ -1119,6 +1119,7 @@ type MoveObject implements IOwner & IObject & IMoveObject {
   asCoin: Coin
   asStakedSui: StakedSui
   asCoinMetadata: CoinMetadata
+  asSuinsRegistration: SuinsRegistration
 }
 
 type MovePackage implements IOwner & IObject {

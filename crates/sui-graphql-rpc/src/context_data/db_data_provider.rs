@@ -33,7 +33,7 @@ use sui_indexer::{
 };
 use sui_json_rpc::{
     coin_api::{parse_to_struct_tag, parse_to_type_tag},
-    name_service::{Domain, NameRecord, NameServiceConfig},
+    name_service::{Domain, NameServiceConfig},
 };
 use sui_json_rpc_types::Stake as RpcStakedSui;
 use sui_types::{
@@ -372,30 +372,6 @@ impl PgManager {
         }
 
         Ok(Some(connection))
-    }
-
-    pub(crate) async fn resolve_name_service_address(
-        &self,
-        name_service_config: &NameServiceConfig,
-        name: String,
-    ) -> Result<Option<Address>, Error> {
-        let domain = name.parse::<Domain>()?;
-
-        let record_id = name_service_config.record_field_id(&domain);
-
-        let field_record_object = match self.inner.get_object_in_blocking_task(record_id).await? {
-            Some(o) => o,
-            None => return Ok(None),
-        };
-
-        let record = field_record_object
-            .to_rust::<Field<Domain, NameRecord>>()
-            .ok_or_else(|| Error::Internal(format!("Malformed Object {record_id}")))?
-            .value;
-
-        Ok(record.target_address.map(|address| Address {
-            address: SuiAddress::from_array(address.to_inner()),
-        }))
     }
 
     pub(crate) async fn available_range(&self) -> Result<(u64, u64), Error> {

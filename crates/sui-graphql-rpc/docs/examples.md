@@ -766,7 +766,7 @@
 ### Name Service
 
 ><pre>{
->  resolveNameServiceAddress(name: "example.sui") {
+>  resolveSuinsAddress(domain: "example.sui") {
 >    address
 >  }
 >  address(
