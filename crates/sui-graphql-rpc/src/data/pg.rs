@@ -3,7 +3,7 @@
 
 use std::time::Instant;
 
-use super::{BoxedQuery, QueryExecutor};
+use super::QueryExecutor;
 use crate::{config::Limits, error::Error, metrics::Metrics};
 use async_trait::async_trait;
 use diesel::{
@@ -14,12 +14,9 @@ use diesel::{
 };
 use sui_indexer::indexer_reader::IndexerReader;
 
-<<<<<<< HEAD
-use tracing::{error, info};
+use tracing::error;
+
 pub(crate) struct PgExecutor {
-=======
-pub(crate) struct PgManager_ {
->>>>>>> b437b75a45 (Move query cost to db metrics)
     pub inner: IndexerReader,
     pub limits: Limits,
     pub metrics: Option<Metrics>,
@@ -61,16 +58,13 @@ impl QueryExecutor for PgExecutor {
             .run_query_async(move |conn| txn(&mut PgConnection { max_cost, conn }))
             .await
             .map_err(|e| Error::Internal(e.to_string()));
-        let elapsed = instant.elapsed().as_millis() as u64;
+        let elapsed = instant.elapsed();
         if let Some(metrics) = &self.metrics {
-            metrics.observe_db_data(elapsed, result.is_ok());
+            metrics.observe_db_data(elapsed.as_secs(), result.is_ok());
         }
-<<<<<<< HEAD
         if result.is_err() {
             error!("DB query error: {:?}", result.as_ref().err());
         }
-=======
->>>>>>> b437b75a45 (Move query cost to db metrics)
         result
     }
 
@@ -89,16 +83,14 @@ impl QueryExecutor for PgExecutor {
             .run_query_repeatable_async(move |conn| txn(&mut PgConnection { max_cost, conn }))
             .await
             .map_err(|e| Error::Internal(e.to_string()));
-        let elapsed = instant.elapsed().as_millis() as u64;
+        let elapsed = instant.elapsed();
+
         if let Some(metrics) = &self.metrics {
-            metrics.observe_db_data(elapsed, result.is_ok());
+            metrics.observe_db_data(elapsed.as_secs(), result.is_ok());
         }
-<<<<<<< HEAD
         if result.is_err() {
             error!("DB query error: {:?}", result.as_ref().err());
         }
-=======
->>>>>>> b437b75a45 (Move query cost to db metrics)
         result
     }
 }
@@ -113,7 +105,6 @@ impl<'c> super::DbConnection for PgConnection<'c> {
         Q: LoadQuery<'static, Self::Connection, U>,
         Q: QueryId + QueryFragment<Self::Backend>,
     {
-<<<<<<< HEAD
         query_cost::log(self.conn, self.max_cost, query());
         query().get_result(self.conn)
     }
@@ -126,23 +117,6 @@ impl<'c> super::DbConnection for PgConnection<'c> {
     {
         query_cost::log(self.conn, self.max_cost, query());
         query().get_results(self.conn)
-=======
-        let max_cost = self.limits.max_db_query_cost;
-        let instant = Instant::now();
-        let result = self
-            .inner
-            .run_query_async(move |conn| {
-                query_cost::log(conn, max_cost, query());
-                query().get_result(conn).optional()
-            })
-            .await
-            .map_err(|e| Error::Internal(e.to_string()));
-        let elapsed = instant.elapsed().as_millis() as u64;
-        if let Some(metrics) = &self.metrics {
-            metrics.observe_db_data(elapsed, result.is_ok());
-        }
-        result
->>>>>>> b437b75a45 (Move query cost to db metrics)
     }
 }
 
@@ -185,19 +159,9 @@ mod query_cost {
         };
 
         if cost > max_db_query_cost as f64 {
-            warn!(
-                cost,
-                max_db_query_cost,
-                exceeds = true,
-                "[Cost] Estimated cost"
-            );
+            warn!(cost, max_db_query_cost, exceeds = true, "Estimated cost");
         } else {
-            info!(
-                cost,
-                max_db_query_cost,
-                exceeds = false,
-                "[Cost] Estimated cost"
-            );
+            info!(cost, max_db_query_cost, exceeds = false, "Estimated cost");
         }
     }
 

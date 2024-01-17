@@ -38,12 +38,12 @@ impl Metrics {
             .report(time);
     }
 
-    /// Record the total time needed for handling the query
+    /// The total time needed for handling the query
     pub(crate) fn query_latency(&self, time: u64) {
         self.request_metrics.query_latency.observe(time);
     }
 
-    /// Record the time needed for validation the query
+    /// The time needed for validating the query
     pub(crate) fn query_validation_latency(&self, time: u64) {
         self.request_metrics.query_validation_latency.observe(time);
     }
@@ -61,7 +61,10 @@ impl Metrics {
                 if let Some(code) = ext.get("code") {
                     self.request_metrics
                         .num_errors
-                        .with_label_values(&[&self.get_query_path(err.path), &code.to_string()])
+                        .with_label_values(&[
+                            &self.get_query_path_on_error(err.path),
+                            &code.to_string(),
+                        ])
                         .inc();
                 }
             }
@@ -70,7 +73,7 @@ impl Metrics {
 
     /// When an error occurs, GraphQL returns a vector of PathSegments,
     /// that we can use to construct a simplified path to the actual error.
-    pub(crate) fn get_query_path(&self, query: Vec<PathSegment>) -> String {
+    pub(crate) fn get_query_path_on_error(&self, query: Vec<PathSegment>) -> String {
         let mut path = String::new();
         for (idx, s) in query.iter().enumerate() {
             if idx > 0 {
@@ -140,6 +143,8 @@ pub(crate) struct RequestMetrics {
     pub output_nodes: Histogram,
     /// The query depth
     pub query_depth: Histogram,
+    /// The size (in bytes) of the payload that is higher than the maximum
+    pub query_payload_too_large_size: Histogram,
     /// The size (in bytes) of the payload
     pub query_payload_size: Histogram,
     /// An error due to too high payload size
@@ -153,7 +158,10 @@ pub(crate) struct RequestMetrics {
     // TODO figure out how to formalize a query path
     /// The time it takes for the GraphQL service to execute the request by path
     pub _query_latency_by_path: HistogramVec,
-    /// Number of errors by path and type
+    /// Number of errors by path and type.
+    /// - max_query_nodes is the number of errors due to a number of input nodes higher than max
+    /// - max_query_depth is the number of errors due to a query depth higher than max allowed
+    /// - max_output_nodes is the number of errors due to a higher number of output nodes than max
     pub num_errors: IntCounterVec,
     /// Number of queries
     pub num_queries: IntCounter,
@@ -173,6 +181,11 @@ impl RequestMetrics {
                 registry,
             ),
             query_depth: Histogram::new_in_registry("query_depth", "Depth of the query", registry),
+            query_payload_too_large_size: Histogram::new_in_registry(
+                "query_payload_too_large_size",
+                "Query payload size (bytes), that was rejected due to being larger than maximum",
+                registry,
+            ),
             query_payload_size: Histogram::new_in_registry(
                 "query_payload_size",
                 "Size of the query payload string",
