@@ -7306,6 +7306,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mysten-service-boilerplate"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "axum",
+ "mysten-service",
+ "prometheus",
+ "serde",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "mysten-util-mem"
 version = "0.11.0"
 dependencies = [
