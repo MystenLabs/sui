@@ -196,11 +196,14 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             }
             continue;
         };
-        let kind = match ekind {
-            E::ImplicitUseFunKind::FunctionDeclaration => N::UseFunKind::FunctionDeclaration,
+        let (kind, used) = match ekind {
+            E::ImplicitUseFunKind::FunctionDeclaration => (
+                N::UseFunKind::FunctionDeclaration,
+                /* silences unused warning */ true,
+            ),
             E::ImplicitUseFunKind::UseAlias { used } => {
                 assert!(is_public.is_none());
-                N::UseFunKind::UseAlias { used }
+                (N::UseFunKind::UseAlias, used)
             }
         };
         let nuf = N::UseFun {
@@ -209,6 +212,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             is_public,
             target_function: (target_m, target_f),
             kind,
+            used,
         };
         let nuf_loc = nuf.loc;
         let methods = resolved.entry(tn.clone()).or_insert_with(UniqueMap::new);
