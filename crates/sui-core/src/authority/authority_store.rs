@@ -1820,10 +1820,13 @@ impl AuthorityStore {
             .collect()
     }
 
-    // TODO: Transaction Orchestrator also calls this, which is not ideal.
-    // Instead of this function use AuthorityEpochStore::epoch_start_configuration() to access this object everywhere
-    // besides when we are reading fields for the current epoch
-    pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
+    /// This function reads the DB directly to get the system state object.
+    /// If reconfiguration is happening at the same time, there is no guarantee whether we would be getting
+    /// the old or the new system state object.
+    /// Hence this function should only be called during RPC reads where data race is not a major concern.
+    /// In general we should avoid this as much as possible.
+    /// If the intent is for testing, you can use AuthorityState:: get_sui_system_state_object_for_testing.
+    pub fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState> {
         get_sui_system_state(self.perpetual_tables.as_ref())
     }
 
@@ -1911,8 +1914,9 @@ impl AuthorityStore {
             .sui_conservation_check_latency
             .set(cur_time.elapsed().as_secs() as i64);
 
+        // It is safe to call this function because we are in the middle of reconfiguration.
         let system_state = self
-            .get_sui_system_state_object()
+            .get_sui_system_state_object_unsafe()
             .expect("Reading sui system state object cannot fail")
             .into_sui_system_state_summary();
         let storage_fund_balance = system_state.storage_fund_total_object_storage_rebates;
