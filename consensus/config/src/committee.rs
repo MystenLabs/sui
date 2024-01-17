@@ -148,7 +148,7 @@ pub struct Authority {
     pub stake: Stake,
     /// Network address for communicating with the authority.
     pub address: Multiaddr,
-    /// The validator's hostname, for metrics and logging.
+    /// The authority's hostname, for metrics and logging.
     pub hostname: String,
     /// The authority's ed25519 publicKey for signing network messages and blocks.
     pub network_key: NetworkPublicKey,
