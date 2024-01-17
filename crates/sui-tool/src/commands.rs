@@ -4,10 +4,10 @@
 use crate::{
     check_completed_snapshot,
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
-    download_db_snapshot, download_formal_snapshot, dump_checkpoints_from_archive, get_object,
-    get_transaction_block, make_clients, pkg_dump, restore_from_db_checkpoint,
-    state_sync_from_archive, verify_archive, verify_archive_by_checksum, ConciseObjectOutput,
-    GroupedObjectOutput, VerboseObjectOutput,
+    download_db_snapshot, download_formal_snapshot, dump_checkpoints_from_archive,
+    get_latest_available_epoch, get_object, get_transaction_block, make_clients, pkg_dump,
+    restore_from_db_checkpoint, state_sync_from_archive, verify_archive,
+    verify_archive_by_checksum, ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::Result;
 use std::env;
@@ -260,7 +260,7 @@ pub enum ToolCommand {
     )]
     DownloadDBSnapshot {
         #[clap(long = "epoch")]
-        epoch: u64,
+        epoch: Option<u64>,
         #[clap(long = "genesis")]
         genesis: Option<PathBuf>,
         #[clap(long = "path", default_value = "/tmp")]
@@ -316,6 +316,10 @@ pub enum ToolCommand {
             help = "if set, --snapshot-bucket and --snapshot-bucket-type are ignored"
         )]
         no_sign_request: bool,
+        /// Download snapshot of the latest available epoch.
+        /// If `--epoch` is specified, then this flag gets ignored.
+        #[clap(long = "latest")]
+        latest: bool,
         /// If false (default), log level will be overridden to "off",
         /// and output will be reduced to necessary status information.
         #[clap(long = "verbose")]
@@ -331,7 +335,7 @@ pub enum ToolCommand {
     )]
     DownloadFormalSnapshot {
         #[clap(long = "epoch")]
-        epoch: u64,
+        epoch: Option<u64>,
         #[clap(long = "genesis")]
         genesis: PathBuf,
         #[clap(long = "path", default_value = "/tmp")]
@@ -375,6 +379,10 @@ pub enum ToolCommand {
             help = "if set, --snapshot-bucket and --snapshot-bucket-type are ignored"
         )]
         no_sign_request: bool,
+        /// Download snapshot of the latest available epoch.
+        /// If `--epoch` is specified, then this flag gets ignored.
+        #[clap(long = "latest")]
+        latest: bool,
         /// If false (default), log level will be overridden to "off",
         /// and output will be reduced to necessary status information.
         #[clap(long = "verbose")]
@@ -594,6 +602,7 @@ impl ToolCommand {
                 archive_bucket_type,
                 no_sign_request,
                 verbose,
+                latest,
             } => {
                 if !verbose {
                     tracing_handle
@@ -749,8 +758,15 @@ impl ToolCommand {
                         panic!("Download from local filesystem is not supported")
                     }
                 };
+                let latest_available_epoch =
+                    latest.then_some(get_latest_available_epoch(&snapshot_store_config).await?);
+                let epoch_to_download = epoch.or(latest_available_epoch).expect(
+                    "Either pass epoch with --epoch <epoch_num> or use latest with --latest",
+                );
 
-                if let Err(e) = check_completed_snapshot(&snapshot_store_config, epoch).await {
+                if let Err(e) =
+                    check_completed_snapshot(&snapshot_store_config, epoch_to_download).await
+                {
                     panic!(
                         "Aborting snapshot restore: {}, snapshot may not be uploaded yet",
                         e
@@ -760,7 +776,7 @@ impl ToolCommand {
                 let verify = verify.unwrap_or(true);
                 download_formal_snapshot(
                     &path,
-                    epoch,
+                    epoch_to_download,
                     &genesis,
                     snapshot_store_config,
                     archive_store_config,
@@ -785,6 +801,7 @@ impl ToolCommand {
                 archive_bucket,
                 archive_bucket_type,
                 no_sign_request,
+                latest,
                 verbose,
             } => {
                 if !verbose {
@@ -985,8 +1002,14 @@ impl ToolCommand {
                         panic!("Download from local filesystem is not supported")
                     }
                 };
-
-                if let Err(e) = check_completed_snapshot(&snapshot_store_config, epoch).await {
+                let latest_available_epoch =
+                    latest.then_some(get_latest_available_epoch(&snapshot_store_config).await?);
+                let epoch_to_download = epoch.or(latest_available_epoch).expect(
+                    "Either pass epoch with --epoch <epoch_num> or use latest with --latest",
+                );
+                if let Err(e) =
+                    check_completed_snapshot(&snapshot_store_config, epoch_to_download).await
+                {
                     panic!(
                         "Aborting snapshot restore: {}, snapshot may not be uploaded yet",
                         e
@@ -998,7 +1021,7 @@ impl ToolCommand {
                         genesis.expect("--genesis must be set if using the --formal flag");
                     download_formal_snapshot(
                         &path,
-                        epoch,
+                        epoch_to_download,
                         &genesis,
                         snapshot_store_config,
                         archive_store_config,
@@ -1010,7 +1033,7 @@ impl ToolCommand {
                 } else {
                     download_db_snapshot(
                         &path,
-                        epoch,
+                        epoch_to_download,
                         snapshot_store_config,
                         skip_indexes,
                         num_parallel_downloads,

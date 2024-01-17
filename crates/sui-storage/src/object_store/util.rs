@@ -29,7 +29,7 @@ pub const MANIFEST_FILENAME: &str = "MANIFEST";
 #[derive(Serialize, Deserialize)]
 
 pub struct Manifest {
-    available_epochs: Vec<u64>,
+    pub available_epochs: Vec<u64>,
 }
 
 impl Manifest {
