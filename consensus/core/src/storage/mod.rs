@@ -24,7 +24,7 @@ pub(crate) trait Store {
     fn read_blocks(&self, refs: &[BlockRef]) -> ConsensusResult<Vec<Option<VerifiedBlock>>>;
 
     /// Checks if blocks exist in the store.
-    fn contain_blocks(&self, refs: &[BlockRef]) -> ConsensusResult<Vec<bool>>;
+    fn contains_blocks(&self, refs: &[BlockRef]) -> ConsensusResult<Vec<bool>>;
 
     /// Reads blocks for an authority, from start_round.
     fn scan_blocks_by_author(

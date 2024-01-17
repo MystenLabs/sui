@@ -11,7 +11,7 @@ pub enum ConsensusError {
     #[error("Error deserializing block: {0}")]
     MalformedBlock(#[from] bcs::Error),
 
-    #[error("Storage error: {0}")]
+    #[error("RocksDB failure: {0}")]
     RocksDBFailure(#[from] TypedStoreError),
 }
 

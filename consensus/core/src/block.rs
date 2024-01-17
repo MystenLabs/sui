@@ -180,57 +180,55 @@ impl fmt::Debug for Slot {
 
 /// Unverified block only allows limited access to its content.
 #[allow(unused)]
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub(crate) struct SignedBlock {
-    block: Block,
-
-    #[serde(skip)]
-    digest: BlockDigest,
+    inner: Block,
     signature: bytes::Bytes,
-
-    #[serde(skip)]
-    serialized: bytes::Bytes,
 }
 
 impl SignedBlock {
-    // TODO: add deserialization and verification.
+    // TODO: add verification.
 }
 
-/// VerifiiedBlock allows full access to its content.
+/// VerifiedBlock allows full access to its content.
 /// It should be relatively cheap to copy.
 #[allow(unused)]
-#[derive(Clone, Deserialize)]
+#[derive(Clone)]
 pub(crate) struct VerifiedBlock {
-    block: Arc<Block>,
+    block: Arc<SignedBlock>,
 
-    #[serde(skip)]
+    // Cached Block digest and serialized SignedBlock, to avoid re-computing these values.
     digest: BlockDigest,
-    signature: bytes::Bytes,
-
-    #[serde(skip)]
     serialized: bytes::Bytes,
 }
 
 impl VerifiedBlock {
     /// Parses a serialized block from storage, where the block has been verified.
     /// This should never be called on unverified data received over the network.
-    pub fn parse_from_storage(serialized: bytes::Bytes) -> Result<Self, bcs::Error> {
-        let mut block: VerifiedBlock = bcs::from_bytes(serialized.chunk())?;
-        block.digest = Self::compute_digest(&block.block)?;
-        block.serialized = serialized;
-        Ok(block)
+    pub fn from_storage(serialized: bytes::Bytes) -> Result<Self, bcs::Error> {
+        let block: SignedBlock = bcs::from_bytes(serialized.chunk())?;
+        let digest = Self::compute_digest(&block.inner)?;
+        Ok(VerifiedBlock {
+            block: Arc::new(block),
+            digest,
+            serialized,
+        })
     }
 
     #[cfg(test)]
     pub(crate) fn new_for_test(block: Block) -> Self {
         let digest = Self::compute_digest(&block).unwrap();
-        let serialized: bytes::Bytes = bcs::to_bytes(&(&block, bytes::Bytes::default()))
+        // Use empty signature in test.
+        let signed_block = SignedBlock {
+            inner: block,
+            signature: Default::default(),
+        };
+        let serialized: bytes::Bytes = bcs::to_bytes(&signed_block)
             .expect("Serialization should not fail")
             .into();
         VerifiedBlock {
-            block: Arc::new(block),
+            block: Arc::new(signed_block),
             digest,
-            signature: Default::default(),
             serialized,
         }
     }
@@ -238,8 +236,8 @@ impl VerifiedBlock {
     /// Returns reference to the block.
     pub fn reference(&self) -> BlockRef {
         BlockRef {
-            round: self.block.round(),
-            author: self.block.author(),
+            round: self.round(),
+            author: self.author(),
             digest: self.digest(),
         }
     }
@@ -264,7 +262,7 @@ impl Deref for VerifiedBlock {
     type Target = Block;
 
     fn deref(&self) -> &Self::Target {
-        &self.block
+        &self.block.inner
     }
 }
 
@@ -336,4 +334,5 @@ impl TestBlock {
     }
 }
 
-// TODO: add basic verification for BlockRef and BlockDigest computations.
+// TODO: add basic verification for BlockRef and BlockDigest.
+// TODO: add tests for SignedBlock and VerifiedBlock conversion.

@@ -13,7 +13,7 @@ use crate::{
     storage::Store,
 };
 
-/// Rounds of recently committed blocks to cached in memory, per authority.
+/// Rounds of recently committed blocks cached in memory, per authority.
 #[allow(unused)]
 const CACHED_ROUNDS: Round = 100;
 
@@ -105,3 +105,5 @@ impl DagState {
         unimplemented!()
     }
 }
+
+// TODO: add unit tests.

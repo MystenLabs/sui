@@ -28,7 +28,7 @@ pub(crate) struct RocksDBStore {
     /// A secondary index that orders refs first by authors.
     digests_by_authorities: DBMap<(AuthorityIndex, Round, BlockDigest), ()>,
     /// Maps commit index to content.
-    commits: DBMap<u64, Commit>,
+    commits: DBMap<CommitIndex, Commit>,
 }
 
 #[allow(unused)]
@@ -110,7 +110,7 @@ impl Store for RocksDBStore {
         let mut blocks = vec![];
         for serialized in serialized {
             if let Some(serialized) = serialized {
-                let block = VerifiedBlock::parse_from_storage(serialized)?;
+                let block = VerifiedBlock::from_storage(serialized)?;
                 blocks.push(Some(block));
             } else {
                 blocks.push(None);
@@ -119,7 +119,7 @@ impl Store for RocksDBStore {
         Ok(blocks)
     }
 
-    fn contain_blocks(&self, refs: &[BlockRef]) -> ConsensusResult<Vec<bool>> {
+    fn contains_blocks(&self, refs: &[BlockRef]) -> ConsensusResult<Vec<bool>> {
         let refs = refs
             .iter()
             .map(|r| (r.round, r.author, r.digest))
@@ -144,11 +144,9 @@ impl Store for RocksDBStore {
         let results = self.read_blocks(refs.as_slice())?;
         let mut blocks = vec![];
         for (r, block) in refs.into_iter().zip(results.into_iter()) {
-            if let Some(block) = block {
-                blocks.push(block);
-            } else {
-                panic!("Block {:?} not found!", r);
-            }
+            blocks.push(
+                block.unwrap_or_else(|| panic!("Storage inconsistency: block {:?} not found!", r)),
+            );
         }
         Ok(blocks)
     }

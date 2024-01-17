@@ -71,7 +71,7 @@ impl Store for MemStore {
         Ok(blocks)
     }
 
-    fn contain_blocks(&self, refs: &[BlockRef]) -> ConsensusResult<Vec<bool>> {
+    fn contains_blocks(&self, refs: &[BlockRef]) -> ConsensusResult<Vec<bool>> {
         let inner = self.inner.read();
         let exist = refs
             .iter()

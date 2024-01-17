@@ -92,7 +92,7 @@ async fn read_and_contain_blocks(
         assert_eq!(read_blocks[2].as_ref().unwrap(), &written_blocks[2]);
 
         let contain_blocks = store
-            .contain_blocks(&refs)
+            .contains_blocks(&refs)
             .expect("Contain blocks should not fail");
         assert_eq!(contain_blocks.len(), 3);
         assert!(contain_blocks[0]);
@@ -166,10 +166,17 @@ async fn scan_blocks(
 
 #[rstest]
 #[tokio::test]
-async fn scan_commits(
+async fn read_and_scan_commits(
     #[values(TestStore::new_rocksdb_store(), TestStore::new_mem_store())] test_store: TestStore,
 ) {
     let store = test_store.store();
+
+    {
+        let last_commit = store
+            .read_last_commit()
+            .expect("Read last commit should not fail");
+        assert!(last_commit.is_none(), "{:?}", last_commit);
+    }
 
     let written_commits = vec![
         Commit {
@@ -194,6 +201,18 @@ async fn scan_commits(
         },
     ];
     store.write(vec![], written_commits.clone()).unwrap();
+
+    {
+        let last_commit = store
+            .read_last_commit()
+            .expect("Read last commit should not fail");
+        assert_eq!(
+            last_commit.as_ref(),
+            written_commits.last(),
+            "{:?}",
+            last_commit
+        );
+    }
 
     {
         let scanned_commits = store
