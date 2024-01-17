@@ -51,6 +51,23 @@ where
     }
 }
 
+// Creates an range bounded Iterator based on `use_safe_iter` on `db`.
+fn get_iter_with_bounds<K, V>(
+    db: &DBMap<K, V>,
+    lower_bound: Option<K>,
+    upper_bound: Option<K>,
+    use_safe_iter: bool,
+) -> TestIteratorWrapper<'_, K, V>
+where
+    K: Serialize + DeserializeOwned,
+    V: Serialize + DeserializeOwned,
+{
+    match use_safe_iter {
+        true => TestIteratorWrapper::SafeIter(db.safe_iter_with_bounds(lower_bound, upper_bound)),
+        false => TestIteratorWrapper::Iter(db.iter_with_bounds(lower_bound, upper_bound)),
+    }
+}
+
 // Creates an range Iterator based on `use_safe_iter` on `db`.
 fn get_range_iter<K, V>(
     db: &DBMap<K, V>,
@@ -703,7 +720,10 @@ async fn test_clear() {
 
 #[rstest]
 #[tokio::test]
-async fn test_iter_with_bounds(#[values(true, false)] is_transactional: bool) {
+async fn test_iter_with_bounds(
+    #[values(true, false)] is_transactional: bool,
+    #[values(true, false)] use_safe_iter: bool,
+) {
     let db = open_map(temp_dir(), None, is_transactional);
 
     // Add [1, 50) and (50, 100) in the db
@@ -713,9 +733,53 @@ async fn test_iter_with_bounds(#[values(true, false)] is_transactional: bool) {
         }
     }
 
+    // Tests basic bounded scan.
+    let db_iter = get_iter_with_bounds(&db, Some(20), Some(90), use_safe_iter);
+    assert_eq!(
+        (20..50)
+            .chain(51..90)
+            .map(|i| (i, i.to_string()))
+            .collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    // Don't specify upper bound.
+    let db_iter = get_iter_with_bounds(&db, Some(20), None, use_safe_iter);
+    assert_eq!(
+        (20..50)
+            .chain(51..100)
+            .map(|i| (i, i.to_string()))
+            .collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    // Don't specify lower bound.
+    let db_iter = get_iter_with_bounds(&db, None, Some(90), use_safe_iter);
+    assert_eq!(
+        (1..50)
+            .chain(51..90)
+            .map(|i| (i, i.to_string()))
+            .collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    // Don't specify any bounds.
+    let db_iter = get_iter_with_bounds(&db, None, None, use_safe_iter);
+    assert_eq!(
+        (1..50)
+            .chain(51..100)
+            .map(|i| (i, i.to_string()))
+            .collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    // Specify a bound outside of dataset.
+    let db_iter = db.iter_with_bounds(Some(200), Some(300));
+    assert!(db_iter.collect::<Vec<_>>().is_empty());
+
+    // Tests bounded scan with skip operation.
     // Skip prior to will return an iterator starting with an "unexpected" key if the sought one is not in the table
-    let db_iter = db
-        .iter_with_bounds(Some(1), Some(100))
+    let db_iter = get_iter_with_bounds(&db, Some(1), Some(100), use_safe_iter)
         .skip_prior_to(&50)
         .unwrap();
 
@@ -736,19 +800,22 @@ async fn test_iter_with_bounds(#[values(true, false)] is_transactional: bool) {
     );
 
     // Skip to a key which is not within the bounds (bound is [1, 50))
-    let db_iter = db.iter_with_bounds(Some(1), Some(50)).skip_to(&50).unwrap();
+    let db_iter = get_iter_with_bounds(&db, Some(1), Some(50), use_safe_iter)
+        .skip_to(&50)
+        .unwrap();
     assert_eq!(Vec::<(i32, String)>::new(), db_iter.collect::<Vec<_>>());
 
     // Skip to first key in the bound (bound is [1, 50))
-    let db_iter = db.iter_with_bounds(Some(1), Some(50)).skip_to(&1).unwrap();
+    let db_iter = get_iter_with_bounds(&db, Some(1), Some(50), use_safe_iter)
+        .skip_to(&1)
+        .unwrap();
     assert_eq!(
         (1..50).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
         db_iter.collect::<Vec<_>>()
     );
 
     // Skip to a key which is not within the bounds (bound is [1, 50))
-    let db_iter = db
-        .iter_with_bounds(Some(1), Some(50))
+    let db_iter = get_iter_with_bounds(&db, Some(1), Some(50), use_safe_iter)
         .skip_prior_to(&50)
         .unwrap();
     assert_eq!(vec![(49, "49".to_string())], db_iter.collect::<Vec<_>>());

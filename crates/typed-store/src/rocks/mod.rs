@@ -1183,7 +1183,29 @@ impl<K, V> DBMap<K, V> {
         )
     }
 
-    // Creates an RocksDB read option with lower and upper bounds set corresponding to `range`.
+    // Creates a RocksDB read option with specified lower and upper bounds.
+    /// Lower bound is inclusive, and upper bound is exclusive.
+    fn create_read_options_with_bounds(
+        &self,
+        lower_bound: Option<K>,
+        upper_bound: Option<K>,
+    ) -> ReadOptions
+    where
+        K: Serialize,
+    {
+        let mut readopts = self.opts.readopts();
+        if let Some(lower_bound) = lower_bound {
+            let key_buf = be_fix_int_ser(&lower_bound).unwrap();
+            readopts.set_iterate_lower_bound(key_buf);
+        }
+        if let Some(upper_bound) = upper_bound {
+            let key_buf = be_fix_int_ser(&upper_bound).unwrap();
+            readopts.set_iterate_upper_bound(key_buf);
+        }
+        readopts
+    }
+
+    // Creates a RocksDB read option with lower and upper bounds set corresponding to `range`.
     fn create_read_options_with_range(&self, range: impl RangeBounds<K>) -> ReadOptions
     where
         K: Serialize,
@@ -1952,15 +1974,7 @@ where
         lower_bound: Option<K>,
         upper_bound: Option<K>,
     ) -> Self::Iterator {
-        let mut readopts = self.opts.readopts();
-        if let Some(lower_bound) = lower_bound {
-            let key_buf = be_fix_int_ser(&lower_bound).unwrap();
-            readopts.set_iterate_lower_bound(key_buf);
-        }
-        if let Some(upper_bound) = upper_bound {
-            let key_buf = be_fix_int_ser(&upper_bound).unwrap();
-            readopts.set_iterate_upper_bound(key_buf);
-        }
+        let readopts = self.create_read_options_with_bounds(lower_bound, upper_bound);
         let db_iter = self.rocksdb.raw_iterator_cf(&self.cf(), readopts);
         let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
         Iter::new(
@@ -1995,6 +2009,25 @@ where
         let db_iter = self
             .rocksdb
             .raw_iterator_cf(&self.cf(), self.opts.readopts());
+        let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
+        SafeIter::new(
+            self.cf.clone(),
+            db_iter,
+            _timer,
+            _perf_ctx,
+            bytes_scanned,
+            keys_scanned,
+            Some(self.db_metrics.clone()),
+        )
+    }
+
+    fn safe_iter_with_bounds(
+        &'a self,
+        lower_bound: Option<K>,
+        upper_bound: Option<K>,
+    ) -> Self::SafeIterator {
+        let readopts = self.create_read_options_with_bounds(lower_bound, upper_bound);
+        let db_iter = self.rocksdb.raw_iterator_cf(&self.cf(), readopts);
         let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
         SafeIter::new(
             self.cf.clone(),

@@ -348,10 +348,11 @@ impl AuthorityPerpetualTables {
         object: &(ObjectID, SequenceNumber),
     ) -> SuiResult<Vec<ObjectKey>> {
         let mut objects = vec![];
-        for (key, _value) in self.objects.iter_with_bounds(
+        for result in self.objects.safe_iter_with_bounds(
             Some(ObjectKey(object.0, object.1.next())),
             Some(ObjectKey(object.0, VersionNumber::MAX)),
         ) {
+            let (key, _) = result?;
             objects.push(key);
         }
         Ok(objects)
@@ -370,7 +371,7 @@ impl AuthorityPerpetualTables {
         let mut wb = self.objects.batch();
         for object in objects {
             wb.delete_batch(&self.objects, [object])?;
-            if self.has_object_lock(object) {
+            if self.has_object_lock(object)? {
                 self.remove_object_lock_batch(&mut wb, object)?;
             }
         }
@@ -380,14 +381,16 @@ impl AuthorityPerpetualTables {
         Ok(())
     }
 
-    pub fn has_object_lock(&self, object: &ObjectKey) -> bool {
-        self.owned_object_transaction_locks
-            .iter_with_bounds(
+    pub fn has_object_lock(&self, object: &ObjectKey) -> SuiResult<bool> {
+        Ok(self
+            .owned_object_transaction_locks
+            .safe_iter_with_bounds(
                 Some((object.0, object.1, ObjectDigest::MIN)),
                 Some((object.0, object.1, ObjectDigest::MAX)),
             )
             .next()
-            .is_some()
+            .transpose()?
+            .is_some())
     }
 
     /// Removes owned object locks and set the lock to the previous version of the object.

@@ -379,7 +379,7 @@ pub fn remove_transaction(path: &Path, opt: RemoveTransactionOptions) -> anyhow:
 pub fn remove_object_lock(path: &Path, opt: RemoveObjectLockOptions) -> anyhow::Result<()> {
     let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None);
     let key = ObjectKey(opt.id, SequenceNumber::from_u64(opt.version));
-    if !opt.confirm && !perpetual_db.has_object_lock(&key) {
+    if !opt.confirm && !perpetual_db.has_object_lock(&key)? {
         bail!("Owned object lock for {:?} is not found!", key);
     };
     println!("Removing owned object lock for {:?}", key);
