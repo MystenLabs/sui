@@ -72,8 +72,12 @@ pub struct UseFun {
 // Mapping from type to their possible "methods"
 pub type ResolvedUseFuns = BTreeMap<TypeName, UniqueMap<Name, UseFun>>;
 
+// Color for scopes of use funs and variables
+pub type Color = u16;
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct UseFuns {
+    pub color: Color,
     pub resolved: ResolvedUseFuns,
     pub implicit_candidates: UniqueMap<Name, ImplicitUseFunCandidate>,
 }
@@ -244,7 +248,7 @@ pub type Type = Spanned<Type_>;
 pub struct Var_ {
     pub name: Symbol,
     pub id: u16,
-    pub color: u16,
+    pub color: Color,
 }
 pub type Var = Spanned<Var_>;
 
@@ -286,6 +290,7 @@ pub struct Lambda {
     pub parameters: LValueList,
     pub break_label: BlockLabel,
     pub return_label: BlockLabel,
+    pub use_fun_color: Color,
     pub body: Box<Exp>,
 }
 
@@ -387,8 +392,9 @@ impl TName for Var {
 //**************************************************************************************************
 
 impl UseFuns {
-    pub fn new() -> Self {
+    pub fn new(color: Color) -> Self {
         Self {
+            color,
             resolved: BTreeMap::new(),
             implicit_candidates: UniqueMap::new(),
         }
@@ -839,9 +845,11 @@ impl AstDebug for ResolvedUseFuns {
 impl AstDebug for UseFuns {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Self {
+            color,
             resolved,
             implicit_candidates,
         } = self;
+        w.write(&format!("use_funs#{} ", color));
         resolved.ast_debug(w);
         w.write("unresolved ");
         w.block(|w| {
@@ -1396,11 +1404,13 @@ impl AstDebug for Lambda {
             parameters: sp!(_, bs),
             break_label,
             return_label,
+            use_fun_color,
             body: e,
         } = self;
         w.write("|");
         bs.ast_debug(w);
         w.write("|");
+        w.write(&format!("use_funs#{}", use_fun_color));
         break_label.ast_debug(w);
         w.write(" ");
         return_label.ast_debug(w);

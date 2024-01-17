@@ -7,7 +7,7 @@ use crate::{
     diagnostics::{codes::NameResolution, Diagnostic},
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Visibility},
     naming::ast::{
-        self as N, BlockLabel, BuiltinTypeName_, ResolvedUseFuns, StructDefinition,
+        self as N, BlockLabel, BuiltinTypeName_, Color, ResolvedUseFuns, StructDefinition,
         StructTypeParameter, TParam, TParamID, TVar, Type, TypeName, TypeName_, Type_, UseFunKind,
         Var,
     },
@@ -26,6 +26,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 //**************************************************************************************************
 
 pub struct UseFunsScope {
+    color: Option<Color>,
     count: usize,
     use_funs: ResolvedUseFuns,
 }
@@ -118,7 +119,11 @@ impl UseFunsScope {
                 use_funs.insert(tn.clone(), public_methods);
             }
         }
-        UseFunsScope { count, use_funs }
+        UseFunsScope {
+            color: None,
+            count,
+            use_funs,
+        }
     }
 }
 
@@ -159,6 +164,7 @@ impl<'env> Context<'env> {
 
     pub fn add_use_funs_scope(&mut self, new_scope: N::UseFuns) {
         let N::UseFuns {
+            color,
             resolved: new_scope,
             implicit_candidates,
         } = new_scope;
@@ -167,13 +173,14 @@ impl<'env> Context<'env> {
             "ICE use fun candidates should have been resolved"
         );
         let cur = self.use_funs.last_mut().unwrap();
-        if new_scope.is_empty() {
+        if new_scope.is_empty() && cur.color == Some(color) {
             cur.count += 1;
             return;
         }
         self.use_funs.push(UseFunsScope {
             count: 1,
             use_funs: new_scope,
+            color: Some(color),
         })
     }
 
@@ -216,27 +223,22 @@ impl<'env> Context<'env> {
         tn: &TypeName,
         method: Name,
     ) -> Option<(ModuleIdent, FunctionName)> {
+        let cur_color = self.use_funs.last().unwrap().color;
         self.use_funs.iter_mut().rev().find_map(|scope| {
+            // scope color is None for global scope, which is always in consideration
+            // otherwise, the color must match the current color. In practice, we are preventing
+            // macro scopes from interfering with each the scopes in which they are expanded
+            if scope.color.is_some() && scope.color != cur_color {
+                return None;
+            }
             let use_fun = scope.use_funs.get_mut(tn)?.get_mut(&method)?;
             use_fun.used = true;
             Some(use_fun.target_function)
         })
     }
 
-    pub fn pop_use_funs_scope_for_macros(&mut self) -> Option<UseFunsScope> {
-        let cur = self.use_funs.last_mut().unwrap();
-        if cur.count > 1 {
-            cur.count -= 1;
-            return None;
-        }
-        Some(self.use_funs.pop().unwrap())
-    }
-
-    pub fn add_use_funs_scope_after_macros(&mut self, scope: Option<UseFunsScope>) {
-        if let Some(scope) = scope {
-            assert_eq!(scope.count, 1);
-            self.use_funs.push(scope);
-        }
+    pub fn current_use_fun_color(&self) -> Option<Color> {
+        self.use_funs.last().unwrap().color
     }
 
     pub fn reset_for_module_item(&mut self) {

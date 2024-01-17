@@ -48,6 +48,7 @@ pub fn program(env: &mut CompilationEnv, info: &mut NamingProgramInfo, inner: &m
             let N::UseFuns {
                 resolved,
                 implicit_candidates,
+                color: _,
             } = &mdef.use_funs;
             assert!(implicit_candidates.is_empty());
             (mident, resolved.clone())
@@ -102,6 +103,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
     let N::UseFuns {
         resolved,
         implicit_candidates,
+        color: _,
     } = uf;
     // remove any incorrect resolved functions
     for (tn, methods) in &mut *resolved {
@@ -320,6 +322,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             parameters: _,
             break_label: _,
             return_label: _,
+            use_fun_color: _,
             body: e,
         }) => exp(context, e),
         N::Exp_::IfElse(econd, et, ef) => {

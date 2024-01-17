@@ -781,6 +781,7 @@ fn use_funs(context: &mut Context, eufs: E::UseFuns) -> N::UseFuns {
         }
     }
     N::UseFuns {
+        color: 0, // used for macro substitution
         resolved,
         implicit_candidates: eimplicit,
     }
@@ -1425,6 +1426,7 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                     parameters,
                     break_label,
                     return_label,
+                    use_fun_color: 0, // used in macro expansion
                     body,
                 }),
             }
@@ -2159,6 +2161,7 @@ fn remove_unused_bindings_exp(
             parameters,
             break_label: _,
             return_label: _,
+            use_fun_color: _,
             body,
         }) => {
             remove_unused_bindings_lvalues(
