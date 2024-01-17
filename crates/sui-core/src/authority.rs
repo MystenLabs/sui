@@ -1496,7 +1496,7 @@ impl AuthorityState {
                     epoch_store.reference_gas_price(),
                     &transaction,
                     input_objects,
-                    receiving_objects,
+                    &receiving_objects,
                     &self.metrics.bytecode_verifier_metrics,
                 )?,
                 None,
@@ -1628,23 +1628,20 @@ impl AuthorityState {
         let protocol_config = epoch_store.protocol_config();
         let max_tx_gas = protocol_config.max_tx_gas();
 
-        let gas_price = gas_price.unwrap_or(reference_gas_price);
-        let gas_budget = gas_budget.unwrap_or(max_tx_gas);
+        let price = gas_price.unwrap_or(reference_gas_price);
+        let budget = gas_budget.unwrap_or(max_tx_gas);
         let owner = gas_sponsor.unwrap_or(sender);
         // Payment might be empty here, but it's fine we'll have to deal with it later after reading all the input objects.
         let payment = gas_objects.unwrap_or_default();
-        let expiration = match epoch {
-            None => TransactionExpiration::None,
-            Some(epoch) => TransactionExpiration::Epoch(epoch),
-        };
+        let expiration = epoch.map_or(TransactionExpiration::None, TransactionExpiration::Epoch);
         let transaction = TransactionData::V1(TransactionDataV1 {
             kind: transaction_kind.clone(),
             sender,
             gas_data: GasData {
                 payment,
                 owner,
-                price: gas_price,
-                budget: gas_budget,
+                price,
+                budget,
             },
             expiration,
         });
@@ -1655,16 +1652,14 @@ impl AuthorityState {
         let input_object_kinds = transaction.input_objects()?;
         let receiving_object_refs = transaction.receiving_objects();
 
-        if !skip_checks {
-            sui_transaction_checks::deny::check_transaction_for_signing(
-                &transaction,
-                &[],
-                &input_object_kinds,
-                &receiving_object_refs,
-                &self.transaction_deny_config,
-                &self.database,
-            )?;
-        }
+        sui_transaction_checks::deny::check_transaction_for_signing(
+            &transaction,
+            &[],
+            &input_object_kinds,
+            &receiving_object_refs,
+            &self.transaction_deny_config,
+            &self.database,
+        )?;
 
         let (mut input_objects, receiving_objects) = self
             .input_loader
@@ -1689,6 +1684,9 @@ impl AuthorityState {
         };
 
         let (gas_status, checked_input_objects) = if skip_checks {
+            // If we are skipping checks, then we call the check_dev_inspect_input function which will perform
+            // only lightweight checks on the transaction input. And if the gas field is empty, that means we will
+            // use the dummy gas object so we need to add it to the input objects vector.
             if transaction.gas().is_empty() {
                 input_objects.push(ObjectReadResult::new(
                     InputObjectKind::ImmOrOwnedMoveObject(gas_objects[0]),
@@ -1710,6 +1708,8 @@ impl AuthorityState {
 
             (gas_status, checked_input_objects)
         } else {
+            // If we are not skipping checks, then we call the check_transaction_input function and its dummy gas
+            // variant which will perform full fledged checks just like a real transaction execution.
             if transaction.gas().is_empty() {
                 sui_transaction_checks::check_transaction_input_with_given_gas(
                     epoch_store.protocol_config(),
