@@ -873,14 +873,12 @@ fn write_sep<T: Display>(
     items: impl IntoIterator<Item = T>,
     sep: &str,
 ) -> std::fmt::Result {
-    let mut start = true;
-    let xs = items.into_iter().peekable();
-    for x in xs {
-        if !start {
+    let mut xs = items.into_iter().peekable();
+    while let Some(x) = xs.next() {
+        write!(f, "{x}")?;
+        if xs.peek().is_some() {
             write!(f, "{sep}")?;
         }
-        start = false;
-        write!(f, "{x}")?;
     }
     Ok(())
 }
