@@ -3,10 +3,8 @@ name = "kiosk_mail"
 version = "0.0.1"
 
 [dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet", override=true }
-
-#testnet
-Kiosk = { git = "https://github.com/MystenLabs/apps.git", subdir = "kiosk", rev = "testnet" }
+Sui = { local = "../../crates/sui-framework/packages/sui-framework" }
+Kiosk = { local = "../" }
 
 [addresses]
 kiosk_mail = "0x0"
