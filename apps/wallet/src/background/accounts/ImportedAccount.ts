@@ -127,7 +127,7 @@ export class ImportedAccount
 	async #getKeyPair() {
 		const ephemeralData = await this.getEphemeralValue();
 		if (ephemeralData) {
-			return fromExportedKeypair(ephemeralData.keyPair);
+			return fromExportedKeypair(ephemeralData.keyPair, true);
 		}
 		return null;
 	}

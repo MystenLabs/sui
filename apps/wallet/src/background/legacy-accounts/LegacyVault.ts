@@ -53,7 +53,7 @@ export class LegacyVault {
 				mnemonicSeedHex: storedMnemonicSeedHex,
 			} = await decrypt<V2DecryptedDataType>(password, data.data);
 			entropy = toEntropy(entropySerialized);
-			keypairs = importedKeypairs.map(fromExportedKeypair);
+			keypairs = importedKeypairs.map((aKeyPair) => fromExportedKeypair(aKeyPair, true));
 			if (storedTokens) {
 				qredoTokens = new Map(Object.entries(storedTokens));
 			}
