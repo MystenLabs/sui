@@ -249,7 +249,7 @@ mod tests {
             let action = actions.get(&bridge_action.digest()).unwrap();
             assert_eq!(action, &bridge_action);
             assert_eq!(
-                store.get_sui_event_cursor(&identifier).unwrap().unwrap(),
+                store.get_sui_event_cursors(&[identifier]).unwrap()[0].unwrap(),
                 sui_event.id.tx_digest,
             );
             break;
@@ -307,7 +307,7 @@ mod tests {
             let action = actions.get(&bridge_action.digest()).unwrap();
             assert_eq!(action, &bridge_action);
             assert_eq!(
-                store.get_eth_event_cursor(&address).unwrap().unwrap(),
+                store.get_eth_event_cursors(&[address]).unwrap()[0].unwrap(),
                 log.block_number.unwrap().as_u64()
             );
             break;
