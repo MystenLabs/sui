@@ -1014,7 +1014,7 @@ type GasInput {
 	"""
 	Objects used to pay for a transaction's execution and storage
 	"""
-	gasPayment(first: Int, after: String, last: Int, before: String): ObjectConnection
+	gasPayment(first: Int, after: String, last: Int, before: String): ObjectConnection!
 	"""
 	An unsigned integer specifying the number of native tokens per gas unit this transaction
 	will pay (in MIST).
