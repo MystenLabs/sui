@@ -833,7 +833,7 @@ impl<
                         // else {
                         //     unreachable!("tx already executed though we did not send LockedExec");
                         // }
-                        // Self::write_updates_to_store(self.memory_store.clone(), deleted, written, my_id as u8, &ew_ids);
+                        Self::write_updates_to_store(self.memory_store.clone(), deleted, written, my_id as u8, &ew_ids);
                         num_tx += 1;
                         if num_tx % 10_000 == 0 {
                             tracing::debug!("[tx-results] EW {my_id} executed {num_tx} txs");
