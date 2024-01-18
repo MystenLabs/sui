@@ -19,6 +19,27 @@ pub type BlockTimestampMs = u64;
 /// Round number of a block.
 pub type Round = u32;
 
+/// The transaction serialised bytes
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Default, Debug)]
+pub(crate) struct Transaction {
+    data: bytes::Bytes,
+}
+
+#[allow(dead_code)]
+impl Transaction {
+    pub fn new(data: Vec<u8>) -> Self {
+        Self { data: data.into() }
+    }
+
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
+
+    pub fn into_data(self) -> Vec<u8> {
+        self.data.to_vec()
+    }
+}
+
 /// A block includes references to previous round blocks and transactions that the validator
 /// considers valid.
 /// Well behaved validators produce at most one block per round, but malicious validators can

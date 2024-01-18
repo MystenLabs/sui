@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use mysten_metrics::{metered_channel, monitored_scope};
 use std::{collections::HashSet, fmt::Debug, sync::Arc, thread};
-
-use mysten_metrics::monitored_scope;
 use thiserror::Error;
+use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
-use tokio::sync::{mpsc, oneshot};
 use tracing::warn;
 
 use crate::{
@@ -15,10 +14,11 @@ use crate::{
     core::Core,
     core_thread::CoreError::Shutdown,
 };
+const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 32;
 
 #[allow(unused)]
 pub(crate) struct CoreThreadDispatcherHandle {
-    sender: mpsc::Sender<CoreThreadCommand>,
+    sender: metered_channel::Sender<CoreThreadCommand>,
     join_handle: thread::JoinHandle<()>,
 }
 
@@ -34,7 +34,7 @@ impl CoreThreadDispatcherHandle {
 #[allow(unused)]
 struct CoreThread {
     core: Core,
-    receiver: mpsc::Receiver<CoreThreadCommand>,
+    receiver: metered_channel::Receiver<CoreThreadCommand>,
     context: Arc<Context>,
 }
 
@@ -66,7 +66,7 @@ impl CoreThread {
 #[derive(Clone)]
 #[allow(dead_code)]
 pub(crate) struct CoreThreadDispatcher {
-    sender: mpsc::WeakSender<CoreThreadCommand>,
+    sender: metered_channel::WeakSender<CoreThreadCommand>,
     context: Arc<Context>,
 }
 
@@ -88,7 +88,11 @@ pub(crate) enum CoreError {
 #[allow(unused)]
 impl CoreThreadDispatcher {
     pub fn start(core: Core, context: Arc<Context>) -> (Self, CoreThreadDispatcherHandle) {
-        let (sender, receiver) = mpsc::channel(32);
+        let (sender, receiver) = metered_channel::channel_with_total(
+            CORE_THREAD_COMMANDS_CHANNEL_SIZE,
+            &context.metrics.channel_metrics.core_thread,
+            &context.metrics.channel_metrics.core_thread_total,
+        );
         let core_thread = CoreThread {
             core,
             receiver,
@@ -148,21 +152,10 @@ impl CoreThreadDispatcher {
 mod test {
     use super::*;
     use crate::context::Context;
-    use crate::metrics::test_metrics;
-    use consensus_config::{AuthorityIndex, Committee, Parameters};
-    use sui_protocol_config::ProtocolConfig;
 
     #[tokio::test]
     async fn test_core_thread() {
-        let (committee, _) = Committee::new_for_test(0, vec![1, 1, 1, 1]);
-        let metrics = test_metrics();
-        let context = Arc::new(Context::new(
-            AuthorityIndex::new_for_test(0),
-            committee,
-            Parameters::default(),
-            ProtocolConfig::get_for_min_version(),
-            metrics,
-        ));
+        let context = Arc::new(Context::new_for_test());
 
         let core = Core::new(context.clone());
         let (core_dispatcher, handle) = CoreThreadDispatcher::start(core, context);

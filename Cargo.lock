@@ -2492,6 +2492,7 @@ dependencies = [
  "rstest",
  "serde",
  "sui-protocol-config",
+ "tap",
  "tempfile",
  "thiserror",
  "tokio",
