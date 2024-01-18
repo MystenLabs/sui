@@ -5,7 +5,7 @@ use enum_dispatch::enum_dispatch;
 use std::collections::{BTreeMap, HashMap};
 
 use crate::base_types::{AuthorityName, EpochId, SuiAddress};
-use crate::committee::{Committee, StakeUnit};
+use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata, StakeUnit};
 use crate::multiaddr::Multiaddr;
 use anemo::types::{PeerAffinity, PeerInfo};
 use anemo::PeerId;
@@ -24,6 +24,7 @@ pub trait EpochStartSystemStateTrait {
     fn epoch_duration_ms(&self) -> u64;
     fn get_validator_addresses(&self) -> Vec<SuiAddress>;
     fn get_sui_committee(&self) -> Committee;
+    fn get_sui_committee_with_network_metadata(&self) -> CommitteeWithNetworkMetadata;
     fn get_narwhal_committee(&self) -> NarwhalCommittee;
     fn get_validator_as_p2p_peers(&self, excluding_self: AuthorityName) -> Vec<PeerInfo>;
     fn get_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId>;
@@ -129,6 +130,30 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
             .iter()
             .map(|validator| validator.sui_address)
             .collect()
+    }
+
+    fn get_sui_committee_with_network_metadata(&self) -> CommitteeWithNetworkMetadata {
+        let (voting_rights, network_metadata) = self
+            .active_validators
+            .iter()
+            .map(|validator| {
+                (
+                    (validator.authority_name(), validator.voting_power),
+                    (
+                        validator.authority_name(),
+                        NetworkMetadata {
+                            network_address: validator.sui_net_address.clone(),
+                            narwhal_primary_address: validator.narwhal_primary_address.clone(),
+                        },
+                    ),
+                )
+            })
+            .unzip();
+
+        CommitteeWithNetworkMetadata {
+            committee: Committee::new(self.epoch, voting_rights),
+            network_metadata,
+        }
     }
 
     fn get_sui_committee(&self) -> Committee {
