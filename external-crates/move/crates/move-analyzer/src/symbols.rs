@@ -5275,6 +5275,27 @@ fn parse_error_test() {
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
+
+    fpath.push("sources/M1.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+    // const in a file containing a parse error
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        8,
+        10,
+        "M1.move",
+        8,
+        10,
+        "M1.move",
+        "const c: u64 = 7",
+        None,
+    );
+
+    let mut fpath = path.clone();
     fpath.push("sources/M2.move");
     let cpath = dunce::canonicalize(&fpath).unwrap();
 

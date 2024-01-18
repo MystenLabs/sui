@@ -171,7 +171,10 @@ fn parse_file(
         Ok(()) => &source_buffer,
     };
     let (defs, comments) = match parse_file_string(compilation_env, file_hash, buffer, package) {
-        Ok(defs_and_comments) => defs_and_comments,
+        Ok(defs_and_comments) => {
+            diags.extend(Diagnostics::from(compilation_env.take_parsing_error()));
+            defs_and_comments
+        }
         Err(ds) => {
             diags.extend(ds);
             (vec![], MatchedFileCommentMap::new())

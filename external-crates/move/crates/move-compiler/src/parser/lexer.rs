@@ -356,6 +356,25 @@ impl<'input> Lexer<'input> {
         Ok((first, second))
     }
 
+    // Look ahead to the nth token after the current one and return nth token without advancing the
+    // state of the lexer.
+    pub fn nth_token(&mut self, n: usize) -> Result<(Tok, &'input str), Box<Diagnostic>> {
+        if n == 0 {
+            return Ok((self.peek(), self.text));
+        }
+        let text = self.trim_whitespace_and_comments(self.cur_end)?;
+        let offset = self.text.len() - text.len();
+        let (mut tok, mut length) = find_token(self.file_hash, self.edition, text, offset)?;
+        let mut i = 1;
+        while i < n {
+            let text = self.trim_whitespace_and_comments(offset + length)?;
+            let offset = self.text.len() - text.len();
+            (tok, length) = find_token(self.file_hash, self.edition, text, offset)?;
+            i = i + 1;
+        }
+        Ok((tok, text))
+    }
+
     // Matches the doc comments after the last token (or the beginning of the file) to the position
     // of the current token. This moves the comments out of `doc_comments` and
     // into `matched_doc_comments`. At the end of parsing, if `doc_comments` is not empty, errors
@@ -418,7 +437,7 @@ impl<'input> Lexer<'input> {
     // e.g., ">" instead of ">>".
     pub fn replace_token(&mut self, token: Tok, len: usize) {
         self.token = token;
-        self.cur_end = self.cur_start + len
+        self.cur_end = self.cur_start + len;
     }
 }
 
