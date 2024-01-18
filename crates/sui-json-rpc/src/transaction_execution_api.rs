@@ -293,7 +293,7 @@ impl WriteApiServer for TransactionExecutionApi {
         sender_address: SuiAddress,
         tx_bytes: Base64,
         gas_price: Option<BigInt<u64>>,
-        epoch: Option<BigInt<u64>>,
+        _epoch: Option<BigInt<u64>>,
         additional_args: Option<DevInspectArgs>,
     ) -> RpcResult<DevInspectResults> {
         with_tracing!(async move {
@@ -301,6 +301,7 @@ impl WriteApiServer for TransactionExecutionApi {
                 gas_sponsor,
                 gas_budget,
                 gas_objects,
+                show_raw_txn_data,
                 skip_checks,
             } = additional_args.unwrap_or_default();
             let tx_kind: TransactionKind = self.convert_bytes(tx_bytes)?;
@@ -312,7 +313,7 @@ impl WriteApiServer for TransactionExecutionApi {
                     gas_budget.map(|i| *i),
                     gas_sponsor,
                     gas_objects,
-                    epoch.map(|i| *i),
+                    show_raw_txn_data,
                     skip_checks,
                 )
                 .await

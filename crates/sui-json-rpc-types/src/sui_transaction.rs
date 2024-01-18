@@ -1050,6 +1050,8 @@ pub struct DevInspectArgs {
     pub gas_objects: Option<Vec<ObjectRef>>,
     /// Whether to skip transaction checks for the transaction.
     pub skip_checks: Option<bool>,
+    /// Whether to return the raw transaction data.
+    pub show_raw_txn_data: Option<bool>,
 }
 
 /// The response from processing a dev inspect transaction
@@ -1068,6 +1070,9 @@ pub struct DevInspectResults {
     /// Execution error from executing the transactions
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// The raw transaction data that was dev inspected.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub raw_txn_data: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -1092,6 +1097,7 @@ impl DevInspectResults {
         effects: TransactionEffects,
         events: TransactionEvents,
         return_values: Result<Vec<ExecutionResult>, ExecutionError>,
+        raw_txn_data: Vec<u8>,
         resolver: &mut dyn LayoutResolver,
     ) -> SuiResult<Self> {
         let tx_digest = *effects.transaction_digest();
@@ -1126,6 +1132,7 @@ impl DevInspectResults {
             events: SuiTransactionBlockEvents::try_from(events, tx_digest, None, resolver)?,
             results,
             error,
+            raw_txn_data,
         })
     }
 }
