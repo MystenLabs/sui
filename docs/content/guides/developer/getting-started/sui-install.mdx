@@ -29,6 +29,9 @@ brew install mystenlabs/tap/sui
 
 Each Sui release provides a set of binaries for several operating systems. You can download these binaries from GitHub and use them to install Sui.
 
+<Tabs groupId="operating-systems">
+
+<TabItem value="linux" label="Linux">
 1. Go to https://github.com/MystenLabs/sui.
 1. In the right pane, find the **Releases** section.
 
@@ -36,21 +39,71 @@ Each Sui release provides a set of binaries for several operating systems. You c
 1. Click the release tagged **Latest** to open the release's page.
 1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
 1. Double-click the downloaded file. If the file doesn't automatically expand, manually unzip the file.
-1. Open the expanded folder and double-click the appropriate binary to install, beginning with sui-`<OS>`-`<ARCHITECTURE>`:
+1. Open the expanded folder. Navigate to the `target/release` directory and double-click the appropriate binary to install, beginning with `sui-linux-<ARCHITECTURE>`:
 
-    - sui-faucet-`<OS>`-`<ARCHITECTURE>`: Local faucet to mint coins on local network.
-    - sui-indexer-`<OS>`-`<ARCHITECTURE>`: An indexer for a local Sui network.
-    - sui-`<OS>`-`<ARCHITECTURE>`: Main Sui binary.
-    - sui-node-`<OS>`-`<ARCHITECTURE>`: Run a local node.
-    - sui-test-validator-`<OS>`-`<ARCHITECTURE>`: Run test validators on a local network for development.
-    - sui-tool-`<OS>`-`<ARCHITECTURE>`: Provides utilities for Sui.
+    - sui-faucet-`linux`-`<ARCHITECTURE>`: Local faucet to mint coins on local network.
+    - sui-indexer-`linux`-`<ARCHITECTURE>`: An indexer for a local Sui network.
+    - sui-`linux`-`<ARCHITECTURE>`: Main Sui binary.
+    - sui-node-`linux`-`<ARCHITECTURE>`: Run a local node.
+    - sui-test-validator-`linux`-`<ARCHITECTURE>`: Run test validators on a local network for development.
+    - sui-tool-`linux`-`<ARCHITECTURE>`: Provides utilities for Sui.
+
+    The Sui binary takes several minutes to download and install files, so make sure you allocate enough time for it to complete. Actual time to complete depends on your network connection and computer specifications.
+</TabItem>
+
+<TabItem value="mac" label="macOS">
+
+1. Go to https://github.com/MystenLabs/sui.
+1. In the right pane, find the **Releases** section.
+
+    ![Sui releases in GitHub](./images/releases.png)
+1. Click the release tagged **Latest** to open the release's page.
+1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
+1. Double-click the downloaded file. If the file doesn't automatically expand, manually unzip the file.
+1. Open the expanded folder. Navigate to the `target/release` directory and double-click the appropriate binary to install, beginning with `sui-macos-<ARCHITECTURE>`:
+
+    - sui-faucet-`macos`-`<ARCHITECTURE>`: Local faucet to mint coins on local network.
+    - sui-indexer-`macos`-`<ARCHITECTURE>`: An indexer for a local Sui network.
+    - sui-`macos`-`<ARCHITECTURE>`: Main Sui binary.
+    - sui-node-`macos`-`<ARCHITECTURE>`: Run a local node.
+    - sui-test-validator-`macos`-`<ARCHITECTURE>`: Run test validators on a local network for development.
+    - sui-tool-`macos`-`<ARCHITECTURE>`: Provides utilities for Sui.
 
     The Sui binary takes several minutes to download and install files, so make sure you allocate enough time for it to complete. Actual time to complete depends on your network connection and computer specifications.
 
+</TabItem>
+
+<TabItem value="win" label="Windows">
+
+1. Go to https://github.com/MystenLabs/sui.
+1. In the right pane, find the **Releases** section.
+
+    ![Sui releases in GitHub](./images/releases.png)
+1. Click the release tagged **Latest** to open the release's page.
+1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
+1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the root of your C drive for demonstration purposes. Replace references to this location in subsequent steps if you choose a different directory.
+1. Navigate to the `target\release` directory of the expanded folder. Rename each file to remove the `-windows-<ARCHITECTURE>` suffix from each file. For example, rename `sui-windows-x86_64` to `sui`. If you don't do this step, you must type `sui-windows-x86_64` to execute commands instead of simply `sui`. When complete, you should have the following .exe files:
+
+    - `sui-data-ingestion`
+    - `sui-faucet`: Local faucet to mint coins on local network.
+    - `sui-indexer`: An indexer for a local Sui network.
+    - `sui`: Main Sui binary.
+    - `sui-node`: Run a local node.
+    - `sui-test-validator`: Run test validators on a local network for development.
+    - `sui-tool`: Provides utilities for Sui.
+
+1. Add the folder containing the extracted files to your `PATH` variable. There are several ways to get to the setting depending on your version of Windows. One way that works on all versions of Windows is to type `sysdm.cpl` in a console to open the System Properties window. Under the **Advanced** tab, click the **Environment Variables...** button.
+1. In the Environment Variables window, select the `Path` variable and click the **Edit...** button. 
+1. In the Edit environment variable window, click **New** and add the path to your expanded folder. Using the example path, this would be `C:\sui\target\release`.
+1. Click **OK**.
+
+</TabItem>
+
+</Tabs>
 
 ### Confirm the installation {#confirm-the-installation}
 
-To confirm that Sui installed correctly, type `sui` and press Enter. You should see a message about the Sui version installed and help for using Sui commands.
+To confirm that Sui installed correctly, type `sui` and press Enter. You should see a message about the Sui version installed and help for using Sui commands. If the command is not recognized, make sure you're using a new console or terminal window.
 
 ## Install from source
 
