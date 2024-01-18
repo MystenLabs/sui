@@ -789,7 +789,7 @@ mod tests {
             mock_state
                 .expect_get_owned_coins()
                 .returning(move |_, _, _, _| {
-                    Err(SuiError::StorageError("mock rocksdb error".to_string()).into())
+                    Err(SuiError::Storage("mock rocksdb error".to_string()).into())
                 });
             let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api

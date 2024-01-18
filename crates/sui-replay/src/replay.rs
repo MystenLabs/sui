@@ -1732,7 +1732,7 @@ impl BackingPackageStore for LocalExec {
             // If package not present fetch it from the network
             self_
                 .get_or_download_object(package_id, true /* we expect a Move package*/)
-                .map_err(|e| SuiError::StorageError(e.to_string()))
+                .map_err(|e| SuiError::Storage(e.to_string()))
         }
 
         let res = inner(self, package_id);
