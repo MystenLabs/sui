@@ -2639,8 +2639,13 @@ fn expand_macro(
     use T::SequenceItem_ as TS;
     use T::UnannotatedExp_ as TE;
 
+    let can_expand = context.add_macro_expansion(m, f, call_loc);
     let argloc = args.loc;
-    match macro_expand::call(context, call_loc, m, f, type_args, args) {
+    let res = match macro_expand::call(context, call_loc, m, f, type_args, args) {
+        _ if !can_expand => {
+            assert!(context.env.has_errors());
+            (context.error_type(call_loc), TE::UnresolvedError)
+        }
         None => {
             assert!(context.env.has_errors());
             (context.error_type(call_loc), TE::UnresolvedError)
@@ -2692,7 +2697,9 @@ fn expand_macro(
             let e_ = TE::Block(seq);
             (ty, e_)
         }
-    }
+    };
+    context.pop_macro_expansion(&m, &f);
+    res
 }
 
 //**************************************************************************************************

@@ -17,6 +17,7 @@ use crate::{
     shared::{known_attributes::TestingAttribute, program_info::*, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
+use indexmap::IndexMap;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -80,6 +81,8 @@ pub struct Context<'env> {
     /// collects all used module members (functions and constants) but it's a superset of these in
     /// that it may contain other identifiers that do not in fact represent a function or a constant
     pub used_module_members: BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
+    /// Current macros being expanded
+    pub macro_expansion: IndexMap<(ModuleIdent, FunctionName), Loc>,
 }
 
 pub struct ResolvedFunctionType {
@@ -151,6 +154,7 @@ impl<'env> Context<'env> {
             env,
             new_friends: BTreeSet::new(),
             used_module_members: BTreeMap::new(),
+            macro_expansion: IndexMap::new(),
         }
     }
 
@@ -237,6 +241,39 @@ impl<'env> Context<'env> {
         })
     }
 
+    /// true iff it is safe to expand,
+    /// false with an error otherwise (e.g. a recursive expansion)
+    pub fn add_macro_expansion(&mut self, m: ModuleIdent, f: FunctionName, loc: Loc) -> bool {
+        if let Some(idx) = self.macro_expansion.get_index_of(&(m, f)) {
+            let msg = format!(
+                "Recursive macro expansion. '{}::{}' has already been expanded",
+                m, f
+            );
+            let mut diag = diag!(TypeSafety::CannotExpandMacro, (loc, msg));
+            for ((prev_m, prev_f), prev_loc) in self.macro_expansion.get_range(idx..).unwrap() {
+                let msg = if prev_m == &m && prev_f == &f {
+                    format!("'{}::{}' previously expanded here", prev_m, prev_f)
+                } else {
+                    "From this macro expansion".to_owned()
+                };
+                diag.add_secondary_label((*prev_loc, msg));
+            }
+            self.env.add_diag(diag);
+            false
+        } else {
+            self.macro_expansion.insert((m, f), loc);
+            true
+        }
+    }
+
+    pub fn pop_macro_expansion(&mut self, m: &ModuleIdent, f: &FunctionName) {
+        let ((prev_m, prev_f), _) = self.macro_expansion.pop().unwrap();
+        assert!(
+            m == &prev_m && f == &prev_f,
+            "ICE macro expansion stack should be popped in reverse order"
+        );
+    }
+
     pub fn reset_for_module_item(&mut self) {
         self.named_block_map = BTreeMap::new();
         self.return_type = None;
@@ -246,6 +283,7 @@ impl<'env> Context<'env> {
         self.current_function = None;
         self.in_macro_function = false;
         self.max_variable_color = 0;
+        self.macro_expansion = IndexMap::new();
     }
 
     pub fn error_type(&mut self, loc: Loc) -> Type {

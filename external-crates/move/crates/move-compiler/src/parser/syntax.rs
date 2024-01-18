@@ -551,7 +551,7 @@ fn parse_module_member_modifiers(context: &mut Context) -> Result<Modifiers, Box
         modifier_name: &'static str,
     ) {
         let msg = format!("Duplicate '{modifier_name}' modifier");
-        let prev_msg = format!("{modifier_name}' modifier previously given here");
+        let prev_msg = format!("'{modifier_name}' modifier previously given here");
         context.env.add_diag(diag!(
             Declarations::DuplicateItem,
             (loc, msg),

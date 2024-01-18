@@ -6719,6 +6719,7 @@ dependencies = [
  "clap",
  "codespan-reporting",
  "hex",
+ "indexmap 2.1.0",
  "move-binary-format",
  "move-borrow-graph",
  "move-bytecode-source-map",
