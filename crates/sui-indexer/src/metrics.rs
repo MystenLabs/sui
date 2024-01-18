@@ -58,6 +58,7 @@ pub struct IndexerMetrics {
     pub checkpoint_db_commit_latency_objects: Histogram,
     pub checkpoint_db_commit_latency_objects_history: Histogram,
     pub checkpoint_db_commit_latency_objects_chunks: Histogram,
+    pub checkpoint_db_commit_latency_objects_history_chunks: Histogram,
     pub checkpoint_db_commit_latency_events: Histogram,
     pub checkpoint_db_commit_latency_events_chunks: Histogram,
     pub checkpoint_db_commit_latency_packages: Histogram,
@@ -67,6 +68,7 @@ pub struct IndexerMetrics {
     pub checkpoint_db_commit_latency_epoch: Histogram,
     pub advance_epoch_latency: Histogram,
     pub update_object_snapshot_latency: Histogram,
+    pub tokio_blocking_task_wait_latency: Histogram,
     // average latency of committing 1000 transactions.
     // 1000 is not necessarily the batch size, it's to roughly map average tx commit latency to [0.1, 1] seconds,
     // which is well covered by DB_COMMIT_LATENCY_SEC_BUCKETS.
@@ -335,6 +337,12 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            checkpoint_db_commit_latency_objects_history_chunks: register_histogram_with_registry!(
+                "checkpoint_db_commit_latency_objects_history_chunks",
+                "Time spent commiting objects history chunks",
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
             checkpoint_db_commit_latency_events: register_histogram_with_registry!(
                 "checkpoint_db_commit_latency_events",
                 "Time spent commiting events",
@@ -394,6 +402,12 @@ impl IndexerMetrics {
             update_object_snapshot_latency: register_histogram_with_registry!(
                 "update_object_snapshot_latency",
                 "Time spent in updating object snapshot",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            tokio_blocking_task_wait_latency: register_histogram_with_registry!(
+                "tokio_blocking_task_wait_latency",
+                "Time spent to wait for tokio blocking task pool",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),

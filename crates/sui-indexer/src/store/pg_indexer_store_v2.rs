@@ -326,6 +326,10 @@ impl PgIndexerStoreV2 {
         &self,
         objects: Vec<ObjectChangeToCommit>,
     ) -> Result<(), IndexerError> {
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_objects_history_chunks
+            .start_timer();
         let mut mutated_objects: Vec<StoredHistoryObject> = vec![];
         let mut deleted_object_ids: Vec<StoredDeletedHistoryObject> = vec![];
         for object in objects {
@@ -369,7 +373,9 @@ impl PgIndexerStoreV2 {
             Duration::from_secs(60)
         )
         .tap(|_| {
+            let elapsed = guard.stop_and_record();
             info!(
+                elapsed,
                 "Persisted {} chunked objects history",
                 mutated_objects.len() + deleted_object_ids.len(),
             )
@@ -838,8 +844,10 @@ impl PgIndexerStoreV2 {
     {
         let this = self.clone();
         let current_span = tracing::Span::current();
+        let guard = self.metrics.tokio_blocking_task_wait_latency.start_timer();
         tokio::task::spawn_blocking(move || {
             let _guard = current_span.enter();
+            let _elapsed = guard.stop_and_record();
             f(this)
         })
     }
@@ -920,6 +928,14 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         &self,
         object_changes: Vec<TransactionObjectChangesToCommit>,
     ) -> Result<(), IndexerError> {
+        let skip_history = std::env::var("SKIP_OBJECT_HISTORY")
+            .map(|val| val.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        if skip_history {
+            info!("skipping object history");
+            return Ok(());
+        }
+
         if object_changes.is_empty() {
             return Ok(());
         }
@@ -961,6 +977,15 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
     // `latest_snapshot_cp` and `latest_cp` based on `objects_snapshot` and `objects_history`,
     // where the size of this range varies between the min and max lag values.
     async fn persist_object_snapshot(&self) -> Result<(), IndexerError> {
+        let skip_snapshot = std::env::var("SKIP_OBJECT_SNAPSHOT")
+            .map(|val| val.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        if skip_snapshot {
+            info!("skipping object snapshot");
+            return Ok(());
+        }
+
+        let guard = self.metrics.update_object_snapshot_latency.start_timer();
         let latest_cp = self
             .get_latest_tx_checkpoint_sequence_number()?
             .unwrap_or_default();
@@ -980,8 +1005,13 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         // with MAX and MIN, the CSR range will vary from MIN cps to MAX cps
         let snapshot_window = self.object_snapshot_max_checkpoint_lag as u64
             - self.object_snapshot_min_checkpoint_lag as u64;
-        let guard = self.metrics.update_object_snapshot_latency.start_timer();
-        self.persist_object_snapshot(start_cp, start_cp + snapshot_window)?;
+
+        self.spawn_blocking_task(move |this| this.persist_object_snapshot(start_cp, start_cp + snapshot_window)).await.map_err(|e| {
+            IndexerError::PostgresWriteError(format!(
+                "Failed to update objects snapshot: {:?}",
+                e
+            ))
+        })??;
         let elapsed = guard.stop_and_record();
         info!(
             elapsed,
