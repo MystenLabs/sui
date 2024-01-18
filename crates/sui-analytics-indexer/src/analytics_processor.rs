@@ -5,7 +5,7 @@ use std::fs;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use anyhow::Result;
@@ -13,7 +13,7 @@ use object_store::path::Path;
 use object_store::DynObjectStore;
 use serde::Serialize;
 use tokio::sync::{mpsc, oneshot};
-use tracing::info;
+use tracing::{error, info};
 
 use sui_indexer::framework::Handler;
 use sui_rest_api::CheckpointData;
@@ -24,7 +24,9 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use crate::analytics_metrics::AnalyticsMetrics;
 use crate::handlers::AnalyticsHandler;
 use crate::writers::AnalyticsWriter;
-use crate::{AnalyticsIndexerConfig, FileMetadata, ParquetSchema, EPOCH_DIR_PREFIX};
+use crate::{
+    AnalyticsIndexerConfig, FileMetadata, MaxCheckpointReader, ParquetSchema, EPOCH_DIR_PREFIX,
+};
 
 pub struct AnalyticsProcessor<S: Serialize + ParquetSchema> {
     handler: Box<dyn AnalyticsHandler<S>>,
@@ -37,6 +39,8 @@ pub struct AnalyticsProcessor<S: Serialize + ParquetSchema> {
     sender: mpsc::Sender<FileMetadata>,
     #[allow(dead_code)]
     kill_sender: oneshot::Sender<()>,
+    #[allow(dead_code)]
+    max_checkpoint_sender: oneshot::Sender<()>,
 }
 
 #[async_trait::async_trait]
@@ -92,6 +96,7 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
     pub async fn new(
         handler: Box<dyn AnalyticsHandler<S>>,
         writer: Box<dyn AnalyticsWriter<S>>,
+        max_checkpoint_reader: Box<dyn MaxCheckpointReader>,
         next_checkpoint_seq_num: CheckpointSequenceNumber,
         metrics: AnalyticsMetrics,
         config: AnalyticsIndexerConfig,
@@ -116,6 +121,13 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
             receiver,
             kill_receiver,
             cloned_metrics,
+            name.clone(),
+        ));
+        let (max_checkpoint_sender, max_checkpoint_receiver) = oneshot::channel::<()>();
+        tokio::task::spawn(Self::setup_max_checkpoint_metrics_updates(
+            max_checkpoint_reader,
+            metrics.clone(),
+            max_checkpoint_receiver,
             name,
         ));
         Ok(Self {
@@ -126,6 +138,7 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
             last_commit_instant: Instant::now(),
             kill_sender,
             sender,
+            max_checkpoint_sender,
             metrics,
             config,
         })
@@ -222,6 +235,33 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
                         break;
                     }
                 },
+            }
+        }
+        Ok(())
+    }
+
+    async fn setup_max_checkpoint_metrics_updates(
+        max_checkpoint_reader: Box<dyn MaxCheckpointReader>,
+        analytics_metrics: AnalyticsMetrics,
+        mut recv: oneshot::Receiver<()>,
+        handler_name: String,
+    ) -> Result<()> {
+        let mut interval = tokio::time::interval(Duration::from_secs(300));
+        loop {
+            tokio::select! {
+                _ = &mut recv => break,
+                 _ = interval.tick() => {
+                    let max_checkpoint = max_checkpoint_reader.max_checkpoint().await;
+                    if let Ok(max_checkpoint) = max_checkpoint {
+                        analytics_metrics
+                            .max_checkpoint_on_store
+                            .with_label_values(&[&handler_name])
+                            .set(max_checkpoint);
+                    } else {
+                        error!("Failed to read max checkpoint for {} with err: {}", handler_name, max_checkpoint.unwrap_err());
+                    }
+
+                 }
             }
         }
         Ok(())
