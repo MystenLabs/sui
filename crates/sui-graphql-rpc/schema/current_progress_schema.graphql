@@ -96,10 +96,10 @@ type Address implements IOwner {
 	"""
 	defaultSuinsName: String
 	"""
-	The SuinsRegistration NFTs owned by the given object. These grant the owner
-	the capability to manage the associated domain.
+	The SuinsRegistration NFTs owned by this address. These grant the owner the capability to
+	manage the associated domain.
 	"""
-	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
+	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
 	"""
 	This resolver is not supported on the Address type.
 	"""
@@ -1715,10 +1715,10 @@ type Object implements IOwner {
 	"""
 	defaultSuinsName: String
 	"""
-	The SuinsRegistration NFTs owned by the given object. These grant the owner
-	the capability to manage the associated domain.
+	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
+	manage the associated domain.
 	"""
-	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
+	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
 	"""
 	Access a dynamic field on an object using its name.
 	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
@@ -1967,10 +1967,10 @@ type Owner implements IOwner {
 	"""
 	defaultSuinsName: String
 	"""
-	The SuinsRegistration NFTs owned by the given object. These grant the owner
-	the capability to manage the associated domain.
+	The SuinsRegistration NFTs owned by this address or object. These grant the owner the
+	capability to manage the associated domain.
 	"""
-	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
+	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection!
 	"""
 	Access a dynamic field on an object using its name.
 	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
