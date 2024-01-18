@@ -262,7 +262,7 @@ pub enum ToolCommand {
         #[clap(long = "epoch")]
         epoch: u64,
         #[clap(long = "genesis")]
-        genesis: PathBuf,
+        genesis: Option<PathBuf>,
         #[clap(long = "path", default_value = "/tmp")]
         path: PathBuf,
         /// skip downloading indexes dir. Overridden to `true` if `--formal` flag specified,
@@ -273,7 +273,7 @@ pub enum ToolCommand {
         /// value based on number of available logical cores.
         #[clap(long = "num-parallel-downloads")]
         num_parallel_downloads: Option<usize>,
-        /// If true, restore from formal (slim, DB agnostic) snapshot. Note that this is only supported
+        /// DEPRECATED - use download-formal-snapshot instead. If true, restore from formal (slim, DB agnostic) snapshot. Note that this is only supported
         /// for protocol versions supporting `commit_root_state_digest`. For mainnet, this is
         /// epoch 20+, and for testnet this is epoch 12+
         #[clap(
@@ -294,9 +294,11 @@ pub enum ToolCommand {
         /// based on value of `--network` and `--formal` flags.
         #[clap(long = "snapshot-bucket")]
         snapshot_bucket: Option<String>,
-        /// Snapshot bucket type. Defaults to "gcs" if `--formal`
-        /// flag specified, otherwise "s3".
-        #[clap(long = "snapshot-bucket-type")]
+        /// Snapshot bucket type
+        #[clap(
+            long = "snapshot-bucket-type",
+            help = "Required if --no-sign-request is not set"
+        )]
         snapshot_bucket_type: Option<ObjectStoreType>,
         /// Path to snapshot directory on local filesystem.
         /// Only applicable if `--snapshot-bucket-type` is "file".
@@ -309,7 +311,10 @@ pub enum ToolCommand {
         #[clap(long = "archive-bucket-type", default_value = "s3")]
         archive_bucket_type: ObjectStoreType,
         /// If true, no authentication is needed for snapshot restores
-        #[clap(long = "no-sign-request")]
+        #[clap(
+            long = "no-sign-request",
+            help = "if set, --snapshot-bucket and --snapshot-bucket-type are ignored"
+        )]
         no_sign_request: bool,
         /// If false (default), log level will be overridden to "off",
         /// and output will be reduced to necessary status information.
@@ -317,6 +322,9 @@ pub enum ToolCommand {
         verbose: bool,
     },
 
+    // Restore from formal (slim, DB agnostic) snapshot. Note that this is only supported
+    /// for protocol versions supporting `commit_root_state_digest`. For mainnet, this is
+    /// epoch 20+, and for testnet this is epoch 12+
     #[clap(
         name = "download-formal-snapshot",
         about = "Downloads formal database snapshot via cloud object store, outputs to local disk"
@@ -342,12 +350,14 @@ pub enum ToolCommand {
         #[clap(long = "network", default_value = "mainnet")]
         network: Chain,
         /// Snapshot bucket name. If not specified, defaults are
-        /// based on value of `--network` and `--formal` flags.
+        /// based on value of `--network` flag.
         #[clap(long = "snapshot-bucket")]
         snapshot_bucket: Option<String>,
-        /// Snapshot bucket type. Defaults to "gcs" if `--formal`
-        /// flag specified, otherwise "s3".
-        #[clap(long = "snapshot-bucket-type")]
+        /// Snapshot bucket type
+        #[clap(
+            long = "snapshot-bucket-type",
+            help = "Required if --no-sign-request is not set"
+        )]
         snapshot_bucket_type: Option<ObjectStoreType>,
         /// Path to snapshot directory on local filesystem.
         /// Only applicable if `--snapshot-bucket-type` is "file".
@@ -360,7 +370,10 @@ pub enum ToolCommand {
         #[clap(long = "archive-bucket-type", default_value = "s3")]
         archive_bucket_type: ObjectStoreType,
         /// If true, no authentication is needed for snapshot restores
-        #[clap(long = "no-sign-request")]
+        #[clap(
+            long = "no-sign-request",
+            help = "if set, --snapshot-bucket and --snapshot-bucket-type are ignored"
+        )]
         no_sign_request: bool,
         /// If false (default), log level will be overridden to "off",
         /// and output will be reduced to necessary status information.
@@ -743,6 +756,7 @@ impl ToolCommand {
                         e
                     );
                 }
+
                 let verify = verify.unwrap_or(true);
                 download_formal_snapshot(
                     &path,
@@ -821,76 +835,97 @@ impl ToolCommand {
                         }
                     });
 
+                let aws_endpoint = env::var("AWS_SNAPSHOT_ENDPOINT").ok();
                 let snapshot_bucket_type = if no_sign_request {
                     ObjectStoreType::S3
                 } else {
                     snapshot_bucket_type
                         .expect("--snapshot-bucket-type must be set if not using --no-sign-request")
                 };
-
-                // index staging is not yet supported for formal snapshots
-                let skip_indexes = skip_indexes || formal;
-                let aws_endpoint = env::var("AWS_SNAPSHOT_ENDPOINT").ok().or_else(|| {
-                    if formal && no_sign_request {
-                        if network == Chain::Mainnet {
-                            Some("https://formal-snapshot.mainnet.sui.io".to_string())
+                let snapshot_store_config = if no_sign_request {
+                    let aws_endpoint = env::var("AWS_SNAPSHOT_ENDPOINT").ok().or_else(|| {
+                        // TODO: remove when the --formal flag is fully removed
+                        if formal {
+                            if network == Chain::Mainnet {
+                                Some("https://formal-snapshot.mainnet.sui.io".to_string())
+                            } else if network == Chain::Testnet {
+                                Some("https://formal-snapshot.testnet.sui.io".to_string())
+                            } else {
+                                None
+                            }
+                        } else if network == Chain::Mainnet {
+                            Some("https://db-snapshot.mainnet.sui.io".to_string())
                         } else if network == Chain::Testnet {
-                            Some("https://formal-snapshot.testnet.sui.io".to_string())
+                            Some("https://db-snapshot.testnet.sui.io".to_string())
                         } else {
                             None
                         }
-                    } else {
-                        None
-                    }
-                });
-                let snapshot_store_config = match snapshot_bucket_type {
-                    ObjectStoreType::S3 => ObjectStoreConfig {
+                    });
+                    ObjectStoreConfig {
                         object_store: Some(ObjectStoreType::S3),
-                        bucket: snapshot_bucket.filter(|s| !s.is_empty()),
-                        aws_access_key_id: env::var("AWS_SNAPSHOT_ACCESS_KEY_ID").ok(),
-                        aws_secret_access_key: env::var("AWS_SNAPSHOT_SECRET_ACCESS_KEY").ok(),
-                        aws_region: env::var("AWS_SNAPSHOT_REGION").ok(),
                         aws_endpoint: aws_endpoint.filter(|s| !s.is_empty()),
                         aws_virtual_hosted_style_request: env::var(
                             "AWS_SNAPSHOT_VIRTUAL_HOSTED_REQUESTS",
                         )
                         .ok()
                         .and_then(|b| b.parse().ok())
-                        .unwrap_or(formal && no_sign_request),
+                        .unwrap_or(no_sign_request),
                         object_store_connection_limit: 200,
                         no_sign_request,
                         ..Default::default()
-                    },
-                    ObjectStoreType::GCS => ObjectStoreConfig {
-                        object_store: Some(ObjectStoreType::GCS),
-                        bucket: snapshot_bucket,
-                        google_service_account: env::var("GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH")
+                    }
+                } else {
+                    match snapshot_bucket_type {
+                        ObjectStoreType::S3 => ObjectStoreConfig {
+                            object_store: Some(ObjectStoreType::S3),
+                            bucket: snapshot_bucket.filter(|s| !s.is_empty()),
+                            aws_access_key_id: env::var("AWS_SNAPSHOT_ACCESS_KEY_ID").ok(),
+                            aws_secret_access_key: env::var("AWS_SNAPSHOT_SECRET_ACCESS_KEY").ok(),
+                            aws_region: env::var("AWS_SNAPSHOT_REGION").ok(),
+                            aws_endpoint: aws_endpoint.filter(|s| !s.is_empty()),
+                            aws_virtual_hosted_style_request: env::var(
+                                "AWS_SNAPSHOT_VIRTUAL_HOSTED_REQUESTS",
+                            )
+                            .ok()
+                            .and_then(|b| b.parse().ok())
+                            .unwrap_or(no_sign_request),
+                            object_store_connection_limit: 200,
+                            no_sign_request,
+                            ..Default::default()
+                        },
+                        ObjectStoreType::GCS => ObjectStoreConfig {
+                            object_store: Some(ObjectStoreType::GCS),
+                            bucket: snapshot_bucket,
+                            google_service_account: env::var(
+                                "GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH",
+                            )
                             .ok(),
-                        object_store_connection_limit: 200,
-                        no_sign_request,
-                        ..Default::default()
-                    },
-                    ObjectStoreType::Azure => ObjectStoreConfig {
-                        object_store: Some(ObjectStoreType::Azure),
-                        bucket: snapshot_bucket,
-                        azure_storage_account: env::var("AZURE_SNAPSHOT_STORAGE_ACCOUNT").ok(),
-                        azure_storage_access_key: env::var("AZURE_SNAPSHOT_STORAGE_ACCESS_KEY")
-                            .ok(),
-                        object_store_connection_limit: 200,
-                        no_sign_request,
-                        ..Default::default()
-                    },
-                    ObjectStoreType::File => {
-                        if snapshot_path.is_some() {
-                            ObjectStoreConfig {
-                                object_store: Some(ObjectStoreType::File),
-                                directory: snapshot_path,
-                                ..Default::default()
-                            }
-                        } else {
-                            panic!(
+                            object_store_connection_limit: 200,
+                            no_sign_request,
+                            ..Default::default()
+                        },
+                        ObjectStoreType::Azure => ObjectStoreConfig {
+                            object_store: Some(ObjectStoreType::Azure),
+                            bucket: snapshot_bucket,
+                            azure_storage_account: env::var("AZURE_SNAPSHOT_STORAGE_ACCOUNT").ok(),
+                            azure_storage_access_key: env::var("AZURE_SNAPSHOT_STORAGE_ACCESS_KEY")
+                                .ok(),
+                            object_store_connection_limit: 200,
+                            no_sign_request,
+                            ..Default::default()
+                        },
+                        ObjectStoreType::File => {
+                            if snapshot_path.is_some() {
+                                ObjectStoreConfig {
+                                    object_store: Some(ObjectStoreType::File),
+                                    directory: snapshot_path,
+                                    ..Default::default()
+                                }
+                            } else {
+                                panic!(
                                 "--snapshot-path must be specified for --snapshot-bucket-type=file"
                             );
+                            }
                         }
                     }
                 };
@@ -959,6 +994,8 @@ impl ToolCommand {
                 }
                 if formal {
                     let verify = verify.unwrap_or(true);
+                    let genesis =
+                        genesis.expect("--genesis must be set if using the --formal flag");
                     download_formal_snapshot(
                         &path,
                         epoch,
