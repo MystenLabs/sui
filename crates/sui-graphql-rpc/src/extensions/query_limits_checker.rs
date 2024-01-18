@@ -1,46 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::Limits;
-use crate::config::ServiceConfig;
-use crate::error::code;
-use crate::error::code::INTERNAL_SERVER_ERROR;
-use crate::error::graphql_error;
-use crate::error::graphql_error_at_pos;
+use crate::config::{Limits, ServiceConfig};
+use crate::error::{code, graphql_error, graphql_error_at_pos};
 use crate::metrics::Metrics;
 use async_graphql::extensions::NextParseQuery;
 use async_graphql::extensions::NextRequest;
-use async_graphql::parser::types::Directive;
-use async_graphql::parser::types::ExecutableDocument;
-use async_graphql::parser::types::Field;
-use async_graphql::parser::types::FragmentDefinition;
-use async_graphql::parser::types::Selection;
-use async_graphql::parser::types::SelectionSet;
-use async_graphql::value;
-use async_graphql::Name;
-use async_graphql::Pos;
-use async_graphql::Positioned;
-use async_graphql::Response;
-use async_graphql::ServerResult;
-use async_graphql::Value;
-use async_graphql::Variables;
+use async_graphql::parser::types::{
+    Directive, ExecutableDocument, Field, FragmentDefinition, Selection, SelectionSet,
+};
 use async_graphql::{
     extensions::{Extension, ExtensionContext, ExtensionFactory},
     ServerError,
 };
+use async_graphql::{value, Name, Pos, Positioned, Response, ServerResult, Value, Variables};
 use async_graphql_value::Value as GqlValue;
 use axum::headers;
 use axum::http::HeaderName;
 use axum::http::HeaderValue;
 use once_cell::sync::Lazy;
-use std::collections::BTreeSet;
-use std::collections::HashMap;
-use std::collections::VecDeque;
+use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Instant;
 use sui_graphql_rpc_headers::LIMITS_HEADER;
 use tokio::sync::Mutex;
-use tracing::error;
+use tracing::info;
+use uuid::Uuid;
 
 /// Only display usage information if this header was in the request.
 pub(crate) struct ShowUsage;
@@ -150,6 +135,12 @@ impl Extension for QueryLimitsChecker {
                     .query_payload_too_large_size
                     .observe(query.len() as u64);
             }
+            info!(
+                query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                "Query payload is too large: {}",
+                query.len()
+            );
+
             return Err(graphql_error(
                 code::GRAPHQL_VALIDATION_FAILED,
                 format!(
@@ -196,6 +187,7 @@ impl Extension for QueryLimitsChecker {
                 &mut running_costs,
                 variables,
                 metrics,
+                ctx,
             )?;
             max_depth_seen = max_depth_seen.max(running_costs.depth);
         }
@@ -244,6 +236,7 @@ impl QueryLimitsChecker {
         cost: &mut ComponentCost,
         variables: &Variables,
         metrics: Option<&Arc<Metrics>>,
+        ctx: &ExtensionContext<'_>,
     ) -> ServerResult<()> {
         // Use BFS to analyze the query and count the number of nodes and the depth of the query
         struct ToVisit<'s> {
@@ -260,7 +253,7 @@ impl QueryLimitsChecker {
                 parent_node_count: 1,
             });
             cost.input_nodes += 1;
-            check_limits(limits, cost, Some(selection.pos), metrics)?;
+            check_limits(limits, cost, Some(selection.pos), metrics, ctx)?;
         }
 
         // Track the number of nodes at first level if any
@@ -269,7 +262,7 @@ impl QueryLimitsChecker {
         while !que.is_empty() {
             // Signifies the start of a new level
             cost.depth += 1;
-            check_limits(limits, cost, None, metrics)?;
+            check_limits(limits, cost, None, metrics, ctx)?;
             while level_len > 0 {
                 // Ok to unwrap since we checked for empty queue
                 // and level_len > 0
@@ -296,7 +289,7 @@ impl QueryLimitsChecker {
                                 parent_node_count: current_count,
                             });
                             cost.input_nodes += 1;
-                            check_limits(limits, cost, Some(field_sel.pos), metrics)?;
+                            check_limits(limits, cost, Some(field_sel.pos), metrics, ctx)?;
                         }
                     }
 
@@ -304,7 +297,7 @@ impl QueryLimitsChecker {
                         let frag_name = &fs.node.fragment_name.node;
                         let frag_def = fragment_defs.get(frag_name).ok_or_else(|| {
                             graphql_error_at_pos(
-                                INTERNAL_SERVER_ERROR,
+                                code::INTERNAL_SERVER_ERROR,
                                 format!(
                                     "Fragment {} not found but present in fragment list",
                                     frag_name
@@ -323,7 +316,7 @@ impl QueryLimitsChecker {
                                 parent_node_count,
                             });
                             cost.input_nodes += 1;
-                            check_limits(limits, cost, Some(selection.pos), metrics)?;
+                            check_limits(limits, cost, Some(selection.pos), metrics, ctx)?;
                         }
                     }
 
@@ -335,7 +328,7 @@ impl QueryLimitsChecker {
                                 parent_node_count,
                             });
                             cost.input_nodes += 1;
-                            check_limits(limits, cost, Some(selection.pos), metrics)?;
+                            check_limits(limits, cost, Some(selection.pos), metrics, ctx)?;
                         }
                     }
                 }
@@ -353,6 +346,7 @@ fn check_limits(
     cost: &ComponentCost,
     pos: Option<Pos>,
     metrics: Option<&Arc<Metrics>>,
+    ctx: &ExtensionContext<'_>,
 ) -> ServerResult<()> {
     if cost.input_nodes > limits.max_query_nodes {
         if let Some(metrics) = metrics {
@@ -361,6 +355,10 @@ fn check_limits(
                 .num_errors
                 .with_label_values(&["max_query_nodes", code::BAD_USER_INPUT]);
         }
+        info!(
+            query_id = ctx.data_unchecked::<Uuid>().to_string(),
+            "Query has too many nodes: {}", cost.depth
+        );
         return Err(ServerError::new(
             format!(
                 "Query has too many nodes. The maximum allowed is {}",
@@ -377,7 +375,10 @@ fn check_limits(
                 .num_errors
                 .with_label_values(&["max_query_depth", code::BAD_USER_INPUT]);
         }
-        error!(target: "async-graphql", "Query has too many levels of nesting {}", cost.depth);
+        info!(
+            query_id = ctx.data_unchecked::<Uuid>().to_string(),
+            "Query has too many levels of nesting: {}", cost.depth
+        );
         return Err(ServerError::new(
             format!(
                 "Query has too many levels of nesting. The maximum allowed is {}",
@@ -394,7 +395,10 @@ fn check_limits(
                 .num_errors
                 .with_label_values(&["max_output_nodes", code::BAD_USER_INPUT]);
         }
-        error!(target: "async-graphql", "Query will result in too many output nodes: {}", cost.output_nodes);
+        info!(
+            query_id = ctx.data_unchecked::<Uuid>().to_string(),
+            "Query will result in too many output nodes: {}", cost.output_nodes
+        );
         return Err(ServerError::new(
             format!(
                 "Query will result in too many output nodes. The maximum allowed is {}, estimated {}",
@@ -419,7 +423,7 @@ fn check_directives(directives: &[Positioned<Directive>]) -> ServerResult<()> {
     for directive in directives {
         if !allowed_directives().contains(&directive.node.name.node.as_str()) {
             return Err(graphql_error_at_pos(
-                INTERNAL_SERVER_ERROR,
+                code::INTERNAL_SERVER_ERROR,
                 format!(
                     "Directive `@{}` is not supported. Supported directives are {}",
                     directive.node.name.node,

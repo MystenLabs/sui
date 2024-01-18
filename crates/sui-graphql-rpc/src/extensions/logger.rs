@@ -11,10 +11,8 @@ use async_graphql::{
 };
 use std::{fmt::Write, net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
-
-// TODO: mode in-depth logging to debug
 
 #[derive(Clone, Debug)]
 pub struct LoggerConfig {
@@ -54,9 +52,7 @@ struct LoggerExtension {
 
 impl LoggerExtension {
     async fn set_session_id(&self, ip: Option<SocketAddr>) {
-        let ip_component = ip.map(|ip| format!("{}-", ip)).unwrap_or_default();
-        let uuid_component = format!("{}", Uuid::new_v4());
-        *self.session_id.lock().await = format!("{}{}", ip_component, uuid_component);
+        *self.session_id.lock().await = ip.map(|ip| format!("{}-", ip)).unwrap_or_default();
     }
 
     async fn session_id(&self) -> String {
@@ -93,8 +89,10 @@ impl Extension for LoggerExtension {
             .any(|(_, operation)| operation.node.selection_set.node.items.iter().any(|selection| matches!(&selection.node, Selection::Field(field) if field.node.name.node == "__schema")));
         if !is_schema && self.config.log_request_query {
             info!(
-                target: "async-graphql",
-                "[Query] {}: {}", self.session_id().await, ctx.stringify_execute_doc(&document, variables)
+                query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                "{}: {}",
+                self.session_id().await,
+                ctx.stringify_execute_doc(&document, variables)
             );
         }
         Ok(document)
@@ -108,10 +106,12 @@ impl Extension for LoggerExtension {
         let res = next.run(ctx).await?;
         if self.config.log_complexity {
             info!(
-                target: "async-graphql",
+                query_id = ctx.data_unchecked::<Uuid>().to_string(),
                 complexity = res.complexity,
                 depth = res.depth,
-                "[Validation] {}", self.session_id().await);
+                "{}",
+                self.session_id().await
+            );
         }
         Ok(res)
     }
@@ -140,14 +140,36 @@ impl Extension for LoggerExtension {
                             }
                         }
                     }
-                    error!(
-                        target: "async-graphql",
-                        "[Response] path={} message={}", path, err.message,
-                    );
+                    if let Some(ext) = &err.extensions {
+                        if let Some(error_code) = ext.get("code") {
+                            if let async_graphql::Value::String(val) = error_code {
+                                if val.as_str() == crate::error::code::INTERNAL_SERVER_ERROR {
+                                    // TODO do we want/it's useful to log the whole problematic query?
+                                    error!(
+                                        query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                                        "path={} message={}", path, err.message,
+                                    );
+                                } else {
+                                    info!(
+                                        query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                                        "path={} message={}", path, err.message,
+                                    );
+                                }
+                            }
+                        }
+                    } else {
+                        warn!(
+                            query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                            no_error_code = "true",
+                            "path={} message={}",
+                            path,
+                            err.message,
+                        );
+                    }
                 } else {
-                    error!(
-                        target: "async-graphql",
-                        "[Response] message={}", err.message,
+                    warn!(
+                        query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                        "message={}", err.message,
                     );
                 }
             }
@@ -155,13 +177,17 @@ impl Extension for LoggerExtension {
             match operation_name {
                 Some("IntrospectionQuery") => {
                     debug!(
-                        target: "async-graphql",
-                        "[Schema] {}: {}", self.session_id().await, resp.data
+                        query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                        "{}: {}",
+                        self.session_id().await,
+                        resp.data
                     );
                 }
                 _ => info!(
-                    target: "async-graphql",
-                    "[Response] {}: {}", self.session_id().await, resp.data
+                    query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                    "{}: {}",
+                    self.session_id().await,
+                    resp.data
                 ),
             }
         }

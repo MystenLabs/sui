@@ -41,6 +41,7 @@ use sui_sdk::SuiClientBuilder;
 use tokio::sync::OnceCell;
 use tower::{Layer, Service};
 use tracing::{info, warn};
+use uuid::Uuid;
 
 pub struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
@@ -267,6 +268,7 @@ async fn graphql_handler(
     }
     let instant = Instant::now();
     let mut req = req.into_inner();
+    req.data.insert(Uuid::new_v4());
     if headers.contains_key(ShowUsage::name()) {
         req.data.insert(ShowUsage)
     }
