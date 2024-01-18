@@ -107,6 +107,10 @@ pub mod checked {
             self.gas_status.move_gas_status_mut()
         }
 
+        pub fn consume(self) -> SuiGasStatus {
+            self.gas_status
+        }
+
         pub fn summary(&self) -> GasCostSummary {
             self.gas_status.summary()
         }

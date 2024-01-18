@@ -43,6 +43,7 @@ pub trait Executor {
         transaction_digest: TransactionDigest,
     ) -> (
         InnerTemporaryStore,
+        SuiGasStatus,
         TransactionEffects,
         Result<(), ExecutionError>,
     );
@@ -70,6 +71,7 @@ pub trait Executor {
         skip_all_checks: bool,
     ) -> (
         InnerTemporaryStore,
+        SuiGasStatus,
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
     );
