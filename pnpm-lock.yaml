@@ -583,9 +583,6 @@ importers:
       '@mysten/wallet-standard':
         specifier: workspace:*
         version: link:../../sdk/wallet-standard
-      '@mysten/zklogin':
-        specifier: workspace:*
-        version: link:../../sdk/zklogin
       '@noble/hashes':
         specifier: ^1.3.1
         version: 1.3.1
@@ -1477,9 +1474,6 @@ importers:
       '@mysten/sui.js':
         specifier: workspace:*
         version: link:../typescript
-      '@mysten/zklogin':
-        specifier: workspace:*
-        version: link:../zklogin
       '@nanostores/react':
         specifier: ^0.7.1
         version: 0.7.1(nanostores@0.9.3)(react@18.2.0)
@@ -1637,6 +1631,12 @@ importers:
       '@suchipi/femver':
         specifier: ^1.0.0
         version: 1.0.0
+      jose:
+        specifier: ^4.14.4
+        version: 4.14.4
+      poseidon-lite:
+        specifier: ^0.2.0
+        version: 0.2.0
       superstruct:
         specifier: ^1.0.3
         version: 1.0.3
@@ -1705,37 +1705,6 @@ importers:
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
-
-  sdk/zklogin:
-    dependencies:
-      '@mysten/bcs':
-        specifier: workspace:*
-        version: link:../bcs
-      '@mysten/sui.js':
-        specifier: workspace:*
-        version: link:../typescript
-      '@noble/hashes':
-        specifier: ^1.3.1
-        version: 1.3.1
-      jose:
-        specifier: ^4.14.4
-        version: 4.14.4
-      poseidon-lite:
-        specifier: ^0.2.0
-        version: 0.2.0
-    devDependencies:
-      '@mysten/build-scripts':
-        specifier: workspace:*
-        version: link:../build-scripts
-      '@types/node':
-        specifier: ^20.4.2
-        version: 20.4.2
-      typescript:
-        specifier: ^5.1.6
-        version: 5.1.6
-      vitest:
-        specifier: ^0.33.0
-        version: 0.33.0(@vitest/ui@0.33.0)(happy-dom@10.5.1)
 
   sdk/zksend:
     dependencies:

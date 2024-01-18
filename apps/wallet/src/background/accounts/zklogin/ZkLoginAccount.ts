@@ -11,7 +11,7 @@ import {
 	type PublicKey,
 	type SerializedSignature,
 } from '@mysten/sui.js/cryptography';
-import { computeZkLoginAddress, genAddressSeed, getZkLoginSignature } from '@mysten/zklogin';
+import { computeZkLoginAddress, genAddressSeed, getZkLoginSignature } from '@mysten/sui.js/zklogin';
 import { blake2b } from '@noble/hashes/blake2b';
 import { decodeJwt } from 'jose';
 

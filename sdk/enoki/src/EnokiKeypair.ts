@@ -5,7 +5,7 @@ import type { SignatureWithBytes } from '@mysten/sui.js/cryptography';
 import { Keypair, PublicKey, SIGNATURE_SCHEME_TO_FLAG } from '@mysten/sui.js/cryptography';
 import type { Ed25519Keypair, Ed25519PublicKey } from '@mysten/sui.js/keypairs/ed25519';
 import type { ZkLoginSignatureInputs } from '@mysten/sui.js/zklogin';
-import { getZkLoginSignature } from '@mysten/zklogin';
+import { getZkLoginSignature } from '@mysten/sui.js/zklogin';
 
 export class EnokiPublicKey extends PublicKey {
 	#address: string;

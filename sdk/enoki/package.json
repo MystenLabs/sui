@@ -56,7 +56,6 @@
 	},
 	"dependencies": {
 		"@mysten/sui.js": "workspace:*",
-		"@mysten/zklogin": "workspace:*",
 		"@nanostores/react": "^0.7.1",
 		"jose": "^4.14.4",
 		"nanostores": "^0.9.3"
