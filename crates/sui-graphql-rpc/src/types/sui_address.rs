@@ -111,6 +111,12 @@ impl From<NativeSuiAddress> for SuiAddress {
     }
 }
 
+impl From<SuiAddress> for NativeSuiAddress {
+    fn from(value: SuiAddress) -> Self {
+        AccountAddress::from(value).into()
+    }
+}
+
 impl FromStr for SuiAddress {
     type Err = FromStrError;
 
