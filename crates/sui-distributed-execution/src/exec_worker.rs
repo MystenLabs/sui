@@ -249,8 +249,6 @@ impl<
         my_id: u8,
         ew_ids: &Vec<UniqueId>,
     ) {
-        return;
-
         // And now we mutate the store.
         // First delete:
         for (id, (ver, kind)) in deleted {
@@ -371,6 +369,15 @@ impl<
         my_id: u8,
         ew_ids: &Vec<UniqueId>,
     ) -> TransactionWithResults {
+        // DELETE THIS
+        return TransactionWithResults {
+            full_tx: full_tx.clone(),
+            tx_effects: TransactionEffects::default(),
+            deleted: BTreeMap::new(),
+            written: BTreeMap::new(),
+            missing_objs: HashSet::new(),
+        };
+
         let tx = &full_tx.tx;
         let txid = tx.digest();
         let tx_data = tx.transaction_data();
@@ -826,7 +833,7 @@ impl<
                         // else {
                         //     unreachable!("tx already executed though we did not send LockedExec");
                         // }
-                        Self::write_updates_to_store(self.memory_store.clone(), deleted, written, my_id as u8, &ew_ids);
+                        // Self::write_updates_to_store(self.memory_store.clone(), deleted, written, my_id as u8, &ew_ids);
                         num_tx += 1;
                         if num_tx % 10_000 == 0 {
                             tracing::debug!("[tx-results] EW {my_id} executed {num_tx} txs");
