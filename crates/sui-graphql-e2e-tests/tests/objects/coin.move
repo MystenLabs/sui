@@ -67,5 +67,24 @@ fragment C on Coin {
         node { ...C }
       }
     }
+
+    allBalances: balances {
+      edges {
+        cursor
+        node {
+          coinType { repr }
+          coinObjectCount
+          totalBalance
+        }
+      }
+    }
+
+    firstBalance: balances(first: 1) {
+      edges { cursor }
+    }
+
+    lastBalance: balances(last: 1) {
+      edges { cursor }
+    }
   }
 }
