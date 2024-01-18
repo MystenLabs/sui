@@ -1,28 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{
-    db_backend::{BalanceQuery, Explain, Explained, GenericQueryBuilder},
-    db_data_provider::{DbValidationError, PageLimit, TypeFilterError},
-};
-use crate::{
-    context_data::db_data_provider::PgManager,
-    error::Error,
-    types::{object::DeprecatedObjectFilter, sui_address::SuiAddress},
-};
+use super::db_backend::{BalanceQuery, Explain, Explained, GenericQueryBuilder};
+use crate::{context_data::db_data_provider::PgManager, error::Error};
 use async_trait::async_trait;
 use diesel::{
     pg::Pg,
     query_builder::{AstPass, QueryFragment},
-    BoolExpressionMethods, ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl,
-    TextExpressionMethods,
+    ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl,
 };
-use std::str::FromStr;
 use sui_indexer::{
     schema_v2::{display, objects},
     types_v2::OwnerType,
 };
-use sui_types::parse_sui_struct_tag;
 use tap::TapFallible;
 use tracing::{info, warn};
 
@@ -45,109 +35,6 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
             .into_boxed()
     }
 
-    fn multi_get_objs(
-        before: Option<Vec<u8>>,
-        after: Option<Vec<u8>>,
-        limit: PageLimit,
-        filter: Option<DeprecatedObjectFilter>,
-        owner_type: Option<OwnerType>,
-    ) -> Result<objects::BoxedQuery<'static, Pg>, Error> {
-        let mut query = order_objs(before, after, &limit);
-        query = query.limit(limit.value() + 1);
-
-        let Some(filter) = filter else {
-            return Ok(query);
-        };
-
-        if let Some(object_ids) = filter.object_ids {
-            query = query.filter(
-                objects::dsl::object_id.eq_any(
-                    object_ids
-                        .into_iter()
-                        .map(|id| id.into_vec())
-                        .collect::<Vec<_>>(),
-                ),
-            );
-        }
-
-        if let Some(owner) = filter.owner {
-            query = query.filter(objects::dsl::owner_id.eq(owner.into_vec()));
-
-            match owner_type {
-                Some(OwnerType::Address) => {
-                    query = query.filter(objects::dsl::owner_type.eq(OwnerType::Address as i16));
-                }
-                Some(OwnerType::Object) => {
-                    query = query.filter(objects::dsl::owner_type.eq(OwnerType::Object as i16));
-                }
-                None => {
-                    query = query.filter(
-                        objects::dsl::owner_type
-                            .eq(OwnerType::Address as i16)
-                            .or(objects::dsl::owner_type.eq(OwnerType::Object as i16)),
-                    );
-                }
-                _ => Err(DbValidationError::InvalidOwnerType)?,
-            }
-        }
-
-        if let Some(object_type) = filter.type_ {
-            let format = "package[::module[::type[<type_params>]]]";
-            let parts: Vec<_> = object_type.splitn(3, "::").collect();
-
-            if parts.iter().any(|&part| part.is_empty()) {
-                return Err(DbValidationError::InvalidType(
-                    TypeFilterError::MissingComponents(object_type, format).to_string(),
-                ))?;
-            }
-
-            if parts.len() == 1 {
-                // We check for a leading 0x to determine if it is an address
-                // And otherwise process it as a primitive type
-                if parts[0].starts_with("0x") {
-                    let package = SuiAddress::from_str(parts[0])
-                        .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
-                    query = query.filter(objects::dsl::object_type.like(format!("{}::%", package)));
-                } else {
-                    query = query.filter(objects::dsl::object_type.eq(parts[0].to_string()));
-                }
-            } else if parts.len() == 2 {
-                // Only package addresses are allowed if there are two or more parts
-                let package = SuiAddress::from_str(parts[0])
-                    .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
-                query = query.filter(
-                    objects::dsl::object_type.like(format!("{}::{}::%", package, parts[1])),
-                );
-            } else if parts.len() == 3 {
-                let validated_type = parse_sui_struct_tag(&object_type)
-                    .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
-
-                if validated_type.type_params.is_empty() {
-                    query = query.filter(
-                        objects::dsl::object_type
-                            .like(format!(
-                                "{}<%",
-                                validated_type.to_canonical_string(/* with_prefix */ true)
-                            ))
-                            .or(objects::dsl::object_type
-                                .eq(validated_type.to_canonical_string(/* with_prefix */ true))),
-                    );
-                } else {
-                    query = query.filter(
-                        objects::dsl::object_type
-                            .eq(validated_type.to_canonical_string(/* with_prefix */ true)),
-                    );
-                }
-            } else {
-                return Err(DbValidationError::InvalidType(
-                    TypeFilterError::TooManyComponents(object_type, 3, format).to_string(),
-                )
-                .into());
-            }
-        }
-
-        Ok(query)
-    }
     fn multi_get_balances(address: Vec<u8>) -> BalanceQuery<'static, Pg> {
         let query = objects::dsl::objects
             .group_by(objects::dsl::coin_type)
@@ -313,29 +200,6 @@ pub fn extract_cost(explain_result: &str) -> Result<f64, Error> {
             "Failed to get cost from query plan".to_string(),
         ))
     }
-}
-
-fn order_objs(
-    before: Option<Vec<u8>>,
-    after: Option<Vec<u8>>,
-    limit: &PageLimit,
-) -> objects::BoxedQuery<'static, Pg> {
-    let mut query = objects::dsl::objects.into_boxed();
-    match limit {
-        PageLimit::First(_) => {
-            if let Some(after) = after {
-                query = query.filter(objects::dsl::object_id.gt(after));
-            }
-            query = query.order(objects::dsl::object_id.asc());
-        }
-        PageLimit::Last(_) => {
-            if let Some(before) = before {
-                query = query.filter(objects::dsl::object_id.lt(before));
-            }
-            query = query.order(objects::dsl::object_id.desc());
-        }
-    }
-    query
 }
 
 pub(crate) type QueryBuilder = PgQueryBuilder;

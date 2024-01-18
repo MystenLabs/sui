@@ -54,27 +54,6 @@ pub(crate) struct Object {
     pub native: NativeObject,
 }
 
-/// Previous implementation of `ObjectFilter`, kept around to use in the legacy DB provider APIs,
-/// while we are in the process of migrating over to the DB APIs.
-#[derive(Default, Clone)]
-pub(crate) struct DeprecatedObjectFilter {
-    /// This field is used to specify the type of objects that should be included in the query
-    /// results.
-    ///
-    /// Objects can be filtered by their type's package, package::module, or their fully qualified
-    /// type name.
-    ///
-    /// Generic types can be queried by either the generic type name, e.g. `0x2::coin::Coin`, or by
-    /// the full type name, such as `0x2::coin::Coin<0x2::sui::SUI>`.
-    pub type_: Option<String>,
-
-    /// Filter for live objects by their current owners.
-    pub owner: Option<SuiAddress>,
-
-    /// Filter for live objects by their IDs.
-    pub object_ids: Option<Vec<SuiAddress>>,
-}
-
 /// Constrains the set of objects returned. All filters are optional, and the resulting set of
 /// objects are ones whose
 ///
@@ -443,16 +422,16 @@ impl Object {
 
     /// The dynamic fields on an object.
     /// Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
-    pub async fn dynamic_field_connection(
+    pub async fn dynamic_fields(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<Cursor>,
         last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, DynamicField>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_dynamic_fields(first, after, last, before, self.address)
+        before: Option<Cursor>,
+    ) -> Result<Connection<String, DynamicField>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        DynamicField::paginate(ctx.data_unchecked(), page, self.address)
             .await
             .extend()
     }

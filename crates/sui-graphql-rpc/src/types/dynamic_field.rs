@@ -1,15 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use move_core_types::annotated_value::{self as A, MoveStruct};
 use sui_indexer::models_v2::objects::StoredObject;
 use sui_indexer::schema_v2::objects;
+use sui_indexer::types_v2::OwnerType;
 use sui_package_resolver::Resolver;
 use sui_types::dynamic_field::{derive_dynamic_field_id, DynamicFieldInfo, DynamicFieldType};
 
-use super::object::deserialize_move_struct;
+use super::cursor::{Page, Target};
+use super::object::{self, deserialize_move_struct};
 use super::type_filter::ExactTypeFilter;
 use super::{
     base64::Base64, move_object::MoveObject, move_value::MoveValue, sui_address::SuiAddress,
@@ -177,6 +180,36 @@ impl DynamicField {
             .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))?;
 
         stored.map(Self::try_from).transpose()
+    }
+
+    /// Query the `db` for a `page` of dynamic fields attached to object with ID `parent`.
+    pub(crate) async fn paginate(
+        db: &Db,
+        page: Page<object::Cursor>,
+        parent: SuiAddress,
+    ) -> Result<Connection<String, DynamicField>, Error> {
+        let (prev, next, results) = db
+            .execute(move |conn| {
+                page.paginate_query::<StoredObject, _, _, _>(conn, move || {
+                    use objects::dsl;
+                    dsl::objects
+                        .filter(dsl::owner_id.eq(parent.into_vec()))
+                        .filter(dsl::owner_type.eq(OwnerType::Object as i16))
+                        .filter(dsl::df_kind.is_not_null())
+                        .into_boxed()
+                })
+            })
+            .await?;
+
+        let mut conn = Connection::new(prev, next);
+
+        for stored in results {
+            let cursor = stored.cursor().encode_cursor();
+            let field = DynamicField::try_from(stored)?;
+            conn.edges.push(Edge::new(cursor, field));
+        }
+
+        Ok(conn)
     }
 }
 
