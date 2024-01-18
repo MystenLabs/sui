@@ -47,7 +47,8 @@ pub trait IndexerStoreV2 {
         object_changes: Vec<TransactionObjectChangesToCommit>,
     ) -> Result<(), IndexerError>;
 
-    async fn persist_object_snapshot(&self) -> Result<(), IndexerError>;
+    async fn persist_object_snapshot(&self, start_cp: u64, end_cp: u64)
+        -> Result<(), IndexerError>;
 
     async fn persist_checkpoints(
         &self,

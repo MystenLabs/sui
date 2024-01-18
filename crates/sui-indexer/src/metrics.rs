@@ -31,6 +31,7 @@ pub struct IndexerMetrics {
     pub latest_fullnode_checkpoint_sequence_number: IntGauge,
     pub latest_tx_checkpoint_sequence_number: IntGauge,
     pub latest_indexer_object_checkpoint_sequence_number: IntGauge,
+    pub latest_object_snapshot_sequence_number: IntGauge,
     // analytical
     pub latest_move_call_metrics_tx_seq: IntGauge,
     pub latest_address_metrics_tx_seq: IntGauge,
@@ -178,6 +179,11 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            latest_object_snapshot_sequence_number: register_int_gauge_with_registry!(
+                "latest_object_snapshot_sequence_number",
+                "Latest object snapshot sequence number from the Indexer",
+                registry,
+            ).unwrap(),
             latest_move_call_metrics_tx_seq: register_int_gauge_with_registry!(
                 "latest_move_call_metrics_tx_seq",
                 "Latest move call metrics tx seq",
