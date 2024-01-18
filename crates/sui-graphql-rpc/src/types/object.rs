@@ -419,8 +419,8 @@ impl Object {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_dynamic_field(self.address, name, DynamicFieldType::DynamicField)
+        use DynamicFieldType as T;
+        DynamicField::query(ctx.data_unchecked(), self.address, name, T::DynamicField)
             .await
             .extend()
     }
@@ -435,8 +435,8 @@ impl Object {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_dynamic_field(self.address, name, DynamicFieldType::DynamicObject)
+        use DynamicFieldType as T;
+        DynamicField::query(ctx.data_unchecked(), self.address, name, T::DynamicObject)
             .await
             .extend()
     }
@@ -483,7 +483,6 @@ impl Object {
                 conn.first(move || {
                     let mut query = dsl::objects
                         .filter(dsl::object_id.eq(address.clone()))
-                        .limit(1)
                         .into_boxed();
 
                     // TODO: leverage objects_history

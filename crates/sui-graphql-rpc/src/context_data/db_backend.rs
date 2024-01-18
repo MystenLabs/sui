@@ -28,7 +28,6 @@ pub(crate) type BalanceQuery<'a, DB> = BoxedSelectStatement<
 >;
 
 pub(crate) trait GenericQueryBuilder<DB: Backend> {
-    fn get_obj(address: Vec<u8>, version: Option<i64>) -> objects::BoxedQuery<'static, DB>;
     fn get_obj_by_type(object_type: String) -> objects::BoxedQuery<'static, DB>;
     fn get_display_by_obj_type(object_type: String) -> display::BoxedQuery<'static, DB>;
     fn multi_get_objs(
