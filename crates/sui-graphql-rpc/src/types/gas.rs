@@ -65,7 +65,7 @@ impl GasInput {
             ..Default::default()
         };
 
-        Object::paginate(ctx.data_unchecked(), page, None, filter)
+        Object::paginate(ctx.data_unchecked(), page, filter)
             .await
             .extend()
     }

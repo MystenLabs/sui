@@ -309,7 +309,7 @@ impl Object {
             return Ok(Connection::new(false, false));
         };
 
-        Object::paginate(ctx.data_unchecked(), page, None, filter)
+        Object::paginate(ctx.data_unchecked(), page, filter)
             .await
             .extend()
     }
@@ -500,28 +500,21 @@ impl Object {
         stored_obj.map(Self::try_from).transpose()
     }
 
-    /// Query the database for a `page` of objects, optionally `filter`-ed and restricted to a
-    /// particular `owner_type` (address-owned, object-owned, shared, immutable).
+    /// Query the database for a `page` of objects, optionally `filter`-ed.
     pub(crate) async fn paginate(
         db: &Db,
         page: Page<Cursor>,
-        owner_type: Option<OwnerType>,
         filter: ObjectFilter,
     ) -> Result<Connection<String, Object>, Error> {
-        Self::paginate_subtype(db, page, owner_type, filter, Ok).await
+        Self::paginate_subtype(db, page, filter, Ok).await
     }
 
     /// Query the database for a `page` of some sub-type of Object. The page uses the bytes of an
-    /// Object ID as the cursor, and can optionally be further `filter`-ed. The `owner_type` is an
-    /// optional additional filter, to constrain the objects to be those whose owner is of a
-    /// particular kind (address-owned, object-owned, shared, immutable). This kind of filter is not
-    /// exposed directly in the GraphQL API, but we can take advantage of it when constructing DB
-    /// queries to serve certain other queries (e.g. dynamic field queries). The subtype is created
+    /// Object ID as the cursor, and can optionally be further `filter`-ed. The subtype is created
     /// using the `downcast` function, which is allowed to fail, if the downcast has failed.
     pub(crate) async fn paginate_subtype<T: OutputType>(
         db: &Db,
         page: Page<Cursor>,
-        owner_type: Option<OwnerType>,
         filter: ObjectFilter,
         downcast: impl Fn(Object) -> Result<T, Error>,
     ) -> Result<Connection<String, T>, Error> {
@@ -547,10 +540,6 @@ impl Object {
                         );
                     }
 
-                    if let Some(owner_type) = &owner_type {
-                        query = query.filter(dsl::owner_type.eq(*owner_type as i16));
-                    }
-
                     if let Some(type_) = &filter.type_ {
                         query = query.filter(dsl::object_type.is_not_null());
                         query = type_.apply(query, dsl::object_type.assume_not_null());
@@ -561,10 +550,7 @@ impl Object {
 
                         // If we are supplying an address as the owner, we know that the object must
                         // be owned by an address, or by an object.
-                        query = query.filter(
-                            dsl::owner_type
-                                .eq_any([OwnerType::Address as i16, OwnerType::Object as i16]),
-                        );
+                        query = query.filter(dsl::owner_type.eq(OwnerType::Address as i16));
                     }
 
                     query
