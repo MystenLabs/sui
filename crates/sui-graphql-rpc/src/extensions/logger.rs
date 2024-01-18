@@ -52,7 +52,7 @@ struct LoggerExtension {
 
 impl LoggerExtension {
     async fn set_session_id(&self, ip: Option<SocketAddr>) {
-        *self.session_id.lock().await = ip.map(|ip| format!("{}-", ip)).unwrap_or_default();
+        *self.session_id.lock().await = ip.map(|ip| format!("{}", ip)).unwrap_or_default();
     }
 
     async fn session_id(&self) -> String {
@@ -90,7 +90,7 @@ impl Extension for LoggerExtension {
         if !is_schema && self.config.log_request_query {
             info!(
                 query_id = ctx.data_unchecked::<Uuid>().to_string(),
-                "{}: {}",
+                "[Query] {} {}",
                 self.session_id().await,
                 ctx.stringify_execute_doc(&document, variables)
             );
@@ -109,7 +109,7 @@ impl Extension for LoggerExtension {
                 query_id = ctx.data_unchecked::<Uuid>().to_string(),
                 complexity = res.complexity,
                 depth = res.depth,
-                "{}",
+                "[Validation] {}",
                 self.session_id().await
             );
         }
@@ -141,27 +141,25 @@ impl Extension for LoggerExtension {
                         }
                     }
                     if let Some(ext) = &err.extensions {
-                        if let Some(error_code) = ext.get("code") {
-                            if let async_graphql::Value::String(val) = error_code {
-                                if val.as_str() == crate::error::code::INTERNAL_SERVER_ERROR {
-                                    // TODO do we want/it's useful to log the whole problematic query?
-                                    error!(
-                                        query_id = ctx.data_unchecked::<Uuid>().to_string(),
-                                        "path={} message={}", path, err.message,
-                                    );
-                                } else {
-                                    info!(
-                                        query_id = ctx.data_unchecked::<Uuid>().to_string(),
-                                        "path={} message={}", path, err.message,
-                                    );
-                                }
+                        if let Some(async_graphql::Value::String(val)) = ext.get("code") {
+                            if val.as_str() == crate::error::code::INTERNAL_SERVER_ERROR {
+                                // TODO do we want/it's useful to log the whole problematic query?
+                                error!(
+                                    query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                                    "[Response] path={} message={}", path, err.message,
+                                );
+                            } else {
+                                info!(
+                                    query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                                    "[Response] path={} message={}", path, err.message,
+                                );
                             }
                         }
                     } else {
                         warn!(
                             query_id = ctx.data_unchecked::<Uuid>().to_string(),
                             no_error_code = "true",
-                            "path={} message={}",
+                            "[Response] path={} message={}",
                             path,
                             err.message,
                         );
@@ -169,7 +167,7 @@ impl Extension for LoggerExtension {
                 } else {
                     warn!(
                         query_id = ctx.data_unchecked::<Uuid>().to_string(),
-                        "message={}", err.message,
+                        "[Response] message={}", err.message,
                     );
                 }
             }
@@ -178,14 +176,14 @@ impl Extension for LoggerExtension {
                 Some("IntrospectionQuery") => {
                     debug!(
                         query_id = ctx.data_unchecked::<Uuid>().to_string(),
-                        "{}: {}",
+                        "[Response] {}: {}",
                         self.session_id().await,
                         resp.data
                     );
                 }
                 _ => info!(
                     query_id = ctx.data_unchecked::<Uuid>().to_string(),
-                    "{}: {}",
+                    "[Response] {}: {}",
                     self.session_id().await,
                     resp.data
                 ),

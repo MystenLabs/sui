@@ -134,6 +134,7 @@ impl Extension for QueryLimitsChecker {
                     .request_metrics
                     .query_payload_too_large_size
                     .observe(query.len() as u64);
+                metrics.request_metrics.num_queries.inc();
             }
             info!(
                 query_id = ctx.data_unchecked::<Uuid>().to_string(),
@@ -354,6 +355,7 @@ fn check_limits(
                 .request_metrics
                 .num_errors
                 .with_label_values(&["max_query_nodes", code::BAD_USER_INPUT]);
+            metrics.request_metrics.num_queries.inc();
         }
         info!(
             query_id = ctx.data_unchecked::<Uuid>().to_string(),
@@ -374,6 +376,7 @@ fn check_limits(
                 .request_metrics
                 .num_errors
                 .with_label_values(&["max_query_depth", code::BAD_USER_INPUT]);
+            metrics.request_metrics.num_queries.inc();
         }
         info!(
             query_id = ctx.data_unchecked::<Uuid>().to_string(),
@@ -394,6 +397,7 @@ fn check_limits(
                 .request_metrics
                 .num_errors
                 .with_label_values(&["max_output_nodes", code::BAD_USER_INPUT]);
+            metrics.request_metrics.num_queries.inc();
         }
         info!(
             query_id = ctx.data_unchecked::<Uuid>().to_string(),
