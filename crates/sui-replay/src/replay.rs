@@ -739,7 +739,7 @@ impl LocalExec {
         let expensive_checks = true;
         let transaction_kind = override_transaction_kind.unwrap_or(tx_info.kind.clone());
         let certificate_deny_set = HashSet::new();
-        let res = if let Ok(gas_status) =
+        let (inner_store, _gas_status, effects, result) = if let Ok(gas_status) =
             SuiGasStatus::new(tx_info.gas_budget, tx_info.gas_price, rgp, protocol_config)
         {
             executor.execute_transaction_to_effects(
@@ -767,14 +767,14 @@ impl LocalExec {
 
         let all_required_objects = self.storage.all_objects();
         let effects =
-            SuiTransactionBlockEffects::try_from(res.1).map_err(ReplayEngineError::from)?;
+            SuiTransactionBlockEffects::try_from(effects).map_err(ReplayEngineError::from)?;
 
         Ok(ExecutionSandboxState {
             transaction_info: tx_info.clone(),
             required_objects: all_required_objects,
-            local_exec_temporary_store: Some(res.0),
+            local_exec_temporary_store: Some(inner_store),
             local_exec_effects: effects,
-            local_exec_status: Some(res.2),
+            local_exec_status: Some(result),
             pre_exec_diag: self.diag.clone(),
         })
     }

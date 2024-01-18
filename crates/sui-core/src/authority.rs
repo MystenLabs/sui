@@ -1386,7 +1386,7 @@ impl AuthorityState {
         let (kind, signer, gas) = transaction_data.execution_parts();
 
         #[allow(unused_mut)]
-        let (inner_temp_store, mut effects, execution_error_opt) =
+        let (inner_temp_store, _, mut effects, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
                 &self.database,
                 protocol_config,
@@ -1516,7 +1516,7 @@ impl AuthorityState {
             .expect("Creating an executor should not fail here");
 
         let expensive_checks = false;
-        let (inner_temp_store, effects, _execution_error) = executor
+        let (inner_temp_store, _, effects, _execution_error) = executor
             .execute_transaction_to_effects(
                 &self.database,
                 protocol_config,
@@ -1757,7 +1757,7 @@ impl AuthorityState {
             transaction,
         );
         let transaction_digest = TransactionDigest::new(default_hash(&intent_msg.value));
-        let (inner_temp_store, effects, execution_result) = executor.dev_inspect_transaction(
+        let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
             &self.database,
             protocol_config,
             self.metrics.limits_metrics.clone(),

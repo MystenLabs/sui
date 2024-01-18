@@ -169,7 +169,7 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
         let transaction = transaction.verify(&VerifyParams::default())?;
 
-        let (inner_temporary_store, effects, execution_error_opt) = self
+        let (inner_temporary_store, _, effects, execution_error_opt) = self
             .epoch_state
             .execute_transaction(&self.store, &self.deny_config, &transaction)?;
 
