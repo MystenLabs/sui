@@ -6,6 +6,7 @@ use std::{
     hash::{Hash, Hasher},
     ops::Deref,
     sync::Arc,
+    time::SystemTime,
 };
 
 use bytes::Bytes;
@@ -14,16 +15,24 @@ use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, HashFunction};
 use serde::{Deserialize, Serialize};
 
-/// Block proposal timestamp in milliseconds.
-pub type BlockTimestampMs = u64;
-
 /// Round number of a block.
 pub type Round = u32;
 
+/// Block proposal timestamp in milliseconds.
+pub type BlockTimestampMs = u64;
+
+// Returns the current time expressed as UNIX timestamp in milliseconds.
+pub fn timestamp_utc_ms() -> BlockTimestampMs {
+    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(n) => n.as_millis() as BlockTimestampMs,
+        Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+    }
+}
+
 /// The transaction serialised bytes
 #[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Default, Debug)]
-pub(crate) struct Transaction {
-    data: Bytes,
+pub struct Transaction {
+    data: bytes::Bytes,
 }
 
 #[allow(dead_code)]
@@ -58,13 +67,13 @@ pub trait BlockAPI {
     fn timestamp_ms(&self) -> BlockTimestampMs;
     fn ancestors(&self) -> &[BlockRef];
     fn transactions(&self) -> &[Transaction];
-    // TODO: add accessor for transactions.
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub struct BlockV1 {
     round: Round,
     author: AuthorityIndex,
+    // TODO: during verification ensure that timestamp_ms >= ancestors.timestamp
     timestamp_ms: BlockTimestampMs,
     ancestors: Vec<BlockRef>,
     transactions: Vec<Transaction>,
@@ -112,7 +121,7 @@ impl BlockAPI for BlockV1 {
 }
 
 /// BlockRef is the minimum info that uniquely identify a block.
-#[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct BlockRef {
     pub round: Round,
     pub author: AuthorityIndex,
@@ -192,6 +201,12 @@ impl fmt::Debug for BlockDigest {
     }
 }
 
+impl AsRef<[u8]> for BlockDigest {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
 /// Slot is the position of blocks in the DAG. It can contain 0, 1 or multiple blocks
 /// from the same authority at the same round.
 #[derive(Clone, Copy, PartialEq, PartialOrd, Default, Hash)]
@@ -234,6 +249,20 @@ pub(crate) struct SignedBlock {
 
 impl SignedBlock {
     // TODO: add verification.
+
+    // TODO: will refactor once the signing approach has been introduced.
+    pub(crate) fn new(block: Block) -> Self {
+        Self {
+            inner: block,
+            signature: Bytes::default(),
+        }
+    }
+
+    /// Serialises the block using the bcs serializer
+    pub(crate) fn serialize(&self) -> Result<bytes::Bytes, bcs::Error> {
+        let bytes = bcs::to_bytes(self)?;
+        bytes.into()
+    }
 }
 
 /// VerifiedBlock allows full access to its content.
@@ -259,6 +288,13 @@ impl VerifiedBlock {
             digest,
             serialized,
         })
+    }
+
+    /// Creates a new VerifiedBlock from a SignedBlock and the serialized bytes aren't available. Primarily this should be
+    /// used when proposing a new block and the bytes aren't available.
+    pub fn new_verified_unserialized(signed_block: SignedBlock) -> Result<Self, bcs::Error> {
+        let serialized = signed_block.serialize()?;
+        Self::new_verified(signed_block, serialized)
     }
 
     #[cfg(test)]

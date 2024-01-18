@@ -31,7 +31,7 @@ impl AuthorityNode {
         protocol_config: ProtocolConfig,
         // To avoid accidentally leaking the private key, the key pair should only be
         // stored in the Block signer.
-        _signer: ProtocolKeyPair,
+        signer: ProtocolKeyPair,
         _block_verifier: impl BlockVerifier,
         registry: Registry,
     ) -> Self {

@@ -51,8 +51,8 @@ impl CoreThread {
                     let missing_blocks = self.core.add_blocks(blocks);
                     sender.send(missing_blocks).ok();
                 }
-                CoreThreadCommand::ForceNewBlock(round, sender) => {
-                    self.core.force_new_block(round);
+                CoreThreadCommand::NewBlockLeaderTimeout(round, sender) => {
+                    self.core.try_new_block_leader_timeout(round);
                     sender.send(()).ok();
                 }
                 CoreThreadCommand::GetMissing(sender) => {
@@ -75,7 +75,7 @@ enum CoreThreadCommand {
     /// Add blocks to be processed and accepted
     AddBlocks(Vec<VerifiedBlock>, oneshot::Sender<Vec<BlockRef>>),
     /// Called when a leader timeout occurs and a block should be produced
-    ForceNewBlock(Round, oneshot::Sender<()>),
+    NewBlockLeaderTimeout(Round, oneshot::Sender<()>),
     /// Request missing blocks that need to be synced.
     GetMissing(oneshot::Sender<Vec<HashSet<BlockRef>>>),
 }
@@ -123,9 +123,9 @@ impl CoreThreadDispatcher {
         receiver.await.map_err(Shutdown)
     }
 
-    pub async fn force_new_block(&self, round: Round) -> Result<(), CoreError> {
+    pub async fn new_block_leader_timeout(&self, round: Round) -> Result<(), CoreError> {
         let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::ForceNewBlock(round, sender))
+        self.send(CoreThreadCommand::NewBlockLeaderTimeout(round, sender))
             .await;
         receiver.await.map_err(Shutdown)
     }
