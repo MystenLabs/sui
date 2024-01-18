@@ -8,7 +8,7 @@ use crate::{
     framework::{run_test_impl, CompiledState, MaybeNamedCompiledModule, MoveTestAdapter},
     tasks::{EmptyCommand, InitCommand, SyntaxChoice, TaskInput},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Error, Result};
 use async_trait::async_trait;
 use clap::Parser;
 use move_binary_format::{
@@ -222,6 +222,10 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         _: TaskInput<Self::Subcommand>,
     ) -> Result<Option<String>> {
         unimplemented!()
+    }
+
+    async fn process_error(&self, err: Error) -> Error {
+        err
     }
 }
 
