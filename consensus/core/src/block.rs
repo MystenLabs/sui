@@ -240,7 +240,6 @@ pub(crate) struct VerifiedBlock {
 }
 
 impl VerifiedBlock {
-
     /// Creates VerifiedBlock from verified SignedBlock and its serialized bytes.
     pub fn new_verified(
         signed_block: SignedBlock,
