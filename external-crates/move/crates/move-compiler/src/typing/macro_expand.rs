@@ -20,6 +20,7 @@ struct Context<'a, 'b> {
     core: &'a mut core::Context<'b>,
     lambdas: LambdaMap,
     tparam_subst: TParamSubst,
+    macro_color: Color,
 }
 
 pub struct ExpandedMacro {
@@ -83,6 +84,7 @@ pub(crate) fn call(
         core: context,
         lambdas,
         tparam_subst,
+        macro_color: next_color,
     };
     seq(&mut context, &mut macro_body);
     let mut wrapped_body = sp(call_loc, N::Exp_::Block(macro_body));
@@ -595,11 +597,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
                 sp(param_loc, N::SequenceItem_::Bind(lambda_params, annot_args)),
                 sp(body_loc, N::SequenceItem_::Seq(labeled_body)),
             ]);
-            let current_use_fun_color = context
-                .core
-                .current_use_fun_color()
-                .expect("ICE cannot expand a macro in the global env");
-            *e_ = N::Exp_::Block((N::UseFuns::new(current_use_fun_color), result));
+            *e_ = N::Exp_::Block((N::UseFuns::new(context.macro_color), result));
         }
         N::Exp_::VarCall(_, sp!(_, es)) => exps(context, es),
     }

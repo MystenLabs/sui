@@ -237,10 +237,6 @@ impl<'env> Context<'env> {
         })
     }
 
-    pub fn current_use_fun_color(&self) -> Option<Color> {
-        self.use_funs.last().unwrap().color
-    }
-
     pub fn reset_for_module_item(&mut self) {
         self.named_block_map = BTreeMap::new();
         self.return_type = None;
