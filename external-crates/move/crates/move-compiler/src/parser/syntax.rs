@@ -1514,15 +1514,21 @@ fn at_start_of_exp(context: &mut Context) -> bool {
 
 // Parse an expression:
 //      Exp =
-//            <LambdaBindList> <Exp>        spec only
+//            <LambdaBindList> <Exp>
 //          | <Quantifier>                  spec only
 //          | <BinOpExp>
 //          | <UnaryExp> "=" <Exp>
 fn parse_exp(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     let exp = match context.tokens.peek() {
-        Tok::Pipe => {
-            let bindings = parse_lambda_bind_list(context)?;
+        tok @ Tok::PipePipe | tok @ Tok::Pipe => {
+            let bindings = if tok == Tok::PipePipe {
+                let loc = current_token_loc(context.tokens);
+                consume_token(context.tokens, Tok::PipePipe)?;
+                sp(loc, vec![])
+            } else {
+                parse_lambda_bind_list(context)?
+            };
             let body = Box::new(parse_exp(context)?);
             Exp_::Lambda(bindings, body)
         }
@@ -2034,8 +2040,13 @@ fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
             let t = parse_type(context)?;
             Type_::Ref(true, Box::new(t))
         }
-        Tok::Pipe => {
-            let args = parse_comma_list(context, Tok::Pipe, Tok::Pipe, parse_type, "a type")?;
+        tok @ Tok::PipePipe | tok @ Tok::Pipe => {
+            let args = if tok == Tok::PipePipe {
+                consume_token(context.tokens, Tok::PipePipe)?;
+                vec![]
+            } else {
+                parse_comma_list(context, Tok::Pipe, Tok::Pipe, parse_type, "a type")?
+            };
             let result = if is_start_of_type(context) {
                 parse_type(context)?
             } else {

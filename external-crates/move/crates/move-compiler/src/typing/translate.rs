@@ -2414,12 +2414,12 @@ fn module_call_impl(
         let call_msg = if decl_is_macro {
             format!(
                 "'{f}' is a macro function and must be called with a `!`. \
-                Try replacing '{f}' with '{f}!'"
+                Try replacing with '{f}!'"
             )
         } else {
             format!(
                 "'{f}' is not a macro function and cannot be called with a `!`. \
-                Try replacing '{f}!' with '{f}'"
+                Try replacing with '{f}'"
             )
         };
         let decl_msg = if decl_is_macro {
