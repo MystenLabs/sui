@@ -7,9 +7,8 @@ use super::dynamic_field::DynamicField;
 use super::dynamic_field::DynamicFieldName;
 use super::stake::StakedSui;
 use super::suins_registration::SuinsRegistration;
-use crate::context_data::db_data_provider::PgManager;
 use crate::data::Db;
-use crate::types::balance::*;
+use crate::types::balance::{self, *};
 use crate::types::coin::*;
 use crate::types::object::{self, *};
 use crate::types::sui_address::SuiAddress;
@@ -39,12 +38,12 @@ use sui_types::gas_coin::GAS;
         arg(name = "type", ty = "Option<ExactTypeFilter>")
     ),
     field(
-        name = "balance_connection",
+        name = "balances",
         ty = "Option<Connection<String, Balance>>",
         arg(name = "first", ty = "Option<u64>"),
-        arg(name = "after", ty = "Option<String>"),
+        arg(name = "after", ty = "Option<balance::Cursor>"),
         arg(name = "last", ty = "Option<u64>"),
-        arg(name = "before", ty = "Option<String>")
+        arg(name = "before", ty = "Option<balance::Cursor>")
     ),
     field(
         name = "coins",
@@ -164,17 +163,17 @@ impl Owner {
             .extend()
     }
 
-    /// The balances of all coin types owned by this Owner.
-    pub async fn balance_connection(
+    /// The balances of all coin types owned by this owner.
+    pub async fn balances(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<balance::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, Balance>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_balances(self.address, first, after, last, before)
+        before: Option<balance::Cursor>,
+    ) -> Result<Connection<String, Balance>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        Balance::paginate(ctx.data_unchecked(), page, self.address)
             .await
             .extend()
     }

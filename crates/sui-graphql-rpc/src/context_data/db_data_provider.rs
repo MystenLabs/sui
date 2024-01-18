@@ -6,15 +6,13 @@ use crate::{
     config::{Limits, DEFAULT_SERVER_DB_POOL_SIZE},
     error::Error,
     types::{
-        address::Address, balance::Balance, big_int::BigInt, coin_metadata::CoinMetadata,
-        move_object::MoveObject, move_type::MoveType, object::Object, sui_address::SuiAddress,
-        validator::Validator,
+        address::Address, coin_metadata::CoinMetadata, move_object::MoveObject, object::Object,
+        sui_address::SuiAddress, validator::Validator,
     },
 };
-use async_graphql::connection::{Connection, Edge};
 use diesel::{OptionalExtension, RunQueryDsl};
 use move_core_types::language_storage::StructTag;
-use std::{collections::BTreeMap, str::FromStr};
+use std::collections::BTreeMap;
 use sui_indexer::{
     apis::GovernanceReadApiV2,
     indexer_reader::IndexerReader,
@@ -32,7 +30,6 @@ use sui_types::{
     sui_system_state::sui_system_state_summary::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
     },
-    TypeTag,
 };
 
 #[cfg(feature = "pg_backend")]
@@ -114,27 +111,6 @@ impl PgManager {
         )
         .await
     }
-
-    async fn multi_get_balances(
-        &self,
-        address: Vec<u8>,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Vec<(Option<i64>, Option<i64>, Option<String>)>>, Error> {
-        // Todo (wlmyng): paginating on balances does not really make sense
-        // We'll always need to calculate all balances first
-        if first.is_some() || after.is_some() || last.is_some() || before.is_some() {
-            return Err(DbValidationError::PaginationDisabledOnBalances.into());
-        }
-
-        self.run_query_async_with_cost(
-            move || Ok(QueryBuilder::multi_get_balances(address.clone())),
-            |query| move |conn| query.load(conn).optional(),
-        )
-        .await
-    }
 }
 
 /// Implement methods to be used by graphql resolvers
@@ -158,46 +134,6 @@ impl PgManager {
     ) -> Result<Option<StoredDisplay>, Error> {
         let object_type = object_type.to_canonical_string(/* with_prefix */ true);
         self.get_display_by_obj_type(object_type).await
-    }
-
-    pub(crate) async fn fetch_balances(
-        &self,
-        address: SuiAddress,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, Balance>>, Error> {
-        let address = address.into_vec();
-        let Some(balances) = self
-            .multi_get_balances(address, first, after, last, before)
-            .await?
-        else {
-            return Ok(None);
-        };
-
-        let mut connection = Connection::new(false, false);
-        for (balance, count, coin_type) in balances {
-            let (Some(balance), Some(count), Some(coin_type)) = (balance, count, coin_type) else {
-                return Err(Error::Internal(
-                    "Expected fields are missing on balance calculation".to_string(),
-                ));
-            };
-
-            let coin_tag = TypeTag::from_str(&coin_type)
-                .map_err(|e| Error::Internal(format!("Error parsing type '{coin_type}': {e}")))?;
-
-            connection.edges.push(Edge::new(
-                coin_type.clone(),
-                Balance {
-                    coin_object_count: Some(count as u64),
-                    total_balance: Some(BigInt::from(balance)),
-                    coin_type: Some(MoveType::new(coin_tag)),
-                },
-            ));
-        }
-
-        Ok(Some(connection))
     }
 
     pub(crate) async fn available_range(&self) -> Result<(u64, u64), Error> {

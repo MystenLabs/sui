@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::db_backend::{BalanceQuery, Explain, Explained, GenericQueryBuilder};
+use super::db_backend::{Explain, Explained, GenericQueryBuilder};
 use crate::{context_data::db_data_provider::PgManager, error::Error};
 use async_trait::async_trait;
 use diesel::{
@@ -9,10 +9,7 @@ use diesel::{
     query_builder::{AstPass, QueryFragment},
     ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl,
 };
-use sui_indexer::{
-    schema_v2::{display, objects},
-    types_v2::OwnerType,
-};
+use sui_indexer::schema_v2::{display, objects};
 use tap::TapFallible;
 use tracing::{info, warn};
 
@@ -33,26 +30,6 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
             .filter(display::dsl::object_type.eq(object_type))
             .limit(1)
             .into_boxed()
-    }
-
-    fn multi_get_balances(address: Vec<u8>) -> BalanceQuery<'static, Pg> {
-        let query = objects::dsl::objects
-            .group_by(objects::dsl::coin_type)
-            .select((
-                diesel::dsl::sql::<diesel::sql_types::Nullable<diesel::sql_types::BigInt>>(
-                    "CAST(SUM(coin_balance) AS BIGINT)",
-                ),
-                diesel::dsl::sql::<diesel::sql_types::Nullable<diesel::sql_types::BigInt>>(
-                    "COUNT(*)",
-                ),
-                objects::dsl::coin_type,
-            ))
-            .filter(objects::dsl::owner_id.eq(address))
-            .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16))
-            .filter(objects::dsl::coin_type.is_not_null())
-            .into_boxed();
-
-        query
     }
 }
 

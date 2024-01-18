@@ -81,9 +81,10 @@ type Address implements IOwner {
 	"""
 	balance(type: String): Balance
 	"""
-	The balance objects for this address.
+	The balances of all coin types owned by this address. Coins of the same type are grouped
+	together into one Balance.
 	"""
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	balances(first: Int, after: String, last: Int, before: String): BalanceConnection!
 	"""
 	The coin objects for this address.
 	
@@ -196,7 +197,7 @@ type Balance {
 	"""
 	Coin type for the balance, such as 0x2::sui::SUI
 	"""
-	coinType: MoveType
+	coinType: MoveType!
 	"""
 	How many coins of this type constitute the balance
 	"""
@@ -1049,7 +1050,7 @@ interface IOwner {
 	address: SuiAddress!
 	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
 	balance(type: String): Balance
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coins(first: Int, after: String, last: Int, before: String, type: String): CoinConnection!
 	stakedSuis(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultSuinsName: String
@@ -1699,10 +1700,10 @@ type Object implements IOwner {
 	"""
 	balance(type: String): Balance
 	"""
-	The balances of all coin types owned by the object. Coins of the same type are grouped
+	The balances of all coin types owned by this object. Coins of the same type are grouped
 	together into one Balance.
 	"""
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	balances(first: Int, after: String, last: Int, before: String): BalanceConnection!
 	"""
 	The coin objects for this object.
 	
@@ -1952,9 +1953,9 @@ type Owner implements IOwner {
 	"""
 	balance(type: String): Balance
 	"""
-	The balances of all coin types owned by this Owner.
+	The balances of all coin types owned by this owner.
 	"""
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	balances(first: Int, after: String, last: Int, before: String): BalanceConnection!
 	"""
 	The coin objects for the given address or object.
 	

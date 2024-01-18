@@ -11,7 +11,7 @@ gas summary: computation_cost: 1000000, storage_cost: 15663600,  storage_rebate:
 task 2 'create-checkpoint'. lines 38-38:
 Checkpoint created: 1
 
-task 3 'run-graphql'. lines 40-71:
+task 3 'run-graphql'. lines 40-90:
 Response: {
   "data": {
     "suiCoins": {
@@ -115,6 +115,44 @@ Response: {
                 }
               }
             }
+          }
+        ]
+      },
+      "allBalances": {
+        "edges": [
+          {
+            "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki",
+            "node": {
+              "coinType": {
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+              },
+              "coinObjectCount": 1,
+              "totalBalance": "299999983336400"
+            }
+          },
+          {
+            "cursor": "IjB4MTZhMjc2NDdkYmVhMmY1MTEyMzc5MGI3OTJkNDY4OGUyMWFhMGZjNzE2NDA1MjEwY2VlYmIwYTJkYzcwZDlmMDo6ZmFrZTo6RkFLRSI",
+            "node": {
+              "coinType": {
+                "repr": "0x16a27647dbea2f51123790b792d4688e21aa0fc716405210ceebb0a2dc70d9f0::fake::FAKE"
+              },
+              "coinObjectCount": 3,
+              "totalBalance": "6"
+            }
+          }
+        ]
+      },
+      "firstBalance": {
+        "edges": [
+          {
+            "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+          }
+        ]
+      },
+      "lastBalance": {
+        "edges": [
+          {
+            "cursor": "IjB4MTZhMjc2NDdkYmVhMmY1MTEyMzc5MGI3OTJkNDY4OGUyMWFhMGZjNzE2NDA1MjEwY2VlYmIwYTJkYzcwZDlmMDo6ZmFrZTo6RkFLRSI"
           }
         ]
       }
