@@ -8,7 +8,7 @@ use async_graphql::connection::{CursorType, Edge};
 use async_graphql::{connection::Connection, *};
 use diesel::{
     BoolExpressionMethods, CombineDsl, ExpressionMethods, NullableExpressionMethods,
-    OptionalExtension, QueryDsl,
+    OptionalExtension, QueryDsl, RunQueryDsl,
 };
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
@@ -341,7 +341,7 @@ impl Object {
             return Ok(Connection::new(false, false));
         };
 
-        Object::paginate(ctx.data_unchecked(), page, filter)
+        Object::paginate_historical(ctx.data_unchecked(), page, None, None, filter)
             .await
             .extend()
     }
@@ -583,6 +583,141 @@ impl Object {
             let cursor = stored.cursor().encode_cursor();
             let object = Object::try_from(stored)?;
             conn.edges.push(Edge::new(cursor, downcast(object)?));
+        }
+
+        Ok(conn)
+    }
+
+    pub(crate) async fn paginate_historical(
+        db: &Db,
+        page: Page<Cursor>,
+        owner_type: Option<OwnerType>,
+        checkpoint_sequence_number: Option<u64>,
+        filter: ObjectFilter,
+    ) -> Result<Connection<String, Object>, Error> {
+        // let (prev, next, results) = db
+        let page_clone = page.clone();
+        let results = db
+        .inner.run_query_async(move |conn| {
+
+                // CTE that constructs a table similar to the live objects table. This selects
+                // the the object's state at the highest object_version at the highest
+                // checkpoint_sequence_number still within the rhs
+
+                let lhs = "COALESCE((SELECT MAX(checkpoint_sequence_number) from objects_snapshot), 0)";
+                let rhs;
+
+                let mut snapshot_query = "SELECT * FROM objects_snapshot".to_string();
+                let mut history_query = format!("SELECT * FROM objects_history WHERE checkpoint_sequence_number >= ({})", lhs);
+
+                if let Some(checkpoint_sequence_number) = checkpoint_sequence_number {
+                    snapshot_query = format!("{} WHERE checkpoint_sequence_number <= {}", snapshot_query, checkpoint_sequence_number);
+                    rhs = format!("{}", checkpoint_sequence_number);
+                } else {
+                    rhs = "SELECT MAX(sequence_number) from checkpoints".to_string();
+                }
+
+                history_query = format!("{} AND checkpoint_sequence_number <= ({})", history_query, rhs);
+
+                let mut filters: Vec<String> = Vec::new();
+
+                let object_id_filter = filter.object_ids.as_ref()
+                    .filter(|ids| !ids.is_empty())
+                    .map(|object_ids| {
+                        object_ids.iter()
+                            .map(|id| format!("'\\x{}'::bytea", hex::encode(id.into_vec())))
+                            .collect::<Vec<_>>().join(",")
+                    })
+                    .map(|filter| format!("object_id IN ({})", filter));
+
+                let object_keys_filter = filter.object_keys.as_ref()
+                    .filter(|keys| !keys.is_empty())
+                    .map(|object_keys| {
+                        object_keys.iter()
+                            .map(|ObjectKey { object_id, version }| {
+                                format!("('\\x{}'::bytea AND object_version = {})", hex::encode(object_id.into_vec()), version)
+                            })
+                            .collect::<Vec<_>>().join(" OR ")
+                    })
+                    .map(|filter| format!("({})", filter));
+
+                match (object_id_filter, object_keys_filter) {
+                    (Some(id_filter), Some(keys_filter)) => filters.push(format!("(({}) OR ({}))", id_filter, keys_filter)),
+                    (Some(id_filter), None) => filters.push(format!("({id_filter})")),
+                    (None, Some(keys_filter)) => filters.push(format!("{keys_filter})")),
+                    (None, None) => {}
+                }
+
+                if let Some(owner_type) = &owner_type {
+                    filters.push(format!("(owner_type = {})", *owner_type as i16));
+                }
+
+                if let Some(type_) = &filter.type_ {
+                    // TODO (wlmyng)
+                    // filters.push_str(" AND object_type IS NOT NULL");
+                    // query = query.filter(dsl::object_type.is_not_null());
+                    // query = type_.apply(query, dsl::object_type.assume_not_null());
+                }
+
+                if let Some(owner) = &filter.owner {
+                    filters.push(format!("(owner_id = '\\x{}'::bytea)", hex::encode(owner.into_vec())));
+
+                    filters.push(format!("(owner_type = {})", OwnerType::Address as i16));
+                }
+
+                let filters_string = if !filters.is_empty() {
+                    format!("WHERE {}", filters.join(" AND "))
+                } else {
+                    "".to_string()
+                };
+
+                // apply pagination
+                let mut after_string = "".to_string();
+                if let Some(after) = page_clone.after() {
+                    after_string.push_str(&format!(" AND object_id > '\\x{}'::bytea", hex::encode((**after).clone())));
+                }
+
+                let mut before_string = "".to_string();
+                if let Some(before) = page_clone.before() {
+                    before_string.push_str(&format!(" AND object_id < '\\x{}'::bytea", hex::encode((**before).clone())));
+                }
+
+                let limit = format!("LIMIT {}", page_clone.limit() as i64 + 2);
+
+                let order_by = match page_clone.is_from_front() {
+                    true => "ORDER BY object_id ASC",
+                    false => "ORDER BY object_id DESC"
+                };
+
+                let raw_sql = format!("WITH unioned_data AS (
+                    {}
+                    UNION
+                    {}
+                ),
+                latest_versions AS (
+                    SELECT object_id, MAX(object_version) AS max_version
+                    FROM unioned_data
+                    GROUP BY object_id
+                )
+                SELECT u.*
+                FROM unioned_data u
+                INNER JOIN latest_versions lv ON u.object_id = lv.object_id AND u.object_version = lv.max_version
+                {} {} {} {} {};", snapshot_query, history_query, filters_string, after_string, before_string, order_by, limit);
+
+                println!("{}", raw_sql);
+
+                diesel::sql_query(raw_sql.clone()).load::<StoredHistoryObject>(conn)
+            })
+            .await.map_err(|e| Error::Internal(format!("Failed to fetch history consistent objects: {e}")))?;
+
+        let (prev, next, results) = page.paginate_results(results);
+
+        let mut conn = Connection::new(prev, next);
+
+        for stored in results {
+            let cursor = stored.cursor().encode_cursor();
+            let object = Object::try_from(stored)?;
+            conn.edges.push(Edge::new(cursor, object));
         }
 
         Ok(conn)
@@ -840,6 +975,31 @@ impl ObjectFilter {
 }
 
 impl Target<Cursor> for StoredObject {
+    type Source = objects::table;
+
+    fn filter_ge<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
+        query.filter(objects::dsl::object_id.ge((**cursor).clone()))
+    }
+
+    fn filter_le<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
+        query.filter(objects::dsl::object_id.le((**cursor).clone()))
+    }
+
+    fn order<ST, GB>(asc: bool, query: Query<ST, GB>) -> Query<ST, GB> {
+        use objects::dsl;
+        if asc {
+            query.order_by(dsl::object_id.asc())
+        } else {
+            query.order_by(dsl::object_id.desc())
+        }
+    }
+
+    fn cursor(&self) -> Cursor {
+        Cursor::new(self.object_id.clone())
+    }
+}
+
+impl Target<Cursor> for StoredHistoryObject {
     type Source = objects::table;
 
     fn filter_ge<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {

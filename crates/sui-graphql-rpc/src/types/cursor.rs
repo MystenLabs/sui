@@ -228,6 +228,19 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
             results
         };
 
+        // The remaining bit can be split out
+        Ok(self.paginate_results(results))
+    }
+
+    // TODO (wlmyng) tbh shouldn't be toooo hard to extend this if given a raw sql string
+
+    pub(crate) fn paginate_results<T>(
+        &self,
+        results: Vec<T>,
+    ) -> (bool, bool, impl Iterator<Item = T>)
+    where
+        T: Send + Target<C> + 'static,
+    {
         // Detect whether the results imply the existence of a previous or next page.
         let (prev, next, prefix, suffix) = match (
             self.after(),
@@ -240,18 +253,18 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
             // cursors, so the bounds must have been invalid, no matter which end the page was
             // drawn from.
             (_, None, _, _, _) | (_, _, None, _, _) => {
-                return Ok((false, false, vec![].into_iter()));
+                return (false, false, vec![].into_iter());
             }
 
             // Page drawn from the front, and the cursor for the first element does not match
             // `after`. This implies the bound was invalid, so we return an empty result.
             (Some(a), Some(f), _, _, End::Front) if f.cursor() != *a => {
-                return Ok((false, false, vec![].into_iter()));
+                return (false, false, vec![].into_iter());
             }
 
             // Similar to above case, but for back of results.
             (_, _, Some(l), Some(b), End::Back) if l.cursor() != *b => {
-                return Ok((false, false, vec![].into_iter()));
+                return (false, false, vec![].into_iter());
             }
 
             // From here onwards, we know that the results are non-empty and if a cursor was
@@ -290,7 +303,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         // previous or next page, because there will be no start or end cursor for this page to
         // anchor on.
         if results.len() == prefix + suffix {
-            return Ok((false, false, vec![].into_iter()));
+            return (false, false, vec![].into_iter());
         }
 
         // We finally made it -- trim the prefix and suffix rows from the result and send it!
@@ -302,7 +315,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
             results.nth_back(suffix - 1);
         }
 
-        Ok((prev, next, results))
+        (prev, next, results)
     }
 }
 

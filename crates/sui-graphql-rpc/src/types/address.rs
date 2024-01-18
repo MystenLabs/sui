@@ -97,7 +97,7 @@ impl Address {
             return Ok(Connection::new(false, false));
         };
 
-        Object::paginate(ctx.data_unchecked(), page, filter)
+        Object::paginate_historical(ctx.data_unchecked(), page, None, None, filter)
             .await
             .extend()
     }
