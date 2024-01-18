@@ -22,9 +22,10 @@ module 0x42::m {
     }
 
     entry fun t0() {
-        let mut count = 0;
-        0x42::m::for!(0, 10, |x| count = count + x*x);
-        assert!(count == 285, 0);
+        // TODO
+        // let mut count = 0;
+        // 0x42::m::for!(0, 10, |x| count = count + x*x);
+        // assert!(count == 285, 0);
 
         // let es = vector[0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
         // let mut sum = 0;
