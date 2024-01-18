@@ -10,6 +10,7 @@ use crate::error::BridgeResult;
 use crate::eth_client::EthClient;
 use crate::retry_with_max_delay;
 use crate::types::EthLog;
+use ethers::types::Address as EthAddress;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,6 +21,7 @@ use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tokio_retry::Retry;
 use tracing::error;
 
+const ETH_LOG_QUERY_MAX_BLOCK_RANGE: u64 = 1000;
 const ETH_EVENTS_CHANNEL_SIZE: usize = 1000;
 const FINALIZED_BLOCK_QUERY_INTERVAL: Duration = Duration::from_secs(2);
 
@@ -29,7 +31,7 @@ pub struct EthSyncer<P> {
 }
 
 /// Map from contract address to their start block.
-pub type EthTargetAddresses = HashMap<ethers::types::Address, u64>;
+pub type EthTargetAddresses = HashMap<EthAddress, u64>;
 
 #[allow(clippy::new_without_default)]
 impl<P> EthSyncer<P>
@@ -47,7 +49,7 @@ where
         self,
     ) -> BridgeResult<(
         Vec<JoinHandle<()>>,
-        mysten_metrics::metered_channel::Receiver<(ethers::types::Address, Vec<EthLog>)>,
+        mysten_metrics::metered_channel::Receiver<(EthAddress, Vec<EthLog>)>,
         watch::Receiver<u64>,
     )> {
         let (eth_evnets_tx, eth_events_rx) = mysten_metrics::metered_channel::channel(
@@ -114,21 +116,22 @@ where
     }
 
     async fn run_event_listening_task(
-        contract_address: ethers::types::Address,
+        contract_address: EthAddress,
         mut start_block: u64,
         mut last_finalized_block_receiver: watch::Receiver<u64>,
-        events_sender: mysten_metrics::metered_channel::Sender<(
-            ethers::types::Address,
-            Vec<EthLog>,
-        )>,
+        events_sender: mysten_metrics::metered_channel::Sender<(EthAddress, Vec<EthLog>)>,
         eth_client: Arc<EthClient<P>>,
     ) {
         tracing::info!(contract_address=?contract_address, "Starting eth events listening task from block {start_block}");
+        let mut more_blocks = false;
         loop {
-            last_finalized_block_receiver
-                .changed()
-                .await
-                .expect("last_finalized_block channel sender is closed");
+            // If no more known blocks, wait for the next finalized block.
+            if !more_blocks {
+                last_finalized_block_receiver
+                    .changed()
+                    .await
+                    .expect("last_finalized_block channel sender is closed");
+            }
             let new_finalized_block = *last_finalized_block_receiver.borrow();
             if new_finalized_block < start_block {
                 tracing::info!(
@@ -139,15 +142,20 @@ where
                 );
                 continue;
             }
+            // Each query does at most ETH_LOG_QUERY_MAX_BLOCK_RANGE blocks.
+            let end_block = std::cmp::min(
+                start_block + ETH_LOG_QUERY_MAX_BLOCK_RANGE - 1,
+                new_finalized_block,
+            );
+            more_blocks = end_block < new_finalized_block;
             let Ok(events) = retry_with_max_delay!(
-                eth_client.get_events_in_range(contract_address, start_block, new_finalized_block),
+                eth_client.get_events_in_range(contract_address, start_block, end_block),
                 Duration::from_secs(600)
             ) else {
                 error!("Failed to get events from eth client after retry");
                 continue;
             };
             let len = events.len();
-            // TODO: convert Log to a custom Log struct that contains block number, tx hash and log index in tx.
             if !events.is_empty() {
                 // Note: it's extremely critical to make sure the Logs we send via this channel
                 // are complete per block height. Namely, we should never send a partial list
@@ -158,7 +166,7 @@ where
                     .expect("All Eth event channel receivers are closed");
                 tracing::info!(?contract_address, "Observed {len} new Eth events",);
             }
-            start_block = new_finalized_block + 1;
+            start_block = end_block + 1;
         }
     }
 }
@@ -167,7 +175,7 @@ where
 mod tests {
     use std::{collections::HashSet, str::FromStr};
 
-    use ethers::types::{Address, Log, U256, U64};
+    use ethers::types::{Log, U256, U64};
     use prometheus::Registry;
     use tokio::sync::mpsc::error::TryRecvError;
 
@@ -186,13 +194,16 @@ mod tests {
         mysten_metrics::init_metrics(&registry);
         let mock_provider = EthMockProvider::new();
         mock_last_finalized_block(&mock_provider, 777);
-        let client = EthClient::new_mocked(mock_provider.clone());
+        let client = EthClient::new_mocked(
+            mock_provider.clone(),
+            HashSet::from_iter(vec![EthAddress::zero()]),
+        );
         let result = client.get_last_finalized_block_id().await.unwrap();
         assert_eq!(result, 777);
 
-        let addresses = HashMap::from_iter(vec![(Address::zero(), 100)]);
+        let addresses = HashMap::from_iter(vec![(EthAddress::zero(), 100)]);
         let log = Log {
-            address: Address::zero(),
+            address: EthAddress::zero(),
             transaction_hash: Some(TxHash::random()),
             block_number: Some(U64::from(777)),
             log_index: Some(U256::from(3)),
@@ -204,7 +215,13 @@ mod tests {
             log_index_in_tx: 0,
             log: log.clone(),
         };
-        mock_get_logs(&mock_provider, Address::zero(), 100, 777, vec![log.clone()]);
+        mock_get_logs(
+            &mock_provider,
+            EthAddress::zero(),
+            100,
+            777,
+            vec![log.clone()],
+        );
         let (_handles, mut logs_rx, mut finalized_block_rx) =
             EthSyncer::new(Arc::new(client), addresses)
                 .run()
@@ -215,17 +232,23 @@ mod tests {
         finalized_block_rx.changed().await.unwrap();
         assert_eq!(*finalized_block_rx.borrow(), 777);
         let (contract_address, received_logs) = logs_rx.recv().await.unwrap();
-        assert_eq!(contract_address, Address::zero());
+        assert_eq!(contract_address, EthAddress::zero());
         assert_eq!(received_logs, vec![eth_log.clone()]);
         assert_eq!(logs_rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
-        mock_get_logs(&mock_provider, Address::zero(), 778, 888, vec![log.clone()]);
+        mock_get_logs(
+            &mock_provider,
+            EthAddress::zero(),
+            778,
+            888,
+            vec![log.clone()],
+        );
         // The latest finalized block is updated to 888, event listener should query again.
         mock_last_finalized_block(&mock_provider, 888);
         finalized_block_rx.changed().await.unwrap();
         assert_eq!(*finalized_block_rx.borrow(), 888);
         let (contract_address, received_logs) = logs_rx.recv().await.unwrap();
-        assert_eq!(contract_address, Address::zero());
+        assert_eq!(contract_address, EthAddress::zero());
         assert_eq!(received_logs, vec![eth_log]);
         assert_eq!(logs_rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
@@ -240,14 +263,18 @@ mod tests {
 
         let mock_provider = EthMockProvider::new();
         mock_last_finalized_block(&mock_provider, 198);
-        let client = EthClient::new_mocked(mock_provider.clone());
 
         let another_address =
-            Address::from_str("0x00000000219ab540356cbb839cbe05303d7705fa").unwrap();
-        let addresses = HashMap::from_iter(vec![(Address::zero(), 100), (another_address, 200)]);
+            EthAddress::from_str("0x00000000219ab540356cbb839cbe05303d7705fa").unwrap();
+        let client = EthClient::new_mocked(
+            mock_provider.clone(),
+            HashSet::from_iter(vec![another_address]),
+        );
+
+        let addresses = HashMap::from_iter(vec![(EthAddress::zero(), 100), (another_address, 200)]);
 
         let log1 = Log {
-            address: Address::zero(),
+            address: EthAddress::zero(),
             transaction_hash: Some(TxHash::random()),
             block_number: Some(U64::from(101)),
             log_index: Some(U256::from(5)),
@@ -261,7 +288,7 @@ mod tests {
         };
         mock_get_logs(
             &mock_provider,
-            Address::zero(),
+            EthAddress::zero(),
             100,
             198,
             vec![log1.clone()],
@@ -297,7 +324,7 @@ mod tests {
         assert_eq!(logs_rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
         let log1 = Log {
-            address: Address::zero(),
+            address: EthAddress::zero(),
             block_number: Some(U64::from(200)),
             transaction_hash: Some(TxHash::random()),
             log_index: Some(U256::from(7)),
@@ -311,7 +338,7 @@ mod tests {
         };
         mock_get_logs(
             &mock_provider,
-            Address::zero(),
+            EthAddress::zero(),
             199,
             400,
             vec![log1.clone()],
@@ -353,6 +380,85 @@ mod tests {
         );
         // No more finalized block change, no more logs.
         assert_eq!(logs_rx.try_recv().unwrap_err(), TryRecvError::Empty);
+        Ok(())
+    }
+
+    /// Test that the syncer will query for logs in multiple queries if the range is too big.
+    #[tokio::test]
+    async fn test_paginated_eth_log_query() -> anyhow::Result<()> {
+        telemetry_subscribers::init_for_testing();
+        let registry = Registry::new();
+        mysten_metrics::init_metrics(&registry);
+        let mock_provider = EthMockProvider::new();
+        let start_block = 100;
+        // range too big, we need two queries
+        let last_finalized_block = start_block + ETH_LOG_QUERY_MAX_BLOCK_RANGE + 1;
+        mock_last_finalized_block(&mock_provider, last_finalized_block);
+        let client = EthClient::new_mocked(
+            mock_provider.clone(),
+            HashSet::from_iter(vec![EthAddress::zero()]),
+        );
+        let result = client.get_last_finalized_block_id().await.unwrap();
+        assert_eq!(result, last_finalized_block);
+
+        let addresses = HashMap::from_iter(vec![(EthAddress::zero(), start_block)]);
+        let log = Log {
+            address: EthAddress::zero(),
+            transaction_hash: Some(TxHash::random()),
+            block_number: Some(U64::from(start_block)),
+            log_index: Some(U256::from(3)),
+            ..Default::default()
+        };
+        let log2 = Log {
+            address: EthAddress::zero(),
+            transaction_hash: Some(TxHash::random()),
+            block_number: Some(U64::from(last_finalized_block)),
+            log_index: Some(U256::from(3)),
+            ..Default::default()
+        };
+        let eth_log = EthLog {
+            block_number: start_block,
+            tx_hash: log.transaction_hash.unwrap(),
+            log_index_in_tx: 0,
+            log: log.clone(),
+        };
+        let eth_log2 = EthLog {
+            block_number: last_finalized_block,
+            tx_hash: log2.transaction_hash.unwrap(),
+            log_index_in_tx: 0,
+            log: log2.clone(),
+        };
+        // First query handles [start, start + ETH_LOG_QUERY_MAX_BLOCK_RANGE - 1]
+        mock_get_logs(
+            &mock_provider,
+            EthAddress::zero(),
+            start_block,
+            start_block + ETH_LOG_QUERY_MAX_BLOCK_RANGE - 1,
+            vec![log.clone()],
+        );
+        // Second query handles [start + ETH_LOG_QUERY_MAX_BLOCK_RANGE, last_finalized_block]
+        mock_get_logs(
+            &mock_provider,
+            EthAddress::zero(),
+            start_block + ETH_LOG_QUERY_MAX_BLOCK_RANGE,
+            last_finalized_block,
+            vec![log2.clone()],
+        );
+
+        let (_handles, mut logs_rx, mut finalized_block_rx) =
+            EthSyncer::new(Arc::new(client), addresses)
+                .run()
+                .await
+                .unwrap();
+
+        finalized_block_rx.changed().await.unwrap();
+        assert_eq!(*finalized_block_rx.borrow(), last_finalized_block);
+        let (contract_address, received_logs) = logs_rx.recv().await.unwrap();
+        assert_eq!(contract_address, EthAddress::zero());
+        assert_eq!(received_logs, vec![eth_log.clone()]);
+        let (contract_address, received_logs) = logs_rx.recv().await.unwrap();
+        assert_eq!(contract_address, EthAddress::zero());
+        assert_eq!(received_logs, vec![eth_log2.clone()]);
         Ok(())
     }
 }

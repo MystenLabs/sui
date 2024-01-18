@@ -20,7 +20,7 @@ use crate::{
 };
 
 // TODO: once we have bridge package on sui framework, we can hardcode the actual package id.
-fn get_bridge_package_id() -> &'static ObjectID {
+pub fn get_bridge_package_id() -> &'static ObjectID {
     static BRIDGE_PACKAGE_ID: OnceCell<ObjectID> = OnceCell::new();
     BRIDGE_PACKAGE_ID.get_or_init(|| match std::env::var("BRIDGE_PACKAGE_ID") {
         Ok(id) => {

@@ -9,7 +9,7 @@ use ethers::types::Address as EthAddress;
 use fastcrypto::traits::EncodeDecodeBase64;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -37,6 +37,10 @@ pub struct BridgeNodeConfig {
     pub sui_rpc_url: String,
     /// Rpc url for Eth fullnode, used for query stuff.
     pub eth_rpc_url: String,
+    /// The eth contract addresses (hex). It must not be empty. It serves two purpose:
+    /// 1. validator only signs bridge actions that are generated from these contracts.
+    /// 2. for EthSyncer to watch for when `run_client` is true.
+    pub eth_addresses: Vec<String>,
     /// Path of the file where bridge client key (any SuiKeyPair) is stored as Base64 encoded `flag || privkey`.
     /// If `run_client` is true, and this is None, then use `bridge_authority_key_path_base64_raw` as client key.
     pub bridge_client_key_path_base64_sui_key: Option<PathBuf>,
@@ -48,8 +52,6 @@ pub struct BridgeNodeConfig {
     pub bridge_client_gas_object: Option<ObjectID>,
     /// Path of the client storage. Required when `run_client` is true.
     pub db_path: Option<PathBuf>,
-    /// The eth addresses (hex) for client to watch for. Need to contain at least one item when `run_client` is true.
-    pub eth_addresses: Option<Vec<String>>,
     /// The sui modules of bridge packages for client to watch for. Need to contain at least one item when `run_client` is true.
     pub sui_bridge_modules: Option<Vec<String>>,
     /// Override the start block number for each eth address. Key must be in `eth_addresses`.
@@ -70,10 +72,23 @@ impl BridgeNodeConfig {
             read_bridge_authority_key(&self.bridge_authority_key_path_base64_raw)?;
 
         // TODO: verify it's part of bridge committee
-
         let sui_client = Arc::new(SuiClient::<SuiSdkClient>::new(&self.sui_rpc_url).await?);
-        let eth_client =
-            Arc::new(EthClient::<ethers::providers::Http>::new(&self.eth_rpc_url).await?);
+
+        if self.eth_addresses.is_empty() {
+            return Err(anyhow!("`eth_addresses` must contain at least one address"));
+        }
+        let eth_bridge_contracts = self
+            .eth_addresses
+            .iter()
+            .map(|addr| EthAddress::from_str(addr))
+            .collect::<Result<Vec<_>, _>>()?;
+        let eth_client = Arc::new(
+            EthClient::<ethers::providers::Http>::new(
+                &self.eth_rpc_url,
+                HashSet::from_iter(eth_bridge_contracts.iter().cloned()),
+            )
+            .await?,
+        );
 
         let bridge_server_config = BridgeServerConfig {
             key: bridge_authority_key,
@@ -104,25 +119,7 @@ impl BridgeNodeConfig {
             .db_path
             .clone()
             .ok_or(anyhow!("`db_path` is required when `run_client` is true"))?;
-        let eth_bridge_contracts = match &self.eth_addresses {
-            Some(addresses) => {
-                if addresses.is_empty() {
-                    return Err(anyhow!(
-                        "`eth_addresses` is required when `run_client` is true"
-                    ));
-                }
-                addresses
-                    .iter()
-                    .map(|addr| EthAddress::from_str(addr))
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|e| anyhow!("Error parsing eth address: {:?}", e))?
-            }
-            None => {
-                return Err(anyhow!(
-                    "`eth_addresses` is required when `run_client` is true"
-                ))
-            }
-        };
+
         let mut eth_bridge_contracts_start_block_override = BTreeMap::new();
         match &self.eth_bridge_contracts_start_block_override {
             Some(overrides) => {
