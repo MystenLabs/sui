@@ -272,6 +272,7 @@ input TransactionMetadata {
   gasPrice: BigInt
   gasBudget: BigInt
   gasObjects: [ObjectRef!]
+  gasSponsor: SuiAddress
 }
 
 # A reference to a particular version of an object.
@@ -1275,8 +1276,6 @@ type ExecutionResult {
 type DryRunResult {
   transaction: TransactionBlock
   error: String
-
-  events: [Event!]
   results: [DryRunEffect!]
 }
 
@@ -1290,7 +1289,7 @@ type DryRunEffect {
 }
 
 type DryRunMutation {
-  input: TransactionInput
+  input: TransactionArgument
   type: MoveType
   bcs: Base64
 }

@@ -18,6 +18,7 @@ use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl};
 use serde::{Deserialize, Serialize};
 use sui_indexer::models_v2::{events::StoredEvent, transactions::StoredTransaction};
 use sui_indexer::schema_v2::{events, transactions, tx_senders};
+use sui_json_rpc_types::SuiEvent;
 use sui_types::base_types::ObjectID;
 use sui_types::Identifier;
 use sui_types::{
@@ -227,6 +228,22 @@ impl Event {
             stored: Some(stored_event),
             native: native_event,
         })
+    }
+}
+
+impl From<SuiEvent> for Event {
+    fn from(event: SuiEvent) -> Self {
+        let native = NativeEvent {
+            sender: event.sender,
+            package_id: event.package_id,
+            transaction_module: event.transaction_module,
+            type_: event.type_,
+            contents: event.bcs,
+        };
+        Self {
+            stored: None,
+            native,
+        }
     }
 }
 

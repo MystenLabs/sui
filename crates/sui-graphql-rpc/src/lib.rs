@@ -19,8 +19,8 @@ mod types;
 use async_graphql::*;
 use fastcrypto::encoding::{Base64, Encoding};
 use mutation::Mutation;
+use serde::de::DeserializeOwned;
 use types::owner::IOwner;
-use serde::Deserialize;
 
 use crate::types::query::Query;
 
@@ -31,12 +31,12 @@ pub fn schema_sdl_export() -> String {
     schema.sdl()
 }
 
-pub fn deserialize_tx_data<'a, T>(tx_bytes: String) -> Result<T>
+pub fn deserialize_tx_data<T>(tx_bytes: &str) -> Result<T>
 where
-    T: Deserialize<'a>,
+    T: DeserializeOwned,
 {
     bcs::from_bytes(
-        &Base64::decode(&tx_bytes)
+        &Base64::decode(tx_bytes)
             .map_err(|e| {
                 error::Error::Client(format!(
                     "Unable to deserialize transaction bytes from Base64: {e}"

@@ -5,7 +5,7 @@ use super::string_input::impl_string_input;
 use async_graphql::*;
 use fastcrypto::encoding::{Base58, Encoding};
 use std::{fmt, str::FromStr};
-use sui_types::digests::TransactionDigest;
+use sui_types::digests::{ObjectDigest, TransactionDigest};
 
 pub(crate) const BASE58_DIGEST_LENGTH: usize = 32;
 
@@ -24,6 +24,10 @@ pub(crate) enum Error {
 impl Digest {
     pub(crate) fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
+    }
+
+    fn into_inner(self) -> [u8; BASE58_DIGEST_LENGTH] {
+        self.0
     }
 }
 
@@ -53,6 +57,12 @@ impl TryFrom<&[u8]> for Digest {
 
         result.copy_from_slice(value);
         Ok(Digest(result))
+    }
+}
+
+impl From<Digest> for ObjectDigest {
+    fn from(digest: Digest) -> Self {
+        ObjectDigest::new(digest.into_inner())
     }
 }
 

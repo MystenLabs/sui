@@ -89,6 +89,12 @@ impl TryFrom<Vec<u8>> for SuiAddress {
     }
 }
 
+impl From<SuiAddress> for ObjectID {
+    fn from(value: SuiAddress) -> Self {
+        ObjectID::new(value.0)
+    }
+}
+
 impl From<AccountAddress> for SuiAddress {
     fn from(value: AccountAddress) -> Self {
         SuiAddress(value.into_bytes())
