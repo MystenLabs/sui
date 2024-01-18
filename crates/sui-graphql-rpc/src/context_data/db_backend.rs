@@ -25,7 +25,6 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn get_obj_by_type(object_type: String) -> objects::BoxedQuery<'static, DB>;
     fn get_display_by_obj_type(object_type: String) -> display::BoxedQuery<'static, DB>;
     fn multi_get_balances(address: Vec<u8>) -> BalanceQuery<'static, DB>;
-    fn get_balance(address: Vec<u8>, coin_type: String) -> BalanceQuery<'static, DB>;
 }
 
 /// The struct returned for query.explain()

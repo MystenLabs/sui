@@ -21,7 +21,7 @@ use sui_indexer::{
     models_v2::{display::StoredDisplay, objects::StoredObject},
     PgConnectionPoolConfig,
 };
-use sui_json_rpc::coin_api::{parse_to_struct_tag, parse_to_type_tag};
+use sui_json_rpc::coin_api::parse_to_struct_tag;
 use sui_json_rpc_types::Stake as RpcStakedSui;
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,
@@ -115,23 +115,6 @@ impl PgManager {
         .await
     }
 
-    async fn get_balance(
-        &self,
-        address: Vec<u8>,
-        coin_type: String,
-    ) -> Result<Option<(Option<i64>, Option<i64>, Option<String>)>, Error> {
-        self.run_query_async_with_cost(
-            move || {
-                Ok(QueryBuilder::get_balance(
-                    address.clone(),
-                    coin_type.clone(),
-                ))
-            },
-            |query| move |conn| query.get_result(conn).optional(),
-        )
-        .await
-    }
-
     async fn multi_get_balances(
         &self,
         address: Vec<u8>,
@@ -175,36 +158,6 @@ impl PgManager {
     ) -> Result<Option<StoredDisplay>, Error> {
         let object_type = object_type.to_canonical_string(/* with_prefix */ true);
         self.get_display_by_obj_type(object_type).await
-    }
-
-    pub(crate) async fn fetch_balance(
-        &self,
-        address: SuiAddress,
-        coin_type: Option<String>,
-    ) -> Result<Option<Balance>, Error> {
-        let address = address.into_vec();
-        let coin_type = parse_to_type_tag(coin_type.clone())
-            .map_err(|e| Error::InvalidCoinType(e.to_string()))?;
-        let result = self
-            .get_balance(
-                address,
-                coin_type.to_canonical_string(/* with_prefix */ true),
-            )
-            .await?;
-
-        match result {
-            None | Some((None, None, None)) => Ok(None),
-
-            Some((Some(balance), Some(count), Some(_coin_type))) => Ok(Some(Balance {
-                coin_object_count: Some(count as u64),
-                total_balance: Some(BigInt::from(balance)),
-                coin_type: Some(MoveType::new(coin_type)),
-            })),
-
-            _ => Err(Error::Internal(
-                "Expected fields are missing on balance calculation".to_string(),
-            )),
-        }
     }
 
     pub(crate) async fn fetch_balances(
