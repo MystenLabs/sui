@@ -663,46 +663,46 @@ impl<
                 // Received a tx from the queue mananger -> the tx is ready to be executed
                 // Must poll from manager_receiver before sw_receiver, to avoid deadlock
                 Some(txid) = manager_receiver.recv() => {
-                    // COMMENT THIS OUT FOR REAL EXECUTION
-                    num_tx += 1;
-                    if num_tx == 1 {
-                        // Expose the start time as a metric. Should be done only once.
-                        worker_metrics.register_start_time();
-                    }
-                    let full_tx = manager.get_tx(&txid);
-                    self.update_metrics(&full_tx, &worker_metrics);
-                    if let Some(_) = self.ready_txs.remove(&txid) {
-                        manager.clean_up(&txid).await;
-                    }
+                    // JUST FOR TESTING --- COMMENT THIS OUT FOR REAL EXECUTION
+                    // num_tx += 1;
+                    // if num_tx == 1 {
+                    //     // Expose the start time as a metric. Should be done only once.
+                    //     worker_metrics.register_start_time();
+                    // }
+                    // let full_tx = manager.get_tx(&txid);
+                    // self.update_metrics(&full_tx, &worker_metrics);
+                    // if let Some(_) = self.ready_txs.remove(&txid) {
+                    //     manager.clean_up(&txid).await;
+                    // }
 
 
                     // UNCOMMENT THIS PART FOR REAL EXECUTION
-                    // let full_tx = manager.get_tx(&txid);
-                    // self.ready_txs.insert(txid, ());
+                    let full_tx = manager.get_tx(&txid);
+                    self.ready_txs.insert(txid, ());
 
-                    // let mut locked_objs = Vec::new();
-                    // for obj_id in full_tx.get_read_set() {
-                    //     if my_id != get_ew_owner_for_object(obj_id, &ew_ids) {
-                    //         continue;
-                    //     }
-                    //     let obj_ref_opt = self.memory_store.get_latest_parent_entry_ref(obj_id).unwrap();
-                    //     let obj_opt = self.memory_store.get_object(&obj_id).unwrap();
-                    //     if let (Some(obj_ref), Some(obj)) = (obj_ref_opt, obj_opt) {
-                    //         locked_objs.push(Some((obj_ref, obj)));
-                    //     } else {
-                    //         locked_objs.push(None);
-                    //     }
-                    // }
+                    let mut locked_objs = Vec::new();
+                    for obj_id in full_tx.get_read_set() {
+                        if my_id != get_ew_owner_for_object(obj_id, &ew_ids) {
+                            continue;
+                        }
+                        let obj_ref_opt = self.memory_store.get_latest_parent_entry_ref(obj_id).unwrap();
+                        let obj_opt = self.memory_store.get_object(&obj_id).unwrap();
+                        if let (Some(obj_ref), Some(obj)) = (obj_ref_opt, obj_opt) {
+                            locked_objs.push(Some((obj_ref, obj)));
+                        } else {
+                            locked_objs.push(None);
+                        }
+                    }
 
-                    // let execute_on_ew = get_designated_executor_for_tx(txid, full_tx,&ew_ids);
-                    // let msg = NetworkMessage{
-                    //     src:0,
-                    //     dst:execute_on_ew as u16,
-                    //     payload: SailfishMessage::LockedExec { full_tx: full_tx.clone(), objects: locked_objs.clone(), child_objects: Vec::new() }};
-                    // // println!("EW {} Sending LockedExec for tx {} to EW {}", my_id, txid, execute_on_ew);
-                    // if out_channel.send(msg).await.is_err() {
-                    //     eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, execute_on_ew);
-                    // }
+                    let execute_on_ew = get_designated_executor_for_tx(txid, full_tx,&ew_ids);
+                    let msg = NetworkMessage{
+                        src:0,
+                        dst:execute_on_ew as u16,
+                        payload: SailfishMessage::LockedExec { full_tx: full_tx.clone(), objects: locked_objs.clone(), child_objects: Vec::new() }};
+                    // println!("EW {} Sending LockedExec for tx {} to EW {}", my_id, txid, execute_on_ew);
+                    if out_channel.send(msg).await.is_err() {
+                        eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, execute_on_ew);
+                    }
                 },
                 Some(msg) = in_channel.recv() => {
                     let msg = msg.payload;
@@ -731,6 +731,20 @@ impl<
                         //     eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, ew);
                         // }
                     } else if let SailfishMessage::LockedExec { full_tx , mut objects, mut child_objects } = msg {
+
+                        // JUST FOR TESTING --- COMMENT THIS OUT FOR REAL EXECUTION
+                        let txid = full_tx.tx.digest();
+                        if let Some(_) = self.ready_txs.remove(&txid) {
+                            manager.clean_up(&txid).await;
+                        }
+                        num_tx += 1;
+                        if num_tx == 1 {
+                            // Expose the start time as a metric. Should be done only once.
+                            worker_metrics.register_start_time();
+                        }
+                        self.update_metrics(&full_tx, &worker_metrics);
+                        continue;
+
                         // TODO: deal with possible duplicate LockedExec messages
                         let txid = full_tx.tx.digest();
                         let mut list = self.received_objs.entry(txid).or_default();
