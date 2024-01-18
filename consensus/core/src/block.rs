@@ -230,7 +230,6 @@ impl SignedBlock {
 
 /// VerifiedBlock allows full access to its content.
 /// It should be relatively cheap to copy.
-#[allow(unused)]
 #[derive(Clone)]
 pub(crate) struct VerifiedBlock {
     block: Arc<SignedBlock>,

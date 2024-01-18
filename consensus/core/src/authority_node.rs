@@ -16,13 +16,13 @@ use crate::core::{Core, CoreSignals};
 use crate::metrics::initialise_metrics;
 use crate::transactions_client::{TransactionsClient, TransactionsConsumer};
 
-pub struct Authority {
+pub struct AuthorityNode {
     context: Arc<Context>,
     start_time: Instant,
     transactions_client: Arc<TransactionsClient>,
 }
 
-impl Authority {
+impl AuthorityNode {
     #[allow(unused)]
     async fn start(
         own_index: AuthorityIndex,
@@ -35,7 +35,7 @@ impl Authority {
         _block_verifier: impl BlockVerifier,
         registry: Registry,
     ) -> Self {
-        info!("Boot authority with index {}", own_index);
+        info!("Starting authority with index {}", own_index);
         let context = Arc::new(Context::new(
             own_index,
             committee,
@@ -87,7 +87,7 @@ mod tests {
     use prometheus::Registry;
     use sui_protocol_config::ProtocolConfig;
 
-    use crate::authority::Authority;
+    use crate::authority_node::AuthorityNode;
     use crate::block_verifier::TestBlockVerifier;
 
     #[tokio::test]
@@ -100,7 +100,7 @@ mod tests {
         let (own_index, _) = committee.authorities().last().unwrap();
         let signer = ProtocolKeyPair::from_bytes(keypairs[0].1.as_bytes()).unwrap();
 
-        let authority = Authority::start(
+        let authority = AuthorityNode::start(
             own_index,
             committee,
             parameters,
