@@ -11251,6 +11251,7 @@ dependencies = [
  "telemetry-subscribers",
  "tempfile",
  "test-cluster",
+ "thiserror",
  "tokio",
  "tracing",
  "unescape",
