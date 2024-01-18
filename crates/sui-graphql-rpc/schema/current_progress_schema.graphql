@@ -1381,6 +1381,10 @@ type MoveObject {
 	Attempts to convert the Move object into a `0x2::coin::CoinMetadata`.
 	"""
 	asCoinMetadata: CoinMetadata
+	"""
+	Attempts to convert the Move object into a `SuinsRegistration` object.
+	"""
+	asSuinsRegistration: SuinsRegistration
 }
 
 """
@@ -2207,9 +2211,9 @@ type Query {
 	"""
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
 	"""
-	Resolves the owner address of the provided domain name.
+	Resolves a SuiNS `domain` name to an address, if it has been bound.
 	"""
-	resolveNameServiceAddress(name: String!): Address
+	resolveSuinsAddress(domain: String!): Address
 	"""
 	The coin metadata associated with the given coin type.
 	"""

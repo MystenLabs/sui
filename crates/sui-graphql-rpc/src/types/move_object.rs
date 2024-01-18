@@ -7,12 +7,14 @@ use super::move_type::MoveType;
 use super::move_value::MoveValue;
 use super::stake::StakedSuiDowncastError;
 use super::sui_address::SuiAddress;
+use super::suins_registration::{SuinsRegistration, SuinsRegistrationDowncastError};
 use super::{coin::Coin, object::Object};
 use crate::context_data::package_cache::PackageCache;
 use crate::data::Db;
 use crate::error::Error;
 use crate::types::stake::StakedSui;
 use async_graphql::*;
+use sui_json_rpc::name_service::NameServiceConfig;
 use sui_package_resolver::Resolver;
 use sui_types::object::{Data, MoveObject as NativeMoveObject};
 use sui_types::TypeTag;
@@ -62,35 +64,52 @@ impl MoveObject {
     }
 
     /// Attempts to convert the Move object into a `0x2::coin::Coin`.
-    async fn as_coin(&self) -> Result<Option<Coin>, Error> {
+    async fn as_coin(&self) -> Result<Option<Coin>> {
         match Coin::try_from(self) {
             Ok(coin) => Ok(Some(coin)),
             Err(CoinDowncastError::NotACoin) => Ok(None),
             Err(CoinDowncastError::Bcs(e)) => {
-                Err(Error::Internal(format!("Failed to deserialize coin: {e}")))
+                Err(Error::Internal(format!("Failed to deserialize Coin: {e}"))).extend()
             }
         }
     }
 
     /// Attempts to convert the Move object into a `0x3::staking_pool::StakedSui`.
-    async fn as_staked_sui(&self) -> Result<Option<StakedSui>, Error> {
+    async fn as_staked_sui(&self) -> Result<Option<StakedSui>> {
         match StakedSui::try_from(self) {
             Ok(coin) => Ok(Some(coin)),
             Err(StakedSuiDowncastError::NotAStakedSui) => Ok(None),
             Err(StakedSuiDowncastError::Bcs(e)) => Err(Error::Internal(format!(
-                "Failed to deserialize staked sui: {e}"
-            ))),
+                "Failed to deserialize StakedSui: {e}"
+            )))
+            .extend(),
         }
     }
 
     /// Attempts to convert the Move object into a `0x2::coin::CoinMetadata`.
-    async fn as_coin_metadata(&self) -> Result<Option<CoinMetadata>, Error> {
+    async fn as_coin_metadata(&self) -> Result<Option<CoinMetadata>> {
         match CoinMetadata::try_from(self) {
             Ok(metadata) => Ok(Some(metadata)),
             Err(CoinMetadataDowncastError::NotCoinMetadata) => Ok(None),
             Err(CoinMetadataDowncastError::Bcs(e)) => Err(Error::Internal(format!(
-                "Failed to deserialize coin metadata: {e}"
-            ))),
+                "Failed to deserialize CoinMetadata: {e}"
+            )))
+            .extend(),
+        }
+    }
+
+    /// Attempts to convert the Move object into a `SuinsRegistration` object.
+    async fn as_suins_registration(&self, ctx: &Context<'_>) -> Result<Option<SuinsRegistration>> {
+        let cfg: &NameServiceConfig = ctx.data_unchecked();
+        let tag = SuinsRegistration::type_(cfg.package_address.into());
+
+        match SuinsRegistration::try_from(self, &tag) {
+            Ok(registration) => Ok(Some(registration)),
+            Err(SuinsRegistrationDowncastError::NotASuinsRegistration) => Ok(None),
+            Err(SuinsRegistrationDowncastError::Bcs(e)) => Err(Error::Internal(format!(
+                "Failed to deserialize SuinsRegistration: {e}",
+            )))
+            .extend(),
         }
     }
 }

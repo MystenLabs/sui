@@ -93,6 +93,12 @@ impl From<AccountAddress> for SuiAddress {
     }
 }
 
+impl From<SuiAddress> for AccountAddress {
+    fn from(value: SuiAddress) -> Self {
+        AccountAddress::new(value.0)
+    }
+}
+
 impl From<ObjectID> for SuiAddress {
     fn from(value: ObjectID) -> Self {
         SuiAddress(value.into_bytes())
