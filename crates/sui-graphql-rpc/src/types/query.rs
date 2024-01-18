@@ -203,7 +203,7 @@ impl Query {
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, Object>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        Object::paginate(ctx.data_unchecked(), page, None, filter.unwrap_or_default())
+        Object::paginate(ctx.data_unchecked(), page, filter.unwrap_or_default())
             .await
             .extend()
     }
