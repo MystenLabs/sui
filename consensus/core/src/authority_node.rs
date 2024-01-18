@@ -16,13 +16,13 @@ use crate::core::{Core, CoreSignals};
 use crate::metrics::initialise_metrics;
 use crate::transactions_client::{TransactionsClient, TransactionsConsumer};
 
-pub struct Validator {
+pub struct AuthorityNode {
     context: Arc<Context>,
     start_time: Instant,
     transactions_client: Arc<TransactionsClient>,
 }
 
-impl Validator {
+impl AuthorityNode {
     #[allow(unused)]
     async fn start(
         own_index: AuthorityIndex,
@@ -35,7 +35,7 @@ impl Validator {
         _block_verifier: impl BlockVerifier,
         registry: Registry,
     ) -> Self {
-        info!("Boot validator with authority index {}", own_index);
+        info!("Starting authority with index {}", own_index);
         let context = Arc::new(Context::new(
             own_index,
             committee,
@@ -64,7 +64,7 @@ impl Validator {
     #[allow(unused)]
     async fn stop(self) {
         info!(
-            "Stopping validator. Total run time: {:?}",
+            "Stopping authority. Total run time: {:?}",
             self.start_time.elapsed()
         );
         self.context
@@ -82,15 +82,16 @@ impl Validator {
 
 #[cfg(test)]
 mod tests {
-    use crate::block_verifier::TestBlockVerifier;
-    use crate::validator::Validator;
     use consensus_config::{Committee, Parameters, ProtocolKeyPair};
     use fastcrypto::traits::ToFromBytes;
     use prometheus::Registry;
     use sui_protocol_config::ProtocolConfig;
 
+    use crate::authority_node::AuthorityNode;
+    use crate::block_verifier::TestBlockVerifier;
+
     #[tokio::test]
-    async fn validator_start_and_stop() {
+    async fn start_and_stop() {
         let (committee, keypairs) = Committee::new_for_test(0, vec![1]);
         let registry = Registry::new();
         let parameters = Parameters::default();
@@ -99,7 +100,7 @@ mod tests {
         let (own_index, _) = committee.authorities().last().unwrap();
         let signer = ProtocolKeyPair::from_bytes(keypairs[0].1.as_bytes()).unwrap();
 
-        let validator = Validator::start(
+        let authority = AuthorityNode::start(
             own_index,
             committee,
             parameters,
@@ -110,10 +111,10 @@ mod tests {
         )
         .await;
 
-        assert_eq!(validator.context.own_index, own_index);
-        assert_eq!(validator.context.committee.epoch(), 0);
-        assert_eq!(validator.context.committee.size(), 1);
+        assert_eq!(authority.context.own_index, own_index);
+        assert_eq!(authority.context.committee.epoch(), 0);
+        assert_eq!(authority.context.committee.size(), 1);
 
-        validator.stop().await;
+        authority.stop().await;
     }
 }
