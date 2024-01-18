@@ -12,7 +12,6 @@ use super::{
 use async_graphql::connection::Connection;
 use async_graphql::*;
 use move_core_types::language_storage::StructTag;
-use sui_indexer::types_v2::OwnerType;
 use sui_json_rpc_types::{Stake as RpcStakedSui, StakeStatus as RpcStakeStatus};
 use sui_types::base_types::MoveObjectType;
 use sui_types::governance::StakedSui as NativeStakedSui;
@@ -114,7 +113,7 @@ impl StakedSui {
             ..Default::default()
         };
 
-        Object::paginate_subtype(db, page, Some(OwnerType::Address), filter, |object| {
+        Object::paginate_subtype(db, page, filter, |object| {
             let address = object.address;
             let move_object = MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(
