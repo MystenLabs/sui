@@ -112,7 +112,7 @@ type Address implements IOwner {
 	This resolver is not supported on the Address type.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
-	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection!
 }
 
 """
@@ -1056,7 +1056,7 @@ interface IOwner {
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
 	dynamicField(name: DynamicFieldName!): DynamicField
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
-	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection!
 }
 
 """
@@ -1742,7 +1742,7 @@ type Object implements IOwner {
 	The dynamic fields on an object.
 	Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
 	"""
-	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection!
 }
 
 """
@@ -1994,7 +1994,7 @@ type Owner implements IOwner {
 	The dynamic fields on an object.
 	This field exists as a convenience when accessing a dynamic field on a wrapped object.
 	"""
-	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
+	dynamicFields(first: Int, after: String, last: Int, before: String): DynamicFieldConnection!
 }
 
 """

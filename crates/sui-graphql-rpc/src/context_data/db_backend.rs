@@ -2,18 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use diesel::backend::Backend;
-use sui_indexer::{
-    schema_v2::{display, objects},
-    types_v2::OwnerType,
-};
+use sui_indexer::schema_v2::{display, objects};
 
-use crate::{error::Error, types::object::DeprecatedObjectFilter};
 use diesel::{
     query_builder::{BoxedSelectStatement, FromClause, QueryId},
     sql_types::Text,
 };
-
-use super::db_data_provider::PageLimit;
 
 pub(crate) type BalanceQuery<'a, DB> = BoxedSelectStatement<
     'a,
@@ -30,13 +24,6 @@ pub(crate) type BalanceQuery<'a, DB> = BoxedSelectStatement<
 pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn get_obj_by_type(object_type: String) -> objects::BoxedQuery<'static, DB>;
     fn get_display_by_obj_type(object_type: String) -> display::BoxedQuery<'static, DB>;
-    fn multi_get_objs(
-        before: Option<Vec<u8>>,
-        after: Option<Vec<u8>>,
-        limit: PageLimit,
-        filter: Option<DeprecatedObjectFilter>,
-        owner_type: Option<OwnerType>,
-    ) -> Result<objects::BoxedQuery<'static, DB>, Error>;
     fn multi_get_balances(address: Vec<u8>) -> BalanceQuery<'static, DB>;
     fn get_balance(address: Vec<u8>, coin_type: String) -> BalanceQuery<'static, DB>;
 }

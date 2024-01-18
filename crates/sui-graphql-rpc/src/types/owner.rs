@@ -83,12 +83,12 @@ use sui_types::gas_coin::GAS;
         arg(name = "name", ty = "DynamicFieldName")
     ),
     field(
-        name = "dynamic_field_connection",
-        ty = "Option<Connection<String, DynamicField>>",
+        name = "dynamic_fields",
+        ty = "Connection<String, DynamicField>",
         arg(name = "first", ty = "Option<u64>"),
-        arg(name = "after", ty = "Option<String>"),
+        arg(name = "after", ty = "Option<object::Cursor>"),
         arg(name = "last", ty = "Option<u64>"),
-        arg(name = "before", ty = "Option<String>"),
+        arg(name = "before", ty = "Option<object::Cursor>"),
     )
 )]
 #[derive(Clone, Debug)]
@@ -280,16 +280,16 @@ impl Owner {
 
     /// The dynamic fields on an object.
     /// This field exists as a convenience when accessing a dynamic field on a wrapped object.
-    pub async fn dynamic_field_connection(
+    pub async fn dynamic_fields(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<object::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, DynamicField>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_dynamic_fields(first, after, last, before, self.address)
+        before: Option<object::Cursor>,
+    ) -> Result<Connection<String, DynamicField>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        DynamicField::paginate(ctx.data_unchecked(), page, self.address)
             .await
             .extend()
     }
