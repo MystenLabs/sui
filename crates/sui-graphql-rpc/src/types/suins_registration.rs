@@ -11,10 +11,7 @@ use super::{
     sui_address::SuiAddress,
 };
 use crate::{data::Db, error::Error};
-use async_graphql::{
-    connection::{Connection, Edge},
-    *,
-};
+use async_graphql::{connection::Connection, *};
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use serde::{Deserialize, Serialize};
 use sui_indexer::types_v2::OwnerType;
@@ -124,30 +121,21 @@ impl SuinsRegistration {
             ..Default::default()
         };
 
-        let objects = Object::paginate(db, page, Some(OwnerType::Address), filter).await?;
-
-        let mut registrations = Connection::new(objects.has_previous_page, objects.has_next_page);
-        for edge in objects.edges {
-            let address = edge.node.address;
-            let move_object = MoveObject::try_from(&edge.node).map_err(|_| {
+        Object::paginate_subtype(db, page, Some(OwnerType::Address), filter, |object| {
+            let address = object.address;
+            let move_object = MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(
                     "Expected {address} to be a SuinsRegistration, but it's not a Move Object.",
                 ))
             })?;
 
-            let suins_registration =
-                SuinsRegistration::try_from(&move_object, &type_).map_err(|_| {
-                    Error::Internal(format!(
-                        "Expected {address} to be a SuinsRegistration, but it is not."
-                    ))
-                })?;
-
-            registrations
-                .edges
-                .push(Edge::new(edge.cursor, suins_registration));
-        }
-
-        Ok(registrations)
+            SuinsRegistration::try_from(&move_object, &type_).map_err(|_| {
+                Error::Internal(format!(
+                    "Expected {address} to be a SuinsRegistration, but it is not."
+                ))
+            })
+        })
+        .await
     }
 
     /// Return the type representing a `SuinsRegistration` on chain. This can change from chain to
