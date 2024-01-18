@@ -33,13 +33,13 @@ use sui_indexer::{
 };
 use sui_json_rpc::{
     coin_api::{parse_to_struct_tag, parse_to_type_tag},
-    name_service::{Domain, NameServiceConfig},
+    name_service::NameServiceConfig,
 };
 use sui_json_rpc_types::Stake as RpcStakedSui;
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SuiAddress as NativeSuiAddress},
     coin::{CoinMetadata as NativeCoinMetadata, TreasuryCap},
-    dynamic_field::{DynamicFieldType, Field},
+    dynamic_field::DynamicFieldType,
     gas_coin::{GAS, TOTAL_SUPPLY_SUI},
     governance::StakedSui as NativeStakedSui,
     object::Object as NativeObject,
@@ -380,30 +380,6 @@ impl PgManager {
             .spawn_blocking(|this| this.get_consistent_read_range())
             .await
             .map(|(start, end)| (start as u64, end as u64))?)
-    }
-
-    pub(crate) async fn default_name_service_name(
-        &self,
-        name_service_config: &NameServiceConfig,
-        address: SuiAddress,
-    ) -> Result<Option<String>, Error> {
-        let reverse_record_id = name_service_config.reverse_record_field_id(address.as_slice());
-
-        let field_reverse_record_object = match self
-            .inner
-            .get_object_in_blocking_task(reverse_record_id)
-            .await?
-        {
-            Some(o) => o,
-            None => return Ok(None),
-        };
-
-        let domain = field_reverse_record_object
-            .to_rust::<Field<SuiAddress, Domain>>()
-            .ok_or_else(|| Error::Internal(format!("Malformed Object {reverse_record_id}")))?
-            .value;
-
-        Ok(Some(domain.to_string()))
     }
 
     /// If no epoch was requested or if the epoch requested is in progress,
