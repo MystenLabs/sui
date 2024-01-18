@@ -377,12 +377,16 @@ impl Object {
             .extend()
     }
 
-    /// The domain that a user address has explicitly configured as their default domain
-    pub async fn default_name_service_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        ctx.data_unchecked::<PgManager>()
-            .default_name_service_name(ctx.data_unchecked::<NameServiceConfig>(), self.address)
-            .await
-            .extend()
+    /// The domain that a user address has explicitly configured as their default domain.
+    pub async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+        Ok(SuinsRegistration::reverse_resolve_to_name(
+            ctx.data_unchecked::<Db>(),
+            ctx.data_unchecked::<NameServiceConfig>(),
+            self.address,
+        )
+        .await
+        .extend()?
+        .map(|d| d.to_string()))
     }
 
     /// The SuinsRegistration NFTs owned by the given object. These grant the owner
