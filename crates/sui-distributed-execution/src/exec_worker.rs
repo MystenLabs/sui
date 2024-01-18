@@ -370,13 +370,13 @@ impl<
         ew_ids: &Vec<UniqueId>,
     ) -> TransactionWithResults {
         // DELETE THIS
-        return TransactionWithResults {
-            full_tx: full_tx.clone(),
-            tx_effects: TransactionEffects::default(),
-            deleted: BTreeMap::new(),
-            written: BTreeMap::new(),
-            missing_objs: HashSet::new(),
-        };
+        // return TransactionWithResults {
+        //     full_tx: full_tx.clone(),
+        //     tx_effects: TransactionEffects::default(),
+        //     deleted: BTreeMap::new(),
+        //     written: BTreeMap::new(),
+        //     missing_objs: HashSet::new(),
+        // };
 
         let tx = &full_tx.tx;
         let txid = tx.digest();
