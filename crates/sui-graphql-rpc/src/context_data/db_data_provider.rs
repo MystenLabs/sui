@@ -14,7 +14,6 @@ use crate::{
         move_object::MoveObject,
         move_type::MoveType,
         object::{DeprecatedObjectFilter, Object},
-        stake::StakedSui,
         sui_address::SuiAddress,
         validator::Validator,
     },
@@ -33,7 +32,7 @@ use sui_indexer::{
 use sui_json_rpc::coin_api::{parse_to_struct_tag, parse_to_type_tag};
 use sui_json_rpc_types::Stake as RpcStakedSui;
 use sui_types::{
-    base_types::{MoveObjectType, ObjectID, SuiAddress as NativeSuiAddress},
+    base_types::{ObjectID, SuiAddress as NativeSuiAddress},
     coin::{CoinMetadata as NativeCoinMetadata, TreasuryCap},
     dynamic_field::DynamicFieldType,
     gas_coin::{GAS, TOTAL_SUPPLY_SUI},
@@ -397,64 +396,6 @@ impl PgManager {
                 .spawn_blocking(move |this| this.get_epoch_sui_system_state(epoch_id))
                 .await?)
         }
-    }
-
-    pub(crate) async fn fetch_staked_sui(
-        &self,
-        address: SuiAddress,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, StakedSui>>, Error> {
-        let obj_filter = DeprecatedObjectFilter {
-            type_: Some(MoveObjectType::staked_sui().to_canonical_string(/* with_prefix */ true)),
-            owner: Some(address),
-            object_ids: None,
-        };
-
-        let objs = self
-            .multi_get_objs(
-                first,
-                after,
-                last,
-                before,
-                Some(obj_filter),
-                Some(OwnerType::Address),
-            )
-            .await?;
-
-        let Some((stored_objs, has_next_page)) = objs else {
-            return Ok(None);
-        };
-
-        let mut connection = Connection::new(false, has_next_page);
-        for stored_obj in stored_objs {
-            let object = Object::try_from(stored_obj)?;
-
-            let move_object = MoveObject::try_from(&object).map_err(|_| {
-                Error::Internal(format!(
-                    "Expected {} to be a staked sui, but it is not an object.",
-                    object.address,
-                ))
-            })?;
-
-            let stake_object = StakedSui::try_from(&move_object).map_err(|_| {
-                Error::Internal(format!(
-                    "Expected {} to be a staked sui, but it is not.",
-                    object.address,
-                ))
-            })?;
-
-            let cursor = move_object
-                .native
-                .id()
-                .to_canonical_string(/* with_prefix */ true);
-
-            connection.edges.push(Edge::new(cursor, stake_object));
-        }
-
-        Ok(Some(connection))
     }
 
     /// Make a request to the RPC for its representations of the staked sui we parsed out of the

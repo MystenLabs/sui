@@ -362,17 +362,17 @@ impl Object {
             .extend()
     }
 
-    /// The `0x3::staking_pool::StakedSui` objects owned by the given object.
-    pub async fn staked_sui_connection(
+    /// The `0x3::staking_pool::StakedSui` objects owned by this object.
+    pub async fn staked_suis(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<Cursor>,
         last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, StakedSui>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_staked_sui(self.address, first, after, last, before)
+        before: Option<Cursor>,
+    ) -> Result<Connection<String, StakedSui>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        StakedSui::paginate(ctx.data_unchecked(), page, self.address)
             .await
             .extend()
     }
@@ -501,18 +501,31 @@ impl Object {
         stored_obj.map(Self::try_from).transpose()
     }
 
-    /// Query the database for a `page` of objects. The page uses the bytes of an Object ID as the
-    /// cursor, and can optionally be further `filter`-ed. The `owner_type` is an optional
-    /// additional filter, to constrain the objects to be those whose owner is of a particular kind
-    /// (address-owned, object-owned, shared, immutable). This kind of filter is not exposed
-    /// directly in the GraphQL API, but we can take advantage of it when constructing DB queries to
-    /// serve certain other queries (e.g. dynamic field queries).
+    /// Query the database for a `page` of objects, optionally `filter`-ed and restricted to a
+    /// particular `owner_type` (address-owned, object-owned, shared, immutable).
     pub(crate) async fn paginate(
         db: &Db,
         page: Page<Cursor>,
         owner_type: Option<OwnerType>,
         filter: ObjectFilter,
     ) -> Result<Connection<String, Object>, Error> {
+        Self::paginate_subtype(db, page, owner_type, filter, Ok).await
+    }
+
+    /// Query the database for a `page` of some sub-type of Object. The page uses the bytes of an
+    /// Object ID as the cursor, and can optionally be further `filter`-ed. The `owner_type` is an
+    /// optional additional filter, to constrain the objects to be those whose owner is of a
+    /// particular kind (address-owned, object-owned, shared, immutable). This kind of filter is not
+    /// exposed directly in the GraphQL API, but we can take advantage of it when constructing DB
+    /// queries to serve certain other queries (e.g. dynamic field queries). The subtype is created
+    /// using the `downcast` function, which is allowed to fail, if the downcast has failed.
+    pub(crate) async fn paginate_subtype<T: OutputType>(
+        db: &Db,
+        page: Page<Cursor>,
+        owner_type: Option<OwnerType>,
+        filter: ObjectFilter,
+        downcast: impl Fn(Object) -> Result<T, Error>,
+    ) -> Result<Connection<String, T>, Error> {
         let (prev, next, results) = db
             .execute(move |conn| {
                 page.paginate_query::<StoredObject, _, _, _>(conn, move || {
@@ -565,7 +578,7 @@ impl Object {
         for stored in results {
             let cursor = stored.cursor().encode_cursor();
             let object = Object::try_from(stored)?;
-            conn.edges.push(Edge::new(cursor, object));
+            conn.edges.push(Edge::new(cursor, downcast(object)?));
         }
 
         Ok(conn)
