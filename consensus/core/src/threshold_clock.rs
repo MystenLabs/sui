@@ -41,10 +41,7 @@ impl ThresholdClock {
         for block_ref in blocks {
             self.add_block(block_ref);
         }
-        if self.round > previous_round {
-            return Some(self.round);
-        }
-        None
+        (self.round > previous_round).then_some(self.round)
     }
 
     pub fn add_block(&mut self, block: BlockRef) {
@@ -148,14 +145,14 @@ mod tests {
         let mut aggregator = ThresholdClock::new(0, context);
 
         let block_refs = vec![
-            BlockRef::new_test(AuthorityIndex::new_for_test(0), 0, BlockDigest::default()),
-            BlockRef::new_test(AuthorityIndex::new_for_test(1), 0, BlockDigest::default()),
-            BlockRef::new_test(AuthorityIndex::new_for_test(2), 0, BlockDigest::default()),
-            BlockRef::new_test(AuthorityIndex::new_for_test(0), 1, BlockDigest::default()),
-            BlockRef::new_test(AuthorityIndex::new_for_test(3), 1, BlockDigest::default()),
-            BlockRef::new_test(AuthorityIndex::new_for_test(1), 2, BlockDigest::default()),
-            BlockRef::new_test(AuthorityIndex::new_for_test(1), 1, BlockDigest::default()),
-            BlockRef::new_test(AuthorityIndex::new_for_test(2), 5, BlockDigest::default()),
+            BlockRef::new(0, AuthorityIndex::new_for_test(0), BlockDigest::default()),
+            BlockRef::new(0, AuthorityIndex::new_for_test(1), BlockDigest::default()),
+            BlockRef::new(0, AuthorityIndex::new_for_test(2), BlockDigest::default()),
+            BlockRef::new(1, AuthorityIndex::new_for_test(0), BlockDigest::default()),
+            BlockRef::new(1, AuthorityIndex::new_for_test(3), BlockDigest::default()),
+            BlockRef::new(2, AuthorityIndex::new_for_test(1), BlockDigest::default()),
+            BlockRef::new(1, AuthorityIndex::new_for_test(1), BlockDigest::default()),
+            BlockRef::new(5, AuthorityIndex::new_for_test(2), BlockDigest::default()),
         ];
 
         let result = aggregator.add_blocks(block_refs);

@@ -372,3 +372,6 @@ impl TestBlock {
         Block::V1(self.block)
     }
 }
+
+// TODO: add basic verification for BlockRef and BlockDigest.
+// TODO: add tests for SignedBlock and VerifiedBlock conversion.

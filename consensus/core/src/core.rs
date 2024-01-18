@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tokio::sync::watch;
 
 use crate::{
-    block::{Block, BlockAPI, BlockRef, BlockV1, Round, SignedBlock, Transaction, VerifiedBlock},
+    block::{Block, BlockAPI, BlockRef, BlockV1, Round, Transaction, VerifiedBlock},
     context::Context,
     threshold_clock::ThresholdClock,
 };
@@ -100,7 +100,7 @@ impl Core {
     }
 
     /// Force creating a new block for the dictated round. This is used when a leader timeout occurs.
-    pub fn force_new_block(&mut self, round: Round) -> Option<SignedBlock> {
+    pub fn force_new_block(&mut self, round: Round) -> Option<VerifiedBlock> {
         if self.last_proposed_round() < round {
             self.context.metrics.node_metrics.leader_timeout_total.inc();
             self.try_new_block(true)
@@ -111,7 +111,7 @@ impl Core {
 
     /// Attempts to propose a new block for the next round. If a block has already proposed for latest
     /// or earlier round, then no block is created and None is returned.
-    pub(crate) fn try_new_block(&mut self, force_new_block: bool) -> Option<SignedBlock> {
+    pub(crate) fn try_new_block(&mut self, force_new_block: bool) -> Option<VerifiedBlock> {
         let _scope = monitored_scope("Core::try_new_block");
 
         let clock_round = self.threshold_clock.get_round();
