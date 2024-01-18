@@ -123,7 +123,7 @@ impl<R: ReadApiServer> IndexerApi<R> {
         }
     }
 
-    async fn get_latest_checkpoint_timestamp_ms(&self) -> StateReadResult<u64> {
+    fn get_latest_checkpoint_timestamp_ms(&self) -> StateReadResult<u64> {
         let latest_checkpoint = self.state.get_latest_checkpoint_sequence_number()?;
 
         let checkpoint = self
@@ -388,7 +388,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             let parent_domain = domain.parent();
             let parent_record_id = self.name_service_config.record_field_id(&parent_domain);
 
-            let current_timestamp_ms = self.get_latest_checkpoint_timestamp_ms().await?;
+            let current_timestamp_ms = self.get_latest_checkpoint_timestamp_ms()?;
 
             // Do these two reads in parallel.
             let mut requests = vec![self.state.get_object(&record_id)];
