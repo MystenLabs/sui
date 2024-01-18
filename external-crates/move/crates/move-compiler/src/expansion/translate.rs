@@ -2367,6 +2367,12 @@ fn function_(
             (macro_loc, m_msg),
         ));
     }
+    if let Some(macro_loc) = macro_ {
+        let current_package = context.current_package;
+        context
+            .env()
+            .check_feature(FeatureGate::Macros, current_package, macro_loc);
+    }
     let visibility = visibility(pvisibility);
     let signature = function_signature(context, psignature);
     let body = function_body(context, pbody);

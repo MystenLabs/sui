@@ -1577,24 +1577,6 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
         EE::Cast(e, t) => NE::Cast(exp(context, *e), type_(context, t)),
         EE::Annotate(e, t) => NE::Annotate(exp(context, *e), type_(context, t)),
 
-        // EE::Call(sp!(mloc, ma_), true, tys_opt, rhs) => {
-        //     use E::ModuleAccess_ as EA;
-        //     use N::BuiltinFunction_ as BF;
-        //     assert!(tys_opt.is_none(), "ICE macros do not have type arguments");
-        //     let nes = call_args(context, rhs);
-        //     match ma_ {
-        //         EA::Name(n) if n.value.as_str() == BF::ASSERT_MACRO => {
-        //             NE::Builtin(sp(mloc, BF::Assert(true)), nes)
-        //         }
-        //         ma_ => {
-        //             context.env.add_diag(diag!(
-        //                 NameResolution::UnboundMacro,
-        //                 (mloc, format!("Unbound macro '{}'", ma_)),
-        //             ));
-        //             NE::UnresolvedError
-        //         }
-        //     }
-        // }
         EE::Call(ma, is_macro, tys_opt, rhs) if context.resolves_to_struct(&ma) => {
             context
                 .env
@@ -1674,6 +1656,13 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                 }
 
                 ResolvedFunction::Module(mf) => {
+                    if is_macro {
+                        context.env.check_feature(
+                            FeatureGate::Macros,
+                            context.current_package,
+                            eloc,
+                        );
+                    }
                     let ResolvedModuleFunction {
                         module,
                         function,
@@ -1703,6 +1692,11 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                 NE::UnresolvedError
             }
             Some(d) => {
+                if is_macro {
+                    context
+                        .env
+                        .check_feature(FeatureGate::Macros, context.current_package, eloc);
+                }
                 let ty_args = tys_opt.map(|tys| types(context, tys));
                 let nes = call_args(context, rhs);
                 NE::MethodCall(d, n, is_macro, ty_args, nes)
