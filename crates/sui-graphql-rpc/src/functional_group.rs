@@ -91,7 +91,7 @@ fn functional_groups() -> &'static BTreeMap<(&'static str, &'static str), Functi
             (("Query", "moveCallMetrics"), G::Analytics),
             (("Query", "networkMetrics"), G::Analytics),
             (("Query", "protocolConfig"), G::SystemState),
-            (("Query", "resolveNameServiceAddress"), G::NameService),
+            (("Query", "resolveSuinsAddress"), G::NameService),
             (("Subscription", "events"), G::Subscriptions),
             (("Subscription", "transactions"), G::Subscriptions),
             (("SystemStateSummary", "safeMode"), G::SystemState),
