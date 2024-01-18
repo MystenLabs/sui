@@ -653,7 +653,6 @@ fn start_summary_sync(
         let store = AuthorityStore::open(
             perpetual_db,
             &genesis,
-            &committee_store,
             usize::MAX,
             false,
             &Registry::default(),
@@ -1275,7 +1274,6 @@ pub async fn state_sync_from_archive(
     let store = AuthorityStore::open(
         perpetual_db,
         &genesis,
-        &committee_store,
         usize::MAX,
         false,
         &Registry::default(),

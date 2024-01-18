@@ -899,8 +899,7 @@ impl LocalExec {
 
         // hack to simulate an epoch change just for this transaction
         {
-            let db = authority_state.db();
-            let mut execution_lock = db.execution_lock_for_reconfiguration().await;
+            let mut execution_lock = authority_state.execution_lock_for_reconfiguration().await;
             *execution_lock = executed_epoch;
             drop(execution_lock);
         }
