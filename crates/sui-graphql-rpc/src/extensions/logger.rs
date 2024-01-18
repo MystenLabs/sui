@@ -14,6 +14,8 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
+use crate::error::code;
+
 #[derive(Clone, Debug)]
 pub struct LoggerConfig {
     pub log_request_query: bool,
@@ -125,6 +127,7 @@ impl Extension for LoggerExtension {
         let resp = next.run(ctx, operation_name).await;
         if resp.is_err() {
             for err in &resp.errors {
+                let error_code = &err.extensions.as_ref().and_then(|x| x.get("code"));
                 if !err.path.is_empty() {
                     let mut path = String::new();
                     for (idx, s) in err.path.iter().enumerate() {
@@ -140,35 +143,62 @@ impl Extension for LoggerExtension {
                             }
                         }
                     }
-                    if let Some(ext) = &err.extensions {
-                        if let Some(async_graphql::Value::String(val)) = ext.get("code") {
-                            if val.as_str() == crate::error::code::INTERNAL_SERVER_ERROR {
-                                // TODO do we want/it's useful to log the whole problematic query?
-                                error!(
-                                    query_id = ctx.data_unchecked::<Uuid>().to_string(),
-                                    "[Response] path={} message={}", path, err.message,
-                                );
-                            } else {
-                                info!(
-                                    query_id = ctx.data_unchecked::<Uuid>().to_string(),
-                                    "[Response] path={} message={}", path, err.message,
-                                );
-                            }
+                    if let Some(async_graphql_value::ConstValue::String(val)) = error_code {
+                        if val.as_str() == code::INTERNAL_SERVER_ERROR {
+                            // TODO do we want/it's useful to log the whole problematic query?
+                            error!(
+                                query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                                error_code = val,
+                                "[Response] path={} message={}",
+                                path,
+                                err.message,
+                            );
+                        } else {
+                            info!(
+                                query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                                error_code = val,
+                                "[Response] path={} message={}",
+                                path,
+                                err.message,
+                            );
                         }
+                    // TODO we have errors without an error code, we should fix these
                     } else {
                         warn!(
                             query_id = ctx.data_unchecked::<Uuid>().to_string(),
-                            no_error_code = "true",
+                            error_code = "none",
                             "[Response] path={} message={}",
                             path,
                             err.message,
                         );
                     }
                 } else {
-                    warn!(
-                        query_id = ctx.data_unchecked::<Uuid>().to_string(),
-                        "[Response] message={}", err.message,
-                    );
+                    if let Some(async_graphql_value::ConstValue::String(val)) = error_code {
+                        if val.as_str() == code::INTERNAL_SERVER_ERROR {
+                            // TODO do we want/it's useful to log the whole problematic query?
+                            error!(
+                                query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                                error_code = val,
+                                "[Response] message={}",
+                                err.message,
+                            );
+                        } else {
+                            info!(
+                                query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                                error_code = val,
+                                "[Response] message={}",
+                                err.message,
+                            );
+                        }
+                    // TODO we have errors without an error code, we should fix these
+                    } else {
+                        warn!(
+                            query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                            error_code = "none",
+                            "[Response] message={}",
+                            err.message,
+                        );
+                    }
                 }
             }
         } else if self.config.log_response {
