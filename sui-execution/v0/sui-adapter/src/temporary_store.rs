@@ -705,7 +705,7 @@ impl<'backing> TemporaryStore<'backing> {
             let new_object_size = object.object_size_for_gas_metering();
             // track changes and compute the new object `storage_rebate`
             let new_storage_rebate =
-                gas_charger.track_storage_mutation(new_object_size, old_storage_rebate);
+                gas_charger.track_storage_mutation(*object_id, new_object_size, old_storage_rebate);
             object.storage_rebate = new_storage_rebate;
             if !object.is_immutable() {
                 objects_to_update.push((object.clone(), *write_kind));
@@ -728,7 +728,7 @@ impl<'backing> TemporaryStore<'backing> {
                 | DeleteKindWithOldVersion::Normal(version) => {
                     // get and track the deleted object `storage_rebate`
                     let storage_rebate = self.get_input_storage_rebate(object_id, *version);
-                    gas_charger.track_storage_mutation(0, storage_rebate);
+                    gas_charger.track_storage_mutation(*object_id, 0, storage_rebate);
                 }
                 DeleteKindWithOldVersion::UnwrapThenDelete
                 | DeleteKindWithOldVersion::UnwrapThenDeleteDEPRECATED(_) => {

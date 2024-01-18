@@ -15,6 +15,7 @@ pub mod checked {
         object::Object,
         sui_serde::{BigInt, Readable},
         transaction::ObjectReadResult,
+        ObjectID,
     };
     use enum_dispatch::enum_dispatch;
     use itertools::MultiUnzip;
@@ -38,7 +39,12 @@ pub mod checked {
         fn reset_storage_cost_and_rebate(&mut self);
         fn charge_storage_read(&mut self, size: usize) -> Result<(), ExecutionError>;
         fn charge_publish_package(&mut self, size: usize) -> Result<(), ExecutionError>;
-        fn track_storage_mutation(&mut self, new_size: usize, storage_rebate: u64) -> u64;
+        fn track_storage_mutation(
+            &mut self,
+            object_id: ObjectID,
+            new_size: usize,
+            storage_rebate: u64,
+        ) -> u64;
         fn charge_storage_and_rebate(&mut self) -> Result<(), ExecutionError>;
         fn adjust_computation_on_out_of_gas(&mut self);
     }

@@ -196,9 +196,14 @@ pub mod checked {
         // Gas charging operations
         //
 
-        pub fn track_storage_mutation(&mut self, new_size: usize, storage_rebate: u64) -> u64 {
+        pub fn track_storage_mutation(
+            &mut self,
+            object_id: ObjectID,
+            new_size: usize,
+            storage_rebate: u64,
+        ) -> u64 {
             self.gas_status
-                .track_storage_mutation(new_size, storage_rebate)
+                .track_storage_mutation(object_id, new_size, storage_rebate)
         }
 
         pub fn reset_storage_cost_and_rebate(&mut self) {
