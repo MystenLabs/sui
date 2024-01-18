@@ -56,18 +56,28 @@ impl Core {
         signals: CoreSignals,
     ) -> Self {
         // TODO: restore the threshold clock round based on the last quorum data in storage when crash/recover
-        let threshold_clock = ThresholdClock::new(0, context.clone());
+        let mut threshold_clock = ThresholdClock::new(0, context.clone());
+
+        // TODO: restore based on DagState, for now we just init via the genesis
+        let (genesis_my, genesis_others) = Block::genesis(context.clone());
+        let pending_ancestors = genesis_others
+            .into_iter()
+            .map(|block| (block.reference(), block.timestamp_ms()))
+            .collect::<VecDeque<_>>();
+
+        // populate the threshold clock to properly advance the round
+        for (ancestor, _) in &pending_ancestors {
+            threshold_clock.add_block(*ancestor);
+        }
+        threshold_clock.add_block(genesis_my.reference());
 
         Self {
             context,
             threshold_clock,
-            last_own_block: VerifiedBlock::new_verified_unserialized(SignedBlock::new(Block::V1(
-                BlockV1::default(),
-            )))
-            .unwrap(), // TODO: restore on crash/recovery
+            last_own_block: genesis_my,
             transactions_consumer,
             pending_transactions: Vec::new(),
-            pending_ancestors: VecDeque::new(),
+            pending_ancestors,
             block_manager,
             signals,
         }
@@ -161,6 +171,7 @@ impl Core {
                 now,
                 ancestors,
                 payload,
+                self.context.committee.epoch(),
             ));
             let signed_block = SignedBlock::new(block);
             let verified_block = VerifiedBlock::new_verified_unserialized(signed_block)
@@ -278,6 +289,11 @@ impl Core {
     fn last_proposed_round(&self) -> Round {
         self.last_own_block.round()
     }
+
+    fn last_proposed_block(&self) -> &VerifiedBlock {
+        &self.last_own_block
+    }
+
     fn payload_to_propose(&mut self) -> Vec<Transaction> {
         let mut total_payload_size = 0;
         let transactions_index = self
@@ -354,13 +370,88 @@ impl CoreSignalsReceivers {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::block::TestBlock;
     use crate::transactions_client::TransactionsClient;
-    use consensus_config::AuthorityIndex;
     use std::time::Duration;
     use tokio::time::timeout;
 
     #[tokio::test]
-    async fn test_core() {
+    async fn test_core_propose_after_genesis() {
+        let context = Arc::new(Context::new_for_test());
+        let block_manager = BlockManager::new();
+        let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
+        let transactions_consumer = TransactionsConsumer::new(tx_receiver);
+        let (signals, _signal_receivers) = CoreSignals::new();
+
+        let mut core = Core::new(
+            context.clone(),
+            transactions_consumer,
+            block_manager,
+            signals,
+        );
+
+        // trigger the try_new_block - that should return now a new block
+        let block = core
+            .try_new_block(false)
+            .expect("A new block should have been created");
+
+        // A new block created - assert the details
+        assert_eq!(block.round(), 1);
+        assert_eq!(block.author().value(), 0);
+        assert_eq!(block.ancestors().len(), 4);
+
+        // genesis blocks should be referenced
+        let (genesis_my, mut genesis_others) = Block::genesis(context);
+        genesis_others.push(genesis_my);
+
+        for ancestor in block.ancestors() {
+            genesis_others
+                .iter()
+                .find(|block| block.reference() == *ancestor)
+                .expect("Block should be found amongst genesis blocks");
+        }
+
+        // Try to propose again - with or without ignore leaders check, it will not return any block
+        assert!(core.try_new_block(false).is_none());
+        assert!(core.try_new_block(true).is_none());
+    }
+
+    #[tokio::test]
+    async fn test_core_propose_once_receiving_a_quorum() {
+        let context = Arc::new(Context::new_for_test());
+        let block_manager = BlockManager::new();
+        let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
+        let transactions_consumer = TransactionsConsumer::new(tx_receiver);
+        let (signals, _signal_receivers) = CoreSignals::new();
+
+        let mut core = Core::new(
+            context.clone(),
+            transactions_consumer,
+            block_manager,
+            signals,
+        );
+
+        // Adding one block now will trigger the creation of new block for round 1
+        let block_1 = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
+        _ = core.add_blocks(vec![block_1]);
+
+        assert_eq!(core.last_proposed_round(), 1);
+        // attempt to create a block - none will be produced.
+        assert!(core.try_new_block(false).is_none());
+
+        // Adding another block now forms a quorum for round 1, so block at round 2 will proposed
+        let block_3 = VerifiedBlock::new_for_test(TestBlock::new(1, 2).build());
+        _ = core.add_blocks(vec![block_3]);
+
+        assert_eq!(core.last_proposed_round(), 2);
+
+        let proposed_block = core.last_proposed_block();
+        assert_eq!(proposed_block.round(), 2);
+        assert_eq!(proposed_block.author(), context.own_index);
+    }
+
+    #[tokio::test]
+    async fn test_core_signals() {
         let context = Arc::new(Context::new_for_test());
         let block_manager = BlockManager::new();
         let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
@@ -370,42 +461,41 @@ mod test {
         let mut new_round_receiver = signal_receivers.new_round_receiver();
         let mut new_block_ready_receiver = signal_receivers.block_ready_receiver();
 
-        let mut core = Core::new(context, transactions_consumer, block_manager, signals);
+        let mut core = Core::new(
+            context.clone(),
+            transactions_consumer,
+            block_manager,
+            signals,
+        );
 
-        assert_eq!(core.last_proposed_round(), 0);
+        // Create multiple blocks per round to trigger block creation events.
+        for round in 1..10 {
+            for authority_index in 1..context.committee.size() {
+                let block = VerifiedBlock::new_for_test(
+                    TestBlock::new(round, authority_index as u32).build(),
+                );
 
-        // Add a few blocks which will get accepted
-        let block_1 = BlockV1::new(1, AuthorityIndex::new_for_test(0), 0, vec![], vec![]);
-        let block_2 = BlockV1::new(1, AuthorityIndex::new_for_test(1), 0, vec![], vec![]);
-        let block_3 = BlockV1::new(1, AuthorityIndex::new_for_test(2), 0, vec![], vec![]);
+                // process them one by one to ensure that all the blocks created and signals are emitted per round.
+                let _ = core.add_blocks(vec![block]);
+            }
 
-        let blocks = vec![block_1, block_2, block_3]
-            .into_iter()
-            .map(|b| VerifiedBlock::new_for_test(Block::V1(b)))
-            .collect();
+            // Check that round has advanced
+            timeout(Duration::from_secs(1), new_round_receiver.changed())
+                .await
+                .expect("Timeout while waiting for new round be received")
+                .expect("Signal receive channel shouldn't be closed");
+            let new_round = new_round_receiver.borrow_and_update();
+            assert_eq!(*new_round, round + 1);
 
-        // Process them via Core
-        _ = core.add_blocks(blocks);
-
-        // Check that round has advanced
-        assert!(new_round_receiver.changed().await.is_ok());
-        let new_round = new_round_receiver.borrow_and_update();
-        assert_eq!(*new_round, 2);
-
-        // And that core is also on same round on its threshold clock
-        assert_eq!(core.threshold_clock.get_round(), 2);
-
-        // And a new block has been proposed
-        timeout(Duration::from_secs(1), new_block_ready_receiver.changed())
-            .await
-            .expect("Timeout while waiting for new block signal")
-            .expect("Signal receive channel shouldn't be closed");
-        let block_ref = new_block_ready_receiver.borrow_and_update();
-
-        // if passed this point then we know that a new block has been produced
-        let proposed_block = &core.last_own_block;
-        assert_eq!(proposed_block.reference(), block_ref.unwrap());
-        assert_eq!(proposed_block.round(), 2);
-        assert_eq!(proposed_block.author(), AuthorityIndex::new_for_test(0));
+            // Check that a new block has been proposed
+            timeout(Duration::from_secs(1), new_block_ready_receiver.changed())
+                .await
+                .expect("Timeout while waiting for new block signal")
+                .expect("Signal receive channel shouldn't be closed");
+            let block_ref = new_block_ready_receiver.borrow_and_update();
+            let block_ref = block_ref.unwrap();
+            assert_eq!(block_ref.round, round + 1);
+            assert_eq!(block_ref.author, context.own_index);
+        }
     }
 }
