@@ -289,7 +289,13 @@ fn module(
     let structs = tstructs.map(|name, s| struct_def(context, name, s));
 
     let constants = tconstants.map(|name, c| constant(context, name, c));
-    let functions = tfunctions.map(|name, f| function(context, name, f));
+    let functions = tfunctions.filter_map(|name, f| {
+        if f.macro_.is_none() {
+            Some(function(context, name, f))
+        } else {
+            None
+        }
+    });
 
     gen_unused_warnings(context, is_source_module, &structs);
 
