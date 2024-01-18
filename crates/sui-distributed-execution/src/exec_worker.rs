@@ -785,6 +785,20 @@ impl<
                                 .unwrap_or_default();
                             // Push execution task to futures queue
                             let ew_ids_copy = ew_ids.clone();
+
+                            // JUST FOR TESTING --- COMMENT THIS OUT FOR REAL EXECUTION
+                            let txid = tx.tx.digest();
+                            if let Some(_) = self.ready_txs.remove(&txid) {
+                                manager.clean_up(&txid).await;
+                            }
+                            num_tx += 1;
+                            if num_tx == 1 {
+                                // Expose the start time as a metric. Should be done only once.
+                                worker_metrics.register_start_time();
+                            }
+                            self.update_metrics(&tx, &worker_metrics);
+                            continue;
+
                             tasks_queue.spawn(async move {
                                 if child_list.is_empty() {
                                     for entry_opt in list.into_iter() {
