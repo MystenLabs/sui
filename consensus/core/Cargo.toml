@@ -12,18 +12,22 @@ base64.workspace = true
 bcs.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true
+consensus-config.workspace = true
 enum_dispatch.workspace = true
 fastcrypto.workspace = true
+mysten-metrics.workspace = true
 parking_lot.workspace = true
 prometheus.workspace = true
 rand.workspace = true
 serde.workspace = true
+sui-protocol-config.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-thiserror.workspace = true
-consensus-config.workspace = true
-sui-protocol-config.workspace = true
+typed-store.workspace = true
 
 workspace-hack.workspace = true
 
-mysten-metrics = { path = "../../crates/mysten-metrics" }
+[dev-dependencies]
+rstest.workspace = true
+tempfile.workspace = true

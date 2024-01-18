@@ -150,9 +150,9 @@ impl BaseCommitter {
         }
 
         Some(Slot::new(
+            round,
             self.leader_schedule
                 .elect_leader(round, self.options.leader_offset),
-            round,
         ))
     }
 
@@ -197,7 +197,7 @@ impl BaseCommitter {
             let ancestor = self
                 .dag_state
                 .read()
-                .get_block(*ancestor)
+                .get_uncommitted_block(ancestor)
                 .expect("We should have the whole sub-dag by now");
             if let Some(support) = self.find_supported_block(leader_slot, &ancestor) {
                 return Some(support);
@@ -234,7 +234,7 @@ impl BaseCommitter {
                 let potential_vote = self
                     .dag_state
                     .read()
-                    .get_block(*reference)
+                    .get_uncommitted_block(reference)
                     .expect("We should have the whole sub-dag by now");
                 let is_vote = self.is_vote(&potential_vote, leader_block);
                 all_votes.insert(*reference, is_vote);
@@ -317,7 +317,7 @@ impl BaseCommitter {
             {
                 tracing::trace!(
                     "[{self}] {voting_block:?} is a blame for leader {}",
-                    Slot::new(leader, voting_round - 1)
+                    Slot::new(voting_round - 1, leader)
                 );
                 if blame_stake_aggregator.add(voter, &self.context.committee) {
                     return true;

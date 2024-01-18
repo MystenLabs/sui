@@ -20,25 +20,30 @@ pub(crate) const MINIMUM_WAVE_LENGTH: Round = 3;
 #[allow(unused)]
 pub(crate) type WaveNumber = u32;
 
+/// Index of the commit.
+pub(crate) type CommitIndex = u64;
+
 /// Specifies one consensus commit.
 /// It is stored on disk, so it does not contain blocks which are stored individually.
 #[allow(unused)]
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub(crate) struct Commit {
     /// Index of the commit.
     /// First commit after genesis has an index of 1, then every next commit has an index incremented by 1.
-    pub index: u64,
+    pub index: CommitIndex,
     /// A reference to the the commit leader.
     pub leader: BlockRef,
     /// Refs to committed blocks, in the commit order.
     pub blocks: Vec<BlockRef>,
+    /// Last committed round per authority.
+    pub last_committed_rounds: Vec<Round>,
 }
 
 /// The status of every leader output by the committers. While the core only cares
 /// about committed leaders, providing a richer status allows for easier debugging,
 /// testing, and composition with advanced commit strategies.
 #[allow(unused)]
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum LeaderStatus {
     Commit(VerifiedBlock),
     Skip(Slot),

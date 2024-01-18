@@ -82,7 +82,7 @@ impl Committee {
         (committee, key_pairs)
     }
 
-    /// Public accessors for Committee data.
+    /// Public accessors for Committee fields.
 
     pub fn epoch(&self) -> Epoch {
         self.epoch
@@ -112,6 +112,14 @@ impl Committee {
 
     pub fn stake(&self, authority_index: AuthorityIndex) -> Stake {
         self.authorities[authority_index].stake
+    }
+
+    pub fn to_authority_index(&self, index: usize) -> Option<AuthorityIndex> {
+        if index < self.authorities.len() {
+            Some(AuthorityIndex(index as u32))
+        } else {
+            None
+        }
     }
 
     pub fn authority(&self, authority_index: AuthorityIndex) -> &Authority {
