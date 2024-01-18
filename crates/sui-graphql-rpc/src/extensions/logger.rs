@@ -145,7 +145,6 @@ impl Extension for LoggerExtension {
                     }
                     if let Some(async_graphql_value::ConstValue::String(val)) = error_code {
                         if val.as_str() == code::INTERNAL_SERVER_ERROR {
-                            // TODO do we want/it's useful to log the whole problematic query?
                             error!(
                                 query_id = ctx.data_unchecked::<Uuid>().to_string(),
                                 error_code = val,
