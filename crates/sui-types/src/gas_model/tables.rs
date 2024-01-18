@@ -15,7 +15,6 @@ use move_vm_types::gas::{GasMeter, SimpleInstruction};
 use move_vm_types::loaded_data::runtime_types::Type;
 use move_vm_types::views::{TypeView, ValueView};
 use once_cell::sync::Lazy;
-use tracing::trace;
 
 use crate::gas_model::units_types::{CostTable, Gas, GasCost};
 
@@ -339,10 +338,16 @@ impl GasStatus {
         }
     }
 
-    pub fn log_for_replay(&self) {
-        trace!(target: "replay_gas_info", "Gas Price: {}", self.gas_price);
-        trace!(target: "replay_gas_info", "Max Gas Stack Height: {}", self.stack_height_high_water_mark);
-        trace!(target: "replay_gas_info", "Number of Bytecode Instructions Executed: {}", self.instructions_executed);
+    pub fn gas_price(&self) -> u64 {
+        self.gas_price
+    }
+
+    pub fn stack_height_high_water_mark(&self) -> u64 {
+        self.stack_height_high_water_mark
+    }
+
+    pub fn instructions_executed(&self) -> u64 {
+        self.instructions_executed
     }
 }
 

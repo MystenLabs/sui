@@ -26,6 +26,7 @@ use sui_types::digests::TransactionDigest;
 use tracing::{error, info};
 pub mod config;
 mod data_fetcher;
+mod displays;
 pub mod fuzz;
 pub mod fuzz_mutations;
 mod replay;
@@ -35,7 +36,6 @@ pub mod types;
 static DEFAULT_SANDBOX_BASE_PATH: &str =
     concat!(env!("CARGO_MANIFEST_DIR"), "/tests/sandbox_snapshots");
 
-mod displays;
 #[cfg(test)]
 mod tests;
 

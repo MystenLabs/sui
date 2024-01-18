@@ -18,7 +18,6 @@ mod checked {
     };
     use move_core_types::vm_status::StatusCode;
     use sui_protocol_config::*;
-    use tracing::trace;
 
     /// A bucket defines a range of units that will be priced the same.
     /// After execution a call to `GasStatus::bucketize` will round the computation
@@ -279,11 +278,8 @@ mod checked {
             )
         }
 
-        pub fn log_for_replay(&self) {
-            #[skip_checked_arithmetic]
-            trace!(target:"replay", "Reference Gas Price: {}", self.reference_gas_price);
-
-            self.gas_status.log_for_replay();
+        pub fn reference_gas_price(&self) -> u64 {
+            self.reference_gas_price
         }
 
         // Check whether gas arguments are legit:

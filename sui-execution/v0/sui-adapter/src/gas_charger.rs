@@ -280,11 +280,6 @@ pub mod checked {
             temporary_store.ensure_gas_and_input_mutated(self);
             temporary_store.collect_storage_and_rebate(self);
 
-            match &self.gas_status {
-                SuiGasStatus::V2(s) => {
-                    s.log_for_replay();
-                }
-            };
             if self.smashed_gas_coin.is_some() {
                 #[skip_checked_arithmetic]
                 trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");

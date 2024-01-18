@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::chain_from_chain_id;
-use crate::displays::Pretty;
 use crate::{
     config::ReplayableNetworkConfigSet,
     data_fetcher::{
         extract_epoch_and_version, DataFetcher, Fetchers, NodeStateDumpFetcher, RemoteFetcher,
     },
+    displays::Pretty,
     types::*,
 };
 use futures::executor::block_on;
@@ -739,7 +739,7 @@ impl LocalExec {
         let expensive_checks = true;
         let transaction_kind = override_transaction_kind.unwrap_or(tx_info.kind.clone());
         let certificate_deny_set = HashSet::new();
-        let (inner_store, _gas_status, effects, result) = if let Ok(gas_status) =
+        let (inner_store, gas_status, effects, result) = if let Ok(gas_status) =
             SuiGasStatus::new(tx_info.gas_budget, tx_info.gas_price, rgp, protocol_config)
         {
             executor.execute_transaction_to_effects(
@@ -760,6 +760,8 @@ impl LocalExec {
         } else {
             unreachable!("Transaction was valid so gas status must be valid");
         };
+
+        trace!(target: "replay_gas_info", "{}", Pretty(&gas_status));
 
         if let ProgrammableTransaction(pt) = transaction_kind {
             trace!(target: "replay_ptb_info", "{}", Pretty(&pt));
