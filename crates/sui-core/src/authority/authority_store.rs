@@ -30,7 +30,7 @@ use sui_types::storage::{
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
-use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tokio::sync::{RwLockReadGuard, RwLockWriteGuard};
 use tokio::time::Instant;
 use tracing::{debug, info, trace};
 use typed_store::rocks::errors::typed_store_err_from_bcs_err;
@@ -129,11 +129,6 @@ pub struct AuthorityStore {
         NotifyRead<TransactionDigest, TransactionEffectsDigest>,
 
     pub(crate) root_state_notify_read: NotifyRead<EpochId, (CheckpointSequenceNumber, Accumulator)>,
-    /// This lock denotes current 'execution epoch'.
-    /// Execution acquires read lock, checks certificate epoch and holds it until all writes are complete.
-    /// Reconfiguration acquires write lock, changes the epoch and revert all transactions
-    /// from previous epoch that are executed but did not make into checkpoint.
-    execution_lock: RwLock<EpochId>,
 
     /// Guards reference count updates to `indirect_move_objects` table
     pub(crate) objects_lock_table: Arc<RwLockTable<ObjectContentDigest>>,
@@ -157,7 +152,6 @@ impl AuthorityStore {
     pub async fn open(
         perpetual_tables: Arc<AuthorityPerpetualTables>,
         genesis: &Genesis,
-        committee_store: &Arc<CommitteeStore>,
         indirect_objects_threshold: usize,
         enable_epoch_sui_conservation_check: bool,
         registry: &Registry,
@@ -184,13 +178,9 @@ impl AuthorityStore {
         let cur_epoch = perpetual_tables.get_recovery_epoch_at_restart()?;
         info!("Epoch start config: {:?}", epoch_start_configuration);
         info!("Cur epoch: {:?}", cur_epoch);
-        let committee = committee_store
-            .get_committee(&cur_epoch)?
-            .unwrap_or_else(|| panic!("Committee of the current epoch ({}) must exist", cur_epoch));
         let this = Self::open_inner(
             genesis,
             perpetual_tables,
-            &committee,
             indirect_objects_threshold,
             enable_epoch_sui_conservation_check,
             registry,
@@ -227,7 +217,6 @@ impl AuthorityStore {
         Self::open_inner(
             genesis,
             perpetual_tables,
-            committee,
             indirect_objects_threshold,
             true,
             &Registry::new(),
@@ -238,13 +227,10 @@ impl AuthorityStore {
     async fn open_inner(
         genesis: &Genesis,
         perpetual_tables: Arc<AuthorityPerpetualTables>,
-        committee: &Committee,
         indirect_objects_threshold: usize,
         enable_epoch_sui_conservation_check: bool,
         registry: &Registry,
     ) -> SuiResult<Arc<Self>> {
-        let epoch = committee.epoch;
-
         let store = Arc::new(Self {
             mutex_table: MutexTable::new(NUM_SHARDS),
             perpetual_tables,
@@ -252,7 +238,6 @@ impl AuthorityStore {
             executed_effects_digests_notify_read: NotifyRead::new(),
             root_state_notify_read:
                 NotifyRead::<EpochId, (CheckpointSequenceNumber, Accumulator)>::new(),
-            execution_lock: RwLock::new(epoch),
             objects_lock_table: Arc::new(RwLockTable::new(NUM_SHARDS)),
             indirect_objects_threshold,
             enable_epoch_sui_conservation_check,
@@ -811,28 +796,6 @@ impl AuthorityStore {
             .collect::<Vec<_>>();
         results.sort_by_key(|(idx, _)| *idx);
         Ok(results.into_iter().map(|(_, result)| result).collect())
-    }
-
-    /// Attempts to acquire execution lock for an executable transaction.
-    /// Returns the lock if the transaction is matching current executed epoch
-    /// Returns None otherwise
-    pub async fn execution_lock_for_executable_transaction(
-        &self,
-        transaction: &VerifiedExecutableTransaction,
-    ) -> SuiResult<ExecutionLockReadGuard> {
-        let lock = self.execution_lock.read().await;
-        if *lock == transaction.auth_sig().epoch() {
-            Ok(lock)
-        } else {
-            Err(SuiError::WrongEpoch {
-                expected_epoch: *lock,
-                actual_epoch: transaction.auth_sig().epoch(),
-            })
-        }
-    }
-
-    pub async fn execution_lock_for_reconfiguration(&self) -> ExecutionLockWriteGuard {
-        self.execution_lock.write().await
     }
 
     // Methods to mutate the store

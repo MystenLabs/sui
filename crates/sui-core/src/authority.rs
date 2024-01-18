@@ -43,7 +43,7 @@ use sui_config::NodeConfig;
 use sui_types::type_resolver::LayoutResolver;
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, RwLock};
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, instrument, trace, warn, Instrument};
 
@@ -625,6 +625,12 @@ pub struct AuthorityState {
 
     epoch_store: ArcSwap<AuthorityPerEpochStore>,
 
+    /// This lock denotes current 'execution epoch'.
+    /// Execution acquires read lock, checks certificate epoch and holds it until all writes are complete.
+    /// Reconfiguration acquires write lock, changes the epoch and revert all transactions
+    /// from previous epoch that are executed but did not make into checkpoint.
+    execution_lock: RwLock<EpochId>,
+
     pub indexes: Option<Arc<IndexStore>>,
 
     pub subscription_handler: Arc<SubscriptionHandler>,
@@ -1093,7 +1099,6 @@ impl AuthorityState {
             return Ok((effects, None));
         }
         let execution_guard = self
-            .database
             .execution_lock_for_executable_transaction(certificate)
             .await;
         // Any caller that verifies the signatures on the certificate will have already checked the
@@ -2374,9 +2379,11 @@ impl AuthorityState {
             archive_readers,
         );
         let input_loader = TransactionInputLoader::new(store.clone());
+        let epoch = epoch_store.epoch();
         let state = Arc::new(AuthorityState {
             name,
             secret,
+            execution_lock: RwLock::new(epoch),
             epoch_store: ArcSwap::new(epoch_store.clone()),
             input_loader,
             database: store,
@@ -2511,6 +2518,28 @@ impl AuthorityState {
         })
     }
 
+    /// Attempts to acquire execution lock for an executable transaction.
+    /// Returns the lock if the transaction is matching current executed epoch
+    /// Returns None otherwise
+    pub async fn execution_lock_for_executable_transaction(
+        &self,
+        transaction: &VerifiedExecutableTransaction,
+    ) -> SuiResult<ExecutionLockReadGuard> {
+        let lock = self.execution_lock.read().await;
+        if *lock == transaction.auth_sig().epoch() {
+            Ok(lock)
+        } else {
+            Err(SuiError::WrongEpoch {
+                expected_epoch: *lock,
+                actual_epoch: transaction.auth_sig().epoch(),
+            })
+        }
+    }
+
+    pub async fn execution_lock_for_reconfiguration(&self) -> ExecutionLockWriteGuard {
+        self.execution_lock.write().await
+    }
+
     #[instrument(level = "error", skip_all)]
     pub async fn reconfigure(
         &self,
@@ -2530,8 +2559,7 @@ impl AuthorityState {
         );
 
         self.committee_store.insert_new_committee(&new_committee)?;
-        let db = self.db();
-        let mut execution_lock = db.execution_lock_for_reconfiguration().await;
+        let mut execution_lock = self.execution_lock_for_reconfiguration().await;
         self.revert_uncommitted_epoch_transactions(cur_epoch_store)
             .await?;
         self.check_system_consistency(
@@ -4368,7 +4396,6 @@ impl AuthorityState {
         }
 
         let execution_guard = self
-            .database
             .execution_lock_for_executable_transaction(&executable_tx)
             .await?;
 

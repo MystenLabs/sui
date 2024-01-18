@@ -433,7 +433,6 @@ impl SuiNode {
         let store = AuthorityStore::open(
             perpetual_tables,
             genesis,
-            &committee_store,
             config.indirect_objects_threshold,
             config
                 .expensive_safety_check_config
