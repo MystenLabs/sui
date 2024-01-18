@@ -203,9 +203,6 @@ pub struct Exp {
     pub ty: Type,
     pub exp: UnannotatedExp,
 }
-pub fn exp(ty: Type, exp: UnannotatedExp) -> Exp {
-    Exp { ty, exp }
-}
 
 pub type Sequence = VecDeque<SequenceItem>;
 #[derive(Debug, PartialEq, Clone)]
@@ -222,20 +219,6 @@ pub enum ExpListItem {
     Splat(Loc, Exp, Vec<Type>),
 }
 
-pub fn single_item(e: Exp) -> ExpListItem {
-    let ty = Box::new(e.ty.clone());
-    ExpListItem::Single(e, ty)
-}
-
-pub fn splat_item(splat_loc: Loc, e: Exp) -> ExpListItem {
-    let ss = match &e.ty {
-        sp!(_, Type_::Unit) => vec![],
-        sp!(_, Type_::Apply(_, sp!(_, TypeName_::Multiple(_)), ss)) => ss.clone(),
-        _ => panic!("ICE splat of non list type"),
-    };
-    ExpListItem::Splat(splat_loc, e, ss)
-}
-
 //**************************************************************************************************
 // impls
 //**************************************************************************************************
@@ -249,6 +232,41 @@ impl BuiltinFunction_ {
             B::Assert(_) => NB::ASSERT_MACRO,
         }
     }
+}
+
+pub fn explist(loc: Loc, mut es: Vec<Exp>) -> Exp {
+    match es.len() {
+        0 => {
+            let e__ = UnannotatedExp_::Unit { trailing: false };
+            let ty = sp(loc, Type_::Unit);
+            exp(ty, sp(loc, e__))
+        }
+        1 => es.pop().unwrap(),
+        _ => {
+            let tys = es.iter().map(|e| e.ty.clone()).collect();
+            let items = es.into_iter().map(single_item).collect();
+            let ty = Type_::multiple(loc, tys);
+            exp(ty, sp(loc, UnannotatedExp_::ExpList(items)))
+        }
+    }
+}
+
+pub fn exp(ty: Type, exp: UnannotatedExp) -> Exp {
+    Exp { ty, exp }
+}
+
+pub fn single_item(e: Exp) -> ExpListItem {
+    let ty = Box::new(e.ty.clone());
+    ExpListItem::Single(e, ty)
+}
+
+pub fn splat_item(splat_loc: Loc, e: Exp) -> ExpListItem {
+    let ss = match &e.ty {
+        sp!(_, Type_::Unit) => vec![],
+        sp!(_, Type_::Apply(_, sp!(_, TypeName_::Multiple(_)), ss)) => ss.clone(),
+        _ => panic!("ICE splat of non list type"),
+    };
+    ExpListItem::Splat(splat_loc, e, ss)
 }
 
 //**************************************************************************************************

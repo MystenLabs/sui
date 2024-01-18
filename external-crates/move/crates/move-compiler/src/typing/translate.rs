@@ -1525,15 +1525,13 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
         NE::Annotate(nl, ty_annot) => {
             let el = exp(context, nl);
             let annot_loc = ty_annot.loc;
-            let rhs = core::instantiate(context, ty_annot);
-            subtype(
+            annotate_(
                 context,
-                annot_loc,
                 || "Invalid type annotation",
-                el.ty.clone(),
-                rhs.clone(),
-            );
-            (rhs.clone(), TE::Annotate(el, Box::new(rhs)))
+                annot_loc,
+                el,
+                ty_annot,
+            )
         }
         NE::UnresolvedError => {
             assert!(context.env.has_errors());
@@ -2228,6 +2226,22 @@ impl crate::shared::ast_debug::AstDebug for ExpDotted_ {
     }
 }
 
+fn annotate_<S: ToString, F: FnOnce() -> S>(
+    context: &mut Context,
+    msg: F,
+    annot_loc: Loc,
+    e: Box<T::Exp>,
+    ty_annot: Type,
+) -> (Type, T::UnannotatedExp_) {
+    let rhs = core::instantiate(context, ty_annot);
+    subtype(context, annot_loc, msg, e.ty.clone(), rhs.clone());
+    let e_ = match core::unfold_type(&context.subst, rhs.clone()).value {
+        Type_::Fun(_, _) => e.exp.value,
+        _ => T::UnannotatedExp_::Annotate(e, Box::new(rhs.clone())),
+    };
+    (rhs, e_)
+}
+
 //**************************************************************************************************
 // Calls
 //**************************************************************************************************
@@ -2667,25 +2681,21 @@ fn expand_macro(
                 })
                 .unzip();
             // type check the arguments against the parameters annotated types
-            let (es, tys) = es
+            let (es, tys): (Vec<_>, _) = es
                 .into_iter()
                 .map(|(e, ty)| {
                     let arg_loc = e.exp.loc;
-                    subtype(
-                        context,
-                        arg_loc,
-                        || "Invalid macro argument",
-                        e.ty.clone(),
-                        ty.clone(),
-                    );
-                    let e_ = sp(arg_loc, TE::Annotate(Box::new(e), Box::new(ty.clone())));
-                    let e = T::exp(ty.clone(), e_);
-                    (T::ExpListItem::Single(e, Box::new(ty.clone())), ty)
+                    let annot_loc = ty.loc;
+                    let e = Box::new(e);
+                    let (ty, e_) =
+                        annotate_(context, || "Invalid macro argument", annot_loc, e, ty);
+                    let e = T::exp(ty.clone(), sp(arg_loc, e_));
+                    (e, ty)
                 })
                 .unzip();
             // bind the locals  and push it on the macro body
             let tys = Type_::multiple(argloc, tys);
-            let es = T::exp(tys.clone(), sp(argloc, TE::ExpList(es)));
+            let es = T::explist(argloc, es);
             let b = bind_list(context, sp(argloc, lvalues_), Some(tys));
             let lvalue_ty = lvalues_expected_types(context, &b);
             let body = exp(context, Box::new(body));

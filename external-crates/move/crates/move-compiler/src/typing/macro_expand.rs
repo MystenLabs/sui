@@ -584,7 +584,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             else {
                 unreachable!()
             };
-            let args = sp(args_loc, N::Exp_::ExpList(arg_list));
+            let args = N::explist(args_loc, arg_list);
             let annot_args = sp(args_loc, N::Exp_::Annotate(Box::new(args), param_ty));
             let body_loc = lambda_body.loc;
             let annot_body = sp(body_loc, N::Exp_::Annotate(lambda_body, result_ty));

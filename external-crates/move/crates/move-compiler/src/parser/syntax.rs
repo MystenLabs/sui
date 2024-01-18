@@ -2083,7 +2083,7 @@ fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
 fn is_start_of_type(context: &mut Context) -> bool {
     matches!(
         context.tokens.peek(),
-        Tok::LParen | Tok::Amp | Tok::AmpMut | Tok::Pipe | Tok::Identifier
+        Tok::LParen | Tok::Amp | Tok::AmpMut | Tok::Pipe | Tok::PipePipe | Tok::Identifier
     )
 }
 
