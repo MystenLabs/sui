@@ -1,20 +1,32 @@
 # Sui Owned Object Pools Quick Start
 
-import { Callout } from 'nextra/components';
+:::warning
 
-<Callout type="info">
-	Sui Owned Object Pools (SuiOOP) is a beta library. Enhancements and changes are likely during
-	development.
-</Callout>
+Sui Owned Object Pools (SuiOOP) is a beta library. Enhancements and changes are likely during
+development.
+
+:::
 
 SuiOOP is a TypeScript library that provides a set of tools for managing multiple concurrent
 transactions on the Sui network to help avoid object equivocation and locking.
 
 ## Installation
 
-```sh npm2yarn
+:::code-group
+
+```bash [npm]
 npm i suioop
 ```
+
+```bash [pnpm]
+pnpm add suioop
+```
+
+```bash [yarn]
+yarn add suioop
+```
+
+:::
 
 ## Usage
 

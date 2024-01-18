@@ -1,12 +1,5 @@
 # End-to-End Examples
 
-import { Callout } from 'nextra/components';
-
-<Callout type="info">
-	Sui Owned Object Pools (SuiOOP) is a beta library. Enhancements and changes are likely during
-	development.
-</Callout>
-
 These examples demonstrate some possible use cases for the Sui Owned Object Pool library.
 
 ## Use case 1: Parallel coin transfers service—Multiple Coins
@@ -18,11 +11,13 @@ Before creating an `ExecutorServiceHandler` instance that executes each incoming
 first need to have a set of coins to use for the coin transferring and to pay for the gas of each
 transaction.
 
-<Callout type="info">
-	`ExecutorServiceHandler` creates worker pools that handle the execution of the transactions. The
-	maximum number of worker pools the handler can create is tightly coupled with the number of your
-	account's coins.
-</Callout>
+:::info
+
+`ExecutorServiceHandler` creates worker pools that handle the execution of the transactions. The
+maximum number of worker pools the handler can create is tightly coupled with the number of your
+account's coins.
+
+:::
 
 Here is the code that creates the coins by splitting a single coin 20 times and transferring the new
 coins to your address:
@@ -118,11 +113,13 @@ for (let i = 0; i < 10; i++) {
 const results = await Promise.allSettled(promises);
 ```
 
-<Callout type="info">
-	Providing a `SplitStrategy` is optional. If you don't provide one, the `DefaultSplitStrategy` is
-	used, which also has a default minimum balance. For demonstration purposes, the minimum pool
-	balance here is 300000000.
-</Callout>
+:::info
+
+Providing a `SplitStrategy` is optional. If you don't provide one, the `DefaultSplitStrategy` is
+used, which also has a default minimum balance. For demonstration purposes, the minimum pool
+balance here is 300000000.
+
+:::
 
 ## Use case 2: mint and transfer NFTs concurrently using multiple AdminCaps
 

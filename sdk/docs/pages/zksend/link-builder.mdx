@@ -1,14 +1,14 @@
-import { Callout } from 'nextra/components';
-
 # Creating zkSend Links
 
-<Callout type="warning">
-	Products and services that incorporate zkSend links may be subject to financial regulations,
-	including obtaining money transmitter licenses in jurisdictions where you provide your services.
-	It is the developer's responsibility to ensure compliance with all relevant laws and obtain any
-	necessary licenses. The information provided by Mysten Labs is not legal advice, and developers
-	should consult with a qualified legal professional to address their specific circumstances.
-</Callout>
+:::warning
+
+Products and services that incorporate zkSend links may be subject to financial regulations,
+including obtaining money transmitter licenses in jurisdictions where you provide your services. It
+is the developer's responsibility to ensure compliance with all relevant laws and obtain any
+necessary licenses. The information provided by Mysten Labs is not legal advice, and developers
+should consult with a qualified legal professional to address their specific circumstances.
+
+:::
 
 ## Limitations
 
@@ -19,10 +19,12 @@ import { Callout } from 'nextra/components';
 
 ## Create a link
 
-<Callout type="warning">
-	zkSend does not keep a record of created links, and losing access to a link will result in the
-	loss of funds of any assets contained within this link.
-</Callout>
+:::warning
+
+zkSend does not keep a record of created links, and losing access to a link will result in the loss
+of funds of any assets contained within this link.
+
+:::
 
 You can start creating your own zkSend link using the `ZkSendLinkBuilder` class. This class
 constructor takes an object with the following options:

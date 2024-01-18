@@ -1,12 +1,12 @@
-import { Callout } from 'nextra/components';
-
 # zkSend SDK
 
-<Callout type="warning">
-	The zkSend SDK is experimental, and may change before a stable version is released. The features
-	described in these docs are only available using the preview version of zkSend, at
-	https://preview.zksend.com.
-</Callout>
+:::warning
+
+The zkSend SDK is experimental, and may change before a stable version is released. The features
+described in these docs are only available using the preview version of zkSend, at
+https://preview.zksend.com.
+
+:::
 
 The zkSend SDK provides tools for interacting with the [zkSend website](https://zksend.com). It
 allows dApps to integrate zkSend into their applications by providing a standard wallet interface.
@@ -15,17 +15,30 @@ transferrable asset.
 
 ## Installation
 
-```sh npm2yarn
+:::code-group
+
+```bash [npm]
 npm i @mysten/zksend
 ```
 
-<Callout type="info">
-	During the development of the zkSend SDK, you may want to install the experimental version.
-
-```sh npm2yarn
-npm i @mysten/zksend@experimental @mysten/sui.js@experimental
-# If you use dapp-kit, you'll also need the experimental version:
-npm i @mysten/dapp-kit@experimental
+```bash [pnpm]
+pnpm add @mysten/zksend
 ```
 
-</Callout>
+```bash [yarn]
+yarn add @mysten/zksend
+```
+
+:::
+
+:::info
+
+    During the development of the zkSend SDK, you may want to install the experimental version.
+
+```sh
+pnpm add @mysten/zksend@experimental @mysten/sui.js@experimental
+# If you use dapp-kit, you'll also need the experimental version:
+pnpm add @mysten/dapp-kit@experimental
+```
+
+:::

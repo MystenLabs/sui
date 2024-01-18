@@ -1,7 +1,5 @@
 # Hello Sui
 
-import { Callout } from 'nextra/components';
-
 This basic example introduces you to the Sui TypeScript SDK. The Node.js example mints SUI on a Sui
 network and then queries the address to get a sum for the owned SUI. You don't need to use an IDE to
 complete the example, but one like Microsoft Visual Studio Code helps centralize more advanced
@@ -31,9 +29,21 @@ When you use a package manager to install the necessary packages, it downloads t
 `node_modules` folder and adds the references to your `package.json` file, creating the file if it
 doesn't already exist. For this example, you need only the Sui TypeScript SDK:
 
-```sh npm2yarn
-npm i -D @mysten/sui.js
+:::code-group
+
+```bash [npm]
+npm i @mysten/sui.js
 ```
+
+```bash [pnpm]
+pnpm add @mysten/sui.js
+```
+
+```bash [yarn]
+yarn add @mysten/sui.js
+```
+
+:::
 
 Your `package.json` file now has a _dependencies_ section with `@mysten/sui.js` listed with the
 package version number.
@@ -103,10 +113,12 @@ provided address. The code also imports `SuiClient` to create a new client on th
 it uses to query the address and output the amount of SUI the address owns before and after using
 the faucet. You can check the total SUI for your address using the Sui Wallet or Sui Client CLI.
 
-<Callout type="info">
-	Faucets on Devnet and Testnet are rate limited. If you run the script too many times, you surpass
-	the limit and must wait to successfully run it again.
-</Callout>
+:::info
+
+Faucets on Devnet and Testnet are rate limited. If you run the script too many times, you surpass
+the limit and must wait to successfully run it again.
+
+:::
 
 You can also use the [Sui Client CLI](https://docs.sui.io/build/cli-client) to perform client calls
 on a Sui network.

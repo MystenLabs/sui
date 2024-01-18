@@ -1,12 +1,5 @@
 # Local Development
 
-import { Callout } from 'nextra/components';
-
-<Callout type="info">
-	Sui Owned Object Pools (SuiOOP) is a beta library. Enhancements and changes are likely during
-	development.
-</Callout>
-
 ## Installing the library
 
 If you would like to extend the library by developing on your local machine, first you need to clone
@@ -18,7 +11,7 @@ git clone https://github.com/MystenLabs/Sui_Owned_Object_Pools.git
 
 Use a package manager to install dependencies from the root of the project.
 
-```sh npm2yarn
+```sh
 npm install
 ```
 
@@ -83,10 +76,12 @@ SUI_NODE= ...
 GET_WORKER_TIMEOUT_MS=1000
 ```
 
-<Callout type="default">
-	You can run `cat ~/.sui/sui_config/sui.keystore` to see your addresses' secret keys. Each secret's
-	corresponding address is in the same row line that appears in `sui client addresses`.
-</Callout>
+:::
+
+You can run `cat ~/.sui/sui_config/sui.keystore` to see your addresses' secret keys. Each secret's
+corresponding address is in the same row line that appears in `sui client addresses`.
+
+:::
 
 The [jest framework](https://jestjs.io/) is recommended for testing. Having installed the project's
 packages with `npm install`, you can run the tests by either:
@@ -104,6 +99,6 @@ packages with `npm install`, you can run the tests by either:
 
 Before committing your changes, run the linter to check for code style consistency.
 
-```sh npm2yarn
+```sh
 npm run lint
 ```

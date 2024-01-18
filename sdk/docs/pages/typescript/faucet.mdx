@@ -1,7 +1,5 @@
 # Faucet
 
-import { Callout } from 'nextra/components';
-
 Devnet, Testnet, and local networks include faucets that mint SUI. You can use the Sui TypeScript
 SDK to call a network's faucet and provide SUI to the address you provide.
 
@@ -21,7 +19,9 @@ await requestSuiFromFaucetV0({
 });
 ```
 
-<Callout type="info">
-	Faucets on Devnet and Testnet are rate limited. If you run the script too many times, you surpass
-	the limit and must wait to successfully run it again.
-</Callout>
+:::info
+
+Faucets on Devnet and Testnet are rate limited. If you run the script too many times, you surpass
+the limit and must wait to successfully run it again.
+
+:::
