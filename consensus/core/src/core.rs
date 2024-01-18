@@ -61,7 +61,10 @@ impl Core {
         Self {
             context,
             threshold_clock,
-            last_own_block: VerifiedBlock::new(SignedBlock::new(Block::V1(BlockV1::default()))), // TODO: restore on crash/recovery
+            last_own_block: VerifiedBlock::new_verified_unserialized(SignedBlock::new(Block::V1(
+                BlockV1::default(),
+            )))
+            .unwrap(), // TODO: restore on crash/recovery
             transactions_consumer,
             pending_transactions: Vec::new(),
             pending_ancestors: VecDeque::new(),
@@ -167,7 +170,7 @@ impl Core {
             self.threshold_clock.add_block(verified_block.reference());
             self.last_own_block = verified_block.clone();
 
-            tracing::debug!("New block created for round {}", verified_block.round());
+            tracing::debug!("New block created {}", verified_block);
 
             //5. emit an event that a new block is ready
             self.signals.new_block_ready(verified_block.reference());

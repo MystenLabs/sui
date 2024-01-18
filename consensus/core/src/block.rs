@@ -121,7 +121,7 @@ impl BlockAPI for BlockV1 {
 }
 
 /// BlockRef is the minimum info that uniquely identify a block.
-#[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct BlockRef {
     pub round: Round,
     pub author: AuthorityIndex,
@@ -261,7 +261,7 @@ impl SignedBlock {
     /// Serialises the block using the bcs serializer
     pub(crate) fn serialize(&self) -> Result<bytes::Bytes, bcs::Error> {
         let bytes = bcs::to_bytes(self)?;
-        bytes.into()
+        Ok(bytes.into())
     }
 }
 
