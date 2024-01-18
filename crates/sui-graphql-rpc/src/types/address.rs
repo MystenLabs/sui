@@ -210,13 +210,13 @@ impl Address {
         Err(Error::DynamicFieldOnAddress.extend())
     }
 
-    pub async fn dynamic_field_connection(
+    pub async fn dynamic_fields(
         &self,
         _first: Option<u64>,
-        _after: Option<String>,
+        _after: Option<object::Cursor>,
         _last: Option<u64>,
-        _before: Option<String>,
-    ) -> Result<Option<Connection<String, DynamicField>>> {
+        _before: Option<object::Cursor>,
+    ) -> Result<Connection<String, DynamicField>> {
         Err(Error::DynamicFieldOnAddress.extend())
     }
 }

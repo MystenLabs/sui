@@ -6,15 +6,8 @@ use crate::{
     config::{Limits, DEFAULT_SERVER_DB_POOL_SIZE},
     error::Error,
     types::{
-        address::Address,
-        balance::Balance,
-        big_int::BigInt,
-        coin_metadata::CoinMetadata,
-        dynamic_field::DynamicField,
-        move_object::MoveObject,
-        move_type::MoveType,
-        object::{DeprecatedObjectFilter, Object},
-        sui_address::SuiAddress,
+        address::Address, balance::Balance, big_int::BigInt, coin_metadata::CoinMetadata,
+        move_object::MoveObject, move_type::MoveType, object::Object, sui_address::SuiAddress,
         validator::Validator,
     },
 };
@@ -26,7 +19,6 @@ use sui_indexer::{
     apis::GovernanceReadApiV2,
     indexer_reader::IndexerReader,
     models_v2::{display::StoredDisplay, objects::StoredObject},
-    types_v2::OwnerType,
     PgConnectionPoolConfig,
 };
 use sui_json_rpc::coin_api::{parse_to_struct_tag, parse_to_type_tag};
@@ -34,7 +26,6 @@ use sui_json_rpc_types::Stake as RpcStakedSui;
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,
     coin::{CoinMetadata as NativeCoinMetadata, TreasuryCap},
-    dynamic_field::DynamicFieldType,
     gas_coin::{GAS, TOTAL_SUPPLY_SUI},
     governance::StakedSui as NativeStakedSui,
     object::Object as NativeObject,
@@ -77,33 +68,9 @@ pub enum DbValidationError {
     InvalidType(String),
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum TypeFilterError {
-    #[error("Invalid format in '{0}' - if '::' is present, there must be a non-empty string on both sides. Expected format like '{1}'")]
-    MissingComponents(String, &'static str),
-    #[error("Invalid format in '{0}' - value must have {1} or fewer components. Expected format like '{2}'")]
-    TooManyComponents(String, u64, &'static str),
-}
-
-// Db needs information on whether the first or last n are being selected
-#[derive(Clone, Copy)]
-pub(crate) enum PageLimit {
-    First(i64),
-    Last(i64),
-}
-
 pub(crate) struct PgManager {
     pub inner: IndexerReader,
     pub limits: Limits,
-}
-
-impl PageLimit {
-    pub(crate) fn value(&self) -> i64 {
-        match self {
-            PageLimit::First(limit) => *limit,
-            PageLimit::Last(limit) => *limit,
-        }
-    }
 }
 
 impl PgManager {
@@ -185,87 +152,10 @@ impl PgManager {
         )
         .await
     }
-
-    async fn multi_get_objs(
-        &self,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        filter: Option<DeprecatedObjectFilter>,
-        owner_type: Option<OwnerType>,
-    ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
-        let limit = self.validate_page_limit(first, last)?;
-        let before = before
-            .map(|cursor| self.parse_obj_cursor(&cursor))
-            .transpose()?;
-        let after = after
-            .map(|cursor| self.parse_obj_cursor(&cursor))
-            .transpose()?;
-
-        let query = move || {
-            QueryBuilder::multi_get_objs(
-                before.clone(),
-                after.clone(),
-                limit,
-                filter.clone(),
-                owner_type,
-            )
-        };
-
-        let result: Option<Vec<StoredObject>> = self
-            .run_query_async_with_cost(query, |query| move |conn| query.load(conn).optional())
-            .await?;
-
-        result
-            .map(|mut stored_objs| {
-                let has_next_page = stored_objs.len() as i64 > limit.value();
-                if has_next_page {
-                    stored_objs.pop();
-                }
-
-                if last.is_some() {
-                    stored_objs.reverse();
-                }
-
-                Ok((stored_objs, has_next_page))
-            })
-            .transpose()
-    }
 }
 
 /// Implement methods to be used by graphql resolvers
 impl PgManager {
-    pub(crate) fn parse_obj_cursor(&self, cursor: &str) -> Result<Vec<u8>, Error> {
-        Ok(SuiAddress::from_str(cursor)
-            .map_err(|e| Error::InvalidCursor(e.to_string()))?
-            .into_vec())
-    }
-
-    pub(crate) fn validate_page_limit(
-        &self,
-        first: Option<u64>,
-        last: Option<u64>,
-    ) -> Result<PageLimit, Error> {
-        if let Some(f) = first {
-            if f > self.limits.max_page_size {
-                return Err(
-                    DbValidationError::PageSizeExceeded(f, self.limits.max_page_size).into(),
-                );
-            }
-            Ok(PageLimit::First(f as i64))
-        } else if let Some(l) = last {
-            if l > self.limits.max_page_size {
-                return Err(
-                    DbValidationError::PageSizeExceeded(l, self.limits.max_page_size).into(),
-                );
-            }
-            return Ok(PageLimit::Last(l as i64));
-        } else {
-            Ok(PageLimit::First(self.limits.default_page_size as i64))
-        }
-    }
-
     /// Retrieve the validator APYs
     pub(crate) async fn fetch_validator_apys(
         &self,
@@ -412,63 +302,6 @@ impl PgManager {
         };
 
         Ok(stake)
-    }
-
-    pub(crate) async fn fetch_dynamic_fields(
-        &self,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        address: SuiAddress,
-    ) -> Result<Option<Connection<String, DynamicField>>, Error> {
-        let filter = DeprecatedObjectFilter {
-            owner: Some(address),
-            ..Default::default()
-        };
-
-        let objs = self
-            .multi_get_objs(
-                first,
-                after,
-                last,
-                before,
-                Some(filter),
-                Some(OwnerType::Object),
-            )
-            .await?;
-
-        let Some((stored_objs, has_next_page)) = objs else {
-            return Ok(None);
-        };
-
-        let mut connection = Connection::new(false, has_next_page);
-
-        for stored in stored_objs {
-            let df_object_id = stored.df_object_id.as_ref().ok_or_else(|| {
-                Error::Internal("Dynamic field does not have df_object_id".to_string())
-            })?;
-            let cursor = SuiAddress::from_bytes(df_object_id)
-                .map_err(|e| Error::Internal(format!("{e}")))?;
-            let df_kind = match stored.df_kind {
-                None => Err(Error::Internal("Dynamic field type is not set".to_string())),
-                Some(df_kind) => match df_kind {
-                    0 => Ok(DynamicFieldType::DynamicField),
-                    1 => Ok(DynamicFieldType::DynamicObject),
-                    _ => Err(Error::Internal("Unexpected df_kind value".to_string())),
-                },
-            }?;
-
-            connection.edges.push(Edge::new(
-                cursor.to_string(),
-                DynamicField {
-                    stored,
-                    df_object_id: cursor,
-                    df_kind,
-                },
-            ));
-        }
-        Ok(Some(connection))
     }
 
     pub(crate) async fn fetch_coin_metadata(
