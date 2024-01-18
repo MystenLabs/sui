@@ -1488,7 +1488,12 @@ pub fn instantiate(context: &mut Context, sp!(loc, t_): Type) -> Type {
             Box::new(instantiate(context, *result)),
         ),
         x @ Param(_) => x,
-        Var(_) => panic!("ICE instantiate type variable"),
+        // instantiating a var really shouldn't happen... but it does because of macro expansion
+        // We expand macros before type checking, but after the arguments to the macro are type
+        // checked (otherwise we couldn't properly do method syntax macros). As a result, we are
+        // substituting type variables into the macro body, and might hit one while expanding a
+        // type in the macro where a type parameter's argument had a type variable.
+        x @ Var(_) => x,
     };
     sp(loc, it_)
 }

@@ -544,19 +544,33 @@ impl Modifiers {
 // ModuleMemberModifiers checks for uniqueness, meaning each individual ModuleMemberModifier can
 // appear only once
 fn parse_module_member_modifiers(context: &mut Context) -> Result<Modifiers, Box<Diagnostic>> {
+    fn duplicate_modifier_error(
+        context: &mut Context,
+        loc: Loc,
+        prev_loc: Loc,
+        modifier_name: &'static str,
+    ) {
+        let msg = format!("Duplicate '{modifier_name}' modifier");
+        let prev_msg = format!("{modifier_name}' modifier previously given here");
+        context.env.add_diag(diag!(
+            Declarations::DuplicateItem,
+            (loc, msg),
+            (prev_loc, prev_msg),
+        ));
+    }
+
     let mut mods = Modifiers::empty();
     loop {
         match context.tokens.peek() {
             Tok::Public => {
                 let vis = parse_visibility(context)?;
                 if let Some(prev_vis) = mods.visibility {
-                    let msg = "Duplicate visibility modifier".to_string();
-                    let prev_msg = "Visibility modifier previously given here".to_string();
-                    context.env.add_diag(diag!(
-                        Declarations::DuplicateItem,
-                        (vis.loc().unwrap(), msg),
-                        (prev_vis.loc().unwrap(), prev_msg),
-                    ));
+                    duplicate_modifier_error(
+                        context,
+                        vis.loc().unwrap(),
+                        prev_vis.loc().unwrap(),
+                        Visibility::PUBLIC,
+                    )
                 }
                 mods.visibility = Some(vis)
             }
@@ -564,13 +578,7 @@ fn parse_module_member_modifiers(context: &mut Context) -> Result<Modifiers, Box
                 let loc = current_token_loc(context.tokens);
                 context.tokens.advance()?;
                 if let Some(prev_loc) = mods.native {
-                    let msg = "Duplicate 'native' modifier".to_string();
-                    let prev_msg = "'native' modifier previously given here".to_string();
-                    context.env.add_diag(diag!(
-                        Declarations::DuplicateItem,
-                        (loc, msg),
-                        (prev_loc, prev_msg)
-                    ))
+                    duplicate_modifier_error(context, loc, prev_loc, NATIVE_MODIFIER)
                 }
                 mods.native = Some(loc)
             }
@@ -578,15 +586,17 @@ fn parse_module_member_modifiers(context: &mut Context) -> Result<Modifiers, Box
                 let loc = current_token_loc(context.tokens);
                 context.tokens.advance()?;
                 if let Some(prev_loc) = mods.entry {
-                    let msg = format!("Duplicate '{}' modifier", ENTRY_MODIFIER);
-                    let prev_msg = format!("'{}' modifier previously given here", ENTRY_MODIFIER);
-                    context.env.add_diag(diag!(
-                        Declarations::DuplicateItem,
-                        (loc, msg),
-                        (prev_loc, prev_msg)
-                    ))
+                    duplicate_modifier_error(context, loc, prev_loc, ENTRY_MODIFIER)
                 }
                 mods.entry = Some(loc)
+            }
+            Tok::Identifier if context.tokens.content() == MACRO_MODIFIER => {
+                let loc = current_token_loc(context.tokens);
+                context.tokens.advance()?;
+                if let Some(prev_loc) = mods.macro_ {
+                    duplicate_modifier_error(context, loc, prev_loc, MACRO_MODIFIER)
+                }
+                mods.macro_ = Some(loc)
             }
             _ => break,
         }
@@ -2026,7 +2036,16 @@ fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
         }
         Tok::Pipe => {
             let args = parse_comma_list(context, Tok::Pipe, Tok::Pipe, parse_type, "a type")?;
-            let result = parse_type(context)?;
+            let result = if is_start_of_type(context) {
+                parse_type(context)?
+            } else {
+                spanned(
+                    context.tokens.file_hash(),
+                    start_loc,
+                    context.tokens.start_loc(),
+                    Type_::Unit,
+                )
+            };
             return Ok(spanned(
                 context.tokens.file_hash(),
                 start_loc,
@@ -2046,6 +2065,15 @@ fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
     };
     let end_loc = context.tokens.previous_end_loc();
     Ok(spanned(context.tokens.file_hash(), start_loc, end_loc, t))
+}
+
+/// Checks whether the next tokens looks like the start of a type. Must be aligned
+/// with `parse_type`.
+fn is_start_of_type(context: &mut Context) -> bool {
+    matches!(
+        context.tokens.peek(),
+        Tok::LParen | Tok::Amp | Tok::AmpMut | Tok::Pipe | Tok::Identifier
+    )
 }
 
 // Parse an optional list of type arguments.

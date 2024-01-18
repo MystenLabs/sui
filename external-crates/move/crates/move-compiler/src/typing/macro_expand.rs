@@ -282,8 +282,12 @@ fn recolor_seq(ctx: &mut Recolor, (use_funs, seq): &mut N::Sequence) {
     for sp!(_, item_) in seq {
         match item_ {
             N::SequenceItem_::Seq(e) => recolor_exp(ctx, e),
-            N::SequenceItem_::Declare(lvalues, _) => recolor_lvalues(ctx, lvalues),
+            N::SequenceItem_::Declare(lvalues, _) => {
+                ctx.add_lvalues(lvalues);
+                recolor_lvalues(ctx, lvalues)
+            }
             N::SequenceItem_::Bind(lvalues, e) => {
+                ctx.add_lvalues(lvalues);
                 recolor_lvalues(ctx, lvalues);
                 recolor_exp(ctx, e)
             }
@@ -292,7 +296,6 @@ fn recolor_seq(ctx: &mut Recolor, (use_funs, seq): &mut N::Sequence) {
 }
 
 fn recolor_lvalues(ctx: &mut Recolor, lvalues: &mut N::LValueList) {
-    ctx.add_lvalues(lvalues);
     for lvalue in &mut lvalues.value {
         recolor_lvalue(ctx, lvalue)
     }
@@ -406,6 +409,7 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
         }) => {
             ctx.add_block_label(*break_label);
             ctx.add_block_label(*return_label);
+            ctx.add_lvalues(parameters);
             recolor_use_funs_(ctx, use_fun_color);
             recolor_lvalues(ctx, parameters);
             recolor_block_label(ctx, break_label);
