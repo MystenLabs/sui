@@ -2,11 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SerializedBcs } from '@mysten/bcs';
-import { isSerializedBcs } from '@mysten/bcs';
 import type { Infer } from 'superstruct';
 import { array, boolean, integer, object, string, union } from 'superstruct';
 
-import { bcs } from '../bcs/index.js';
 import type { SharedObjectRef } from '../bcs/index.js';
 import { SuiObjectRef } from '../types/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
@@ -31,19 +29,9 @@ export type ObjectCallArg = Infer<typeof ObjectCallArg>;
 export const BuilderCallArg = union([PureCallArg, ObjectCallArg]);
 export type BuilderCallArg = Infer<typeof BuilderCallArg>;
 
-function Pure(data: Uint8Array | SerializedBcs<any>, type?: string): PureCallArg;
-/** @deprecated pass SerializedBcs values instead */
-function Pure(data: unknown, type?: string): PureCallArg;
-function Pure(data: unknown, type?: string): PureCallArg {
+function Pure(data: Uint8Array | SerializedBcs<any>): PureCallArg {
 	return {
-		Pure: Array.from(
-			data instanceof Uint8Array
-				? data
-				: isSerializedBcs(data)
-				? data.toBytes()
-				: // NOTE: We explicitly set this to be growable to infinity, because we have maxSize validation at the builder-level:
-				  bcs.ser(type!, data, { maxSize: Infinity }).toBytes(),
-		),
+		Pure: Array.from(data instanceof Uint8Array ? data : data.toBytes()),
 	};
 }
 

@@ -1,15 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	bcs,
-	BCS as BcsRegistry,
-	fromB58,
-	fromHEX,
-	getSuiMoveConfig,
-	toB58,
-	toHEX,
-} from '@mysten/bcs';
+import { bcs, fromB58, fromHEX, toB58, toHEX } from '@mysten/bcs';
 import type { BcsType, BcsTypeOptions } from '@mysten/bcs';
 
 import type { MoveCallTransaction } from '../builder/Transactions.js';
@@ -119,18 +111,6 @@ export type GasData = {
  * Indications the expiration time for a transaction.
  */
 export type TransactionExpiration = { None: null } | { Epoch: number };
-
-const bcsRegistry = new BcsRegistry({
-	...getSuiMoveConfig(),
-	types: {
-		enums: {
-			'Option<T>': {
-				None: null,
-				Some: 'T',
-			},
-		},
-	},
-});
 
 function unsafe_u64(options?: BcsTypeOptions<number>) {
 	return bcs
@@ -400,6 +380,10 @@ const MultiSig = bcs.struct('MultiSig', {
 	multisig_pk: MultiSigPublicKey,
 });
 
+const PersonalMessage = bcs.struct('PersonalMessage', {
+	message: bcs.vector(bcs.u8()),
+});
+
 const suiBcs = {
 	...bcs,
 	U8: bcs.u8(),
@@ -434,52 +418,7 @@ const suiBcs = {
 	TransactionExpiration,
 	TransactionKind,
 	TypeTag,
-
-	// preserve backwards compatibility with old bcs export
-	ser: bcsRegistry.ser.bind(bcsRegistry),
-	de: bcsRegistry.de.bind(bcsRegistry),
-	getTypeInterface: bcsRegistry.getTypeInterface.bind(bcsRegistry),
-	hasType: bcsRegistry.hasType.bind(bcsRegistry),
-	parseTypeName: bcsRegistry.parseTypeName.bind(bcsRegistry),
-	registerAddressType: bcsRegistry.registerAddressType.bind(bcsRegistry),
-	registerAlias: bcsRegistry.registerAlias.bind(bcsRegistry),
-	registerBcsType: bcsRegistry.registerBcsType.bind(bcsRegistry),
-	registerEnumType: bcsRegistry.registerEnumType.bind(bcsRegistry),
-	registerStructType: bcsRegistry.registerStructType.bind(bcsRegistry),
-	registerType: bcsRegistry.registerType.bind(bcsRegistry),
-	types: bcsRegistry.types,
+	PersonalMessage,
 };
 
-bcsRegistry.registerBcsType('utf8string', () => bcs.string({ name: 'utf8string' }));
-bcsRegistry.registerBcsType('unsafe_u64', () => unsafe_u64());
-bcsRegistry.registerBcsType('enumKind', (T) => enumKind(T));
-
-[
-	Address,
-	Argument,
-	CallArg,
-	CompressedSignature,
-	GasData,
-	MultiSig,
-	MultiSigPkMap,
-	MultiSigPublicKey,
-	ObjectArg,
-	ObjectDigest,
-	ProgrammableMoveCall,
-	ProgrammableTransaction,
-	PublicKey,
-	SenderSignedData,
-	SharedObjectRef,
-	StructTag,
-	SuiObjectRef,
-	Transaction,
-	TransactionData,
-	TransactionDataV1,
-	TransactionExpiration,
-	TransactionKind,
-	TypeTag,
-].forEach((type) => {
-	bcsRegistry.registerBcsType(type.name, () => type);
-});
-
-export { suiBcs as bcs, bcsRegistry };
+export { suiBcs as bcs };

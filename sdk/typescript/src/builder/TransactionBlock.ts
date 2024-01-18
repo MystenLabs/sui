@@ -27,7 +27,7 @@ import {
 	PureCallArg,
 } from './Inputs.js';
 import { createPure } from './pure.js';
-import { getPureSerializationType, isTxContext } from './serializer.js';
+import { isTxContext } from './serializer.js';
 import type { TransactionExpiration } from './TransactionBlockData.js';
 import { TransactionBlockDataBuilder } from './TransactionBlockData.js';
 import type { MoveCallTransaction, TransactionArgument, TransactionType } from './Transactions.js';
@@ -245,22 +245,14 @@ export class TransactionBlock {
 	get pure(): ReturnType<typeof createPure> {
 		Object.defineProperty(this, 'pure', {
 			enumerable: false,
-			value: createPure((value, type) => {
+			value: createPure((value) => {
 				if (isSerializedBcs(value)) {
 					return this.#input('pure', {
 						Pure: Array.from(value.toBytes()),
 					});
 				}
 
-				// TODO: we can also do some deduplication here
-				return this.#input(
-					'pure',
-					value instanceof Uint8Array
-						? Inputs.Pure(value)
-						: type
-						? Inputs.Pure(value, type)
-						: value,
-				);
+				return this.#input('pure', Inputs.Pure(value));
 			}),
 		});
 
@@ -698,13 +690,6 @@ export class TransactionBlock {
 						if (is(input.value, BuilderCallArg)) return;
 
 						const inputValue = input.value;
-
-						const serType = getPureSerializationType(param, inputValue);
-
-						if (serType) {
-							input.value = Inputs.Pure(inputValue, serType);
-							return;
-						}
 
 						const structVal = extractStructTag(param);
 						if (structVal != null || (typeof param === 'object' && 'TypeParameter' in param)) {

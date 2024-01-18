@@ -3,6 +3,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { bcs } from '../../src/bcs';
 import { TransactionBlock } from '../../src/builder';
 import { SuiClient } from '../../src/client';
 import { Keypair } from '../../src/cryptography';
@@ -20,22 +21,22 @@ describe('Test dev inspect', () => {
 
 	it('Dev inspect split + transfer', async () => {
 		const tx = new TransactionBlock();
-		const coin = tx.splitCoins(tx.gas, [tx.pure(10)]);
-		tx.transferObjects([coin], tx.pure(toolbox.address()));
+		const coin = tx.splitCoins(tx.gas, [10]);
+		tx.transferObjects([coin], toolbox.address());
 		await validateDevInspectTransaction(toolbox.client, toolbox.keypair, tx, 'success');
 	});
 
 	it('can set gas price as number', async () => {
 		const tx = new TransactionBlock();
-		const coin = tx.splitCoins(tx.gas, [tx.pure(10)]);
-		tx.transferObjects([coin], tx.pure(toolbox.address()));
+		const coin = tx.splitCoins(tx.gas, [10]);
+		tx.transferObjects([coin], toolbox.address());
 		await validateDevInspectTransaction(toolbox.client, toolbox.keypair, tx, 'success', 2000);
 	});
 
 	it('can set gas price as bigint', async () => {
 		const tx = new TransactionBlock();
-		const coin = tx.splitCoins(tx.gas, [tx.pure(10)]);
-		tx.transferObjects([coin], tx.pure(toolbox.address()));
+		const coin = tx.splitCoins(tx.gas, [10]);
+		tx.transferObjects([coin], toolbox.address());
 		await validateDevInspectTransaction(toolbox.client, toolbox.keypair, tx, 'success', 2000n);
 	});
 
@@ -47,11 +48,11 @@ describe('Test dev inspect', () => {
 		const obj = tx.moveCall({
 			target: `${packageId}::serializer_tests::return_struct`,
 			typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>'],
-			arguments: [tx.pure(coin_0.coinObjectId)],
+			arguments: [bcs.Address.serialize(coin_0.coinObjectId)],
 		});
 
 		// TODO: Ideally dev inspect transactions wouldn't need this, but they do for now
-		tx.transferObjects([obj], tx.pure(toolbox.address()));
+		tx.transferObjects([obj], toolbox.address());
 
 		await validateDevInspectTransaction(toolbox.client, toolbox.keypair, tx, 'success');
 	});

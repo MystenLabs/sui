@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { bcs } from '../../src/bcs';
 import { TransactionBlock } from '../../src/builder';
 import { SUI_FRAMEWORK_ADDRESS } from '../../src/utils';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
@@ -15,7 +16,7 @@ describe('Test Move call with a vector of objects as input', () => {
 		const tx = new TransactionBlock();
 		tx.moveCall({
 			target: `${packageId}::entry_point_vector::mint`,
-			arguments: [tx.pure(String(val))],
+			arguments: [bcs.U64.serialize(val)],
 		});
 		const result = await toolbox.client.signAndExecuteTransactionBlock({
 			signer: toolbox.keypair,

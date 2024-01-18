@@ -7,9 +7,7 @@ import { expect, it } from 'vitest';
 import { bcs } from '../../bcs/index.js';
 import { normalizeSuiAddress } from '../../utils/sui-types.js';
 import type { MoveCallTransaction, TransferObjectsTransaction } from '../index.js';
-import { PROGRAMMABLE_CALL, TRANSACTION } from '../index.js';
 
-// Oooh-weeee we nailed it!
 it('can serialize simplified programmable call struct', () => {
 	const moveCall: MoveCallTransaction = {
 		kind: 'MoveCall',
@@ -27,8 +25,8 @@ it('can serialize simplified programmable call struct', () => {
 		],
 	};
 
-	const bytes = bcs.ser(PROGRAMMABLE_CALL, moveCall).toBytes();
-	const result: MoveCallTransaction = bcs.de(PROGRAMMABLE_CALL, bytes);
+	const bytes = bcs.ProgrammableMoveCall.serialize(moveCall).toBytes();
+	const result = bcs.ProgrammableMoveCall.parse(bytes);
 
 	// since we normalize addresses when (de)serializing, the returned value differs
 	// only check the module and the function; ignore address comparison (it's not an issue
@@ -47,18 +45,10 @@ it('can serialize enum with "kind" property', () => {
 		address: { kind: 'Input', index: 0 },
 	};
 
-	const bytes = bcs.ser(TRANSACTION, transaction).toBytes();
-	const result: TransferObjectsTransaction = bcs.de(TRANSACTION, bytes);
+	const bytes = bcs.Transaction.serialize(transaction).toBytes();
+	const result = bcs.Transaction.parse(bytes);
 
 	expect(result).toEqual(transaction);
-});
-
-it('can serialize Option<T> types using the legacy registry API', () => {
-	const none = bcs.ser('Option<u8>', { None: true }).toBytes();
-	const some = bcs.ser('Option<u8>', { Some: 2 }).toBytes();
-
-	expect(none).toEqual(new Uint8Array([0]));
-	expect(some).toEqual(new Uint8Array([1, 2]));
 });
 
 function ref(): { objectId: string; version: string; digest: string } {
@@ -71,7 +61,7 @@ function ref(): { objectId: string; version: string; digest: string } {
 
 it('can serialize transaction data with a programmable transaction', () => {
 	let sui = normalizeSuiAddress('0x2');
-	let txData = {
+	const txData = {
 		V1: {
 			sender: normalizeSuiAddress('0xBAD'),
 			expiration: { None: true },
@@ -89,14 +79,15 @@ it('can serialize transaction data with a programmable transaction', () => {
 						// second argument is a vector of names
 						{
 							Pure: Array.from(
-								bcs.ser('vector<string>', ['name', 'description', 'img_url']).toBytes(),
+								bcs.vector(bcs.string()).serialize(['name', 'description', 'img_url']).toBytes(),
 							),
 						},
 						// third argument is a vector of values
 						{
 							Pure: Array.from(
 								bcs
-									.ser('vector<string>', [
+									.vector(bcs.string())
+									.serialize([
 										'Capy {name}',
 										'A cute little creature',
 										'https://api.capy.art/{id}/svg',
@@ -106,7 +97,7 @@ it('can serialize transaction data with a programmable transaction', () => {
 						},
 						// 4th and last argument is the account address to send display to
 						{
-							Pure: Array.from(bcs.ser('address', ref().objectId).toBytes()),
+							Pure: Array.from(bcs.Address.serialize(ref().objectId).toBytes()),
 						},
 					],
 					transactions: [
@@ -154,10 +145,10 @@ it('can serialize transaction data with a programmable transaction', () => {
 				},
 			},
 		},
-	};
+	} satisfies typeof bcs.TransactionData.$inferInput;
 
-	const type = 'TransactionData';
-	const bytes = bcs.ser(type, txData).toBytes();
-	const result = bcs.de(type, bytes);
+	const bytes = bcs.TransactionData.serialize(txData).toBytes();
+
+	const result = bcs.TransactionData.parse(bytes);
 	expect(result).toEqual(txData);
 });

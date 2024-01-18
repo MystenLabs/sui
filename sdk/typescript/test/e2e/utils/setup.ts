@@ -7,6 +7,7 @@ import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
 import { WebSocket } from 'ws';
 
+import { bcs } from '../../../src/bcs/index.js';
 import { TransactionBlock, UpgradePolicy } from '../../../src/builder/index.js';
 import type { SuiObjectChangePublished } from '../../../src/client/index.js';
 import { getFullnodeUrl, SuiClient, SuiHTTPTransport } from '../../../src/client/index.js';
@@ -122,7 +123,7 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 	});
 
 	// Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
-	tx.transferObjects([cap], tx.pure(await toolbox.address()));
+	tx.transferObjects([cap], await toolbox.address());
 
 	const publishTxn = await toolbox.client.signAndExecuteTransactionBlock({
 		transactionBlock: tx,
@@ -176,7 +177,7 @@ export async function upgradePackage(
 	const cap = tx.object(capId);
 	const ticket = tx.moveCall({
 		target: '0x2::package::authorize_upgrade',
-		arguments: [cap, tx.pure(UpgradePolicy.COMPATIBLE), tx.pure(digest)],
+		arguments: [cap, bcs.u8().serialize(UpgradePolicy.COMPATIBLE), tx.pure(digest)],
 	});
 
 	const receipt = tx.upgrade({
@@ -237,8 +238,8 @@ export async function paySui(
 		).data[0].coinObjectId;
 
 	recipients.forEach((recipient, i) => {
-		const coin = tx.splitCoins(coinId!, [tx.pure(amounts![i])]);
-		tx.transferObjects([coin], tx.pure(recipient));
+		const coin = tx.splitCoins(coinId!, [amounts![i]]);
+		tx.transferObjects([coin], recipient);
 	});
 
 	const txn = await client.signAndExecuteTransactionBlock({

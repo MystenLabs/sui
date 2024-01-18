@@ -3,7 +3,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { SharedObjectRef } from '../../src/bcs';
+import { bcs, SharedObjectRef } from '../../src/bcs';
 import { BuilderCallArg, TransactionBlock } from '../../src/builder';
 import { TransactionBlockDataBuilder } from '../../src/builder/TransactionBlockData';
 import { SuiTransactionBlockResponse } from '../../src/client';
@@ -57,7 +57,7 @@ describe('Transaction Serialization and deserialization', () => {
 			arguments: [
 				tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
 				tx.object(coin.coinObjectId),
-				tx.pure(validatorAddress),
+				bcs.Address.serialize(validatorAddress),
 			],
 		});
 		await serializeAndDeserialize(tx, [true]);

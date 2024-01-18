@@ -73,7 +73,7 @@ describe('offline build', () => {
 
 	it('builds a split transaction', async () => {
 		const tx = setup();
-		tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(Inputs.Pure(100, 'u64'))]));
+		tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(bcs.u64().serialize(100).toBytes())]));
 		await tx.build();
 	});
 
@@ -95,17 +95,17 @@ describe('offline build', () => {
 
 	it('can determine the type of inputs for built-in transactions', async () => {
 		const tx = setup();
-		tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(100)]));
+		tx.splitCoins(tx.gas, [100]);
 		await tx.build();
 	});
 
 	it('supports pre-serialized inputs as Uint8Array', async () => {
 		const tx = setup();
-		const inputBytes = bcs.ser('u64', 100n).toBytes();
+		const inputBytes = bcs.u64().serialize(100n).toBytes();
 		// Use bytes directly in pure value:
 		tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(inputBytes)]));
 		// Use bytes in input helper:
-		tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(Inputs.Pure(inputBytes))]));
+		tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(inputBytes)]));
 		await tx.build();
 	});
 
@@ -126,7 +126,7 @@ describe('offline build', () => {
 	it('uses a receiving argument', async () => {
 		const tx = setup();
 		tx.object(Inputs.ObjectRef(ref()));
-		const coin = tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(100)]));
+		const coin = tx.splitCoins(tx.gas, [100]);
 		tx.add(Transactions.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]));
 		tx.add(
 			Transactions.MoveCall({

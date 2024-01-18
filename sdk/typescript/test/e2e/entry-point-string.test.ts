@@ -3,6 +3,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { bcs } from '../../src/bcs';
 import { TransactionBlock } from '../../src/builder';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
@@ -14,7 +15,10 @@ describe('Test Move call with strings', () => {
 		const tx = new TransactionBlock();
 		tx.moveCall({
 			target: `${packageId}::entry_point_types::${funcName}`,
-			arguments: [tx.pure(str), tx.pure(len)],
+			arguments: [
+				Array.isArray(str) ? bcs.vector(bcs.String).serialize(str) : bcs.String.serialize(str),
+				bcs.U64.serialize(len),
+			],
 		});
 		const result = await toolbox.client.signAndExecuteTransactionBlock({
 			transactionBlock: tx,
