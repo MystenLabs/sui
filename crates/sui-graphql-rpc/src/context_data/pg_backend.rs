@@ -54,10 +54,6 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
 
         query
     }
-    fn get_balance(address: Vec<u8>, coin_type: String) -> BalanceQuery<'static, Pg> {
-        let query = PgQueryBuilder::multi_get_balances(address);
-        query.filter(objects::dsl::coin_type.eq(coin_type))
-    }
 }
 
 /// Allows methods like load(), get_result(), etc. on an Explained query

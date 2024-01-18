@@ -297,10 +297,10 @@ impl Object {
     pub async fn balance(
         &self,
         ctx: &Context<'_>,
-        type_: Option<String>,
+        type_: Option<ExactTypeFilter>,
     ) -> Result<Option<Balance>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_balance(self.address, type_)
+        let coin = type_.map_or_else(GAS::type_tag, |t| t.0);
+        Balance::query(ctx.data_unchecked(), self.address, coin)
             .await
             .extend()
     }

@@ -36,7 +36,7 @@ use sui_types::gas_coin::GAS;
     field(
         name = "balance",
         ty = "Option<Balance>",
-        arg(name = "type", ty = "Option<String>")
+        arg(name = "type", ty = "Option<ExactTypeFilter>")
     ),
     field(
         name = "balance_connection",
@@ -156,10 +156,10 @@ impl Owner {
     pub async fn balance(
         &self,
         ctx: &Context<'_>,
-        type_: Option<String>,
+        type_: Option<ExactTypeFilter>,
     ) -> Result<Option<Balance>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_balance(self.address, type_)
+        let coin = type_.map_or_else(GAS::type_tag, |t| t.0);
+        Balance::query(ctx.data_unchecked(), self.address, coin)
             .await
             .extend()
     }
