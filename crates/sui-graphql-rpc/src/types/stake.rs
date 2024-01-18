@@ -1,12 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::context_data::db_data_provider::PgManager;
 use crate::error::Error;
+use crate::{context_data::db_data_provider::PgManager, data::Db};
 
-use super::{big_int::BigInt, epoch::Epoch, move_object::MoveObject};
+use super::cursor::Page;
+use super::object::{Object, ObjectFilter};
+use super::{
+    big_int::BigInt, epoch::Epoch, move_object::MoveObject, object, sui_address::SuiAddress,
+};
+use async_graphql::connection::Connection;
 use async_graphql::*;
+use move_core_types::language_storage::StructTag;
+use sui_indexer::types_v2::OwnerType;
 use sui_json_rpc_types::{Stake as RpcStakedSui, StakeStatus as RpcStakeStatus};
+use sui_types::base_types::MoveObjectType;
 use sui_types::governance::StakedSui as NativeStakedSui;
 
 #[derive(Copy, Clone, Enum, PartialEq, Eq)]
@@ -91,6 +99,38 @@ impl StakedSui {
 }
 
 impl StakedSui {
+    /// Query the database for a `page` of Staked SUI. The page uses the same cursor type as is used
+    /// for `Object`, and is further filtered to a particular `owner`.
+    pub(crate) async fn paginate(
+        db: &Db,
+        page: Page<object::Cursor>,
+        owner: SuiAddress,
+    ) -> Result<Connection<String, StakedSui>, Error> {
+        let type_: StructTag = MoveObjectType::staked_sui().into();
+
+        let filter = ObjectFilter {
+            type_: Some(type_.into()),
+            owner: Some(owner),
+            ..Default::default()
+        };
+
+        Object::paginate_subtype(db, page, Some(OwnerType::Address), filter, |object| {
+            let address = object.address;
+            let move_object = MoveObject::try_from(&object).map_err(|_| {
+                Error::Internal(format!(
+                    "Expected {address} to be a StakedSui, but it's not a Move Object.",
+                ))
+            })?;
+
+            StakedSui::try_from(&move_object).map_err(|_| {
+                Error::Internal(format!(
+                    "Expected {address} to be a StakedSui, but it is not."
+                ))
+            })
+        })
+        .await
+    }
+
     /// The JSON-RPC representation of a StakedSui so that we can "cheat" to implement fields that
     /// are not yet implemented directly for GraphQL.
     ///

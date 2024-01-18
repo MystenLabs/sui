@@ -56,12 +56,12 @@ use sui_types::gas_coin::GAS;
         arg(name = "type", ty = "Option<ExactTypeFilter>")
     ),
     field(
-        name = "staked_sui_connection",
+        name = "staked_suis",
         ty = "Option<Connection<String, StakedSui>>",
         arg(name = "first", ty = "Option<u64>"),
-        arg(name = "after", ty = "Option<String>"),
+        arg(name = "after", ty = "Option<object::Cursor>"),
         arg(name = "last", ty = "Option<u64>"),
-        arg(name = "before", ty = "Option<String>")
+        arg(name = "before", ty = "Option<object::Cursor>")
     ),
     field(name = "default_suins_name", ty = "Option<String>"),
     field(
@@ -199,17 +199,17 @@ impl Owner {
             .extend()
     }
 
-    /// The `0x3::staking_pool::StakedSui` objects owned by the given object.
-    pub async fn staked_sui_connection(
+    /// The `0x3::staking_pool::StakedSui` objects owned by this address or object.
+    pub async fn staked_suis(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<object::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, StakedSui>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_staked_sui(self.address, first, after, last, before)
+        before: Option<object::Cursor>,
+    ) -> Result<Connection<String, StakedSui>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        StakedSui::paginate(ctx.data_unchecked(), page, self.address)
             .await
             .extend()
     }

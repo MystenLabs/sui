@@ -92,9 +92,9 @@ type Address implements IOwner {
 	"""
 	coins(first: Int, after: String, last: Int, before: String, type: String): CoinConnection!
 	"""
-	The `0x3::staking_pool::StakedSui` objects owned by the given address.
+	The `0x3::staking_pool::StakedSui` objects owned by this address.
 	"""
-	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
+	stakedSuis(first: Int, after: String, last: Int, before: String): StakedSuiConnection!
 	"""
 	The domain that a user address has explicitly configured as their default domain.
 	"""
@@ -1051,7 +1051,7 @@ interface IOwner {
 	balance(type: String): Balance
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coins(first: Int, after: String, last: Int, before: String, type: String): CoinConnection!
-	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
+	stakedSuis(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultSuinsName: String
 	suinsRegistrations(first: Int, after: String, last: Int, before: String): SuinsRegistrationConnection
 	dynamicField(name: DynamicFieldName!): DynamicField
@@ -1711,9 +1711,9 @@ type Object implements IOwner {
 	"""
 	coins(first: Int, after: String, last: Int, before: String, type: String): CoinConnection!
 	"""
-	The `0x3::staking_pool::StakedSui` objects owned by the given object.
+	The `0x3::staking_pool::StakedSui` objects owned by this object.
 	"""
-	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
+	stakedSuis(first: Int, after: String, last: Int, before: String): StakedSuiConnection!
 	"""
 	The domain that a user address has explicitly configured as their default domain.
 	"""
@@ -1963,9 +1963,9 @@ type Owner implements IOwner {
 	"""
 	coins(first: Int, after: String, last: Int, before: String, type: String): CoinConnection!
 	"""
-	The `0x3::staking_pool::StakedSui` objects owned by the given object.
+	The `0x3::staking_pool::StakedSui` objects owned by this address or object.
 	"""
-	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
+	stakedSuis(first: Int, after: String, last: Int, before: String): StakedSuiConnection!
 	"""
 	The domain that a user address has explicitly configured as their default domain.
 	"""
