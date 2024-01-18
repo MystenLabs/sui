@@ -202,6 +202,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     assert!(context.constraints.is_empty());
     context.reset_for_module_item();
     context.current_function = Some(name);
+    context.in_macro_function = macro_.is_some();
     process_attributes(context, &attributes);
     let visibility =
         match public_testing_visibility(context.env, context.current_package, &name, entry) {
@@ -219,6 +220,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
         body
     };
     context.current_function = None;
+    context.in_macro_function = false;
     context.env.pop_warning_filter_scope();
     T::Function {
         warning_filter,
