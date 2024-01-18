@@ -256,8 +256,8 @@ impl Owner {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_dynamic_field(self.address, name, DynamicFieldType::DynamicField)
+        use DynamicFieldType as T;
+        DynamicField::query(ctx.data_unchecked(), self.address, name, T::DynamicField)
             .await
             .extend()
     }
@@ -272,8 +272,8 @@ impl Owner {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_dynamic_field(self.address, name, DynamicFieldType::DynamicObject)
+        use DynamicFieldType as T;
+        DynamicField::query(ctx.data_unchecked(), self.address, name, T::DynamicObject)
             .await
             .extend()
     }
