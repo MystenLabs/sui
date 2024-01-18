@@ -11815,6 +11815,7 @@ dependencies = [
  "backoff",
  "base64-url",
  "bcs",
+ "bytes",
  "futures",
  "mysten-metrics",
  "notify",
