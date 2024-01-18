@@ -39,17 +39,18 @@ Each Sui release provides a set of binaries for several operating systems. You c
 1. Click the release tagged **Latest** to open the release's page.
 1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
 1. Double-click the downloaded file. If the file doesn't automatically expand, manually unzip the file.
-1. Open the expanded folder. Navigate to the `target/release` directory and double-click the appropriate binary to install, beginning with `sui-linux-<ARCHITECTURE>`:
+1. Open the expanded folder. Navigate to the `target/release` directory and double-click the appropriate binary to install, beginning with `sui-ubuntu-x86_64`:
 
-    - sui-faucet-`linux`-`<ARCHITECTURE>`: Local faucet to mint coins on local network.
-    - sui-indexer-`linux`-`<ARCHITECTURE>`: An indexer for a local Sui network.
-    - sui-`linux`-`<ARCHITECTURE>`: Main Sui binary.
-    - sui-node-`linux`-`<ARCHITECTURE>`: Run a local node.
-    - sui-test-validator-`linux`-`<ARCHITECTURE>`: Run test validators on a local network for development.
-    - sui-tool-`linux`-`<ARCHITECTURE>`: Provides utilities for Sui.
+    - `sui-data-ingestion-ubuntu-x86_64`: Massage Full node data for indexer to store in a database.
+    - `sui-faucet-ubuntu-x86_64`: Local faucet to mint coins on local network.
+    - `sui-indexer-ubuntu-x86_64`: An indexer for a local Sui network.
+    - `sui-ubuntu-x86_64`: Main Sui binary.
+    - `sui-node-ubuntu-x86_64`: Run a local node.
+    - `sui-test-validator-ubuntu-x86_64`: Run test validators on a local network for development.
+    - `sui-tool-ubuntu-x86_64`: Provides utilities for Sui.
 
     The Sui binary takes several minutes to download and install files, so make sure you allocate enough time for it to complete. Actual time to complete depends on your network connection and computer specifications.
-    
+
 </TabItem>
 
 <TabItem value="mac" label="macOS">
@@ -63,12 +64,13 @@ Each Sui release provides a set of binaries for several operating systems. You c
 1. Double-click the downloaded file. If the file doesn't automatically expand, manually unzip the file.
 1. Open the expanded folder. Navigate to the `target/release` directory and double-click the appropriate binary to install, beginning with `sui-macos-<ARCHITECTURE>`:
 
-    - sui-faucet-`macos`-`<ARCHITECTURE>`: Local faucet to mint coins on local network.
-    - sui-indexer-`macos`-`<ARCHITECTURE>`: An indexer for a local Sui network.
-    - sui-`macos`-`<ARCHITECTURE>`: Main Sui binary.
-    - sui-node-`macos`-`<ARCHITECTURE>`: Run a local node.
-    - sui-test-validator-`macos`-`<ARCHITECTURE>`: Run test validators on a local network for development.
-    - sui-tool-`macos`-`<ARCHITECTURE>`: Provides utilities for Sui.
+    - `sui-data-ingestion-macos-<ARCHITECTURE>`: Massage Full node data for indexer to store in a database.
+    - `sui-faucet-macos-<ARCHITECTURE>`: Local faucet to mint coins on local network.
+    - `sui-indexer-macos-<ARCHITECTURE>`: An indexer for a local Sui network.
+    - `sui-macos-<ARCHITECTURE>`: Main Sui binary.
+    - `sui-node-macos-<ARCHITECTURE>`: Run a local node.
+    - `sui-test-validator-macos-<ARCHITECTURE>`: Run test validators on a local network for development.
+    - `sui-tool-macos-<ARCHITECTURE>`: Provides utilities for Sui.
 
     The Sui binary takes several minutes to download and install files, so make sure you allocate enough time for it to complete. Actual time to complete depends on your network connection and computer specifications.
 
@@ -83,9 +85,9 @@ Each Sui release provides a set of binaries for several operating systems. You c
 1. Click the release tagged **Latest** to open the release's page.
 1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
 1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the root of your C drive for demonstration purposes. Replace references to this location in subsequent steps if you choose a different directory.
-1. Navigate to the `target\release` directory of the expanded folder. Rename each file to remove the `-windows-<ARCHITECTURE>` suffix from each file. For example, rename `sui-windows-x86_64` to `sui`. If you don't do this step, you must type `sui-windows-x86_64` to execute commands instead of simply `sui`. When complete, you should have the following .exe files:
+1. Navigate to the `target\release` directory of the expanded folder. Rename each file to remove the `-windows-x86_64` suffix from each file name. For example, rename `sui-windows-x86_64.exe` to `sui.exe`. If you don't do this step, you must type `sui-windows-x86_64` to execute commands instead of simply `sui`. When complete, you should have the following .exe files:
 
-    - `sui-data-ingestion`
+    - `sui-data-ingestion`: Massage Full node data for indexer to store in a database.
     - `sui-faucet`: Local faucet to mint coins on local network.
     - `sui-indexer`: An indexer for a local Sui network.
     - `sui`: Main Sui binary.
@@ -93,9 +95,16 @@ Each Sui release provides a set of binaries for several operating systems. You c
     - `sui-test-validator`: Run test validators on a local network for development.
     - `sui-tool`: Provides utilities for Sui.
 
+    :::info
+
+    Rename the `external-crates\move\target\release\move-analyzer-windows-x86_64.exe` in the same way.
+
+    :::
+
 1. Add the folder containing the extracted files to your `PATH` variable. There are several ways to get to the setting depending on your version of Windows. One way that works on all versions of Windows is to type `sysdm.cpl` in a console to open the System Properties window. Under the **Advanced** tab, click the **Environment Variables...** button.
 1. In the Environment Variables window, select the `Path` variable and click the **Edit...** button. 
 1. In the Edit environment variable window, click **New** and add the path to your expanded folder. Using the example path, this would be `C:\sui\target\release`.
+1. Add an additional path pointing to the Move analyzer, as well: `C:\sui\external-crates\move\target\release`, for example.
 1. Click **OK**.
 
 </TabItem>
