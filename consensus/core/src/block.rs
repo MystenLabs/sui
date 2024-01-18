@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use enum_dispatch::enum_dispatch;
 use std::{
     fmt,
     hash::{Hash, Hasher},
@@ -9,7 +10,6 @@ use std::{
 };
 
 use consensus_config::{AuthorityIndex, DefaultHashFunction, DIGEST_LENGTH};
-use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, HashFunction};
 use serde::{Deserialize, Serialize};
 
@@ -65,6 +65,23 @@ pub struct BlockV1 {
     author: AuthorityIndex,
     timestamp_ms: BlockTimestampMs,
     ancestors: Vec<BlockRef>,
+}
+
+impl BlockV1 {
+    #[allow(dead_code)]
+    pub(crate) fn new(
+        round: Round,
+        author: AuthorityIndex,
+        timestamp_ms: BlockTimestampMs,
+        ancestors: Vec<BlockRef>,
+    ) -> BlockV1 {
+        Self {
+            round,
+            author,
+            timestamp_ms,
+            ancestors,
+        }
+    }
 }
 
 impl BlockAPI for BlockV1 {
@@ -279,6 +296,7 @@ impl VerifiedBlock {
     }
 }
 
+/// Allow quick access on the underlying Block without having to always refer to the inner block ref.
 impl Deref for VerifiedBlock {
     type Target = Block;
 

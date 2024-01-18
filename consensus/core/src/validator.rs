@@ -4,6 +4,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::block_manager::BlockManager;
 use consensus_config::{AuthorityIndex, Committee, Parameters, ProtocolKeyPair};
 use prometheus::Registry;
 use sui_protocol_config::ProtocolConfig;
@@ -11,6 +12,7 @@ use tracing::info;
 
 use crate::block_verifier::BlockVerifier;
 use crate::context::Context;
+use crate::core::{Core, CoreSignals};
 use crate::metrics::initialise_metrics;
 use crate::transactions_client::{TransactionsClient, TransactionsConsumer};
 
@@ -45,7 +47,12 @@ impl Validator {
 
         // Create the transactions client and the transactions consumer
         let (client, tx_receiver) = TransactionsClient::new(context.clone());
-        let _tx_consumer = TransactionsConsumer::new(tx_receiver);
+        let tx_consumer = TransactionsConsumer::new(tx_receiver);
+
+        // Construct Core
+        let (core_signals, _signals_receivers) = CoreSignals::new();
+        let block_manager = BlockManager::new();
+        let _core = Core::new(context.clone(), tx_consumer, block_manager, core_signals);
 
         Self {
             context,

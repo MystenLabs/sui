@@ -39,6 +39,7 @@ pub(crate) struct NodeMetrics {
     pub core_lock_enqueued: IntCounter,
     pub core_lock_dequeued: IntCounter,
     pub leader_timeout_total: IntCounter,
+    pub threshold_clock_round: IntGauge,
 }
 
 impl NodeMetrics {
@@ -75,6 +76,11 @@ impl NodeMetrics {
                 registry,
             )
             .unwrap(),
+            threshold_clock_round: register_int_gauge_with_registry!(
+                "threshold_clock_round",
+                "The current threshold clock round. We only advance to a new round when a quorum of parents have been synced.",
+                registry,
+            ).unwrap(),
         }
     }
 }

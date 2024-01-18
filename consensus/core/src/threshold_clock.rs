@@ -34,6 +34,16 @@ impl ThresholdClock {
         self.last_quorum_ts
     }
 
+    /// Add the block references that have been successfully processed and advance the round accordingly. If the round
+    /// has indeed advanced then the new round is returned, otherwise None is returned.
+    pub fn add_blocks(&mut self, mut blocks: Vec<BlockRef>) -> Option<Round> {
+        let previous_round = self.round;
+        for block_ref in blocks {
+            self.add_block(block_ref);
+        }
+        (self.round > previous_round).then_some(self.round)
+    }
+
     pub fn add_block(&mut self, block: BlockRef) {
         match block.round.cmp(&self.round) {
             // Blocks with round less then what we currently build are irrelevant here
@@ -72,22 +82,11 @@ impl ThresholdClock {
 mod tests {
     use super::*;
     use crate::block::BlockDigest;
-    use crate::metrics::test_metrics;
-    use consensus_config::Committee;
-    use consensus_config::{AuthorityIndex, Parameters};
-    use sui_protocol_config::ProtocolConfig;
+    use consensus_config::AuthorityIndex;
 
     #[test]
-    fn test_threshold_clock() {
-        let committee = Committee::new_for_test(0, vec![1, 1, 1, 1]).0;
-        let metrics = test_metrics();
-        let context = Arc::new(Context::new(
-            AuthorityIndex::new_for_test(0),
-            committee,
-            Parameters::default(),
-            ProtocolConfig::get_for_min_version(),
-            metrics,
-        ));
+    fn test_threshold_clock_add_block() {
+        let context = Arc::new(Context::new_for_test());
         let mut aggregator = ThresholdClock::new(0, context);
 
         aggregator.add_block(BlockRef::new(
@@ -138,5 +137,25 @@ mod tests {
             BlockDigest::default(),
         ));
         assert_eq!(aggregator.get_round(), 5);
+    }
+
+    #[test]
+    fn test_threshold_clock_add_blocks() {
+        let context = Arc::new(Context::new_for_test());
+        let mut aggregator = ThresholdClock::new(0, context);
+
+        let block_refs = vec![
+            BlockRef::new(0, AuthorityIndex::new_for_test(0), BlockDigest::default()),
+            BlockRef::new(0, AuthorityIndex::new_for_test(1), BlockDigest::default()),
+            BlockRef::new(0, AuthorityIndex::new_for_test(2), BlockDigest::default()),
+            BlockRef::new(1, AuthorityIndex::new_for_test(0), BlockDigest::default()),
+            BlockRef::new(1, AuthorityIndex::new_for_test(3), BlockDigest::default()),
+            BlockRef::new(2, AuthorityIndex::new_for_test(1), BlockDigest::default()),
+            BlockRef::new(1, AuthorityIndex::new_for_test(1), BlockDigest::default()),
+            BlockRef::new(5, AuthorityIndex::new_for_test(2), BlockDigest::default()),
+        ];
+
+        let result = aggregator.add_blocks(block_refs);
+        assert_eq!(Some(5), result);
     }
 }
