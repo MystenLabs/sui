@@ -24,7 +24,7 @@ Version: 4
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(3,1)}}
 
 task 5 'transfer-object'. lines 35-35:
-Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: [object(3,0)], parent_id: [object(2,0)] }
+Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: object(3,0), parent_id: object(2,0) }
 
 task 6 'view-object'. lines 37-37:
 Owner: Object ID: ( fake(2,0) )

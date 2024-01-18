@@ -1000,14 +1000,14 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let mut err = error.to_string();
         for (name, account) in &self.accounts {
             let addr = account.address.to_string();
-            let replace = format!("[{}]", name);
+            let replace = format!("@{}", name);
             err = err.replace(&addr, &replace);
             // Also match without 0x since different error messages may use different format.
             err = err.replace(&addr[2..], &replace);
         }
         for (id, fake_id) in &self.object_enumeration {
             let id = id.to_string();
-            let replace = format!("[object({})]", fake_id);
+            let replace = format!("object({})", fake_id);
             err = err.replace(&id, &replace);
             // Also match without 0x since different error messages may use different format.
             err = err.replace(&id[2..], &replace);

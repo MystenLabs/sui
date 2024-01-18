@@ -67,7 +67,7 @@ mutated: object(_), 0x0000000000000000000000000000000000000000000000000000000000
 gas summary: computation_cost: 1000000, storage_cost: 11293600,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
 
 task 14 'transfer-object'. lines 90-92:
-Error: Error checking transaction input objects: AddressDeniedForCoin { address: [A], coin_type: "[object(1,0)]::first_coin::FIRST_COIN" }
+Error: Error checking transaction input objects: AddressDeniedForCoin { address: @A, coin_type: "object(1,0)::first_coin::FIRST_COIN" }
 
 task 15 'transfer-object'. lines 93-93:
 mutated: object(0,0), object(1,2)
