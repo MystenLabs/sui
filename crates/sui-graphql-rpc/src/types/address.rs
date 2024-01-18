@@ -5,10 +5,10 @@ use async_graphql::{connection::Connection, *};
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_types::gas_coin::GAS;
 
-use crate::{context_data::db_data_provider::PgManager, data::Db, error::Error};
+use crate::{data::Db, error::Error};
 
 use super::{
-    balance::Balance,
+    balance::{self, Balance},
     coin::Coin,
     cursor::Page,
     dynamic_field::{DynamicField, DynamicFieldName},
@@ -114,17 +114,18 @@ impl Address {
             .extend()
     }
 
-    /// The balance objects for this address.
-    pub async fn balance_connection(
+    /// The balances of all coin types owned by this address. Coins of the same type are grouped
+    /// together into one Balance.
+    pub async fn balances(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<balance::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, Balance>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_balances(self.address, first, after, last, before)
+        before: Option<balance::Cursor>,
+    ) -> Result<Connection<String, Balance>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        Balance::paginate(ctx.data_unchecked(), page, self.address)
             .await
             .extend()
     }

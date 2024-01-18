@@ -66,7 +66,7 @@ fn functional_groups() -> &'static BTreeMap<(&'static str, &'static str), Functi
     static GROUPS: Lazy<BTreeMap<(&str, &str), FunctionalGroup>> = Lazy::new(|| {
         BTreeMap::from_iter([
             (("Address", "balance"), G::Coins),
-            (("Address", "balanceConnection"), G::Coins),
+            (("Address", "balances"), G::Coins),
             (("Address", "coins"), G::Coins),
             (("Address", "defaultSuinsName"), G::NameService),
             (("Address", "dynamicField"), G::DynamicFields),
@@ -79,7 +79,7 @@ fn functional_groups() -> &'static BTreeMap<(&'static str, &'static str), Functi
             (("Epoch", "referenceGasPrice"), G::SystemState),
             (("Epoch", "validatorSet"), G::SystemState),
             (("Object", "balance"), G::Coins),
-            (("Object", "balanceConnection"), G::Coins),
+            (("Object", "balances"), G::Coins),
             (("Object", "coins"), G::Coins),
             (("Object", "defaultSuinsName"), G::NameService),
             (("Object", "dynamicField"), G::DynamicFields),
@@ -87,7 +87,7 @@ fn functional_groups() -> &'static BTreeMap<(&'static str, &'static str), Functi
             (("Object", "dynamicFields"), G::DynamicFields),
             (("Object", "suinsRegistrations"), G::NameService),
             (("Owner", "balance"), G::Coins),
-            (("Owner", "balanceConnection"), G::Coins),
+            (("Owner", "balances"), G::Coins),
             (("Owner", "coins"), G::Coins),
             (("Owner", "defaultSuinsName"), G::NameService),
             (("Owner", "dynamicField"), G::DynamicFields),

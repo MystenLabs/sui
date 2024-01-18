@@ -21,6 +21,7 @@ use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::gas_coin::GAS;
 use sui_types::TypeTag;
 
+use super::balance;
 use super::big_int::BigInt;
 use super::cursor::{self, Page, Target};
 use super::display::{get_rendered_fields, DisplayEntry};
@@ -305,18 +306,18 @@ impl Object {
             .extend()
     }
 
-    /// The balances of all coin types owned by the object. Coins of the same type are grouped
+    /// The balances of all coin types owned by this object. Coins of the same type are grouped
     /// together into one Balance.
-    pub async fn balance_connection(
+    pub async fn balances(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<balance::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, Balance>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_balances(self.address, first, after, last, before)
+        before: Option<balance::Cursor>,
+    ) -> Result<Connection<String, Balance>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        Balance::paginate(ctx.data_unchecked(), page, self.address)
             .await
             .extend()
     }

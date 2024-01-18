@@ -158,7 +158,7 @@
 >      coinObjectCount
 >      totalBalance
 >    }
->    balanceConnection {
+>    balances {
 >      nodes {
 >        coinType {
 >          repr
