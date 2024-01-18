@@ -389,27 +389,25 @@ impl Object {
         .map(|d| d.to_string()))
     }
 
-    /// The SuinsRegistration NFTs owned by the given object. These grant the owner
-    /// the capability to manage the associated domain.
+    /// The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
+    /// manage the associated domain.
     pub async fn suins_registrations(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<Cursor>,
         last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, SuinsRegistration>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_suins_registrations(
-                first,
-                after,
-                last,
-                before,
-                ctx.data_unchecked::<NameServiceConfig>(),
-                self.address,
-            )
-            .await
-            .extend()
+        before: Option<Cursor>,
+    ) -> Result<Connection<String, SuinsRegistration>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        SuinsRegistration::paginate(
+            ctx.data_unchecked::<Db>(),
+            ctx.data_unchecked::<NameServiceConfig>(),
+            page,
+            self.address,
+        )
+        .await
+        .extend()
     }
 
     /// Access a dynamic field on an object using its name.
