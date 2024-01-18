@@ -68,9 +68,12 @@ impl CheckpointReader {
     async fn remote_fetch(&self) -> Result<Vec<CheckpointData>> {
         let mut checkpoints = vec![];
         if let Some(ref store) = self.remote_store {
-            let futures = (self.current_checkpoint_number
-                ..(REMOTE_READ_BATCH_SIZE as u64 + self.last_pruned_watermark))
-                .map(|checkpoint_number| async move {
+            let limit = std::cmp::min(
+                self.current_checkpoint_number + REMOTE_READ_BATCH_SIZE as u64,
+                self.last_pruned_watermark + MAX_CHECKPOINTS_IN_PROGRESS as u64,
+            );
+            let futures =
+                (self.current_checkpoint_number..limit).map(|checkpoint_number| async move {
                     let path = Path::from(format!("{}.chk", checkpoint_number));
                     match store.get(&path).await {
                         Ok(resp) => resp.bytes().await,
@@ -103,6 +106,10 @@ impl CheckpointReader {
             self.current_checkpoint_number, self.last_pruned_watermark, checkpoints.len(),
         );
         for checkpoint in checkpoints {
+            assert_eq!(
+                checkpoint.checkpoint_summary.sequence_number,
+                self.current_checkpoint_number
+            );
             if (MAX_CHECKPOINTS_IN_PROGRESS as u64 + self.last_pruned_watermark)
                 <= checkpoint.checkpoint_summary.sequence_number
             {
