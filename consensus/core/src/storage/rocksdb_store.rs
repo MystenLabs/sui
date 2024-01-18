@@ -16,14 +16,14 @@ use typed_store::{
 
 use super::Store;
 use crate::{
-    block::{BlockDigest, BlockRef, Round, VerifiedBlock},
+    block::{BlockDigest, BlockRef, Round, SignedBlock, VerifiedBlock},
     commit::{Commit, CommitIndex},
     error::ConsensusResult,
 };
 
 /// Persistent storage with RocksDB.
 pub(crate) struct RocksDBStore {
-    /// Stores the blocks by refs.
+    /// Stores SignedBlock by refs.
     blocks: DBMap<(Round, AuthorityIndex, BlockDigest), bytes::Bytes>,
     /// A secondary index that orders refs first by authors.
     digests_by_authorities: DBMap<(AuthorityIndex, Round, BlockDigest), ()>,
@@ -39,15 +39,19 @@ impl RocksDBStore {
 
     /// Creates a new instance of RocksDB storage.
     pub(crate) fn new(path: &str) -> Self {
+        // Consensus data has high write throughput (all transactions) and is rarely read
+        // (only during recovery and when helping peers catch up).
         let db_options = default_db_options().optimize_db_for_write_throughput(2);
         let mut metrics_conf = MetricConf::new("consensus");
         metrics_conf.read_sample_interval = SamplingInterval::new(Duration::from_secs(60), 0);
-        let cf_options = db_options.options.clone();
+        let cf_options = default_db_options().optimize_for_write_throughput().options;
         let column_family_options = vec![
             (
                 Self::BLOCKS_CF,
                 default_db_options()
                     .optimize_for_write_throughput()
+                    // Blocks can get large and they don't need to be compacted.
+                    // So keep them in rocksdb blobstore.
                     .optimize_for_large_values_no_scan(1 << 10)
                     .options,
             ),
@@ -110,7 +114,8 @@ impl Store for RocksDBStore {
         let mut blocks = vec![];
         for serialized in serialized {
             if let Some(serialized) = serialized {
-                let block = VerifiedBlock::from_storage(serialized)?;
+                let signed_block: SignedBlock = bcs::from_bytes(&serialized)?;
+                let block = VerifiedBlock::new_verified(signed_block, serialized)?;
                 blocks.push(Some(block));
             } else {
                 blocks.push(None);

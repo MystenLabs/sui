@@ -24,7 +24,7 @@ pub(crate) struct MemStore {
 struct Inner {
     blocks: BTreeMap<(Round, AuthorityIndex, BlockDigest), VerifiedBlock>,
     digests_by_authorities: BTreeSet<(AuthorityIndex, Round, BlockDigest)>,
-    commits: BTreeMap<u64, Commit>,
+    commits: BTreeMap<CommitIndex, Commit>,
 }
 
 impl MemStore {

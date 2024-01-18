@@ -8,7 +8,6 @@ use std::{
     sync::Arc,
 };
 
-use bytes::Buf as _;
 use consensus_config::{AuthorityIndex, DefaultHashFunction, DIGEST_LENGTH};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, HashFunction};
@@ -203,13 +202,14 @@ pub(crate) struct VerifiedBlock {
 }
 
 impl VerifiedBlock {
-    /// Parses a serialized block from storage, where the block has been verified.
-    /// This should never be called on unverified data received over the network.
-    pub fn from_storage(serialized: bytes::Bytes) -> Result<Self, bcs::Error> {
-        let block: SignedBlock = bcs::from_bytes(serialized.chunk())?;
-        let digest = Self::compute_digest(&block.inner)?;
+    /// Creates VerifiedBlock from verified SignedBlock and its serialized bytes.
+    pub fn new_verified(
+        signed_block: SignedBlock,
+        serialized: bytes::Bytes,
+    ) -> Result<Self, bcs::Error> {
+        let digest = Self::compute_digest(&signed_block.inner)?;
         Ok(VerifiedBlock {
-            block: Arc::new(block),
+            block: Arc::new(signed_block),
             digest,
             serialized,
         })
