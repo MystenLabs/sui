@@ -675,13 +675,14 @@ impl Object {
             })
             .await?;
 
-        // For the moment, if the object existed at some point, it will have eventually be written to objects_snapshot.
-        // Therefore, if both results are None, the object has never existed.
+        // For the moment, if the object existed at some point, it will have eventually be written
+        // to objects_snapshot. Therefore, if both results are None, the object has never existed.
         let Some(mut stored_objs) = results else {
             return Ok(None);
         };
 
-        // The objects_history object will occupy the last element and will always be more recent than the previous elements.
+        // The objects_history object will occupy the last element and will always be more recent
+        // than the previous elements.
         stored_objs.pop().map(Self::try_from).transpose()
     }
 
@@ -734,13 +735,14 @@ impl Object {
             })
             .await?;
 
-        // For the moment, if the object existed at some point, it will have eventually be written to objects_snapshot.
-        // Therefore, if both results are None, the object has never existed.
+        // For the moment, if the object existed at some point, it will have eventually be written
+        // to objects_snapshot. Therefore, if both results are None, the object has never existed.
         let Some(mut stored_objs) = results else {
             return Ok(None);
         };
 
-        // The objects_history object will occupy the last element and will always be more recent than the previous elements.
+        // The objects_history object will occupy the last element and will always be more recent
+        // than the previous elements.
         stored_objs.pop().map(Self::try_from).transpose()
     }
 
@@ -755,7 +757,8 @@ impl Object {
         } else if let Some(version) = version {
             Object::query_at_version(db, address, version).await
         } else {
-            // safe to do because either version or checkpoint_sequence_number is not None and version is None
+            // safe to do because either version or checkpoint_sequence_number is not None and
+            // version is None
             Object::query_latest_at_checkpoint(db, address, checkpoint_sequence_number.unwrap())
                 .await
         }
