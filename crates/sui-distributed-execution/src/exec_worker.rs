@@ -800,6 +800,7 @@ impl<
                                     }
                                 }
 
+                                sleep(Duration::from_millis(100)).await;
                                 // println!("EW {} executing tx {}", my_id, txid);
                                 Self::async_exec(
                                     tx,

@@ -8,12 +8,12 @@ use sui_single_node_benchmark::{
 };
 use sui_types::{base_types::SuiAddress, object::Object, transaction::Transaction};
 
-// pub const WORKLOAD: WorkloadKind = WorkloadKind::NoMove;
-pub const WORKLOAD: WorkloadKind = WorkloadKind::Move {
-    num_input_objects: 2,
-    num_dynamic_fields: 0,
-    computation: 0,
-};
+pub const WORKLOAD: WorkloadKind = WorkloadKind::NoMove;
+// pub const WORKLOAD: WorkloadKind = WorkloadKind::Move {
+//     num_input_objects: 2,
+//     num_dynamic_fields: 0,
+//     computation: 0,
+// };
 pub const COMPONENT: Component = Component::PipeTxsToChannel;
 
 pub fn export_to_files(
@@ -98,6 +98,8 @@ pub async fn generate_benchmark_data(
 mod test {
     use std::{fs, time::Duration};
 
+    use tokio::time::sleep;
+
     use super::import_from_files;
 
     #[tokio::test]
@@ -126,8 +128,8 @@ mod test {
 
     #[tokio::test]
     async fn benchmark_setup_move_test() {
-        let tx_count = 300;
-        let duration = Duration::from_secs(10);
+        let tx_count = 1000;
+        let duration = Duration::from_secs(50);
 
         super::generate_benchmark_data(tx_count, duration).await;
     }
@@ -135,10 +137,11 @@ mod test {
     #[tokio::test]
     #[should_panic]
     async fn benchmark_setup_twice_move_test() {
-        let tx_count = 300;
-        let duration = Duration::from_secs(10);
+        let tx_count = 10000;
+        let duration = Duration::from_secs(50);
 
         super::generate_benchmark_data(tx_count, duration).await;
+        sleep(Duration::from_millis(1_000)).await;
         super::generate_benchmark_data(tx_count, duration).await;
     }
 }
