@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cmp::Ordering;
-use std::collections::BTreeSet;
 use std::ops::Not;
 use std::sync::Arc;
 use std::{iter, mem, thread};
@@ -24,13 +23,11 @@ use sui_types::digests::TransactionEventsDigest;
 use sui_types::error::UserInputError;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
-use sui_types::object::Owner;
 use sui_types::storage::{
-    get_module, BackingPackageStore, ChildObjectResolver, InputKey, MarkerValue, ObjectKey,
-    ObjectOrTombstone, ObjectStore, PackageObject,
+    get_module, BackingPackageStore, MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore,
 };
 use sui_types::sui_system_state::get_sui_system_state;
-use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
+use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure};
 use tokio::sync::{RwLockReadGuard, RwLockWriteGuard};
 use tokio::time::Instant;
 use tracing::{debug, info, trace};
@@ -399,52 +396,42 @@ impl AuthorityStore {
             .contains_key(digest)?)
     }
 
-    pub fn get_deleted_shared_object_previous_tx_digest(
+    pub fn get_marker_value(
         &self,
         object_id: &ObjectID,
         version: &SequenceNumber,
         epoch_id: EpochId,
-    ) -> SuiResult<Option<TransactionDigest>> {
+    ) -> SuiResult<Option<MarkerValue>> {
         let object_key = (epoch_id, ObjectKey(*object_id, *version));
-
-        match self
+        Ok(self
             .perpetual_tables
             .object_per_epoch_marker_table
-            .get(&object_key)?
-        {
-            Some(MarkerValue::SharedDeleted(digest)) => Ok(Some(digest)),
-            _ => Ok(None),
-        }
+            .get(&object_key)?)
     }
 
-    pub fn get_last_shared_object_deletion_info(
+    pub fn get_latest_marker(
         &self,
         object_id: &ObjectID,
         epoch_id: EpochId,
-    ) -> SuiResult<Option<(SequenceNumber, TransactionDigest)>> {
-        let object_key = ObjectKey::max_for_id(object_id);
-        let marker_key = (epoch_id, object_key);
+    ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
+        let min_key = (epoch_id, ObjectKey::min_for_id(object_id));
+        let max_key = (epoch_id, ObjectKey::max_for_id(object_id));
 
         let marker_entry = self
             .perpetual_tables
             .object_per_epoch_marker_table
-            .unbounded_iter()
-            .skip_prior_to(&marker_key)?
+            .safe_iter_with_bounds(Some(min_key), Some(max_key))
+            .skip_prior_to(&max_key)?
             .next();
         match marker_entry {
-            // Make sure the object was deleted or wrapped.
-            Some(((epoch, key), MarkerValue::SharedDeleted(digest))) => {
-                // Make sure object id matches and version is >= `version`
-                let object_id_matches = key.0 == *object_id;
-                // Make sure we don't have a stale epoch for some reason (e.g., a revert)
-                let epoch_data_ok = epoch == epoch_id;
-                if object_id_matches && epoch_data_ok {
-                    Ok(Some((key.1, digest)))
-                } else {
-                    Ok(None)
-                }
+            Some(Ok(((epoch, key), marker))) => {
+                // because of the iterator bounds these cannot fail
+                assert_eq!(epoch, epoch_id);
+                assert_eq!(key.0, *object_id);
+                Ok(Some((key.1, marker)))
             }
-            _ => Ok(None),
+            Some(Err(e)) => Err(e.into()),
+            None => Ok(None),
         }
     }
 
@@ -535,6 +522,26 @@ impl AuthorityStore {
             .await
     }
 
+    pub fn object_exists_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> SuiResult<bool> {
+        Ok(self
+            .perpetual_tables
+            .objects
+            .contains_key(&ObjectKey(*object_id, version))?)
+    }
+
+    pub fn multi_object_exists_by_key(&self, object_keys: &[ObjectKey]) -> SuiResult<Vec<bool>> {
+        Ok(self
+            .perpetual_tables
+            .objects
+            .multi_contains_keys(object_keys.to_vec())?
+            .into_iter()
+            .collect())
+    }
+
     pub fn get_object_ref_prior_to_key(
         &self,
         object_id: &ObjectID,
@@ -579,47 +586,6 @@ impl AuthorityStore {
         Ok(ret)
     }
 
-    /// Load a list of objects from the store by object reference.
-    /// If they exist in the store, they are returned directly.
-    /// If any object missing, we try to figure out the best error to return.
-    /// If the object we are asking is currently locked at a future version, we know this
-    /// transaction is out-of-date and we return a ObjectVersionUnavailableForConsumption,
-    /// which indicates this is not retriable.
-    /// Otherwise, we return a ObjectNotFound error, which indicates this is retriable.
-    pub fn multi_get_object_with_more_accurate_error_return(
-        &self,
-        object_refs: &[ObjectRef],
-    ) -> Result<Vec<Object>, SuiError> {
-        let objects = self.multi_get_object_by_key(
-            &object_refs.iter().map(ObjectKey::from).collect::<Vec<_>>(),
-        )?;
-        let mut result = Vec::new();
-        for (object_opt, object_ref) in objects.into_iter().zip(object_refs) {
-            match object_opt {
-                None => {
-                    let lock = self.get_latest_lock_for_object_id(object_ref.0)?;
-                    let error = if lock.1 >= object_ref.1 {
-                        UserInputError::ObjectVersionUnavailableForConsumption {
-                            provided_obj_ref: *object_ref,
-                            current_version: lock.1,
-                        }
-                    } else {
-                        UserInputError::ObjectNotFound {
-                            object_id: object_ref.0,
-                            version: Some(object_ref.1),
-                        }
-                    };
-                    return Err(SuiError::UserInputError { error });
-                }
-                Some(object) => {
-                    result.push(object);
-                }
-            }
-        }
-        assert_eq!(result.len(), object_refs.len());
-        Ok(result)
-    }
-
     /// Get many objects
     pub fn get_objects(&self, objects: &[ObjectID]) -> Result<Vec<Option<Object>>, SuiError> {
         let mut result = Vec::new();
@@ -627,20 +593,6 @@ impl AuthorityStore {
             result.push(self.get_object(id)?);
         }
         Ok(result)
-    }
-
-    pub fn have_received_object_at_version(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        let marker_key = (epoch_id, ObjectKey(*object_id, version));
-        Ok(self
-            .perpetual_tables
-            .object_per_epoch_marker_table
-            .get(&marker_key)?
-            .is_some_and(|marker_value| marker_value == MarkerValue::Received))
     }
 
     pub fn have_deleted_owned_object_at_version_or_after(
@@ -672,130 +624,6 @@ impl AuthorityStore {
             }
             None => Ok(false),
         }
-    }
-
-    /// Gets the input object keys from input object kinds, by determining the versions of owned,
-    /// shared and package objects.
-    /// When making changes, please see if check_sequenced_input_objects() below needs
-    /// similar changes as well.
-    pub fn get_input_object_keys(
-        &self,
-        digest: &TransactionDigest,
-        objects: &[InputObjectKind],
-        epoch_store: &AuthorityPerEpochStore,
-    ) -> BTreeSet<InputKey> {
-        let mut shared_locks = HashMap::<ObjectID, SequenceNumber>::new();
-        objects
-            .iter()
-            .map(|kind| {
-                match kind {
-                    InputObjectKind::SharedMoveObject { id, .. } => {
-                        if shared_locks.is_empty() {
-                            shared_locks = epoch_store
-                                .get_shared_locks(digest)
-                                .expect("Read from storage should not fail!")
-                                .into_iter()
-                                .collect();
-                        }
-                        // If we can't find the locked version, it means
-                        // 1. either we have a bug that skips shared object version assignment
-                        // 2. or we have some DB corruption
-                        let Some(version) = shared_locks.get(id) else {
-                            panic!(
-                                "Shared object locks should have been set. tx_digset: {digest:?}, obj \
-                                id: {id:?}",
-                            )
-                        };
-                        InputKey::VersionedObject{ id: *id, version: *version}
-                    }
-                    InputObjectKind::MovePackage(id) => InputKey::Package { id: *id },
-                    InputObjectKind::ImmOrOwnedMoveObject(objref) => InputKey::VersionedObject {id: objref.0, version: objref.1},
-                }
-            })
-            .collect()
-    }
-
-    /// Checks if the input object identified by the InputKey exists, with support for non-system
-    /// packages i.e. when version is None. If the input object doesn't exist and it's a receiving
-    /// object, we also check if the object exists in the object marker table and view it as
-    /// existing if it is in the table.
-    #[instrument(level = "trace", skip_all)]
-    pub fn multi_input_objects_available(
-        &self,
-        keys: impl Iterator<Item = InputKey> + Clone,
-        receiving_objects: HashSet<InputKey>,
-        epoch_store: &AuthorityPerEpochStore,
-    ) -> Result<Vec<bool>, SuiError> {
-        let (keys_with_version, keys_without_version): (Vec<_>, Vec<_>) = keys
-            .enumerate()
-            .partition(|(_, key)| key.version().is_some());
-
-        let mut versioned_results = vec![];
-        for ((idx, input_key), has_key) in keys_with_version.iter().zip(
-            self.perpetual_tables
-                .objects
-                .multi_contains_keys(
-                    keys_with_version
-                        .iter()
-                        .map(|(_, k)| ObjectKey(k.id(), k.version().unwrap())),
-                )?
-                .into_iter(),
-        ) {
-            // If the key exists at the specified version, then the object is available.
-            if has_key {
-                versioned_results.push((*idx, true))
-            } else if receiving_objects.contains(input_key) {
-                // There could be a more recent version of this object, and the object at the
-                // specified version could have already been pruned. In such a case `has_key` will
-                // be false, but since this is a receiving object we should mark it as available if
-                // we can determine that an object with a version greater than or equal to the
-                // specified version exists or was deleted. We will then let mark it as available
-                // to let the the transaction through so it can fail at execution.
-                let is_available = self
-                    .get_object(&input_key.id())?
-                    .map(|obj| obj.version() >= input_key.version().unwrap())
-                    .unwrap_or(false)
-                    || self.have_deleted_owned_object_at_version_or_after(
-                        &input_key.id(),
-                        input_key.version().unwrap(),
-                        epoch_store.epoch(),
-                    )?;
-                versioned_results.push((*idx, is_available));
-            } else if self
-                .get_deleted_shared_object_previous_tx_digest(
-                    &input_key.id(),
-                    &input_key.version().unwrap(),
-                    epoch_store.epoch(),
-                )?
-                .is_some()
-            {
-                // If the object is an already deleted shared object, mark it as available if the
-                // version for that object is in the shared deleted marker table.
-                versioned_results.push((*idx, true));
-            } else {
-                versioned_results.push((*idx, false));
-            }
-        }
-
-        let unversioned_results = keys_without_version.into_iter().map(|(idx, key)| {
-            (
-                idx,
-                match self
-                    .get_latest_object_ref_or_tombstone(key.id())
-                    .expect("read cannot fail")
-                {
-                    None => false,
-                    Some(entry) => entry.2.is_alive(),
-                },
-            )
-        });
-
-        let mut results = versioned_results
-            .into_iter()
-            .chain(unversioned_results)
-            .collect::<Vec<_>>();
-        results.sort_by_key(|(idx, _)| *idx);
-        Ok(results.into_iter().map(|(_, result)| result).collect())
     }
 
     // Methods to mutate the store
@@ -1287,7 +1115,10 @@ impl AuthorityStore {
     }
 
     /// Returns UserInputError::ObjectNotFound if no lock records found for this object.
-    fn get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
+    pub(crate) fn get_latest_lock_for_object_id(
+        &self,
+        object_id: ObjectID,
+    ) -> SuiResult<ObjectRef> {
         let mut iterator = self
             .perpetual_tables
             .owned_object_transaction_locks
@@ -1685,6 +1516,11 @@ impl AuthorityStore {
             return Ok(());
         }
 
+        // Note that this can only be called at reconfiguration time, at which time the
+        // db is fully consistent. Therefore the system cache (in AuthorityState) has no
+        // dirty data and is not needed.
+        let cache = Arc::new(InMemoryCache::new(self.clone()));
+
         let executor = old_epoch_store.executor();
         info!("Starting SUI conservation check. This may take a while..");
         let cur_time = Instant::now();
@@ -1702,9 +1538,10 @@ impl AuthorityStore {
                         if count % 1_000_000 == 0 {
                             let mut task_objects = vec![];
                             mem::swap(&mut pending_objects, &mut task_objects);
+                            let cache = cache.clone();
                             pending_tasks.push(s.spawn(move || {
                                 let mut layout_resolver =
-                                    executor.type_layout_resolver(Box::new(self.as_ref()));
+                                    executor.type_layout_resolver(Box::new(cache.as_ref()));
                                 let mut total_storage_rebate = 0;
                                 let mut total_sui = 0;
                                 for object in task_objects {
@@ -1732,7 +1569,7 @@ impl AuthorityStore {
                 (init.0 + result.0, init.1 + result.1)
             })
         });
-        let mut layout_resolver = executor.type_layout_resolver(Box::new(self.as_ref()));
+        let mut layout_resolver = executor.type_layout_resolver(Box::new(cache.as_ref()));
         for object in pending_objects {
             total_storage_rebate += object.storage_rebate;
             total_sui +=
@@ -1912,12 +1749,6 @@ impl AuthorityStore {
     }
 }
 
-impl BackingPackageStore for AuthorityStore {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
-        self.package_cache.get_package_object(package_id, self)
-    }
-}
-
 impl ObjectStore for AuthorityStore {
     /// Read an object and return it, or Ok(None) if the object was not found.
     fn get_object(
@@ -1933,71 +1764,6 @@ impl ObjectStore for AuthorityStore {
         version: VersionNumber,
     ) -> Result<Option<Object>, sui_types::storage::error::Error> {
         self.perpetual_tables.get_object_by_key(object_id, version)
-    }
-}
-
-impl ChildObjectResolver for AuthorityStore {
-    fn read_child_object(
-        &self,
-        parent: &ObjectID,
-        child: &ObjectID,
-        child_version_upper_bound: SequenceNumber,
-    ) -> SuiResult<Option<Object>> {
-        let Some(child_object) =
-            self.find_object_lt_or_eq_version(*child, child_version_upper_bound)
-        else {
-            return Ok(None);
-        };
-
-        let parent = *parent;
-        if child_object.owner != Owner::ObjectOwner(parent.into()) {
-            return Err(SuiError::InvalidChildObjectAccess {
-                object: *child,
-                given_parent: parent,
-                actual_owner: child_object.owner,
-            });
-        }
-        Ok(Some(child_object))
-    }
-
-    fn get_object_received_at_version(
-        &self,
-        owner: &ObjectID,
-        receiving_object_id: &ObjectID,
-        receive_object_at_version: SequenceNumber,
-        epoch_id: EpochId,
-    ) -> SuiResult<Option<Object>> {
-        let Some(recv_object) =
-            self.get_object_by_key(receiving_object_id, receive_object_at_version)?
-        else {
-            return Ok(None);
-        };
-
-        // Check for:
-        // * Invalid access -- treat as the object does not exist. Or;
-        // * If we've already received the object at the version -- then treat it as though it doesn't exist.
-        // These two cases must remain indisguishable to the caller otherwise we risk forks in
-        // transaction replay due to possible reordering of transactions during replay.
-        if recv_object.owner != Owner::AddressOwner((*owner).into())
-            || self.have_received_object_at_version(
-                receiving_object_id,
-                receive_object_at_version,
-                epoch_id,
-            )?
-        {
-            return Ok(None);
-        }
-
-        Ok(Some(recv_object))
-    }
-}
-
-impl ParentSync for AuthorityStore {
-    fn get_latest_parent_entry_ref_deprecated(
-        &self,
-        object_id: ObjectID,
-    ) -> SuiResult<Option<ObjectRef>> {
-        self.get_latest_object_ref_or_tombstone(object_id)
     }
 }
 

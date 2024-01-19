@@ -3,7 +3,6 @@
 
 use parking_lot::Mutex;
 use std::sync::Arc;
-use typed_store::TypedStoreError;
 
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
@@ -19,6 +18,7 @@ use sui_types::messages_checkpoint::FullCheckpointContents;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::messages_checkpoint::VerifiedCheckpointContents;
 use sui_types::object::Object;
+use sui_types::storage::error::Error as StorageError;
 use sui_types::storage::WriteStore;
 use sui_types::storage::{ObjectKey, ReadStore};
 use sui_types::transaction::VerifiedTransaction;
@@ -66,13 +66,15 @@ impl RocksDbStore {
 }
 
 impl ReadStore for RocksDbStore {
-    type Error = typed_store::TypedStoreError;
+    type Error = StorageError;
 
     fn get_checkpoint_by_digest(
         &self,
         digest: &CheckpointDigest,
     ) -> Result<Option<VerifiedCheckpoint>, Self::Error> {
-        self.checkpoint_store.get_checkpoint_by_digest(digest)
+        self.checkpoint_store
+            .get_checkpoint_by_digest(digest)
+            .map_err(Into::into)
     }
 
     fn get_checkpoint_by_sequence_number(
@@ -81,6 +83,7 @@ impl ReadStore for RocksDbStore {
     ) -> Result<Option<VerifiedCheckpoint>, Self::Error> {
         self.checkpoint_store
             .get_checkpoint_by_sequence_number(sequence_number)
+            .map_err(Into::into)
     }
 
     fn get_highest_verified_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error> {
@@ -90,6 +93,7 @@ impl ReadStore for RocksDbStore {
                 maybe_checkpoint
                     .expect("storage should have been initialized with genesis checkpoint")
             })
+            .map_err(Into::into)
     }
 
     fn get_highest_synced_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error> {
@@ -99,12 +103,14 @@ impl ReadStore for RocksDbStore {
                 maybe_checkpoint
                     .expect("storage should have been initialized with genesis checkpoint")
             })
+            .map_err(Into::into)
     }
 
     fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber, Self::Error> {
         self.checkpoint_store
             .get_highest_pruned_checkpoint_seq_number()
             .map(|seq| seq + 1)
+            .map_err(Into::into)
     }
 
     fn get_full_checkpoint_contents_by_sequence_number(
@@ -113,6 +119,7 @@ impl ReadStore for RocksDbStore {
     ) -> Result<Option<FullCheckpointContents>, Self::Error> {
         self.checkpoint_store
             .get_full_checkpoint_contents_by_sequence_number(sequence_number)
+            .map_err(Into::into)
     }
 
     fn get_full_checkpoint_contents(
@@ -155,11 +162,7 @@ impl ReadStore for RocksDbStore {
         self.execution_cache
             .get_transaction_block(digest)
             .map(|tx| tx.map(|tx| (*tx).clone()))
-            // TODO: remove this when https://github.com/MystenLabs/sui/pull/15685 is merged.
-            .map_err(|err| match err {
-                SuiError::StorageError(err) => err,
-                _ => TypedStoreError::RocksDBError(err.to_string()),
-            })
+            .map_err(StorageError::custom)
     }
 
     fn get_transaction_effects(
@@ -168,11 +171,7 @@ impl ReadStore for RocksDbStore {
     ) -> Result<Option<TransactionEffects>, Self::Error> {
         self.execution_cache
             .get_effects(digest)
-            // TODO: remove this when https://github.com/MystenLabs/sui/pull/15685 is merged.
-            .map_err(|err| match err {
-                SuiError::StorageError(err) => err,
-                _ => TypedStoreError::RocksDBError(err.to_string()),
-            })
+            .map_err(StorageError::custom)
     }
 
     fn get_transaction_events(
@@ -181,11 +180,7 @@ impl ReadStore for RocksDbStore {
     ) -> Result<Option<TransactionEvents>, Self::Error> {
         self.execution_cache
             .get_events(digest)
-            // TODO: remove this when https://github.com/MystenLabs/sui/pull/15685 is merged.
-            .map_err(|err| match err {
-                SuiError::StorageError(err) => err,
-                _ => TypedStoreError::RocksDBError(err.to_string()),
-            })
+            .map_err(StorageError::custom)
     }
 }
 
@@ -201,7 +196,9 @@ impl WriteStore for RocksDbStore {
             self.insert_committee(committee)?;
         }
 
-        self.checkpoint_store.insert_verified_checkpoint(checkpoint)
+        self.checkpoint_store
+            .insert_verified_checkpoint(checkpoint)
+            .map_err(Into::into)
     }
 
     fn update_highest_synced_checkpoint(
@@ -241,6 +238,7 @@ impl WriteStore for RocksDbStore {
             .multi_insert_transaction_and_effects(contents.iter())?;
         self.checkpoint_store
             .insert_verified_checkpoint_contents(checkpoint, contents)
+            .map_err(Into::into)
     }
 
     fn insert_committee(&self, new_committee: Committee) -> Result<(), Self::Error> {

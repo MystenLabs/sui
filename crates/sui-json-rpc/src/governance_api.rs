@@ -395,7 +395,7 @@ async fn exchange_rates(
                 error: e.to_string(),
             })?;
         let validator = get_validator_from_table(
-            state.get_db().as_ref(),
+            state.get_cache_reader().as_ref(),
             system_state_summary.inactive_pools_id,
             &pool_id,
         )?; // TODO(wlmyng): roll this into StateReadError
@@ -422,7 +422,7 @@ async fn exchange_rates(
                 })?;
 
                 let exchange_rate: PoolTokenExchangeRate = get_dynamic_field_from_store(
-                    state.get_db().as_ref(),
+                    &state.get_cache_reader().as_ref(),
                     exchange_rates_id,
                     &epoch,
                 )?;

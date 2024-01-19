@@ -84,7 +84,9 @@ impl TransactionInputLoader {
             }
         }
 
-        let objects = self.cache.multi_get_object_by_objref(&object_refs)?;
+        let objects = self
+            .cache
+            .multi_get_object_with_more_accurate_error_return(&object_refs)?;
         assert_eq!(objects.len(), object_refs.len());
         for (index, object) in fetch_indices.into_iter().zip(objects.into_iter()) {
             input_results[index] = Some(ObjectReadResult {
