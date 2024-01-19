@@ -35,6 +35,7 @@ pub mod types;
 static DEFAULT_SANDBOX_BASE_PATH: &str =
     concat!(env!("CARGO_MANIFEST_DIR"), "/tests/sandbox_snapshots");
 
+mod displays;
 #[cfg(test)]
 mod tests;
 

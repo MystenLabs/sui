@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::chain_from_chain_id;
+use crate::displays::Pretty;
 use crate::{
     config::ReplayableNetworkConfigSet,
     data_fetcher::{
@@ -44,6 +45,7 @@ use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsA
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::storage::{get_module, PackageObject};
+use sui_types::transaction::TransactionKind::ProgrammableTransaction;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
     committee::EpochId,
@@ -64,7 +66,7 @@ use sui_types::{
     },
     DEEPBOOK_PACKAGE_ID,
 };
-use tracing::{error, info, warn};
+use tracing::{error, info, trace, warn};
 
 // TODO: add persistent cache. But perf is good enough already.
 
@@ -735,6 +737,7 @@ impl LocalExec {
 
         // All prep done
         let expensive_checks = true;
+        let transaction_kind = override_transaction_kind.unwrap_or(tx_info.kind.clone());
         let certificate_deny_set = HashSet::new();
         let res = if let Ok(gas_status) =
             SuiGasStatus::new(tx_info.gas_budget, tx_info.gas_price, rgp, protocol_config)
@@ -750,12 +753,16 @@ impl LocalExec {
                 CheckedInputObjects::new_for_replay(input_objects),
                 tx_info.gas.clone(),
                 gas_status,
-                override_transaction_kind.unwrap_or(tx_info.kind.clone()),
+                transaction_kind.clone(),
                 tx_info.sender,
                 *tx_digest,
             )
         } else {
             unreachable!("Transaction was valid so gas status must be valid");
+        };
+
+        if let ProgrammableTransaction(pt) = transaction_kind {
+            trace!(target: "replay_ptb_info", "{}", Pretty(&pt));
         };
 
         let all_required_objects = self.storage.all_objects();
