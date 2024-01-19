@@ -4,11 +4,11 @@
 use crate::{error::code, metrics::Metrics};
 use async_graphql::{
     extensions::{
-        Extension, ExtensionContext, ExtensionFactory, NextExecute, NextParseQuery,
-        NextPrepareRequest, NextResolve, NextValidation, ResolveInfo,
+        Extension, ExtensionContext, ExtensionFactory, NextExecute, NextParseQuery, NextResolve,
+        NextValidation, ResolveInfo,
     },
     parser::types::{ExecutableDocument, OperationType, Selection},
-    PathSegment, Request, Response, ServerError, ServerResult, ValidationResult, Variables,
+    PathSegment, Response, ServerError, ServerResult, ValidationResult, Variables,
 };
 use async_graphql_value::ConstValue;
 use std::{fmt::Write, net::SocketAddr, sync::Arc};
@@ -51,16 +51,6 @@ struct LoggerExtension {
 
 #[async_trait::async_trait]
 impl Extension for LoggerExtension {
-    /// Called at prepare request.
-    async fn prepare_request(
-        &self,
-        ctx: &ExtensionContext<'_>,
-        request: Request,
-        next: NextPrepareRequest<'_>,
-    ) -> ServerResult<Request> {
-        next.run(ctx, request).await
-    }
-
     async fn resolve(
         &self,
         ctx: &ExtensionContext<'_>,
