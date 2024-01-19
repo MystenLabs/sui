@@ -477,7 +477,7 @@ pub type SequenceItem = Spanned<SequenceItem_>;
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchArm_ {
     pub pattern: MatchPattern,
-    pub binders: Vec<Var>,
+    pub binders: Vec<(Mutability, Var)>,
     pub guard: Option<Box<Exp>>,
     pub guard_binders: UniqueMap<Var, Var>, // pattern binder name -> guard var name
     pub rhs_binders: BTreeSet<Var>,         // pattern binders used in the right-hand side
@@ -495,7 +495,7 @@ pub enum MatchPattern_ {
         Option<Vec<Type>>,
         Fields<MatchPattern>,
     ),
-    Binder(Var),
+    Binder(Mutability, Var),
     Literal(Value),
     Wildcard,
     Or(Box<MatchPattern>, Box<MatchPattern>),
@@ -1895,7 +1895,10 @@ impl AstDebug for MatchPattern_ {
                 });
                 w.write("} ");
             }
-            Binder(name) => name.ast_debug(w),
+            Binder(mut_, name) => {
+                mut_.ast_debug(w);
+                name.ast_debug(w)
+            },
             Literal(v) => v.ast_debug(w),
             Wildcard => w.write("_"),
             Or(lhs, rhs) => {

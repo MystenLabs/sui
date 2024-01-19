@@ -86,20 +86,20 @@ pub fn feature_edition_error_msg(edition: Edition, feature: FeatureGate) -> Opti
     let supports_feature = edition.supports(feature);
     if !supports_feature {
         let valid_editions = valid_editions_for_feature(feature);
-        let message = if valid_editions.is_empty() && Edition::DEVELOPMENT.features().contains(&feature)
-        {
-            format!(
-                "{} under development and should not be used right now.",
-                feature.error_prefix()
-            )
-        } else {
-            format!(
-                "{} not supported by current edition '{edition}', \
+        let message =
+            if valid_editions.is_empty() && Edition::DEVELOPMENT.features().contains(&feature) {
+                format!(
+                    "{} under development and should not be used right now.",
+                    feature.error_prefix()
+                )
+            } else {
+                format!(
+                    "{} not supported by current edition '{edition}', \
                     only {} support this feature",
-                feature.error_prefix(),
-                format_oxford_list!("and", "'{}'", valid_editions)
-            )
-        };
+                    feature.error_prefix(),
+                    format_oxford_list!("and", "'{}'", valid_editions)
+                )
+            };
         Some(message)
     } else {
         None

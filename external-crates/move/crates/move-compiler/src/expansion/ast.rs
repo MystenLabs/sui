@@ -291,7 +291,7 @@ pub type Type = Spanned<Type_>;
 // Expressions
 //**************************************************************************************************
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialOrd, Ord, Hash)]
 pub enum Mutability {
     Imm,
     Mut(Loc), // if the local had a `mut` prefix
@@ -449,7 +449,7 @@ pub enum MatchPattern_ {
     PositionalConstructor(ModuleAccess, Option<Vec<Type>>, Spanned<Vec<MatchPattern>>),
     FieldConstructor(ModuleAccess, Option<Vec<Type>>, Fields<MatchPattern>),
     HeadConstructor(ModuleAccess, Option<Vec<Type>>),
-    Binder(Var),
+    Binder(Mutability, Var),
     Literal(Value),
     ErrorPat,
     Or(Box<MatchPattern>, Box<MatchPattern>),
@@ -823,6 +823,21 @@ impl IntoIterator for AbilitySet {
 
     fn into_iter(self) -> Self::IntoIter {
         AbilitySetIntoIter(self.0.into_iter())
+    }
+}
+
+//**************************************************************************************************
+// PartialEq
+//**************************************************************************************************
+
+impl PartialEq for Mutability {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Mutability::Imm, Mutability::Imm) => true,
+            (Mutability::Either, Mutability::Either) => true,
+            (Mutability::Mut(_), Mutability::Mut(_)) => true,
+            (_, _) => false,
+        }
     }
 }
 
@@ -1764,7 +1779,10 @@ impl AstDebug for MatchPattern_ {
                     w.write(">");
                 }
             }
-            Binder(name) => w.write(format!("{}", name)),
+            Binder(mut_, name) => {
+                mut_.ast_debug(w);
+                w.write(format!("{}", name))
+            }
             Literal(v) => v.ast_debug(w),
             ErrorPat => w.write("_<err>_"),
             Or(lhs, rhs) => {

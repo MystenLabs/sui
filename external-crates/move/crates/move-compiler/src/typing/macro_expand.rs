@@ -517,7 +517,7 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
                     rhs_binders,
                     rhs,
                 } = &mut arm.value;
-                for var in binders.iter_mut() {
+                for (_, var) in binders.iter_mut() {
                     ctx.add_var(&var);
                     recolor_var(ctx, var);
                 }
@@ -650,7 +650,7 @@ fn recolor_pat(ctx: &mut Recolor, sp!(_, p_): &mut N::MatchPattern) {
                 recolor_pat(ctx, p)
             }
         }
-        N::MatchPattern_::Binder(var) => recolor_var(ctx, var),
+        N::MatchPattern_::Binder(_mut, var) => recolor_var(ctx, var),
         N::MatchPattern_::Or(lhs, rhs) => {
             recolor_pat(ctx, lhs);
             recolor_pat(ctx, rhs);
@@ -800,10 +800,10 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                     rhs,
                 } = &mut arm.value;
                 take_and_mut_replace!(binders, valid_binders, {
-                    let valid_binders_set = valid_binders
+                    valid_binders = valid_binders
                         .clone()
                         .into_iter()
-                        .filter(|sp!(_, var_)| {
+                        .filter(|(_, sp!(_, var_))| {
                             if context.all_params.contains_key(var_) {
                                 assert!(
                                     context.core.env.has_errors(),
@@ -814,10 +814,14 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                                 true
                             }
                         })
+                        .collect::<Vec<_>>();
+                    let valid_binders_set = valid_binders
+                        .iter()
+                        .map(|(_, var)| var.clone())
                         .collect::<BTreeSet<_>>();
                     take_and_mut_replace!(guard_binders, cur_guard_binders, {
                         cur_guard_binders = cur_guard_binders.filter_map(|k, v| {
-                            if valid_binders.contains(&k) {
+                            if valid_binders_set.contains(&k) {
                                 Some(v)
                             } else {
                                 None
@@ -827,10 +831,9 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                     take_and_mut_replace!(rhs_binders, valid_rhs_binders, {
                         valid_rhs_binders = valid_rhs_binders
                             .into_iter()
-                            .filter(|v| valid_binders.contains(&v))
+                            .filter(|v| valid_binders_set.contains(&v))
                             .collect();
                     });
-                    valid_binders = valid_binders_set.into_iter().collect::<Vec<_>>();
                 });
                 pat(context, pattern);
                 guard.as_mut().map(|guard| exp(context, guard));
@@ -1121,7 +1124,7 @@ fn pat(context: &mut Context, sp!(_, p_): &mut N::MatchPattern) {
                 pat(context, p)
             }
         }
-        N::MatchPattern_::Binder(var) => {
+        N::MatchPattern_::Binder(_mut, var) => {
             if context.all_params.contains_key(&var.value) {
                 assert!(
                     context.core.env.has_errors(),

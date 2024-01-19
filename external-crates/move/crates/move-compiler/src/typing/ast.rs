@@ -280,7 +280,7 @@ pub enum UnannotatedPat_ {
         Vec<Type>,
         Fields<(Type, MatchPattern)>,
     ),
-    Binder(Var),
+    Binder(Mutability, Var),
     Literal(Value),
     Wildcard,
     Or(Box<MatchPattern>, Box<MatchPattern>),
@@ -942,7 +942,10 @@ impl AstDebug for UnannotatedPat_ {
                 w.write("@");
                 inner.ast_debug(w);
             }
-            UnannotatedPat_::Binder(x) => x.ast_debug(w),
+            UnannotatedPat_::Binder(mut_, x) => {
+                mut_.ast_debug(w);
+                x.ast_debug(w)
+            },
             UnannotatedPat_::Literal(v) => v.ast_debug(w),
             UnannotatedPat_::Wildcard => w.write("_"),
             UnannotatedPat_::ErrorPat => w.write("<err>"),

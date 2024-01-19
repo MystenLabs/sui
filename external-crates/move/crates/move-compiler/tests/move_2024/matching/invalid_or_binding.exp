@@ -1,4 +1,4 @@
-error[E03019]: invalud pattern
+error[E03019]: invalid pattern
   ┌─ tests/move_2024/matching/invalid_or_binding.move:9:24
   │
 9 │             Two::Tuple(x, _) | Two::Tuple(_, _y) => { let _y = x; },
@@ -8,7 +8,7 @@ error[E03019]: invalud pattern
   │
   = Both sides of an or-pattern must bind the same variables.
 
-error[E03019]: invalud pattern
+error[E03019]: invalid pattern
   ┌─ tests/move_2024/matching/invalid_or_binding.move:9:46
   │
 9 │             Two::Tuple(x, _) | Two::Tuple(_, _y) => { let _y = x; },

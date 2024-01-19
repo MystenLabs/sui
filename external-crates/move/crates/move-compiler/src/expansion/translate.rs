@@ -2998,13 +2998,12 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                 _ => error_pattern!(),
             }
         }
-        PP::Name(name_chain) => {
+        PP::Name(mut_, name_chain) => {
             let Some((head_ctor_name, pts_opt)) =
                 resolve_and_validate_name(context, name_chain, true)
             else {
                 return error_pattern!();
             };
-            let tys = optional_sp_types(context, pts_opt);
             match head_ctor_name {
                 sp!(loc, EM::Name(name)) => {
                     let name_value = name.value;
@@ -3019,12 +3018,13 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                             .add_diag(diag!(Declarations::InvalidName, (name.loc, msg)));
                         error_pattern!()
                     } else {
-                        sp(loc, EP::Binder(Var(name)))
+                        sp(loc, EP::Binder(mutability(context, loc, mut_), Var(name)))
                     }
                 }
-                head_ctor_name @ sp!(_, EM::Variant(_, _)) => {
-                    sp(loc, EP::HeadConstructor(head_ctor_name, tys))
-                }
+                head_ctor_name @ sp!(_, EM::Variant(_, _)) => sp(
+                    loc,
+                    EP::HeadConstructor(head_ctor_name, optional_sp_types(context, pts_opt)),
+                ),
                 _ => error_pattern!(),
             }
         }

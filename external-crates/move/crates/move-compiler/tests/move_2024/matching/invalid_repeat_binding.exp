@@ -1,4 +1,4 @@
-error[E03019]: invalud pattern
+error[E03019]: invalid pattern
   ┌─ tests/move_2024/matching/invalid_repeat_binding.move:9:24
   │
 9 │             Two::Tuple(x, x) => { let _y = x; },
@@ -6,5 +6,5 @@ error[E03019]: invalud pattern
   │                        │   
   │                        binder 'x' is defined here
   │
-  = A pattern variable must be unique unless it appears on each side of an or-pattern.
+  = A pattern variable must be unique, and must appear once in each or-pattern alternative.
 

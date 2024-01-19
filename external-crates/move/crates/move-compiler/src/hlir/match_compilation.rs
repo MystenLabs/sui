@@ -4,7 +4,7 @@
 use crate::{
     diag,
     // diag,
-    expansion::ast::{Fields, ModuleIdent, Value, Value_, Mutability},
+    expansion::ast::{Fields, ModuleIdent, Mutability, Value, Value_},
     hlir::translate::Context,
     naming::ast::{self as N, BuiltinTypeName_, Type, UseFuns, Var},
     parser::ast::{BinOp_, DatatypeName, Field, VariantName},
@@ -36,7 +36,8 @@ struct FringeEntry {
     ty: Type,
 }
 
-type PatBindings = BTreeMap<Var, FringeEntry>;
+type Binders = Vec<(Mutability, Var)>;
+type PatBindings = BTreeMap<Var, (Mutability, FringeEntry)>;
 type Guard = Option<Box<T::Exp>>;
 
 #[derive(Clone, Debug)]
@@ -86,7 +87,7 @@ impl PatternArm {
         if self
             .pat
             .iter()
-            .all(|pat| matches!(pat.pat.value, TP::Wildcard | TP::Binder(_)))
+            .all(|pat| matches!(pat.pat.value, TP::Wildcard | TP::Binder(_, _)))
         {
             let bindings = self.make_arm_bindings(fringe);
             let PatternArm { pat: _, guard, arm } = self;
@@ -104,8 +105,8 @@ impl PatternArm {
     fn make_arm_bindings(&mut self, fringe: &VecDeque<FringeEntry>) -> PatBindings {
         let mut bindings = BTreeMap::new();
         for (pmut, subject) in self.pat.iter_mut().zip(fringe.iter()) {
-            if let TP::Binder(x) = pmut.pat.value {
-                if bindings.insert(x, subject.clone()).is_some() {
+            if let TP::Binder(mut_, x) = pmut.pat.value {
+                if bindings.insert(x, (mut_, subject.clone())).is_some() {
                     panic!("ICE should have failed in naming");
                 };
                 pmut.pat.value = TP::Wildcard;
@@ -130,7 +131,7 @@ impl PatternArm {
                     let ty_fields: Fields<Type> = fields.clone().map(|_, (ndx, (ty, _))| (ndx, ty));
                     names.insert(name, (pat.pat.loc, ty_fields));
                 }
-                TP::Binder(_) => (),
+                TP::Binder(_, _) => (),
                 TP::Literal(_) => (),
                 TP::Wildcard => (),
                 TP::Or(lhs, rhs) => {
@@ -156,7 +157,7 @@ impl PatternArm {
             match pat.pat.value {
                 TP::Constructor(_, _, _, _, _) => (),
                 TP::BorrowConstructor(_, _, _, _, _) => (),
-                TP::Binder(_) => (),
+                TP::Binder(_, _) => (),
                 TP::Literal(v) => {
                     values.insert(v);
                 }
@@ -179,7 +180,7 @@ impl PatternArm {
         context: &Context,
         ctor_name: &VariantName,
         arg_types: &Vec<&Type>,
-    ) -> Option<(Vec<Var>, PatternArm)> {
+    ) -> Option<(Binders, PatternArm)> {
         let mut output = self.clone();
         let first_pattern = output.pat.pop_front().unwrap();
         let loc = first_pattern.pat.loc;
@@ -198,7 +199,7 @@ impl PatternArm {
             }
             TP::Constructor(_, _, _, _, _) | TP::BorrowConstructor(_, _, _, _, _) => None,
             TP::Literal(_) => None,
-            TP::Binder(x) => {
+            TP::Binder(mut_, x) => {
                 for arg_type in arg_types
                     .clone()
                     .into_iter()
@@ -207,7 +208,7 @@ impl PatternArm {
                 {
                     output.pat.push_front(arg_type);
                 }
-                Some((vec![x], output))
+                Some((vec![(mut_, x)], output))
             }
             TP::Wildcard => {
                 for arg_type in arg_types
@@ -227,7 +228,7 @@ impl PatternArm {
                 match inner_spec {
                     None => None,
                     Some((mut v, inner)) => {
-                        v.push(x);
+                        v.push((Mutability::Imm, x));
                         Some((v, inner))
                     }
                 }
@@ -236,14 +237,14 @@ impl PatternArm {
         }
     }
 
-    fn specialize_literal(&self, literal: &Value) -> Option<(Vec<Var>, PatternArm)> {
+    fn specialize_literal(&self, literal: &Value) -> Option<(Binders, PatternArm)> {
         let mut output = self.clone();
         let first_pattern = output.pat.pop_front().unwrap();
         match first_pattern.pat.value {
             TP::Literal(v) if &v == literal => Some((vec![], output)),
             TP::Literal(_) => None,
             TP::Constructor(_, _, _, _, _) | TP::BorrowConstructor(_, _, _, _, _) => None,
-            TP::Binder(x) => Some((vec![x], output)),
+            TP::Binder(mut_, x) => Some((vec![(mut_, x)], output)),
             TP::Wildcard => Some((vec![], output)),
             TP::Or(_, _) => unreachable!(),
             TP::At(x, inner) => {
@@ -252,7 +253,7 @@ impl PatternArm {
                 match inner_spec {
                     None => None,
                     Some((mut v, inner)) => {
-                        v.push(x);
+                        v.push((Mutability::Imm, x));
                         Some((v, inner))
                     }
                 }
@@ -261,13 +262,13 @@ impl PatternArm {
         }
     }
 
-    fn default(&self) -> Option<(Vec<Var>, PatternArm)> {
+    fn default(&self) -> Option<(Binders, PatternArm)> {
         let mut output = self.clone();
         let first_pattern = output.pat.pop_front().unwrap();
         match first_pattern.pat.value {
             TP::Literal(_) => None,
             TP::Constructor(_, _, _, _, _) | TP::BorrowConstructor(_, _, _, _, _) => None,
-            TP::Binder(x) => Some((vec![x], output)),
+            TP::Binder(mut_, x) => Some((vec![(mut_, x)], output)),
             TP::Wildcard => Some((vec![], output)),
             TP::Or(_, _) => unreachable!(),
             TP::At(x, inner) => {
@@ -276,7 +277,7 @@ impl PatternArm {
                 match inner_spec {
                     None => None,
                     Some((mut v, inner)) => {
-                        v.push(x);
+                        v.push((Mutability::Imm, x));
                         Some((v, inner))
                     }
                 }
@@ -315,10 +316,10 @@ impl PatternMatrix {
                         apply_pattern_subst(*inner, env).pat.value
                     }
                 }
-                TP::Binder(x) => {
+                TP::Binder(mut_, x) => {
                     let xloc = x.loc;
                     if let Some(y) = env.get(&x) {
-                        TP::Binder(sp(xloc, y.value))
+                        TP::Binder(mut_, sp(xloc, y.value))
                     } else {
                         TP::Wildcard
                     }
@@ -402,7 +403,7 @@ impl PatternMatrix {
         context: &Context,
         ctor_name: &VariantName,
         arg_types: Vec<&Type>,
-    ) -> (Vec<Var>, PatternMatrix) {
+    ) -> (Binders, PatternMatrix) {
         let mut patterns = vec![];
         let mut bindings = vec![];
         for entry in &self.patterns {
@@ -420,7 +421,7 @@ impl PatternMatrix {
         (bindings, matrix)
     }
 
-    fn specialize_literal(&self, lit: &Value) -> (Vec<Var>, PatternMatrix) {
+    fn specialize_literal(&self, lit: &Value) -> (Binders, PatternMatrix) {
         let mut patterns = vec![];
         let mut bindings = vec![];
         for entry in &self.patterns {
@@ -435,7 +436,7 @@ impl PatternMatrix {
         (bindings, matrix)
     }
 
-    fn default(&self) -> (Vec<Var>, PatternMatrix) {
+    fn default(&self) -> (Binders, PatternMatrix) {
         let mut patterns = vec![];
         let mut bindings = vec![];
         for entry in &self.patterns {
@@ -486,7 +487,7 @@ fn ty_to_wildcard_pattern(ty: Type, loc: Loc) -> T::MatchPattern {
 fn flatten_or(pat: MatchPattern) -> Vec<MatchPattern> {
     if matches!(
         pat.pat.value,
-        TP::Literal(_) | TP::Binder(_) | TP::Wildcard | TP::ErrorPat
+        TP::Literal(_) | TP::Binder(_, _) | TP::Wildcard | TP::ErrorPat
     ) {
         vec![pat]
     } else if matches!(
@@ -538,7 +539,7 @@ fn flatten_or(pat: MatchPattern) -> Vec<MatchPattern> {
                     pat: sp(ploc, TP::At(x, Box::new(pat))),
                 })
                 .collect::<Vec<_>>(),
-            TP::Literal(_) | TP::Binder(_) | TP::Wildcard | TP::ErrorPat => unreachable!(),
+            TP::Literal(_) | TP::Binder(_, _) | TP::Wildcard | TP::ErrorPat => unreachable!(),
         }
     }
 }
@@ -596,14 +597,14 @@ enum MatchStep {
     Failure,
     LiteralSwitch {
         subject: FringeEntry,
-        subject_binders: Vec<Var>,
+        subject_binders: Vec<(Mutability, Var)>,
         fringe: Fringe,
         arms: BTreeMap<Value, PatternMatrix>,
         default: PatternMatrix,
     },
     VariantSwitch {
         subject: FringeEntry,
-        subject_binders: Vec<Var>,
+        subject_binders: Vec<(Mutability, Var)>,
         tyargs: Vec<Type>,
         arms: BTreeMap<VariantName, (Vec<(Field, Var, Type)>, Fringe, PatternMatrix)>,
         default: (Fringe, PatternMatrix),
@@ -616,13 +617,13 @@ enum WorkResult {
     Failure,
     LiteralSwitch {
         subject: FringeEntry,
-        subject_binders: Vec<Var>,
+        subject_binders: Vec<(Mutability, Var)>,
         arms: BTreeMap<Value, usize>,
         default: usize, // default
     },
     VariantSwitch {
         subject: FringeEntry,
-        subject_binders: Vec<Var>,
+        subject_binders: Vec<(Mutability, Var)>,
         tyargs: Vec<Type>,
         arms: BTreeMap<VariantName, (Vec<(Field, Var, Type)>, usize)>,
         default: usize,
@@ -668,7 +669,7 @@ pub fn compile_match(
 
         let subject_binder = {
             let lhs_loc = subject_loc;
-            let lhs_lvalue = make_lvalue(subject_var, subject.ty.clone());
+            let lhs_lvalue = make_lvalue(subject_var, Mutability::Imm, subject.ty.clone());
             let binder = T::SequenceItem_::Bind(
                 sp(lhs_loc, vec![lhs_lvalue]),
                 vec![Some(subject.ty.clone())],
@@ -679,7 +680,7 @@ pub fn compile_match(
 
         let subject_borrow = {
             let lhs_loc = arms_loc;
-            let lhs_lvalue = make_lvalue(match_var, subject_borrow_rhs.ty.clone());
+            let lhs_lvalue = make_lvalue(match_var, Mutability::Imm, subject_borrow_rhs.ty.clone());
             let binder = T::SequenceItem_::Bind(
                 sp(lhs_loc, vec![lhs_lvalue]),
                 vec![Some(subject_borrow_rhs.ty.clone())],
@@ -990,7 +991,7 @@ fn resolve_result(
                 .unwrap();
             let bindings = subject_binders
                 .into_iter()
-                .map(|binder| (binder, subject.clone()))
+                .map(|(mut_, binder)| (binder, (mut_, subject.clone())))
                 .collect();
 
             let sorted_variants: Vec<VariantName> = context.hlir_context.enum_variants(&m, &e);
@@ -1031,7 +1032,7 @@ fn resolve_result(
         {
             let bindings = subject_binders
                 .into_iter()
-                .map(|binder| (binder, subject.clone()))
+                .map(|(mut_, binder)| (binder, (mut_, subject.clone())))
                 .collect();
             // If the literal switch for a boolean is saturated, no default case.
             let lit_subject = make_lit_copy(subject.clone());
@@ -1062,7 +1063,7 @@ fn resolve_result(
         } => {
             let bindings = subject_binders
                 .into_iter()
-                .map(|binder| (binder, subject.clone()))
+                .map(|(mut_, binder)| (binder, (mut_, subject.clone())))
                 .collect();
             let lit_subject = make_lit_copy(subject.clone());
 
@@ -1194,16 +1195,16 @@ fn make_arm_unpack(
                 seq.push_back(unpack);
             }
             TP::Literal(_) => (),
-            TP::Binder(x) if rhs_binders.contains(&x) => {
-                seq.push_back(make_move_binding(x, entry.ty.clone(), entry))
+            TP::Binder(mut_, x) if rhs_binders.contains(&x) => {
+                seq.push_back(make_move_binding(x, mut_, entry.ty.clone(), entry))
             }
-            TP::Binder(_) => (),
+            TP::Binder(_, _) => (),
             TP::Wildcard => (),
             TP::Or(_, _) => unreachable!(),
             TP::At(x, inner) => {
                 if rhs_binders.contains(&x) {
                     let bind_entry = entry.clone();
-                    seq.push_back(make_move_binding(x, bind_entry.ty.clone(), bind_entry));
+                    seq.push_back(make_move_binding(x, Mutability::Imm, bind_entry.ty.clone(), bind_entry));
                 }
                 queue.push_front((entry, *inner));
             }
@@ -1283,7 +1284,7 @@ fn make_unpack_stmt(
     let mut lvalue_fields: Fields<(Type, T::LValue)> = UniqueMap::new();
 
     for (ndx, (field_name, var, ty)) in fields.into_iter().enumerate() {
-        let var_lvalue = make_lvalue(var, ty.clone());
+        let var_lvalue = make_lvalue(var, Mutability::Imm, ty.clone());
         lvalue_fields
             .add(field_name, (ndx, (ty, var_lvalue)))
             .unwrap();
@@ -1364,11 +1365,11 @@ fn make_copy_bindings(bindings: PatBindings, next: T::Exp) -> T::Exp {
 fn make_bindings(bindings: PatBindings, next: T::Exp, as_copy: bool) -> T::Exp {
     let eloc = next.exp.loc;
     let mut seq = VecDeque::new();
-    for (lhs, rhs) in bindings {
+    for (lhs, (mut_, rhs)) in bindings {
         let binding = if as_copy {
-            make_copy_binding(lhs, rhs.ty.clone(), rhs)
+            make_copy_binding(lhs, mut_, rhs.ty.clone(), rhs)
         } else {
-            make_move_binding(lhs, rhs.ty.clone(), rhs)
+            make_move_binding(lhs, mut_, rhs.ty.clone(), rhs)
         };
         seq.push_back(binding);
     }
@@ -1378,20 +1379,20 @@ fn make_bindings(bindings: PatBindings, next: T::Exp, as_copy: bool) -> T::Exp {
     T::exp(result_type, exp_value)
 }
 
-fn make_lvalue(lhs: Var, ty: Type) -> T::LValue {
+fn make_lvalue(lhs: Var, mut_: Mutability, ty: Type) -> T::LValue {
     let lhs_loc = lhs.loc;
     let lhs_var = T::LValue_::Var {
         var: lhs,
         ty: Box::new(ty.clone()),
-        mut_: Some(Mutability::Imm),
+        mut_: Some(mut_),
         unused_binding: false,
     };
     sp(lhs_loc, lhs_var)
 }
 
-fn make_move_binding(lhs: Var, ty: Type, rhs: FringeEntry) -> T::SequenceItem {
+fn make_move_binding(lhs: Var, mut_: Mutability, ty: Type, rhs: FringeEntry) -> T::SequenceItem {
     let lhs_loc = lhs.loc;
-    let lhs_lvalue = make_lvalue(lhs, ty.clone());
+    let lhs_lvalue = make_lvalue(lhs, mut_, ty.clone());
     let binder = T::SequenceItem_::Bind(
         sp(lhs_loc, vec![lhs_lvalue]),
         vec![Some(ty)],
@@ -1400,9 +1401,9 @@ fn make_move_binding(lhs: Var, ty: Type, rhs: FringeEntry) -> T::SequenceItem {
     sp(lhs_loc, binder)
 }
 
-fn make_copy_binding(lhs: Var, ty: Type, rhs: FringeEntry) -> T::SequenceItem {
+fn make_copy_binding(lhs: Var, mut_: Mutability, ty: Type, rhs: FringeEntry) -> T::SequenceItem {
     let lhs_loc = lhs.loc;
-    let lhs_lvalue = make_lvalue(lhs, ty.clone());
+    let lhs_lvalue = make_lvalue(lhs, mut_, ty.clone());
     let binder = T::SequenceItem_::Bind(
         sp(lhs_loc, vec![lhs_lvalue]),
         vec![Some(ty.clone())],

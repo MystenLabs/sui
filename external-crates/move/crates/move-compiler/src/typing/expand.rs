@@ -408,7 +408,7 @@ fn pat(context: &mut Context, p: &mut T::MatchPattern) {
         P::At(_var, inner) => {
             pat(context, inner);
         }
-        P::ErrorPat | P::Literal(_) | P::Binder(_) | P::Wildcard => (),
+        P::ErrorPat | P::Literal(_) | P::Binder(_, _) | P::Wildcard => (),
     }
 }
 

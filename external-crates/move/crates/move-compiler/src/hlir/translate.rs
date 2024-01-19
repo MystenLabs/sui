@@ -279,10 +279,10 @@ impl<'env> Context<'env> {
 
     pub fn bind_local(&mut self, mut_: Mutability, v: N::Var, t: H::SingleType) {
         let symbol = translate_var(v);
-        // Guard values may be re-declared due to or patterns
+        // We may reuse a name if it appears on both sides of an `or` pattern
         if let Some((cur_mut, cur_t)) = self.function_locals.get(&symbol) {
             assert!(cur_t == &t);
-            assert!(cur_mut == &mut_);
+            assert!(cur_mut == &mut_, "{:?} changed mutability from {:?} to {:?}", v, cur_mut, mut_);
         } else {
             self.function_locals.add(symbol, (mut_, t)).unwrap();
         }
@@ -953,13 +953,13 @@ fn tail(
         }
 
         E::Match(subject, arms) => {
-            // println!("compiling match!");
-            // print!("subject:");
-            // subject.print_verbose();
-            // println!("\narms:");
-            // for arm in &arms.value {
-            //     arm.value.print_verbose();
-            // }
+            println!("compiling match!");
+            print!("subject:");
+            subject.print_verbose();
+            println!("\narms:");
+            for arm in &arms.value {
+                arm.value.print_verbose();
+            }
             let compiled = match_compilation::compile_match(context, in_type, *subject, arms);
             // println!("-----\ncompiled:");
             // compiled.print();

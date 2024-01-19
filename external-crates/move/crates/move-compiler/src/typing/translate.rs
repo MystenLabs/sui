@@ -2059,15 +2059,15 @@ fn match_arm(
         rhs,
     } = arm_;
 
-    let bind_locs = binders.iter().map(|sp!(loc, _)| *loc).collect();
+    let bind_locs = binders.iter().map(|(_, sp!(loc, _))| *loc).collect();
     let msg = "Invalid type for pattern";
     let bind_vars = core::make_expr_list_tvars(context, pattern.loc, msg, bind_locs);
 
     let binders: Vec<(N::Var, Type)> = binders
         .into_iter()
         .zip(bind_vars)
-        .map(|(x, ty)| {
-            context.declare_local(Mutability::Either, x, ty.clone());
+        .map(|((mut_, x), ty)| {
+            context.declare_local(mut_, x, ty.clone());
             (x, ty)
         })
         .collect();
@@ -2193,9 +2193,9 @@ fn match_pattern(
             };
             T::pat(bt, sp(loc, pat_))
         }
-        P::Binder(x) => {
+        P::Binder(mut_, x) => {
             let x_ty = context.get_local_type(&x);
-            T::pat(x_ty, sp(loc, TP::Binder(x)))
+            T::pat(x_ty, sp(loc, TP::Binder(mut_, x)))
         }
         P::Literal(v) => {
             let ty = match &v.value {

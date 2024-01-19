@@ -505,6 +505,6 @@ fn pat(context: &mut Context, p: &T::MatchPattern) {
             pat(context, lhs);
             pat(context, rhs);
         }
-        P::Wildcard | P::ErrorPat | P::Binder(_) | P::Literal(_) => (),
+        P::Wildcard | P::ErrorPat | P::Binder(_, _) | P::Literal(_) => (),
     }
 }

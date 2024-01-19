@@ -665,7 +665,7 @@ pub enum MatchPattern_ {
     // T<t1, ..., tn> { x1: pat1, ..., xn: patn }
     FieldConstructor(NameAccessChain, Spanned<Vec<(Field, MatchPattern)>>),
     // T<t1, ..., tn>
-    Name(NameAccessChain),
+    Name(Mutability, NameAccessChain),
     // 0 | true | ...
     Literal(Value),
     // pat1 | pat2
@@ -2116,7 +2116,10 @@ impl AstDebug for MatchPattern_ {
                 });
                 w.write("} ");
             }
-            Name(name) => {
+            Name(mut_, name) => {
+                if mut_.is_some() {
+                    w.write("mut ");
+                }
                 name.ast_debug(w)
             }
             Literal(v) => v.ast_debug(w),

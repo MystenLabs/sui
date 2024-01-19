@@ -995,7 +995,9 @@ fn parse_exp_field(context: &mut Context) -> Result<(Field, Exp), Box<Diagnostic
 fn parse_bind_field(context: &mut Context) -> Result<(Field, Bind), Box<Diagnostic>> {
     let mut_ = parse_mut_opt(context)?;
     let f = parse_field(context).or_else(|diag| match mut_ {
-        Some(mut_loc) if context.env.edition(context.current_package) == Edition::E2024_MIGRATION => {
+        Some(mut_loc)
+            if context.env.edition(context.current_package) == Edition::E2024_MIGRATION =>
+        {
             report_name_migration(context, "mut", mut_loc);
             Ok(Field(sp(mut_.unwrap(), "mut".into())))
         }
@@ -1782,6 +1784,8 @@ fn parse_match_arm(context: &mut Context) -> Result<MatchArm, Box<Diagnostic>> {
 //   <PatField> = <Field> ( ":" <MatchPat> )?
 
 fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagnostic>> {
+    const INVALID_MUT_ERROR_MSG: &str =
+        "Can't use 'mut' as a modifier outside of variable bindings";
     const INVALID_PAT_ERROR_MSG: &str = "Invalid pattern";
     const WILDCARD_AT_ERROR_MSG: &str = "Cannot use '_' as an at-pattern";
 
@@ -1795,13 +1799,27 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
                 consume_token(context.tokens, Tok::RParen)?;
                 pat
             }
-            Tok::Identifier => ok_with_loc!(context, {
+            Tok::Mut | Tok::Identifier => ok_with_loc!(context, {
+                let mut_ = parse_mut_opt(context)?;
                 let name_access_chain = parse_name_access_chain(
                     context,
                     /* macros */ false,
                     /* tyargs */ true,
                     || "a pattern entry",
                 )?;
+
+                match mut_ {
+                    Some(loc)
+                        if !matches!(name_access_chain.value, NameAccessChain_::Single(_))
+                            || name_access_chain.value.has_tyargs() =>
+                    {
+                        return Err(Box::new(diag!(
+                            Syntax::UnexpectedToken,
+                            (loc, INVALID_MUT_ERROR_MSG)
+                        )));
+                    }
+                    _ => (),
+                }
 
                 match context.tokens.peek() {
                     Tok::LParen => {
@@ -1830,7 +1848,7 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
                         );
                         MP::FieldConstructor(name_access_chain, sp(loc, patterns))
                     }
-                    _ => MP::Name(name_access_chain),
+                    _ => MP::Name(mut_, name_access_chain),
                 }
             }),
             _ => {
@@ -1849,13 +1867,21 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
     fn parse_field_pattern(
         context: &mut Context,
     ) -> Result<(Field, MatchPattern), Box<Diagnostic>> {
+        const INVALID_MUT_ERROR_MSG: &str = "'mut' modifier can only be used on variable bindings";
+        let mut_ = parse_mut_opt(context)?;
         let field = parse_field(context)?;
         let pattern = if match_token(context.tokens, Tok::Colon)? {
+            if let Some(loc) = mut_ {
+                return Err(Box::new(diag!(
+                    Syntax::UnexpectedToken,
+                    (loc, INVALID_MUT_ERROR_MSG)
+                )));
+            }
             parse_match_pattern(context)?
         } else {
             sp(
                 field.loc(),
-                MP::Name(sp(field.loc(), NameAccessChain_::single(field.0))),
+                MP::Name(mut_, sp(field.loc(), NameAccessChain_::single(field.0))),
             )
         };
         Ok((field, pattern))
@@ -2822,7 +2848,9 @@ fn parse_function_decl(
 fn parse_parameter(context: &mut Context) -> Result<(Mutability, Var, Type), Box<Diagnostic>> {
     let mut_ = parse_mut_opt(context)?;
     let v = parse_var(context).or_else(|diag| match mut_ {
-        Some(mut_loc) if context.env.edition(context.current_package) == Edition::E2024_MIGRATION => {
+        Some(mut_loc)
+            if context.env.edition(context.current_package) == Edition::E2024_MIGRATION =>
+        {
             report_name_migration(context, "mut", mut_loc);
             Ok(Var(sp(mut_.unwrap(), "mut".into())))
         }
@@ -3357,7 +3385,8 @@ fn parse_address_block(
     context: &mut Context,
 ) -> Result<AddressDefinition, Box<Diagnostic>> {
     const UNEXPECTED_TOKEN: &str = "Invalid code unit. Expected 'address' or 'module'";
-    let in_migration_mode = context.env.edition(context.current_package) == Edition::E2024_MIGRATION;
+    let in_migration_mode =
+        context.env.edition(context.current_package) == Edition::E2024_MIGRATION;
 
     if context.tokens.peek() != Tok::Identifier {
         let start = context.tokens.start_loc();
