@@ -26,13 +26,13 @@ where
                 s.parse::<usize>()
                     .unwrap_or(OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG)
             })
-            .unwrap_or(0);
+            .unwrap_or(OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG);
         let snapshot_max_lag = std::env::var("OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG")
             .map(|s| {
                 s.parse::<usize>()
                     .unwrap_or(OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG)
             })
-            .unwrap_or(0);
+            .unwrap_or(OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG);
         Self {
             store,
             metrics,
