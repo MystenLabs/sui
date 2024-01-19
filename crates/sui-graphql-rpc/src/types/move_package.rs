@@ -189,7 +189,7 @@ impl MovePackage {
         // write back the parsed Package to the cache as well.)
         let Some(native) = self.super_.native_impl() else {
             return Err(Error::Internal(
-                "This should be unreachable as we cannot downcast if native is None".to_string(),
+                "No native representation of package to parse.".to_string(),
             ));
         };
 

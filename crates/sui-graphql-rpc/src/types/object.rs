@@ -73,18 +73,18 @@ pub(crate) enum ObjectKind {
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 #[graphql(name = "ObjectKind")]
 pub enum ObjectStatus {
-    /// - NOT_INDEXED: the object is loaded from serialized data, such as the contents of a
-    ///   transaction.
+    /// NOT_INDEXED: the object is loaded from serialized data, such as the contents of a
+    /// transaction.
     NotIndexed,
-    /// - LIVE: the object is currently live and is not deleted or wrapped.
+    /// LIVE: the object is currently live and is not deleted or wrapped.
     Live,
-    /// - HISTORICAL: the object is referenced at some version, and thus is fetched from the
-    ///   snapshot or historical objects table.
+    /// HISTORICAL: the object is referenced at some version, and thus is fetched from the snapshot
+    /// or historical objects table.
     Historical,
-    /// - WRAPPED_OR_DELETED: The object is deleted or wrapped and only partial information can be
+    /// WRAPPED_OR_DELETED: The object is deleted or wrapped and only partial information can be
     /// loaded from the indexer.
     WrappedOrDeleted,
-    /// - OUTSIDE_AVAILABLE_RANGE: The requested object falls outside of the consistent read range
+    /// OUTSIDE_AVAILABLE_RANGE: The requested object falls outside of the consistent read range
     /// supported by the indexer. The requested object may or may not actually exist on-chain, but
     /// the data is not yet or no longer indexed.
     OutsideAvailableRange,
@@ -253,6 +253,7 @@ impl Object {
             K::WrappedOrDeleted(_) => None,
             K::OutsideAvailableRange => None,
             K::Live(_, stored) => Some(Base64::from(&stored.serialized_object)),
+            // WrappedOrDeleted objects do not have a serialized object, thus this column in the db is nullable.
             K::Historical(_, stored) => stored.serialized_object.as_ref().map(Base64::from),
             K::NotIndexed(native) => {
                 let bytes = bcs::to_bytes(native)
@@ -601,16 +602,13 @@ impl Object {
     }
 
     async fn query_live(db: &Db, address: SuiAddress) -> Result<Option<Self>, Error> {
-        let vec_address = address.into_vec();
         use objects::dsl as objects;
+        let vec_address = address.into_vec();
 
         let stored_obj: Option<StoredObject> = db
             .execute(move |conn| {
-                conn.result(move || {
-                    objects::objects
-                        .filter(objects::object_id.eq(vec_address.clone()))
-                        .limit(1)
-                        .into_boxed()
+                conn.first(move || {
+                    objects::objects.filter(objects::object_id.eq(vec_address.clone()))
                 })
                 .optional()
             })
@@ -620,19 +618,16 @@ impl Object {
         stored_obj.map(Self::try_from).transpose()
     }
 
-    async fn query_historical(
+    async fn query_at_version(
         db: &Db,
         address: SuiAddress,
-        version: Option<u64>,
-        checkpoint_sequence_number: Option<u64>,
+        version: u64,
     ) -> Result<Option<Self>, Error> {
-        let vec_address = address.into_vec();
-        let version = version.map(|n| n as i64);
-        let checkpoint_sequence_number = checkpoint_sequence_number.map(|n| n as i64);
-
         use checkpoints::dsl as checkpoints;
         use objects_history::dsl as history;
         use objects_snapshot::dsl as snapshot;
+
+        let version = version as i64;
 
         let results: Option<Vec<StoredHistoryObject>> = db
             .execute(move |conn| {
@@ -642,21 +637,80 @@ impl Object {
                     // objects_history table. Thus, we always need to check the objects_snapshot
                     // table as well.
                     let mut snapshot_query = snapshot::objects_snapshot
-                        .filter(snapshot::object_id.eq(vec_address.clone()))
+                        .filter(snapshot::object_id.eq(address.into_vec()))
                         .into_boxed();
 
                     let mut historical_query = history::objects_history
-                        .filter(history::object_id.eq(vec_address.clone()))
+                        .filter(history::object_id.eq(address.into_vec()))
                         .order_by(history::object_version.desc())
                         .limit(1)
                         .into_boxed();
 
-                    if let Some(version) = version {
-                        snapshot_query =
-                            snapshot_query.filter(snapshot::object_version.eq(version));
-                        historical_query =
-                            historical_query.filter(history::object_version.eq(version));
-                    }
+                    snapshot_query = snapshot_query.filter(snapshot::object_version.eq(version));
+                    historical_query = historical_query.filter(history::object_version.eq(version));
+
+                    let left = snapshot::objects_snapshot
+                        .select(snapshot::checkpoint_sequence_number)
+                        .order(snapshot::checkpoint_sequence_number.desc())
+                        .limit(1);
+
+                    let right = checkpoints::checkpoints
+                        .select(checkpoints::sequence_number)
+                        .order(checkpoints::sequence_number.desc())
+                        .limit(1);
+
+                    historical_query = historical_query
+                        .filter(
+                            history::checkpoint_sequence_number
+                                .ge(coalesce(left.single_value(), 0)),
+                        )
+                        .filter(
+                            history::checkpoint_sequence_number
+                                .le(coalesce(right.single_value(), 0)),
+                        );
+
+                    snapshot_query.union(historical_query)
+                })
+                .optional()
+            })
+            .await?;
+
+        // For the moment, if the object existed at some point, it will have eventually be written to objects_snapshot.
+        // Therefore, if both results are None, the object has never existed.
+        let Some(mut stored_objs) = results else {
+            return Ok(None);
+        };
+
+        // The objects_history object will occupy the last element and will always be more recent than the previous elements.
+        stored_objs.pop().map(Self::try_from).transpose()
+    }
+
+    async fn query_latest_at_checkpoint(
+        db: &Db,
+        address: SuiAddress,
+        checkpoint_sequence_number: u64,
+    ) -> Result<Option<Self>, Error> {
+        use objects_history::dsl as history;
+        use objects_snapshot::dsl as snapshot;
+
+        let checkpoint_sequence_number = checkpoint_sequence_number as i64;
+
+        let results: Option<Vec<StoredHistoryObject>> = db
+            .execute(move |conn| {
+                conn.results(move || {
+                    // If an object was created or mutated in a checkpoint outside the current
+                    // available range, and never touched again, it will not show up in the
+                    // objects_history table. Thus, we always need to check the objects_snapshot
+                    // table as well.
+                    let mut snapshot_query = snapshot::objects_snapshot
+                        .filter(snapshot::object_id.eq(address.into_vec()))
+                        .into_boxed();
+
+                    let mut historical_query = history::objects_history
+                        .filter(history::object_id.eq(address.into_vec()))
+                        .order_by(history::object_version.desc())
+                        .limit(1)
+                        .into_boxed();
 
                     let left = snapshot::objects_snapshot
                         .select(snapshot::checkpoint_sequence_number)
@@ -667,31 +721,12 @@ impl Object {
                         history::checkpoint_sequence_number.ge(coalesce(left.single_value(), 0)),
                     );
 
-                    // if some checkpoint_sequence_number is provided, use it as the upper bound.
-                    // This is because an object can be extant at some target, but be indexed with
-                    // at a checkpoint_sequence_number <= target.
-                    if let Some(checkpoint_sequence_number) = checkpoint_sequence_number {
-                        // A validation check is not needed as we coalesce both sides to 0 for null
-                        // values, and if left > right, the db will return 0 rows. This also saves
-                        // us a roundtrip.
-                        historical_query = historical_query.filter(
-                            history::checkpoint_sequence_number.le(checkpoint_sequence_number),
-                        );
+                    historical_query = historical_query
+                        .filter(history::checkpoint_sequence_number.le(checkpoint_sequence_number));
 
-                        snapshot_query = snapshot_query.filter(
-                            snapshot::checkpoint_sequence_number.le(checkpoint_sequence_number),
-                        );
-                    } else {
-                        let right = checkpoints::checkpoints
-                            .select(checkpoints::sequence_number)
-                            .order(checkpoints::sequence_number.desc())
-                            .limit(1);
-
-                        historical_query = historical_query.filter(
-                            history::checkpoint_sequence_number
-                                .le(coalesce(right.single_value(), 0)),
-                        );
-                    }
+                    snapshot_query = snapshot_query.filter(
+                        snapshot::checkpoint_sequence_number.le(checkpoint_sequence_number),
+                    );
 
                     snapshot_query.union(historical_query)
                 })
@@ -701,38 +736,12 @@ impl Object {
 
         // For the moment, if the object existed at some point, it will have eventually be written to objects_snapshot.
         // Therefore, if both results are None, the object has never existed.
-        let Some(stored_objs) = results else {
+        let Some(mut stored_objs) = results else {
             return Ok(None);
         };
 
-        match stored_objs
-            .iter()
-            // First, filter the objects based on an exact match on version and
-            // checkpoint_sequence_number if provided
-            .filter(|stored_obj| {
-                version.map_or(true, |version| stored_obj.object_version == version)
-                    && checkpoint_sequence_number.map_or(true, |checkpoint| {
-                        stored_obj.checkpoint_sequence_number <= checkpoint
-                    })
-            })
-            // Then, find the object with the largest checkpoint_sequence_number among those
-            // filtered - it should still be within the available range as the db query was bounded
-            .max_by_key(|stored_obj| stored_obj.object_version)
-        {
-            Some(stored_obj) => {
-                Ok(Some(Self::try_from(stored_obj.clone()).map_err(|e| {
-                    Error::Internal(format!("Failed to convert object: {e}"))
-                })?))
-            }
-            // We were able to retrieve results, but do not match with the given parameters. The
-            // most likely scenario is when we look up an object on object_id and
-            // checkpoint_sequence_number, no object_version. The object exists in objects_snapshot,
-            // and the data's checkpoint_sequence_number exceeds the given parameter.
-            None => Ok(Some(Object {
-                address,
-                kind: ObjectKind::OutsideAvailableRange,
-            })),
-        }
+        // The objects_history object will occupy the last element and will always be more recent than the previous elements.
+        stored_objs.pop().map(Self::try_from).transpose()
     }
 
     pub(crate) async fn query(
@@ -744,7 +753,13 @@ impl Object {
         if version.is_none() && checkpoint_sequence_number.is_none() {
             Object::query_live(db, address).await
         } else {
-            Object::query_historical(db, address, version, checkpoint_sequence_number).await
+            if let Some(version) = version {
+                Object::query_at_version(db, address, version).await
+            } else {
+                // safe to do because either version or checkpoint_sequence_number is not None and version is None
+                Object::query_latest_at_checkpoint(db, address, checkpoint_sequence_number.unwrap())
+                    .await
+            }
         }
         .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))
     }
