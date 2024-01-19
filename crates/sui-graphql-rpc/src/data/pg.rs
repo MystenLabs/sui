@@ -19,7 +19,7 @@ use tracing::error;
 pub(crate) struct PgExecutor {
     pub inner: IndexerReader,
     pub limits: Limits,
-    pub metrics: Option<Metrics>,
+    pub metrics: Metrics,
 }
 
 pub(crate) struct PgConnection<'c> {
@@ -28,7 +28,7 @@ pub(crate) struct PgConnection<'c> {
 }
 
 impl PgExecutor {
-    pub(crate) fn new(inner: IndexerReader, limits: Limits, metrics: Option<Metrics>) -> Self {
+    pub(crate) fn new(inner: IndexerReader, limits: Limits, metrics: Metrics) -> Self {
         Self {
             inner,
             limits,
@@ -56,16 +56,14 @@ impl QueryExecutor for PgExecutor {
         let result = self
             .inner
             .run_query_async(move |conn| txn(&mut PgConnection { max_cost, conn }))
-            .await
-            .map_err(|e| Error::Internal(e.to_string()));
+            .await;
         let elapsed = instant.elapsed();
-        if let Some(metrics) = &self.metrics {
-            metrics.observe_db_data(elapsed.as_secs(), result.is_ok());
+        self.metrics
+            .observe_db_data(elapsed.as_secs(), result.is_ok());
+        if let Err(e) = &result {
+            error!("DB query error: {e:?}");
         }
-        if result.is_err() {
-            error!("DB query error: {:?}", result.as_ref().err());
-        }
-        result
+        result.map_err(|e| Error::Internal(e.to_string()))
     }
 
     async fn execute_repeatable<T, U, E>(&self, txn: T) -> Result<U, Error>
@@ -81,17 +79,14 @@ impl QueryExecutor for PgExecutor {
         let result = self
             .inner
             .run_query_repeatable_async(move |conn| txn(&mut PgConnection { max_cost, conn }))
-            .await
-            .map_err(|e| Error::Internal(e.to_string()));
+            .await;
         let elapsed = instant.elapsed();
-
-        if let Some(metrics) = &self.metrics {
-            metrics.observe_db_data(elapsed.as_secs(), result.is_ok());
+        self.metrics
+            .observe_db_data(elapsed.as_secs(), result.is_ok());
+        if let Err(e) = &result {
+            error!("DB query error: {e:?}");
         }
-        if result.is_err() {
-            error!("DB query error: {:?}", result.as_ref().err());
-        }
-        result
+        result.map_err(|e| Error::Internal(e.to_string()))
     }
 }
 

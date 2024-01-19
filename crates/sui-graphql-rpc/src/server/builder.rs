@@ -62,11 +62,11 @@ pub(crate) struct ServerBuilder {
 
     schema: SchemaBuilder<Query, Mutation, EmptySubscription>,
     router: Option<Router>,
-    metrics: Option<Metrics>,
+    metrics: Metrics,
 }
 
 impl ServerBuilder {
-    pub fn new(port: u16, host: String, metrics: Option<Metrics>) -> Self {
+    pub fn new(port: u16, host: String, metrics: Metrics) -> Self {
         Self {
             port,
             host,
@@ -115,7 +115,6 @@ impl ServerBuilder {
                     self.metrics.clone(),
                     check_version_middleware,
                 ))
-                // .layer(middleware::from_fn(check_version_middleware))
                 .layer(middleware::from_fn(set_version_middleware));
             self.router = Some(router);
         }
@@ -185,7 +184,7 @@ impl ServerBuilder {
         let mut builder = ServerBuilder::new(
             config.connection.port,
             config.connection.host.clone(),
-            Some(metrics.clone()),
+            metrics.clone(),
         );
 
         let name_service_config = config.name_service.clone();
@@ -196,7 +195,7 @@ impl ServerBuilder {
         .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
 
         // DB
-        let db = Db::new(reader.clone(), config.service.limits, Some(metrics.clone()));
+        let db = Db::new(reader.clone(), config.service.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader.clone(), config.service.limits);
         let package_store = DbPackageStore(reader);
         let package_cache = PackageStoreWithLruCache::new(package_store);
@@ -257,15 +256,14 @@ impl ServerBuilder {
 }
 
 async fn graphql_handler(
-    State(metrics): State<Option<Metrics>>,
+    State(metrics): State<Metrics>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
-    if let Some(ref m) = metrics {
-        m.request_metrics.inflight_requests.inc();
-    }
+    metrics.request_metrics.inflight_requests.inc();
+    metrics.inc_num_queries();
     let instant = Instant::now();
     let mut req = req.into_inner();
     req.data.insert(Uuid::new_v4());
@@ -277,26 +275,24 @@ async fn graphql_handler(
     req.data.insert(addr);
     let result = schema.execute(req).await;
     let elapsed = instant.elapsed().as_millis() as u64;
-    if let Some(m) = metrics {
-        m.query_latency(elapsed);
-        m.inc_num_queries();
-        if !result.is_ok() {
-            m.inc_errors(result.errors.clone());
-        }
-        m.request_metrics.inflight_requests.dec();
-
-        // TODO Is this the right way to get the top level query path names?
-        if let Ok(json_value) = result.data.clone().into_json() {
-            if let Some(k) = json_value.as_object().map(|x| x.keys().collect::<Vec<_>>()) {
-                for path in k {
-                    m.request_metrics
-                        .num_queries_top_level
-                        .with_label_values(&[path.as_str()])
-                        .inc();
-                }
+    metrics.query_latency(elapsed);
+    if !result.is_ok() {
+        metrics.inc_errors(result.errors.clone());
+    }
+    // TODO Is this the right way to get the top level query path names?
+    if let Ok(json_value) = result.data.clone().into_json() {
+        if let Some(k) = json_value.as_object().map(|x| x.keys().collect::<Vec<_>>()) {
+            for path in k {
+                metrics
+                    .request_metrics
+                    .num_queries_top_level
+                    .with_label_values(&[path.as_str()])
+                    .inc();
             }
         }
     }
+
+    metrics.request_metrics.inflight_requests.dec();
     result.into()
 }
 
@@ -370,6 +366,12 @@ pub mod tests {
         )
     }
 
+    fn metrics() -> Metrics {
+        let binding_address: SocketAddr = "0.0.0.0:9185".parse().unwrap();
+        let registry = mysten_metrics::start_prometheus_server(binding_address).default_registry();
+        Metrics::new(&registry)
+    }
+
     pub async fn test_timeout_impl() {
         let (connection_config, _cluster) = prep_cluster().await;
 
@@ -408,9 +410,10 @@ pub mod tests {
             let mut cfg = ServiceConfig::default();
             cfg.limits.request_timeout_ms = timeout.as_millis() as u64;
 
-            let db = Db::new(reader.clone(), cfg.limits, None);
+            let metrics = metrics();
+            let db = Db::new(reader.clone(), cfg.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader, cfg.limits);
-            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), None)
+            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics)
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(cfg)
@@ -459,9 +462,10 @@ pub mod tests {
                 },
                 ..Default::default()
             };
-            let db = Db::new(reader.clone(), service_config.limits, None);
+            let metrics = metrics();
+            let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader, service_config.limits);
-            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), None)
+            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics)
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(service_config)
@@ -528,9 +532,10 @@ pub mod tests {
                 },
                 ..Default::default()
             };
-            let db = Db::new(reader.clone(), service_config.limits, None);
+            let metrics = metrics();
+            let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader, service_config.limits);
-            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), None)
+            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics)
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(service_config)
@@ -595,11 +600,12 @@ pub mod tests {
             },
             ..Default::default()
         };
+        let metrics = metrics();
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-        let db = Db::new(reader.clone(), service_config.limits, None);
+        let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader, service_config.limits);
-        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), None)
+        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics)
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)
@@ -646,9 +652,10 @@ pub mod tests {
         let service_config = ServiceConfig::default();
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-        let db = Db::new(reader.clone(), service_config.limits, None);
+        let metrics = metrics();
+        let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader, service_config.limits);
-        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), None)
+        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics)
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)
@@ -685,9 +692,9 @@ pub mod tests {
         let service_config = ServiceConfig::default();
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-        let db = Db::new(reader.clone(), service_config.limits, None);
+        let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader, service_config.limits);
-        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), None)
+        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics.clone())
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)
