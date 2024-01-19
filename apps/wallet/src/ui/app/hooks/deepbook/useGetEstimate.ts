@@ -15,6 +15,7 @@ import BigNumber from 'bignumber.js';
 
 const MAX_COINS_PER_REQUEST = 10;
 const ESTIMATE_RETRY_COUNT = 10;
+const NUMBER_EXPECTED_BALANCE_CHANGES = 3;
 
 async function getCoinsByBalance({
 	coinType,
@@ -299,7 +300,7 @@ export function useGetEstimate({
 					}),
 				]);
 
-				if ((isAsk && !baseCoins.length) || (!isAsk && !quoteCoins.length)) {
+				if (isAsk ? !baseCoins.length : !quoteCoins.length) {
 					throw new Error('No coins found in balance');
 				}
 
@@ -326,6 +327,10 @@ export function useGetEstimate({
 				}
 
 				const dryRunResponse = await signer!.dryRunTransactionBlock({ transactionBlock: txn });
+
+				if (dryRunResponse.balanceChanges.length < NUMBER_EXPECTED_BALANCE_CHANGES) {
+					throw new Error('Not enough balance. Please lower swap amount');
+				}
 
 				return {
 					txn,
