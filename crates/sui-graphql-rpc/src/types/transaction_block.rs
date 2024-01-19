@@ -7,7 +7,6 @@ use async_graphql::{
     *,
 };
 use diesel::{alias, ExpressionMethods, NullableExpressionMethods, OptionalExtension, QueryDsl};
-use either::Either;
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer::{
     models_v2::transactions::StoredTransaction,
@@ -17,9 +16,12 @@ use sui_indexer::{
 };
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,
+    effects::TransactionEffects as NativeTransactionEffects,
+    event::Event as NativeEvent,
     message_envelope::Message,
     transaction::{
-        SenderSignedData as NativeSenderSignedData, TransactionDataAPI, TransactionExpiration,
+        SenderSignedData as NativeSenderSignedData, TransactionData as NativeTransactionData,
+        TransactionDataAPI, TransactionExpiration,
     },
 };
 
@@ -35,8 +37,6 @@ use super::{
     cursor::{self, Page, Target},
     digest::Digest,
     epoch::Epoch,
-    event::Event,
-    execution_result::ExecutedTransaction,
     gas::GasInput,
     sui_address::SuiAddress,
     transaction_block_effects::TransactionBlockEffects,
@@ -45,12 +45,27 @@ use super::{
 };
 
 #[derive(Clone)]
-pub(crate) struct TransactionBlock {
-    /// Representation of transaction data either in the Indexer's Store, or coming from an execution result.
-    pub tx_data: Either<StoredTransaction, ExecutedTransaction>,
-
-    /// Deserialized representation of `stored.raw_transaction`.
-    pub native: NativeSenderSignedData,
+pub(crate) enum TransactionBlock {
+    /// A transaction block that has been indexed and stored in the database,
+    /// containing all information that the other two variants have, and more.
+    Stored {
+        stored_tx: StoredTransaction,
+        native: NativeSenderSignedData,
+    },
+    /// A transaction block that has been executed via executeTransactionBlock
+    /// but not yet indexed.
+    Executed {
+        tx_data: NativeSenderSignedData,
+        effects: NativeTransactionEffects,
+        events: Vec<NativeEvent>,
+    },
+    /// A transaction block that has been executed via dryRunTransactionBlock.
+    /// This variant also does not return signatures or digest since only `NativeTransactionData` is present.
+    DryRun {
+        tx_data: NativeTransactionData,
+        effects: NativeTransactionEffects,
+        events: Vec<NativeEvent>,
+    },
 }
 
 /// An input filter selecting for either system or programmable transactions.
@@ -83,21 +98,21 @@ pub(crate) struct TransactionBlockFilter {
 }
 
 pub(crate) type Cursor = cursor::JsonCursor<u64>;
-type CEvent = cursor::JsonCursor<usize>;
 type Query<ST, GB> = data::Query<ST, transactions::table, GB>;
 
 #[Object]
 impl TransactionBlock {
     /// A 32-byte hash that uniquely identifies the transaction block contents, encoded in Base58.
     /// This serves as a unique id for the block on chain.
-    async fn digest(&self) -> String {
-        Base58::encode(self.native.digest())
+    async fn digest(&self) -> Option<String> {
+        self.native_signed_data()
+            .map(|s| Base58::encode(s.digest()))
     }
 
     /// The address corresponding to the public key that signed this transaction. System
     /// transactions do not have senders.
     async fn sender(&self) -> Option<Address> {
-        let sender = self.native.transaction_data().sender();
+        let sender = self.native().sender();
         (sender != NativeSuiAddress::ZERO).then(|| Address {
             address: SuiAddress::from(sender),
         })
@@ -109,76 +124,36 @@ impl TransactionBlock {
     /// If the owner of the gas object(s) is not the same as the sender, the transaction block is a
     /// sponsored transaction block.
     async fn gas_input(&self) -> Option<GasInput> {
-        Some(GasInput::from(self.native.transaction_data().gas_data()))
+        Some(GasInput::from(self.native().gas_data()))
     }
 
     /// The type of this transaction as well as the commands and/or parameters comprising the
     /// transaction of this kind.
     async fn kind(&self) -> Option<TransactionBlockKind> {
-        Some(TransactionBlockKind::from(
-            self.native.transaction_data().kind().clone(),
-        ))
+        Some(TransactionBlockKind::from(self.native().kind().clone()))
     }
 
     /// A list of all signatures, Base64-encoded, from senders, and potentially the gas owner if
     /// this is a sponsored transaction.
     async fn signatures(&self) -> Option<Vec<Base64>> {
-        Some(
-            self.native
-                .tx_signatures()
+        self.native_signed_data().map(|s| {
+            s.tx_signatures()
                 .iter()
-                .map(|s| Base64::from(s.as_ref()))
-                .collect(),
-        )
+                .map(|sig| Base64::from(sig.as_ref()))
+                .collect()
+        })
     }
 
     /// The effects field captures the results to the chain of executing this transaction.
     async fn effects(&self) -> Result<Option<TransactionBlockEffects>> {
-        Ok(Some(
-            TransactionBlockEffects::try_from(self.clone()).extend()?,
-        ))
-    }
-
-    /// Events emitted by this transaction block.
-    async fn events(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<CEvent>,
-        last: Option<u64>,
-        before: Option<CEvent>,
-    ) -> Result<Connection<String, Event>> {
-        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        let mut connection = Connection::new(false, false);
-        let len = match &self.tx_data {
-            Either::Left(stored) => stored.events.len(),
-            Either::Right(executed) => executed.events.len(),
-        };
-        let Some((prev, next, cs)) = page.paginate_indices(len) else {
-            return Ok(connection);
-        };
-
-        connection.has_previous_page = prev;
-        connection.has_next_page = next;
-
-        for c in cs {
-            let event = match self.tx_data {
-                Either::Left(ref stored) => {
-                    Event::try_from_stored_transaction(stored, *c).extend()?
-                }
-                Either::Right(ref executed) => executed.events[*c].clone(),
-            };
-            connection.edges.push(Edge::new(c.encode_cursor(), event));
-        }
-
-        Ok(connection)
+        Ok(Some(self.clone().try_into().extend()?))
     }
 
     /// This field is set by senders of a transaction block. It is an epoch reference that sets a
     /// deadline after which validators will no longer consider the transaction valid. By default,
     /// there is no deadline for when a transaction must execute.
     async fn expiration(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        let TransactionExpiration::Epoch(id) = self.native.transaction_data().expiration() else {
+        let TransactionExpiration::Epoch(id) = self.native().expiration() else {
             return Ok(None);
         };
 
@@ -187,16 +162,36 @@ impl TransactionBlock {
 
     /// Serialized form of this transaction's `SenderSignedData`, BCS serialized and Base64 encoded.
     async fn bcs(&self) -> Option<Base64> {
-        match &self.tx_data {
-            Either::Left(stored) => Some(Base64::from(&stored.raw_transaction)),
-            Either::Right(executed) => bcs::to_bytes(&executed.sender_signed_data)
-                .ok()
-                .map(Base64::from),
+        match self {
+            TransactionBlock::Stored { stored_tx, .. } => {
+                Some(Base64::from(&stored_tx.raw_transaction))
+            }
+            TransactionBlock::Executed { tx_data, .. } => {
+                bcs::to_bytes(&tx_data).ok().map(Base64::from)
+            }
+            // Dry run transaction does not have signatures so no sender signed data.
+            TransactionBlock::DryRun { .. } => None,
         }
     }
 }
 
 impl TransactionBlock {
+    fn native(&self) -> &NativeTransactionData {
+        match self {
+            TransactionBlock::Stored { native, .. } => native.transaction_data(),
+            TransactionBlock::Executed { tx_data, .. } => tx_data.transaction_data(),
+            TransactionBlock::DryRun { tx_data, .. } => tx_data,
+        }
+    }
+
+    fn native_signed_data(&self) -> Option<&NativeSenderSignedData> {
+        match self {
+            TransactionBlock::Stored { native, .. } => Some(native),
+            TransactionBlock::Executed { tx_data, .. } => Some(tx_data),
+            TransactionBlock::DryRun { .. } => None,
+        }
+    }
+
     /// Look up a `TransactionBlock` in the database, by its transaction digest.
     pub(crate) async fn query(db: &Db, digest: Digest) -> Result<Option<Self>, Error> {
         use transactions::dsl;
@@ -430,13 +425,40 @@ impl Target<Cursor> for StoredTransaction {
 impl TryFrom<StoredTransaction> for TransactionBlock {
     type Error = Error;
 
-    fn try_from(stored: StoredTransaction) -> Result<Self, Error> {
-        let native = bcs::from_bytes(&stored.raw_transaction)
+    fn try_from(stored_tx: StoredTransaction) -> Result<Self, Error> {
+        let native = bcs::from_bytes(&stored_tx.raw_transaction)
             .map_err(|e| Error::Internal(format!("Error deserializing transaction block: {e}")))?;
 
-        Ok(TransactionBlock {
-            tx_data: Either::Left(stored),
-            native,
-        })
+        Ok(TransactionBlock::Stored { stored_tx, native })
+    }
+}
+
+impl TryFrom<TransactionBlockEffects> for TransactionBlock {
+    type Error = Error;
+
+    fn try_from(effects: TransactionBlockEffects) -> Result<Self, Error> {
+        match effects {
+            TransactionBlockEffects::Stored { stored_tx, .. } => {
+                TransactionBlock::try_from(stored_tx.clone())
+            }
+            TransactionBlockEffects::Executed {
+                tx_data,
+                native,
+                events,
+            } => Ok(TransactionBlock::Executed {
+                tx_data: tx_data.clone(),
+                effects: native.clone(),
+                events: events.clone(),
+            }),
+            TransactionBlockEffects::DryRun {
+                tx_data,
+                native,
+                events,
+            } => Ok(TransactionBlock::DryRun {
+                tx_data: tx_data.clone(),
+                effects: native.clone(),
+                events: events.clone(),
+            }),
+        }
     }
 }

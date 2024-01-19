@@ -39,14 +39,16 @@ module Test::M1 {
 {
   transactionBlocks(filter: { signAddress: "@{A}" }) {
     nodes {
-      events {
-        edges {
-          node {
-            sendingModule {
-              name
+      effects{
+        events {
+          edges {
+            node {
+              sendingModule {
+                name
+              }
+              json
+              bcs
             }
-            json
-            bcs
           }
         }
       }
@@ -71,14 +73,16 @@ module Test::M1 {
 {
   transactionBlocks(first: 1, filter: { signAddress: "@{A}" }) {
     nodes {
-      events(last: 1) {
-        edges {
-          node {
-            sendingModule {
-              name
+      effects {
+        events(last: 1) {
+          edges {
+            node {
+              sendingModule {
+                name
+              }
+              json
+              bcs
             }
-            json
-            bcs
           }
         }
       }
@@ -90,14 +94,16 @@ module Test::M1 {
 {
   transactionBlocks(last: 1, filter: { signAddress: "@{A}" }) {
     nodes {
-      events(first: 2, after: "@{cursor_0}") {
-        edges {
-          node {
-            sendingModule {
-              name
+      effects {
+        events(first: 2, after: "@{cursor_0}") {
+          edges {
+            node {
+              sendingModule {
+                name
+              }
+              json
+              bcs
             }
-            json
-            bcs
           }
         }
       }

@@ -26,93 +26,99 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 task 5 'create-checkpoint'. lines 36-36:
 Checkpoint created: 1
 
-task 6 'run-graphql'. lines 38-55:
+task 6 'run-graphql'. lines 38-57:
 Response: {
   "data": {
     "transactionBlocks": {
       "nodes": [
         {
-          "events": {
-            "edges": [
-              {
-                "node": {
-                  "sendingModule": {
-                    "name": "M1"
-                  },
-                  "json": {
-                    "new_value": "1"
-                  },
-                  "bcs": "AQAAAAAAAAA="
+          "effects": {
+            "events": {
+              "edges": [
+                {
+                  "node": {
+                    "sendingModule": {
+                      "name": "M1"
+                    },
+                    "json": {
+                      "new_value": "1"
+                    },
+                    "bcs": "AQAAAAAAAAA="
+                  }
                 }
-              }
-            ]
+              ]
+            }
           }
         },
         {
-          "events": {
-            "edges": [
-              {
-                "node": {
-                  "sendingModule": {
-                    "name": "M1"
-                  },
-                  "json": {
-                    "new_value": "10"
-                  },
-                  "bcs": "CgAAAAAAAAA="
+          "effects": {
+            "events": {
+              "edges": [
+                {
+                  "node": {
+                    "sendingModule": {
+                      "name": "M1"
+                    },
+                    "json": {
+                      "new_value": "10"
+                    },
+                    "bcs": "CgAAAAAAAAA="
+                  }
+                },
+                {
+                  "node": {
+                    "sendingModule": {
+                      "name": "M1"
+                    },
+                    "json": {
+                      "new_value": "11"
+                    },
+                    "bcs": "CwAAAAAAAAA="
+                  }
                 }
-              },
-              {
-                "node": {
-                  "sendingModule": {
-                    "name": "M1"
-                  },
-                  "json": {
-                    "new_value": "11"
-                  },
-                  "bcs": "CwAAAAAAAAA="
-                }
-              }
-            ]
+              ]
+            }
           }
         },
         {
-          "events": {
-            "edges": [
-              {
-                "node": {
-                  "sendingModule": {
-                    "name": "M1"
-                  },
-                  "json": {
-                    "new_value": "100"
-                  },
-                  "bcs": "ZAAAAAAAAAA="
+          "effects": {
+            "events": {
+              "edges": [
+                {
+                  "node": {
+                    "sendingModule": {
+                      "name": "M1"
+                    },
+                    "json": {
+                      "new_value": "100"
+                    },
+                    "bcs": "ZAAAAAAAAAA="
+                  }
+                },
+                {
+                  "node": {
+                    "sendingModule": {
+                      "name": "M1"
+                    },
+                    "json": {
+                      "new_value": "101"
+                    },
+                    "bcs": "ZQAAAAAAAAA="
+                  }
+                },
+                {
+                  "node": {
+                    "sendingModule": {
+                      "name": "M1"
+                    },
+                    "json": {
+                      "new_value": "102"
+                    },
+                    "bcs": "ZgAAAAAAAAA="
+                  }
                 }
-              },
-              {
-                "node": {
-                  "sendingModule": {
-                    "name": "M1"
-                  },
-                  "json": {
-                    "new_value": "101"
-                  },
-                  "bcs": "ZQAAAAAAAAA="
-                }
-              },
-              {
-                "node": {
-                  "sendingModule": {
-                    "name": "M1"
-                  },
-                  "json": {
-                    "new_value": "102"
-                  },
-                  "bcs": "ZgAAAAAAAAA="
-                }
-              }
-            ]
+              ]
+            }
           }
         }
       ]
@@ -120,7 +126,7 @@ Response: {
   }
 }
 
-task 7 'run-graphql'. lines 57-68:
+task 7 'run-graphql'. lines 59-70:
 Response: {
   "data": {
     "events": {
@@ -184,26 +190,28 @@ Response: {
   }
 }
 
-task 8 'run-graphql'. lines 70-87:
+task 8 'run-graphql'. lines 72-91:
 Response: {
   "data": {
     "transactionBlocks": {
       "nodes": [
         {
-          "events": {
-            "edges": [
-              {
-                "node": {
-                  "sendingModule": {
-                    "name": "M1"
-                  },
-                  "json": {
-                    "new_value": "1"
-                  },
-                  "bcs": "AQAAAAAAAAA="
+          "effects": {
+            "events": {
+              "edges": [
+                {
+                  "node": {
+                    "sendingModule": {
+                      "name": "M1"
+                    },
+                    "json": {
+                      "new_value": "1"
+                    },
+                    "bcs": "AQAAAAAAAAA="
+                  }
                 }
-              }
-            ]
+              ]
+            }
           }
         }
       ]
@@ -211,37 +219,39 @@ Response: {
   }
 }
 
-task 9 'run-graphql'. lines 89-106:
+task 9 'run-graphql'. lines 93-112:
 Response: {
   "data": {
     "transactionBlocks": {
       "nodes": [
         {
-          "events": {
-            "edges": [
-              {
-                "node": {
-                  "sendingModule": {
-                    "name": "M1"
-                  },
-                  "json": {
-                    "new_value": "101"
-                  },
-                  "bcs": "ZQAAAAAAAAA="
+          "effects": {
+            "events": {
+              "edges": [
+                {
+                  "node": {
+                    "sendingModule": {
+                      "name": "M1"
+                    },
+                    "json": {
+                      "new_value": "101"
+                    },
+                    "bcs": "ZQAAAAAAAAA="
+                  }
+                },
+                {
+                  "node": {
+                    "sendingModule": {
+                      "name": "M1"
+                    },
+                    "json": {
+                      "new_value": "102"
+                    },
+                    "bcs": "ZgAAAAAAAAA="
+                  }
                 }
-              },
-              {
-                "node": {
-                  "sendingModule": {
-                    "name": "M1"
-                  },
-                  "json": {
-                    "new_value": "102"
-                  },
-                  "bcs": "ZgAAAAAAAAA="
-                }
-              }
-            ]
+              ]
+            }
           }
         }
       ]

@@ -41,10 +41,6 @@ impl BalanceChange {
 }
 
 impl BalanceChange {
-    pub(crate) fn new(stored: StoredBalanceChange) -> Self {
-        Self { stored }
-    }
-
     pub(crate) fn read(bytes: &[u8]) -> Result<Self, Error> {
         let stored = bcs::from_bytes(bytes)
             .map_err(|e| Error::Internal(format!("Error deserializing BalanceChange: {e}")))?;
