@@ -111,36 +111,31 @@ pub struct PgIndexerStoreV2 {
     blocking_cp: PgConnectionPool,
     module_cache: Arc<SyncModuleCache<IndexerStoreModuleResolver>>,
     metrics: IndexerMetrics,
+    config: PgIndexerStoreV2Config,
+    partition_manager: PgPartitionManager,
+}
+
+#[derive(Clone)]
+pub struct PgIndexerStoreV2Config {
     parallel_chunk_size: usize,
     parallel_objects_chunk_size: usize,
     object_snapshot_min_checkpoint_lag: usize,
     object_snapshot_max_checkpoint_lag: usize,
-    partition_manager: PgPartitionManager,
 }
 
 impl PgIndexerStoreV2 {
     pub fn new(blocking_cp: PgConnectionPool, metrics: IndexerMetrics) -> Self {
+        Self::new_with_config(blocking_cp, metrics, PgIndexerStoreV2Config::default())
+    }
+
+    pub fn new_with_config(
+        blocking_cp: PgConnectionPool,
+        metrics: IndexerMetrics,
+        config: PgIndexerStoreV2Config,
+    ) -> Self {
         let module_cache: Arc<SyncModuleCache<IndexerStoreModuleResolver>> = Arc::new(
             SyncModuleCache::new(IndexerStoreModuleResolver::new(blocking_cp.clone())),
         );
-        let parallel_chunk_size = std::env::var("PG_COMMIT_PARALLEL_CHUNK_SIZE")
-            .unwrap_or_else(|_e| PG_COMMIT_PARALLEL_CHUNK_SIZE_PER_DB_TX.to_string())
-            .parse::<usize>()
-            .unwrap();
-        let parallel_objects_chunk_size = std::env::var("PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE")
-            .unwrap_or_else(|_e| PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE_PER_DB_TX.to_string())
-            .parse::<usize>()
-            .unwrap();
-        let object_snapshot_min_checkpoint_lag =
-            std::env::var("OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG")
-                .unwrap_or_else(|_e| OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG.to_string())
-                .parse::<usize>()
-                .unwrap();
-        let object_snapshot_max_checkpoint_lag =
-            std::env::var("OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG")
-                .unwrap_or_else(|_e| OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG.to_string())
-                .parse::<usize>()
-                .unwrap();
         let partition_manager = PgPartitionManager::new(blocking_cp.clone())
             .expect("Failed to initialize partition manager");
 
@@ -148,10 +143,7 @@ impl PgIndexerStoreV2 {
             blocking_cp,
             module_cache,
             metrics,
-            parallel_chunk_size,
-            parallel_objects_chunk_size,
-            object_snapshot_min_checkpoint_lag,
-            object_snapshot_max_checkpoint_lag,
+            config,
             partition_manager,
         }
     }
@@ -855,6 +847,23 @@ impl PgIndexerStoreV2 {
     }
 }
 
+impl PgIndexerStoreV2Config {
+    pub fn ci_integration_test_cfg(
+        object_snapshot_min_checkpoint_lag: Option<usize>,
+        object_snapshot_max_checkpoint_lag: Option<usize>,
+    ) -> Self {
+        let mut cfg = Self::default();
+        if let Some(object_snapshot_min_checkpoint_lag) = object_snapshot_min_checkpoint_lag {
+            cfg.object_snapshot_min_checkpoint_lag = object_snapshot_min_checkpoint_lag;
+        }
+        if let Some(object_snapshot_max_checkpoint_lag) = object_snapshot_max_checkpoint_lag {
+            cfg.object_snapshot_max_checkpoint_lag = object_snapshot_max_checkpoint_lag;
+        }
+
+        cfg
+    }
+}
+
 #[async_trait]
 impl IndexerStoreV2 for PgIndexerStoreV2 {
     type ModuleCache = SyncModuleCache<IndexerStoreModuleResolver>;
@@ -895,7 +904,7 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
             .start_timer();
         let objects = make_final_list_of_objects_to_commit(object_changes);
         let len = objects.len();
-        let chunks = chunk!(objects, self.parallel_objects_chunk_size);
+        let chunks = chunk!(objects, self.config.parallel_objects_chunk_size);
         let futures = chunks
             .into_iter()
             .map(|c| self.spawn_blocking_task(move |this| this.persist_objects_chunk(c)))
@@ -930,7 +939,7 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
             .start_timer();
 
         let len = objects.len();
-        let chunks = chunk!(objects, self.parallel_objects_chunk_size);
+        let chunks = chunk!(objects, self.config.parallel_objects_chunk_size);
         let futures = chunks
             .into_iter()
             .map(|c| self.spawn_blocking_task(move |this| this.persist_objects_history_chunk(c)))
@@ -968,7 +977,7 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
             .get_latest_object_snapshot_checkpoint_sequence_number()?
             .unwrap_or_default();
 
-        if latest_cp <= latest_snapshot_cp + self.object_snapshot_max_checkpoint_lag as u64 {
+        if latest_cp <= latest_snapshot_cp + self.config.object_snapshot_max_checkpoint_lag as u64 {
             return Ok(());
         }
         // make sure cp 0 is handled
@@ -978,8 +987,8 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
             latest_snapshot_cp + 1
         };
         // with MAX and MIN, the CSR range will vary from MIN cps to MAX cps
-        let snapshot_window = self.object_snapshot_max_checkpoint_lag as u64
-            - self.object_snapshot_min_checkpoint_lag as u64;
+        let snapshot_window = self.config.object_snapshot_max_checkpoint_lag as u64
+            - self.config.object_snapshot_min_checkpoint_lag as u64;
         let guard = self.metrics.update_object_snapshot_latency.start_timer();
         self.persist_object_snapshot(start_cp, start_cp + snapshot_window)?;
         let elapsed = guard.stop_and_record();
@@ -1010,7 +1019,7 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
             .start_timer();
         let len = transactions.len();
 
-        let chunks = chunk!(transactions, self.parallel_chunk_size);
+        let chunks = chunk!(transactions, self.config.parallel_chunk_size);
         let futures = chunks
             .into_iter()
             .map(|c| self.spawn_blocking_task(move |this| this.persist_transactions_chunk(c)))
@@ -1040,7 +1049,7 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
             .metrics
             .checkpoint_db_commit_latency_events
             .start_timer();
-        let chunks = chunk!(events, self.parallel_chunk_size);
+        let chunks = chunk!(events, self.config.parallel_chunk_size);
         let futures = chunks
             .into_iter()
             .map(|c| self.spawn_blocking_task(move |this| this.persist_events_chunk(c)))
@@ -1090,7 +1099,7 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
             .metrics
             .checkpoint_db_commit_latency_tx_indices
             .start_timer();
-        let chunks = chunk!(indices, self.parallel_chunk_size);
+        let chunks = chunk!(indices, self.config.parallel_chunk_size);
 
         let futures = chunks
             .into_iter()
@@ -1137,6 +1146,35 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
 
     fn module_cache(&self) -> Arc<Self::ModuleCache> {
         self.module_cache.clone()
+    }
+}
+
+impl Default for PgIndexerStoreV2Config {
+    fn default() -> Self {
+        let parallel_chunk_size = std::env::var("PG_COMMIT_PARALLEL_CHUNK_SIZE")
+            .unwrap_or_else(|_e| PG_COMMIT_PARALLEL_CHUNK_SIZE_PER_DB_TX.to_string())
+            .parse::<usize>()
+            .unwrap();
+        let parallel_objects_chunk_size = std::env::var("PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE")
+            .unwrap_or_else(|_e| PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE_PER_DB_TX.to_string())
+            .parse::<usize>()
+            .unwrap();
+        let object_snapshot_min_checkpoint_lag =
+            std::env::var("OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG")
+                .unwrap_or_else(|_e| OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG.to_string())
+                .parse::<usize>()
+                .unwrap();
+        let object_snapshot_max_checkpoint_lag =
+            std::env::var("OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG")
+                .unwrap_or_else(|_e| OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG.to_string())
+                .parse::<usize>()
+                .unwrap();
+        Self {
+            parallel_chunk_size,
+            parallel_objects_chunk_size,
+            object_snapshot_min_checkpoint_lag,
+            object_snapshot_max_checkpoint_lag,
+        }
     }
 }
 

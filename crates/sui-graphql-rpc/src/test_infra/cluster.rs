@@ -44,6 +44,7 @@ pub struct Cluster {
     pub graphql_client: SimpleClient,
 }
 
+/// Starts a validator, fullnode, indexer, and graphql service for testing.
 pub async fn start_cluster(
     graphql_connection_config: ConnectionConfig,
     internal_data_source_rpc_port: Option<u16>,
@@ -53,8 +54,15 @@ pub async fn start_cluster(
     let val_fn = start_validator_with_fullnode(internal_data_source_rpc_port).await;
 
     // Starts indexer
-    let (pg_store, pg_handle) =
-        start_test_indexer_v2(Some(db_url), val_fn.rpc_url().to_string(), None, true).await;
+    let (pg_store, pg_handle) = start_test_indexer_v2(
+        Some(db_url),
+        val_fn.rpc_url().to_string(),
+        None,
+        true,
+        None,
+        None,
+    )
+    .await;
 
     // Starts graphql server
     let fn_rpc_url = val_fn.rpc_url().to_string();
@@ -79,10 +87,14 @@ pub async fn start_cluster(
     }
 }
 
+/// Takes in a simulated instantiation of a Sui blockchain and builds a cluster around it. This
+/// cluster is typically used in e2e tests to emulate and test behaviors.
 pub async fn serve_executor(
     graphql_connection_config: ConnectionConfig,
     internal_data_source_rpc_port: u16,
     executor: Arc<dyn NodeStateGetter>,
+    object_snapshot_min_checkpoint_lag: Option<usize>,
+    object_snapshot_max_checkpoint_lag: Option<usize>,
 ) -> ExecutorCluster {
     let db_url = graphql_connection_config.db_url.clone();
 
@@ -94,12 +106,13 @@ pub async fn serve_executor(
         sui_rest_api::start_service(executor_server_url, executor, Some("/rest".to_owned())).await;
     });
 
-    // Starts indexer
     let (pg_store, pg_handle) = start_test_indexer_v2(
         Some(db_url),
         format!("http://{}", executor_server_url),
         None,
         true,
+        object_snapshot_min_checkpoint_lag,
+        object_snapshot_max_checkpoint_lag,
     )
     .await;
 
@@ -196,5 +209,21 @@ impl ExecutorCluster {
         })
         .await
         .expect("Timeout waiting for indexer to catchup to checkpoint");
+    }
+
+    /// Since the indexer commits not one but potentially a set of checkpoints at a time, it's possible
+    /// that while the latest checkpoint to commit would exceed the max lag allowed by the snapshot,
+    /// because the persist_objects_snapshot method only sees the current state of the indexer's db,
+    /// which is at an earlier checkpoint, it does not actually kick off a new snapshot. For example, at
+    /// min_lag=0, max_lag=2, we'll take a snapshot every time max(sequence_number) on checkpoints >=
+    /// max_lag-min_lag + max(checkpoint_sequence_number) on snapshots. Let's say indexer falls behind,
+    /// and now is trying to index checkpoints 3 through 6. the checkpoints table will show that it is
+    /// currently at checkpoint 2. to the objects_snapshot logic, this checkpoint is still within the
+    /// allowable lag, so it does not do anything, even though by the end of this commitment we will be
+    /// at checkpoint 6, and the objects_snapshot table will have fallen further behind. Thus, in our
+    /// tests we have to force the indexer to take another look. This time, it'll see that checkpoints
+    /// table is at checkpoint 6, and it will take a snapshot.
+    pub async fn force_objects_snapshot_catchup(&self) {
+        self.indexer_store.persist_object_snapshot().await.unwrap();
     }
 }

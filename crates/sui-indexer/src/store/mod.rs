@@ -7,6 +7,7 @@ pub(crate) use indexer_store_v2::*;
 pub use pg_indexer_analytical_store::PgIndexerAnalyticalStore;
 pub use pg_indexer_store::PgIndexerStore;
 pub use pg_indexer_store_v2::PgIndexerStoreV2;
+pub use pg_indexer_store_v2::PgIndexerStoreV2Config;
 
 mod indexer_analytical_store;
 mod indexer_store;

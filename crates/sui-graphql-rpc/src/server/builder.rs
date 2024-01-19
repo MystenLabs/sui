@@ -326,6 +326,8 @@ pub mod tests {
                 connection_config,
                 DEFAULT_INTERNAL_DATA_SOURCE_PORT,
                 Arc::new(sim),
+                None,
+                None,
             )
             .await,
         )

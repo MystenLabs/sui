@@ -55,6 +55,8 @@ mod ingestion_tests {
             format!("http://{}", server_url),
             None,
             true,
+            None,
+            None,
         )
         .await;
         (server_handle, pg_store, pg_handle)

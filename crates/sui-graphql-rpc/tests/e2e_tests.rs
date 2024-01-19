@@ -84,6 +84,7 @@ mod tests {
             connection_config,
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
+            None,
         )
         .await;
 
@@ -115,6 +116,7 @@ mod tests {
             connection_config,
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
+            None,
         )
         .await;
 
@@ -156,6 +158,7 @@ mod tests {
             connection_config,
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
+            None,
         )
         .await;
 

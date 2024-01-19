@@ -205,6 +205,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             custom_validator_account,
             reference_gas_price,
             default_gas_price,
+            object_snapshot_min_checkpoint_lag,
+            object_snapshot_max_checkpoint_lag,
         ) = match task_opt.map(|t| t.command) {
             Some((
                 InitCommand { named_addresses },
@@ -217,6 +219,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     custom_validator_account,
                     reference_gas_price,
                     default_gas_price,
+                    object_snapshot_min_checkpoint_lag,
+                    object_snapshot_max_checkpoint_lag,
                 },
             )) => {
                 let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -244,6 +248,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 if reference_gas_price.is_some() && !simulator {
                     panic!("Can only set reference gas price in simulator mode");
                 }
+
                 (
                     map,
                     accounts,
@@ -252,6 +257,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     custom_validator_account,
                     reference_gas_price,
                     default_gas_price,
+                    object_snapshot_min_checkpoint_lag,
+                    object_snapshot_max_checkpoint_lag,
                 )
             }
             None => {
@@ -262,6 +269,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     protocol_config,
                     false,
                     false,
+                    None,
+                    None,
                     None,
                     None,
                 )
@@ -286,9 +295,12 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 &protocol_config,
                 custom_validator_account,
                 reference_gas_price,
+                object_snapshot_min_checkpoint_lag,
+                object_snapshot_max_checkpoint_lag,
             )
             .await
         } else {
+            // TODO: wlmyng-configs this could be a map of configs as well
             init_val_fullnode_executor(rng, account_names, additional_mapping, &protocol_config)
                 .await
         };
@@ -541,6 +553,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 cluster
                     .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(30))
                     .await;
+
+                cluster.force_objects_snapshot_catchup().await;
 
                 let interpolated = self.interpolate_query(&contents, &cursors)?;
                 let resp = cluster
@@ -1837,6 +1851,8 @@ async fn init_sim_executor(
     protocol_config: &ProtocolConfig,
     custom_validator_account: bool,
     reference_gas_price: Option<u64>,
+    object_snapshot_min_checkpoint_lag: Option<usize>,
+    object_snapshot_max_checkpoint_lag: Option<usize>,
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
@@ -1906,6 +1922,8 @@ async fn init_sim_executor(
         ConnectionConfig::ci_integration_test_cfg(),
         DEFAULT_INTERNAL_DATA_SOURCE_PORT,
         Arc::new(read_replica),
+        object_snapshot_min_checkpoint_lag,
+        object_snapshot_max_checkpoint_lag,
     )
     .await;
 
