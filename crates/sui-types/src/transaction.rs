@@ -863,7 +863,7 @@ impl Command {
     }
 }
 
-pub(crate) fn write_sep<T: Display>(
+pub fn write_sep<T: Display>(
     f: &mut Formatter<'_>,
     items: impl IntoIterator<Item = T>,
     sep: &str,

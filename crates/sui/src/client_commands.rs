@@ -620,11 +620,11 @@ pub enum SuiClientCommands {
         tx_digest: String,
 
         /// Log extra gas-related information
-        #[arg(long, short)]
+        #[arg(long)]
         gas_info: bool,
 
         /// Log information about each programmable transaction command
-        #[arg(long, short)]
+        #[arg(long)]
         ptb_info: bool,
     },
 

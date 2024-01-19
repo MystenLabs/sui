@@ -52,7 +52,6 @@ mod checked {
             UpgradeReceipt, UpgradeTicket,
         },
         transaction::{Argument, Command, ProgrammableMoveCall, ProgrammableTransaction},
-        transaction_displays::Pretty,
         Identifier, SUI_FRAMEWORK_ADDRESS,
     };
     use sui_types::{
@@ -63,7 +62,6 @@ mod checked {
         private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
         INIT_FN_NAME,
     };
-    use tracing::trace;
 
     use crate::adapter::substitute_package_id;
     use crate::programmable_transactions::context::*;
@@ -77,9 +75,6 @@ mod checked {
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
-        #[skip_checked_arithmetic]
-        trace!(target: "replay_ptb_info", "{}", Pretty(&pt));
-
         let ProgrammableTransaction { inputs, commands } = pt;
         let mut context = ExecutionContext::new(
             protocol_config,

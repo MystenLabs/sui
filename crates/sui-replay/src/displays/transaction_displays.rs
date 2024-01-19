@@ -1,18 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::transaction::CallArg::Pure;
-use crate::transaction::{
+use crate::displays::Pretty;
+use std::fmt::{Display, Formatter};
+use sui_types::transaction::CallArg::Pure;
+use sui_types::transaction::{
     write_sep, Argument, CallArg, Command, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction,
 };
-use std::fmt::{Display, Formatter};
 use tabled::{
     builder::Builder as TableBuilder,
     settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
 };
 
-pub struct Pretty<'a, T>(pub &'a T);
-
+/// These Display implementations provide alternate displays that are used to format info contained
+/// in these Structs when calling the CLI replay command with an additional provided flag.
 impl<'a> Display for Pretty<'a, ProgrammableTransaction> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut builder = TableBuilder::default();
