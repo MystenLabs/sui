@@ -887,7 +887,7 @@ impl ReadApiServer for ReadApi {
                 .into_iter()
                 .enumerate()
                 .map(|(seq, e)| {
-                    let layout = store.executor().type_layout_resolver(Box::new(state.get_db())).get_annotated_layout(&e.type_)?;
+                    let layout = store.executor().type_layout_resolver(Box::new(&state.get_cache_reader().as_ref())).get_annotated_layout(&e.type_)?;
                     SuiEvent::try_from(
                         e,
                         *effect.transaction_digest(),
@@ -1072,7 +1072,7 @@ fn to_sui_transaction_events(
     let epoch_store = fullnode_api.state.load_epoch_store_one_call_per_task();
     let mut layout_resolver = epoch_store
         .executor()
-        .type_layout_resolver(Box::new(fullnode_api.state.get_db()));
+        .type_layout_resolver(Box::new(fullnode_api.state.get_cache_reader()));
     Ok(SuiTransactionBlockEvents::try_from(
         events,
         tx_digest,

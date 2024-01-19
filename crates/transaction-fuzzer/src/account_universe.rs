@@ -127,14 +127,14 @@ pub fn assert_accounts_match(
     executor: &Executor,
 ) -> Result<(), TestCaseError> {
     let state = executor.state.clone();
-    let store = state.db();
+    let cache = state.get_cache_reader();
     let epoch_store = state.load_epoch_store_one_call_per_task();
     let mut layout_resolver = epoch_store
         .executor()
-        .type_layout_resolver(Box::new(store.as_ref()));
+        .type_layout_resolver(Box::new(cache.as_ref()));
     for (idx, account) in universe.accounts().iter().enumerate() {
         for (balance_idx, acc_object) in account.current_coins.iter().enumerate() {
-            let object = store.get_object(&acc_object.id()).unwrap().unwrap();
+            let object = cache.get_object(&acc_object.id()).unwrap().unwrap();
             let total_sui_value =
                 object.get_total_sui(layout_resolver.as_mut()).unwrap() - object.storage_rebate;
             let account_balance_i = account.current_balances[balance_idx];
