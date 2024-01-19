@@ -400,9 +400,9 @@ impl SuiClientInner for SuiSdkClient {
 #[cfg(test)]
 mod tests {
     use crate::{
-        events::EmittedSuiToEthTokenBridgeV1,
+        events::{EmittedSuiToEthTokenBridgeV1, MoveTokenBridgeEvent},
         sui_mock_client::SuiMockClient,
-        types::{BridgeChainId, SuiToEthBridgeAction, TokenId},
+        types::{BridgeActionType, BridgeChainId, SuiToEthBridgeAction, TokenId},
     };
     use ethers::types::{
         Address, Block, BlockNumber, Filter, FilterBlockOption, Log, ValueOrArray, U64,
@@ -690,7 +690,8 @@ mod tests {
 
         // Ensure all struct tags are inited
         init_all_struct_tags();
-        let event_1 = EmittedSuiToEthTokenBridgeV1 {
+
+        let sanitized_event_1 = EmittedSuiToEthTokenBridgeV1 {
             nonce: 1,
             sui_chain_id: BridgeChainId::SuiTestnet,
             sui_address: SuiAddress::random_for_testing_only(),
@@ -699,15 +700,23 @@ mod tests {
             token_id: TokenId::Sui,
             amount: 100,
         };
+        let emitted_event_1 = MoveTokenBridgeEvent {
+            message_type: BridgeActionType::TokenTransfer as u8,
+            seq_num: sanitized_event_1.nonce,
+            source_chain: sanitized_event_1.sui_chain_id as u8,
+            sender_address: sanitized_event_1.sui_address.to_vec(),
+            target_chain: sanitized_event_1.eth_chain_id as u8,
+            target_address: sanitized_event_1.eth_address.as_bytes().to_vec(),
+            token_type: sanitized_event_1.token_id as u8,
+            amount: sanitized_event_1.amount,
+        };
 
-        // TODO: remove once we don't rely on env var to get object id
-        // Before that happens, the value needs to match address of
-        // `EMITTED_SUI_TO_ETH_TOKEN_BRIDGE_V1_STUCT_TAG`
+        // TODO: remove once we don't rely on env var to get package id
         std::env::set_var("BRIDGE_PACKAGE_ID", "0x0b");
 
         let mut sui_event_1 = SuiEvent::random_for_testing();
         sui_event_1.type_ = SuiToEthTokenBridgeV1.get().unwrap().clone();
-        sui_event_1.bcs = bcs::to_bytes(&event_1).unwrap();
+        sui_event_1.bcs = bcs::to_bytes(&emitted_event_1).unwrap();
 
         #[derive(Serialize, Deserialize)]
         struct RandomStruct {};
@@ -735,7 +744,7 @@ mod tests {
         let mut expected_action_1 = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
             sui_tx_digest: tx_digest,
             sui_tx_event_index: 0,
-            sui_bridge_event: event_1.clone(),
+            sui_bridge_event: sanitized_event_1.clone(),
         });
         assert_eq!(
             sui_client
@@ -747,7 +756,7 @@ mod tests {
         let mut expected_action_2 = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
             sui_tx_digest: tx_digest,
             sui_tx_event_index: 2,
-            sui_bridge_event: event_1.clone(),
+            sui_bridge_event: sanitized_event_1.clone(),
         });
         assert_eq!(
             sui_client
