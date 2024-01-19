@@ -70,7 +70,7 @@ impl SuinsRegistration {
     ) -> Result<Option<NameRecord>, Error> {
         let record_id = config.record_field_id(&domain.0);
 
-        let Some(object) = MoveObject::query(db, record_id.into(), None).await? else {
+        let Some(object) = MoveObject::query(db, record_id.into(), None, None).await? else {
             return Ok(None);
         };
 
@@ -91,7 +91,8 @@ impl SuinsRegistration {
     ) -> Result<Option<NativeDomain>, Error> {
         let reverse_record_id = config.reverse_record_field_id(address.as_slice());
 
-        let Some(object) = MoveObject::query(db, reverse_record_id.into(), None).await? else {
+        let Some(object) = MoveObject::query(db, reverse_record_id.into(), None, None).await?
+        else {
             return Ok(None);
         };
 
