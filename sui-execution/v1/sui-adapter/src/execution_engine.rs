@@ -190,7 +190,12 @@ mod checked {
             &mut gas_charger,
             *epoch_id,
         );
-        (inner, gas_charger.consume(), effects, execution_result)
+        (
+            inner,
+            gas_charger.into_gas_status(),
+            effects,
+            execution_result,
+        )
     }
 
     pub fn execute_genesis_state_update(

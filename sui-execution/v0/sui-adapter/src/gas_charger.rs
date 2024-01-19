@@ -107,7 +107,7 @@ pub mod checked {
             self.gas_status.move_gas_status_mut()
         }
 
-        pub fn consume(self) -> SuiGasStatus {
+        pub fn into_gas_status(self) -> SuiGasStatus {
             self.gas_status
         }
 
