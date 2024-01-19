@@ -742,19 +742,6 @@ impl<
                         // }
                     } else if let SailfishMessage::LockedExec { full_tx , mut objects, mut child_objects } = msg {
 
-                        // JUST FOR TESTING --- COMMENT THIS OUT FOR REAL EXECUTION
-                        let txid = full_tx.tx.digest();
-                        if let Some(_) = self.ready_txs.remove(&txid) {
-                            manager.clean_up(&txid).await;
-                        }
-                        num_tx += 1;
-                        if num_tx == 1 {
-                            // Expose the start time as a metric. Should be done only once.
-                            worker_metrics.register_start_time();
-                        }
-                        self.update_metrics(&full_tx, &worker_metrics);
-                        continue;
-
                         // TODO: deal with possible duplicate LockedExec messages
                         let txid = full_tx.tx.digest();
                         let mut list = self.received_objs.entry(txid).or_default();
