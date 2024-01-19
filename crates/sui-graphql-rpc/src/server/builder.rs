@@ -333,6 +333,7 @@ pub mod tests {
     use simulacrum::Simulacrum;
     use std::time::Duration;
     use std::{collections::HashMap, sync::Arc};
+    use uuid::Uuid;
 
     async fn prep_cluster() -> (ConnectionConfig, ExecutorCluster) {
         let rng = StdRng::from_seed([12; 32]);
@@ -357,6 +358,15 @@ pub mod tests {
         let binding_address: SocketAddr = "0.0.0.0:9185".parse().unwrap();
         let registry = mysten_metrics::start_prometheus_server(binding_address).default_registry();
         Metrics::new(&registry)
+    }
+
+    fn ip_address() -> SocketAddr {
+        let binding_address: SocketAddr = "0.0.0.0:51515".parse().unwrap();
+        binding_address
+    }
+
+    fn query_id() -> Uuid {
+        Uuid::new_v4()
     }
 
     pub async fn test_timeout_impl() {
@@ -404,6 +414,8 @@ pub mod tests {
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(cfg)
+                .context_data(query_id())
+                .context_data(ip_address())
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })
@@ -452,10 +464,13 @@ pub mod tests {
             let metrics = metrics();
             let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader, service_config.limits);
-            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics)
+            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics.clone())
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(service_config)
+                .context_data(query_id())
+                .context_data(ip_address())
+                .context_data(metrics.clone())
                 .extension(QueryLimitsChecker::default())
                 .build_schema();
             schema.execute(query).await
@@ -483,7 +498,7 @@ pub mod tests {
 
         assert_eq!(
             errs,
-            vec!["Query has too many levels of nesting. The maximum allowed is 0".to_string()]
+            vec!["Query has too many levels of nesting 1. The maximum allowed is 0".to_string()]
         );
         let errs: Vec<_> = exec_query_depth_limit(
             2,
@@ -498,7 +513,7 @@ pub mod tests {
         .collect();
         assert_eq!(
             errs,
-            vec!["Query has too many levels of nesting. The maximum allowed is 2".to_string()]
+            vec!["Query has too many levels of nesting 3. The maximum allowed is 2".to_string()]
         );
     }
 
@@ -522,10 +537,13 @@ pub mod tests {
             let metrics = metrics();
             let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader, service_config.limits);
-            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics)
+            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics.clone())
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(service_config)
+                .context_data(query_id())
+                .context_data(ip_address())
+                .context_data(metrics.clone())
                 .extension(QueryLimitsChecker::default())
                 .build_schema();
             schema.execute(query).await
@@ -552,7 +570,7 @@ pub mod tests {
             .collect();
         assert_eq!(
             err,
-            vec!["Query has too many nodes. The maximum allowed is 0".to_string()]
+            vec!["Query has too many nodes 1. The maximum allowed is 0".to_string()]
         );
 
         let err: Vec<_> = exec_query_node_limit(
@@ -568,7 +586,7 @@ pub mod tests {
         .collect();
         assert_eq!(
             err,
-            vec!["Query has too many nodes. The maximum allowed is 4".to_string()]
+            vec!["Query has too many nodes 5. The maximum allowed is 4".to_string()]
         );
     }
 
@@ -592,10 +610,13 @@ pub mod tests {
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader, service_config.limits);
-        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics)
+        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics.clone())
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)
+            .context_data(query_id())
+            .context_data(ip_address())
+            .context_data(metrics.clone())
             .build_schema();
 
         let resp = schema
@@ -642,10 +663,13 @@ pub mod tests {
         let metrics = metrics();
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader, service_config.limits);
-        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics)
+        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics.clone())
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)
+            .context_data(query_id())
+            .context_data(ip_address())
+            .context_data(metrics.clone())
             .build_schema();
 
         // Should complete successfully
@@ -686,6 +710,8 @@ pub mod tests {
             .context_data(pg_conn_pool)
             .context_data(service_config)
             .context_data(metrics.clone())
+            .context_data(query_id())
+            .context_data(ip_address())
             .extension(QueryLimitsChecker::default())
             .build_schema();
         let _ = schema.execute("{ chainIdentifier }").await;
