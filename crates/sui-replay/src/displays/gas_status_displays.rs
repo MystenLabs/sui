@@ -41,6 +41,11 @@ fn display_info(f: &mut Formatter<'_>, sui_gas_status: &GasStatusV2) -> std::fmt
     )?;
     write!(
         f,
+        "Max Gas Stack Size: {}\n",
+        sui_gas_status.gas_status.stack_size_high_water_mark()
+    )?;
+    write!(
+        f,
         "Number of Bytecode Instructions Executed: {}",
         sui_gas_status.gas_status.instructions_executed()
     )

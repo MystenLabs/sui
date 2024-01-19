@@ -150,7 +150,7 @@ mod checked {
         /// at the end of execution while determining storage charges.
         /// It tracks `storage_bytes * obj_data_cost_refundable` as
         /// described in `storage_gas_price`
-        /// It will be multiplied by the storage gas price.
+        /// It has been multiplied by the storage gas price
         storage_cost: u64,
         /// storage_rebate is the storage rebate (in Sui) for in this object.
         /// This is computed at the end of execution while determining storage charges.
@@ -337,6 +337,7 @@ mod checked {
                 Ok(())
             }
         }
+
         fn storage_cost(&self) -> u64 {
             self.storage_gas_units()
         }

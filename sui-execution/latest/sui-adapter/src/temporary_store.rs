@@ -800,7 +800,7 @@ impl<'backing> TemporaryStore<'backing> {
             let new_object_size = object.object_size_for_gas_metering();
             // track changes and compute the new object `storage_rebate`
             let new_storage_rebate = gas_charger.track_storage_mutation(
-                (*object.id()).into(),
+                object.id(),
                 new_object_size,
                 old_storage_rebate,
             );
