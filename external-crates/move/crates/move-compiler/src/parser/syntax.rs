@@ -3049,10 +3049,10 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, Box<Diagno
                     // with error recovery lexer goes into weird state here that where cur_end <
                     // cur_start so only simpler error can be created
                     // TODO: should figure out why lexer goes crazy
-                    return Err(Box::new(diag!(
+                    Err(Box::new(diag!(
                         Syntax::UnexpectedToken,
                         (context.tokens.current_token_loc(), "Unexpected token")
-                    )));
+                    )))
                 }
             }
         }

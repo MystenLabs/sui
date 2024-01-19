@@ -370,7 +370,7 @@ impl<'input> Lexer<'input> {
             let text = self.trim_whitespace_and_comments(offset + length)?;
             let offset = self.text.len() - text.len();
             (tok, length) = find_token(self.file_hash, self.edition, text, offset)?;
-            i = i + 1;
+            i += 1;
         }
         Ok((tok, text))
     }
