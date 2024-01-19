@@ -1660,9 +1660,6 @@ type Object implements IOwner {
 	snapshot or historical objects table.
 	- WRAPPED_OR_DELETED: The object is deleted or wrapped and only partial information can be
 	loaded from the indexer.
-	- OUTSIDE_AVAILABLE_RANGE: The requested object falls outside of the consistent read range
-	supported by the indexer. The requested object may or may not actually exist on-chain, but
-	the data is not yet or no longer indexed.
 	"""
 	status: ObjectKind!
 	"""
@@ -1903,12 +1900,6 @@ enum ObjectKind {
 	loaded from the indexer.
 	"""
 	WRAPPED_OR_DELETED
-	"""
-	OUTSIDE_AVAILABLE_RANGE: The requested object falls outside of the consistent read range
-	supported by the indexer. The requested object may or may not actually exist on-chain, but
-	the data is not yet or no longer indexed.
-	"""
-	OUTSIDE_AVAILABLE_RANGE
 }
 
 """

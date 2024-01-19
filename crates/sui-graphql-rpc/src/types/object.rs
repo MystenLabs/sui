@@ -64,10 +64,6 @@ pub(crate) enum ObjectKind {
     /// The object is wrapped or deleted and only partial information can be loaded from the
     /// indexer.
     WrappedOrDeleted(StoredDeletedHistoryObject),
-    /// The requested object falls outside of the consistent read range supported by the indexer.
-    /// The requested object may or may not actually exist on-chain, but the data is not yet or no
-    /// longer indexed.
-    OutsideAvailableRange,
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
@@ -84,10 +80,6 @@ pub enum ObjectStatus {
     /// WRAPPED_OR_DELETED: The object is deleted or wrapped and only partial information can be
     /// loaded from the indexer.
     WrappedOrDeleted,
-    /// OUTSIDE_AVAILABLE_RANGE: The requested object falls outside of the consistent read range
-    /// supported by the indexer. The requested object may or may not actually exist on-chain, but
-    /// the data is not yet or no longer indexed.
-    OutsideAvailableRange,
 }
 
 /// Constrains the set of objects returned. All filters are optional, and the resulting set of
@@ -184,9 +176,6 @@ impl Object {
     ///   snapshot or historical objects table.
     /// - WRAPPED_OR_DELETED: The object is deleted or wrapped and only partial information can be
     ///   loaded from the indexer.
-    /// - OUTSIDE_AVAILABLE_RANGE: The requested object falls outside of the consistent read range
-    /// supported by the indexer. The requested object may or may not actually exist on-chain, but
-    /// the data is not yet or no longer indexed.
     async fn status(&self) -> ObjectStatus {
         ObjectStatus::from(&self.kind)
     }
@@ -251,7 +240,6 @@ impl Object {
         use ObjectKind as K;
         Ok(match &self.kind {
             K::WrappedOrDeleted(_) => None,
-            K::OutsideAvailableRange => None,
             K::Live(_, stored) => Some(Base64::from(&stored.serialized_object)),
             // WrappedOrDeleted objects do not have a serialized object, thus this column in the db is nullable.
             K::Historical(_, stored) => stored.serialized_object.as_ref().map(Base64::from),
@@ -516,7 +504,7 @@ impl Object {
 
         match &self.kind {
             K::Live(native, _) | K::NotIndexed(native) | K::Historical(native, _) => Some(native),
-            K::WrappedOrDeleted(_) | K::OutsideAvailableRange => None,
+            K::WrappedOrDeleted(_) => None,
         }
     }
 
@@ -528,7 +516,6 @@ impl Object {
                 Some(native.version().value())
             }
             K::WrappedOrDeleted(stored) => Some(stored.object_version as u64),
-            K::OutsideAvailableRange => None,
         }
     }
 
@@ -944,7 +931,6 @@ impl From<&ObjectKind> for ObjectStatus {
             ObjectKind::Live(_, _) => ObjectStatus::Live,
             ObjectKind::Historical(_, _) => ObjectStatus::Historical,
             ObjectKind::WrappedOrDeleted(_) => ObjectStatus::WrappedOrDeleted,
-            ObjectKind::OutsideAvailableRange => ObjectStatus::OutsideAvailableRange,
         }
     }
 }
