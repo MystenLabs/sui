@@ -25,7 +25,7 @@ pub mod universal_committer_tests;
 pub(crate) struct UniversalCommitter {
     /// The per-epoch configuration of this authority.
     context: Arc<Context>,
-    /// Block store representing the Dag state
+    /// In memory block store representing the dag state
     dag_state: Arc<RwLock<DagState>>,
     /// The list of committers for multi-leader or pipelining
     committers: Vec<BaseCommitter>,
