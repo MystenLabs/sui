@@ -431,8 +431,7 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 ```yaml
 services:
   backend:
-    # Find the latest image from https://hub.docker.com/repository/docker/mysten/zklogin/general
-    image: mysten/zklogin:prover-98b33142b9ad326a6893365ff2f18fae612a1d67
+    image: mysten/zklogin:prover-stable
     volumes:
       # The ZKEY environment variable must be set to the path of the zkey file.
       - ${ZKEY}:/app/binaries/zkLogin.zkey
@@ -441,8 +440,7 @@ services:
       - WITNESS_BINARIES=/app/binaries
 
   frontend:
-    # Find the latest image from https://hub.docker.com/repository/docker/mysten/zklogin/general
-    image: mysten/zklogin:prover-fe-98b33142b9ad326a6893365ff2f18fae612a1d67
+    image: mysten/zklogin:prover-fe-stable
     command: "8080"
     ports:
       # The PROVER_PORT environment variable must be set to the desired port.
