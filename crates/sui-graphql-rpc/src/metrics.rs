@@ -19,6 +19,44 @@ pub(crate) struct Metrics {
     pub request_metrics: Arc<RequestMetrics>,
 }
 
+#[derive(Clone)]
+pub(crate) struct DBMetrics {
+    /// The number of fetches grouped by result (success or error)
+    pub db_fetches: IntCounterVec,
+    /// The fetch latency grouped by result (success or error)
+    pub db_fetch_latency: HistogramVec,
+    // TODO make this work, blocked by pg.rs (unclear if to use log function or smth else)
+    pub _db_query_cost: Histogram,
+    // TODO determine if we want this metric, and implement it
+    pub _db_fetch_batch_size: HistogramVec,
+}
+
+#[derive(Clone)]
+pub(crate) struct RequestMetrics {
+    /// The number of nodes for the input query that passed the query limits check
+    pub input_nodes: Histogram,
+    /// The number of nodes in the result
+    pub output_nodes: Histogram,
+    /// The query depth
+    pub query_depth: Histogram,
+    /// The size (in bytes) of the payload that is higher than the maximum
+    pub query_payload_too_large_size: Histogram,
+    /// The size (in bytes) of the payload
+    pub query_payload_size: Histogram,
+    /// The time it takes to validate the query
+    pub query_validation_latency: Histogram,
+    /// The time it takes for the GraphQL service to execute the request
+    pub query_latency: Histogram,
+    /// Number of errors by path and type.
+    pub num_errors: IntCounterVec,
+    /// Number of queries
+    pub num_queries: IntCounter,
+    /// Number of queries by top level path
+    pub num_queries_top_level: IntCounterVec,
+    /// Total inflight requests
+    pub inflight_requests: Gauge,
+}
+
 impl Metrics {
     pub(crate) fn new(registry: &Registry) -> Self {
         let db_metrics = DBMetrics::new(registry);
@@ -96,18 +134,6 @@ impl Metrics {
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct DBMetrics {
-    /// The number of fetches grouped by result (success or error)
-    pub db_fetches: IntCounterVec,
-    /// The fetch latency grouped by result (success or error)
-    pub db_fetch_latency: HistogramVec,
-    // TODO make this work, blocked by pg.rs (unclear if to use log function or smth else)
-    pub _db_query_cost: Histogram,
-    // TODO determine if we want this metric, and implement it
-    pub _db_fetch_batch_size: HistogramVec,
-}
-
 impl DBMetrics {
     pub(crate) fn new(registry: &Registry) -> Self {
         Self {
@@ -137,32 +163,6 @@ impl DBMetrics {
             ),
         }
     }
-}
-
-#[derive(Clone)]
-pub(crate) struct RequestMetrics {
-    /// The number of nodes for the input query that passed the query limits check
-    pub input_nodes: Histogram,
-    /// The number of nodes in the result
-    pub output_nodes: Histogram,
-    /// The query depth
-    pub query_depth: Histogram,
-    /// The size (in bytes) of the payload that is higher than the maximum
-    pub query_payload_too_large_size: Histogram,
-    /// The size (in bytes) of the payload
-    pub query_payload_size: Histogram,
-    /// The time it takes to validate the query
-    pub query_validation_latency: Histogram,
-    /// The time it takes for the GraphQL service to execute the request
-    pub query_latency: Histogram,
-    /// Number of errors by path and type.
-    pub num_errors: IntCounterVec,
-    /// Number of queries
-    pub num_queries: IntCounter,
-    /// Number of queries by top level path
-    pub num_queries_top_level: IntCounterVec,
-    /// Total inflight requests
-    pub inflight_requests: Gauge,
 }
 
 impl RequestMetrics {
