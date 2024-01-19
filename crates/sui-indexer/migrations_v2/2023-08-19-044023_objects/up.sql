@@ -55,7 +55,7 @@ CREATE TABLE objects_history (
     df_name                     bytea,
     df_object_type              text,
     df_object_id                bytea,
-    CONSTRAINT objects_history_pk PRIMARY KEY (object_id, object_version, checkpoint_sequence_number)
+    CONSTRAINT objects_history_pk PRIMARY KEY (checkpoint_sequence_number, object_id, object_version)
 ) PARTITION BY RANGE (checkpoint_sequence_number);
 CREATE TABLE objects_history_partition_0 PARTITION OF objects_history FOR VALUES FROM (0) TO (MAXVALUE);
 -- TODO(gegaowp): add corresponding indices for consistent reads of objects_history table

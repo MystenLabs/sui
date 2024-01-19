@@ -21,6 +21,7 @@ use tracing::info;
 
 use crate::framework::fetcher::CheckpointFetcher;
 use crate::handlers::checkpoint_handler_v2::new_handlers;
+use crate::processors_v2::objects_snapshot_processor::ObjectsSnapshotProcessor;
 use crate::processors_v2::processor_orchestrator_v2::ProcessorOrchestratorV2;
 use crate::store::{IndexerStoreV2, PgIndexerAnalyticalStore};
 
@@ -61,6 +62,10 @@ impl IndexerV2 {
             downloaded_checkpoint_data_sender,
         );
         spawn_monitored_task!(fetcher.run());
+
+        let objects_snapshot_processor =
+            ObjectsSnapshotProcessor::new(store.clone(), metrics.clone());
+        spawn_monitored_task!(objects_snapshot_processor.start());
 
         let checkpoint_handler = new_handlers(store, metrics, config).await?;
 
