@@ -3198,13 +3198,13 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                 _ => error_pattern!(),
             }
         }
-        PP::Name(name_chain, pts_opt) => {
+        PP::Name(mut_, name_chain, pts_opt) => {
             let head_ctor_name = context
                 .name_access_chain_to_module_access(Access::Variant, name_chain)
                 .and_then(|name| head_ctor_okay(context, name, true));
             let tys = optional_types(context, pts_opt);
             match head_ctor_name {
-                Some(sp!(loc, EM::Name(name))) => sp(loc, EP::Binder(Var(name))),
+                Some(sp!(loc, EM::Name(name))) => sp(loc, EP::Binder(mut_, Var(name))),
                 Some(head_ctor_name @ sp!(_, EM::Variant(_, _))) => {
                     sp(loc, EP::HeadConstructor(head_ctor_name, tys))
                 }
@@ -3231,17 +3231,17 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
     }
 }
 
-fn pattern_binders(context: &mut Context, pattern: &E::MatchPattern) -> Vec<Var> {
+fn pattern_binders(context: &mut Context, pattern: &E::MatchPattern) -> Vec<(Mutability, Var)> {
     use E::MatchPattern_ as EP;
 
-    fn report_duplicate(context: &mut Context, var: Var, locs: &Vec<Loc>) {
+    fn report_duplicate(context: &mut Context, var: Var, locs: &Vec<(Mutability, Loc)>) {
         assert!(locs.len() > 1, "ICE pattern duplicate detection error");
-        let first_loc = locs.first().unwrap();
+        let (_, first_loc) = locs.first().unwrap();
         let mut diag = diag!(
             NameResolution::InvalidPattern,
             (*first_loc, format!("binder '{}' is defined here", var))
         );
-        for loc in locs.iter().skip(1) {
+        for (_, loc) in locs.iter().skip(1) {
             diag.add_secondary_label((*loc, "and repeated here"));
         }
         diag.add_note("A pattern variable must be unique unless it appears on different sides of an or-pattern.");
@@ -3266,7 +3266,28 @@ fn pattern_binders(context: &mut Context, pattern: &E::MatchPattern) -> Vec<Var>
         context.env().add_diag(diag);
     }
 
-    type Bindings = BTreeMap<Var, Vec<Loc>>;
+    fn report_mismatched_or_mutability(
+        context: &mut Context,
+        mutable_loc: Loc,
+        immutable_loc: Loc,
+        var: &Var,
+        posn: OrPosn,
+    ) {
+        let (primary_side, secondary_side) = match posn {
+            OrPosn::Left => ("left", "right"),
+            OrPosn::Right => ("right", "left"),
+        };
+        let primary_msg = format!("{} or-pattern binds variable {} mutably", primary_side, var);
+        let secondary_msg = format!("{} or-pattern binds it immutably", secondary_side);
+        let mut diag = diag!(NameResolution::InvalidPattern, (mutable_loc, primary_msg));
+        diag.add_secondary_label((immutable_loc, secondary_msg));
+        diag.add_note(
+            "Both sides of an or-pattern must bind the same variables with the same mutability.",
+        );
+        context.env().add_diag(diag);
+    }
+
+    type Bindings = BTreeMap<Var, Vec<(Mutability, Loc)>>;
 
     fn report_duplicates_and_combine(
         context: &mut Context,
@@ -3296,13 +3317,12 @@ fn pattern_binders(context: &mut Context, pattern: &E::MatchPattern) -> Vec<Var>
 
     fn check_duplicates(context: &mut Context, sp!(ploc, pattern): &E::MatchPattern) -> Bindings {
         match pattern {
-            EP::Binder(var) | EP::At(var, _) => {
+            EP::Binder(mut_, var) => [(*var, vec![(*mut_, *ploc)])].into_iter().collect(),
+            EP::At(var, inner) => {
                 let mut bindings: Bindings = BTreeMap::new();
-                bindings.entry(*var).or_default().push(*ploc);
-                if let EP::At(_, inner) = pattern {
-                    let new_bindings = check_duplicates(context, inner);
-                    bindings = report_duplicates_and_combine(context, vec![bindings, new_bindings]);
-                }
+                bindings.entry(*var).or_default().push((None, *ploc));
+                let new_bindings = check_duplicates(context, inner);
+                bindings = report_duplicates_and_combine(context, vec![bindings, new_bindings]);
                 bindings
             }
             EP::PositionalConstructor(_, _, sp!(_, patterns)) => {
@@ -3323,9 +3343,49 @@ fn pattern_binders(context: &mut Context, pattern: &E::MatchPattern) -> Vec<Var>
                 let mut left_bindings = check_duplicates(context, left);
                 let mut right_bindings = check_duplicates(context, right);
 
-                for key in left_bindings.keys() {
+                for (key, mut_and_locs) in left_bindings.iter_mut() {
                     if !right_bindings.contains_key(key) {
                         report_mismatched_or(context, OrPosn::Left, key, right.loc);
+                    }
+
+                    let lhs_mutability = mut_and_locs.get(0).and_then(|(m, _)| *m);
+                    let rhs_mutability = right_bindings
+                        .get(key)
+                        .and_then(|mut_and_locs| mut_and_locs.get(0).and_then(|(m, _)| *m));
+                    match (lhs_mutability, rhs_mutability) {
+                        // LHS variable mutable, RHS variable immutable
+                        (Some(lhs_mutability), None) => {
+                            report_mismatched_or_mutability(
+                                context,
+                                lhs_mutability,
+                                right.loc,
+                                key,
+                                OrPosn::Left,
+                            );
+                            // Mutabilities are mismatched so update them to all be mutable to
+                            // avoid further errors further down the line.
+                            if let Some(mut_and_locs) = right_bindings.get_mut(key) {
+                                for m in mut_and_locs.iter_mut().filter(|(x, _)| x.is_none()) {
+                                    m.0 = Some(lhs_mutability);
+                                }
+                            }
+                        }
+                        (None, Some(rhs_mutability)) => {
+                            // RHS variable mutable, LHS variable immutable
+                            report_mismatched_or_mutability(
+                                context,
+                                rhs_mutability,
+                                key.loc(),
+                                key,
+                                OrPosn::Right,
+                            );
+                            // Mutabilities are mismatched so update them to all be mutable to
+                            // avoid further errors further down the line.
+                            for m in mut_and_locs.iter_mut().filter(|(x, _)| x.is_none()) {
+                                m.0 = Some(rhs_mutability);
+                            }
+                        }
+                        _ => (),
                     }
                 }
 
@@ -3350,8 +3410,10 @@ fn pattern_binders(context: &mut Context, pattern: &E::MatchPattern) -> Vec<Var>
         }
     }
 
-    let bindings = check_duplicates(context, pattern);
-    bindings.keys().cloned().collect::<Vec<_>>()
+    check_duplicates(context, pattern)
+        .into_iter()
+        .map(|(var, vs)| (vs.get(0).and_then(|x| x.0), var))
+        .collect::<Vec<_>>()
 }
 
 //**************************************************************************************************
