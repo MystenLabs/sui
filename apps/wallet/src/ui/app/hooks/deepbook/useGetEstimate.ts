@@ -9,6 +9,7 @@ import { useSuiClient } from '@mysten/dapp-kit';
 import { type DeepBookClient } from '@mysten/deepbook';
 import { TransactionBlock } from '@mysten/sui.js/builder';
 import { type CoinStruct, type SuiClient } from '@mysten/sui.js/client';
+import * as Sentry from '@sentry/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 
@@ -226,6 +227,7 @@ export function useGetEstimate({
 	baseConversionRate,
 	quoteConversionRate,
 	enabled,
+	amount,
 }: {
 	accountCapId: string;
 	signer: WalletSigner | null;
@@ -239,6 +241,7 @@ export function useGetEstimate({
 	baseConversionRate: number;
 	quoteConversionRate: number;
 	enabled?: boolean;
+	amount: string;
 }) {
 	const walletFeeAddress = useDeepBookContext().walletFeeAddress;
 	const queryClient = useQueryClient();
@@ -265,55 +268,78 @@ export function useGetEstimate({
 			baseConversionRate,
 			quoteConversionRate,
 			lotSize,
+			amount,
 		],
 		queryFn: async () => {
-			const [baseCoins, quoteCoins] = await Promise.all([
-				getCoinsByBalance({
+			const sentryTransaction = Sentry.startTransaction({
+				name: 'defi-swap',
+				op: 'get-estimate',
+				data: {
 					coinType,
-					balance: baseBalance,
-					suiClient,
-					address: activeAddress!,
-				}),
-				getCoinsByBalance({
-					coinType,
-					balance: quoteBalance,
-					suiClient,
-					address: activeAddress!,
-				}),
-			]);
-
-			if ((isAsk && !baseCoins.length) || (!isAsk && !quoteCoins.length)) {
-				throw new Error('No coins found in balance');
-			}
-
-			const txn = await getPlaceMarketOrderTxn({
-				deepBookClient,
-				poolId,
-				accountCapId,
-				address: activeAddress!,
-				isAsk,
-				baseCoins,
-				quoteCoins,
-				baseBalance,
-				quoteBalance,
-				walletFeeAddress,
-				totalBaseBalance,
-				totalQuoteBalance,
-				baseConversionRate,
-				quoteConversionRate,
-				lotSize,
+					activeAddress,
+					isAsk,
+					swapAmount: amount,
+					maxAvailableBalanceToSwap: isAsk ? totalBaseBalance : totalQuoteBalance,
+				},
 			});
 
-			if (!accountCapId) {
-				await queryClient.invalidateQueries({ queryKey: ['get-owned-objects'] });
+			try {
+				const [baseCoins, quoteCoins] = await Promise.all([
+					getCoinsByBalance({
+						coinType,
+						balance: baseBalance,
+						suiClient,
+						address: activeAddress!,
+					}),
+					getCoinsByBalance({
+						coinType,
+						balance: quoteBalance,
+						suiClient,
+						address: activeAddress!,
+					}),
+				]);
+
+				if ((isAsk && !baseCoins.length) || (!isAsk && !quoteCoins.length)) {
+					throw new Error('No coins found in balance');
+				}
+
+				const txn = await getPlaceMarketOrderTxn({
+					deepBookClient,
+					poolId,
+					accountCapId,
+					address: activeAddress!,
+					isAsk,
+					baseCoins,
+					quoteCoins,
+					baseBalance,
+					quoteBalance,
+					walletFeeAddress,
+					totalBaseBalance,
+					totalQuoteBalance,
+					baseConversionRate,
+					quoteConversionRate,
+					lotSize,
+				});
+
+				if (!accountCapId) {
+					await queryClient.invalidateQueries({ queryKey: ['get-owned-objects'] });
+				}
+
+				const dryRunResponse = await signer!.dryRunTransactionBlock({ transactionBlock: txn });
+
+				return {
+					txn,
+					dryRunResponse,
+				};
+			} catch (error) {
+				sentryTransaction.setStatus('failed_precondition');
+				Sentry.captureException(error);
+				throw error;
+			} finally {
+				if (amount) {
+					sentryTransaction.finish();
+				}
 			}
-
-			const dryRunResponse = await signer!.dryRunTransactionBlock({ transactionBlock: txn });
-
-			return {
-				txn,
-				dryRunResponse,
-			};
 		},
 		enabled:
 			enabled &&
