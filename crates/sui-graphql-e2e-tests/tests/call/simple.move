@@ -83,10 +83,12 @@ module Test::M1 {
     objects {
       edges {
         node {
-          address
-          digest
-          owner {
-            __typename
+          asObject {
+            address
+            digest
+            owner {
+                __typename
+            }
           }
         }
       }
@@ -100,10 +102,12 @@ module Test::M1 {
     objects {
       edges {
         node {
-          address
-          digest
-          owner {
-            __typename
+          asObject {
+            address
+            digest
+            owner {
+                __typename
+            }
           }
         }
       }
@@ -113,10 +117,12 @@ module Test::M1 {
     objects {
       edges {
         node {
-          address
-          digest
-          owner {
-            __typename
+          asObject {
+            address
+            digest
+            owner {
+                __typename
+            }
           }
         }
       }
@@ -127,10 +133,12 @@ module Test::M1 {
     objects {
       edges {
         node {
-          address
-          digest
-          owner {
-            __typename
+          asObject {
+            address
+            digest
+            owner {
+                __typename
+            }
           }
         }
       }
