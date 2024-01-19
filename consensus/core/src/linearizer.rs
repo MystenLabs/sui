@@ -113,6 +113,7 @@ impl fmt::Debug for CommittedSubDag {
 
 /// Expand a committed sequence of leader into a sequence of sub-dags.
 #[allow(unused)]
+#[derive(Clone)]
 pub struct Linearizer {
     /// In memory block store representing the dag state
     dag_state: Arc<RwLock<DagState>>,
@@ -177,9 +178,13 @@ impl Linearizer {
     }
 
     // This function should be called whenever a new commit is observed. This will
-    // iterate over the sequence of committed leaders and produce a list of sub-dags.
-    pub fn handle_commit(&mut self, committed_leaders: Vec<VerifiedBlock>) -> Vec<CommittedSubDag> {
-        let mut committed_sub_dags = vec![];
+    // iterate over the sequence of committed leaders and produce a list of commit
+    // data & committed sub-dags.
+    pub fn handle_commit(
+        &mut self,
+        committed_leaders: Vec<VerifiedBlock>,
+    ) -> Vec<(Commit, CommittedSubDag)> {
+        let mut commits = vec![];
 
         for leader_block in committed_leaders {
             // Grab latest commit state from dag state
@@ -199,7 +204,7 @@ impl Linearizer {
             sub_dag.sort();
 
             // Update last commit in dag state
-            let last_commit = Commit {
+            let last_commit_data = Commit {
                 index: sub_dag.commit_index,
                 leader: sub_dag.leader,
                 blocks: sub_dag
@@ -213,11 +218,12 @@ impl Linearizer {
                     .collect::<Vec<_>>(),
                 last_committed_rounds,
             };
-            self.dag_state.write().set_last_commit(last_commit);
-
-            committed_sub_dags.push(sub_dag);
+            self.dag_state
+                .write()
+                .set_last_commit(last_commit_data.clone());
+            commits.push((last_commit_data, sub_dag));
         }
-        committed_sub_dags
+        commits
     }
 }
 
@@ -287,8 +293,8 @@ mod tests {
             ancestors = new_ancestors;
         }
 
-        let subdags = linearizer.handle_commit(leaders.clone());
-        for (idx, subdag) in subdags.into_iter().enumerate() {
+        let commits = linearizer.handle_commit(leaders.clone());
+        for (idx, (_commit_data, subdag)) in commits.into_iter().enumerate() {
             tracing::info!("{subdag:?}");
             assert_eq!(subdag.leader, leaders[idx].reference());
             assert_eq!(subdag.timestamp_ms, leaders[idx].timestamp_ms());
@@ -419,17 +425,19 @@ mod tests {
             .read()
             .get_uncommitted_block(&second_leader)
             .unwrap();
-        let subdag = linearizer.handle_commit(vec![second_leader_block.clone()]);
+        let commit = linearizer.handle_commit(vec![second_leader_block.clone()]);
+        assert_eq!(commit.len(), 1);
+
+        let (_commit_data, subdag) = &commit[0];
         tracing::info!("{subdag:?}");
-        assert_eq!(subdag.len(), 1);
-        assert_eq!(subdag[0].leader, second_leader);
-        assert_eq!(subdag[0].timestamp_ms, second_leader_block.timestamp_ms());
-        assert_eq!(subdag[0].commit_index, expected_second_commit_data.index);
+        assert_eq!(subdag.leader, second_leader);
+        assert_eq!(subdag.timestamp_ms, second_leader_block.timestamp_ms());
+        assert_eq!(subdag.commit_index, expected_second_commit_data.index);
 
         // Using the same sorting as used in CommittedSubDag::sort
         blocks.sort_by(|a, b| a.round.cmp(&b.round).then_with(|| a.author.cmp(&b.author)));
         assert_eq!(
-            subdag[0]
+            subdag
                 .blocks
                 .clone()
                 .into_iter()
@@ -437,7 +445,7 @@ mod tests {
                 .collect::<Vec<_>>(),
             blocks
         );
-        for block in subdag[0].blocks.iter() {
+        for block in subdag.blocks.iter() {
             assert!(block.round() <= expected_second_commit_data.leader.round);
         }
     }
