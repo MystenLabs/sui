@@ -752,14 +752,12 @@ impl Object {
     ) -> Result<Option<Self>, Error> {
         if version.is_none() && checkpoint_sequence_number.is_none() {
             Object::query_live(db, address).await
+        } else if let Some(version) = version {
+            Object::query_at_version(db, address, version).await
         } else {
-            if let Some(version) = version {
-                Object::query_at_version(db, address, version).await
-            } else {
-                // safe to do because either version or checkpoint_sequence_number is not None and version is None
-                Object::query_latest_at_checkpoint(db, address, checkpoint_sequence_number.unwrap())
-                    .await
-            }
+            // safe to do because either version or checkpoint_sequence_number is not None and version is None
+            Object::query_latest_at_checkpoint(db, address, checkpoint_sequence_number.unwrap())
+                .await
         }
         .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))
     }
