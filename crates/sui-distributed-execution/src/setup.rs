@@ -8,7 +8,12 @@ use sui_single_node_benchmark::{
 };
 use sui_types::{base_types::SuiAddress, object::Object, transaction::Transaction};
 
-pub const WORKLOAD: WorkloadKind = WorkloadKind::NoMove;
+// pub const WORKLOAD: WorkloadKind = WorkloadKind::NoMove;
+pub const WORKLOAD: WorkloadKind = WorkloadKind::Move {
+    num_input_objects: 2,
+    num_dynamic_fields: 0,
+    computation: 0,
+};
 pub const COMPONENT: Component = Component::PipeTxsToChannel;
 
 pub fn export_to_files(
@@ -117,5 +122,23 @@ mod test {
         assert_eq!(read_accounts.len(), ctx.get_accounts().len());
         assert_eq!(&read_objects, ctx.get_genesis_objects());
         assert_eq!(read_txs, txs);
+    }
+
+    #[tokio::test]
+    async fn benchmark_setup_move_test() {
+        let tx_count = 300;
+        let duration = Duration::from_secs(10);
+
+        super::generate_benchmark_data(tx_count, duration).await;
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn benchmark_setup_twice_move_test() {
+        let tx_count = 300;
+        let duration = Duration::from_secs(10);
+
+        super::generate_benchmark_data(tx_count, duration).await;
+        super::generate_benchmark_data(tx_count, duration).await;
     }
 }

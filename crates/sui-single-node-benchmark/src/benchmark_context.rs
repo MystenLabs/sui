@@ -62,8 +62,9 @@ impl BenchmarkContext {
 
         info!("Initializing validator");
         let start_time: std::time::Instant = std::time::Instant::now();
-        let validator = SingleValidator::new(&[], benchmark_component, checkpoint_size).await;
-        // SingleValidator::new(&genesis_gas_objects, benchmark_component, checkpoint_size).await;
+        // let validator = SingleValidator::new(&[], benchmark_component, checkpoint_size).await;
+        let validator =
+            SingleValidator::new(&genesis_gas_objects, benchmark_component, checkpoint_size).await;
         let elapsed = start_time.elapsed().as_millis() as f64;
         println!("Validator initialized in {} ms", elapsed,);
 
