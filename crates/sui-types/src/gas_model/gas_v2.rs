@@ -150,12 +150,14 @@ mod checked {
         /// at the end of execution while determining storage charges.
         /// It tracks `storage_bytes * obj_data_cost_refundable` as
         /// described in `storage_gas_price`
-        /// It has been multiplied by the storage gas price
-        storage_cost: u64,
+        /// It has been multiplied by the storage gas price. This is the new storage rebate.
+        pub storage_cost: u64,
         /// storage_rebate is the storage rebate (in Sui) for in this object.
         /// This is computed at the end of execution while determining storage charges.
         /// The value is in Sui.
-        storage_rebate: u64,
+        pub storage_rebate: u64,
+        /// The object size post-transaction in bytes
+        pub new_size: u64,
     }
 
     #[allow(dead_code)]
@@ -341,6 +343,10 @@ mod checked {
         fn storage_cost(&self) -> u64 {
             self.storage_gas_units()
         }
+
+        pub fn per_object_storage(&self) -> &Vec<(ObjectID, PerObjectStorage)> {
+            &self.per_object_storage
+        }
     }
 
     impl SuiGasStatusAPI for SuiGasStatus {
@@ -471,6 +477,7 @@ mod checked {
                 PerObjectStorage {
                     storage_cost,
                     storage_rebate,
+                    new_size,
                 },
             ));
             // return the new object rebate (object storage cost)
