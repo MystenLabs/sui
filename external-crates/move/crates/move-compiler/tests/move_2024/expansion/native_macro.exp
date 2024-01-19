@@ -1,7 +1,7 @@
 error[E02007]: invalid 'fun' declaration
-  ┌─ tests/move_2024/expansion/native_macro.move:2:5
+  ┌─ tests/move_2024/expansion/native_macro.move:3:5
   │
-2 │     native macro fun foo();
+3 │     native macro fun foo();
   │     ^^^^^^ ----- Function declared as 'macro' here
   │     │       
   │     Invalid function declaration. 'native' functions cannot be 'macro'

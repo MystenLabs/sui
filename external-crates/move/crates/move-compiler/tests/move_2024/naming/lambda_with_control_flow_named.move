@@ -29,19 +29,19 @@ module a::m {
     fun nested() {
         do!(|| 'outer: {
             do2!(|| 'a: {
-                if (false) break'outer 0;
-                if (false) return'outer 0;
+                if (false) break'outer (0, 1);
+                if (false) return'outer (0, 1);
                 if (false) break'a (0, 1);
                 if (false) return'a 0;
                 0
             },
             || 'b: {
-                if (false) break'outer 0;
-                if (false) return'outer 0;
+                if (false) break'outer (0, 1);
+                if (false) return'outer (0, 1);
                 if (false) break'b (0, 1);
                 if (false) return'b 0;
                 0
-            });
+            })
         });
     }
 }

@@ -49,7 +49,7 @@ pub fn program(
         info,
         inner: N::Program_ { modules: nmodules },
     } = prog;
-    let mut context = Context::new(compilation_env, pre_compiled_lib, info);
+    let mut context = Box::new(Context::new(compilation_env, pre_compiled_lib, info));
 
     extract_macros(&mut context, &nmodules);
     let mut modules = modules(&mut context, nmodules);
@@ -219,7 +219,6 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
         unused_let_muts(context);
         body
     };
-    body.print();
     context.current_function = None;
     context.in_macro_function = false;
     context.env.pop_warning_filter_scope();
@@ -307,7 +306,7 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
     );
     context.return_type = Some(signature.clone());
 
-    let mut value = exp_(context, nvalue);
+    let mut value = exp(context, Box::new(nvalue));
     unused_let_muts(context);
     subtype(
         context,
@@ -330,7 +329,7 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
         attributes,
         loc,
         signature,
-        value,
+        value: *value,
     }
 }
 
@@ -1066,7 +1065,7 @@ fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence 
     for (idx, sp!(loc, ns_)) in seq.into_iter().enumerate() {
         match ns_ {
             NS::Seq(ne) => {
-                let e = exp_(context, ne);
+                let e = exp(context, Box::new(ne));
                 // If it is not the last element
                 if idx < len - 1 {
                     context.add_ability_constraint(
@@ -1079,7 +1078,7 @@ fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence 
                         Ability_::Drop,
                     )
                 }
-                work_queue.push_front(SeqCase::Seq(loc, Box::new(e)));
+                work_queue.push_front(SeqCase::Seq(loc, e));
             }
             NS::Declare(nbind, ty_opt) => {
                 let instantiated_ty_op = ty_opt.map(|t| core::instantiate(context, t));
@@ -1087,13 +1086,9 @@ fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence 
                 work_queue.push_front(SeqCase::Declare { loc, b });
             }
             NS::Bind(nbind, nr) => {
-                let e = exp_(context, nr);
+                let e = exp(context, Box::new(nr));
                 let b = bind_list(context, nbind, Some(e.ty.clone()));
-                work_queue.push_front(SeqCase::Bind {
-                    loc,
-                    b,
-                    e: Box::new(e),
-                });
+                work_queue.push_front(SeqCase::Bind { loc, b, e });
             }
         }
     }
@@ -1123,27 +1118,26 @@ fn sequence_type(seq: &T::Sequence) -> &Type {
 }
 
 fn exp_vec(context: &mut Context, es: Vec<N::Exp>) -> Vec<T::Exp> {
-    es.into_iter().map(|e| exp_(context, e)).collect()
+    es.into_iter().map(|e| *exp(context, Box::new(e))).collect()
+}
+
+fn exp_k<R>(context: &mut Context, ne: Box<N::Exp>, k: Box<dyn FnOnce(Box<T::Exp>) -> R>) -> R {
+    let e = exp(context, ne);
+    k(e)
 }
 
 fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
-    Box::new(exp_(context, *ne))
-}
-
-fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
-    ne_.print();
     use N::Exp_ as NE;
     use T::UnannotatedExp_ as TE;
-
-    if matches!(ne_, NE::BinopExp(..)) {
+    if matches!(ne.value, NE::BinopExp(..)) {
         return process_binops!(
             (BinOp, Loc),
-            T::Exp,
-            sp(eloc, ne_),
+            Box<T::Exp>,
+            *ne,
             sp!(loc, cur_),
             cur_,
             NE::BinopExp(lhs, op, rhs) => { (*lhs, (op, loc), *rhs) },
-            { exp_(context, sp(loc, cur_)) },
+            { exp(context, Box::new(sp(loc, cur_))) },
             value_stack,
             (bop, loc) => {
                 let el = value_stack.pop().expect("ICE binop typing issue");
@@ -1153,6 +1147,7 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
         );
     }
 
+    let sp!(eloc, ne_) = *ne;
     let (ty, e_) = match ne_ {
         NE::Unit { trailing } => (sp(eloc, Type_::Unit), TE::Unit { trailing }),
         NE::Value(sp!(vloc, Value_::InferredNum(v))) => (
@@ -1394,7 +1389,7 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
                 add_field_types(context, eloc, "argument", &m, &n, targs.clone(), nfields);
 
             let tfields = typed_nfields.map(|f, (idx, (fty, narg))| {
-                let arg = exp_(context, narg);
+                let arg = exp(context, Box::new(narg));
                 subtype(
                     context,
                     arg.exp.loc,
@@ -1402,7 +1397,7 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
                     arg.ty.clone(),
                     fty.clone(),
                 );
-                (idx, (fty, arg))
+                (idx, (fty, *arg))
             });
             if !context.is_current_module(&m) {
                 let msg = format!(
@@ -1418,11 +1413,11 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
         }
 
         NE::ExpDotted(DottedUsage::Use, sp!(_, N::ExpDotted_::Exp(ner))) => {
-            let er = exp_(context, *ner);
+            let er = exp(context, ner);
             (er.ty, er.exp.value)
         }
         NE::ExpDotted(DottedUsage::Borrow(mut_), sp!(_, N::ExpDotted_::Exp(ner))) => {
-            let er = exp_(context, *ner);
+            let er = exp(context, ner);
             warn_on_constant_borrow(context, eloc, &er);
             context.add_base_type_constraint(eloc, "Invalid borrow", er.ty.clone());
             let ty = sp(eloc, Type_::Ref(mut_, Box::new(er.ty.clone())));
@@ -1438,7 +1433,7 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             (ty, eborrow)
         }
         NE::ExpDotted(DottedUsage::Move(loc), sp!(_, N::ExpDotted_::Exp(ner))) => {
-            let er = exp_(context, *ner);
+            let er = exp(context, ner);
 
             match er.exp.value {
                 TE::Use(var) => (
@@ -1463,7 +1458,7 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             }
         }
         NE::ExpDotted(DottedUsage::Copy(loc), sp!(_, N::ExpDotted_::Exp(ner))) => {
-            let er = exp_(context, *ner);
+            let er = exp(context, ner);
             let (ty, ecopy) = match er.exp.value {
                 TE::Use(var) => (
                     er.ty,
@@ -1542,10 +1537,16 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
 
         NE::BinopExp(..) => unreachable!(),
     };
-    T::exp(ty, sp(eloc, e_))
+    Box::new(T::exp(ty, sp(eloc, e_)))
 }
 
-fn binop(context: &mut Context, el: T::Exp, bop: BinOp, loc: Loc, er: T::Exp) -> T::Exp {
+fn binop(
+    context: &mut Context,
+    el: Box<T::Exp>,
+    bop: BinOp,
+    loc: Loc,
+    er: Box<T::Exp>,
+) -> Box<T::Exp> {
     use BinOp_::*;
     use T::UnannotatedExp_ as TE;
     let msg = || format!("Incompatible arguments to '{}'", &bop);
@@ -1609,13 +1610,10 @@ fn binop(context: &mut Context, el: T::Exp, bop: BinOp, loc: Loc, er: T::Exp) ->
 
         Range | Implies | Iff => panic!("specification operator unexpected"),
     };
-    T::exp(
+    Box::new(T::exp(
         ty,
-        sp(
-            loc,
-            TE::BinopExp(Box::new(el), bop, Box::new(operand_ty), Box::new(er)),
-        ),
-    )
+        sp(loc, TE::BinopExp(el, bop, Box::new(operand_ty), er)),
+    ))
 }
 
 fn loop_body(
@@ -2700,14 +2698,19 @@ fn expand_macro(
             let es = T::explist(argloc, es);
             let b = bind_list(context, sp(argloc, lvalues_), Some(tys));
             let lvalue_ty = lvalues_expected_types(context, &b);
-            let body = exp(context, Box::new(body));
-            let ty = body.ty.clone();
-            let seq = VecDeque::from([
-                sp(argloc, TS::Bind(b, lvalue_ty, Box::new(es))),
-                sp(body.exp.loc, TS::Seq(body)),
-            ]);
-            let e_ = TE::Block(seq);
-            (ty, e_)
+            exp_k(
+                context,
+                Box::new(body),
+                Box::new(move |body| {
+                    let ty = body.ty.clone();
+                    let seq = VecDeque::from([
+                        sp(argloc, TS::Bind(b, lvalue_ty, Box::new(es))),
+                        sp(body.exp.loc, TS::Seq(body)),
+                    ]);
+                    let e_ = TE::Block(seq);
+                    (ty, e_)
+                }),
+            )
         }
     };
     context.pop_macro_expansion(&m, &f);

@@ -862,12 +862,15 @@ impl AstDebug for UseFuns {
         } = self;
         w.write(&format!("use_funs#{} ", color));
         resolved.ast_debug(w);
-        w.write("unresolved ");
-        w.block(|w| {
-            for (_, _, implicit) in implicit_candidates {
-                implicit.ast_debug(w)
-            }
-        })
+        if !implicit_candidates.is_empty() {
+            w.write("unresolved ");
+            w.block(|w| {
+                for (_, _, implicit) in implicit_candidates {
+                    implicit.ast_debug(w)
+                }
+            });
+        }
+        w.new_line();
     }
 }
 
