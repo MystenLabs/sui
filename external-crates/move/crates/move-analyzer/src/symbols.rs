@@ -5360,8 +5360,8 @@ fn parse_error_with_deps_test() {
         8,
         29,
         "M2.move",
-        "s: unknown type (unresolved)",
-        None,
+        "s: ParseErrorDep::M1::SomeStruct",
+        Some((2, 11, "M1.move")),
     );
 }
 
