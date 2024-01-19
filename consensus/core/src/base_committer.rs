@@ -176,7 +176,7 @@ impl BaseCommitter {
 
     /// Return the wave in which the specified round belongs. This takes into
     /// account the round offset for when pipelining is enabled.
-    fn wave_number(&self, round: Round) -> WaveNumber {
+    pub(crate) fn wave_number(&self, round: Round) -> WaveNumber {
         round.saturating_sub(self.options.round_offset) / self.options.wave_length
     }
 
