@@ -222,7 +222,8 @@ fn lvalue(context: &mut Context, sp!(loc, l_): &LValue) {
                         match display_var(v.value()) {
                             DisplayVar::Tmp => {
                                 let msg = format!(
-                                    "This term {} a value without the '{}' ability and must be used",
+                                    "This expression {} a value without the '{}' ability \
+                                    which must be used",
                                     verb,
                                     Ability_::Drop,
                                 );
