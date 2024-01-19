@@ -208,6 +208,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             None => ExpensiveSafetyCheckConfig::default(),
             Some(config) => config,
         };
+        let cache = Arc::new(InMemoryCache::new(authority_store.clone()));
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -215,7 +216,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             None,
             EpochMetrics::new(&registry),
             epoch_start_configuration,
-            authority_store.clone(),
+            cache.clone(),
             cache_metrics,
             signature_verifier_metrics,
             &expensive_safety_checks,
@@ -261,8 +262,8 @@ impl<'a> TestAuthorityBuilder<'a> {
             name,
             secret,
             SupportedProtocolVersions::SYSTEM_DEFAULT,
-            authority_store.clone(),
-            InMemoryCache::new(authority_store).into(),
+            authority_store,
+            cache,
             epoch_store,
             committee_store,
             index_store,

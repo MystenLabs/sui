@@ -25,6 +25,7 @@ use crate::{
         test_authority_builder::TestAuthorityBuilder,
         AuthorityState,
     },
+    in_mem_execution_cache::ExecutionCacheRead,
     move_call,
 };
 use move_core_types::ident_str;
@@ -560,7 +561,7 @@ impl TestRunner {
         epoch: EpochId,
     ) -> Option<TransactionDigest> {
         self.authority_state
-            .database
+            .get_cache_reader()
             .get_deleted_shared_object_previous_tx_digest(object_id, version, epoch)
             .unwrap()
     }

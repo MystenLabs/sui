@@ -2146,7 +2146,7 @@ async fn create_epoch_store(
         None,
         EpochMetrics::new(&registry),
         epoch_start_config,
-        authority_state.database.clone(),
+        authority_state.get_cache_reader().clone(),
         cache_metrics,
         signature_verifier_metrics,
         &ExpensiveSafetyCheckConfig::default(),
