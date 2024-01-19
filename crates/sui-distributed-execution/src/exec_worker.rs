@@ -3,6 +3,8 @@ use dashmap::DashMap;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_vm_runtime::move_vm::MoveVM;
+use sha3::Digest;
+use sha3::Sha3_256;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use sui_adapter_latest::{adapter, execution_engine};
@@ -800,7 +802,15 @@ impl<
                                     }
                                 }
 
-                                sleep(Duration::from_millis(100)).await;
+                                // a loop that repeatedly hashes some initial value
+                                // simulates a more compute intensive execution
+                                let mut buf: [u8; 32] = [0u8; 32];
+                                let iterations = 100_000;
+                                for _ in 0..iterations {
+                                    buf = sha3::Sha3_256::digest(&buf).into();
+                                }
+
+
                                 // println!("EW {} executing tx {}", my_id, txid);
                                 Self::async_exec(
                                     tx,
