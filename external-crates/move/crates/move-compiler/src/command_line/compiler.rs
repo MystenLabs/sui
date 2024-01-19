@@ -862,11 +862,20 @@ fn run(
         return Ok(cur);
     }
 
+    macro_rules! p {
+        ($($arg:tt)*) => {
+            if pre_compiled_lib.is_none() {
+                println!($($arg)*);
+            }
+        }
+    }
     match cur {
         PassResult::Parser(prog) => {
+            p!("IN PARSING");
             let prog = parser::merge_spec_modules::program(compilation_env, prog);
             let prog = unit_test::filter_test_members::program(compilation_env, prog);
             let prog = verification::ast_filter::program(compilation_env, prog);
+            p!("FINISHED PARSING");
             let eprog = expansion::translate::program(compilation_env, pre_compiled_lib, prog);
             run(
                 compilation_env,
@@ -877,6 +886,7 @@ fn run(
             )
         }
         PassResult::Expansion(eprog) => {
+            p!("FINISHED EXPANSION");
             let nprog = naming::translate::program(compilation_env, pre_compiled_lib, eprog);
             run(
                 compilation_env,
@@ -887,7 +897,12 @@ fn run(
             )
         }
         PassResult::Naming(nprog) => {
+            p!("FINISHED NAMING");
             let tprog = typing::translate::program(compilation_env, pre_compiled_lib, nprog);
+            if pre_compiled_lib.is_none() {
+                use crate::shared::ast_debug::AstDebug;
+                tprog.print();
+            }
             run(
                 compilation_env,
                 pre_compiled_lib,
@@ -897,6 +912,7 @@ fn run(
             )
         }
         PassResult::Typing(tprog) => {
+            p!("FINISHED TYPING");
             compilation_env.check_diags_at_or_above_severity(Severity::BlockingError)?;
             let hprog = hlir::translate::program(compilation_env, pre_compiled_lib, tprog);
             run(
@@ -908,6 +924,7 @@ fn run(
             )
         }
         PassResult::HLIR(hprog) => {
+            p!("FINISHED HLIR");
             let cprog = cfgir::translate::program(compilation_env, pre_compiled_lib, hprog);
             run(
                 compilation_env,
@@ -918,6 +935,7 @@ fn run(
             )
         }
         PassResult::CFGIR(cprog) => {
+            p!("FINISHED CFGIR");
             // Don't generate bytecode if there are any errors
             compilation_env.check_diags_at_or_above_severity(Severity::NonblockingError)?;
             let compiled_units =
@@ -926,6 +944,7 @@ fn run(
             compilation_env.check_diags_at_or_above_severity(Severity::NonblockingError)?;
             let warnings = compilation_env.take_final_warning_diags();
             assert!(until == PASS_COMPILATION);
+            p!("FINISHED TO BYTECODE");
             run(
                 compilation_env,
                 pre_compiled_lib,

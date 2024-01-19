@@ -219,6 +219,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
         unused_let_muts(context);
         body
     };
+    body.print();
     context.current_function = None;
     context.in_macro_function = false;
     context.env.pop_warning_filter_scope();
@@ -1130,6 +1131,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
 }
 
 fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
+    ne_.print();
     use N::Exp_ as NE;
     use T::UnannotatedExp_ as TE;
 

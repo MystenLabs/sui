@@ -509,11 +509,7 @@ impl<'env> Context<'env> {
                 matches!(name_type, NominalBlockType::Loop | NominalBlockType::Lambda)
             })
             .map(|(name, id, name_type)| {
-                let name = if name_type == &NominalBlockType::Lambda {
-                    lambda_break(*name)
-                } else {
-                    *name
-                };
+                let name = rename_lambda_label(NominalBlockUsage::Break, *name, *name_type);
                 BlockLabel(sp(
                     loc,
                     N::Var_ {
@@ -531,8 +527,7 @@ impl<'env> Context<'env> {
             .rev()
             .find(|(_, _, name_type)| matches!(name_type, NominalBlockType::Lambda))
             .map(|(name, id, name_type)| {
-                assert_eq!(*name_type, NominalBlockType::Lambda);
-                let name = lambda_return(*name);
+                let name = rename_lambda_label(NominalBlockUsage::Return, *name, *name_type);
                 BlockLabel(sp(
                     loc,
                     N::Var_ {
@@ -560,6 +555,7 @@ impl<'env> Context<'env> {
         if let Some((id, block_type)) = id_opt {
             let block_type = *block_type;
             if block_type.is_acceptable_usage(usage) {
+                let name = rename_lambda_label(usage, name, block_type);
                 let nvar_ = N::Var_ {
                     name,
                     id: *id,
@@ -628,6 +624,23 @@ fn lambda_break(lambda: Symbol) -> Symbol {
 
 fn lambda_return(lambda: Symbol) -> Symbol {
     format!("{}-return", lambda).into()
+}
+
+fn rename_lambda_label(
+    usage: NominalBlockUsage,
+    name: Symbol,
+    name_type: NominalBlockType,
+) -> Symbol {
+    if name_type != NominalBlockType::Lambda {
+        return name;
+    }
+    match usage {
+        NominalBlockUsage::Return => lambda_return(name),
+        NominalBlockUsage::Break => lambda_break(name),
+        NominalBlockUsage::Continue => {
+            unreachable!("ICE lambda continue should be caught as an error")
+        }
+    }
 }
 
 impl NominalBlockType {

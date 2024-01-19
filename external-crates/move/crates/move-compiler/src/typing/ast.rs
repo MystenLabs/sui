@@ -385,9 +385,16 @@ impl AstDebug for (FunctionName, &Function) {
         }
         w.write(&format!("fun#{index} {name}"));
         signature.ast_debug(w);
-        match &body.value {
-            FunctionBody_::Defined(body) => body.ast_debug(w),
-            FunctionBody_::Native | FunctionBody_::Macro => w.writeln(";"),
+        body.ast_debug(w);
+    }
+}
+
+impl AstDebug for FunctionBody_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        use FunctionBody_ as F;
+        match self {
+            F::Defined(seq) => seq.ast_debug(w),
+            F::Native | F::Macro => w.writeln(";"),
         }
     }
 }
