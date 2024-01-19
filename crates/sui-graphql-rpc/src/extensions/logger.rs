@@ -10,7 +10,6 @@ use async_graphql::{
     PathSegment, Request, Response, ServerError, ServerResult, ValidationResult, Variables,
 };
 use std::{fmt::Write, net::SocketAddr, sync::Arc};
-use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -41,25 +40,13 @@ pub struct Logger {
 impl ExtensionFactory for Logger {
     fn create(&self) -> Arc<dyn Extension> {
         Arc::new(LoggerExtension {
-            session_id: "".to_string().into(),
             config: self.config.clone(),
         })
     }
 }
 
 struct LoggerExtension {
-    session_id: Mutex<String>,
     config: LoggerConfig,
-}
-
-impl LoggerExtension {
-    async fn set_session_id(&self, ip: Option<SocketAddr>) {
-        *self.session_id.lock().await = ip.map(|ip| format!("{}", ip)).unwrap_or_default();
-    }
-
-    async fn session_id(&self) -> String {
-        self.session_id.lock().await.clone()
-    }
 }
 
 #[async_trait::async_trait]
@@ -71,8 +58,6 @@ impl Extension for LoggerExtension {
         request: Request,
         next: NextPrepareRequest<'_>,
     ) -> ServerResult<Request> {
-        self.set_session_id(ctx.data_opt::<SocketAddr>().copied())
-            .await;
         next.run(ctx, request).await
     }
 
@@ -92,8 +77,8 @@ impl Extension for LoggerExtension {
         if !is_schema && self.config.log_request_query {
             info!(
                 query_id = ctx.data_unchecked::<Uuid>().to_string(),
-                "[Query] {} {}",
-                self.session_id().await,
+                session_id = ctx.data_unchecked::<SocketAddr>().to_string(),
+                "[Query] {}",
                 ctx.stringify_execute_doc(&document, variables)
             );
         }
@@ -109,10 +94,10 @@ impl Extension for LoggerExtension {
         if self.config.log_complexity {
             info!(
                 query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                session_id = ctx.data_unchecked::<SocketAddr>().to_string(),
                 complexity = res.complexity,
                 depth = res.depth,
-                "[Validation] {}",
-                self.session_id().await
+                "[Validation]",
             );
         }
         Ok(res)
@@ -125,6 +110,8 @@ impl Extension for LoggerExtension {
         next: NextExecute<'_>,
     ) -> Response {
         let resp = next.run(ctx, operation_name).await;
+        let session_id = ctx.data_unchecked::<SocketAddr>().to_string();
+        let query_id = ctx.data_unchecked::<Uuid>().to_string();
         if resp.is_err() {
             for err in &resp.errors {
                 let error_code = &err.extensions.as_ref().and_then(|x| x.get("code"));
@@ -146,7 +133,8 @@ impl Extension for LoggerExtension {
                     if let Some(async_graphql_value::ConstValue::String(val)) = error_code {
                         if val.as_str() == code::INTERNAL_SERVER_ERROR {
                             error!(
-                                query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                                query_id,
+                                session_id,
                                 error_code = val,
                                 "[Response] path={} message={}",
                                 path,
@@ -154,7 +142,8 @@ impl Extension for LoggerExtension {
                             );
                         } else {
                             info!(
-                                query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                                query_id,
+                                session_id,
                                 error_code = val,
                                 "[Response] path={} message={}",
                                 path,
@@ -164,7 +153,8 @@ impl Extension for LoggerExtension {
                     // TODO we have errors without an error code, we should fix these
                     } else {
                         warn!(
-                            query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                            query_id,
+                            session_id,
                             error_code = "none",
                             "[Response] path={} message={}",
                             path,
@@ -175,14 +165,16 @@ impl Extension for LoggerExtension {
                     if val.as_str() == code::INTERNAL_SERVER_ERROR {
                         // TODO do we want/it's useful to log the whole problematic query?
                         error!(
-                            query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                            query_id,
+                            session_id,
                             error_code = val,
                             "[Response] message={}",
                             err.message,
                         );
                     } else {
                         info!(
-                            query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                            query_id,
+                            session_id,
                             error_code = val,
                             "[Response] message={}",
                             err.message,
@@ -191,7 +183,8 @@ impl Extension for LoggerExtension {
                 // TODO we have errors without an error code, we should fix these
                 } else {
                     warn!(
-                        query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                        query_id,
+                        session_id,
                         error_code = "none",
                         "[Response] message={}",
                         err.message,
@@ -201,19 +194,9 @@ impl Extension for LoggerExtension {
         } else if self.config.log_response {
             match operation_name {
                 Some("IntrospectionQuery") => {
-                    debug!(
-                        query_id = ctx.data_unchecked::<Uuid>().to_string(),
-                        "[Response] {}: {}",
-                        self.session_id().await,
-                        resp.data
-                    );
+                    debug!(query_id, session_id, "[Response] {}", resp.data);
                 }
-                _ => info!(
-                    query_id = ctx.data_unchecked::<Uuid>().to_string(),
-                    "[Response] {}: {}",
-                    self.session_id().await,
-                    resp.data
-                ),
+                _ => info!(query_id, session_id, "[Response] {}", resp.data),
             }
         }
         resp
