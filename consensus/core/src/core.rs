@@ -25,6 +25,19 @@ use tokio::sync::watch;
 /// The maximum transaction payload defined in bytes.
 const MAX_BLOCK_PAYLOAD_SIZE_BYTES: usize = 100_000; // 100 KB
 
+#[derive(Clone)]
+pub(crate) struct CoreOptions {
+    max_payload_size_bytes: usize,
+}
+
+impl Default for CoreOptions {
+    fn default() -> Self {
+        Self {
+            max_payload_size_bytes: MAX_BLOCK_PAYLOAD_SIZE_BYTES,
+        }
+    }
+}
+
 #[allow(dead_code)]
 pub(crate) struct Core {
     context: Arc<Context>,
@@ -45,6 +58,8 @@ pub(crate) struct Core {
     block_manager: BlockManager,
     /// Signals that the component emits
     signals: CoreSignals,
+    /// The options for the component
+    options: CoreOptions,
 }
 
 #[allow(dead_code)]
@@ -53,23 +68,29 @@ impl Core {
         context: Arc<Context>,
         transactions_consumer: TransactionsConsumer,
         block_manager: BlockManager,
-        signals: CoreSignals,
+        mut signals: CoreSignals,
+        options: CoreOptions,
     ) -> Self {
         // TODO: restore the threshold clock round based on the last quorum data in storage when crash/recover
         let mut threshold_clock = ThresholdClock::new(0, context.clone());
 
         // TODO: restore based on DagState, for now we just init via the genesis
         let (genesis_my, genesis_others) = Block::genesis(context.clone());
-        let pending_ancestors = genesis_others
-            .into_iter()
-            .map(|block| (block.reference(), block.timestamp_ms()))
-            .collect::<VecDeque<_>>();
+
+        let mut pending_ancestors = VecDeque::new();
+        for block in genesis_others {
+            pending_ancestors.push_back((block.reference(), block.timestamp_ms()));
+        }
 
         // populate the threshold clock to properly advance the round
         for (ancestor, _) in &pending_ancestors {
             threshold_clock.add_block(*ancestor);
         }
         threshold_clock.add_block(genesis_my.reference());
+
+        // emit a signal for the last threshold clock round, even if that's unnecessary it will ensure that the timeout
+        // logic will trigger to attempt a block creation.
+        signals.new_round(threshold_clock.get_round());
 
         Self {
             context,
@@ -80,6 +101,7 @@ impl Core {
             pending_ancestors,
             block_manager,
             signals,
+            options,
         }
     }
 
@@ -113,11 +135,6 @@ impl Core {
                 .push_back((block.reference(), block.timestamp_ms()));
         }
 
-        // Pull transactions to be proposed and append to the pending list
-        for transaction in self.transactions_consumer.next() {
-            self.pending_transactions.push(transaction);
-        }
-
         // Attempt to create a new block
         let _ = self.try_new_block(false);
 
@@ -139,6 +156,11 @@ impl Core {
     /// or earlier round, then no block is created and None is returned.
     fn try_new_block(&mut self, ignore_leaders_check: bool) -> Option<VerifiedBlock> {
         let _scope = monitored_scope("Core::try_new_block");
+
+        // Pull transactions to be proposed and append to the pending list
+        for transaction in self.transactions_consumer.next() {
+            self.pending_transactions.push(transaction);
+        }
 
         let clock_round = self.threshold_clock.get_round();
         if clock_round <= self.last_proposed_round() {
@@ -179,6 +201,11 @@ impl Core {
 
             //4. Add to the threshold clock
             self.threshold_clock.add_block(verified_block.reference());
+
+            // TODO: use the DagState instead to accept the block directly. Will address on follow up PR when I'll inject
+            // the DagState. Now that's necessary to ensure that blocks aren't double processed.
+            self.block_manager.add_blocks(vec![verified_block.clone()]);
+
             self.last_own_block = verified_block.clone();
 
             tracing::debug!("New block created {}", verified_block);
@@ -207,7 +234,7 @@ impl Core {
                 // We assume that our system's clock can't go backwards when we perform the check here (ex due to ntp corrections)
                 assert!(*timestamp <= block_timestamp, "Violation, ancestor block timestamp {timestamp} greater than our timestamp {block_timestamp}");
 
-                block_ref.round > clock_round
+                block_ref.round >= clock_round
             })
             .unwrap_or(self.pending_ancestors.len());
 
@@ -217,19 +244,17 @@ impl Core {
         // Compress the references in the block. We don't want to include an ancestors that already referenced by other blocks
         // we are about to include.
         let mut references_in_block: HashSet<BlockRef> = HashSet::new();
-        let mut ancestors = taken
+        let ancestors = taken
             .iter()
             .map(|(block_ref, _timestamp)| *block_ref)
             .collect::<Vec<_>>();
-
-        // explicitly add our last produced block to ensure that is going to get referenced (assuming is not excluded by dag compression)
-        ancestors.push(self.last_own_block.reference());
 
         for block in self.get_blocks(&ancestors).into_iter().flatten() {
             references_in_block.extend(block.ancestors());
         }
 
-        let mut to_propose = vec![];
+        // explicitly add our last produced block to end result
+        let mut to_propose = vec![self.last_own_block.reference()];
         for block_ref in ancestors.into_iter() {
             if !references_in_block.contains(&block_ref) {
                 to_propose.push(block_ref);
@@ -266,10 +291,16 @@ impl Core {
 
     /// Returns the blocks at the specified round for the given authorities. The method might return more than one block
     /// per authority in case of equivocation.
-    fn blocks_at_round(&self, round: Round, authorities: &[AuthorityIndex]) -> Vec<&BlockRef> {
+    fn blocks_at_round(&self, round: Round, authorities: &[AuthorityIndex]) -> Vec<BlockRef> {
         // TODO: this is super dummy for now to make it work - it will be replaced by the corresponding DagState method
-        self.pending_ancestors
-            .iter()
+        let mut ancestors = self.pending_ancestors.clone();
+        ancestors.push_back((
+            self.last_own_block.reference(),
+            self.last_own_block.timestamp_ms(),
+        ));
+
+        ancestors
+            .into_iter()
             .filter_map(|(b, _)| {
                 if b.round == round && authorities.contains(&b.author) {
                     Some(b)
@@ -281,9 +312,12 @@ impl Core {
     }
 
     /// Returns the leaders of the provided round.
-    fn leaders(&self, _round: Round) -> Vec<AuthorityIndex> {
-        // TODO: this info will be retrieved from the base committers.
-        vec![]
+    fn leaders(&self, round: Round) -> Vec<AuthorityIndex> {
+        // TODO: this info will be retrieved from the base committers. For now just do a simple round robin so we can
+        // use it in tests.
+        vec![AuthorityIndex::new_for_test(
+            round % self.context.committee.size() as u32,
+        )]
     }
 
     fn last_proposed_round(&self) -> Round {
@@ -301,7 +335,7 @@ impl Core {
             .iter()
             .position(|t| {
                 total_payload_size += t.data().len();
-                total_payload_size > MAX_BLOCK_PAYLOAD_SIZE_BYTES
+                total_payload_size > self.options.max_payload_size_bytes
             })
             .unwrap_or(self.pending_transactions.len());
 
@@ -371,24 +405,46 @@ impl CoreSignalsReceivers {
 mod test {
     use super::*;
     use crate::block::TestBlock;
+    use crate::metrics::test_metrics;
     use crate::transactions_client::TransactionsClient;
+    use consensus_config::{Committee, Parameters, Stake};
     use std::time::Duration;
-    use tokio::time::timeout;
+    use sui_protocol_config::ProtocolConfig;
 
     #[tokio::test]
     async fn test_core_propose_after_genesis() {
         let context = Arc::new(Context::new_for_test());
         let block_manager = BlockManager::new();
-        let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
+        let (transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
         let transactions_consumer = TransactionsConsumer::new(tx_receiver);
         let (signals, _signal_receivers) = CoreSignals::new();
+        let options = CoreOptions {
+            max_payload_size_bytes: 100,
+        };
 
         let mut core = Core::new(
             context.clone(),
             transactions_consumer,
             block_manager,
             signals,
+            options.clone(),
         );
+
+        // Send some transactions
+        let mut total = 0;
+        let mut index = 0;
+        loop {
+            let transaction =
+                bcs::to_bytes(&format!("Transaction {index}")).expect("Shouldn't fail");
+            total += transaction.len();
+            index += 1;
+            transactions_client.submit(transaction).await.unwrap();
+
+            // Create total size of transactions up to 1KB
+            if total >= 1_000 {
+                break;
+            }
+        }
 
         // trigger the try_new_block - that should return now a new block
         let block = core
@@ -399,6 +455,14 @@ mod test {
         assert_eq!(block.round(), 1);
         assert_eq!(block.author().value(), 0);
         assert_eq!(block.ancestors().len(), 4);
+
+        let mut total = 0;
+        for (i, transaction) in block.payload().iter().enumerate() {
+            total += transaction.data().len();
+            let transaction: String = bcs::from_bytes(transaction.data()).unwrap();
+            assert_eq!(format!("Transaction {i}"), transaction);
+        }
+        assert!(total < options.max_payload_size_bytes);
 
         // genesis blocks should be referenced
         let (genesis_my, mut genesis_others) = Block::genesis(context);
@@ -429,6 +493,7 @@ mod test {
             transactions_consumer,
             block_manager,
             signals,
+            CoreOptions::default(),
         );
 
         // Adding one block now will trigger the creation of new block for round 1
@@ -451,51 +516,140 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_core_signals() {
-        let context = Arc::new(Context::new_for_test());
-        let block_manager = BlockManager::new();
-        let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
-        let transactions_consumer = TransactionsConsumer::new(tx_receiver);
-        let (signals, signal_receivers) = CoreSignals::new();
+    async fn test_core_try_new_block_leader_timeout() {
+        // Create the cores for all authorities
+        let cores = create_cores(vec![1, 1, 1, 1]);
 
-        let mut new_round_receiver = signal_receivers.new_round_receiver();
-        let mut new_block_ready_receiver = signal_receivers.block_ready_receiver();
+        // Create blocks for rounds 1..=3 from all Cores except Core of authority 3, so we miss the block from it. As
+        // it will be the leader of round 3 then no-one will be able to progress to round 4 unless we explicitly trigger
+        // the block creation.
+        // create the cores and their signals for all the authorities
+        let mut cores = cores.into_iter().take(3).collect::<Vec<_>>();
 
-        let mut core = Core::new(
-            context.clone(),
-            transactions_consumer,
-            block_manager,
-            signals,
-        );
+        // Now iterate over a few rounds and ensure the corresponding signals are created while network advances
+        let mut last_round_blocks = Vec::new();
+        for round in 1..=3 {
+            let mut this_round_blocks = Vec::new();
 
-        // Create multiple blocks per round to trigger block creation events.
-        for round in 1..10 {
-            for authority_index in 1..context.committee.size() {
-                let block = VerifiedBlock::new_for_test(
-                    TestBlock::new(round, authority_index as u32).build(),
-                );
+            for (core, _signal_receivers) in &mut cores {
+                core.add_blocks(last_round_blocks.clone());
 
-                // process them one by one to ensure that all the blocks created and signals are emitted per round.
-                let _ = core.add_blocks(vec![block]);
+                assert_eq!(core.last_proposed_round(), round);
+
+                this_round_blocks.push(core.last_own_block.clone());
             }
 
-            // Check that round has advanced
-            timeout(Duration::from_secs(1), new_round_receiver.changed())
-                .await
-                .expect("Timeout while waiting for new round be received")
-                .expect("Signal receive channel shouldn't be closed");
-            let new_round = new_round_receiver.borrow_and_update();
-            assert_eq!(*new_round, round + 1);
-
-            // Check that a new block has been proposed
-            timeout(Duration::from_secs(1), new_block_ready_receiver.changed())
-                .await
-                .expect("Timeout while waiting for new block signal")
-                .expect("Signal receive channel shouldn't be closed");
-            let block_ref = new_block_ready_receiver.borrow_and_update();
-            let block_ref = block_ref.unwrap();
-            assert_eq!(block_ref.round, round + 1);
-            assert_eq!(block_ref.author, context.own_index);
+            last_round_blocks = this_round_blocks;
         }
+
+        // Try to create the blocks for round 4 by calling the try_new_block method. No block should be created as the
+        // leader - authority 3 - hasn't proposed any block.
+        for (core, _) in &mut cores {
+            core.add_blocks(last_round_blocks.clone());
+            assert!(core.try_new_block(false).is_none());
+        }
+
+        // Now try to create the blocks for round 4 via the leader timeout method which should ignore any leader checks
+        for (core, _) in &mut cores {
+            assert!(core.try_new_block_leader_timeout(4).is_some());
+            assert_eq!(core.last_proposed_round(), 4);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_core_signals() {
+        // create the cores and their signals for all the authorities
+        let mut cores = create_cores(vec![1, 1, 1, 1]);
+
+        // Now iterate over a few rounds and ensure the corresponding signals are created while network advances
+        let mut last_round_blocks = Vec::new();
+        for round in 1..=10 {
+            let mut this_round_blocks = Vec::new();
+
+            for (core, signal_receivers) in &mut cores {
+                // add the blocks from last round
+                // this will trigger a block creation for the round and a signal should be emitted
+                core.add_blocks(last_round_blocks.clone());
+
+                // A "new round" signal should be received given that all the blocks of previous round have been processed
+                let new_round = receive(
+                    Duration::from_secs(1),
+                    signal_receivers.new_round_receiver(),
+                )
+                .await;
+                assert_eq!(new_round, round);
+
+                // Check that a new block has been proposed
+                let block_ref = receive(
+                    Duration::from_secs(1),
+                    signal_receivers.block_ready_receiver(),
+                )
+                .await
+                .unwrap();
+                assert_eq!(block_ref.round, round);
+                assert_eq!(block_ref.author, core.context.own_index);
+
+                // append the new block to this round blocks
+                this_round_blocks.push(core.last_proposed_block().clone());
+
+                let block = core.last_proposed_block();
+
+                // ensure that produced block is referring to the blocks of last_round
+                assert_eq!(block.ancestors().len(), core.context.committee.size());
+                for ancestor in block.ancestors() {
+                    if block.round() > 1 {
+                        // don't bother with round 1 block which just contains the genesis blocks.
+                        assert!(
+                            last_round_blocks
+                                .iter()
+                                .any(|block| block.reference() == *ancestor),
+                            "Reference from previous round should be added"
+                        );
+                    }
+                }
+            }
+
+            last_round_blocks = this_round_blocks;
+        }
+    }
+
+    /// Creates cores for the specified number of authorities for their corresponding stakes. The method returns the
+    /// cores and their respective signal receivers are returned in `AuthorityIndex` order asc.
+    fn create_cores(authorities: Vec<Stake>) -> Vec<(Core, CoreSignalsReceivers)> {
+        let mut cores = Vec::new();
+
+        for index in 0..authorities.len() {
+            let (committee, _) = Committee::new_for_test(0, authorities.clone());
+            let context = Arc::new(Context::new(
+                AuthorityIndex::new_for_test(index as u32),
+                committee,
+                Parameters::default(),
+                ProtocolConfig::get_for_min_version(),
+                test_metrics(),
+            ));
+            let block_manager = BlockManager::new();
+            let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
+            let transactions_consumer = TransactionsConsumer::new(tx_receiver);
+            let (signals, signal_receivers) = CoreSignals::new();
+
+            let core = Core::new(
+                context,
+                transactions_consumer,
+                block_manager,
+                signals,
+                CoreOptions::default(),
+            );
+
+            cores.push((core, signal_receivers));
+        }
+        cores
+    }
+
+    async fn receive<T: Copy>(timeout: Duration, mut receiver: watch::Receiver<T>) -> T {
+        tokio::time::timeout(timeout, receiver.changed())
+            .await
+            .expect("Timeout while waiting to read from receiver")
+            .expect("Signal receive channel shouldn't be closed");
+        *receiver.borrow_and_update()
     }
 }

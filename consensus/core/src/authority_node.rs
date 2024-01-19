@@ -12,7 +12,7 @@ use tracing::info;
 
 use crate::block_verifier::BlockVerifier;
 use crate::context::Context;
-use crate::core::{Core, CoreSignals};
+use crate::core::{Core, CoreOptions, CoreSignals};
 use crate::metrics::initialise_metrics;
 use crate::transactions_client::{TransactionsClient, TransactionsConsumer};
 
@@ -52,7 +52,13 @@ impl AuthorityNode {
         // Construct Core
         let (core_signals, _signals_receivers) = CoreSignals::new();
         let block_manager = BlockManager::new();
-        let _core = Core::new(context.clone(), tx_consumer, block_manager, core_signals);
+        let _core = Core::new(
+            context.clone(),
+            tx_consumer,
+            block_manager,
+            core_signals,
+            CoreOptions::default(),
+        );
 
         Self {
             context,
