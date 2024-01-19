@@ -14,7 +14,9 @@ use crate::{
         ast::{self as N, BlockLabel, TParamID},
         fake_natives,
     },
-    parser::ast::{self as P, ConstantName, DatatypeName, Field, FunctionName, VariantName},
+    parser::ast::{
+        self as P, ConstantName, DatatypeName, Field, FunctionName, Mutability, VariantName,
+    },
     shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
@@ -2139,13 +2141,13 @@ fn match_arm(context: &mut Context, sp!(aloc, arm): E::MatchArm) -> N::MatchArm 
     // NB: we already checked the binders for duplicates and listed them all during expansion, so
     // now we just need to set up the map and recur down everything.
     for binder in &binders {
-        context.declare_local(false, binder.0);
+        context.declare_local(false, binder.1 .0);
     }
 
     let mut binder_map: BTreeMap<P::Var, N::Var> = binders
         .clone()
         .into_iter()
-        .map(|binder| {
+        .map(|(_, binder)| {
             let rhs = context
                 .as_var(binder.loc(), "pattern", binder.0)
                 .expect("ICE pattern binder failure");
@@ -2158,13 +2160,13 @@ fn match_arm(context: &mut Context, sp!(aloc, arm): E::MatchArm) -> N::MatchArm 
     // references). So we push a new scope with new binders that map to the old ones, process the
     // guard, then see which of those new binders are actually used in the the guard.
     context.new_local_scope();
-    for binder in &binders {
+    for (_, binder) in &binders {
         context.declare_local(false, binder.0);
     }
     let guard_binder_map: BTreeMap<P::Var, N::Var> = binders
         .clone()
         .into_iter()
-        .map(|binder| {
+        .map(|(_, binder)| {
             let rhs = context
                 .as_var(binder.loc(), "pattern", binder.0)
                 .expect("ICE pattern binder failure");
@@ -2190,19 +2192,28 @@ fn match_arm(context: &mut Context, sp!(aloc, arm): E::MatchArm) -> N::MatchArm 
     // Next we visit the right-hand side to mark binder usage there.
     let rhs = exp(context, *rhs);
 
-    let binders: Vec<N::Var> = binders
+    let binders: Vec<(Mutability, N::Var)> = binders
         .iter()
-        .map(|binder| {
-            context
-                .as_var(binder.loc(), "pattern", binder.0)
-                .expect("ICE pattern binder failure")
+        .map(|(mut_, binder)| {
+            (
+                *mut_,
+                context
+                    .as_var(binder.loc(), "pattern", binder.0)
+                    .expect("ICE pattern binder failure"),
+            )
         })
         .collect();
 
     let rhs_binders: BTreeSet<N::Var> = binders
         .clone()
         .into_iter()
-        .filter(|binder| context.used_locals.contains(&binder.value))
+        .filter_map(|(_, binder)| {
+            if context.used_locals.contains(&binder.value) {
+                Some(binder)
+            } else {
+                None
+            }
+        })
         .collect();
 
     // Mark all pattern variables used in the guard as used so that they don't get reported as
@@ -2301,7 +2312,7 @@ fn pat(context: &mut Context, sp!(ploc, pat_): E::MatchPattern) -> N::MatchPatte
                 NP::ErrorPat
             }
         }
-        EP::Binder(binder) => {
+        EP::Binder(_, binder) => {
             let binder = context
                 .resolve_local(
                     binder.loc(),
