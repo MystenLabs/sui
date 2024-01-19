@@ -8,9 +8,10 @@ use super::dynamic_field::DynamicFieldName;
 use super::stake::StakedSui;
 use super::suins_registration::SuinsRegistration;
 use crate::data::Db;
-use crate::types::balance::{self, *};
-use crate::types::coin::*;
-use crate::types::object::{self, *};
+use crate::types::balance::{self, Balance};
+use crate::types::coin::Coin;
+use crate::types::move_object::MoveObject;
+use crate::types::object::{self, Object, ObjectFilter};
 use crate::types::sui_address::SuiAddress;
 use crate::types::type_filter::ExactTypeFilter;
 
@@ -25,7 +26,7 @@ use sui_types::gas_coin::GAS;
     field(name = "address", ty = "SuiAddress"),
     field(
         name = "objects",
-        ty = "Connection<String, Object>",
+        ty = "Connection<String, MoveObject>",
         arg(name = "first", ty = "Option<u64>"),
         arg(name = "after", ty = "Option<object::Cursor>"),
         arg(name = "last", ty = "Option<u64>"),
@@ -135,7 +136,7 @@ impl Owner {
         last: Option<u64>,
         before: Option<object::Cursor>,
         filter: Option<ObjectFilter>,
-    ) -> Result<Connection<String, Object>> {
+    ) -> Result<Connection<String, MoveObject>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let Some(filter) = filter.unwrap_or_default().intersect(ObjectFilter {
@@ -145,7 +146,7 @@ impl Owner {
             return Ok(Connection::new(false, false));
         };
 
-        Object::paginate(ctx.data_unchecked(), page, filter)
+        MoveObject::paginate(ctx.data_unchecked(), page, filter)
             .await
             .extend()
     }

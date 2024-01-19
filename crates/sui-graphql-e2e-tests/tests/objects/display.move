@@ -150,10 +150,12 @@ module Test::boars {
   address(address: "@{A}") {
     objects(filter: {type: "@{Test}::boars::Boar"}) {
       nodes {
-        display {
-          key
-          value
-          error
+        asObject {
+            display {
+            key
+            value
+            error
+          }
         }
       }
     }
@@ -171,10 +173,12 @@ module Test::boars {
   address(address: "@{A}") {
     objects(filter: {type: "@{Test}::boars::Boar"}) {
       nodes {
-        display {
-          key
-          value
-          error
+        asObject {
+            display {
+            key
+            value
+            error
+          }
         }
       }
     }
@@ -192,10 +196,12 @@ module Test::boars {
   address(address: "@{A}") {
     objects(filter: {type: "@{Test}::boars::Boar"}) {
       nodes {
-        display {
-          key
-          value
-          error
+        asObject {
+            display {
+            key
+            value
+            error
+          }
         }
       }
     }

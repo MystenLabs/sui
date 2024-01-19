@@ -75,7 +75,7 @@ type Address implements IOwner {
 	"""
 	The objects that are owned by this address.
 	"""
-	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection!
 	"""
 	The balance that this address holds.
 	"""
@@ -1088,7 +1088,7 @@ type GenesisTransaction {
 
 interface IOwner {
 	address: SuiAddress!
-	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection!
 	balance(type: String): Balance
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coins(first: Int, after: String, last: Int, before: String, type: String): CoinConnection!
@@ -1435,6 +1435,35 @@ type MoveObject {
 	asSuinsRegistration: SuinsRegistration
 }
 
+type MoveObjectConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [MoveObjectEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveObject!]!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveObjectEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveObject!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 """
 A MovePackage is a kind of Move object that represents code that has been published on chain.
 It exposes information about its modules, type definitions, functions, and dependencies.
@@ -1745,7 +1774,7 @@ type Object implements IOwner {
 	"""
 	The objects owned by this object
 	"""
-	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection!
 	"""
 	The balance of coin objects of a particular coin type owned by the object.
 	"""
@@ -2033,7 +2062,7 @@ type Owner implements IOwner {
 	asAddress: Address
 	asObject: Object
 	address: SuiAddress!
-	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection!
 	"""
 	Total balance of all coins with marker type owned by this Owner. If type is not supplied,
 	it defaults to 0x2::sui::SUI.

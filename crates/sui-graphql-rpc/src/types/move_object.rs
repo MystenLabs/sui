@@ -3,9 +3,10 @@
 
 use super::coin::CoinDowncastError;
 use super::coin_metadata::{CoinMetadata, CoinMetadataDowncastError};
+use super::cursor::Page;
 use super::move_type::MoveType;
 use super::move_value::MoveValue;
-use super::object::ObjectVersionKey;
+use super::object::{self, ObjectFilter, ObjectVersionKey};
 use super::stake::StakedSuiDowncastError;
 use super::sui_address::SuiAddress;
 use super::suins_registration::{SuinsRegistration, SuinsRegistrationDowncastError};
@@ -14,6 +15,7 @@ use crate::context_data::package_cache::PackageCache;
 use crate::data::Db;
 use crate::error::Error;
 use crate::types::stake::StakedSui;
+use async_graphql::connection::Connection;
 use async_graphql::*;
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_package_resolver::Resolver;
@@ -128,6 +130,22 @@ impl MoveObject {
         Ok(Some(MoveObject::try_from(&object).map_err(|_| {
             Error::Internal(format!("{address} is not an object"))
         })?))
+    }
+
+    pub(crate) async fn paginate(
+        db: &Db,
+        page: Page<object::Cursor>,
+        filter: ObjectFilter,
+    ) -> Result<Connection<String, MoveObject>, Error> {
+        Object::paginate_subtype(db, page, filter, |object| {
+            let address = object.address;
+            MoveObject::try_from(&object).map_err(|_| {
+                Error::Internal(format!(
+                    "Expected {address} to be a Move object, but it's not."
+                ))
+            })
+        })
+        .await
     }
 }
 
