@@ -153,7 +153,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    objects_history (object_id, object_version, checkpoint_sequence_number) {
+    objects_history (checkpoint_sequence_number, object_id, object_version) {
         object_id -> Bytea,
         object_version -> Int8,
         object_status -> Int2,
@@ -173,7 +173,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    objects_history_partition_0 (object_id, object_version, checkpoint_sequence_number) {
+    objects_history_partition_0 (checkpoint_sequence_number, object_id, object_version) {
         object_id -> Bytea,
         object_version -> Int8,
         object_status -> Int2,

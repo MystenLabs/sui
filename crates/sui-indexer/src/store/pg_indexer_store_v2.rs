@@ -74,8 +74,6 @@ const PG_COMMIT_PARALLEL_CHUNK_SIZE_PER_DB_TX: usize = 500;
 // Having this number too high may cause many db deadlocks because of
 // optimistic locking.
 const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE_PER_DB_TX: usize = 500;
-const OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG: usize = 900;
-const OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG: usize = 300;
 
 // with rn = 1, we only select the latest version of each object,
 // so that we don't have to update the same object multiple times.
@@ -113,8 +111,6 @@ pub struct PgIndexerStoreV2 {
     metrics: IndexerMetrics,
     parallel_chunk_size: usize,
     parallel_objects_chunk_size: usize,
-    object_snapshot_min_checkpoint_lag: usize,
-    object_snapshot_max_checkpoint_lag: usize,
     partition_manager: PgPartitionManager,
 }
 
@@ -131,16 +127,6 @@ impl PgIndexerStoreV2 {
             .unwrap_or_else(|_e| PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE_PER_DB_TX.to_string())
             .parse::<usize>()
             .unwrap();
-        let object_snapshot_min_checkpoint_lag =
-            std::env::var("OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG")
-                .unwrap_or_else(|_e| OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG.to_string())
-                .parse::<usize>()
-                .unwrap();
-        let object_snapshot_max_checkpoint_lag =
-            std::env::var("OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG")
-                .unwrap_or_else(|_e| OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG.to_string())
-                .parse::<usize>()
-                .unwrap();
         let partition_manager = PgPartitionManager::new(blocking_cp.clone())
             .expect("Failed to initialize partition manager");
 
@@ -150,8 +136,6 @@ impl PgIndexerStoreV2 {
             metrics,
             parallel_chunk_size,
             parallel_objects_chunk_size,
-            object_snapshot_min_checkpoint_lag,
-            object_snapshot_max_checkpoint_lag,
             partition_manager,
         }
     }
@@ -326,6 +310,10 @@ impl PgIndexerStoreV2 {
         &self,
         objects: Vec<ObjectChangeToCommit>,
     ) -> Result<(), IndexerError> {
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_objects_history_chunks
+            .start_timer();
         let mut mutated_objects: Vec<StoredHistoryObject> = vec![];
         let mut deleted_object_ids: Vec<StoredDeletedHistoryObject> = vec![];
         for object in objects {
@@ -369,7 +357,9 @@ impl PgIndexerStoreV2 {
             Duration::from_secs(60)
         )
         .tap(|_| {
+            let elapsed = guard.stop_and_record();
             info!(
+                elapsed,
                 "Persisted {} chunked objects history",
                 mutated_objects.len() + deleted_object_ids.len(),
             )
@@ -838,8 +828,10 @@ impl PgIndexerStoreV2 {
     {
         let this = self.clone();
         let current_span = tracing::Span::current();
+        let guard = self.metrics.tokio_blocking_task_wait_latency.start_timer();
         tokio::task::spawn_blocking(move || {
             let _guard = current_span.enter();
+            let _elapsed = guard.stop_and_record();
             f(this)
         })
     }
@@ -920,6 +912,14 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         &self,
         object_changes: Vec<TransactionObjectChangesToCommit>,
     ) -> Result<(), IndexerError> {
+        let skip_history = std::env::var("SKIP_OBJECT_HISTORY")
+            .map(|val| val.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        if skip_history {
+            info!("skipping object history");
+            return Ok(());
+        }
+
         if object_changes.is_empty() {
             return Ok(());
         }
@@ -951,43 +951,33 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         Ok(())
     }
 
-    // The `objects_snapshot` table maintains a delayed snapshot of the `objects` table,
-    // controlled by `object_snapshot_max_checkpoint_lag` (max lag) and
-    // `object_snapshot_min_checkpoint_lag` (min lag). For instance, with a max lag of 900
-    // and a min lag of 300 checkpoints, the `objects_snapshot` table will lag behind the
-    // `objects` table by 300 to 900 checkpoints. The snapshot is updated when the lag
-    // exceeds the max lag threshold, and updates continue until the lag is reduced to
-    // the min lag threshold. Then, we have a consistent read range between
-    // `latest_snapshot_cp` and `latest_cp` based on `objects_snapshot` and `objects_history`,
-    // where the size of this range varies between the min and max lag values.
-    async fn persist_object_snapshot(&self) -> Result<(), IndexerError> {
-        let latest_cp = self
-            .get_latest_tx_checkpoint_sequence_number()?
-            .unwrap_or_default();
-        let latest_snapshot_cp = self
-            .get_latest_object_snapshot_checkpoint_sequence_number()?
-            .unwrap_or_default();
-
-        if latest_cp <= latest_snapshot_cp + self.object_snapshot_max_checkpoint_lag as u64 {
+    async fn persist_object_snapshot(
+        &self,
+        start_cp: u64,
+        end_cp: u64,
+    ) -> Result<(), IndexerError> {
+        let skip_snapshot = std::env::var("SKIP_OBJECT_SNAPSHOT")
+            .map(|val| val.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        if skip_snapshot {
+            info!("skipping object snapshot");
             return Ok(());
         }
-        // make sure cp 0 is handled
-        let start_cp = if latest_snapshot_cp == 0 {
-            0
-        } else {
-            latest_snapshot_cp + 1
-        };
-        // with MAX and MIN, the CSR range will vary from MIN cps to MAX cps
-        let snapshot_window = self.object_snapshot_max_checkpoint_lag as u64
-            - self.object_snapshot_min_checkpoint_lag as u64;
+
         let guard = self.metrics.update_object_snapshot_latency.start_timer();
-        self.persist_object_snapshot(start_cp, start_cp + snapshot_window)?;
+
+        self.spawn_blocking_task(move |this| this.persist_object_snapshot(start_cp, end_cp))
+            .await
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed to update objects snapshot: {:?}",
+                    e
+                ))
+            })??;
         let elapsed = guard.stop_and_record();
         info!(
             elapsed,
-            "Persisted snapshot for checkpoints from {} to {}",
-            start_cp,
-            start_cp + snapshot_window,
+            "Persisted snapshot for checkpoints from {} to {}", start_cp, end_cp
         );
         Ok(())
     }
