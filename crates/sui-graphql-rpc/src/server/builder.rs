@@ -276,7 +276,7 @@ async fn graphql_handler(
     let result = schema.execute(req).await;
     let elapsed = instant.elapsed().as_millis() as u64;
     metrics.query_latency(elapsed);
-    if !result.is_ok() {
+    if result.is_err() {
         metrics.inc_errors(result.errors.clone());
     }
     // TODO Is this the right way to get the top level query path names?

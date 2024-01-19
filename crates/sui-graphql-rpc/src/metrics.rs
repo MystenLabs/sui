@@ -11,6 +11,8 @@ use prometheus::{
 };
 use std::fmt::Write;
 
+use crate::error::code;
+
 #[derive(Clone)]
 pub(crate) struct Metrics {
     pub db_metrics: Arc<DBMetrics>,
@@ -58,15 +60,17 @@ impl Metrics {
     pub(crate) fn inc_errors(&self, errors: Vec<ServerError>) {
         for err in errors {
             if let Some(ext) = err.extensions {
-                if let Some(code) = ext.get("code") {
+                if let Some(async_graphql_value::ConstValue::String(val)) = ext.get("code") {
                     self.request_metrics
                         .num_errors
-                        .with_label_values(&[
-                            &self.get_query_path_on_error(err.path),
-                            &code.to_string(),
-                        ])
+                        .with_label_values(&[&self.get_query_path_on_error(err.path), val])
                         .inc();
                 }
+            } else {
+                self.request_metrics
+                    .num_errors
+                    .with_label_values(&[&self.get_query_path_on_error(err.path), code::UNKNOWN])
+                    .inc();
             }
         }
     }
@@ -147,8 +151,6 @@ pub(crate) struct RequestMetrics {
     pub query_payload_too_large_size: Histogram,
     /// The size (in bytes) of the payload
     pub query_payload_size: Histogram,
-    /// An error due to too high payload size
-    pub query_payload_error: IntCounter,
     /// The time it takes to validate the query
     pub query_validation_latency: Histogram,
     /// The time it takes to validate the query
@@ -159,9 +161,6 @@ pub(crate) struct RequestMetrics {
     /// The time it takes for the GraphQL service to execute the request by path
     pub _query_latency_by_path: HistogramVec,
     /// Number of errors by path and type.
-    /// - max_query_nodes is the number of errors due to a number of input nodes higher than max
-    /// - max_query_depth is the number of errors due to a query depth higher than max allowed
-    /// - max_output_nodes is the number of errors due to a higher number of output nodes than max
     pub num_errors: IntCounterVec,
     /// Number of queries
     pub num_queries: IntCounter,
@@ -195,12 +194,6 @@ impl RequestMetrics {
                 "Size of the query payload string",
                 registry,
             ),
-            query_payload_error: register_int_counter_with_registry!(
-                "query_payload_error",
-                "The total number of client input errors due to too large payload size",
-                registry,
-            )
-            .unwrap(),
             _query_validation_latency_by_path: HistogramVec::new_in_registry(
                 "query_validation_latency_by_path",
                 "The time to validate the query for each path",

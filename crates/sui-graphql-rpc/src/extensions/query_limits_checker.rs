@@ -6,12 +6,9 @@ use crate::error::{code, graphql_error, graphql_error_at_pos};
 use crate::metrics::Metrics;
 use async_graphql::extensions::NextParseQuery;
 use async_graphql::extensions::NextRequest;
+use async_graphql::extensions::{Extension, ExtensionContext, ExtensionFactory};
 use async_graphql::parser::types::{
     Directive, ExecutableDocument, Field, FragmentDefinition, Selection, SelectionSet,
-};
-use async_graphql::{
-    extensions::{Extension, ExtensionContext, ExtensionFactory},
-    ServerError,
 };
 use async_graphql::{value, Name, Pos, Positioned, Response, ServerResult, Value, Variables};
 use async_graphql_value::Value as GqlValue;
@@ -20,6 +17,7 @@ use axum::http::HeaderName;
 use axum::http::HeaderValue;
 use once_cell::sync::Lazy;
 use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
 use sui_graphql_rpc_headers::LIMITS_HEADER;
@@ -122,28 +120,28 @@ impl Extension for QueryLimitsChecker {
         variables: &Variables,
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
+        let query_id = ctx.data_unchecked::<Uuid>().to_string();
+        let session_id = ctx.data_unchecked::<SocketAddr>().to_string();
+        let metrics = ctx.data_unchecked::<Metrics>();
         let instant = Instant::now();
         let cfg = ctx
             .data::<ServiceConfig>()
             .expect("No service config provided in schema data");
-        let metrics = ctx.data_opt::<Arc<Metrics>>();
         if query.len() > cfg.limits.max_query_payload_size as usize {
-            if let Some(metrics) = metrics {
-                metrics.request_metrics.query_payload_error.inc();
-                metrics
-                    .request_metrics
-                    .query_payload_too_large_size
-                    .observe(query.len() as u64);
-                metrics.request_metrics.num_queries.inc();
-            }
+            metrics
+                .request_metrics
+                .query_payload_too_large_size
+                .observe(query.len() as u64);
             info!(
-                query_id = ctx.data_unchecked::<Uuid>().to_string(),
+                query_id,
+                session_id,
+                error_code = code::BAD_USER_INPUT,
                 "Query payload is too large: {}",
                 query.len()
             );
 
             return Err(graphql_error(
-                code::GRAPHQL_VALIDATION_FAILED,
+                code::BAD_USER_INPUT,
                 format!(
                     "Query payload is too large. The maximum allowed is {} bytes",
                     cfg.limits.max_query_payload_size
@@ -187,7 +185,6 @@ impl Extension for QueryLimitsChecker {
                 sel_set,
                 &mut running_costs,
                 variables,
-                metrics,
                 ctx,
             )?;
             max_depth_seen = max_depth_seen.max(running_costs.depth);
@@ -204,25 +201,23 @@ impl Extension for QueryLimitsChecker {
                 num_fragments: doc.fragments.len() as u32,
             });
         }
-        if let Some(metrics) = ctx.data_opt::<Metrics>() {
-            metrics.query_validation_latency(elapsed);
-            metrics
-                .request_metrics
-                .input_nodes
-                .observe(running_costs.input_nodes as u64);
-            metrics
-                .request_metrics
-                .output_nodes
-                .observe(running_costs.output_nodes);
-            metrics
-                .request_metrics
-                .query_depth
-                .observe(running_costs.depth as u64);
-            metrics
-                .request_metrics
-                .query_payload_size
-                .observe(query.len() as u64);
-        }
+        metrics.query_validation_latency(elapsed);
+        metrics
+            .request_metrics
+            .input_nodes
+            .observe(running_costs.input_nodes as u64);
+        metrics
+            .request_metrics
+            .output_nodes
+            .observe(running_costs.output_nodes);
+        metrics
+            .request_metrics
+            .query_depth
+            .observe(running_costs.depth as u64);
+        metrics
+            .request_metrics
+            .query_payload_size
+            .observe(query.len() as u64);
         Ok(doc)
     }
 }
@@ -236,7 +231,6 @@ impl QueryLimitsChecker {
         sel_set: &Positioned<SelectionSet>,
         cost: &mut ComponentCost,
         variables: &Variables,
-        metrics: Option<&Arc<Metrics>>,
         ctx: &ExtensionContext<'_>,
     ) -> ServerResult<()> {
         // Use BFS to analyze the query and count the number of nodes and the depth of the query
@@ -254,7 +248,7 @@ impl QueryLimitsChecker {
                 parent_node_count: 1,
             });
             cost.input_nodes += 1;
-            check_limits(limits, cost, Some(selection.pos), metrics, ctx)?;
+            check_limits(limits, cost, Some(selection.pos), ctx)?;
         }
 
         // Track the number of nodes at first level if any
@@ -263,7 +257,7 @@ impl QueryLimitsChecker {
         while !que.is_empty() {
             // Signifies the start of a new level
             cost.depth += 1;
-            check_limits(limits, cost, None, metrics, ctx)?;
+            check_limits(limits, cost, None, ctx)?;
             while level_len > 0 {
                 // Ok to unwrap since we checked for empty queue
                 // and level_len > 0
@@ -290,7 +284,7 @@ impl QueryLimitsChecker {
                                 parent_node_count: current_count,
                             });
                             cost.input_nodes += 1;
-                            check_limits(limits, cost, Some(field_sel.pos), metrics, ctx)?;
+                            check_limits(limits, cost, Some(field_sel.pos), ctx)?;
                         }
                     }
 
@@ -317,7 +311,7 @@ impl QueryLimitsChecker {
                                 parent_node_count,
                             });
                             cost.input_nodes += 1;
-                            check_limits(limits, cost, Some(selection.pos), metrics, ctx)?;
+                            check_limits(limits, cost, Some(selection.pos), ctx)?;
                         }
                     }
 
@@ -329,7 +323,7 @@ impl QueryLimitsChecker {
                                 parent_node_count,
                             });
                             cost.input_nodes += 1;
-                            check_limits(limits, cost, Some(selection.pos), metrics, ctx)?;
+                            check_limits(limits, cost, Some(selection.pos), ctx)?;
                         }
                     }
                 }
@@ -346,69 +340,56 @@ fn check_limits(
     limits: &Limits,
     cost: &ComponentCost,
     pos: Option<Pos>,
-    metrics: Option<&Arc<Metrics>>,
     ctx: &ExtensionContext<'_>,
 ) -> ServerResult<()> {
+    let query_id = ctx.data_unchecked::<Uuid>().to_string();
+    let session_id = ctx.data_unchecked::<SocketAddr>().to_string();
+    let error_code = code::BAD_USER_INPUT;
     if cost.input_nodes > limits.max_query_nodes {
-        if let Some(metrics) = metrics {
-            metrics
-                .request_metrics
-                .num_errors
-                .with_label_values(&["max_query_nodes", code::BAD_USER_INPUT]);
-            metrics.request_metrics.num_queries.inc();
-        }
         info!(
-            query_id = ctx.data_unchecked::<Uuid>().to_string(),
-            "Query has too many nodes: {}", cost.depth
+            query_id,
+            session_id, error_code, "Query has too many nodes: {}", cost.input_nodes
         );
-        return Err(ServerError::new(
+        return Err(graphql_error_at_pos(
+            error_code,
             format!(
-                "Query has too many nodes. The maximum allowed is {}",
-                limits.max_query_nodes
+                "Query has too many nodes {}. The maximum allowed is {}",
+                cost.input_nodes, limits.max_query_nodes
             ),
-            pos,
+            pos.unwrap_or_default(),
         ));
     }
 
     if cost.depth > limits.max_query_depth {
-        if let Some(metrics) = metrics {
-            metrics
-                .request_metrics
-                .num_errors
-                .with_label_values(&["max_query_depth", code::BAD_USER_INPUT]);
-            metrics.request_metrics.num_queries.inc();
-        }
         info!(
-            query_id = ctx.data_unchecked::<Uuid>().to_string(),
-            "Query has too many levels of nesting: {}", cost.depth
+            query_id,
+            session_id, error_code, "Query has too many levels of nesting: {}", cost.depth
         );
-        return Err(ServerError::new(
+        return Err(graphql_error_at_pos(
+            error_code,
             format!(
-                "Query has too many levels of nesting. The maximum allowed is {}",
-                limits.max_query_depth
+                "Query has too many levels of nesting {}. The maximum allowed is {}",
+                cost.depth, limits.max_query_depth
             ),
-            pos,
+            pos.unwrap_or_default(),
         ));
     }
 
     if cost.output_nodes > limits.max_output_nodes {
-        if let Some(metrics) = metrics {
-            metrics
-                .request_metrics
-                .num_errors
-                .with_label_values(&["max_output_nodes", code::BAD_USER_INPUT]);
-            metrics.request_metrics.num_queries.inc();
-        }
         info!(
-            query_id = ctx.data_unchecked::<Uuid>().to_string(),
-            "Query will result in too many output nodes: {}", cost.output_nodes
+            query_id,
+            session_id,
+            error_code,
+            "Query will result in too many output nodes: {}",
+            cost.output_nodes
         );
-        return Err(ServerError::new(
-            format!(
+        return Err(graphql_error_at_pos(
+            error_code,
+                format!(
                 "Query will result in too many output nodes. The maximum allowed is {}, estimated {}",
                 limits.max_output_nodes, cost.output_nodes
             ),
-            pos,
+            pos.unwrap_or_default(),
         ));
     }
 
