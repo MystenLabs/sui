@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    cmp::max,
     collections::{BTreeMap, BTreeSet},
     ops::Bound::{Excluded, Included, Unbounded},
     panic,
@@ -45,6 +46,9 @@ pub(crate) struct DagState {
 
     // Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
+
+    // Highest round of blocks accepted.
+    pub highest_round: Round,
 }
 
 #[allow(unused)]
@@ -57,6 +61,7 @@ impl DagState {
             Some(commit) => commit.last_committed_rounds.clone(),
             None => vec![0; num_authorities],
         };
+        let highest_round = *last_committed_rounds.iter().max().unwrap();
 
         let mut state = Self {
             context,
@@ -64,6 +69,7 @@ impl DagState {
             cached_refs: vec![BTreeSet::new(); num_authorities],
             last_commit,
             store,
+            highest_round,
         };
 
         for (i, round) in last_committed_rounds.into_iter().enumerate() {
@@ -82,6 +88,7 @@ impl DagState {
 
     /// Accepts a block into DagState and keeps it in memory.
     pub(crate) fn accept_block(&mut self, block: VerifiedBlock) {
+        self.highest_round = max(self.highest_round, block.round());
         let block_ref = block.reference();
 
         // TODO: Move this check to core
