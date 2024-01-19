@@ -279,19 +279,6 @@ async fn graphql_handler(
     if result.is_err() {
         metrics.inc_errors(result.errors.clone());
     }
-    // TODO Is this the right way to get the top level query path names?
-    if let Ok(json_value) = result.data.clone().into_json() {
-        if let Some(k) = json_value.as_object().map(|x| x.keys().collect::<Vec<_>>()) {
-            for path in k {
-                metrics
-                    .request_metrics
-                    .num_queries_top_level
-                    .with_label_values(&[path.as_str()])
-                    .inc();
-            }
-        }
-    }
-
     metrics.request_metrics.inflight_requests.dec();
     result.into()
 }

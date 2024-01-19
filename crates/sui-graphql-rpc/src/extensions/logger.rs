@@ -1,19 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{error::code, metrics::Metrics};
 use async_graphql::{
     extensions::{
         Extension, ExtensionContext, ExtensionFactory, NextExecute, NextParseQuery,
-        NextPrepareRequest, NextValidation,
+        NextPrepareRequest, NextResolve, NextValidation, ResolveInfo,
     },
     parser::types::{ExecutableDocument, OperationType, Selection},
     PathSegment, Request, Response, ServerError, ServerResult, ValidationResult, Variables,
 };
+use async_graphql_value::ConstValue;
 use std::{fmt::Write, net::SocketAddr, sync::Arc};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
-
-use crate::error::code;
 
 #[derive(Clone, Debug)]
 pub struct LoggerConfig {
@@ -59,6 +59,22 @@ impl Extension for LoggerExtension {
         next: NextPrepareRequest<'_>,
     ) -> ServerResult<Request> {
         next.run(ctx, request).await
+    }
+
+    async fn resolve(
+        &self,
+        ctx: &ExtensionContext<'_>,
+        info: ResolveInfo<'_>,
+        next: NextResolve<'_>,
+    ) -> ServerResult<Option<ConstValue>> {
+        if info.path_node.parent.is_none() {
+            ctx.data_unchecked::<Metrics>()
+                .request_metrics
+                .num_queries_top_level
+                .with_label_values(&[info.name])
+                .inc();
+        }
+        next.run(ctx, info).await
     }
 
     async fn parse_query(
