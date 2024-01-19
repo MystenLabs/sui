@@ -669,6 +669,7 @@ impl<
                     }
                     self.update_metrics(&tx_with_results.full_tx, &worker_metrics);
                 },
+
                 // Received a tx from the queue mananger -> the tx is ready to be executed
                 // Must poll from manager_receiver before sw_receiver, to avoid deadlock
                 Some(txid) = manager_receiver.recv() => {
@@ -742,17 +743,17 @@ impl<
                     } else if let SailfishMessage::LockedExec { full_tx , mut objects, mut child_objects } = msg {
 
                         // JUST FOR TESTING --- COMMENT THIS OUT FOR REAL EXECUTION
-                        // let txid = full_tx.tx.digest();
-                        // if let Some(_) = self.ready_txs.remove(&txid) {
-                        //     manager.clean_up(&txid).await;
-                        // }
-                        // num_tx += 1;
-                        // if num_tx == 1 {
-                        //     // Expose the start time as a metric. Should be done only once.
-                        //     worker_metrics.register_start_time();
-                        // }
-                        // self.update_metrics(&full_tx, &worker_metrics);
-                        // continue;
+                        let txid = full_tx.tx.digest();
+                        if let Some(_) = self.ready_txs.remove(&txid) {
+                            manager.clean_up(&txid).await;
+                        }
+                        num_tx += 1;
+                        if num_tx == 1 {
+                            // Expose the start time as a metric. Should be done only once.
+                            worker_metrics.register_start_time();
+                        }
+                        self.update_metrics(&full_tx, &worker_metrics);
+                        continue;
 
                         // TODO: deal with possible duplicate LockedExec messages
                         let txid = full_tx.tx.digest();
@@ -770,7 +771,6 @@ impl<
                         if *ctr == get_ews_for_tx(&full_tx, &ew_ids).len() as u8 {
                             // let tx = manager.get_tx(&txid).clone();
                             let tx = full_tx;
-                            self.ready_txs.remove(&txid);
                             *ctr = 0;
 
                             let mem_store = self.memory_store.clone();
@@ -781,23 +781,12 @@ impl<
                             let protocol_config = protocol_config.clone();
                             let metrics = metrics.clone();
                             let child_inputs = self.waiting_child_objs.get(&txid)
-                                .map(|r| r.clone())
-                                .unwrap_or_default();
+                            .map(|r| r.clone())
+                            .unwrap_or_default();
                             // Push execution task to futures queue
                             let ew_ids_copy = ew_ids.clone();
 
-                            // JUST FOR TESTING --- COMMENT THIS OUT FOR REAL EXECUTION
-                            let txid = tx.tx.digest();
-                            if let Some(_) = self.ready_txs.remove(&txid) {
-                                manager.clean_up(&txid).await;
-                            }
-                            num_tx += 1;
-                            if num_tx == 1 {
-                                // Expose the start time as a metric. Should be done only once.
-                                worker_metrics.register_start_time();
-                            }
-                            self.update_metrics(&tx, &worker_metrics);
-                            continue;
+                            self.ready_txs.remove(&txid);
 
                             tasks_queue.spawn(async move {
                                 if child_list.is_empty() {
