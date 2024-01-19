@@ -230,7 +230,7 @@ opt-level = 1
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
 anyhow = "1.0.71"
-arrow-array = "47.0.0"
+arrow-array = "50.0.0"
 arc-swap = { version = "1.5.1", features = ["serde"] }
 assert_cmd = "2.0.6"
 async-graphql = "6.0.7"
@@ -378,7 +378,7 @@ object_store = { version = "0.7", features = ["aws", "gcp", "azure"] }
 once_cell = "1.18.0"
 ouroboros = "0.17"
 parking_lot = "0.12.1"
-parquet = "47.0.0"
+parquet = "50.0.0"
 pkcs8 = { version = "0.9.0", features = ["std"] }
 pprof = { version = "0.11.0", features = ["cpp", "frame-pointer"] }
 pretty_assertions = "1.3.0"

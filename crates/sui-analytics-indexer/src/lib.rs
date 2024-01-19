@@ -5,6 +5,7 @@ use std::ops::Range;
 use std::path::PathBuf;
 
 use anyhow::{anyhow, Result};
+use arrow_array::{Array, Int32Array};
 use clap::*;
 use gcp_bigquery_client::model::query_request::QueryRequest;
 use gcp_bigquery_client::Client;
@@ -12,6 +13,7 @@ use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
 use object_store::path::Path;
 use serde::{Deserialize, Serialize};
+use snowflake_api::{QueryResult, SnowflakeApi};
 use strum_macros::EnumIter;
 use tracing::info;
 
@@ -120,11 +122,88 @@ pub struct AnalyticsIndexerConfig {
     pub bq_checkpoint_col_id: Option<String>,
     #[clap(long, global = true)]
     pub report_bq_max_table_checkpoint: bool,
+    #[clap(long, default_value = None, global = true)]
+    pub sf_account_identifier: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub sf_warehouse: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub sf_database: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub sf_schema: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub sf_username: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub sf_role: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub sf_password: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub sf_table_id: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub sf_checkpoint_col_id: Option<String>,
+    #[clap(long, global = true)]
+    pub report_sf_max_table_checkpoint: bool,
 }
 
 #[async_trait::async_trait]
 pub trait MaxCheckpointReader: Send + Sync + 'static {
-    async fn max_checkpoint(&self) -> anyhow::Result<i64>;
+    async fn max_checkpoint(&self) -> Result<i64>;
+}
+
+struct SnowflakeMaxCheckpointReader {
+    query: String,
+    api: SnowflakeApi,
+}
+
+impl SnowflakeMaxCheckpointReader {
+    pub async fn new(
+        account_identifier: &str,
+        warehouse: &str,
+        database: &str,
+        schema: &str,
+        user: &str,
+        role: &str,
+        passwd: &str,
+        table_id: &str,
+        col_id: &str,
+    ) -> anyhow::Result<Self> {
+        let api = SnowflakeApi::with_password_auth(
+            account_identifier,
+            Some(warehouse),
+            Some(database),
+            Some(schema),
+            user,
+            Some(role),
+            passwd,
+        )
+        .expect("Failed to build sf api client");
+        Ok(SnowflakeMaxCheckpointReader {
+            query: format!("SELECT max({}) from {}", col_id, table_id),
+            api,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl MaxCheckpointReader for SnowflakeMaxCheckpointReader {
+    async fn max_checkpoint(&self) -> Result<i64> {
+        let res = self.api.exec(&self.query).await?;
+        match res {
+            QueryResult::Arrow(a) => {
+                if let Some(record_batch) = a.first() {
+                    let col = record_batch.column(0);
+                    let col_array = col
+                        .as_any()
+                        .downcast_ref::<Int32Array>()
+                        .expect("Failed to downcast arrow column");
+                    Ok(col_array.value(0) as i64)
+                } else {
+                    Ok(-1)
+                }
+            }
+            QueryResult::Json(_j) => Err(anyhow!("Unexpected query result")),
+            QueryResult::Empty => Err(anyhow!("Unexpected query result")),
+        }
+    }
 }
 
 struct BQMaxCheckpointReader {
@@ -154,7 +233,7 @@ impl BQMaxCheckpointReader {
 
 #[async_trait::async_trait]
 impl MaxCheckpointReader for BQMaxCheckpointReader {
-    async fn max_checkpoint(&self) -> anyhow::Result<i64> {
+    async fn max_checkpoint(&self) -> Result<i64> {
         let mut result = self
             .client
             .job()
@@ -170,6 +249,7 @@ impl MaxCheckpointReader for BQMaxCheckpointReader {
 }
 
 struct NoOpCheckpointReader;
+
 #[async_trait::async_trait]
 impl MaxCheckpointReader for NoOpCheckpointReader {
     async fn max_checkpoint(&self) -> Result<i64> {
@@ -470,6 +550,45 @@ pub async fn make_max_checkpoint_reader(
                     .bq_checkpoint_col_id
                     .as_ref()
                     .ok_or(anyhow!("Missing big query checkpoint col id"))?,
+            )
+            .await?,
+        )
+    } else if config.report_sf_max_table_checkpoint {
+        Box::new(
+            SnowflakeMaxCheckpointReader::new(
+                config
+                    .sf_account_identifier
+                    .as_ref()
+                    .ok_or(anyhow!("Missing sf account identifier"))?,
+                config
+                    .sf_warehouse
+                    .as_ref()
+                    .ok_or(anyhow!("Missing sf warehouse"))?,
+                config
+                    .sf_database
+                    .as_ref()
+                    .ok_or(anyhow!("Missing sf database"))?,
+                config
+                    .sf_schema
+                    .as_ref()
+                    .ok_or(anyhow!("Missing sf schema"))?,
+                config
+                    .sf_username
+                    .as_ref()
+                    .ok_or(anyhow!("Missing sf username"))?,
+                config.sf_role.as_ref().ok_or(anyhow!("Missing sf role"))?,
+                config
+                    .sf_password
+                    .as_ref()
+                    .ok_or(anyhow!("Missing sf password"))?,
+                config
+                    .sf_table_id
+                    .as_ref()
+                    .ok_or(anyhow!("Missing sf table id"))?,
+                config
+                    .sf_checkpoint_col_id
+                    .as_ref()
+                    .ok_or(anyhow!("Missing sf checkpoint col id"))?,
             )
             .await?,
         )
