@@ -108,7 +108,9 @@ use sui_types::messages_grpc::{
 };
 use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
 use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
-use sui_types::storage::{GetSharedLocks, ObjectKey, ObjectOrTombstone, ObjectStore, WriteKind};
+use sui_types::storage::{
+    GetSharedLocks, InputKey, ObjectKey, ObjectOrTombstone, ObjectStore, WriteKind,
+};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
@@ -742,7 +744,7 @@ impl AuthorityState {
             &input_object_kinds,
             &receiving_objects_refs,
             &self.transaction_deny_config,
-            &self.database,
+            self.get_cache_reader().as_ref(),
         )?;
 
         let (input_objects, receiving_objects) = self
@@ -1396,7 +1398,7 @@ impl AuthorityState {
         #[allow(unused_mut)]
         let (inner_temp_store, _, mut effects, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
-                &self.database,
+                self.get_cache_reader().as_ref(),
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
@@ -1461,7 +1463,7 @@ impl AuthorityState {
             &input_object_kinds,
             &receiving_object_refs,
             &self.transaction_deny_config,
-            &self.database,
+            self.get_cache_reader().as_ref(),
         )?;
 
         let (input_objects, receiving_objects) = self
@@ -1526,7 +1528,7 @@ impl AuthorityState {
         let expensive_checks = false;
         let (inner_temp_store, _, effects, _execution_error) = executor
             .execute_transaction_to_effects(
-                &self.database,
+                self.get_cache_reader().as_ref(),
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
                 expensive_checks,
@@ -1553,7 +1555,7 @@ impl AuthorityState {
                 .executor()
                 .type_layout_resolver(Box::new(TemporaryPackageStore::new(
                     &inner_temp_store,
-                    self.database.clone(),
+                    self.get_cache_reader().clone(),
                 )));
         // Returning empty vector here because we recalculate changes in the rpc layer.
         let object_changes = Vec::new();
@@ -1680,7 +1682,7 @@ impl AuthorityState {
             &input_object_kinds,
             &receiving_object_refs,
             &self.transaction_deny_config,
-            &self.database,
+            self.get_cache_reader().as_ref(),
         )?;
 
         let (mut input_objects, receiving_objects) = self
@@ -1766,7 +1768,7 @@ impl AuthorityState {
         );
         let transaction_digest = TransactionDigest::new(default_hash(&intent_msg.value));
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
-            &self.database,
+            self.get_cache_reader().as_ref(),
             protocol_config,
             self.metrics.limits_metrics.clone(),
             /* expensive checks */ false,
@@ -1793,7 +1795,8 @@ impl AuthorityState {
             vec![]
         };
 
-        let package_store = TemporaryPackageStore::new(&inner_temp_store, self.database.clone());
+        let package_store =
+            TemporaryPackageStore::new(&inner_temp_store, self.get_cache_reader().clone());
 
         let mut layout_resolver = epoch_store
             .executor()
@@ -1911,7 +1914,7 @@ impl AuthorityState {
                 .executor()
                 .type_layout_resolver(Box::new(TemporaryPackageStore::new(
                     inner_temporary_store,
-                    self.database.clone(),
+                    self.get_cache_reader().clone(),
                 )));
         let modified_at_version = effects
             .modified_at_versions()
@@ -2183,7 +2186,7 @@ impl AuthorityState {
                 .executor()
                 .type_layout_resolver(Box::new(TemporaryPackageStore::new(
                     inner_temporary_store,
-                    self.database.clone(),
+                    self.get_cache_reader().clone(),
                 )));
         SuiTransactionBlockEvents::try_from(
             transaction_events,
@@ -2254,7 +2257,7 @@ impl AuthorityState {
             Some(
                 self.load_epoch_store_one_call_per_task()
                     .executor()
-                    .type_layout_resolver(Box::new(self.database.as_ref()))
+                    .type_layout_resolver(Box::new(self.get_cache_reader().as_ref()))
                     .get_annotated_layout(&move_obj.type_().clone().into())?,
             )
         } else {
@@ -2387,7 +2390,7 @@ impl AuthorityState {
         let metrics = Arc::new(AuthorityMetrics::new(prometheus_registry));
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let transaction_manager = Arc::new(TransactionManager::new(
-            store.clone(),
+            execution_cache.clone(),
             &epoch_store,
             tx_ready_certificates,
             metrics.clone(),
@@ -2521,7 +2524,7 @@ impl AuthorityState {
         let mut new_dynamic_fields = vec![];
         let mut layout_resolver = epoch_store
             .executor()
-            .type_layout_resolver(Box::new(self.database.as_ref()));
+            .type_layout_resolver(Box::new(self.get_cache_reader().as_ref()));
         for o in genesis_objects.iter() {
             match o.owner {
                 Owner::AddressOwner(addr) => new_owners.push((
@@ -3116,7 +3119,7 @@ impl AuthorityState {
                 self.load_epoch_store_one_call_per_task()
                     .executor()
                     // TODO(cache) - must read through cache
-                    .type_layout_resolver(Box::new(self.database.as_ref()))
+                    .type_layout_resolver(Box::new(self.get_cache_reader().as_ref()))
                     .get_annotated_layout(&object.type_().clone().into())
             })
             .transpose()?;
@@ -3336,6 +3339,7 @@ impl AuthorityState {
         }
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_transactions_and_serialized_sizes(
         &self,
         digests: &[TransactionDigest],
@@ -3681,9 +3685,10 @@ impl AuthorityState {
             .collect::<Result<Vec<_>, _>>()?;
 
         let epoch_store = self.load_epoch_store_one_call_per_task();
+        let backing_store = self.get_cache_reader();
         let mut layout_resolver = epoch_store
             .executor()
-            .type_layout_resolver(Box::new(self.database.as_ref()));
+            .type_layout_resolver(Box::new(&backing_store));
         let mut events = vec![];
         for (e, tx_digest, event_seq, timestamp) in stored_events.into_iter() {
             events.push(SuiEvent::try_from(
@@ -4596,7 +4601,7 @@ impl AuthorityState {
             self.name,
             new_committee,
             epoch_start_configuration,
-            self.db(),
+            self.get_cache_reader().clone(),
             expensive_safety_check_config,
             cur_epoch_store.get_chain_identifier(),
         );
@@ -4641,6 +4646,48 @@ impl AuthorityState {
         )
         .await;
         let _ = AuthorityStorePruner::compact(&self.database.perpetual_tables);
+    }
+}
+
+impl AuthorityState {
+    /// Gets the input object keys from input object kinds, by determining the versions of owned,
+    /// shared and package objects.
+    /// When making changes, please see if check_sequenced_input_objects() below needs
+    /// similar changes as well.
+    pub fn get_input_object_keys(
+        digest: &TransactionDigest,
+        objects: &[InputObjectKind],
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> BTreeSet<InputKey> {
+        let mut shared_locks = HashMap::<ObjectID, SequenceNumber>::new();
+        objects
+            .iter()
+            .map(|kind| {
+                match kind {
+                    InputObjectKind::SharedMoveObject { id, .. } => {
+                        if shared_locks.is_empty() {
+                            shared_locks = epoch_store
+                                .get_shared_locks(digest)
+                                .expect("Read from storage should not fail!")
+                                .into_iter()
+                                .collect();
+                        }
+                        // If we can't find the locked version, it means
+                        // 1. either we have a bug that skips shared object version assignment
+                        // 2. or we have some DB corruption
+                        let Some(version) = shared_locks.get(id) else {
+                            panic!(
+                                "Shared object locks should have been set. tx_digset: {digest:?}, obj \
+                                id: {id:?}",
+                            )
+                        };
+                        InputKey::VersionedObject{ id: *id, version: *version}
+                    }
+                    InputObjectKind::MovePackage(id) => InputKey::Package { id: *id },
+                    InputObjectKind::ImmOrOwnedMoveObject(objref) => InputKey::VersionedObject {id: objref.0, version: objref.1},
+                }
+            })
+            .collect()
     }
 }
 

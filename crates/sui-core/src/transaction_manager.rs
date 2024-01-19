@@ -26,8 +26,11 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
 use tracing::{error, info, instrument, trace, warn};
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::{AuthorityMetrics, AuthorityStore};
+use crate::authority::AuthorityMetrics;
+use crate::{
+    authority::authority_per_epoch_store::AuthorityPerEpochStore, authority::AuthorityState,
+    in_mem_execution_cache::ExecutionCacheRead,
+};
 use sui_types::transaction::SenderSignedData;
 use tap::TapOptional;
 
@@ -54,7 +57,7 @@ pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 200;
 /// The actual execution logic is inside AuthorityState. After a transaction commits and updates
 /// storage, committed objects and certificates are notified back to TransactionManager.
 pub struct TransactionManager {
-    authority_store: Arc<AuthorityStore>,
+    cache_read: Arc<dyn ExecutionCacheRead>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
     metrics: Arc<AuthorityMetrics>,
     inner: RwLock<Inner>,
@@ -338,13 +341,13 @@ impl TransactionManager {
     /// Transactions from other sources, e.g. checkpoint executor, have own persistent storage to
     /// retry transactions.
     pub(crate) fn new(
-        authority_store: Arc<AuthorityStore>,
+        cache_read: Arc<dyn ExecutionCacheRead>,
         epoch_store: &AuthorityPerEpochStore,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
         let transaction_manager = TransactionManager {
-            authority_store,
+            cache_read,
             metrics: metrics.clone(),
             inner: RwLock::new(Inner::new(epoch_store.epoch(), metrics)),
             tx_ready_certificates,
@@ -411,7 +414,7 @@ impl TransactionManager {
                 let digest = *cert.digest();
                 // skip already executed txes
                 if self
-                    .authority_store
+                    .cache_read
                     .is_tx_already_executed(&digest)
                     .expect("Failed to check if tx is already executed")
                 {
@@ -440,7 +443,7 @@ impl TransactionManager {
                     .value
                     .input_objects()
                     .expect("input_objects() cannot fail");
-                let mut input_object_keys = self.authority_store.get_input_object_keys(
+                let mut input_object_keys = AuthorityState::get_input_object_keys(
                     &digest,
                     &input_object_kinds,
                     epoch_store,
@@ -489,11 +492,11 @@ impl TransactionManager {
         // But input objects can become available before TM lock is acquired.
         // So missing objects' availability are checked again after acquiring TM lock.
         let cache_miss_availability = self
-            .authority_store
+            .cache_read
             .multi_input_objects_available(
-                input_object_cache_misses.iter().cloned(),
+                &input_object_cache_misses,
                 receiving_objects,
-                epoch_store,
+                epoch_store.epoch(),
             )
             .expect("Checking object existence cannot fail!")
             .into_iter()
@@ -584,7 +587,7 @@ impl TransactionManager {
                 continue;
             }
             // skip already executed txes
-            if self.authority_store.is_tx_already_executed(&digest)? {
+            if self.cache_read.is_tx_already_executed(&digest)? {
                 // also ensure the transaction will not be retried after restart.
                 let _ = epoch_store.remove_pending_execution(&digest);
                 self.metrics

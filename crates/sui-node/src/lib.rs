@@ -441,6 +441,8 @@ impl SuiNode {
             &prometheus_registry,
         )
         .await?;
+        let execution_cache = Arc::new(InMemoryCache::new(store.clone()));
+
         let cur_epoch = store.get_recovery_epoch_at_restart()?;
         let committee = committee_store
             .get_committee(&cur_epoch)?
@@ -459,7 +461,7 @@ impl SuiNode {
             Some(epoch_options.options),
             EpochMetrics::new(&registry_service.default_registry()),
             epoch_start_configuration,
-            store.clone(),
+            execution_cache.clone(),
             cache_metrics,
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
@@ -501,8 +503,6 @@ impl SuiNode {
             genesis.checkpoint_contents().clone(),
             &epoch_store,
         );
-
-        let execution_cache = Arc::new(InMemoryCache::new(store.clone()));
 
         let state_sync_store = RocksDbStore::new(
             store.clone(),

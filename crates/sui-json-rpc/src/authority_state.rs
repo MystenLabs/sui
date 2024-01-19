@@ -9,7 +9,8 @@ use mysten_metrics::spawn_monitored_task;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use sui_core::authority::{AuthorityState, AuthorityStore};
+use sui_core::authority::AuthorityState;
+use sui_core::in_mem_execution_cache::{ExecutionCacheRead, InMemoryCache};
 use sui_core::subscription_handler::SubscriptionHandler;
 use sui_json_rpc_types::{
     Coin as SuiCoin, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
@@ -87,7 +88,7 @@ pub trait StateRead: Send + Sync {
         limit: usize,
     ) -> StateReadResult<Vec<(ObjectID, DynamicFieldInfo)>>;
 
-    fn get_db(&self) -> Arc<AuthorityStore>;
+    fn get_cache_reader(&self) -> Arc<InMemoryCache>;
 
     fn get_owner_objects(
         &self,
@@ -302,8 +303,8 @@ impl StateRead for AuthorityState {
         Ok(self.get_dynamic_fields(owner, cursor, limit)?)
     }
 
-    fn get_db(&self) -> Arc<AuthorityStore> {
-        self.db()
+    fn get_cache_reader(&self) -> Arc<InMemoryCache> {
+        self.get_cache_reader().clone()
     }
 
     fn get_owner_objects(
@@ -575,10 +576,10 @@ impl<S: ?Sized + StateRead> ObjectProvider for Arc<S> {
         id: &ObjectID,
         version: &SequenceNumber,
     ) -> Result<Option<Object>, Self::Error> {
-        let database = self.get_db();
+        let cache = self.get_cache_reader();
         let id = *id;
         let version = *version;
-        spawn_monitored_task!(async move { database.find_object_lt_or_eq_version(id, version) })
+        spawn_monitored_task!(async move { cache.find_object_lt_or_eq_version(id, version) })
             .await
             .map_err(StateReadError::from)
     }
@@ -610,10 +611,10 @@ impl<S: ?Sized + StateRead> ObjectProvider for (Arc<S>, Arc<TransactionKeyValueS
         id: &ObjectID,
         version: &SequenceNumber,
     ) -> Result<Option<Object>, Self::Error> {
-        let database = self.0.get_db();
+        let cache = self.0.get_cache_reader();
         let id = *id;
         let version = *version;
-        spawn_monitored_task!(async move { database.find_object_lt_or_eq_version(id, version) })
+        spawn_monitored_task!(async move { cache.find_object_lt_or_eq_version(id, version) })
             .await
             .map_err(StateReadError::from)
     }
