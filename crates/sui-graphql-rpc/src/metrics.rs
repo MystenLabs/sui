@@ -153,13 +153,8 @@ pub(crate) struct RequestMetrics {
     pub query_payload_size: Histogram,
     /// The time it takes to validate the query
     pub query_validation_latency: Histogram,
-    /// The time it takes to validate the query
-    pub _query_validation_latency_by_path: HistogramVec,
     /// The time it takes for the GraphQL service to execute the request
     pub query_latency: Histogram,
-    // TODO figure out how to formalize a query path
-    /// The time it takes for the GraphQL service to execute the request by path
-    pub _query_latency_by_path: HistogramVec,
     /// Number of errors by path and type.
     pub num_errors: IntCounterVec,
     /// Number of queries
@@ -194,12 +189,6 @@ impl RequestMetrics {
                 "Size of the query payload string",
                 registry,
             ),
-            _query_validation_latency_by_path: HistogramVec::new_in_registry(
-                "query_validation_latency_by_path",
-                "The time to validate the query for each path",
-                &["path"],
-                registry,
-            ),
             query_validation_latency: Histogram::new_in_registry(
                 "query_validation_latency",
                 "The time to validate the query",
@@ -208,12 +197,6 @@ impl RequestMetrics {
             query_latency: Histogram::new_in_registry(
                 "query_latency",
                 "The time needed to resolve and get the result for the request",
-                registry,
-            ),
-            _query_latency_by_path: HistogramVec::new_in_registry(
-                "query_latency_by_path",
-                "The time needed to resolve and get the result for the request for this path",
-                &["path"],
                 registry,
             ),
             num_errors: register_int_counter_vec_with_registry!(
