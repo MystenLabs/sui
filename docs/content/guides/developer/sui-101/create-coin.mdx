@@ -28,7 +28,7 @@ module examples::mycoin {
 
 The `Coin<T>` is a generic implementation of a coin on Sui. The owner of the `TreasuryCap` gets control over the minting and burning of coins. Further transactions can be sent directly to the `sui::coin::Coin` with `TreasuryCap` object as authorization.
 
-Extending the example further, add a `mint` function to the module. Use the `mint_and_transfer` function of the `Coin` module to create (mint) a coin and transfer it to an address. 
+Extending the example further, add a `mint` function to the module. Use the `mint` function of the `Coin` module to create (mint) a coin and then transfer it to an address. 
 
 ```move
 public fun mint(
@@ -37,7 +37,8 @@ public fun mint(
     recipient: address, 
     ctx: &mut TxContext,
 ) {
-    coin::mint_and_transfer(treasury_cap, amount, recipient, ctx)
+    let coin = coin::mint(treasury_cap, amount, ctx);
+    transfer::public_transfer(coin, recipient)
 }
 ``` 
 
@@ -46,7 +47,19 @@ public fun mint(
 If you published the previous example to a Sui network, you can use the `sui client call` command to mint coins and deliver them to the address you provide. See [Sui CLI](../../../references/cli.mdx) for more information on the command line interface.
 
 ```shell
-sui client call --function mint --module coinage --package <PACKAGE-ID> --args <TREASURY-CAP-ID> <NUMBER-OF-COINS> <RECIPIENT-ADDRESS> --gas-budget <GAS-AMOUNT>
+sui client call --function mint --module mycoin --package <PACKAGE-ID> --args <TREASURY-CAP-ID> <COIN-AMOUNT> <RECIPIENT-ADDRESS> --gas-budget <GAS-AMOUNT>
+```
+
+If the call is successful your console displays the result, which includes a **Balance Changes** section with the following information included:
+
+```shell
+...
+
+Owner: Account Address ( <RECIPIENT-ADDRESS> ) 
+CoinType: <PACKAGE-ID>::mycoin::MYCOIN 
+Amount: <COIN-AMOUNT>
+
+...
 ```
 
 ## DenyList
