@@ -8,13 +8,12 @@ use crate::{
     error::BridgeResult,
     retry_with_max_delay,
     sui_client::{SuiClient, SuiClientInner},
+    sui_transaction_builder::get_bridge_package_id,
 };
 use mysten_metrics::spawn_logged_monitored_task;
 use std::{collections::HashMap, sync::Arc};
 use sui_json_rpc_types::SuiEvent;
-use sui_types::{
-    base_types::ObjectID, digests::TransactionDigest, Identifier, SUI_SYSTEM_PACKAGE_ID,
-};
+use sui_types::{digests::TransactionDigest, Identifier};
 use tokio::{
     task::JoinHandle,
     time::{self, Duration},
@@ -23,7 +22,7 @@ use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tokio_retry::Retry;
 
 // TODO: use the right package id
-const PACKAGE_ID: ObjectID = SUI_SYSTEM_PACKAGE_ID;
+// const PACKAGE_ID: ObjectID = SUI_SYSTEM_PACKAGE_ID;
 const SUI_EVENTS_CHANNEL_SIZE: usize = 1000;
 
 /// Map from contract address to their start block.
@@ -98,7 +97,11 @@ where
         loop {
             interval.tick().await;
             let Ok(events) = retry_with_max_delay!(
-                sui_client.query_events_by_module(PACKAGE_ID, module.clone(), next_cursor),
+                sui_client.query_events_by_module(
+                    *get_bridge_package_id(),
+                    module.clone(),
+                    next_cursor
+                ),
                 Duration::from_secs(600)
             ) else {
                 tracing::error!("Failed to query events from sui client after retry");
@@ -164,7 +167,8 @@ mod tests {
 
         // Module Foo has new events
         let mut event_1: SuiEvent = SuiEvent::random_for_testing();
-        event_1.type_.address = PACKAGE_ID.into();
+        let package_id = *get_bridge_package_id();
+        event_1.type_.address = package_id.into();
         event_1.type_.module = module_foo.clone();
         let module_foo_events_1: sui_json_rpc_types::Page<SuiEvent, EventID> = EventPage {
             data: vec![event_1.clone(), event_1.clone()],
@@ -194,7 +198,7 @@ mod tests {
 
         // Module Bar has new events
         let mut event_2: SuiEvent = SuiEvent::random_for_testing();
-        event_2.type_.address = PACKAGE_ID.into();
+        event_2.type_.address = package_id.into();
         event_2.type_.module = module_bar.clone();
         let module_bar_events_1 = EventPage {
             data: vec![event_2.clone()],
@@ -237,7 +241,7 @@ mod tests {
         events: EventPage,
     ) {
         mock.add_event_response(
-            PACKAGE_ID,
+            *get_bridge_package_id(),
             module.clone(),
             EventID {
                 tx_digest: cursor,

@@ -85,8 +85,11 @@ pub fn build_transaction(
     action: VerifiedCertifiedBridgeAction,
 ) -> BridgeResult<TransactionData> {
     match action.data() {
-        BridgeAction::EthToSuiBridgeAction(_) | BridgeAction::SuiToEthBridgeAction(_) => {
-            build_token_bridge_approve_transaction(client_address, gas_object_ref, action)
+        BridgeAction::EthToSuiBridgeAction(_) => {
+            build_token_bridge_approve_transaction(client_address, gas_object_ref, action, true)
+        }
+        BridgeAction::SuiToEthBridgeAction(_) => {
+            build_token_bridge_approve_transaction(client_address, gas_object_ref, action, false)
         }
     }
 }
@@ -96,6 +99,7 @@ fn build_token_bridge_approve_transaction(
     client_address: SuiAddress,
     gas_object_ref: &ObjectRef,
     action: VerifiedCertifiedBridgeAction,
+    claim: bool,
 ) -> BridgeResult<TransactionData> {
     let (bridge_action, sigs) = action.into_inner().into_data_and_sig();
     let mut builder = ProgrammableTransactionBuilder::new();
@@ -184,13 +188,15 @@ fn build_token_bridge_approve_transaction(
         vec![arg_bridge, arg_msg, arg_signatures],
     );
 
-    builder.programmable_move_call(
-        *get_bridge_package_id(),
-        ident_str!("bridge").to_owned(),
-        ident_str!("claim_and_transfer_token").to_owned(),
-        vec![get_sui_token_type_tag(token_type)],
-        vec![arg_bridge, source_chain, seq_num],
-    );
+    if claim {
+        builder.programmable_move_call(
+            *get_bridge_package_id(),
+            ident_str!("bridge").to_owned(),
+            ident_str!("claim_and_transfer_token").to_owned(),
+            vec![get_sui_token_type_tag(token_type)],
+            vec![arg_bridge, source_chain, seq_num],
+        );
+    }
 
     let pt = builder.finish();
 
