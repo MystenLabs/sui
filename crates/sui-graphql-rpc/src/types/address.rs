@@ -12,7 +12,8 @@ use super::{
     coin::Coin,
     cursor::Page,
     dynamic_field::{DynamicField, DynamicFieldName},
-    object::{self, Object, ObjectFilter},
+    move_object::MoveObject,
+    object::{self, ObjectFilter},
     stake::StakedSui,
     sui_address::SuiAddress,
     suins_registration::SuinsRegistration,
@@ -87,7 +88,7 @@ impl Address {
         last: Option<u64>,
         before: Option<object::Cursor>,
         filter: Option<ObjectFilter>,
-    ) -> Result<Connection<String, Object>> {
+    ) -> Result<Connection<String, MoveObject>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let Some(filter) = filter.unwrap_or_default().intersect(ObjectFilter {
@@ -97,7 +98,7 @@ impl Address {
             return Ok(Connection::new(false, false));
         };
 
-        Object::paginate(ctx.data_unchecked(), page, filter)
+        MoveObject::paginate(ctx.data_unchecked(), page, filter)
             .await
             .extend()
     }
