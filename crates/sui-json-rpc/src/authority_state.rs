@@ -127,7 +127,7 @@ pub trait StateRead: Send + Sync {
         gas_budget: Option<u64>,
         gas_sponsor: Option<SuiAddress>,
         gas_objects: Option<Vec<ObjectRef>>,
-        epoch: Option<u64>,
+        show_raw_txn_data: Option<bool>,
         skip_checks: Option<bool>,
     ) -> StateReadResult<DevInspectResults>;
 
@@ -355,7 +355,7 @@ impl StateRead for AuthorityState {
         gas_budget: Option<u64>,
         gas_sponsor: Option<SuiAddress>,
         gas_objects: Option<Vec<ObjectRef>>,
-        epoch: Option<u64>,
+        show_raw_txn_data: Option<bool>,
         skip_checks: Option<bool>,
     ) -> StateReadResult<DevInspectResults> {
         Ok(self
@@ -366,7 +366,7 @@ impl StateRead for AuthorityState {
                 gas_budget,
                 gas_sponsor,
                 gas_objects,
-                epoch,
+                show_raw_txn_data,
                 skip_checks,
             )
             .await?)

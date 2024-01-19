@@ -1612,7 +1612,7 @@ impl AuthorityState {
         gas_budget: Option<u64>,
         gas_sponsor: Option<SuiAddress>,
         gas_objects: Option<Vec<ObjectRef>>,
-        epoch: Option<u64>,
+        show_raw_txn_data: Option<bool>,
         skip_checks: Option<bool>,
     ) -> SuiResult<DevInspectResults> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
@@ -1628,6 +1628,8 @@ impl AuthorityState {
                 error: "system transactions are not supported".to_string(),
             });
         }
+
+        let show_raw_txn_data = show_raw_txn_data.unwrap_or(false);
         let skip_checks = skip_checks.unwrap_or(true);
         let reference_gas_price = epoch_store.reference_gas_price();
         let protocol_config = epoch_store.protocol_config();
@@ -1638,7 +1640,6 @@ impl AuthorityState {
         let owner = gas_sponsor.unwrap_or(sender);
         // Payment might be empty here, but it's fine we'll have to deal with it later after reading all the input objects.
         let payment = gas_objects.unwrap_or_default();
-        let expiration = epoch.map_or(TransactionExpiration::None, TransactionExpiration::Epoch);
         let transaction = TransactionData::V1(TransactionDataV1 {
             kind: transaction_kind.clone(),
             sender,
@@ -1648,8 +1649,16 @@ impl AuthorityState {
                 price,
                 budget,
             },
-            expiration,
+            expiration: TransactionExpiration::None,
         });
+
+        let raw_txn_data = if show_raw_txn_data {
+            bcs::to_bytes(&transaction).map_err(|_| SuiError::TransactionSerializationError {
+                error: "Failed to serialize transaction during dev inspect".to_string(),
+            })?
+        } else {
+            vec![]
+        };
 
         transaction.check_version_supported(protocol_config)?;
         transaction.validity_check_no_gas_check(protocol_config)?;
@@ -1778,6 +1787,7 @@ impl AuthorityState {
             effects,
             inner_temp_store.events.clone(),
             execution_result,
+            raw_txn_data,
             layout_resolver.as_mut(),
         )
     }

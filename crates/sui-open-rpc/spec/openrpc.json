@@ -5672,6 +5672,13 @@
               }
             ]
           },
+          "showRawTxnData": {
+            "description": "Whether to return the raw transaction data.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "skipChecks": {
             "description": "Whether to skip transaction checks for the transaction.",
             "type": [
@@ -5709,6 +5716,15 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Event"
+            }
+          },
+          "rawTxnData": {
+            "description": "The raw transaction data that was dev inspected.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
             }
           },
           "results": {
