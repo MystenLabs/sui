@@ -97,7 +97,7 @@ function getBalanceAndWalletFees(balance: string, totalBalance: string, conversi
 		 * If the balance + wallet fees is greater than the total balance, we need to
 		 * recalculate the balance and wallet fees.
 		 */
-		const remainingBalance = bigNumberBalance.minus(walletFees).toString();
+		const remainingBalance = bigNumberBalance.minus(new BigNumber(walletFees).times(2)).toString();
 		const newWalletFee = getWalletFee(remainingBalance);
 
 		return {
