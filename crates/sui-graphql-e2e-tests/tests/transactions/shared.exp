@@ -47,7 +47,19 @@ Response: {
                   "address": "0x304d95705285484dfdce6d2c93b322bf4bb53254b3c4a21513cf3632a61a77f6",
                   "version": 2,
                   "digest": "2oW3VzQMCk6AtwLWeD1z1NZVSCZGsHxhus6Xpt2NxB7e",
-                  "object": null
+                  "object": {
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0xd01f94a13ef231248f3c439973a9d714e04f81d2fb42c59d8496695a45e801ec::m::Foo"
+                        },
+                        "json": {
+                          "id": "0x304d95705285484dfdce6d2c93b322bf4bb53254b3c4a21513cf3632a61a77f6",
+                          "x": "0"
+                        }
+                      }
+                    }
+                  }
                 }
               ]
             }

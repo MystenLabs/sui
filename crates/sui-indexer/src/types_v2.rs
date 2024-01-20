@@ -214,6 +214,22 @@ pub enum ObjectStatus {
     WrappedOrDeleted = 1,
 }
 
+impl TryFrom<i16> for ObjectStatus {
+    type Error = IndexerError;
+
+    fn try_from(value: i16) -> Result<Self, Self::Error> {
+        Ok(match value {
+            0 => ObjectStatus::Active,
+            1 => ObjectStatus::WrappedOrDeleted,
+            value => {
+                return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "{value} as ObjectStatus"
+                )))
+            }
+        })
+    }
+}
+
 impl TryFrom<i16> for OwnerType {
     type Error = IndexerError;
 

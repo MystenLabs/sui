@@ -1652,11 +1652,22 @@ with fields) with additional metadata detailing its id, version, transaction dig
 field indicating how this object can be accessed.
 """
 type Object implements IOwner {
-	version: Int!
+	version: Int
+	"""
+	The current status of the object as read from the off-chain store. The possible states are:
+	- NOT_INDEXED: the object is loaded from serialized data, such as the contents of a
+	transaction.
+	- LIVE: the object is currently live and is not deleted or wrapped.
+	- HISTORICAL: the object is referenced at some version, and thus is fetched from the
+	snapshot or historical objects table.
+	- WRAPPED_OR_DELETED: The object is deleted or wrapped and only partial information can be
+	loaded from the indexer.
+	"""
+	status: ObjectKind!
 	"""
 	32-byte hash that identifies the object's current contents, encoded as a Base58 string.
 	"""
-	digest: String!
+	digest: String
 	"""
 	The amount of SUI we would rebate if this object gets deleted or mutated.
 	This number is recalculated based on the present storage gas price.
@@ -1869,6 +1880,27 @@ input ObjectFilter {
 input ObjectKey {
 	objectId: SuiAddress!
 	version: Int!
+}
+
+enum ObjectKind {
+	"""
+	The object is loaded from serialized data, such as the contents of a transaction.
+	"""
+	NOT_INDEXED
+	"""
+	The object is currently live and is not deleted or wrapped.
+	"""
+	LIVE
+	"""
+	The object is referenced at some version, and thus is fetched from the snapshot or
+	historical objects table.
+	"""
+	HISTORICAL
+	"""
+	The object is deleted or wrapped and only partial information can be loaded from the
+	indexer.
+	"""
+	WRAPPED_OR_DELETED
 }
 
 """

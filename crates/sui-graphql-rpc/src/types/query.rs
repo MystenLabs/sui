@@ -19,7 +19,7 @@ use super::{
     epoch::Epoch,
     event::{self, Event, EventFilter},
     move_type::MoveType,
-    object::{self, Object, ObjectFilter},
+    object::{self, Object, ObjectFilter, ObjectVersionKey},
     owner::Owner,
     protocol_config::ProtocolConfigs,
     sui_address::SuiAddress,
@@ -77,9 +77,18 @@ impl Query {
         address: SuiAddress,
         version: Option<u64>,
     ) -> Result<Option<Object>> {
-        Object::query(ctx.data_unchecked(), address, version)
+        match version {
+            Some(version) => Object::query(
+                ctx.data_unchecked(),
+                address,
+                ObjectVersionKey::Historical(version),
+            )
             .await
-            .extend()
+            .extend(),
+            None => Object::query(ctx.data_unchecked(), address, ObjectVersionKey::Latest)
+                .await
+                .extend(),
+        }
     }
 
     /// Look-up an Account by its SuiAddress.

@@ -4,7 +4,7 @@
 use super::base64::Base64;
 use super::cursor::{JsonCursor, Page};
 use super::move_module::MoveModule;
-use super::object::Object;
+use super::object::{Object, ObjectVersionKey};
 use super::sui_address::SuiAddress;
 use crate::data::Db;
 use crate::error::Error;
@@ -187,7 +187,13 @@ impl MovePackage {
     fn parsed_package(&self) -> Result<ParsedMovePackage, Error> {
         // TODO: Leverage the package cache (attempt to read from it, and if that doesn't succeed,
         // write back the parsed Package to the cache as well.)
-        ParsedMovePackage::read(&self.super_.native)
+        let Some(native) = self.super_.native_impl() else {
+            return Err(Error::Internal(
+                "No native representation of package to parse.".to_string(),
+            ));
+        };
+
+        ParsedMovePackage::read(native)
             .map_err(|e| Error::Internal(format!("Error reading package: {e}")))
     }
 
@@ -213,9 +219,9 @@ impl MovePackage {
     pub(crate) async fn query(
         db: &Db,
         address: SuiAddress,
-        version: Option<u64>,
+        key: ObjectVersionKey,
     ) -> Result<Option<Self>, Error> {
-        let Some(object) = Object::query(db, address, version).await? else {
+        let Some(object) = Object::query(db, address, key).await? else {
             return Ok(None);
         };
 
@@ -229,7 +235,11 @@ impl TryFrom<&Object> for MovePackage {
     type Error = MovePackageDowncastError;
 
     fn try_from(object: &Object) -> Result<Self, Self::Error> {
-        if let Data::Package(move_package) = &object.native.data {
+        let Some(native) = object.native_impl() else {
+            return Err(MovePackageDowncastError);
+        };
+
+        if let Data::Package(move_package) = &native.data {
             Ok(Self {
                 super_: object.clone(),
                 native: move_package.clone(),
