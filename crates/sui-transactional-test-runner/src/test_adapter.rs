@@ -48,9 +48,9 @@ use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_graphql_rpc::config::ConnectionConfig;
-use sui_graphql_rpc::test_infra::cluster::serve_executor;
 use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
 use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
+use sui_graphql_rpc::test_infra::cluster::{serve_executor, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{DevInspectResults, SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
@@ -205,6 +205,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             custom_validator_account,
             reference_gas_price,
             default_gas_price,
+            object_snapshot_min_checkpoint_lag,
+            object_snapshot_max_checkpoint_lag,
         ) = match task_opt.map(|t| t.command) {
             Some((
                 InitCommand { named_addresses },
@@ -217,6 +219,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     custom_validator_account,
                     reference_gas_price,
                     default_gas_price,
+                    object_snapshot_min_checkpoint_lag,
+                    object_snapshot_max_checkpoint_lag,
                 },
             )) => {
                 let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -244,6 +248,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 if reference_gas_price.is_some() && !simulator {
                     panic!("Can only set reference gas price in simulator mode");
                 }
+
                 (
                     map,
                     accounts,
@@ -252,6 +257,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     custom_validator_account,
                     reference_gas_price,
                     default_gas_price,
+                    object_snapshot_min_checkpoint_lag,
+                    object_snapshot_max_checkpoint_lag,
                 )
             }
             None => {
@@ -262,6 +269,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     protocol_config,
                     false,
                     false,
+                    None,
+                    None,
                     None,
                     None,
                 )
@@ -286,6 +295,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 &protocol_config,
                 custom_validator_account,
                 reference_gas_price,
+                object_snapshot_min_checkpoint_lag,
+                object_snapshot_max_checkpoint_lag,
             )
             .await
         } else {
@@ -540,6 +551,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
                 cluster
                     .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(30))
+                    .await;
+
+                cluster
+                    .wait_for_objects_snapshot_catchup(Duration::from_secs(30))
                     .await;
 
                 let interpolated = self.interpolate_query(&contents, &cursors)?;
@@ -1837,6 +1852,8 @@ async fn init_sim_executor(
     protocol_config: &ProtocolConfig,
     custom_validator_account: bool,
     reference_gas_price: Option<u64>,
+    object_snapshot_min_checkpoint_lag: Option<usize>,
+    object_snapshot_max_checkpoint_lag: Option<usize>,
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
@@ -1906,6 +1923,11 @@ async fn init_sim_executor(
         ConnectionConfig::ci_integration_test_cfg(),
         DEFAULT_INTERNAL_DATA_SOURCE_PORT,
         Arc::new(read_replica),
+        Some(SnapshotLagConfig::new(
+            object_snapshot_min_checkpoint_lag,
+            object_snapshot_max_checkpoint_lag,
+            Some(1),
+        )),
     )
     .await;
 
