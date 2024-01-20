@@ -288,6 +288,7 @@ impl RpcExampleProvider {
             results: None,
             error: None,
             raw_txn_data: vec![],
+            raw_effects: vec![],
         };
 
         Examples::new(
