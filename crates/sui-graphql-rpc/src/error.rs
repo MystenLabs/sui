@@ -64,8 +64,6 @@ pub(crate) fn graphql_error_at_pos(
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("This query is unavailable through address. Please try again with the object or owner type.")]
-    DynamicFieldOnAddress,
     #[error("Unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
     ProtocolVersionUnsupported(u64, u64),
     #[error(transparent)]
@@ -99,7 +97,6 @@ impl ErrorExtensions for Error {
     fn extend(&self) -> async_graphql::Error {
         async_graphql::Error::new(format!("{}", self)).extend_with(|_err, e| match self {
             Error::InvalidCoinType(_)
-            | Error::DynamicFieldOnAddress
             | Error::ProtocolVersionUnsupported { .. }
             | Error::DomainParse(_)
             | Error::DbValidation(_)

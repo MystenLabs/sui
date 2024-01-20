@@ -39,7 +39,7 @@ fragment Modules on Object {
     asMovePackage {
         module(name: "m") {
             name
-            package { asObject { address } }
+            package { address }
 
             fileFormatVersion
             bytes

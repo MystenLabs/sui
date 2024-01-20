@@ -117,7 +117,7 @@ module P1::m {
 # see the IDs of types as they appear in the new package -- they will
 # all be the runtime ID.
 fragment FullStruct on MoveStruct {
-    module { package { asObject { address } } }
+    module { package { address } }
     name
     abilities
     typeParameters {

@@ -223,9 +223,7 @@ Response: {
                         "s": {
                           "module": {
                             "package": {
-                              "asObject": {
-                                "address": "0xe891855165c8eaae42985dea34d160bd32e833a05805bfb683c87372f8295b86"
-                              }
+                              "address": "0xe891855165c8eaae42985dea34d160bd32e833a05805bfb683c87372f8295b86"
                             }
                           },
                           "name": "S",
@@ -250,9 +248,7 @@ Response: {
                         "t": {
                           "module": {
                             "package": {
-                              "asObject": {
-                                "address": "0x01b002c07a457b73fb0f2effd2f02fd5ff49436d43fe41332b69358925c76e0b"
-                              }
+                              "address": "0x01b002c07a457b73fb0f2effd2f02fd5ff49436d43fe41332b69358925c76e0b"
                             }
                           },
                           "name": "T",

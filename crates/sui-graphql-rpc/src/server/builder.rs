@@ -6,6 +6,8 @@ use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
+use crate::types::move_object::IMoveObject;
+use crate::types::object::IObject;
 use crate::types::owner::IOwner;
 use crate::{
     config::ServerConfig,
@@ -71,8 +73,7 @@ impl ServerBuilder {
         Self {
             port,
             host,
-            schema: async_graphql::Schema::build(Query, Mutation, EmptySubscription)
-                .register_output_type::<IOwner>(),
+            schema: schema_builder(),
             router: None,
             metrics,
         }
@@ -259,6 +260,8 @@ impl ServerBuilder {
 
 fn schema_builder() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
     async_graphql::Schema::build(Query, Mutation, EmptySubscription)
+        .register_output_type::<IMoveObject>()
+        .register_output_type::<IObject>()
         .register_output_type::<IOwner>()
 }
 

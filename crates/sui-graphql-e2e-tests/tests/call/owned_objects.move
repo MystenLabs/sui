@@ -49,13 +49,11 @@ module Test::M1 {
     objects {
       edges {
         node {
-          asObject {
-            owner {
-                __typename
-                ... on AddressOwner {
-                owner {
-                    address
-                }
+          owner {
+              __typename
+              ... on AddressOwner {
+              owner {
+                  address
               }
             }
           }
@@ -77,13 +75,11 @@ module Test::M1 {
     objects {
       edges {
         node {
-          asObject {
-            owner {
-              __typename
-              ... on AddressOwner {
-                owner {
-                  address
-                }
+          owner {
+            __typename
+            ... on AddressOwner {
+              owner {
+                address
               }
             }
           }
@@ -99,13 +95,11 @@ module Test::M1 {
     objects(filter: {owner: "0x42"}) {
       edges {
         node {
-          asObject {
-            owner {
-                __typename
-                ... on AddressOwner {
-                owner {
-                    address
-                }
+          owner {
+              __typename
+              ... on AddressOwner {
+              owner {
+                  address
               }
             }
           }
@@ -121,13 +115,11 @@ module Test::M1 {
     objects(filter: {owner: "0x888"}) {
       edges {
         node {
-          asObject {
-            owner {
-                __typename
-                ... on AddressOwner {
-                owner {
-                    address
-                }
+          owner {
+              __typename
+              ... on AddressOwner {
+              owner {
+                  address
               }
             }
           }
@@ -143,13 +135,11 @@ module Test::M1 {
     objects {
       edges {
         node {
-          asObject {
-            owner {
-                __typename
-                ... on AddressOwner {
-                owner {
-                    address
-                }
+          owner {
+              __typename
+              ... on AddressOwner {
+              owner {
+                  address
               }
             }
           }
@@ -165,13 +155,11 @@ module Test::M1 {
     objects {
       edges {
         node {
-          asObject {
-            owner {
-                __typename
-                ... on AddressOwner {
-                owner {
-                    address
-                }
+          owner {
+              __typename
+              ... on AddressOwner {
+              owner {
+                  address
               }
             }
           }
