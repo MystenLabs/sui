@@ -327,12 +327,10 @@ pub mod tests {
         extensions::{Extension, ExtensionContext, NextExecute},
         Response,
     };
-    use prometheus::proto::MetricFamily;
-    use prometheus::Registry;
     use rand::{rngs::StdRng, SeedableRng};
     use simulacrum::Simulacrum;
+    use std::sync::Arc;
     use std::time::Duration;
-    use std::{collections::HashMap, sync::Arc};
     use uuid::Uuid;
 
     async fn prep_cluster() -> (ConnectionConfig, ExecutorCluster) {

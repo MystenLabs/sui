@@ -224,7 +224,7 @@ pub(crate) fn query_label_for_error(query: &[PathSegment]) -> String {
 
     match &fields[..] {
         [] => "".to_string(),
-        [seg] => format!("{}", seg),
+        [seg] => seg.to_string(),
         [fst, .., lst] => format!("{fst}..{lst}"),
     }
 }
