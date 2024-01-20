@@ -301,7 +301,7 @@ impl WriteApiServer for TransactionExecutionApi {
                 gas_sponsor,
                 gas_budget,
                 gas_objects,
-                show_raw_txn_data,
+                show_raw_txn_data_and_effects,
                 skip_checks,
             } = additional_args.unwrap_or_default();
             let tx_kind: TransactionKind = self.convert_bytes(tx_bytes)?;
@@ -313,7 +313,7 @@ impl WriteApiServer for TransactionExecutionApi {
                     gas_budget.map(|i| *i),
                     gas_sponsor,
                     gas_objects,
-                    show_raw_txn_data,
+                    show_raw_txn_data_and_effects,
                     skip_checks,
                 )
                 .await
