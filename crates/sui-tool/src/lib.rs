@@ -51,7 +51,7 @@ use sui_core::storage::RocksDbStore;
 use sui_snapshot::reader::StateSnapshotReaderV1;
 use sui_snapshot::setup_db_state;
 use sui_storage::object_store::util::{copy_file, exists, get_path};
-use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
+use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreGetExt, ObjectStoreType};
 use sui_storage::verify_checkpoint_range;
 use sui_types::messages_checkpoint::{CheckpointCommitment, ECMHLiveObjectSetDigest};
 use sui_types::messages_grpc::{
@@ -793,6 +793,27 @@ fn start_summary_sync(
         checkpoint_store.update_highest_pruned_checkpoint(&checkpoint)?;
         Ok::<(), anyhow::Error>(())
     })
+}
+
+pub async fn get_latest_available_epoch(
+    snapshot_store_config: &ObjectStoreConfig,
+) -> Result<u64, anyhow::Error> {
+    let remote_object_store = if snapshot_store_config.no_sign_request {
+        snapshot_store_config.make_http()?
+    } else {
+        snapshot_store_config.make().map(Arc::new)?
+    };
+    let manifest_contents = remote_object_store
+        .get_bytes(&get_path(MANIFEST_FILENAME))
+        .await?;
+    let root_manifest: Manifest = serde_json::from_slice(&manifest_contents)
+        .map_err(|err| anyhow!("Error parsing MANIFEST from bytes: {}", err))?;
+    let epoch = root_manifest
+        .available_epochs
+        .iter()
+        .max()
+        .ok_or(anyhow!("No snapshot found in manifest"))?;
+    Ok(*epoch)
 }
 
 pub async fn check_completed_snapshot(
