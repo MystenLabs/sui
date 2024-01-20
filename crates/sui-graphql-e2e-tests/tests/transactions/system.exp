@@ -11,16 +11,7 @@ Response: {
           "signatures": [
             "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
           ],
-          "gasInput": {
-            "gasSponsor": {
-              "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
-            },
-            "gasPayment": {
-              "nodes": []
-            },
-            "gasPrice": "1",
-            "gasBudget": "0"
-          },
+          "gasInput": null,
           "kind": {
             "__typename": "GenesisTransaction",
             "objects": {
@@ -1308,7 +1299,28 @@ Response: {
         }
       ]
     }
-  }
+  },
+  "errors": [
+    {
+      "message": "Internal error occurred while processing request: Indexer failed to read PostgresDB with error: `current transaction is aborted, commands ignored until end of transaction block`",
+      "locations": [
+        {
+          "line": 10,
+          "column": 17
+        }
+      ],
+      "path": [
+        "transactionBlocks",
+        "nodes",
+        0,
+        "gasInput",
+        "gasPayment"
+      ],
+      "extensions": {
+        "code": "INTERNAL_SERVER_ERROR"
+      }
+    }
+  ]
 }
 
 task 3 'create-checkpoint'. lines 106-106:
@@ -1325,16 +1337,7 @@ Response: {
           "signatures": [
             "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
           ],
-          "gasInput": {
-            "gasSponsor": {
-              "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
-            },
-            "gasPayment": {
-              "nodes": []
-            },
-            "gasPrice": "1",
-            "gasBudget": "0"
-          },
+          "gasInput": null,
           "kind": {
             "__typename": "ConsensusCommitPrologueTransaction",
             "epoch": {
@@ -1395,7 +1398,28 @@ Response: {
         }
       ]
     }
-  }
+  },
+  "errors": [
+    {
+      "message": "Internal error occurred while processing request: Indexer failed to read PostgresDB with error: `current transaction is aborted, commands ignored until end of transaction block`",
+      "locations": [
+        {
+          "line": 11,
+          "column": 17
+        }
+      ],
+      "path": [
+        "transactionBlocks",
+        "nodes",
+        0,
+        "gasInput",
+        "gasPayment"
+      ],
+      "extensions": {
+        "code": "INTERNAL_SERVER_ERROR"
+      }
+    }
+  ]
 }
 
 task 6 'advance-epoch'. lines 187-187:
@@ -1412,16 +1436,7 @@ Response: {
           "signatures": [
             "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
           ],
-          "gasInput": {
-            "gasSponsor": {
-              "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
-            },
-            "gasPayment": {
-              "nodes": []
-            },
-            "gasPrice": "1",
-            "gasBudget": "0"
-          },
+          "gasInput": null,
           "kind": {
             "__typename": "EndOfEpochTransaction",
             "transactions": {
@@ -1519,5 +1534,26 @@ Response: {
         }
       ]
     }
-  }
+  },
+  "errors": [
+    {
+      "message": "Internal error occurred while processing request: Indexer failed to read PostgresDB with error: `current transaction is aborted, commands ignored until end of transaction block`",
+      "locations": [
+        {
+          "line": 10,
+          "column": 17
+        }
+      ],
+      "path": [
+        "transactionBlocks",
+        "nodes",
+        0,
+        "gasInput",
+        "gasPayment"
+      ],
+      "extensions": {
+        "code": "INTERNAL_SERVER_ERROR"
+      }
+    }
+  ]
 }

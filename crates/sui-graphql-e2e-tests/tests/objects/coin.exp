@@ -17,7 +17,7 @@ Response: {
     "suiCoins": {
       "edges": [
         {
-          "cursor": "IC/ODiKvEk37J2+SHdOXOh0tj3+kKyMTQRJIm4g7eZSB",
+          "cursor": "IC/ODiKvEk37J2+SHdOXOh0tj3+kKyMTQRJIm4g7eZSBAAAAAAAAAAA=",
           "node": {
             "balance": "300000000000000",
             "asMoveObject": {
@@ -30,7 +30,7 @@ Response: {
           }
         },
         {
-          "cursor": "IIUF8I/vAPTSS4QFLI2mNoFN4DnGALfzAwuahN/pVrxb",
+          "cursor": "IIUF8I/vAPTSS4QFLI2mNoFN4DnGALfzAwuahN/pVrxbAQAAAAAAAAA=",
           "node": {
             "balance": "299999983336400",
             "asMoveObject": {
@@ -43,7 +43,7 @@ Response: {
           }
         },
         {
-          "cursor": "IMuoUJrAqPQolyrJOQDQP8MtinwxMmIaikWg2Um7ZZSU",
+          "cursor": "IMuoUJrAqPQolyrJOQDQP8MtinwxMmIaikWg2Um7ZZSUAAAAAAAAAAA=",
           "node": {
             "balance": "30000000000000000",
             "asMoveObject": {
@@ -60,7 +60,7 @@ Response: {
     "fakeCoins": {
       "edges": [
         {
-          "cursor": "IF1ymdLegVciBXLBI6Y6HdJ/5hQguKpAgAKnTCcgbvhv",
+          "cursor": "IF1ymdLegVciBXLBI6Y6HdJ/5hQguKpAgAKnTCcgbvhvAQAAAAAAAAA=",
           "node": {
             "balance": "2",
             "asMoveObject": {
@@ -73,7 +73,7 @@ Response: {
           }
         },
         {
-          "cursor": "IIoI4sKegbEz05/HKKtUr5Jh5xsjZNdTBMhXLyAvY0x8",
+          "cursor": "IIoI4sKegbEz05/HKKtUr5Jh5xsjZNdTBMhXLyAvY0x8AQAAAAAAAAA=",
           "node": {
             "balance": "1",
             "asMoveObject": {
@@ -86,7 +86,7 @@ Response: {
           }
         },
         {
-          "cursor": "IP3OtufdP1lIpko4Gdw3YAOc+hhMq2YIBWFuGKP3luxj",
+          "cursor": "IP3OtufdP1lIpko4Gdw3YAOc+hhMq2YIBWFuGKP3luxjAQAAAAAAAAA=",
           "node": {
             "balance": "3",
             "asMoveObject": {
@@ -104,7 +104,7 @@ Response: {
       "coins": {
         "edges": [
           {
-            "cursor": "IIUF8I/vAPTSS4QFLI2mNoFN4DnGALfzAwuahN/pVrxb",
+            "cursor": "IIUF8I/vAPTSS4QFLI2mNoFN4DnGALfzAwuahN/pVrxbAQAAAAAAAAA=",
             "node": {
               "balance": "299999983336400",
               "asMoveObject": {

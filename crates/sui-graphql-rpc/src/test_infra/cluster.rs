@@ -240,4 +240,11 @@ impl ExecutorCluster {
         .await
         .expect("Timeout waiting for indexer to update objects snapshot");
     }
+
+    pub async fn force_objects_snapshot_catchup(&self, start_cp: u64, end_cp: u64) {
+        self.indexer_store
+            .persist_object_snapshot(start_cp, end_cp)
+            .await
+            .expect("Failed to create objects snapshot");
+    }
 }
