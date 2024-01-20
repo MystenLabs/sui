@@ -12,8 +12,49 @@ const OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG: usize = 300;
 pub struct ObjectsSnapshotProcessor<S> {
     pub store: S,
     metrics: IndexerMetrics,
+    pub config: SnapshotLagConfig,
+}
+
+#[derive(Clone)]
+pub struct SnapshotLagConfig {
     pub snapshot_min_lag: usize,
     pub snapshot_max_lag: usize,
+    pub sleep_duration: u64,
+}
+
+impl SnapshotLagConfig {
+    pub fn new(
+        min_lag: Option<usize>,
+        max_lag: Option<usize>,
+        sleep_duration: Option<u64>,
+    ) -> Self {
+        let default_config = Self::default();
+        Self {
+            snapshot_min_lag: min_lag.unwrap_or(default_config.snapshot_min_lag),
+            snapshot_max_lag: max_lag.unwrap_or(default_config.snapshot_max_lag),
+            sleep_duration: sleep_duration.unwrap_or(default_config.sleep_duration),
+        }
+    }
+}
+
+impl Default for SnapshotLagConfig {
+    fn default() -> Self {
+        let snapshot_min_lag = std::env::var("OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG")
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG);
+
+        let snapshot_max_lag = std::env::var("OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG")
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG);
+
+        SnapshotLagConfig {
+            snapshot_min_lag,
+            snapshot_max_lag,
+            sleep_duration: 5,
+        }
+    }
 }
 
 impl<S> ObjectsSnapshotProcessor<S>
@@ -21,23 +62,22 @@ where
     S: IndexerStoreV2 + Clone + Sync + Send + 'static,
 {
     pub fn new(store: S, metrics: IndexerMetrics) -> ObjectsSnapshotProcessor<S> {
-        let snapshot_min_lag = std::env::var("OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG")
-            .map(|s| {
-                s.parse::<usize>()
-                    .unwrap_or(OBJECTS_SNAPSHOT_MIN_CHECKPOINT_LAG)
-            })
-            .unwrap_or(0);
-        let snapshot_max_lag = std::env::var("OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG")
-            .map(|s| {
-                s.parse::<usize>()
-                    .unwrap_or(OBJECTS_SNAPSHOT_MAX_CHECKPOINT_LAG)
-            })
-            .unwrap_or(0);
         Self {
             store,
             metrics,
-            snapshot_min_lag,
-            snapshot_max_lag,
+            config: SnapshotLagConfig::default(),
+        }
+    }
+
+    pub fn new_with_config(
+        store: S,
+        metrics: IndexerMetrics,
+        config: SnapshotLagConfig,
+    ) -> ObjectsSnapshotProcessor<S> {
+        Self {
+            store,
+            metrics,
+            config,
         }
     }
 
@@ -64,7 +104,8 @@ where
             latest_snapshot_cp + 1
         };
         // with MAX and MIN, the CSR range will vary from MIN cps to MAX cps
-        let snapshot_window = self.snapshot_max_lag as u64 - self.snapshot_min_lag as u64;
+        let snapshot_window =
+            self.config.snapshot_max_lag as u64 - self.config.snapshot_min_lag as u64;
         let mut latest_cp = self
             .store
             .get_latest_tx_checkpoint_sequence_number()
@@ -72,7 +113,7 @@ where
             .unwrap_or_default();
 
         loop {
-            while latest_cp <= start_cp + self.snapshot_max_lag as u64 {
+            while latest_cp <= start_cp + self.config.snapshot_max_lag as u64 {
                 tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                 latest_cp = self
                     .store

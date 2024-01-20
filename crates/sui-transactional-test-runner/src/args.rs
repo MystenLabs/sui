@@ -60,6 +60,10 @@ pub struct SuiInitArgs {
     pub reference_gas_price: Option<u64>,
     #[clap(long = "default-gas-price")]
     pub default_gas_price: Option<u64>,
+    #[clap(long = "object-snapshot-min-checkpoint-lag")]
+    pub object_snapshot_min_checkpoint_lag: Option<usize>,
+    #[clap(long = "object-snapshot-max-checkpoint-lag")]
+    pub object_snapshot_max_checkpoint_lag: Option<usize>,
 }
 
 #[derive(Debug, clap::Parser)]
