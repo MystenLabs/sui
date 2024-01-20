@@ -3,4 +3,160 @@ title: Escrow
 draft: true
 ---
 
-Content coming soon
+This guide demonstrates an atomic swap, which does not require a trusted third party, by utilizing a [shared object](/concepts/object-ownership/shared) as an escrow. Shared objects are a unique concept to Sui. They are able to be modified by any transaction and by any signer, given they meet the requirements set forth by the transaction. For more information on shared objects versus owned objects, see [here](/guides/developer/sui-101/shared-owned).
+
+In addition to the smart contract, this example also includes:
+
+- A frontend for people to list object for sale and to accept trades
+- A service that indexes chain state in order to discover trades
+
+## Prerequisites
+
+Before getting started, make sure you have:
+
+- [Installed the latest version of Sui](/guides/developer/getting-started/sui-install).
+- [Configured a valid network environment](/references/cli/client#set-current-environment), as we will be deploying the module on testnet.
+
+## Backend
+
+This particular protocol consists of three phases:
+
+1. One party `lock`s their object, obtaining a `Locked` object and its `Key`. This party can `unlock` their object to preserve liveness if the other party stalls before completing the second stage.
+2. The other party registers a publicly accessible, shared `Escrow` object. This effectively locks their object at a particular version as well, waiting for the first party to complete the swap. The second party is able to request their object is returned to them, to preserve liveness as well.
+3. The first party sends their locked object and its key to the shared `Escrow` object. This completes the swap, as long as all conditions are met: The sender of the swap transaction is the recipient of the `Escrow`, the key of the desired object (`exchange_key`) in the escrow matches the key supplied in the swap, and the key supplied in the swap unlocks the `Locked<U>`.
+
+Let’s create a Sui project using the terminal command `sui move new escrow`. Create a file in the sources directory named `shared.move`, and let’s go through the code together.
+
+See [this](https://github.com/MystenLabs/sui/blob/main/examples/move/escrow/sources/shared.move) for the complete code.
+
+### `shared.move`
+
+Let's go through the code line by line:
+
+#### Structs
+
+##### `Escrow<T>`
+
+This struct represents an object held in escrow. It contains the following fields:
+
+- `id`: Unique identifier for the escrow object.
+- `sender`: Address of the owner of the `escrowed` object.
+- `recipient`: Intended recipient of the `escrowed` object.
+- `exchange_key`: ID of the key that opens the lock on the object sender wants from the recipient.
+- `escrowed`: The actual object held in escrow.
+
+```move
+struct Escrow<T: key + store> has key, store {
+   id: UID,
+   sender: address,
+   recipient: address,
+   exchange_key: ID,
+   escrowed: T,
+}
+```
+
+#### Error Codes
+
+Two constants are defined to represent potential errors during the execution of the swap:
+
+- `EMismatchedSenderRecipient`: The `sender` and `recipient` of the two escrowed objects do not match.
+- `EMismatchedExchangeObject`: The `exchange_for` fields of the two escrowed objects do not match.
+
+```move
+const EMismatchedSenderRecipient: u64 = 0;
+const EMismatchedExchangeObject: u64 = 1;
+```
+
+#### Public Functions
+
+##### `create`
+
+This function is used to create a new escrow object. It takes four arguments: the object to be escrowed, the ID of the key that opens the lock on the object sender wants from the recipient, the intended recipient, and the transaction context.
+
+```move
+public fun create<T: key + store>(
+   escrowed: T,
+   exchange_key: ID,
+   recipient: address,
+   ctx: &mut TxContext
+) {
+   let escrow = Escrow {
+       id: object::new(ctx),
+       sender: tx_context::sender(ctx),
+       recipient,
+       exchange_key,
+       escrowed,
+   };
+
+   transfer::public_share_object(escrow);
+}
+```
+
+##### `swap`
+
+This function is used to perform the swap operation. It takes four arguments: the escrow object, the key, the locked object, and the transaction context.
+
+```move
+public fun swap<T: key + store, U: key + store>(
+   escrow: Escrow<T>,
+   key: Key,
+   locked: Locked<U>,
+   ctx: &TxContext,
+): T {
+   let Escrow {
+       id,
+       sender,
+       recipient,
+       exchange_key,
+       escrowed,
+   } = escrow;
+
+   assert!(recipient == tx_context::sender(ctx), EMismatchedSenderRecipient);
+   assert!(exchange_key == object::id(&key), EMismatchedExchangeObject);
+
+   // Do the actual swap
+   transfer::public_transfer(lock::unlock(locked, key), sender);
+   object::delete(id);
+
+   escrowed
+}
+```
+
+##### `return_to_sender`
+
+This function is used to cancel the escrow and return the escrowed item to the sender. It takes two arguments: the escrow object and the transaction context.
+
+```move
+public fun return_to_sender<T: key + store>(
+   escrow: Escrow<T>,
+   ctx: &TxContext
+): T {
+   let Escrow {
+       id,
+       sender,
+       recipient: _,
+       exchange_key: _,
+       escrowed,
+   } = escrow;
+
+   assert!(sender == tx_context::sender(ctx), EMismatchedSenderRecipient);
+   object::delete(id);
+   escrowed
+}
+```
+
+#### Tests
+
+The code includes several tests to ensure the correct functioning of the atomic swap process. These tests cover successful swaps, mismatches in sender or recipient, mismatches in the exchange object, tampering with the object, and returning the object to the sender.
+
+In conclusion, this code provides a robust and secure way to perform atomic swaps of objects in a decentralized system, without the need for a trusted third party. It uses shared objects and a series of checks to ensure that the swap only occurs if all conditions are met.
+
+#### Deployment
+
+Now that we have written the smart contract, let’s deploy it. First ensure the contract compiles successfully using `sui move build`. Once that is confirmed, you can deploy the project using the command `sui client publish --gas-budget 10000000`.
+
+## Frontend
+With our code successfully deployed on testnet, we should now allow users to interact with it via a frontend.
+
+## Indexing Service
+In order to have our dApp production ready, we need to have an indexer listening to the blockchain, and updating the frontend as escrows are made and swaps are fulfilled.
