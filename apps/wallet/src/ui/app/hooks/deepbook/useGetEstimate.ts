@@ -354,5 +354,6 @@ export function useGetEstimate({
 			!!signer &&
 			!!activeAddress,
 		retry: ESTIMATE_RETRY_COUNT,
+		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
 	});
 }
