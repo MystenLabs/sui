@@ -6,6 +6,7 @@ use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
+use crate::types::owner::IOwner;
 use crate::{
     config::ServerConfig,
     context_data::db_data_provider::PgManager,
@@ -70,7 +71,8 @@ impl ServerBuilder {
         Self {
             port,
             host,
-            schema: async_graphql::Schema::build(Query, Mutation, EmptySubscription),
+            schema: async_graphql::Schema::build(Query, Mutation, EmptySubscription)
+                .register_output_type::<IOwner>(),
             router: None,
             metrics,
         }
@@ -253,6 +255,16 @@ impl ServerBuilder {
 
         Ok(builder)
     }
+}
+
+fn schema_builder() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
+    async_graphql::Schema::build(Query, Mutation, EmptySubscription)
+        .register_output_type::<IOwner>()
+}
+
+/// Return the string representation of the schema used by this server.
+pub fn export_schema() -> String {
+    schema_builder().finish().sdl()
 }
 
 async fn graphql_handler(
