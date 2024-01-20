@@ -1884,22 +1884,21 @@ input ObjectKey {
 
 enum ObjectKind {
 	"""
-	NOT_INDEXED: the object is loaded from serialized data, such as the contents of a
-	transaction.
+	The object is loaded from serialized data, such as the contents of a transaction.
 	"""
 	NOT_INDEXED
 	"""
-	LIVE: the object is currently live and is not deleted or wrapped.
+	The object is currently live and is not deleted or wrapped.
 	"""
 	LIVE
 	"""
-	HISTORICAL: the object is referenced at some version, and thus is fetched from the snapshot
-	or historical objects table.
+	The object is referenced at some version, and thus is fetched from the snapshot or
+	historical objects table.
 	"""
 	HISTORICAL
 	"""
-	WRAPPED_OR_DELETED: The object is deleted or wrapped and only partial information can be
-	loaded from the indexer.
+	The object is deleted or wrapped and only partial information can be loaded from the
+	indexer.
 	"""
 	WRAPPED_OR_DELETED
 }
