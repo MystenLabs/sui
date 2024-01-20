@@ -277,7 +277,6 @@ export function useGetEstimate({
 				op: 'get-estimate',
 				data: {
 					coinType,
-					activeAddress,
 					isAsk,
 					swapAmount: amount,
 					maxAvailableBalanceToSwap: isAsk ? totalBaseBalance : totalQuoteBalance,
