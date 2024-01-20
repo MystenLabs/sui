@@ -14,7 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 
 const MAX_COINS_PER_REQUEST = 10;
-const ESTIMATE_RETRY_COUNT = 10;
+const ESTIMATE_RETRY_COUNT = 3;
 const NUMBER_EXPECTED_BALANCE_CHANGES = 3;
 
 async function getCoinsByBalance({
@@ -340,9 +340,7 @@ export function useGetEstimate({
 				Sentry.captureException(error);
 				throw error;
 			} finally {
-				if (amount) {
-					sentryTransaction.finish();
-				}
+				sentryTransaction.finish();
 			}
 		},
 		enabled:
@@ -352,8 +350,8 @@ export function useGetEstimate({
 			!!quoteBalance &&
 			quoteBalance !== '0' &&
 			!!signer &&
-			!!activeAddress,
+			!!activeAddress &&
+			!!amount,
 		retry: ESTIMATE_RETRY_COUNT,
-		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
 	});
 }
