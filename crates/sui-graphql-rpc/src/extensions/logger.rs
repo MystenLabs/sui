@@ -51,6 +51,8 @@ struct LoggerExtension {
 
 #[async_trait::async_trait]
 impl Extension for LoggerExtension {
+    // This hook is used to get the top level node name for recording in the metrics which top
+    // level nodes are being called.
     async fn resolve(
         &self,
         ctx: &ExtensionContext<'_>,
@@ -137,12 +139,12 @@ impl Extension for LoggerExtension {
                         }
                     }
 
-                    if let Some(async_graphql_value::ConstValue::String(val)) = error_code {
-                        if val.as_str() == code::INTERNAL_SERVER_ERROR {
+                    if let Some(async_graphql_value::ConstValue::String(error_code)) = error_code {
+                        if error_code.as_str() == code::INTERNAL_SERVER_ERROR {
                             error!(
                                 query_id,
                                 session_id,
-                                error_code = val,
+                                error_code,
                                 "[Response] path={} message={}",
                                 path,
                                 err.message,
@@ -151,7 +153,7 @@ impl Extension for LoggerExtension {
                             info!(
                                 query_id,
                                 session_id,
-                                error_code = val,
+                                error_code,
                                 "[Response] path={} message={}",
                                 path,
                                 err.message,
@@ -162,16 +164,27 @@ impl Extension for LoggerExtension {
                             query_id,
                             session_id,
                             error_code = code::UNKNOWN,
-                            "[Response] message={}",
+                            "[Response] path={} message={}",
+                            path,
                             err.message,
                         );
                     }
+                } else {
+                    let error_code = if let Some(error_code) = error_code {
+                        error_code.to_string()
+                    } else {
+                        code::UNKNOWN.to_string()
+                    };
+                    info!(
+                        query_id,
+                        session_id, error_code, "[Response] message={}", err.message
+                    )
                 }
             }
         } else if self.config.log_response {
             match operation_name {
                 Some("IntrospectionQuery") => {
-                    debug!(query_id, session_id, "[Response] {}", resp.data);
+                    debug!(query_id, session_id, "[Schema] {}", resp.data);
                 }
                 _ => info!(query_id, session_id, "[Response] {}", resp.data),
             }

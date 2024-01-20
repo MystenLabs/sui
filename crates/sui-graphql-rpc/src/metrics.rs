@@ -9,7 +9,6 @@ use prometheus::{
     register_gauge_with_registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry, Gauge, IntCounter, IntCounterVec, Registry,
 };
-use std::fmt::Write;
 
 use crate::error::code;
 
@@ -101,36 +100,16 @@ impl Metrics {
                 if let Some(async_graphql_value::ConstValue::String(val)) = ext.get("code") {
                     self.request_metrics
                         .num_errors
-                        .with_label_values(&[&self.get_query_path_on_error(err.path), val])
+                        .with_label_values(&[query_label_for_error(&err.path).as_str(), val])
                         .inc();
                 }
             } else {
                 self.request_metrics
                     .num_errors
-                    .with_label_values(&[&self.get_query_path_on_error(err.path), code::UNKNOWN])
+                    .with_label_values(&[query_label_for_error(&err.path).as_str(), code::UNKNOWN])
                     .inc();
             }
         }
-    }
-
-    /// When an error occurs, GraphQL returns a vector of PathSegments,
-    /// that we can use to construct a simplified path to the actual error.
-    pub(crate) fn get_query_path_on_error(&self, query: Vec<PathSegment>) -> String {
-        let mut path = String::new();
-        for (idx, s) in query.iter().enumerate() {
-            if idx > 0 {
-                path.push('.');
-            }
-            match s {
-                PathSegment::Index(idx) => {
-                    let _ = write!(&mut path, "{}", idx);
-                }
-                PathSegment::Field(name) => {
-                    let _ = write!(&mut path, "{}", name);
-                }
-            }
-        }
-        path
     }
 }
 
@@ -226,5 +205,26 @@ impl RequestMetrics {
             )
             .unwrap(),
         }
+    }
+}
+
+/// When an error occurs, GraphQL returns a vector of PathSegments,
+/// that we can use to retrieve the last node which contains the error.
+pub(crate) fn query_label_for_error(query: &[PathSegment]) -> String {
+    let fields: Vec<_> = query
+        .iter()
+        .filter_map(|s| {
+            if let PathSegment::Field(name) = s {
+                Some(name)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    match &fields[..] {
+        [] => "".to_string(),
+        [seg] => format!("{}", seg),
+        [fst, .., lst] => format!("{fst}..{lst}"),
     }
 }
