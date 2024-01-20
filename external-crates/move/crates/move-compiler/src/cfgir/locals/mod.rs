@@ -222,9 +222,7 @@ fn lvalue(context: &mut Context, sp!(loc, l_): &LValue) {
                         match display_var(v.value()) {
                             DisplayVar::Tmp => {
                                 let msg = format!(
-                                    "This expression {} a value without the '{}' ability \
-                                    which must be used",
-                                    verb,
+                                    "This expression without the '{}' ability must be used",
                                     Ability_::Drop,
                                 );
                                 let mut diag = diag!(

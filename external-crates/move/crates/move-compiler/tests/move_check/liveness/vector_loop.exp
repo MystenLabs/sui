@@ -9,7 +9,7 @@ error[E06001]: unused value without 'drop'
    │                                                            │
    │                                                            Invalid usage of undroppable value
    │                                                            The type 'a::m::User' does not have the ability 'drop'
-   │                                                            This expression might contain a value without the 'drop' ability which must be used
+   │                                                            This expression without the 'drop' ability must be used
 
 error[E06001]: unused value without 'drop'
    ┌─ tests/move_check/liveness/vector_loop.move:25:9
