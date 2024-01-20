@@ -658,11 +658,13 @@ impl Object {
                             left.single_value()
                                 .is_null()
                                 .or(history::checkpoint_sequence_number
-                                    .ge(left.single_value().assume_not_null())),
+                                    .nullable()
+                                    .ge(left.single_value())),
                         )
                         .filter(
                             history::checkpoint_sequence_number
-                                .le(right.single_value().assume_not_null()),
+                                .nullable()
+                                .le(right.single_value()),
                         );
 
                     snapshot_query.union(historical_query)
@@ -721,7 +723,8 @@ impl Object {
                         left.single_value()
                             .is_null()
                             .or(history::checkpoint_sequence_number
-                                .ge(left.single_value().assume_not_null())),
+                                .nullable()
+                                .ge(left.single_value())),
                     );
 
                     historical_query = historical_query
