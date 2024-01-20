@@ -5672,8 +5672,8 @@
               }
             ]
           },
-          "showRawTxnData": {
-            "description": "Whether to return the raw transaction data.",
+          "showRawTxnDataAndEffects": {
+            "description": "Whether to return the raw transaction data and effects.",
             "type": [
               "boolean",
               "null"
@@ -5716,6 +5716,15 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Event"
+            }
+          },
+          "rawEffects": {
+            "description": "The raw effects of the transaction that was dev inspected.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
             }
           },
           "rawTxnData": {

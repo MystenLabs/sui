@@ -1612,7 +1612,7 @@ impl AuthorityState {
         gas_budget: Option<u64>,
         gas_sponsor: Option<SuiAddress>,
         gas_objects: Option<Vec<ObjectRef>>,
-        show_raw_txn_data: Option<bool>,
+        show_raw_txn_data_and_effects: Option<bool>,
         skip_checks: Option<bool>,
     ) -> SuiResult<DevInspectResults> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
@@ -1629,7 +1629,7 @@ impl AuthorityState {
             });
         }
 
-        let show_raw_txn_data = show_raw_txn_data.unwrap_or(false);
+        let show_raw_txn_data_and_effects = show_raw_txn_data_and_effects.unwrap_or(false);
         let skip_checks = skip_checks.unwrap_or(true);
         let reference_gas_price = epoch_store.reference_gas_price();
         let protocol_config = epoch_store.protocol_config();
@@ -1652,7 +1652,7 @@ impl AuthorityState {
             expiration: TransactionExpiration::None,
         });
 
-        let raw_txn_data = if show_raw_txn_data {
+        let raw_txn_data = if show_raw_txn_data_and_effects {
             bcs::to_bytes(&transaction).map_err(|_| SuiError::TransactionSerializationError {
                 error: "Failed to serialize transaction during dev inspect".to_string(),
             })?
@@ -1777,6 +1777,14 @@ impl AuthorityState {
             skip_checks,
         );
 
+        let raw_effects = if show_raw_txn_data_and_effects {
+            bcs::to_bytes(&effects).map_err(|_| SuiError::TransactionSerializationError {
+                error: "Failed to serialize transaction effects during dev inspect".to_string(),
+            })?
+        } else {
+            vec![]
+        };
+
         let package_store = TemporaryPackageStore::new(&inner_temp_store, self.database.clone());
 
         let mut layout_resolver = epoch_store
@@ -1788,6 +1796,7 @@ impl AuthorityState {
             inner_temp_store.events.clone(),
             execution_result,
             raw_txn_data,
+            raw_effects,
             layout_resolver.as_mut(),
         )
     }
