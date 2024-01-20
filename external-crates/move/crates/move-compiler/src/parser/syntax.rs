@@ -2851,6 +2851,12 @@ fn parse_use_alias(context: &mut Context) -> Result<Option<Name>, Box<Diagnostic
 //                  )
 //              )*
 //          "}"
+//
+// Due to parsing error recovery, while parsing a module the parser may advance past the end of the
+// current module and encounter the next module which also should be parsed. At the point of
+// encountering this next module's starting keyword, its (optional) attributes are already parsed
+// and should be used when constructing this next module - hence making them part of the returned
+// result.
 fn parse_module(
     attributes: Vec<Attributes>,
     context: &mut Context,
@@ -2977,6 +2983,11 @@ fn is_start_of_next_member_or_module_or_eof(tok: Tok, content: &str) -> bool {
     }
 }
 
+/// Parse a single module member. Due to parsing error recovery, when attempting to parse the next
+/// module member, the parser may have already advanced past the end of the current module and
+/// encounter the next module which also should be parsed. While this is a member parsing error,
+/// (optional) attributes for this presumed member (but in fact the next module) had already been
+/// parsed and should be returned as part of the result to allow further parsing of the next module.
 fn parse_module_member(
     context: &mut Context,
 ) -> Result<ModuleMember, (Box<Diagnostic>, Option<Vec<Attributes>>)> {
