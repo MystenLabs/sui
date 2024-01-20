@@ -6,11 +6,12 @@ use async_graphql::{
     connection::{Connection, ConnectionNameType, CursorType, Edge, EdgeNameType, EmptyFields},
     *,
 };
-use either::Either;
 use sui_indexer::models_v2::transactions::StoredTransaction;
 use sui_types::{
     effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
+    event::Event as NativeEvent,
     execution_status::ExecutionStatus as NativeExecutionStatus,
+    transaction::SenderSignedData as NativeSenderSignedData,
     transaction::TransactionData as NativeTransactionData,
 };
 
@@ -22,6 +23,7 @@ use super::{
     date_time::DateTime,
     digest::Digest,
     epoch::Epoch,
+    event::Event,
     gas::GasEffects,
     object_change::ObjectChange,
     transaction_block::TransactionBlock,
@@ -29,13 +31,27 @@ use super::{
 };
 
 #[derive(Clone)]
-pub(crate) struct TransactionBlockEffects {
-    /// Representation of transaction effects in the Indexer's Store or
-    /// the native representation of transaction effects.
-    pub tx_data: Either<StoredTransaction, NativeTransactionData>,
-
-    /// Deserialized representation of `stored.raw_effects`.
-    pub native: NativeTransactionEffects,
+pub(crate) enum TransactionBlockEffects {
+    /// A transaction that has been indexed and stored in the database,
+    /// containing all information that the other two variants have, and more.
+    Stored {
+        stored_tx: StoredTransaction,
+        native: NativeTransactionEffects,
+    },
+    /// A transaction block that has been executed via executeTransactionBlock
+    /// but not yet indexed. So it does not contain checkpoint, timestamp or balanceChanges.
+    Executed {
+        tx_data: NativeSenderSignedData,
+        native: NativeTransactionEffects,
+        events: Vec<NativeEvent>,
+    },
+    /// A transaction block that has been executed via dryRunTransactionBlock. Similar to
+    /// Executed, it does not contain checkpoint, timestamp or balanceChanges.
+    DryRun {
+        tx_data: NativeTransactionData,
+        native: NativeTransactionEffects,
+        events: Vec<NativeEvent>,
+    },
 }
 
 /// The execution status of this transaction block: success or failure.
@@ -51,26 +67,23 @@ pub enum ExecutionStatus {
 /// therefore must be a different types to the default `TransactionBlockConnection`).
 struct DependencyConnectionNames;
 
-pub(crate) type CDependencies = JsonCursor<usize>;
-pub(crate) type CUnchangedSharedObject = JsonCursor<usize>;
-pub(crate) type CObjectChange = JsonCursor<usize>;
-pub(crate) type CBalanceChange = JsonCursor<usize>;
+type CDependencies = JsonCursor<usize>;
+type CUnchangedSharedObject = JsonCursor<usize>;
+type CObjectChange = JsonCursor<usize>;
+type CBalanceChange = JsonCursor<usize>;
+type CEvent = JsonCursor<usize>;
 
 /// The effects representing the result of executing a transaction block.
 #[Object]
 impl TransactionBlockEffects {
     /// The transaction that ran to produce these effects.
     async fn transaction_block(&self) -> Result<Option<TransactionBlock>> {
-        self.tx_data
-            .as_ref()
-            .left()
-            .map(|stored_tx| TransactionBlock::try_from(stored_tx.clone()).extend())
-            .transpose()
+        Ok(Some(self.clone().try_into().extend()?))
     }
 
     /// Whether the transaction executed successfully or not.
     async fn status(&self) -> Option<ExecutionStatus> {
-        Some(match self.native.status() {
+        Some(match self.native().status() {
             NativeExecutionStatus::Success => ExecutionStatus::Success,
             NativeExecutionStatus::Failure { .. } => ExecutionStatus::Failure,
         })
@@ -79,12 +92,12 @@ impl TransactionBlockEffects {
     /// The latest version of all objects (apart from packages) that have been created or modified
     /// by this transaction, immediately following this transaction.
     async fn lamport_version(&self) -> u64 {
-        self.native.lamport_version().value()
+        self.native().lamport_version().value()
     }
 
     /// The reason for a transaction failure, if it did fail.
     async fn errors(&self) -> Option<String> {
-        match self.native.status() {
+        match self.native().status() {
             NativeExecutionStatus::Success => None,
 
             NativeExecutionStatus::Failure {
@@ -131,7 +144,7 @@ impl TransactionBlockEffects {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let mut connection = Connection::new(false, false);
 
-        let dependencies = self.native.dependencies();
+        let dependencies = self.native().dependencies();
 
         let Some((prev, next, cs)) = page.paginate_indices(dependencies.len()) else {
             return Ok(connection);
@@ -173,7 +186,7 @@ impl TransactionBlockEffects {
 
     /// Effects to the gas object.
     async fn gas_effects(&self) -> Option<GasEffects> {
-        Some(GasEffects::from(&self.native))
+        Some(GasEffects::from(self.native()))
     }
 
     /// Shared objects that are referenced by but not changed by this transaction.
@@ -188,7 +201,7 @@ impl TransactionBlockEffects {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let mut connection = Connection::new(false, false);
 
-        let input_shared_objects = self.native.input_shared_objects();
+        let input_shared_objects = self.native().input_shared_objects();
 
         let Some((prev, next, cs)) = page.paginate_indices(input_shared_objects.len()) else {
             return Ok(connection);
@@ -224,7 +237,7 @@ impl TransactionBlockEffects {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let mut connection = Connection::new(false, false);
 
-        let object_changes = self.native.object_changes();
+        let object_changes = self.native().object_changes();
 
         let Some((prev, next, cs)) = page.paginate_indices(object_changes.len()) else {
             return Ok(connection);
@@ -259,7 +272,7 @@ impl TransactionBlockEffects {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let mut connection = Connection::new(false, false);
 
-        let Some(stored_tx) = self.tx_data.as_ref().left() else {
+        let Self::Stored { stored_tx, .. } = self else {
             return Ok(connection);
         };
 
@@ -284,25 +297,63 @@ impl TransactionBlockEffects {
         Ok(connection)
     }
 
+    /// Events emitted by this transaction block.
+    async fn events(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CEvent>,
+        last: Option<u64>,
+        before: Option<CEvent>,
+    ) -> Result<Connection<String, Event>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        let mut connection = Connection::new(false, false);
+        let len = match self {
+            Self::Stored { stored_tx, .. } => stored_tx.events.len(),
+            Self::Executed { events, .. } | Self::DryRun { events, .. } => events.len(),
+        };
+        let Some((prev, next, cs)) = page.paginate_indices(len) else {
+            return Ok(connection);
+        };
+
+        connection.has_previous_page = prev;
+        connection.has_next_page = next;
+
+        for c in cs {
+            let event = match self {
+                Self::Stored { stored_tx, .. } => {
+                    Event::try_from_stored_transaction(stored_tx, *c).extend()?
+                }
+                Self::Executed { events, .. } | Self::DryRun { events, .. } => Event {
+                    stored: None,
+                    native: events[*c].clone(),
+                },
+            };
+            connection.edges.push(Edge::new(c.encode_cursor(), event));
+        }
+
+        Ok(connection)
+    }
+
     /// Timestamp corresponding to the checkpoint this transaction was finalized in.
     async fn timestamp(&self) -> Result<Option<DateTime>, Error> {
-        self.tx_data
-            .as_ref()
-            .left()
-            .map(|ts| DateTime::from_ms(ts.timestamp_ms))
-            .transpose()
+        let Self::Stored { stored_tx, .. } = self else {
+            return Ok(None);
+        };
+        Ok(Some(DateTime::from_ms(stored_tx.timestamp_ms)?))
     }
 
     /// The epoch this transaction was finalized in.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(ctx.data_unchecked(), Some(self.native.executed_epoch()))
+        Epoch::query(ctx.data_unchecked(), Some(self.native().executed_epoch()))
             .await
             .extend()
     }
 
     /// The checkpoint this transaction was finalized in.
     async fn checkpoint(&self, ctx: &Context<'_>) -> Result<Option<Checkpoint>> {
-        let Some(stored_tx) = self.tx_data.as_ref().left() else {
+        // If the transaction data is not a stored transaction, it's not in the checkpoint yet so we return None.
+        let Self::Stored { stored_tx, .. } = self else {
             return Ok(None);
         };
 
@@ -318,15 +369,25 @@ impl TransactionBlockEffects {
 
     /// Base64 encoded bcs serialization of the on-chain transaction effects.
     async fn bcs(&self) -> Result<Base64> {
-        let bytes = if let Some(stored) = self.tx_data.as_ref().left() {
-            stored.raw_effects.clone()
+        let bytes = if let Self::Stored { stored_tx, .. } = self {
+            stored_tx.raw_effects.clone()
         } else {
-            bcs::to_bytes(&self.native)
+            bcs::to_bytes(&self.native())
                 .map_err(|e| Error::Internal(format!("Error serializing transaction effects: {e}")))
                 .extend()?
         };
 
         Ok(Base64::from(bytes))
+    }
+}
+
+impl TransactionBlockEffects {
+    fn native(&self) -> &NativeTransactionEffects {
+        match self {
+            TransactionBlockEffects::Stored { native, .. } => native,
+            TransactionBlockEffects::Executed { native, .. } => native,
+            TransactionBlockEffects::DryRun { native, .. } => native,
+        }
     }
 }
 
@@ -342,17 +403,39 @@ impl EdgeNameType for DependencyConnectionNames {
     }
 }
 
-impl TryFrom<StoredTransaction> for TransactionBlockEffects {
+impl TryFrom<TransactionBlock> for TransactionBlockEffects {
     type Error = Error;
 
-    fn try_from(stored: StoredTransaction) -> Result<Self, Error> {
-        let native = bcs::from_bytes(&stored.raw_effects).map_err(|e| {
-            Error::Internal(format!("Error deserializing transaction effects: {e}"))
-        })?;
+    fn try_from(block: TransactionBlock) -> Result<Self, Error> {
+        match block {
+            TransactionBlock::Stored { stored_tx, .. } => {
+                let native = bcs::from_bytes(&stored_tx.raw_effects).map_err(|e| {
+                    Error::Internal(format!("Error deserializing transaction effects: {e}"))
+                })?;
 
-        Ok(TransactionBlockEffects {
-            tx_data: Either::Left(stored),
-            native,
-        })
+                Ok(TransactionBlockEffects::Stored {
+                    stored_tx: stored_tx.clone(),
+                    native,
+                })
+            }
+            TransactionBlock::Executed {
+                tx_data,
+                effects,
+                events,
+            } => Ok(TransactionBlockEffects::Executed {
+                tx_data,
+                native: effects,
+                events,
+            }),
+            TransactionBlock::DryRun {
+                tx_data,
+                effects,
+                events,
+            } => Ok(TransactionBlockEffects::DryRun {
+                tx_data,
+                native: effects,
+                events,
+            }),
+        }
     }
 }

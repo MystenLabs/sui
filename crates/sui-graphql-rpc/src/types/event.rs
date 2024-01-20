@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
 use super::cursor::{self, Page, Target};
 use super::digest::Digest;
 use super::type_filter::{ModuleFilter, TypeFilter};
@@ -16,9 +18,10 @@ use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl};
 use serde::{Deserialize, Serialize};
 use sui_indexer::models_v2::{events::StoredEvent, transactions::StoredTransaction};
 use sui_indexer::schema_v2::{events, transactions, tx_senders};
+use sui_types::base_types::ObjectID;
+use sui_types::Identifier;
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress, event::Event as NativeEvent, parse_sui_struct_tag,
-    TypeTag,
 };
 
 /// A Sui node emits one of the following events:
@@ -28,8 +31,10 @@ use sui_types::{
 /// Delete object event
 /// New object event
 /// Epoch change event
+#[derive(Clone, Debug)]
 pub(crate) struct Event {
-    pub stored: StoredEvent,
+    pub stored: Option<StoredEvent>,
+    pub native: NativeEvent,
 }
 
 /// Contents of an Event's cursor.
@@ -86,44 +91,41 @@ impl Event {
     /// calls A::m2::emit_event to emit an event,
     /// the sending module would be A::m1.
     async fn sending_module(&self, ctx: &Context<'_>) -> Result<Option<MoveModule>> {
-        let sending_package = SuiAddress::from_bytes(&self.stored.package)
-            .map_err(|e| Error::Internal(e.to_string()))
-            .extend()?;
-        MoveModule::query(ctx.data_unchecked(), sending_package, &self.stored.module)
-            .await
-            .extend()
+        MoveModule::query(
+            ctx.data_unchecked(),
+            self.native.package_id.into(),
+            &self.native.transaction_module.to_string(),
+        )
+        .await
+        .extend()
     }
 
     /// Address of the sender of the event
     async fn sender(&self) -> Result<Option<Address>> {
-        let Some(Some(sender)) = self.stored.senders.first() else {
-            return Ok(None);
-        };
-
-        let address = SuiAddress::from_bytes(sender)
-            .map_err(|e| Error::Internal(format!("Failed to deserialize address: {e}")))
-            .extend()?;
-
-        if address.as_slice() == NativeSuiAddress::ZERO.as_ref() {
+        if self.native.sender == NativeSuiAddress::ZERO {
             return Ok(None);
         }
 
-        Ok(Some(Address { address }))
+        Ok(Some(Address {
+            address: self.native.sender.into(),
+        }))
     }
 
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
     async fn timestamp(&self) -> Result<Option<DateTime>, Error> {
-        Ok(DateTime::from_ms(self.stored.timestamp_ms).ok())
+        if let Some(stored) = &self.stored {
+            Ok(Some(DateTime::from_ms(stored.timestamp_ms)?))
+        } else {
+            Ok(None)
+        }
     }
 
     #[graphql(flatten)]
     async fn move_value(&self) -> Result<MoveValue> {
-        let type_ = TypeTag::from(
-            parse_sui_struct_tag(&self.stored.event_type)
-                .map_err(|e| Error::Internal(e.to_string()))
-                .extend()?,
-        );
-        Ok(MoveValue::new(type_, Base64::from(self.stored.bcs.clone())))
+        Ok(MoveValue::new(
+            self.native.type_.clone().into(),
+            Base64::from(self.native.contents.clone()),
+        ))
     }
 }
 
@@ -182,7 +184,7 @@ impl Event {
 
         for stored in results {
             let cursor = stored.cursor().encode_cursor();
-            conn.edges.push(Edge::new(cursor, Event { stored }));
+            conn.edges.push(Edge::new(cursor, stored.try_into()?));
         }
 
         Ok(conn)
@@ -217,12 +219,43 @@ impl Event {
             event_type: native_event
                 .type_
                 .to_canonical_string(/* with_prefix */ true),
-            bcs: native_event.contents,
+            bcs: native_event.contents.clone(),
             timestamp_ms: stored_tx.timestamp_ms,
         };
 
         Ok(Self {
-            stored: stored_event,
+            stored: Some(stored_event),
+            native: native_event,
+        })
+    }
+}
+
+impl TryFrom<StoredEvent> for Event {
+    type Error = Error;
+
+    fn try_from(stored: StoredEvent) -> Result<Self, Self::Error> {
+        let Some(Some(sender_bytes)) = stored.senders.first() else {
+            return Err(Error::Internal("No senders found for event".to_string()));
+        };
+        let sender = NativeSuiAddress::from_bytes(sender_bytes)
+            .map_err(|e| Error::Internal(e.to_string()))?;
+
+        let package_id =
+            ObjectID::from_bytes(&stored.package).map_err(|e| Error::Internal(e.to_string()))?;
+        let type_ =
+            parse_sui_struct_tag(&stored.event_type).map_err(|e| Error::Internal(e.to_string()))?;
+        let transaction_module =
+            Identifier::from_str(&stored.module).map_err(|e| Error::Internal(e.to_string()))?;
+        let contents = stored.bcs.clone();
+        Ok(Event {
+            stored: Some(stored),
+            native: NativeEvent {
+                sender,
+                package_id,
+                transaction_module,
+                type_,
+                contents,
+            },
         })
     }
 }

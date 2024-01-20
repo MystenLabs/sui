@@ -780,7 +780,7 @@ type Checkpoint {
 }
 
 type TransactionBlock {
-  digest: String!
+  digest: String
 
   sender: Address
   gasInput: GasInput

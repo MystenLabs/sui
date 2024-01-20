@@ -1,15 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{error::Error, types::execution_result::ExecutionResult};
+use crate::{
+    error::Error, types::execution_result::ExecutionResult,
+    types::transaction_block_effects::TransactionBlockEffects,
+};
 use async_graphql::*;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::{encoding::Base64, traits::ToFromBytes};
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_sdk::SuiClient;
+use sui_types::effects::TransactionEffects as NativeTransactionEffects;
+use sui_types::event::Event as NativeEvent;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
+use sui_types::transaction::SenderSignedData;
 use sui_types::{signature::GenericSignature, transaction::Transaction};
-
 pub struct Mutation;
 
 /// Mutations are used to write to the Sui network.
@@ -72,12 +77,16 @@ impl Mutation {
             );
         }
         let transaction = Transaction::from_generic_sig_data(tx_data, sigs);
+        let options = SuiTransactionBlockResponseOptions::new()
+            .with_events()
+            .with_raw_input()
+            .with_raw_effects();
 
         let result = sui_sdk_client
             .quorum_driver_api()
             .execute_transaction_block(
                 transaction,
-                SuiTransactionBlockResponseOptions::default(),
+                options,
                 Some(ExecuteTransactionRequestType::WaitForEffectsCert),
             )
             .await
@@ -86,13 +95,40 @@ impl Mutation {
             .map_err(|e| Error::Internal(format!("Unable to execute transaction: {e}")))
             .extend()?;
 
+        let native: NativeTransactionEffects = bcs::from_bytes(&result.raw_effects)
+            .map_err(|e| Error::Internal(format!("Unable to deserialize transaction effects: {e}")))
+            .extend()?;
+        let tx_data: SenderSignedData = bcs::from_bytes(&result.raw_transaction)
+            .map_err(|e| Error::Internal(format!("Unable to deserialize transaction data: {e}")))
+            .extend()?;
+
+        let events = result
+            .events
+            .ok_or_else(|| {
+                Error::Internal("No events are returned from transaction execution".to_string())
+            })?
+            .data
+            .into_iter()
+            .map(|e| NativeEvent {
+                package_id: e.package_id,
+                transaction_module: e.transaction_module,
+                sender: e.sender,
+                type_: e.type_,
+                contents: e.bcs,
+            })
+            .collect();
+
         Ok(ExecutionResult {
             errors: if result.errors.is_empty() {
                 None
             } else {
                 Some(result.errors)
             },
-            digest: result.digest.to_string(),
+            effects: TransactionBlockEffects::Executed {
+                tx_data,
+                native,
+                events,
+            },
         })
     }
 }

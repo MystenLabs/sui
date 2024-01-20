@@ -912,9 +912,11 @@ type ExecutionResult {
 	"""
 	errors: [String!]
 	"""
-	The digest field captures the digest of the transaction block
+	The effects of the executed transaction. Since the transaction was just executed
+	and not indexed yet, fields including `balance_changes`, `timestamp` and `checkpoint`
+	are not available.
 	"""
-	digest: String!
+	effects: TransactionBlockEffects!
 }
 
 """
@@ -2701,7 +2703,7 @@ type TransactionBlock {
 	A 32-byte hash that uniquely identifies the transaction block contents, encoded in Base58.
 	This serves as a unique id for the block on chain.
 	"""
-	digest: String!
+	digest: String
 	"""
 	The address corresponding to the public key that signed this transaction. System
 	transactions do not have senders.
@@ -2729,10 +2731,6 @@ type TransactionBlock {
 	The effects field captures the results to the chain of executing this transaction.
 	"""
 	effects: TransactionBlockEffects
-	"""
-	Events emitted by this transaction block.
-	"""
-	events(first: Int, after: String, last: Int, before: String): EventConnection!
 	"""
 	This field is set by senders of a transaction block. It is an epoch reference that sets a
 	deadline after which validators will no longer consider the transaction valid. By default,
@@ -2816,6 +2814,10 @@ type TransactionBlockEffects {
 	addresses and objects.
 	"""
 	balanceChanges(first: Int, after: String, last: Int, before: String): BalanceChangeConnection!
+	"""
+	Events emitted by this transaction block.
+	"""
+	events(first: Int, after: String, last: Int, before: String): EventConnection!
 	"""
 	Timestamp corresponding to the checkpoint this transaction was finalized in.
 	"""

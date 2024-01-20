@@ -325,8 +325,7 @@ mod tests {
         let tx_bytes = tx_bytes.encoded();
         let sigs = sigs.iter().map(|sig| sig.encoded()).collect::<Vec<_>>();
 
-        let mutation =
-            r#"{ executeTransactionBlock(txBytes: $tx,  signatures: $sigs) {digest errors}}"#;
+        let mutation = r#"{ executeTransactionBlock(txBytes: $tx,  signatures: $sigs) { effects { transactionBlock { digest } } errors}}"#;
 
         let variables = vec![
             GraphqlQueryVariable {
@@ -348,7 +347,15 @@ mod tests {
         let binding = res.response_body().data.clone().into_json().unwrap();
         let res = binding.get("executeTransactionBlock").unwrap();
 
-        let digest = res.get("digest").unwrap().as_str().unwrap();
+        let digest = res
+            .get("effects")
+            .unwrap()
+            .get("transactionBlock")
+            .unwrap()
+            .get("digest")
+            .unwrap()
+            .as_str()
+            .unwrap();
         assert!(res.get("errors").unwrap().is_null());
         assert_eq!(digest, original_digest.to_string());
 
