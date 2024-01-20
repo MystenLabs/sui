@@ -1,3 +1,9 @@
+error[E02004]: invalid 'module' declaration
+  ┌─ tests/move_check/parser/missing_angle_brace_close.move:1:8
+  │
+1 │ module M {
+  │        ^ Invalid module declaration. The module does not have a specified address. Either declare it inside of an 'address <address> {' block or declare it with an address 'module <address>::M''
+
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/missing_angle_brace_close.move:3:22
   │

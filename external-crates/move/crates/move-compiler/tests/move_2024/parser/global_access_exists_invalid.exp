@@ -1,3 +1,9 @@
+error[E02004]: invalid 'module' declaration
+  ┌─ tests/move_2024/parser/global_access_exists_invalid.move:1:8
+  │
+1 │ module M {
+  │        ^ Invalid module declaration. The module does not have a specified address. Either declare it inside of an 'address <address> {' block or declare it with an address 'module <address>::M''
+
 error[E01003]: invalid modifier
   ┌─ tests/move_2024/parser/global_access_exists_invalid.move:2:5
   │
@@ -5,6 +11,12 @@ error[E01003]: invalid modifier
   │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
   │
   = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E03011]: invalid use of reserved name
+  ┌─ tests/move_2024/parser/global_access_exists_invalid.move:9:9
+  │
+9 │     fun freeze(): u64 { 0 }
+  │         ^^^^^^ Invalid function name 'freeze'. 'freeze' is restricted and cannot be used to name a function
 
 error[E01002]: unexpected token
    ┌─ tests/move_2024/parser/global_access_exists_invalid.move:13:26

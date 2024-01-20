@@ -1,6 +1,15 @@
+error[E02004]: invalid 'module' declaration
+  ┌─ tests/move_check/parser/module_missing_rbrace.move:1:8
+  │
+1 │ module M {
+  │        ^ Invalid module declaration. The module does not have a specified address. Either declare it inside of an 'address <address> {' block or declare it with an address 'module <address>::M''
+
 error[E01002]: unexpected token
   ┌─ tests/move_check/parser/module_missing_rbrace.move:4:1
   │
 4 │ 
-  │ ^ Unexpected token
+  │ ^
+  │ 
+  │ Unexpected end-of-file
+  │ Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
 

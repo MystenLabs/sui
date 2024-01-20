@@ -5294,6 +5294,36 @@ fn parse_error_test() {
         "const c: u64 = 7",
         None,
     );
+    // const in a file containing a parse error (in the second module, after parsing error in the
+    // previous module)
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        14,
+        10,
+        "M1.move",
+        14,
+        10,
+        "M1.move",
+        "const c: u64 = 7",
+        None,
+    );
+    // const in a file containing a parse error (in the second module, with module annotation, after
+    // parsing error in the previous module)
+    assert_use_def(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        0,
+        21,
+        10,
+        "M1.move",
+        21,
+        10,
+        "M1.move",
+        "const c: u64 = 7",
+        None,
+    );
 
     let mut fpath = path.clone();
     fpath.push("sources/M2.move");

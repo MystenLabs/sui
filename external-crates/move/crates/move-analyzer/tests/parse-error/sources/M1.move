@@ -7,4 +7,17 @@ module ParseError::M1 {
     const x; u64 = 42;
 
     const c: u64 = 7;
+
+    const d
+}
+
+module ParseError::M3 {
+    const c: u64 = 7;
+
+    const d
+}
+
+#[test]
+module ParseError::M4 {
+    const c: u64 = 7;
 }
