@@ -377,7 +377,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e2);
             exp(context, e3);
         }
-        E::While(e1, _, e2) => {
+        E::While(_, e1, e2) => {
             exp(context, e1);
             exp(context, e2);
         }

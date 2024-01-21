@@ -5,23 +5,19 @@ module a::m {
 
     // simple test of break/return in a lambda with a named block
     fun t() {
-        let x = do!(|| 'a: {
-            if (false) break'a 0;
+        do!(|| 'a: {
             if (false) return'a 0;
             0
         });
-        let x = do!(|| ('a: {
-            if (false) break'a 0;
+        do!(|| ('a: {
             if (false) return'a 0;
             0
         }));
-        let (x, y) = do2!(|| 'a: {
-            if (false) break'a (0, 1);
+        do2!(|| 'a: {
             if (false) return'a 0;
             0
         },
         || 'b: {
-            if (false) break'b (0, 1);
             if (false) return'b 0;
             0
         });
@@ -29,16 +25,12 @@ module a::m {
     fun nested() {
         do!(|| 'outer: {
             do2!(|| 'a: {
-                if (false) break'outer (0, 1);
                 if (false) return'outer (0, 1);
-                if (false) break'a (0, 1);
                 if (false) return'a 0;
                 0
             },
             || 'b: {
-                if (false) break'outer (0, 1);
                 if (false) return'outer (0, 1);
-                if (false) break'b (0, 1);
                 if (false) return'b 0;
                 0
             })

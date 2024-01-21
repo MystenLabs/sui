@@ -320,7 +320,6 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
         | N::Exp_::Annotate(e, _)
         | N::Exp_::Lambda(N::Lambda {
             parameters: _,
-            break_label: _,
             return_label: _,
             use_fun_color: _,
             body: e,
@@ -330,7 +329,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             exp(context, et);
             exp(context, ef);
         }
-        N::Exp_::While(econd, _, ebody) => {
+        N::Exp_::While(_, econd, ebody) => {
             exp(context, econd);
             exp(context, ebody)
         }

@@ -25,7 +25,7 @@ struct Context<'a, 'b> {
 
 pub struct ExpandedMacro {
     pub argument_bindings: Vec<(Option<Loc>, Var, N::Type, T::Exp)>,
-    pub body: N::Exp,
+    pub body: Box<N::Exp>,
 }
 
 pub(crate) fn call(
@@ -78,8 +78,7 @@ pub(crate) fn call(
             argument_bindings.push((mut_, param, param_ty, arg))
         }
     }
-    let mut break_labels: BTreeSet<_> = lambdas.values().map(|(l, _, _)| l.break_label).collect();
-    break_labels.insert(return_label);
+    let break_labels: BTreeSet<_> = BTreeSet::from([return_label]);
     let mut context = Context {
         core: context,
         lambdas,
@@ -87,13 +86,13 @@ pub(crate) fn call(
         macro_color: next_color,
     };
     seq(&mut context, &mut macro_body);
-    let mut wrapped_body = sp(call_loc, N::Exp_::Block(macro_body));
+    let mut wrapped_body = Box::new(sp(call_loc, N::Exp_::Block(macro_body)));
     for label in break_labels {
         let seq = (
             N::UseFuns::new(next_color),
             VecDeque::from([sp(call_loc, N::SequenceItem_::Seq(wrapped_body))]),
         );
-        wrapped_body = sp(call_loc, N::Exp_::NamedBlock(label, seq));
+        wrapped_body = Box::new(sp(call_loc, N::Exp_::NamedBlock(label, seq)));
     }
     Some(ExpandedMacro {
         argument_bindings,
@@ -130,14 +129,18 @@ fn recolor_macro(
         ..
     } = signature;
     let tparam_ids = type_parameters.iter().map(|t| t.id).collect();
-    let return_label = BlockLabel(sp(
+    let label = sp(
         call_loc,
         N::Var_ {
             name: N::BlockLabel::MACRO_RETURN_NAME_SYMBOL,
             id: 0,
             color,
         },
-    ));
+    );
+    let return_label = BlockLabel {
+        label,
+        is_implicit: true,
+    };
     let recolor_use_funs = true;
     let recolor = &mut Recolor::new(color, Some(return_label), recolor_use_funs);
     recolor.add_params(&parameters);
@@ -266,7 +269,7 @@ fn recolor_block_label(ctx: &mut Recolor, label: &mut BlockLabel) {
     if !ctx.block_labels.contains(label) {
         return;
     }
-    label.0.value.color = ctx.color;
+    label.label.value.color = ctx.color;
 }
 
 fn recolor_use_funs(ctx: &mut Recolor, use_funs: &mut UseFuns) {
@@ -356,7 +359,7 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
             recolor_block_label(ctx, name);
             recolor_exp(ctx, e)
         }
-        N::Exp_::While(econd, name, ebody) => {
+        N::Exp_::While(name, econd, ebody) => {
             ctx.add_block_label(*name);
             recolor_block_label(ctx, name);
             recolor_exp(ctx, econd);
@@ -404,17 +407,14 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
 
         N::Exp_::Lambda(N::Lambda {
             parameters,
-            break_label,
             return_label,
             use_fun_color,
             body,
         }) => {
-            ctx.add_block_label(*break_label);
             ctx.add_block_label(*return_label);
             ctx.add_lvalues(parameters);
             recolor_use_funs_(ctx, use_fun_color);
             recolor_lvalues(ctx, parameters);
-            recolor_block_label(ctx, break_label);
             recolor_block_label(ctx, return_label);
             recolor_exp(ctx, body)
         }
@@ -503,7 +503,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             exp(context, et);
             exp(context, ef);
         }
-        N::Exp_::While(econd, _name, ebody) => {
+        N::Exp_::While(_name, econd, ebody) => {
             exp(context, econd);
             exp(context, ebody)
         }
@@ -557,7 +557,6 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             let (
                 N::Lambda {
                     parameters: mut lambda_params,
-                    break_label: _, // not used at this level
                     return_label,
                     use_fun_color,
                     body: mut lambda_body,
@@ -585,14 +584,13 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
                 unreachable!()
             };
             let args = N::explist(args_loc, arg_list);
-            let annot_args = sp(args_loc, N::Exp_::Annotate(Box::new(args), param_ty));
+            let annot_args = Box::new(sp(args_loc, N::Exp_::Annotate(Box::new(args), param_ty)));
             let body_loc = lambda_body.loc;
-            let annot_body = sp(body_loc, N::Exp_::Annotate(lambda_body, result_ty));
+            let annot_body = Box::new(sp(body_loc, N::Exp_::Annotate(lambda_body, result_ty)));
             let labeled_seq = VecDeque::from([sp(body_loc, N::SequenceItem_::Seq(annot_body))]);
-            let labeled_body = sp(
-                body_loc,
-                N::Exp_::NamedBlock(return_label, (N::UseFuns::new(use_fun_color), labeled_seq)),
-            );
+            let labeled_body_ =
+                N::Exp_::NamedBlock(return_label, (N::UseFuns::new(use_fun_color), labeled_seq));
+            let labeled_body = Box::new(sp(body_loc, labeled_body_));
             let result = VecDeque::from([
                 sp(param_loc, N::SequenceItem_::Bind(lambda_params, annot_args)),
                 sp(body_loc, N::SequenceItem_::Seq(labeled_body)),

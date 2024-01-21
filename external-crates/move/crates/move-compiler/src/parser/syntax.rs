@@ -1140,14 +1140,6 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
         }
         Tok::Identifier | Tok::RestrictedIdentifier => parse_name_exp(context)?,
 
-        Tok::BlockLabel => {
-            // TODO: improve error messages around this.
-            let label = parse_block_label(context)?;
-            consume_token(context.tokens, Tok::Colon)?;
-            consume_token(context.tokens, Tok::LBrace)?;
-            Exp_::NamedBlock(label, parse_sequence(context)?)
-        }
-
         Tok::NumValue => {
             // Check if this is a ModuleIdent (in a ModuleAccess).
             if context.tokens.lookahead()? == Tok::ColonColon {
@@ -1230,7 +1222,14 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
 fn is_control_exp(tok: Tok) -> bool {
     matches!(
         tok,
-        Tok::Break | Tok::Continue | Tok::If | Tok::While | Tok::Loop | Tok::Return | Tok::Abort
+        Tok::Break
+            | Tok::Continue
+            | Tok::If
+            | Tok::While
+            | Tok::Loop
+            | Tok::Return
+            | Tok::Abort
+            | Tok::BlockLabel
     )
 }
 
@@ -1382,6 +1381,12 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
             };
             (Exp_::Continue(label), false)
         }
+        Tok::BlockLabel => {
+            let name = parse_block_label(context)?;
+            consume_token(context.tokens, Tok::Colon)?;
+            let (e, ends_in_block) = parse_exp_or_sequence(context)?;
+            (Exp_::Labled(name, Box::new(e)), ends_in_block)
+        }
         _ => unreachable!(),
     };
     let end_loc = context.tokens.previous_end_loc();
@@ -1509,6 +1514,7 @@ fn at_start_of_exp(context: &mut Context) -> bool {
             | Tok::Loop
             | Tok::Return
             | Tok::While
+            | Tok::BlockLabel
     )
 }
 

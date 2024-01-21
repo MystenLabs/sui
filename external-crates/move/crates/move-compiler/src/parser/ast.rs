@@ -615,8 +615,8 @@ pub enum Exp_ {
     // loop eloop
     Loop(Box<Exp>),
 
-    // 'label: { seq }
-    NamedBlock(BlockLabel, Sequence),
+    // 'label: e
+    Labled(BlockLabel, Box<Exp>),
     // { seq }
     Block(Sequence),
     // fun (x1, ..., xn) e
@@ -1812,9 +1812,9 @@ impl AstDebug for Exp_ {
                 w.write("loop ");
                 e.ast_debug(w);
             }
-            E::NamedBlock(name, seq) => {
-                w.write(format!("'{}: ", name));
-                w.block(|w| seq.ast_debug(w))
+            E::Labled(name, e) => {
+                w.write(format!("'{name}: "));
+                e.ast_debug(w)
             }
             E::Block(seq) => w.block(|w| seq.ast_debug(w)),
             E::Lambda(sp!(_, bs), e) => {

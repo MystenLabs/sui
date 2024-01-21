@@ -251,7 +251,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
             exp(context, et);
             exp(context, ef);
         }
-        E::While(eb, _, eloop) => {
+        E::While(_, eb, eloop) => {
             exp(context, eb);
             exp(context, eloop);
         }

@@ -165,7 +165,7 @@ pub enum UnannotatedExp_ {
     Vector(Loc, usize, Box<Type>, Box<Exp>),
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
-    While(Box<Exp>, BlockLabel, Box<Exp>),
+    While(BlockLabel, Box<Exp>, Box<Exp>),
     Loop {
         name: BlockLabel,
         has_break: bool,
@@ -534,9 +534,8 @@ impl AstDebug for UnannotatedExp_ {
                 f.ast_debug(w);
             }
             E::While(name, b, e) => {
-                w.write("while@");
                 name.ast_debug(w);
-                w.write(" (");
+                w.write(": while (");
                 b.ast_debug(w);
                 w.write(")");
                 e.ast_debug(w);
@@ -546,13 +545,12 @@ impl AstDebug for UnannotatedExp_ {
                 has_break,
                 body,
             } => {
-                w.write("loop");
+                name.ast_debug(w);
+                w.write(": loop");
                 if *has_break {
                     w.write("#with_break");
                 }
                 w.write(" ");
-                name.ast_debug(w);
-                w.write(": ");
                 body.ast_debug(w);
             }
             E::NamedBlock(name, seq) => {

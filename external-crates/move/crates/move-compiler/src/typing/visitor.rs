@@ -165,7 +165,7 @@ pub trait TypingVisitorContext {
                 self.visit_exp(e2);
                 self.visit_exp(e3);
             }
-            E::While(e1, _, e2) => {
+            E::While(_, e1, e2) => {
                 self.visit_exp(e1);
                 self.visit_exp(e2);
             }

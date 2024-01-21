@@ -345,11 +345,10 @@ pub enum Exp_ {
     Vector(Loc, Option<Vec<Type>>, Spanned<Vec<Exp>>),
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
-    While(Box<Exp>, Option<BlockLabel>, Box<Exp>),
+    While(Option<BlockLabel>, Box<Exp>, Box<Exp>),
     Loop(Option<BlockLabel>, Box<Exp>),
-    NamedBlock(BlockLabel, Sequence),
-    Block(Sequence),
-    Lambda(LValueList, Option<BlockLabel>, Box<Exp>),
+    Block(Option<BlockLabel>, Sequence),
+    Lambda(LValueList, Box<Exp>),
     Quant(
         QuantKind,
         LValueWithRangeList,
@@ -388,9 +387,9 @@ pub type Exp = Spanned<Exp_>;
 pub type Sequence = (UseFuns, VecDeque<SequenceItem>);
 #[derive(Debug, Clone, PartialEq)]
 pub enum SequenceItem_ {
-    Seq(Exp),
+    Seq(Box<Exp>),
     Declare(LValueList, Option<Type>),
-    Bind(LValueList, Exp),
+    Bind(LValueList, Box<Exp>),
 }
 pub type SequenceItem = Spanned<SequenceItem_>;
 
@@ -1379,28 +1378,26 @@ impl AstDebug for Exp_ {
                 w.write(" else ");
                 f.ast_debug(w);
             }
-            E::While(b, name, e) => {
+            E::While(name, b, e) => {
+                name.map(|name| w.write(format!("'{}: ", name)));
                 w.write("while (");
                 b.ast_debug(w);
                 w.write(")");
-                name.map(|name| w.write(format!(" '{}: ", name)));
                 e.ast_debug(w);
             }
             E::Loop(name, e) => {
+                name.map(|name| w.write(format!("'{}: ", name)));
                 w.write("loop ");
-                name.map(|name| w.write(format!(" '{}: ", name)));
                 e.ast_debug(w);
             }
-            E::NamedBlock(name, seq) => {
-                w.write(format!("'{}: ", name));
+            E::Block(name, seq) => {
+                name.map(|name| w.write(format!("'{}: ", name)));
                 seq.ast_debug(w);
             }
-            E::Block(seq) => seq.ast_debug(w),
-            E::Lambda(sp!(_, bs), name, e) => {
-                w.write("fun ");
+            E::Lambda(sp!(_, bs), e) => {
+                w.write("|");
                 bs.ast_debug(w);
-                w.write(" ");
-                name.map(|name| w.write(format!("'{}: ", name)));
+                w.write("| ");
                 e.ast_debug(w);
             }
             E::Quant(kind, sp!(_, rs), trs, c_opt, e) => {

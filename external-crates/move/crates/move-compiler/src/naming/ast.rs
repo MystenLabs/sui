@@ -253,7 +253,10 @@ pub struct Var_ {
 pub type Var = Spanned<Var_>;
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone, PartialOrd, Ord)]
-pub struct BlockLabel(pub Var);
+pub struct BlockLabel {
+    pub label: Var,
+    pub is_implicit: bool,
+}
 
 #[derive(Debug, PartialEq, Clone)]
 #[allow(clippy::large_enum_variant)]
@@ -288,7 +291,6 @@ pub type BuiltinFunction = Spanned<BuiltinFunction_>;
 #[derive(Debug, PartialEq, Clone)]
 pub struct Lambda {
     pub parameters: LValueList,
-    pub break_label: BlockLabel,
     pub return_label: BlockLabel,
     pub use_fun_color: Color,
     pub body: Box<Exp>,
@@ -320,7 +322,7 @@ pub enum Exp_ {
     Vector(Loc, Option<Type>, Spanned<Vec<Exp>>),
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
-    While(Box<Exp>, BlockLabel, Box<Exp>),
+    While(BlockLabel, Box<Exp>, Box<Exp>),
     Loop(BlockLabel, Box<Exp>),
     NamedBlock(BlockLabel, Sequence),
     Block(Sequence),
@@ -357,9 +359,9 @@ pub type Exp = Spanned<Exp_>;
 pub type Sequence = (UseFuns, VecDeque<SequenceItem>);
 #[derive(Debug, PartialEq, Clone)]
 pub enum SequenceItem_ {
-    Seq(Exp),
+    Seq(Box<Exp>),
     Declare(LValueList, Option<Type>),
-    Bind(LValueList, Exp),
+    Bind(LValueList, Box<Exp>),
 }
 pub type SequenceItem = Spanned<SequenceItem_>;
 
@@ -705,11 +707,9 @@ impl Type_ {
 }
 
 impl BlockLabel {
-    // base symbol to used when making names for unnamed loops
-    pub const LOOP_NAME_SYMBOL: Symbol = symbol!("loop");
-    // base symbol to used when making names for unnamed lambdas
-    pub const LAMBDA_NAME_SYMBOL: Symbol = symbol!("lambda");
-    pub const MACRO_RETURN_NAME_SYMBOL: Symbol = symbol!("macro");
+    // base symbol to used when making names for unnamed loops or lambdas
+    pub const IMPLICIT_LABEL_SYMBOL: Symbol = symbol!("%implicit");
+    pub const MACRO_RETURN_NAME_SYMBOL: Symbol = symbol!("%macro");
 }
 
 impl Value_ {
@@ -1027,12 +1027,18 @@ impl AstDebug for Var_ {
 
 impl AstDebug for BlockLabel {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Var_ { name, id, color } = self.0.value;
+        let BlockLabel {
+            is_implicit,
+            label: sp!(_, Var_ { name, id, color }),
+        } = self;
         w.write(&format!("'{name}"));
-        if id != 0 {
+        if *is_implicit {
+            w.write("#implicit")
+        }
+        if *id != 0 {
             w.write(&format!("#{id}"));
         }
-        if color != 0 {
+        if *color != 0 {
             w.write(&format!("#{color}"));
         }
     }
@@ -1303,19 +1309,19 @@ impl AstDebug for Exp_ {
                 w.write(" else ");
                 f.ast_debug(w);
             }
-            E::While(b, name, e) => {
+            E::While(name, b, e) => {
+                name.ast_debug(w);
+                w.write(": ");
                 w.write("while ");
                 w.write(" (");
                 b.ast_debug(w);
                 w.write(") ");
-                name.ast_debug(w);
-                w.write(": ");
                 e.ast_debug(w);
             }
             E::Loop(name, e) => {
-                w.write("loop ");
                 name.ast_debug(w);
                 w.write(": ");
+                w.write("loop ");
                 e.ast_debug(w);
             }
             E::NamedBlock(name, seq) => {
@@ -1416,19 +1422,16 @@ impl AstDebug for Lambda {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Lambda {
             parameters: sp!(_, bs),
-            break_label,
             return_label,
             use_fun_color,
             body: e,
         } = self;
+        return_label.ast_debug(w);
+        w.write(": ");
         w.write("|");
         bs.ast_debug(w);
         w.write("|");
         w.write(&format!("use_funs#{}", use_fun_color));
-        break_label.ast_debug(w);
-        w.write(" ");
-        return_label.ast_debug(w);
-        w.write(": ");
         e.ast_debug(w);
     }
 }

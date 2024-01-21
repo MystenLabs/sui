@@ -48,7 +48,11 @@ fn translate_var(sp!(loc, v_): N::Var) -> H::Var {
     H::Var(sp(loc, s))
 }
 
-fn translate_block_label(N::BlockLabel(sp!(loc, v_)): N::BlockLabel) -> H::BlockLabel {
+fn translate_block_label(lbl: N::BlockLabel) -> H::BlockLabel {
+    let N::BlockLabel {
+        label: sp!(loc, v_),
+        ..
+    } = lbl;
     let N::Var_ {
         name,
         id: depth,
@@ -1409,7 +1413,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
                 },
             ));
         }
-        E::While(test, name, body) => {
+        E::While(name, test, body) => {
             let mut cond_block = make_block!();
             let cond_exp = value(context, &mut cond_block, Some(&tbool(eloc)), *test);
             let cond = (cond_block, Box::new(cond_exp));

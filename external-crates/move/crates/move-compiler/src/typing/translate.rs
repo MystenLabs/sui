@@ -471,7 +471,7 @@ mod check_valid_constant {
                 exp(context, ef);
                 "'if' expressions are"
             }
-            E::While(eb, _, eloop) => {
+            E::While(_, eb, eloop) => {
                 exp(context, eb);
                 exp(context, eloop);
                 "'while' expressions are"
@@ -1065,7 +1065,7 @@ fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence 
     for (idx, sp!(loc, ns_)) in seq.into_iter().enumerate() {
         match ns_ {
             NS::Seq(ne) => {
-                let e = exp(context, Box::new(ne));
+                let e = exp(context, ne);
                 // If it is not the last element
                 if idx < len - 1 {
                     context.add_ability_constraint(
@@ -1086,7 +1086,7 @@ fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence 
                 work_queue.push_front(SeqCase::Declare { loc, b });
             }
             NS::Bind(nbind, nr) => {
-                let e = exp(context, Box::new(nr));
+                let e = exp(context, nr);
                 let b = bind_list(context, nbind, Some(e.ty.clone()));
                 work_queue.push_front(SeqCase::Bind { loc, b, e });
             }
@@ -1119,11 +1119,6 @@ fn sequence_type(seq: &T::Sequence) -> &Type {
 
 fn exp_vec(context: &mut Context, es: Vec<N::Exp>) -> Vec<T::Exp> {
     es.into_iter().map(|e| *exp(context, Box::new(e))).collect()
-}
-
-fn exp_k<R>(context: &mut Context, ne: Box<N::Exp>, k: Box<dyn FnOnce(Box<T::Exp>) -> R>) -> R {
-    let e = exp(context, ne);
-    k(e)
 }
 
 fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
@@ -1230,7 +1225,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             );
             (ty, TE::IfElse(eb, et, ef))
         }
-        NE::While(nb, name, nloop) => {
+        NE::While(name, nb, nloop) => {
             let eb = exp(context, nb);
             let bloc = eb.exp.loc;
             subtype(
@@ -1241,7 +1236,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 Type_::bool(bloc),
             );
             let (_has_break, ty, body) = loop_body(context, eloc, name, false, nloop);
-            (sp(eloc, ty.value), TE::While(eb, name, body))
+            (sp(eloc, ty.value), TE::While(name, eb, body))
         }
         NE::Loop(name, nloop) => {
             let (has_break, ty, body) = loop_body(context, eloc, name, true, nloop);
@@ -2698,19 +2693,14 @@ fn expand_macro(
             let es = T::explist(argloc, es);
             let b = bind_list(context, sp(argloc, lvalues_), Some(tys));
             let lvalue_ty = lvalues_expected_types(context, &b);
-            exp_k(
-                context,
-                Box::new(body),
-                Box::new(move |body| {
-                    let ty = body.ty.clone();
-                    let seq = VecDeque::from([
-                        sp(argloc, TS::Bind(b, lvalue_ty, Box::new(es))),
-                        sp(body.exp.loc, TS::Seq(body)),
-                    ]);
-                    let e_ = TE::Block(seq);
-                    (ty, e_)
-                }),
-            )
+            let body = exp(context, body);
+            let ty = body.ty.clone();
+            let seq = VecDeque::from([
+                sp(argloc, TS::Bind(b, lvalue_ty, Box::new(es))),
+                sp(body.exp.loc, TS::Seq(body)),
+            ]);
+            let e_ = TE::Block(seq);
+            (ty, e_)
         }
     };
     context.pop_macro_expansion(&m, &f);
