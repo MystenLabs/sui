@@ -245,9 +245,10 @@ impl TransactionWithEffects {
         let mut read_set = HashSet::new();
         for kind in &input_object_kinds {
             match kind {
-                InputObjectKind::MovePackage(id)
-                | InputObjectKind::SharedMoveObject { id, .. }
+                // InputObjectKind::MovePackage(id) |
+                InputObjectKind::SharedMoveObject { id, .. }
                 | InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => read_set.insert(*id),
+                _ => false,
             };
         }
 
@@ -258,9 +259,9 @@ impl TransactionWithEffects {
             }
         }
 
-        for (&package_obj_id, _, _) in tx_data.move_calls() {
-            read_set.insert(package_obj_id);
-        }
+        // for (&package_obj_id, _, _) in tx_data.move_calls() {
+        //     read_set.insert(package_obj_id);
+        // }
 
         return read_set;
     }
