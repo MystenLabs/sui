@@ -539,6 +539,26 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             }};
         }
         match command {
+            SuiSubcommand::ForceObjectSnapshotCatchup(ForceObjectSnapshotCatchup {
+                start_cp,
+                end_cp,
+            }) => {
+                let cluster = self.cluster.as_ref().unwrap();
+                let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
+
+                if end_cp > highest_checkpoint {
+                    bail!(
+                        "end_cp {} is greater than highest checkpoint {}",
+                        end_cp,
+                        highest_checkpoint,
+                    );
+                }
+
+                cluster
+                    .force_objects_snapshot_catchup(start_cp, end_cp)
+                    .await;
+                Ok(None)
+            }
             SuiSubcommand::RunGraphql(RunGraphqlCommand {
                 show_usage,
                 show_headers,

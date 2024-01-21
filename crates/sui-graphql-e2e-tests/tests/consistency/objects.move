@@ -139,7 +139,7 @@ module Test::M1 {
 //# create-checkpoint
 
 //# run-graphql --cursors @{obj_6_0,2}
-# We should still see objects at this cursor
+# We should see objects - the cursor should still be valid.
 {
   address(address: "@{A}") {
     objects(filter: {type: "@{Test}"}, after: "@{cursor_0}") {

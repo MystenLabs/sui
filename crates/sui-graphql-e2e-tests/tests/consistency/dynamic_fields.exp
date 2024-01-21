@@ -1,0 +1,102 @@
+processed 12 tasks
+
+init:
+A: object(0,0), validator_0: object(0,1)
+
+task 1 'publish'. lines 6-56:
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 8390400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'programmable'. lines 58-60:
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3549200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'run'. lines 62-62:
+created: object(3,0)
+mutated: object(0,0), object(2,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 6004000,  storage_rebate: 3513708, non_refundable_storage_fee: 35492
+
+task 4 'create-checkpoint'. lines 64-64:
+Checkpoint created: 1
+
+task 5 'run'. lines 66-66:
+mutated: object(0,0), object(2,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 3549200,  storage_rebate: 3513708, non_refundable_storage_fee: 35492
+
+task 6 'create-checkpoint'. lines 68-68:
+Checkpoint created: 2
+
+task 7 'run-graphql'. lines 70-89:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFields": {
+        "nodes": [
+          {
+            "value": {
+              "contents": {
+                "json": {
+                  "id": "0x4509ef25b4f830aa2167220cfb53774f1d3beca9ac00ed95d8471b5c5de76159",
+                  "count": "1"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 8 'run'. lines 91-91:
+mutated: object(0,0), object(2,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 3549200,  storage_rebate: 3513708, non_refundable_storage_fee: 35492
+
+task 9 'create-checkpoint'. lines 93-93:
+Checkpoint created: 3
+
+task 10 'run-graphql'. lines 95-114:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFields": {
+        "nodes": [
+          {
+            "value": {
+              "contents": {
+                "json": {
+                  "id": "0x4509ef25b4f830aa2167220cfb53774f1d3beca9ac00ed95d8471b5c5de76159",
+                  "count": "2"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 11 'run-graphql'. lines 116-135:
+Response: {
+  "data": {
+    "object": {
+      "dynamicFields": {
+        "nodes": [
+          {
+            "value": {
+              "contents": {
+                "json": {
+                  "id": "0x4509ef25b4f830aa2167220cfb53774f1d3beca9ac00ed95d8471b5c5de76159",
+                  "count": "1"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

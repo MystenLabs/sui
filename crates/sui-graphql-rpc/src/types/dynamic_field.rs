@@ -20,6 +20,7 @@ pub(crate) struct DynamicField {
     pub super_: MoveObject,
     pub df_object_id: SuiAddress,
     pub df_kind: DynamicFieldType,
+    pub checkpoint_sequence_number: Option<u64>,
 }
 
 #[derive(Union)]
@@ -56,6 +57,7 @@ impl DynamicField {
             .data()
             .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
             .extend()?;
+
         let (struct_tag, move_struct) = deserialize_move_struct(&self.super_.native, resolver)
             .await
             .extend()?;
@@ -95,7 +97,7 @@ impl DynamicField {
             let obj = MoveObject::query(
                 ctx.data_unchecked(),
                 self.df_object_id,
-                ObjectVersionKey::LatestAt(None),
+                ObjectVersionKey::LatestAt(self.checkpoint_sequence_number),
             )
             .await
             .extend()?;
@@ -105,6 +107,7 @@ impl DynamicField {
                 .data()
                 .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
                 .extend()?;
+
             let (struct_tag, move_struct) = deserialize_move_struct(&self.super_.native, resolver)
                 .await
                 .extend()?;
@@ -135,6 +138,7 @@ impl DynamicField {
     pub(crate) async fn query(
         db: &Db,
         parent: SuiAddress,
+        checkpoint_sequence_number: Option<u64>,
         name: DynamicFieldName,
         kind: DynamicFieldType,
     ) -> Result<Option<DynamicField>, Error> {
@@ -151,7 +155,7 @@ impl DynamicField {
         let Some(super_) = MoveObject::query(
             db,
             SuiAddress::from(field_id),
-            ObjectVersionKey::LatestAt(None),
+            ObjectVersionKey::LatestAt(checkpoint_sequence_number),
         )
         .await?
         else {
@@ -166,6 +170,7 @@ impl DynamicField {
             super_,
             df_object_id,
             df_kind,
+            checkpoint_sequence_number,
         }))
     }
 
@@ -197,6 +202,7 @@ impl DynamicField {
                     super_,
                     df_object_id,
                     df_kind,
+                    checkpoint_sequence_number,
                 })
             },
         )

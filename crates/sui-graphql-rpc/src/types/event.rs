@@ -109,6 +109,7 @@ impl Event {
 
         Ok(Some(Address {
             address: self.native.sender.into(),
+            checkpoint_sequence_number: self.checkpoint_sequence_number_impl(),
         }))
     }
 
@@ -228,6 +229,12 @@ impl Event {
             stored: Some(stored_event),
             native: native_event,
         })
+    }
+
+    pub(crate) fn checkpoint_sequence_number_impl(&self) -> Option<u64> {
+        self.stored
+            .as_ref()
+            .map(|stored| stored.checkpoint_sequence_number as u64)
     }
 }
 

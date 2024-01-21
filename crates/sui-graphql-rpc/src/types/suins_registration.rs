@@ -64,7 +64,7 @@ pub(crate) enum SuinsRegistrationDowncastError {
 #[Object]
 impl SuinsRegistration {
     pub(crate) async fn address(&self) -> SuiAddress {
-        OwnerImpl(self.super_.super_.address).address().await
+        OwnerImpl::from(&self.super_.super_).address().await
     }
 
     /// Objects owned by this object, optionally `filter`-ed.
@@ -77,7 +77,7 @@ impl SuinsRegistration {
         before: Option<object::Cursor>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, MoveObject>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .objects(ctx, first, after, last, before, filter)
             .await
     }
@@ -89,7 +89,7 @@ impl SuinsRegistration {
         ctx: &Context<'_>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Option<Balance>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .balance(ctx, type_)
             .await
     }
@@ -103,7 +103,7 @@ impl SuinsRegistration {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Result<Connection<String, Balance>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .balances(ctx, first, after, last, before)
             .await
     }
@@ -120,7 +120,7 @@ impl SuinsRegistration {
         before: Option<object::Cursor>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Connection<String, Coin>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .coins(ctx, first, after, last, before, type_)
             .await
     }
@@ -134,14 +134,14 @@ impl SuinsRegistration {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, StakedSui>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .staked_suis(ctx, first, after, last, before)
             .await
     }
 
     /// The domain explicitly configured as the default domain pointing to this object.
     pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .default_suins_name(ctx)
             .await
     }
@@ -156,7 +156,7 @@ impl SuinsRegistration {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, SuinsRegistration>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .suins_registrations(ctx, first, after, last, before)
             .await
     }
@@ -254,7 +254,7 @@ impl SuinsRegistration {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .dynamic_field(ctx, name)
             .await
     }
@@ -271,7 +271,7 @@ impl SuinsRegistration {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .dynamic_object_field(ctx, name)
             .await
     }
@@ -288,7 +288,7 @@ impl SuinsRegistration {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .dynamic_fields(ctx, first, after, last, before)
             .await
     }

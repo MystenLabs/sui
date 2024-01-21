@@ -11,6 +11,9 @@ use crate::error::Error;
 pub(crate) struct BalanceChange {
     // TODO: Move this type into indexer crates, rather than JSON-RPC.
     stored: StoredBalanceChange,
+    // BalanceChange is only available when a tx has been indexed, so it will always have a
+    // checkpoint_sequence_number
+    checkpoint_sequence_number: Option<u64>,
 }
 
 /// Effects to the balance (sum of coin values per coin type) owned by an address or object.
@@ -23,6 +26,7 @@ impl BalanceChange {
         match self.stored.owner {
             O::AddressOwner(addr) | O::ObjectOwner(addr) => Some(Owner {
                 address: SuiAddress::from(addr),
+                checkpoint_sequence_number: self.checkpoint_sequence_number,
             }),
 
             O::Shared { .. } | O::Immutable => None,
@@ -41,10 +45,16 @@ impl BalanceChange {
 }
 
 impl BalanceChange {
-    pub(crate) fn read(bytes: &[u8]) -> Result<Self, Error> {
+    pub(crate) fn read(
+        bytes: &[u8],
+        checkpoint_sequence_number: Option<u64>,
+    ) -> Result<Self, Error> {
         let stored = bcs::from_bytes(bytes)
             .map_err(|e| Error::Internal(format!("Error deserializing BalanceChange: {e}")))?;
 
-        Ok(Self { stored })
+        Ok(Self {
+            stored,
+            checkpoint_sequence_number,
+        })
     }
 }

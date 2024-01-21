@@ -113,8 +113,13 @@ impl TransactionBlock {
     /// transactions do not have senders.
     async fn sender(&self) -> Option<Address> {
         let sender = self.native().sender();
+        println!(
+            "tx_block -> sender passing checkpoint_sequence_number: {:?}",
+            self.checkpoint_sequence_number_impl()
+        );
         (sender != NativeSuiAddress::ZERO).then(|| Address {
             address: SuiAddress::from(sender),
+            checkpoint_sequence_number: self.checkpoint_sequence_number_impl(),
         })
     }
 
@@ -124,7 +129,14 @@ impl TransactionBlock {
     /// If the owner of the gas object(s) is not the same as the sender, the transaction block is a
     /// sponsored transaction block.
     async fn gas_input(&self) -> Option<GasInput> {
-        Some(GasInput::from(self.native().gas_data()))
+        let Self::Stored { stored_tx, .. } = self else {
+            return None;
+        };
+
+        Some(GasInput::from(
+            self.native().gas_data(),
+            Some(stored_tx.checkpoint_sequence_number as u64),
+        ))
     }
 
     /// The type of this transaction as well as the commands and/or parameters comprising the
@@ -188,6 +200,16 @@ impl TransactionBlock {
         match self {
             TransactionBlock::Stored { native, .. } => Some(native),
             TransactionBlock::Executed { tx_data, .. } => Some(tx_data),
+            TransactionBlock::DryRun { .. } => None,
+        }
+    }
+
+    fn checkpoint_sequence_number_impl(&self) -> Option<u64> {
+        match self {
+            TransactionBlock::Stored { stored_tx, .. } => {
+                Some(stored_tx.checkpoint_sequence_number as u64)
+            }
+            TransactionBlock::Executed { .. } => None,
             TransactionBlock::DryRun { .. } => None,
         }
     }
@@ -282,7 +304,7 @@ impl TransactionBlock {
                         let tx_ = alias!(tx as tx_after);
                         let sub_query = tx_
                             .select(tx_.field(tx::dsl::tx_sequence_number))
-                            .filter(tx_.field(tx::dsl::checkpoint_sequence_number).eq(*c as i64))
+                            .filter(tx_.field(tx::dsl::checkpoint_sequence_number).ge(*c as i64))
                             .order(tx_.field(tx::dsl::tx_sequence_number).desc())
                             .limit(1);
 
@@ -302,7 +324,7 @@ impl TransactionBlock {
                         let tx_ = alias!(tx as tx_before);
                         let sub_query = tx_
                             .select(tx_.field(tx::dsl::tx_sequence_number))
-                            .filter(tx_.field(tx::dsl::checkpoint_sequence_number).eq(*c as i64))
+                            .filter(tx_.field(tx::dsl::checkpoint_sequence_number).le(*c as i64))
                             .order(tx_.field(tx::dsl::tx_sequence_number).asc())
                             .limit(1);
 

@@ -1,6 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::types::cursor::{JsonCursor, Page};
+use crate::types::sui_address::SuiAddress;
+use crate::{
+    error::Error,
+    types::{
+        big_int::BigInt, date_time::DateTime, epoch::Epoch, move_package::MovePackage,
+        object::Object,
+    },
+};
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use move_binary_format::errors::PartialVMResult;
@@ -12,16 +21,6 @@ use sui_types::{
         AuthenticatorStateExpire as NativeAuthenticatorStateExpireTransaction,
         ChangeEpoch as NativeChangeEpochTransaction,
         EndOfEpochTransactionKind as NativeEndOfEpochTransactionKind,
-    },
-};
-
-use crate::types::cursor::{JsonCursor, Page};
-use crate::types::sui_address::SuiAddress;
-use crate::{
-    error::Error,
-    types::{
-        big_int::BigInt, date_time::DateTime, epoch::Epoch, move_package::MovePackage,
-        object::Object,
     },
 };
 
@@ -186,7 +185,8 @@ impl ChangeEpochTransaction {
             );
 
             let runtime_id = native.id();
-            let object = Object::from_native(SuiAddress::from(runtime_id), native);
+
+            let object = Object::from_native(SuiAddress::from(runtime_id), native, None);
             let package = MovePackage::try_from(&object)
                 .map_err(|_| Error::Internal("Failed to create system package".to_string()))
                 .extend()?;

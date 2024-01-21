@@ -1,0 +1,988 @@
+processed 26 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1 'publish'. lines 12-42:
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 15663600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'create-checkpoint'. lines 44-44:
+Checkpoint created: 1
+
+task 3 'programmable'. lines 46-48:
+mutated: object(0,0), object(1,1), object(1,5)
+gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 3972672, non_refundable_storage_fee: 40128
+
+task 4 'create-checkpoint'. lines 50-50:
+Checkpoint created: 2
+
+task 5 'transfer-object'. lines 52-52:
+mutated: object(0,0), object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
+
+task 6 'create-checkpoint'. lines 54-54:
+Checkpoint created: 3
+
+task 7 'transfer-object'. lines 56-56:
+mutated: object(0,0), object(1,3)
+gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
+
+task 9 'create-checkpoint'. lines 60-60:
+Checkpoint created: 4
+
+task 11 'create-checkpoint'. lines 64-64:
+Checkpoint created: 5
+
+task 13 'create-checkpoint'. lines 68-68:
+Checkpoint created: 6
+
+task 15 'create-checkpoint'. lines 72-72:
+Checkpoint created: 7
+
+task 16 'run-graphql'. lines 74-106:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "300"
+                },
+                {
+                  "coinBalance": "100"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999983336400"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 3,
+                  "totalBalance": "600"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                },
+                {
+                  "coinBalance": "100"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999982296272"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 3,
+                  "totalBalance": "700"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999981273168"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "600"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999980250064"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "400"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 18 'run-graphql'. lines 111-143:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "300"
+                },
+                {
+                  "coinBalance": "100"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999983336400"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 3,
+                  "totalBalance": "600"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                },
+                {
+                  "coinBalance": "100"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999982296272"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 3,
+                  "totalBalance": "700"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999981273168"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "600"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999980250064"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "400"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 20 'run-graphql'. lines 147-179:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "100"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "300"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                },
+                {
+                  "coinBalance": "100"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999982296272"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 3,
+                  "totalBalance": "700"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999981273168"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "600"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999980250064"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "400"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 22 'run-graphql'. lines 183-215:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "200"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "200"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "600"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999981273168"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "600"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999980250064"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "400"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 24 'run-graphql'. lines 220-253:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "coins": {
+              "nodes": []
+            },
+            "allBalances": {
+              "nodes": []
+            },
+            "firstBalance": {
+              "edges": []
+            },
+            "lastBalance": {
+              "edges": []
+            }
+          }
+        },
+        {
+          "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "400"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "400"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999980250064"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "400"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 25 'run-graphql'. lines 255-283:
+Response: {
+  "data": {
+    "address": {
+      "coins": {
+        "nodes": [
+          {
+            "coinBalance": "100"
+          },
+          {
+            "coinBalance": "200"
+          }
+        ]
+      },
+      "allBalances": {
+        "nodes": [
+          {
+            "coinType": {
+              "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+            },
+            "coinObjectCount": 1,
+            "totalBalance": "300000000000000"
+          },
+          {
+            "coinType": {
+              "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+            },
+            "coinObjectCount": 2,
+            "totalBalance": "300"
+          }
+        ]
+      },
+      "firstBalance": {
+        "edges": [
+          {
+            "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+          }
+        ]
+      },
+      "lastBalance": {
+        "edges": [
+          {
+            "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+          }
+        ]
+      }
+    }
+  }
+}
