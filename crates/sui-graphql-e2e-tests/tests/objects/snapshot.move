@@ -89,7 +89,7 @@ module Test::M1 {
 //# create-checkpoint
 
 //# run-graphql
-# should not exist on live objects
+# Should still show up now that we always read from objects_snapshot and objects_history.
 {
   object(
     address: "@{obj_2_0}"

@@ -49,7 +49,7 @@ impl GenesisTransaction {
             let native =
                 NativeObject::new_from_genesis(data, owner, TransactionDigest::genesis_marker());
 
-            let object = Object::from_native(SuiAddress::from(native.id()), native);
+            let object = Object::from_native(SuiAddress::from(native.id()), native, Some(0));
             connection.edges.push(Edge::new(c.encode_cursor(), object));
         }
 

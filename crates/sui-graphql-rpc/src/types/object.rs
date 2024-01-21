@@ -42,6 +42,7 @@ use sui_indexer::schema_v2::{checkpoints, objects, objects_history, objects_snap
 use sui_indexer::types_v2::ObjectStatus as NativeObjectStatus;
 use sui_indexer::types_v2::OwnerType;
 use sui_package_resolver::Resolver;
+use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::object::{
     MoveObject as NativeMoveObject, Object as NativeObject, Owner as NativeOwner,
 };
@@ -51,6 +52,7 @@ use sui_types::TypeTag;
 pub(crate) struct Object {
     pub address: SuiAddress,
     pub kind: ObjectKind,
+    pub checkpoint_sequence_number: Option<u64>,
 }
 
 /// Type to implement GraphQL fields that are shared by all Objects.
@@ -124,6 +126,14 @@ pub(crate) struct ObjectFilter {
     pub object_keys: Option<Vec<ObjectKey>>,
 }
 
+/// ObjectFilter and any additional context, if needed
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) enum ObjectFilterWrapper {
+    Object(ObjectFilter),
+    DynamicField(SuiAddress),
+    Coin(ObjectFilter, TypeTag),
+}
+
 #[derive(InputObject, Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ObjectKey {
     pub object_id: SuiAddress,
@@ -172,9 +182,8 @@ pub struct AddressOwner {
 
 #[allow(dead_code)]
 pub(crate) enum ObjectVersionKey {
-    Latest,
-    LatestAt(u64),   // checkpoint_sequence_number
-    Historical(u64), // version
+    LatestAt(Option<u64>), // checkpoint_sequence_number
+    Historical(u64),       // version
 }
 
 pub(crate) enum HistoricalObjectPaginationResult<I, T>
@@ -182,7 +191,7 @@ where
     I: Iterator<Item = T>,
 {
     Error(HistoricalObjectPaginationError),
-    Success(bool, bool, I),
+    Success(bool, bool, I, u64),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -270,7 +279,7 @@ pub(crate) enum IObject {
 #[Object]
 impl Object {
     pub(crate) async fn address(&self) -> SuiAddress {
-        OwnerImpl(self.address).address().await
+        OwnerImpl::from(self).address().await
     }
 
     /// Objects owned by this object, optionally `filter`-ed.
@@ -283,7 +292,7 @@ impl Object {
         before: Option<Cursor>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, MoveObject>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .objects(ctx, first, after, last, before, filter)
             .await
     }
@@ -295,7 +304,7 @@ impl Object {
         ctx: &Context<'_>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Option<Balance>> {
-        OwnerImpl(self.address).balance(ctx, type_).await
+        OwnerImpl::from(self).balance(ctx, type_).await
     }
 
     /// The balances of all coin types owned by this object.
@@ -307,7 +316,7 @@ impl Object {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Result<Connection<String, Balance>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .balances(ctx, first, after, last, before)
             .await
     }
@@ -324,7 +333,7 @@ impl Object {
         before: Option<Cursor>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Connection<String, Coin>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .coins(ctx, first, after, last, before, type_)
             .await
     }
@@ -338,14 +347,14 @@ impl Object {
         last: Option<u64>,
         before: Option<Cursor>,
     ) -> Result<Connection<String, StakedSui>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .staked_suis(ctx, first, after, last, before)
             .await
     }
 
     /// The domain explicitly configured as the default domain pointing to this object.
     pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        OwnerImpl(self.address).default_suins_name(ctx).await
+        OwnerImpl::from(self).default_suins_name(ctx).await
     }
 
     /// The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
@@ -358,7 +367,7 @@ impl Object {
         last: Option<u64>,
         before: Option<Cursor>,
     ) -> Result<Connection<String, SuinsRegistration>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .suins_registrations(ctx, first, after, last, before)
             .await
     }
@@ -441,7 +450,7 @@ impl Object {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.address).dynamic_field(ctx, name).await
+        OwnerImpl::from(self).dynamic_field(ctx, name).await
     }
 
     /// Access a dynamic object field on an object using its name. Names are arbitrary Move values
@@ -456,9 +465,7 @@ impl Object {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.address)
-            .dynamic_object_field(ctx, name)
-            .await
+        OwnerImpl::from(self).dynamic_object_field(ctx, name).await
     }
 
     /// The dynamic fields and dynamic object fields on an object.
@@ -473,7 +480,7 @@ impl Object {
         last: Option<u64>,
         before: Option<Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .dynamic_fields(ctx, first, after, last, before)
             .await
     }
@@ -515,7 +522,10 @@ impl ObjectImpl<'_> {
             O::AddressOwner(address) => {
                 let address = SuiAddress::from(address);
                 Some(ObjectOwner::Address(AddressOwner {
-                    owner: Some(Owner { address }),
+                    owner: Some(Owner {
+                        address,
+                        checkpoint_sequence_number: self.0.checkpoint_sequence_number,
+                    }),
                 }))
             }
             O::Immutable => Some(ObjectOwner::Immutable(Immutable { dummy: None })),
@@ -523,7 +533,7 @@ impl ObjectImpl<'_> {
                 let parent = Object::query(
                     ctx.data_unchecked(),
                     address.into(),
-                    ObjectVersionKey::Latest,
+                    ObjectVersionKey::LatestAt(self.0.checkpoint_sequence_number),
                 )
                 .await
                 .ok()
@@ -640,10 +650,16 @@ impl ObjectImpl<'_> {
 
 impl Object {
     /// Construct a GraphQL object from a native object, without its stored (indexed) counterpart.
-    pub(crate) fn from_native(address: SuiAddress, native: NativeObject) -> Object {
+    /// Consequently, there is no checkpoint_sequence_number context.
+    pub(crate) fn from_native(
+        address: SuiAddress,
+        native: NativeObject,
+        checkpoint_sequence_number: Option<u64>,
+    ) -> Object {
         Object {
             address,
             kind: ObjectKind::NotIndexed(native),
+            checkpoint_sequence_number,
         }
     }
 
@@ -667,6 +683,49 @@ impl Object {
         }
     }
 
+    pub(crate) fn dynamic_field_info(
+        &self,
+    ) -> Result<Option<(SuiAddress, DynamicFieldType)>, Error> {
+        let (df_object_id, df_kind) = match &self.kind {
+            ObjectKind::Live(_, stored) => {
+                let Some(df_object_id) = stored.df_object_id.as_ref() else {
+                    return Err(Error::Internal(
+                        "Object is not a dynamic field.".to_string(),
+                    ));
+                };
+
+                (df_object_id, stored.df_kind)
+            }
+            ObjectKind::Historical(_, stored) => {
+                let Some(df_object_id) = stored.df_object_id.as_ref() else {
+                    return Err(Error::Internal(
+                        "Object is not a dynamic field.".to_string(),
+                    ));
+                };
+
+                (df_object_id, stored.df_kind)
+            }
+            _ => return Ok(None),
+        };
+
+        let df_object_id = SuiAddress::from_bytes(df_object_id).map_err(|e| {
+            Error::Internal(format!("Failed to deserialize dynamic field ID: {e}."))
+        })?;
+
+        let df_kind = match df_kind {
+            Some(0) => DynamicFieldType::DynamicField,
+            Some(1) => DynamicFieldType::DynamicObject,
+            Some(k) => {
+                return Err(Error::Internal(format!(
+                    "Unrecognized dynamic field kind: {k}."
+                )))
+            }
+            None => return Err(Error::Internal("No dynamic field kind.".to_string())),
+        };
+
+        Ok(Some((df_object_id, df_kind)))
+    }
+
     /// Query the database for a `page` of objects, optionally `filter`-ed.
     pub(crate) async fn paginate(
         db: &Db,
@@ -674,7 +733,14 @@ impl Object {
         checkpoint_sequence_number: Option<u64>,
         filter: ObjectFilter,
     ) -> Result<Connection<String, Object>, Error> {
-        Self::paginate_subtype(db, page, checkpoint_sequence_number, filter, Ok).await
+        Self::paginate_subtype(
+            db,
+            page,
+            checkpoint_sequence_number,
+            ObjectFilterWrapper::Object(filter),
+            Ok,
+        )
+        .await
     }
 
     /// Query the database for a `page` of some sub-type of Object. The page uses the bytes of an
@@ -683,8 +749,8 @@ impl Object {
     pub(crate) async fn paginate_subtype<T: OutputType>(
         db: &Db,
         page: Page<Cursor>,
-        checkpoint_sequence_number: Option<u64>,
-        filter: ObjectFilter,
+        checkpoint_sequence_number: Option<u64>, // why optional? say address { objects(cursor) }. address will inherit latest checkpoint, but objects(cursor) at that checkpoint should still be valid until it goes out of range. however, for txBlock { address { objects(cursor)}}, that cursor should be consistent with txblock
+        filter: ObjectFilterWrapper,
         downcast: impl Fn(Object) -> Result<T, Error>,
     ) -> Result<Connection<String, T>, Error> {
         let mut conn: Connection<String, T> = Connection::new(false, false);
@@ -697,8 +763,11 @@ impl Object {
             page.after(),
             page.before(),
         ) {
-            Ok(checkpoint_sequence_number) => checkpoint_sequence_number,
-            Err(_) => return Ok(conn),
+            Ok(checkpoint_sequence_number) => {
+                println!("Consistent");
+                checkpoint_sequence_number
+            }
+            Err(e) => return Err(e),
         };
 
         let pagination_results = db
@@ -799,16 +868,21 @@ impl Object {
                 )?;
 
                 Ok(HistoricalObjectPaginationResult::Success(
-                    result.0, result.1, result.2,
+                    result.0, result.1, result.2, rhs as u64,
                 ))
             })
             .await?;
 
-        let (prev, next, results) = match pagination_results {
+        let (prev, next, results, rhs) = match pagination_results {
             HistoricalObjectPaginationResult::Error(e) => {
                 return Err(Error::Client(e.to_string()));
             }
-            HistoricalObjectPaginationResult::Success(prev, next, results) => (prev, next, results),
+            HistoricalObjectPaginationResult::Success(
+                prev,
+                next,
+                results,
+                checkpoint_sequence_number,
+            ) => (prev, next, results, checkpoint_sequence_number),
         };
 
         conn.has_previous_page = prev;
@@ -816,31 +890,31 @@ impl Object {
 
         for stored in results {
             let cursor = stored.cursor().encode_cursor();
-            let object = Object::try_from(stored)?;
+            let object = Object::try_from_stored_history_object(stored, Some(rhs))?;
             conn.edges.push(Edge::new(cursor, downcast(object)?));
         }
 
         Ok(conn)
     }
 
-    async fn query_live(db: &Db, address: SuiAddress) -> Result<Option<Self>, Error> {
-        use objects::dsl as objects;
-        let vec_address = address.into_vec();
+    fn raw_object_filter(
+        mut helper: RawQueryWrapper,
+        filter_wrapper: &ObjectFilterWrapper,
+    ) -> RawQueryWrapper {
+        let filter = match filter_wrapper {
+            ObjectFilterWrapper::Object(filter) => filter,
+            ObjectFilterWrapper::DynamicField(address) => {
+                let statement = helper.build_condition(format!(
+                    "owner_id = '\\x{}'::bytea AND owner_type = {} AND df_kind IS NOT NULL",
+                    hex::encode(address.into_vec()),
+                    OwnerType::Object as i16
+                ));
+                helper = helper.sql(statement);
+                return helper;
+            }
+            ObjectFilterWrapper::Coin(filter, _) => filter,
+        };
 
-        let stored_obj: Option<StoredObject> = db
-            .execute(move |conn| {
-                conn.first(move || {
-                    objects::objects.filter(objects::object_id.eq(vec_address.clone()))
-                })
-                .optional()
-            })
-            .await
-            .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))?;
-
-        stored_obj.map(Self::try_from).transpose()
-    }
-
-    fn raw_object_filter(mut helper: RawQueryWrapper, filter: &ObjectFilter) -> RawQueryWrapper {
         let object_id_filter = if let Some(object_ids) = &filter.object_ids {
             // Maximally strict - match a vec of 0 elements
             if object_ids.is_empty() {
@@ -912,6 +986,16 @@ impl Object {
             helper = helper.sql(statement);
         }
 
+        if let ObjectFilterWrapper::Coin(_, coin_type) = filter_wrapper {
+            let bind_idx = helper.get_bind_idx();
+            let statement = helper.build_condition(format!("coin_type = {}", bind_idx));
+
+            helper = helper.sql(statement);
+            helper = helper.bind::<diesel::sql_types::Text, _>(
+                coin_type.to_canonical_string(/* with_prefix */ true),
+            );
+        }
+
         if let Some(type_) = &filter.type_ {
             return type_.apply_raw_boxed(helper, "object_type");
         }
@@ -919,6 +1003,7 @@ impl Object {
         helper
     }
 
+    /// Viewing an object at version will set its children to the object's checkpoint.
     async fn query_at_version(
         db: &Db,
         address: SuiAddress,
@@ -988,19 +1073,22 @@ impl Object {
         stored_objs
             .into_iter()
             .max_by_key(|o| o.object_version)
-            .map(Self::try_from)
+            .map(|o| {
+                let checkpoint_sequence_number = o.checkpoint_sequence_number as u64;
+                Self::try_from_stored_history_object(o, Some(checkpoint_sequence_number))
+            })
             .transpose()
     }
 
+    /// If checkpoint is provided, that becomes the upper bound. Otherwise, don't set one.
     async fn query_latest_at_checkpoint(
         db: &Db,
         address: SuiAddress,
-        checkpoint_sequence_number: u64,
+        checkpoint_sequence_number: Option<u64>,
     ) -> Result<Option<Self>, Error> {
+        use checkpoints::dsl as checkpoints;
         use objects_history::dsl as history;
         use objects_snapshot::dsl as snapshot;
-
-        let checkpoint_sequence_number = checkpoint_sequence_number as i64;
 
         let results: Option<Vec<StoredHistoryObject>> = db
             .execute(move |conn| {
@@ -1032,12 +1120,28 @@ impl Object {
                                 .ge(left.single_value())),
                     );
 
-                    historical_query = historical_query
-                        .filter(history::checkpoint_sequence_number.le(checkpoint_sequence_number));
+                    let right = checkpoints::checkpoints
+                        .select(checkpoints::sequence_number)
+                        .order(checkpoints::sequence_number.desc())
+                        .limit(1);
 
-                    snapshot_query = snapshot_query.filter(
-                        snapshot::checkpoint_sequence_number.le(checkpoint_sequence_number),
-                    );
+                    if let Some(checkpoint_sequence_number) = checkpoint_sequence_number {
+                        historical_query = historical_query
+                            .filter(
+                                history::checkpoint_sequence_number
+                                    .le(checkpoint_sequence_number as i64),
+                            )
+                            .filter(
+                                history::checkpoint_sequence_number
+                                    .nullable()
+                                    .le(right.single_value()),
+                            );
+
+                        snapshot_query = snapshot_query.filter(
+                            snapshot::checkpoint_sequence_number
+                                .le(checkpoint_sequence_number as i64),
+                        );
+                    }
 
                     snapshot_query.union(historical_query)
                 })
@@ -1055,7 +1159,7 @@ impl Object {
         stored_objs
             .into_iter()
             .max_by_key(|o| o.object_version)
-            .map(Self::try_from)
+            .map(|o| Self::try_from_stored_history_object(o, checkpoint_sequence_number))
             .transpose()
     }
 
@@ -1065,7 +1169,6 @@ impl Object {
         key: ObjectVersionKey,
     ) -> Result<Option<Self>, Error> {
         match key {
-            ObjectVersionKey::Latest => Self::query_live(db, address).await,
             ObjectVersionKey::LatestAt(checkpoint_sequence_number) => {
                 Self::query_latest_at_checkpoint(db, address, checkpoint_sequence_number).await
             }
@@ -1094,7 +1197,70 @@ impl Object {
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch singleton: {e}")))?;
 
-        stored_obj.map(Self::try_from).transpose()
+        stored_obj
+            .map(|o| Self::try_from_stored_object(o, None))
+            .transpose()
+    }
+
+    pub(crate) fn try_from_stored_object(
+        stored_object: StoredObject,
+        checkpoint_sequence_number: Option<u64>,
+    ) -> Result<Self, Error> {
+        let address = addr(&stored_object.object_id)?;
+        let native_object = bcs::from_bytes(&stored_object.serialized_object)
+            .map_err(|_| Error::Internal(format!("Failed to deserialize object {address}")))?;
+
+        Ok(Self {
+            address,
+            kind: ObjectKind::Live(native_object, stored_object),
+            checkpoint_sequence_number,
+        })
+    }
+
+    pub(crate) fn try_from_stored_history_object(
+        history_object: StoredHistoryObject,
+        checkpoint_sequence_number: Option<u64>,
+    ) -> Result<Self, Error> {
+        let address = addr(&history_object.object_id)?;
+
+        let object_status =
+            NativeObjectStatus::try_from(history_object.object_status).map_err(|_| {
+                Error::Internal(format!(
+                    "Unknown object status {} for object {} at version {}",
+                    history_object.object_status, address, history_object.object_version
+                ))
+            })?;
+
+        match object_status {
+            NativeObjectStatus::Active => {
+                let Some(serialized_object) = &history_object.serialized_object else {
+                    return Err(Error::Internal(format!(
+                        "Live object {} at version {} cannot have missing serialized_object field",
+                        address, history_object.object_version
+                    )));
+                };
+
+                let native_object = bcs::from_bytes(serialized_object).map_err(|_| {
+                    Error::Internal(format!("Failed to deserialize object {address}"))
+                })?;
+
+                Ok(Self {
+                    address,
+                    kind: ObjectKind::Historical(native_object, history_object),
+                    checkpoint_sequence_number,
+                })
+            }
+            NativeObjectStatus::WrappedOrDeleted => Ok(Self {
+                address,
+                kind: ObjectKind::WrappedOrDeleted(StoredDeletedHistoryObject {
+                    object_id: history_object.object_id,
+                    object_version: history_object.object_version,
+                    object_status: history_object.object_status,
+                    checkpoint_sequence_number: history_object.checkpoint_sequence_number,
+                }),
+                checkpoint_sequence_number,
+            }),
+        }
     }
 }
 
@@ -1253,66 +1419,6 @@ impl HistoricalObjectCursor {
         Self {
             object_id,
             checkpoint_sequence_number,
-        }
-    }
-}
-
-impl TryFrom<StoredObject> for Object {
-    type Error = Error;
-
-    fn try_from(stored_object: StoredObject) -> Result<Self, Error> {
-        let address = addr(&stored_object.object_id)?;
-        let native_object = bcs::from_bytes(&stored_object.serialized_object)
-            .map_err(|_| Error::Internal(format!("Failed to deserialize object {address}")))?;
-
-        Ok(Self {
-            address,
-            kind: ObjectKind::Live(native_object, stored_object),
-        })
-    }
-}
-
-impl TryFrom<StoredHistoryObject> for Object {
-    type Error = Error;
-
-    fn try_from(history_object: StoredHistoryObject) -> Result<Self, Error> {
-        let address = addr(&history_object.object_id)?;
-
-        let object_status =
-            NativeObjectStatus::try_from(history_object.object_status).map_err(|_| {
-                Error::Internal(format!(
-                    "Unknown object status {} for object {} at version {}",
-                    history_object.object_status, address, history_object.object_version
-                ))
-            })?;
-
-        match object_status {
-            NativeObjectStatus::Active => {
-                let Some(serialized_object) = &history_object.serialized_object else {
-                    return Err(Error::Internal(format!(
-                        "Live object {} at version {} cannot have missing serialized_object field",
-                        address, history_object.object_version
-                    )));
-                };
-
-                let native_object = bcs::from_bytes(serialized_object).map_err(|_| {
-                    Error::Internal(format!("Failed to deserialize object {address}"))
-                })?;
-
-                Ok(Self {
-                    address,
-                    kind: ObjectKind::Historical(native_object, history_object),
-                })
-            }
-            NativeObjectStatus::WrappedOrDeleted => Ok(Self {
-                address,
-                kind: ObjectKind::WrappedOrDeleted(StoredDeletedHistoryObject {
-                    object_id: history_object.object_id,
-                    object_version: history_object.object_version,
-                    object_status: history_object.object_status,
-                    checkpoint_sequence_number: history_object.checkpoint_sequence_number,
-                }),
-            }),
         }
     }
 }

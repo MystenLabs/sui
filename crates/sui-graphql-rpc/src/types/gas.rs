@@ -22,6 +22,7 @@ pub(crate) struct GasInput {
     pub price: u64,
     pub budget: u64,
     pub payment_obj_keys: Vec<ObjectKey>,
+    pub checkpoint_sequence_number: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,6 +47,7 @@ impl GasInput {
     async fn gas_sponsor(&self) -> Option<Address> {
         Some(Address {
             address: self.owner,
+            checkpoint_sequence_number: self.checkpoint_sequence_number,
         })
     }
 
@@ -65,9 +67,14 @@ impl GasInput {
             ..Default::default()
         };
 
-        Object::paginate(ctx.data_unchecked(), page, None, filter)
-            .await
-            .extend()
+        Object::paginate(
+            ctx.data_unchecked(),
+            page,
+            self.checkpoint_sequence_number,
+            filter,
+        )
+        .await
+        .extend()
     }
 
     /// An unsigned integer specifying the number of native tokens per gas unit this transaction
@@ -138,8 +145,8 @@ impl GasEffects {
     }
 }
 
-impl From<&GasData> for GasInput {
-    fn from(s: &GasData) -> Self {
+impl GasInput {
+    pub(crate) fn from(s: &GasData, checkpoint_sequence_number: Option<u64>) -> Self {
         Self {
             owner: s.owner.into(),
             price: s.price,
@@ -152,6 +159,7 @@ impl From<&GasData> for GasInput {
                     version: o.1.value(),
                 })
                 .collect(),
+            checkpoint_sequence_number,
         }
     }
 }

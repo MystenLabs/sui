@@ -17,6 +17,7 @@ pub(crate) struct Validator {
     pub validator_summary: NativeSuiValidatorSummary,
     pub at_risk: Option<u64>,
     pub report_records: Option<Vec<Address>>,
+    pub checkpoint_sequence_number: Option<u64>,
 }
 
 #[Object]
@@ -25,6 +26,7 @@ impl Validator {
     async fn address(&self) -> Address {
         Address {
             address: SuiAddress::from(self.validator_summary.sui_address),
+            checkpoint_sequence_number: self.checkpoint_sequence_number,
         }
     }
 
@@ -90,7 +92,7 @@ impl Validator {
         MoveObject::query(
             ctx.data_unchecked(),
             self.operation_cap_id(),
-            ObjectVersionKey::Latest,
+            ObjectVersionKey::LatestAt(self.checkpoint_sequence_number),
         )
         .await
         .extend()
@@ -102,7 +104,7 @@ impl Validator {
         MoveObject::query(
             ctx.data_unchecked(),
             self.staking_pool_id(),
-            ObjectVersionKey::Latest,
+            ObjectVersionKey::LatestAt(self.checkpoint_sequence_number),
         )
         .await
         .extend()
@@ -114,7 +116,7 @@ impl Validator {
         MoveObject::query(
             ctx.data_unchecked(),
             self.exchange_rates_id(),
-            ObjectVersionKey::Latest,
+            ObjectVersionKey::LatestAt(self.checkpoint_sequence_number),
         )
         .await
         .extend()

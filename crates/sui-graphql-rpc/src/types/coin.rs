@@ -1,18 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::data::{Db, QueryExecutor};
+use crate::data::Db;
 use crate::error::Error;
 
 use super::balance::{self, Balance};
 use super::base64::Base64;
 use super::big_int::BigInt;
-use super::cursor::{Page, Target};
+use super::cursor::Page;
 use super::display::DisplayEntry;
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::{MoveObject, MoveObjectImpl};
 use super::move_value::MoveValue;
-use super::object::{self, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus};
+use super::object::{
+    self, Object, ObjectFilter, ObjectFilterWrapper, ObjectImpl, ObjectOwner, ObjectStatus,
+};
 use super::owner::OwnerImpl;
 use super::stake::StakedSui;
 use super::sui_address::SuiAddress;
@@ -21,11 +23,7 @@ use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
 use async_graphql::*;
 
-use async_graphql::connection::{Connection, CursorType, Edge};
-use diesel::{ExpressionMethods, QueryDsl};
-use sui_indexer::models_v2::objects::StoredObject;
-use sui_indexer::schema_v2::objects;
-use sui_indexer::types_v2::OwnerType;
+use async_graphql::connection::Connection;
 use sui_types::coin::Coin as NativeCoin;
 use sui_types::TypeTag;
 
@@ -47,7 +45,7 @@ pub(crate) enum CoinDowncastError {
 #[Object]
 impl Coin {
     pub(crate) async fn address(&self) -> SuiAddress {
-        OwnerImpl(self.super_.super_.address).address().await
+        OwnerImpl::from(&self.super_.super_).address().await
     }
 
     /// Objects owned by this object, optionally `filter`-ed.
@@ -60,7 +58,7 @@ impl Coin {
         before: Option<object::Cursor>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, MoveObject>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .objects(ctx, first, after, last, before, filter)
             .await
     }
@@ -72,7 +70,7 @@ impl Coin {
         ctx: &Context<'_>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Option<Balance>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .balance(ctx, type_)
             .await
     }
@@ -86,7 +84,7 @@ impl Coin {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Result<Connection<String, Balance>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .balances(ctx, first, after, last, before)
             .await
     }
@@ -103,7 +101,7 @@ impl Coin {
         before: Option<object::Cursor>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Connection<String, Coin>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .coins(ctx, first, after, last, before, type_)
             .await
     }
@@ -117,14 +115,14 @@ impl Coin {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, StakedSui>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .staked_suis(ctx, first, after, last, before)
             .await
     }
 
     /// The domain explicitly configured as the default domain pointing to this object.
     pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .default_suins_name(ctx)
             .await
     }
@@ -139,7 +137,7 @@ impl Coin {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, SuinsRegistration>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .suins_registrations(ctx, first, after, last, before)
             .await
     }
@@ -237,7 +235,7 @@ impl Coin {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .dynamic_field(ctx, name)
             .await
     }
@@ -254,7 +252,7 @@ impl Coin {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .dynamic_object_field(ctx, name)
             .await
     }
@@ -271,7 +269,7 @@ impl Coin {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .dynamic_fields(ctx, first, after, last, before)
             .await
     }
@@ -288,51 +286,34 @@ impl Coin {
     pub(crate) async fn paginate(
         db: &Db,
         page: Page<object::Cursor>,
+        checkpoint_sequence_number: Option<u64>,
         coin_type: TypeTag,
         owner: Option<SuiAddress>,
     ) -> Result<Connection<String, Coin>, Error> {
-        let (prev, next, results) = db
-            .execute(move |conn| {
-                page.paginate_query::<StoredObject, _, _, _>(conn, move || {
-                    use objects::dsl;
-                    let mut query = dsl::objects.into_boxed();
+        let filter = ObjectFilter {
+            owner,
+            ..Default::default()
+        };
 
-                    query = query.filter(
-                        dsl::coin_type.eq(coin_type.to_canonical_string(/* with_prefix */ true)),
-                    );
+        Object::paginate_subtype(
+            db,
+            page,
+            checkpoint_sequence_number,
+            ObjectFilterWrapper::Coin(filter, coin_type),
+            |object| {
+                let address = object.address;
+                let move_object = MoveObject::try_from(&object).map_err(|_| {
+                    Error::Internal(format!(
+                        "Expected {address} to be a Coin, but it's not a Move Object.",
+                    ))
+                })?;
 
-                    if let Some(owner) = &owner {
-                        // Leverage index on objects table
-                        query = query.filter(dsl::owner_type.eq(OwnerType::Address as i16));
-                        query = query.filter(dsl::owner_id.eq(owner.into_vec()));
-                    }
-
-                    query
+                Coin::try_from(&move_object).map_err(|_| {
+                    Error::Internal(format!("Expected {address} to be a Coin, but it is not."))
                 })
-            })
-            .await?;
-
-        let mut conn = Connection::new(prev, next);
-
-        for stored in results {
-            let cursor = stored.cursor().encode_cursor();
-            let object = Object::try_from(stored)?;
-
-            let move_ = MoveObject::try_from(&object).map_err(|_| {
-                Error::Internal(format!(
-                    "Failed to deserialize as Move object: {}",
-                    object.address
-                ))
-            })?;
-
-            let coin = Coin::try_from(&move_).map_err(|_| {
-                Error::Internal(format!("Faild to deserialize as Coin: {}", object.address))
-            })?;
-
-            conn.edges.push(Edge::new(cursor, coin));
-        }
-
-        Ok(conn)
+            },
+        )
+        .await
     }
 }
 
