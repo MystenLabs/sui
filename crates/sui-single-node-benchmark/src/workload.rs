@@ -46,6 +46,7 @@ impl Workload {
                     "Each transaction requires at least 1 input object"
                 );
                 let move_package = ctx.publish_package().await;
+                println!("move_package: {:?}", move_package.0);
                 let root_objects = ctx
                     .preparing_dynamic_fields(move_package.0, num_dynamic_fields)
                     .await;

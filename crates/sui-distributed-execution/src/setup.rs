@@ -1,19 +1,20 @@
-use std::{collections::BTreeMap, fs, io::BufReader, path::PathBuf, time::Duration};
+use std::{collections::BTreeMap, fs, io::BufReader, path::PathBuf, sync::Arc, time::Duration};
 
 use sui_single_node_benchmark::{
     benchmark_context::BenchmarkContext,
     command::{Component, WorkloadKind},
     mock_account::Account,
+    tx_generator::{MoveTxGenerator, NonMoveTxGenerator, TxGenerator},
     workload::Workload,
 };
 use sui_types::{base_types::SuiAddress, object::Object, transaction::Transaction};
 
-pub const WORKLOAD: WorkloadKind = WorkloadKind::NoMove;
-// pub const WORKLOAD: WorkloadKind = WorkloadKind::Move {
-//     num_input_objects: 2,
-//     num_dynamic_fields: 0,
-//     computation: 0,
-// };
+// pub const WORKLOAD: WorkloadKind = WorkloadKind::NoMove;
+pub const WORKLOAD: WorkloadKind = WorkloadKind::Move {
+    num_input_objects: 1,
+    num_dynamic_fields: 0,
+    computation: 0,
+};
 pub const COMPONENT: Component = Component::PipeTxsToChannel;
 
 pub fn export_to_files(
@@ -62,26 +63,33 @@ pub fn import_from_files(
     (accounts, objects, txs)
 }
 
-pub async fn generate_benchmark_data(
+pub async fn generate_benchmark_ctx_workload(
     tx_count: u64,
     duration: Duration,
-) -> (BenchmarkContext, Vec<Transaction>) {
+) -> (BenchmarkContext, Workload) {
     let workload = Workload::new(tx_count * duration.as_secs(), WORKLOAD);
     println!(
         "Setting up benchmark...{tx_count} txs per second for {} seconds",
         duration.as_secs()
     );
     let start_time = std::time::Instant::now();
-    let mut ctx = BenchmarkContext::new(workload, COMPONENT, 0).await;
+    let ctx = BenchmarkContext::new(workload, COMPONENT, 0).await;
     let elapsed = start_time.elapsed().as_millis() as f64;
     println!(
         "Benchmark setup finished in {}ms at a rate of {} accounts/s",
         elapsed,
         1000f64 * workload.num_accounts() as f64 / elapsed
     );
+    (ctx, workload)
+}
 
+pub async fn generate_benchmark_txs(
+    workload: Workload,
+    mut ctx: BenchmarkContext,
+) -> (BenchmarkContext, Arc<dyn TxGenerator>, Vec<Transaction>) {
     let start_time = std::time::Instant::now();
     let tx_generator = workload.create_tx_generator(&mut ctx).await;
+    let gen_clone = tx_generator.clone();
     let transactions = ctx.generate_transactions(tx_generator).await;
     let elapsed = start_time.elapsed().as_millis() as f64;
     println!(
@@ -91,7 +99,7 @@ pub async fn generate_benchmark_data(
         1000f64 * workload.tx_count as f64 / elapsed,
     );
 
-    (ctx, transactions)
+    (ctx, gen_clone, transactions)
 }
 
 #[cfg(test)]
@@ -113,7 +121,8 @@ mod test {
             working_directory
         ));
 
-        let (ctx, txs) = super::generate_benchmark_data(tx_count, duration).await;
+        let (ctx, worload) = super::generate_benchmark_ctx_workload(tx_count, duration).await;
+        let (ctx, _, txs) = super::generate_benchmark_txs(worload, ctx).await;
         super::export_to_files(
             ctx.get_accounts(),
             ctx.get_genesis_objects(),
@@ -131,7 +140,8 @@ mod test {
         let tx_count = 1000;
         let duration = Duration::from_secs(50);
 
-        super::generate_benchmark_data(tx_count, duration).await;
+        let (ctx, workload) = super::generate_benchmark_ctx_workload(tx_count, duration).await;
+        super::generate_benchmark_txs(workload, ctx).await;
     }
 
     #[tokio::test]
@@ -140,8 +150,28 @@ mod test {
         let tx_count = 10000;
         let duration = Duration::from_secs(50);
 
-        super::generate_benchmark_data(tx_count, duration).await;
+        let (ctx, workload) = super::generate_benchmark_ctx_workload(tx_count, duration).await;
+        super::generate_benchmark_txs(workload, ctx).await;
         sleep(Duration::from_millis(1_000)).await;
-        super::generate_benchmark_data(tx_count, duration).await;
+        super::generate_benchmark_ctx_workload(tx_count, duration).await;
+    }
+
+    #[tokio::test]
+    async fn cpu_intensive_hash_loop() {
+        use sha3::Digest;
+
+        // How many hashes can be performed in a second?
+        let start_time = std::time::Instant::now();
+        let mut buf: [u8; 32] = [0u8; 32];
+        let iterations = 100_000_000;
+        for _ in 0..iterations {
+            buf = sha3::Sha3_256::digest(&buf).into();
+        }
+        let elapsed = start_time.elapsed().as_millis() as f64;
+        println!(
+            "Hashing took {}ms at a rate of {} hashes/s",
+            elapsed,
+            1000f64 * iterations as f64 / elapsed
+        );
     }
 }

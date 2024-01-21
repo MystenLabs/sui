@@ -21,6 +21,7 @@ use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
 use sui_node::metrics;
+use sui_single_node_benchmark::tx_generator::{MoveTxGenerator, TxGenerator};
 use sui_types::digests::ChainIdentifier;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -33,7 +34,9 @@ use tokio::{
 };
 use typed_store::rocks::default_db_options;
 
-use crate::{metrics::Metrics, setup::generate_benchmark_data};
+use crate::{
+    metrics::Metrics, setup::generate_benchmark_ctx_workload, setup::generate_benchmark_txs,
+};
 
 use super::types::*;
 
@@ -484,7 +487,8 @@ impl SequenceWorkerState {
         _working_dir: PathBuf,
     ) {
         // let (_, _, transactions) = import_from_files(working_dir);
-        let (_, transactions) = generate_benchmark_data(tx_count, duration).await;
+        let (ctx, workload) = generate_benchmark_ctx_workload(tx_count, duration).await;
+        let (_, generator, transactions) = generate_benchmark_txs(workload, ctx).await;
 
         const PRECISION: u64 = 20;
         let burst_duration = 1000 / PRECISION;

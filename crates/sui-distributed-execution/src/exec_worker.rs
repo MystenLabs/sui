@@ -34,7 +34,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, Duration};
 
-use crate::setup::generate_benchmark_data;
+use crate::setup::generate_benchmark_ctx_workload;
 use crate::{metrics::Metrics, types::WritableObjectStore};
 
 use super::types::*;
@@ -527,7 +527,7 @@ impl<
 
     async fn init_genesis_objects(&self, tx_count: u64, duration: Duration) {
         // let (_, objects, _) = import_from_files(working_directory);
-        let (ctx, _) = generate_benchmark_data(tx_count, duration).await;
+        let (ctx, _) = generate_benchmark_ctx_workload(tx_count, duration).await;
         let objects = ctx.get_genesis_objects();
         for obj in objects {
             self.memory_store
@@ -693,6 +693,7 @@ impl<
 
                     let mut locked_objs = Vec::new();
                     for obj_id in full_tx.get_read_set() {
+                        println!("EW {} checking if obj {} is locked", my_id, obj_id);
                         if my_id != get_ew_owner_for_object(obj_id, &ew_ids) {
                             continue;
                         }
@@ -704,6 +705,7 @@ impl<
                             locked_objs.push(None);
                         }
                     }
+                    println!("Sending LockedExec for tx {}, locked_objs: {:?}", txid, locked_objs);
 
                     let execute_on_ew = get_designated_executor_for_tx(txid, full_tx,&ew_ids);
                     let msg = NetworkMessage{
@@ -747,10 +749,10 @@ impl<
                         let txid = full_tx.tx.digest();
                         let mut list = self.received_objs.entry(txid).or_default();
                         list.append(&mut objects);
+                        // println!("EW {} received LockedExec for tx {}: {:?}", my_id, txid, list.into_iter());
 
                         let mut ctr = self.locked_exec_count.entry(txid).or_insert(0);
                         *ctr += 1;
-                        // println!("EW {} received LockedExec for tx {} (ctr={})", my_id, txid, *ctr);
 
                         let mut child_list = self.received_child_objs.entry(txid).or_default();
                         child_list.append(&mut child_objects);
