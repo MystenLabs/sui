@@ -12,6 +12,7 @@ use crate::effects::{InputSharedObject, TransactionEffectsAPI};
 use crate::execution::SharedInput;
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
+#[cfg(debug_assertions)]
 use crate::is_system_package;
 use crate::message_envelope::Message;
 use crate::object::{Owner, OBJECT_START_VERSION};
