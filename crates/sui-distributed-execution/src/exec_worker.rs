@@ -804,7 +804,7 @@ impl<
                                 // a loop that repeatedly hashes some initial value
                                 // simulates a more compute intensive execution
                                 let mut buf: [u8; 32] = [0u8; 32];
-                                let iterations = 10_000;
+                                let iterations = 1_000;
                                 for _ in 0..iterations {
                                     buf = sha3::Sha3_256::digest(&buf).into();
                                 }
