@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use sui_types::base_types::ObjectID;
+
 use crate::benchmark_context::BenchmarkContext;
 use crate::command::WorkloadKind;
 use crate::tx_generator::{MoveTxGenerator, NonMoveTxGenerator, TxGenerator};
@@ -33,9 +35,12 @@ impl Workload {
         }
     }
 
-    pub async fn create_tx_generator(&self, ctx: &mut BenchmarkContext) -> Arc<dyn TxGenerator> {
+    pub async fn create_tx_generator(
+        &self,
+        ctx: &mut BenchmarkContext,
+    ) -> (Arc<dyn TxGenerator>, Option<ObjectID>) {
         match self.workload_kind {
-            WorkloadKind::NoMove => Arc::new(NonMoveTxGenerator::new()),
+            WorkloadKind::NoMove => (Arc::new(NonMoveTxGenerator::new()), None),
             WorkloadKind::Move {
                 num_input_objects,
                 num_dynamic_fields,
@@ -50,12 +55,16 @@ impl Workload {
                 let root_objects = ctx
                     .preparing_dynamic_fields(move_package.0, num_dynamic_fields)
                     .await;
-                Arc::new(MoveTxGenerator::new(
-                    move_package.0,
-                    num_input_objects,
-                    computation,
-                    root_objects,
-                ))
+
+                (
+                    Arc::new(MoveTxGenerator::new(
+                        move_package.0,
+                        num_input_objects,
+                        computation,
+                        root_objects,
+                    )),
+                    Some(move_package.0),
+                )
             }
         }
     }

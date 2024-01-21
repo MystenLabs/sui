@@ -7,7 +7,11 @@ use sui_single_node_benchmark::{
     tx_generator::{MoveTxGenerator, NonMoveTxGenerator, TxGenerator},
     workload::Workload,
 };
-use sui_types::{base_types::SuiAddress, object::Object, transaction::Transaction};
+use sui_types::{
+    base_types::{ObjectID, SuiAddress},
+    object::Object,
+    transaction::Transaction,
+};
 
 // pub const WORKLOAD: WorkloadKind = WorkloadKind::NoMove;
 pub const WORKLOAD: WorkloadKind = WorkloadKind::Move {
@@ -86,10 +90,9 @@ pub async fn generate_benchmark_ctx_workload(
 pub async fn generate_benchmark_txs(
     workload: Workload,
     mut ctx: BenchmarkContext,
-) -> (BenchmarkContext, Arc<dyn TxGenerator>, Vec<Transaction>) {
+) -> (BenchmarkContext, Option<ObjectID>, Vec<Transaction>) {
     let start_time = std::time::Instant::now();
-    let tx_generator = workload.create_tx_generator(&mut ctx).await;
-    let gen_clone = tx_generator.clone();
+    let (tx_generator, move_package) = workload.create_tx_generator(&mut ctx).await;
     let transactions = ctx.generate_transactions(tx_generator).await;
     let elapsed = start_time.elapsed().as_millis() as f64;
     println!(
@@ -99,7 +102,7 @@ pub async fn generate_benchmark_txs(
         1000f64 * workload.tx_count as f64 / elapsed,
     );
 
-    (ctx, gen_clone, transactions)
+    (ctx, move_package, transactions)
 }
 
 #[cfg(test)]

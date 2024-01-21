@@ -27,7 +27,7 @@ pub struct Command {
     pub checkpoint_size: usize,
     #[arg(
         long,
-        default_value = "baseline",
+        default_value = "execution-only",
         ignore_case = true,
         help = "Which component to benchmark"
     )]

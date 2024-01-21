@@ -12,6 +12,7 @@ use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::transaction_input_checker::get_gas_status_no_epoch_store_experimental;
 use sui_move_natives;
 use sui_protocol_config::ProtocolConfig;
+
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::digests::{ChainIdentifier, ObjectDigest, TransactionDigest};
@@ -35,6 +36,7 @@ use tokio::task::JoinSet;
 use tokio::time::{sleep, Duration};
 
 use crate::setup::generate_benchmark_ctx_workload;
+use crate::setup::generate_benchmark_txs;
 use crate::{metrics::Metrics, types::WritableObjectStore};
 
 use super::types::*;
@@ -527,7 +529,29 @@ impl<
 
     async fn init_genesis_objects(&self, tx_count: u64, duration: Duration) {
         // let (_, objects, _) = import_from_files(working_directory);
-        let (ctx, _) = generate_benchmark_ctx_workload(tx_count, duration).await;
+        let (ctx, workload) = generate_benchmark_ctx_workload(tx_count, duration).await;
+        let (ctx, move_package_id, _) = generate_benchmark_txs(workload, ctx).await;
+
+        // insert the move package into the store first
+        if move_package_id.is_some() {
+            let move_package_id = move_package_id.unwrap();
+            let move_package = ctx
+                .validator()
+                .get_validator()
+                .get_object(&move_package_id)
+                .await
+                .unwrap()
+                .unwrap();
+            self.memory_store.insert(
+                move_package_id,
+                (
+                    move_package.compute_object_reference(),
+                    move_package.clone(),
+                ),
+            );
+        }
+
+        // insert the genesis objects into the store
         let objects = ctx.get_genesis_objects();
         for obj in objects {
             self.memory_store

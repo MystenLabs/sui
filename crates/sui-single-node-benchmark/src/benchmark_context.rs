@@ -77,7 +77,7 @@ impl BenchmarkContext {
         }
     }
 
-    pub(crate) fn validator(&self) -> SingleValidator {
+    pub fn validator(&self) -> SingleValidator {
         self.validator.clone()
     }
 

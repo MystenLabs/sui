@@ -31,7 +31,7 @@ pub async fn run_benchmark(
     println!("Setting up benchmark...");
     let start_time = std::time::Instant::now();
     let mut ctx = BenchmarkContext::new(workload, component, checkpoint_size).await;
-    let tx_generator = workload.create_tx_generator(&mut ctx).await;
+    let (tx_generator, _) = workload.create_tx_generator(&mut ctx).await;
     let transactions = ctx.generate_transactions(tx_generator).await;
     let elapsed = start_time.elapsed().as_millis() as f64;
     println!(
