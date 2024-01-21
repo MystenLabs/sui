@@ -15,7 +15,7 @@ pub mod mock_account;
 pub(crate) mod mock_consensus;
 pub(crate) mod mock_storage;
 pub(crate) mod single_node;
-pub(crate) mod tx_generator;
+pub mod tx_generator;
 pub mod workload;
 
 /// Benchmark a given workload on a specified component.
