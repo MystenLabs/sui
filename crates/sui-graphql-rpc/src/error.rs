@@ -14,8 +14,8 @@ use crate::context_data::db_data_provider::DbValidationError;
 pub(crate) mod code {
     pub const BAD_REQUEST: &str = "BAD_REQUEST";
     pub const BAD_USER_INPUT: &str = "BAD_USER_INPUT";
-    pub const GRAPHQL_VALIDATION_FAILED: &str = "GRAPHQL_VALIDATION_FAILED";
     pub const INTERNAL_SERVER_ERROR: &str = "INTERNAL_SERVER_ERROR";
+    pub const UNKNOWN: &str = "UNKNOWN";
 }
 
 /// Create a GraphQL Response containing an Error.
