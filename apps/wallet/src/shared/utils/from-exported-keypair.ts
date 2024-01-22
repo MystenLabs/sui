@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ExportedKeypair, type Keypair } from '@mysten/sui.js/cryptography';
+import { type Keypair, type SignatureScheme } from '@mysten/sui.js/cryptography';
 import {
 	decodeSuiPrivateKey,
 	LEGACY_PRIVATE_KEY_SIZE,
@@ -12,8 +12,17 @@ import { Secp256k1Keypair } from '@mysten/sui.js/keypairs/secp256k1';
 import { Secp256r1Keypair } from '@mysten/sui.js/keypairs/secp256r1';
 import { fromB64 } from '@mysten/sui.js/utils';
 
+/**
+ * Wallet stored data might contain imported accounts with their keys stored in the previous format.
+ * Using this type to type-check it.
+ */
+export type LegacyExportedKeyPair = {
+	schema: SignatureScheme;
+	privateKey: string;
+};
+
 export function fromExportedKeypair(
-	secret: ExportedKeypair | string,
+	secret: LegacyExportedKeyPair | string,
 	legacySupport = false,
 ): Keypair {
 	let schema;

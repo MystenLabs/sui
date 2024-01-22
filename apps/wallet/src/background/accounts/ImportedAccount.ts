@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { decrypt, encrypt } from '_src/shared/cryptography/keystore';
-import { fromExportedKeypair } from '_src/shared/utils/from-exported-keypair';
-import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
+import {
+	fromExportedKeypair,
+	type LegacyExportedKeyPair,
+} from '_src/shared/utils/from-exported-keypair';
 
 import {
 	Account,
@@ -14,8 +16,8 @@ import {
 	type SigningAccount,
 } from './Account';
 
-type SessionStorageData = { keyPair: ExportedKeypair | string };
-type EncryptedData = { keyPair: ExportedKeypair | string };
+type SessionStorageData = { keyPair: LegacyExportedKeyPair | string };
+type EncryptedData = { keyPair: LegacyExportedKeyPair | string };
 
 export interface ImportedAccountSerialized extends SerializedAccount {
 	type: 'imported';
