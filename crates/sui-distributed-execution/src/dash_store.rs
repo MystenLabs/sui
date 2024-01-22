@@ -19,7 +19,8 @@ use crate::types::WritableObjectStore;
 
 #[derive(Debug)]
 pub struct DashMemoryBackedStore {
-    pub objects: DashMap<ObjectID, (ObjectRef, Object)>,
+    // pub objects: DashMap<ObjectID, (ObjectRef, Object)>,
+    pub objects: DashMap<ObjectID, Object>,
 }
 
 impl DashMemoryBackedStore {
@@ -32,7 +33,8 @@ impl DashMemoryBackedStore {
 
 impl ObjectStore for DashMemoryBackedStore {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        Ok(self.objects.get(object_id).map(|v| v.1.clone()))
+        // Ok(self.objects.get(object_id).map(|v| v.1.clone()))
+        Ok(self.objects.get(object_id).map(|v| v.clone()))
     }
 
     fn get_object_by_key(
@@ -40,12 +42,23 @@ impl ObjectStore for DashMemoryBackedStore {
         object_id: &ObjectID,
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
+        // Ok(self
+        //     .objects
+        //     .get(object_id)
+        //     .and_then(|obj| {
+        //         if obj.1.version() == version {
+        //             Some(obj.1.clone())
+        //         } else {
+        //             None
+        //         }
+        //     })
+        //     .clone())
         Ok(self
             .objects
             .get(object_id)
             .and_then(|obj| {
-                if obj.1.version() == version {
-                    Some(obj.1.clone())
+                if obj.version() == version {
+                    Some(obj.clone())
                 } else {
                     None
                 }
@@ -56,17 +69,24 @@ impl ObjectStore for DashMemoryBackedStore {
 
 impl WritableObjectStore for DashMemoryBackedStore {
     fn insert(&self, k: ObjectID, v: (ObjectRef, Object)) -> Option<(ObjectRef, Object)> {
-        self.objects.insert(k, v)
+        // self.objects.insert(k, v)
+        self.objects
+            .insert(k, v.1)
+            .map(|v| (v.compute_object_reference(), v))
     }
 
     fn remove(&self, k: ObjectID) -> Option<(ObjectRef, Object)> {
-        Some(self.objects.remove(&k).unwrap().1)
+        let (_, obj) = self.objects.remove(&k).unwrap();
+        Some((obj.compute_object_reference(), obj))
     }
 }
 
 impl ParentSync for DashMemoryBackedStore {
     fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
-        Ok(self.objects.get(&object_id).map(|v| v.0))
+        Ok(self
+            .objects
+            .get(&object_id)
+            .map(|v| v.compute_object_reference()))
     }
 }
 
@@ -127,7 +147,8 @@ impl ChildObjectResolver for DashMemoryBackedStore {
 
 impl ObjectStore for &DashMemoryBackedStore {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        Ok(self.objects.get(object_id).map(|v| v.1.clone()))
+        // Ok(self.objects.get(object_id).map(|v| v.1.clone()))
+        Ok(self.objects.get(object_id).map(|v| v.clone()))
     }
 
     fn get_object_by_key(
@@ -135,12 +156,23 @@ impl ObjectStore for &DashMemoryBackedStore {
         object_id: &ObjectID,
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
+        // Ok(self
+        //     .objects
+        //     .get(object_id)
+        //     .and_then(|obj| {
+        //         if obj.1.version() == version {
+        //             Some(obj.1.clone())
+        //         } else {
+        //             None
+        //         }
+        //     })
+        //     .clone())
         Ok(self
             .objects
             .get(object_id)
             .and_then(|obj| {
-                if obj.1.version() == version {
-                    Some(obj.1.clone())
+                if obj.version() == version {
+                    Some(obj.clone())
                 } else {
                     None
                 }
