@@ -14,8 +14,8 @@ import {
 	type SigningAccount,
 } from './Account';
 
-type SessionStorageData = { keyPair: ExportedKeypair };
-type EncryptedData = { keyPair: ExportedKeypair };
+type SessionStorageData = { keyPair: ExportedKeypair | string };
+type EncryptedData = { keyPair: ExportedKeypair | string };
 
 export interface ImportedAccountSerialized extends SerializedAccount {
 	type: 'imported';
@@ -43,7 +43,7 @@ export class ImportedAccount
 	readonly exportableKeyPair = true;
 
 	static async createNew(inputs: {
-		keyPair: ExportedKeypair;
+		keyPair: string;
 		password: string;
 	}): Promise<Omit<ImportedAccountSerialized, 'id'>> {
 		const keyPair = fromExportedKeypair(inputs.keyPair);
@@ -118,10 +118,10 @@ export class ImportedAccount
 		return this.generateSignature(data, keyPair);
 	}
 
-	async exportKeyPair(password: string): Promise<ExportedKeypair> {
+	async exportKeyPair(password: string): Promise<string> {
 		const { encrypted } = await this.getStoredData();
 		const { keyPair } = await decrypt<EncryptedData>(password, encrypted);
-		return keyPair;
+		return fromExportedKeypair(keyPair, true).getSecretKey();
 	}
 
 	async #getKeyPair() {

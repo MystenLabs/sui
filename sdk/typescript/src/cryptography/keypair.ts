@@ -21,6 +21,7 @@ export type ParsedKeypair = {
 	secretKey: Uint8Array;
 };
 
+/** @deprecated use string instead. See {@link Keypair.getSecretKey} */
 export type ExportedKeypair = {
 	schema: SignatureScheme;
 	privateKey: string;
@@ -99,6 +100,7 @@ export abstract class Keypair extends BaseSigner {
 	abstract getSecretKey(): string;
 
 	/**
+	 * @deprecated use {@link Keypair.getSecretKey} instead
 	 * This returns an exported keypair object, schema is the signature
 	 * scheme name, and the private key field is a Bech32 encoded string
 	 * of 33-byte `flag || private_key` that starts with `suiprivkey`.
