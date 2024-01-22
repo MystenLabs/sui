@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use sui_adapter_latest::{adapter, execution_engine};
 use sui_config::genesis::Genesis;
+use sui_core::authority::authority_store_tables::LiveObject;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::transaction_input_checker::get_gas_status_no_epoch_store_experimental;
 use sui_move_natives;
@@ -549,31 +550,28 @@ impl<
         let (ctx, workload) = generate_benchmark_ctx_workload(tx_count, duration).await;
         let (ctx, move_package_id, txs) = generate_benchmark_txs(workload, ctx).await;
 
-        // insert the move package into the store first
-        if move_package_id.is_some() {
-            let move_package_id = move_package_id.unwrap();
-            let move_package = ctx
-                .validator()
-                .get_validator()
-                .get_object(&move_package_id)
-                .await
-                .unwrap()
-                .unwrap();
-            self.memory_store.insert(
-                move_package_id,
-                (
-                    move_package.compute_object_reference(),
-                    move_package.clone(),
-                ),
-            );
+        let objects: HashMap<_, _> = ctx
+            .validator()
+            .get_validator()
+            .database
+            .iter_live_object_set(false)
+            .map(|o| match o {
+                LiveObject::Normal(object) => (object.id(), object),
+                LiveObject::Wrapped(_) => unreachable!(),
+            })
+            .collect();
+
+        for (id, obj) in objects {
+            self.memory_store
+                .insert(id, (obj.compute_object_reference(), obj));
         }
 
         // insert the genesis objects into the store
-        let objects = ctx.get_genesis_objects();
-        for obj in objects {
-            self.memory_store
-                .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
-        }
+        // let objects = ctx.get_genesis_objects();
+        // for obj in objects {
+        //     self.memory_store
+        //         .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
+        // }
 
         (txs, ctx)
     }
