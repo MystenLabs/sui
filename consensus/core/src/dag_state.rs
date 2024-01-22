@@ -177,4 +177,182 @@ impl DagState {
     }
 }
 
-// TODO: add unit tests.
+#[cfg(test)]
+mod test {
+    use std::vec;
+
+    use super::*;
+    use crate::{
+        block::{BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock},
+        storage::mem_store::MemStore,
+    };
+
+    #[test]
+    fn get_unncommitted_blocks() {
+        let context = Arc::new(Context::new_for_test());
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Populate test blocks for round 1 ~ 10, authorities 0 ~ 2.
+        let num_rounds: u32 = 10;
+        let non_existent_round: u32 = 100;
+        let num_authorities: u32 = 3;
+        let num_blocks_per_slot: usize = 3;
+        let mut blocks = BTreeMap::new();
+        for round in 1..=num_rounds {
+            for author in 0..num_authorities {
+                // Create 3 blocks per slot, with different timestamps and digests.
+                let base_ts = round as BlockTimestampMs * 1000;
+                for timestamp in base_ts..base_ts + num_blocks_per_slot as u64 {
+                    let block = VerifiedBlock::new_for_test(
+                        TestBlock::new(round, author)
+                            .set_timestamp_ms(timestamp)
+                            .build(),
+                    );
+                    dag_state.accept_block(block.clone());
+                    blocks.insert(block.reference(), block);
+                }
+            }
+        }
+
+        // Check uncommitted blocks that exist.
+        for (r, block) in &blocks {
+            assert_eq!(dag_state.get_uncommitted_block(r), Some(block.clone()));
+        }
+
+        // Check uncommitted blocks that do not exist.
+        let last_ref = blocks.keys().last().unwrap();
+        assert!(dag_state
+            .get_uncommitted_block(&BlockRef::new(
+                last_ref.round,
+                last_ref.author,
+                BlockDigest::MIN
+            ))
+            .is_none());
+
+        // Check slots with uncommitted blocks.
+        for round in 1..=num_rounds {
+            for author in 0..num_authorities {
+                let slot = Slot::new(
+                    round,
+                    context
+                        .committee
+                        .to_authority_index(author as usize)
+                        .unwrap(),
+                );
+                let blocks = dag_state.get_uncommitted_blocks_at_slot(slot);
+                assert_eq!(blocks.len(), num_blocks_per_slot);
+                for b in blocks {
+                    assert_eq!(b.round(), round);
+                    assert_eq!(
+                        b.author(),
+                        context
+                            .committee
+                            .to_authority_index(author as usize)
+                            .unwrap()
+                    );
+                }
+            }
+        }
+
+        // Check slots without uncommitted blocks.
+        let slot = Slot::new(non_existent_round, AuthorityIndex::ZERO);
+        assert!(dag_state.get_uncommitted_blocks_at_slot(slot).is_empty());
+
+        // Check rounds with uncommitted blocks.
+        for round in 1..=num_rounds {
+            let blocks = dag_state.get_uncommitted_blocks_at_round(round);
+            assert_eq!(blocks.len(), num_authorities as usize * num_blocks_per_slot);
+            for b in blocks {
+                assert_eq!(b.round(), round);
+            }
+        }
+
+        // Check rounds without uncommitted blocks.
+        assert!(dag_state
+            .get_uncommitted_blocks_at_round(non_existent_round)
+            .is_empty());
+    }
+
+    #[test]
+    fn ancestors_at_uncommitted_round() {
+        let context = Arc::new(Context::new_for_test());
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Populate a dag of blocks.
+
+        // block_1_0 will be connected to anchor.
+        let block_1_0 =
+            VerifiedBlock::new_for_test(TestBlock::new(1, 0).set_timestamp_ms(100).build());
+        // Slot(1, 1) has 2 blocks. Only block_1_1 will be connected to anchor.
+        let block_1_1 =
+            VerifiedBlock::new_for_test(TestBlock::new(1, 1).set_timestamp_ms(110).build());
+        let block_1_1_1 =
+            VerifiedBlock::new_for_test(TestBlock::new(1, 1).set_timestamp_ms(111).build());
+        // block_1_2 will not be connected to anchor.
+        let block_1_2 =
+            VerifiedBlock::new_for_test(TestBlock::new(1, 2).set_timestamp_ms(120).build());
+        // block_1_3 will be connected to anchor.
+        let block_1_3 =
+            VerifiedBlock::new_for_test(TestBlock::new(1, 3).set_timestamp_ms(130).build());
+        let round_1 = vec![
+            block_1_0.clone(),
+            block_1_1.clone(),
+            block_1_1_1.clone(),
+            block_1_2.clone(),
+            block_1_3.clone(),
+        ];
+        let round_1_ancestors = vec![
+            block_1_0.reference(),
+            block_1_1.reference(),
+            block_1_3.reference(),
+        ];
+        let round_2 = vec![
+            VerifiedBlock::new_for_test(
+                TestBlock::new(2, 0)
+                    .set_timestamp_ms(200)
+                    .set_ancestors(round_1_ancestors.clone())
+                    .build(),
+            ),
+            VerifiedBlock::new_for_test(
+                TestBlock::new(2, 2)
+                    .set_timestamp_ms(220)
+                    .set_ancestors(round_1_ancestors.clone())
+                    .build(),
+            ),
+            VerifiedBlock::new_for_test(
+                TestBlock::new(2, 3)
+                    .set_timestamp_ms(230)
+                    .set_ancestors(round_1_ancestors.clone())
+                    .build(),
+            ),
+        ];
+        let round_2_ancestors = round_2.iter().map(|b| b.reference()).collect();
+        let anchor = VerifiedBlock::new_for_test(
+            TestBlock::new(3, 1)
+                .set_timestamp_ms(310)
+                .set_ancestors(round_2_ancestors)
+                .build(),
+        );
+
+        // Add all blocks to DagState.
+        for b in round_1
+            .iter()
+            .chain(round_2.iter())
+            .chain([anchor.clone()].iter())
+        {
+            dag_state.accept_block(b.clone());
+        }
+
+        // Check ancestors connected to anchor.
+        let ancestors = dag_state.ancestors_at_uncommitted_round(&anchor, 1);
+        let mut ancestors_refs: Vec<BlockRef> = ancestors.iter().map(|b| b.reference()).collect();
+        ancestors_refs.sort();
+        assert_eq!(
+            ancestors_refs, round_1_ancestors,
+            "Expected round 1 ancestors: {:?}. Got: {:?}",
+            round_1_ancestors, ancestors_refs
+        );
+    }
+}

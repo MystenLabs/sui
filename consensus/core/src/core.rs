@@ -230,9 +230,9 @@ mod test {
         assert_eq!(core.last_proposed_round(), 0);
 
         // Add a few blocks which will get accepted
-        let block_1 = BlockV1::new(1, AuthorityIndex::new_for_test(0), 0, vec![]);
-        let block_2 = BlockV1::new(1, AuthorityIndex::new_for_test(1), 0, vec![]);
-        let block_3 = BlockV1::new(1, AuthorityIndex::new_for_test(2), 0, vec![]);
+        let block_1 = BlockV1::new(1, AuthorityIndex::new_for_test(0), 0, vec![], vec![]);
+        let block_2 = BlockV1::new(1, AuthorityIndex::new_for_test(1), 0, vec![], vec![]);
+        let block_3 = BlockV1::new(1, AuthorityIndex::new_for_test(2), 0, vec![], vec![]);
 
         let blocks = vec![block_1, block_2, block_3]
             .into_iter()

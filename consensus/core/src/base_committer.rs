@@ -258,7 +258,7 @@ impl BaseCommitter {
     /// skip the target leader.
     fn decide_leader_from_anchor(&self, anchor: &VerifiedBlock, leader_slot: Slot) -> LeaderStatus {
         // Get the block(s) proposed by the leader. There could be more than one leader block
-        // per round (produced by a Byzantine leader).
+        // in the slot from a Byzantine authority.
         let leader_blocks = self
             .dag_state
             .read()
