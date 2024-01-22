@@ -1,5 +1,7 @@
 use core::panic;
 use dashmap::DashMap;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_vm_runtime::move_vm::MoveVM;
@@ -12,6 +14,7 @@ use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::transaction_input_checker::get_gas_status_no_epoch_store_experimental;
 use sui_move_natives;
 use sui_protocol_config::ProtocolConfig;
+use sui_single_node_benchmark::benchmark_context::BenchmarkContext;
 
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::committee::EpochId;
@@ -533,7 +536,11 @@ impl<
     //     }
     // }
 
-    async fn init_genesis_objects(&self, tx_count: u64, duration: Duration) -> Vec<Transaction> {
+    async fn init_genesis_objects(
+        &self,
+        tx_count: u64,
+        duration: Duration,
+    ) -> (Vec<Transaction>, BenchmarkContext) {
         // let (_, objects, _) = import_from_files(working_directory);
         let (ctx, workload) = generate_benchmark_ctx_workload(tx_count, duration).await;
         let (ctx, move_package_id, txs) = generate_benchmark_txs(workload, ctx).await;
@@ -564,7 +571,7 @@ impl<
                 .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
         }
 
-        txs
+        (txs, ctx)
     }
 
     /// ExecutionWorker main
@@ -610,30 +617,47 @@ impl<
 
         if self.mode == ExecutionMode::Channel {
             // self.process_genesis_objects(in_channel).await;
-            let txs = self.init_genesis_objects(tx_count, duration).await;
-            for tx in txs {
-                let full_tx = TransactionWithEffects {
-                    tx: tx.data().clone(),
-                    ground_truth_effects: None,
-                    child_inputs: None,
-                    checkpoint_seq: None,
-                    timestamp: 0.0,
-                };
-                Self::async_exec(
-                    full_tx,
-                    self.memory_store.clone(),
-                    HashSet::new(),
-                    move_vm.clone(),
-                    reference_gas_price,
-                    epoch_data.epoch_id(),
-                    epoch_data.epoch_start_timestamp(),
-                    protocol_config.clone(),
-                    metrics.clone(),
-                    my_id as u8,
-                    &ew_ids,
-                )
-                .await;
-            }
+            let (txs, ctx) = self.init_genesis_objects(tx_count, duration).await;
+            let in_memory_store = ctx.validator().create_in_memory_store();
+            let tasks: FuturesUnordered<_> = txs
+                .into_iter()
+                .map(|tx| {
+                    let validator = ctx.validator();
+                    let in_memory_store = in_memory_store.clone();
+                    tokio::spawn(async move {
+                        validator
+                            .execute_transaction_in_memory(in_memory_store, tx)
+                            .await
+                    })
+                })
+                .collect();
+            let results: Vec<_> = tasks.collect().await;
+            results.into_iter().for_each(|r| {
+                r.unwrap();
+            });
+            // for tx in txs {
+            //     let full_tx = TransactionWithEffects {
+            //         tx: tx.data().clone(),
+            //         ground_truth_effects: None,
+            //         child_inputs: None,
+            //         checkpoint_seq: None,
+            //         timestamp: 0.0,
+            //     };
+            //     Self::async_exec(
+            //         full_tx,
+            //         self.memory_store.clone(),
+            //         HashSet::new(),
+            //         move_vm.clone(),
+            //         reference_gas_price,
+            //         epoch_data.epoch_id(),
+            //         epoch_data.epoch_start_timestamp(),
+            //         protocol_config.clone(),
+            //         metrics.clone(),
+            //         my_id as u8,
+            //         &ew_ids,
+            //     )
+            //     .await;
+            // }
             panic!("Done executing txs");
         }
         // Main loop

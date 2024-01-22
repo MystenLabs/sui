@@ -18,7 +18,7 @@ use sui_types::storage::{
 };
 
 #[derive(Clone)]
-pub(crate) struct InMemoryObjectStore {
+pub struct InMemoryObjectStore {
     objects: Arc<HashMap<ObjectID, Object>>,
     num_object_reads: Arc<AtomicU64>,
 }

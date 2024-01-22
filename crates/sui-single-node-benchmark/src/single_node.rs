@@ -170,7 +170,7 @@ impl SingleValidator {
         effects
     }
 
-    pub(crate) async fn execute_transaction_in_memory(
+    pub async fn execute_transaction_in_memory(
         &self,
         store: InMemoryObjectStore,
         transaction: Transaction,
@@ -295,7 +295,7 @@ impl SingleValidator {
         (checkpoint_executor, ckpt_sender)
     }
 
-    pub(crate) fn create_in_memory_store(&self) -> InMemoryObjectStore {
+    pub fn create_in_memory_store(&self) -> InMemoryObjectStore {
         let objects: HashMap<_, _> = self
             .get_validator()
             .database
