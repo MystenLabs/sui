@@ -8,7 +8,7 @@ use clap::Parser;
 use sui_graphql_rpc::commands::Command;
 use sui_graphql_rpc::config::{ConnectionConfig, ServerConfig, ServiceConfig};
 use sui_graphql_rpc::config::{Ide, TxExecFullNodeConfig};
-use sui_graphql_rpc::schema_sdl_export;
+use sui_graphql_rpc::server::builder::export_schema;
 use sui_graphql_rpc::server::graphiql_server::{
     start_graphiql_server, start_graphiql_server_from_cfg_path,
 };
@@ -32,7 +32,7 @@ async fn main() {
             }
         }
         Command::GenerateSchema { file } => {
-            let out = schema_sdl_export();
+            let out = export_schema();
             if let Some(file) = file {
                 println!("Write schema to file: {:?}", file);
                 std::fs::write(file, &out).unwrap();
