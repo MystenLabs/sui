@@ -430,6 +430,10 @@ impl<
             }
         }
 
+        if !missing_objs.is_empty() {
+            panic!("Missing objects for tx {}: {:?}", txid, missing_objs);
+        }
+
         if missing_objs.is_empty()
             && get_ews_for_tx(&full_tx, ew_ids).contains(&(my_id as UniqueId))
         {
