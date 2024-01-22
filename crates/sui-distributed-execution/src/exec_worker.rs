@@ -532,33 +532,34 @@ impl<
         let (ctx, workload) = generate_benchmark_ctx_workload(tx_count, duration).await;
         let (ctx, move_package_id, txs) = generate_benchmark_txs(workload, ctx).await;
 
-        // insert the move package into the store first
-        if move_package_id.is_some() {
-            let move_package_id = move_package_id.unwrap();
-            let move_package = ctx
-                .validator()
-                .get_validator()
-                .get_object(&move_package_id)
-                .await
-                .unwrap()
-                .unwrap();
-            self.memory_store.insert(
-                move_package_id,
-                (
-                    move_package.compute_object_reference(),
-                    move_package.clone(),
-                ),
-            );
-        }
+        // // insert the move package into the store first
+        // if move_package_id.is_some() {
+        //     let move_package_id = move_package_id.unwrap();
+        //     let move_package = ctx
+        //         .validator()
+        //         .get_validator()
+        //         .get_object(&move_package_id)
+        //         .await
+        //         .unwrap()
+        //         .unwrap();
+        //     self.memory_store.insert(
+        //         move_package_id,
+        //         (
+        //             move_package.compute_object_reference(),
+        //             move_package.clone(),
+        //         ),
+        //     );
+        // }
 
-        // insert the genesis objects into the store
-        let objects = ctx.get_genesis_objects();
-        for obj in objects {
-            self.memory_store
-                .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
-        }
+        // // insert the genesis objects into the store
+        // let objects = ctx.get_genesis_objects();
+        // for obj in objects {
+        //     self.memory_store
+        //         .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
+        // }
 
         ctx.benchmark_transaction_execution_in_memory(txs).await;
+        panic!("Done with init_genesis_objects");
     }
 
     /// ExecutionWorker main
