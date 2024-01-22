@@ -475,7 +475,6 @@ mod tests {
             .execute_to_graphql(query.to_string(), true, variables, vec![])
             .await
             .unwrap();
-
         let binding = res.response_body().data.clone().into_json().unwrap();
         let res = binding.get("dryRunTransactionBlock").unwrap();
 

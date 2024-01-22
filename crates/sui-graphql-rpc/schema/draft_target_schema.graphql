@@ -269,8 +269,8 @@ scalar OpenMoveTypeSignature
 # `TransactionData` in a dry-run.
 input TransactionMetadata {
   sender: SuiAddress
-  gasPrice: BigInt
-  gasBudget: BigInt
+  gasPrice: Int
+  gasBudget: Int
   gasObjects: [ObjectRef!]
   gasSponsor: SuiAddress
 }

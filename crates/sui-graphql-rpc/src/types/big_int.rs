@@ -35,13 +35,6 @@ impl Description for BigInt {
         "String representation of an arbitrary width, possibly signed integer."
     }
 }
-impl BigInt {
-    pub fn to_u64(&self) -> InputValueResult<u64> {
-        self.0
-            .parse()
-            .map_err(|e| InputValueError::custom(format!("Not a valid u64 number: {e}")))
-    }
-}
 
 impl FromStr for BigInt {
     type Err = NotANumber;

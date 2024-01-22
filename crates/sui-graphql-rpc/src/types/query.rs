@@ -4,11 +4,14 @@
 use std::str::FromStr;
 
 use async_graphql::{connection::Connection, *};
+use fastcrypto::encoding::{Base64, Encoding};
+use move_core_types::account_address::AccountAddress;
+use serde::de::DeserializeOwned;
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_json_rpc_types::DevInspectArgs;
 use sui_sdk::SuiClient;
 use sui_types::transaction::{TransactionData, TransactionKind};
-use sui_types::{gas_coin::GAS, sui_serde::BigInt, transaction::TransactionDataAPI, TypeTag};
+use sui_types::{gas_coin::GAS, transaction::TransactionDataAPI, TypeTag};
 
 use super::{
     address::Address,
@@ -33,8 +36,8 @@ use super::{
     type_filter::ExactTypeFilter,
 };
 use crate::{
-    config::ServiceConfig, context_data::db_data_provider::PgManager, data::Db,
-    deserialize_tx_data, error::Error, mutation::Mutation,
+    config::ServiceConfig, context_data::db_data_provider::PgManager, data::Db, error::Error,
+    mutation::Mutation,
 };
 
 pub(crate) struct Query;
@@ -80,11 +83,7 @@ impl Query {
     ///
     /// `txMeta` the data that is missing from a `TransactionKind` to make
     ///     a `TransactionData` (sender address and gas information).  All
-    ///     its fields are nullable: `sender` defaults to `0x0`, if
-    ///     `gasObjects` is not present, or is an empty list, it is
-    ///     substituted with a mock Coin object, `gasPrice` defaults to
-    ///     the reference gas price, `gasBudget` defaults to the max gas budget
-    ///     and `gasSponsor` defaults to the sender.
+    ///     its fields are nullable.
     ///
     /// `skipChecks` optional flag to disable the usual verification
     ///     checks that prevent access to objects that are owned by
@@ -121,22 +120,9 @@ impl Query {
                 let tx_kind = deserialize_tx_data::<TransactionKind>(&tx_bytes)?;
 
                 // Default is 0x0
-                let sender_address = sender
-                    .unwrap_or_else(|| SuiAddress::from_array([0; SuiAddress::LENGTH]))
-                    .into();
+                let sender_address = sender.unwrap_or_else(|| AccountAddress::ZERO.into()).into();
 
-                let gas_sponsor = gas_sponsor
-                    .map(|addr| {
-                        addr.as_slice()
-                            .try_into()
-                            .map_err(|_| {
-                                Error::Internal(
-                                    "Unable to deserialize gas sponsor address".to_string(),
-                                )
-                            })
-                            .extend()
-                    })
-                    .transpose()?;
+                let gas_sponsor = gas_sponsor.map(|addr| addr.into());
 
                 let gas_objects = gas_objects.map(|objs| {
                     objs.into_iter()
@@ -144,26 +130,12 @@ impl Query {
                         .collect()
                 });
 
-                let gas_budget = gas_budget
-                    .map(|budget| budget.to_u64())
-                    .transpose()
-                    .map_err(|_| Error::Internal("Unable to convert gas budget to u64".to_string()))
-                    .extend()?
-                    .map(BigInt::from);
-
-                let gas_price = gas_price
-                    .map(|price: crate::types::big_int::BigInt| price.to_u64())
-                    .transpose()
-                    .map_err(|_| Error::Internal("Unable to convert gas price to u64".to_string()))
-                    .extend()?
-                    .map(BigInt::from);
-
                 (
                     sender_address,
                     tx_kind,
-                    gas_price,
+                    gas_price.map(|p| p.into()),
                     gas_sponsor,
-                    gas_budget,
+                    gas_budget.map(|b| b.into()),
                     gas_objects,
                 )
             } else {
@@ -173,9 +145,9 @@ impl Query {
                 (
                     tx_data.sender(),
                     tx_data.clone().into_kind(),
-                    Some(BigInt::from(tx_data.gas_price())),
+                    Some(tx_data.gas_price().into()),
                     Some(tx_data.gas_owner()),
-                    Some(BigInt::from(tx_data.gas_budget())),
+                    Some(tx_data.gas_budget().into()),
                     Some(tx_data.gas().to_vec()),
                 )
             };
@@ -394,4 +366,25 @@ impl Query {
             .await
             .extend()
     }
+}
+
+fn deserialize_tx_data<T>(tx_bytes: &str) -> Result<T>
+where
+    T: DeserializeOwned,
+{
+    bcs::from_bytes(
+        &Base64::decode(tx_bytes)
+            .map_err(|e| {
+                Error::Client(format!(
+                    "Unable to deserialize transaction bytes from Base64: {e}"
+                ))
+            })
+            .extend()?,
+    )
+    .map_err(|e| {
+        Error::Client(format!(
+            "Unable to deserialize transaction bytes as BCS: {e}"
+        ))
+    })
+    .extend()
 }

@@ -37,8 +37,6 @@ pub(crate) enum FromVecError {
 }
 
 impl SuiAddress {
-    pub const LENGTH: usize = SUI_ADDRESS_LENGTH;
-
     pub fn from_array(arr: [u8; SUI_ADDRESS_LENGTH]) -> Self {
         SuiAddress(arr)
     }
@@ -89,12 +87,6 @@ impl TryFrom<Vec<u8>> for SuiAddress {
     }
 }
 
-impl From<SuiAddress> for ObjectID {
-    fn from(value: SuiAddress) -> Self {
-        ObjectID::new(value.0)
-    }
-}
-
 impl From<AccountAddress> for SuiAddress {
     fn from(value: AccountAddress) -> Self {
         SuiAddress(value.into_bytes())
@@ -110,6 +102,12 @@ impl From<SuiAddress> for AccountAddress {
 impl From<ObjectID> for SuiAddress {
     fn from(value: ObjectID) -> Self {
         SuiAddress(value.into_bytes())
+    }
+}
+
+impl From<SuiAddress> for ObjectID {
+    fn from(value: SuiAddress) -> Self {
+        ObjectID::new(value.0)
     }
 }
 

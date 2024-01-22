@@ -9,76 +9,17 @@ use crate::error::Error;
 use async_graphql::*;
 use sui_json_rpc_types::{DevInspectResults, SuiExecutionResult};
 use sui_types::effects::TransactionEffects as NativeTransactionEffects;
-use sui_types::event::Event as NativeEvent;
 use sui_types::transaction::TransactionData as NativeTransactionData;
 
-#[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
-#[graphql(complex)]
+#[derive(Clone, Debug, SimpleObject)]
 pub(crate) struct DryRunResult {
     /// The error that occurred during dry run execution, if any.
     pub error: Option<String>,
-    /// The intermediate results of the dry run execution.
+    /// The intermediate results for each command of the dry run execution, including
+    /// contents of mutated references and return values.
     pub results: Option<Vec<DryRunEffect>>,
-
-    #[graphql(skip)]
-    pub events: Vec<NativeEvent>,
-
-    #[graphql(skip)]
-    pub effects: NativeTransactionEffects,
-
-    #[graphql(skip)]
-    pub tx_data: NativeTransactionData,
-}
-
-#[ComplexObject]
-impl DryRunResult {
     /// The transaction block representing the dry run execution.
-    pub async fn transaction(&self) -> Option<TransactionBlock> {
-        Some(TransactionBlock::DryRun {
-            tx_data: self.tx_data.clone(),
-            effects: self.effects.clone(),
-            events: self.events.clone(),
-        })
-    }
-}
-
-impl TryFrom<DevInspectResults> for DryRunResult {
-    type Error = crate::error::Error;
-    fn try_from(results: DevInspectResults) -> Result<Self, Self::Error> {
-        let execution_results = results
-            .results
-            .ok_or(Error::Internal(
-                "No execution results returned from dev inspect".to_string(),
-            ))?
-            .into_iter()
-            .map(DryRunEffect::try_from)
-            .collect::<Result<Vec<_>, Self::Error>>()?;
-        let events = results
-            .events
-            .data
-            .into_iter()
-            .map(|e| NativeEvent {
-                sender: e.sender,
-                package_id: e.package_id,
-                transaction_module: e.transaction_module,
-                type_: e.type_,
-                contents: e.bcs,
-            })
-            .collect();
-        let effects: NativeTransactionEffects =
-            bcs::from_bytes(&results.raw_effects).map_err(|e| {
-                Error::Internal(format!("Unable to deserialize transaction effects: {e}"))
-            })?;
-        let tx_data: NativeTransactionData = bcs::from_bytes(&results.raw_txn_data)
-            .map_err(|e| Error::Internal(format!("Unable to deserialize transaction data: {e}")))?;
-        Ok(Self {
-            error: results.error,
-            results: Some(execution_results),
-            events,
-            effects,
-            tx_data,
-        })
-    }
+    pub transaction: Option<TransactionBlock>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
@@ -88,6 +29,53 @@ pub(crate) struct DryRunEffect {
 
     /// Return results of each command in this transaction.
     pub return_values: Option<Vec<DryRunReturn>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
+pub(crate) struct DryRunMutation {
+    pub input: TransactionArgument,
+
+    pub type_: MoveType,
+
+    pub bcs: Base64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
+pub(crate) struct DryRunReturn {
+    pub type_: MoveType,
+
+    pub bcs: Base64,
+}
+
+impl TryFrom<DevInspectResults> for DryRunResult {
+    type Error = crate::error::Error;
+    fn try_from(results: DevInspectResults) -> Result<Self, Self::Error> {
+        let execution_results = results
+            .results
+            .ok_or_else(|| {
+                Error::Internal("No execution results returned from dev inspect".to_string())
+            })?
+            .into_iter()
+            .map(DryRunEffect::try_from)
+            .collect::<Result<Vec<_>, Self::Error>>()?;
+        let events = results.events.data.into_iter().map(|e| e.into()).collect();
+        let effects: NativeTransactionEffects =
+            bcs::from_bytes(&results.raw_effects).map_err(|e| {
+                Error::Internal(format!("Unable to deserialize transaction effects: {e}"))
+            })?;
+        let tx_data: NativeTransactionData = bcs::from_bytes(&results.raw_txn_data)
+            .map_err(|e| Error::Internal(format!("Unable to deserialize transaction data: {e}")))?;
+        let transaction = Some(TransactionBlock::DryRun {
+            tx_data,
+            effects,
+            events,
+        });
+        Ok(Self {
+            error: results.error,
+            results: Some(execution_results),
+            transaction,
+        })
+    }
 }
 
 impl TryFrom<SuiExecutionResult> for DryRunEffect {
@@ -104,7 +92,7 @@ impl TryFrom<SuiExecutionResult> for DryRunEffect {
                     bcs: bcs.into(),
                 })
             })
-            .collect::<Result<Vec<_>>>()
+            .collect::<Result<Vec<_>, anyhow::Error>>()
             .map_err(|e| {
                 Error::Internal(format!(
                     "Failed to parse results returned from dev inspect: {:?}",
@@ -120,7 +108,7 @@ impl TryFrom<SuiExecutionResult> for DryRunEffect {
                     bcs: bcs.into(),
                 })
             })
-            .collect::<Result<Vec<_>>>()
+            .collect::<Result<Vec<_>, anyhow::Error>>()
             .map_err(|e| {
                 Error::Internal(format!(
                     "Failed to parse results returned from dev inspect: {:?}",
@@ -132,22 +120,4 @@ impl TryFrom<SuiExecutionResult> for DryRunEffect {
             return_values: Some(return_values),
         })
     }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
-pub(crate) struct DryRunMutation {
-    pub input: TransactionArgument,
-
-    #[graphql(name = "type")]
-    pub type_: MoveType,
-
-    pub bcs: Base64,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
-pub(crate) struct DryRunReturn {
-    #[graphql(name = "type")]
-    pub type_: MoveType,
-
-    pub bcs: Base64,
 }

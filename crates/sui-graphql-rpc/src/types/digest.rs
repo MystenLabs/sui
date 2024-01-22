@@ -25,10 +25,6 @@ impl Digest {
     pub(crate) fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
     }
-
-    fn into_inner(self) -> [u8; BASE58_DIGEST_LENGTH] {
-        self.0
-    }
 }
 
 impl_string_input!(Digest);
@@ -62,7 +58,7 @@ impl TryFrom<&[u8]> for Digest {
 
 impl From<Digest> for ObjectDigest {
     fn from(digest: Digest) -> Self {
-        ObjectDigest::new(digest.into_inner())
+        ObjectDigest::new(digest.0)
     }
 }
 
