@@ -226,7 +226,7 @@ impl BridgeAction {
                 // Add message version
                 bytes.push(TOKEN_TRANSFER_MESSAGE_VERSION);
                 // Add nonce
-                bytes.extend_from_slice(&e.nonce.to_le_bytes());
+                bytes.extend_from_slice(&e.nonce.to_be_bytes());
                 // Add source chain id
                 bytes.push(e.sui_chain_id as u8);
 
@@ -245,7 +245,7 @@ impl BridgeAction {
                 bytes.push(e.token_id as u8);
 
                 // Add token amount
-                bytes.extend_from_slice(&e.amount.to_le_bytes());
+                bytes.extend_from_slice(&e.amount.to_be_bytes());
             }
             BridgeAction::EthToSuiBridgeAction(a) => {
                 let e = &a.eth_bridge_event;
@@ -254,7 +254,7 @@ impl BridgeAction {
                 // Add message version
                 bytes.push(TOKEN_TRANSFER_MESSAGE_VERSION);
                 // Add nonce
-                bytes.extend_from_slice(&e.nonce.to_le_bytes());
+                bytes.extend_from_slice(&e.nonce.to_be_bytes());
                 // Add source chain id
                 bytes.push(e.eth_chain_id as u8);
 
@@ -273,7 +273,7 @@ impl BridgeAction {
                 bytes.push(e.token_id as u8);
 
                 // Add token amount
-                bytes.extend_from_slice(&e.amount.to_le_bytes());
+                bytes.extend_from_slice(&e.amount.to_be_bytes());
             } // TODO add formats for other events
         }
         bytes
@@ -462,7 +462,7 @@ mod tests {
         let prefix_bytes = BRIDGE_MESSAGE_PREFIX.to_vec(); // len: 18
         let message_type = vec![BridgeActionType::TokenTransfer as u8]; // len: 1
         let message_version = vec![TOKEN_TRANSFER_MESSAGE_VERSION]; // len: 1
-        let nonce_bytes = nonce.to_le_bytes().to_vec(); // len: 8
+        let nonce_bytes = nonce.to_be_bytes().to_vec(); // len: 8
         let source_chain_id_bytes = vec![sui_chain_id as u8]; // len: 1
 
         let sui_address_length_bytes = vec![SUI_ADDRESS_LENGTH as u8]; // len: 1
@@ -472,7 +472,7 @@ mod tests {
         let eth_address_bytes = eth_address.as_bytes().to_vec(); // len: 20
 
         let token_id_bytes = vec![token_id as u8]; // len: 1
-        let token_amount_bytes = amount.to_le_bytes().to_vec(); // len: 8
+        let token_amount_bytes = amount.to_be_bytes().to_vec(); // len: 8
 
         let mut combined_bytes = Vec::new();
         combined_bytes.extend_from_slice(&prefix_bytes);
@@ -535,16 +535,15 @@ mod tests {
             sui_bridge_event,
         })
         .to_bytes();
-
         assert_eq!(
             encoded_bytes,
-            Hex::decode("5355495f4252494447455f4d45535341474500010a00000000000000012000000000000000000000000000000000000000000000000000000000000000640b1400000000000000000000000000000000000000c8033930000000000000").unwrap(),
+            Hex::decode("5355495f4252494447455f4d4553534147450001000000000000000a012000000000000000000000000000000000000000000000000000000000000000640b1400000000000000000000000000000000000000c8030000000000003039").unwrap(),
         );
 
         let hash = Keccak256::digest(encoded_bytes).digest;
         assert_eq!(
             hash.to_vec(),
-            Hex::decode("1f308fdc0a7e73701370bf1ecbac91cc0605a2be000c52431c4f9546545ead5b")
+            Hex::decode("6ab34c52b6264cbc12fe8c3874f9b08f8481d2e81530d136386646dbe2f8baf4")
                 .unwrap(),
         );
         Ok(())
@@ -588,13 +587,13 @@ mod tests {
 
         assert_eq!(
             encoded_bytes,
-            Hex::decode("5355495f4252494447455f4d45535341474500010a000000000000000b1400000000000000000000000000000000000000c801200000000000000000000000000000000000000000000000000000000000000064033930000000000000").unwrap(),
+            Hex::decode("5355495f4252494447455f4d4553534147450001000000000000000a0b1400000000000000000000000000000000000000c801200000000000000000000000000000000000000000000000000000000000000064030000000000003039").unwrap(),
         );
 
         let hash = Keccak256::digest(encoded_bytes).digest;
         assert_eq!(
             hash.to_vec(),
-            Hex::decode("e9ea9aef6729a3274ebb77acb835039f71a8910e90eb14a2c479bf5901159cc5")
+            Hex::decode("b352508c301a37bb1b68a75dd0fc42b6f692b2650818631c8f8a4d4d3e5bef46")
                 .unwrap(),
         );
         Ok(())

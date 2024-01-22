@@ -5,6 +5,7 @@ module bridge::message {
     use std::vector;
 
     use sui::bcs;
+    use sui::bcs::BCS;
 
     use bridge::message_types;
 
@@ -63,7 +64,7 @@ module bridge::message {
         let target_chain = bcs::peel_u8(&mut bcs);
         let target_address = bcs::peel_vec_u8(&mut bcs);
         let token_type = bcs::peel_u8(&mut bcs);
-        let amount = bcs::peel_u64(&mut bcs);
+        let amount = peel_u64_be(&mut bcs);
         assert!(vector::is_empty(&bcs::into_remainder_bytes(bcs)), ETrailingBytes);
         TokenPayload {
             sender_address,
@@ -95,7 +96,7 @@ module bridge::message {
         vector::push_back(&mut message, message_type);
         vector::push_back(&mut message, message_version);
         // bcs serializes u64 as 8 bytes
-        vector::append(&mut message, bcs::to_bytes(&seq_num));
+        vector::append(&mut message, reverse_bytes(bcs::to_bytes(&seq_num)));
         vector::push_back(&mut message, source_chain);
         vector::append(&mut message, payload);
         message
@@ -132,7 +133,7 @@ module bridge::message {
         vector::append(&mut payload, target_address);
         vector::push_back(&mut payload, token_type);
         // bcs serialzies u64 as 8 bytes
-        vector::append(&mut payload, bcs::to_bytes(&amount));
+        vector::append(&mut payload, reverse_bytes(bcs::to_bytes(&amount)));
 
         BridgeMessage {
             message_type: message_types::token(),
@@ -206,13 +207,28 @@ module bridge::message {
         self.op_type
     }
 
+    fun reverse_bytes(bytes: vector<u8>): vector<u8> {
+        vector::reverse(&mut bytes);
+        bytes
+    }
+
+    fun peel_u64_be(bcs: &mut BCS): u64 {
+        let (value, i) = (0u64, 64u8);
+        while (i > 0) {
+            i = i - 8;
+            let byte = (bcs::peel_u8(bcs) as u64);
+            value = value + (byte << i);
+        };
+        value
+    }
+
     #[test_only]
     public fun deserialize_message(message: vector<u8>): BridgeMessage {
         let bcs = bcs::new(message);
         BridgeMessage {
             message_type: bcs::peel_u8(&mut bcs),
             message_version: bcs::peel_u8(&mut bcs),
-            seq_num: bcs::peel_u64(&mut bcs),
+            seq_num: peel_u64_be(&mut bcs),
             source_chain: bcs::peel_u8(&mut bcs),
             payload: bcs::into_remainder_bytes(bcs)
         }
@@ -250,7 +266,7 @@ module bridge::message {
         // Test message serialization
         let message = serialize_message(token_bridge_message);
         let expected_msg = hex::decode(
-            b"00010a00000000000000012000000000000000000000000000000000000000000000000000000000000000640b1400000000000000000000000000000000000000c8033930000000000000",
+            b"0001000000000000000a012000000000000000000000000000000000000000000000000000000000000000640b1400000000000000000000000000000000000000c8030000000000003039",
         );
 
         assert!(message == expected_msg, 0);
@@ -293,12 +309,27 @@ module bridge::message {
         // Test message serialization
         let message = serialize_message(token_bridge_message);
         let expected_msg = hex::decode(
-            b"00010a000000000000000b1400000000000000000000000000000000000000c801200000000000000000000000000000000000000000000000000000000000000064033930000000000000",
+            b"0001000000000000000a0b1400000000000000000000000000000000000000c801200000000000000000000000000000000000000000000000000000000000000064030000000000003039",
         );
         assert!(message == expected_msg, 0);
         assert!(token_bridge_message == deserialize_message(message), 0);
 
         coin::burn_for_testing(coin);
         test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun test_be_to_le_conversion() {
+        let input = hex::decode(b"78563412");
+        let expected = hex::decode(b"12345678");
+        assert!(reverse_bytes(input) == expected, 0)
+    }
+
+    #[test]
+    fun test_peel_u64_be() {
+        let input = hex::decode(b"0000000000003039");
+        let expected = 12345u64;
+        let bcs = bcs::new(input);
+        assert!(peel_u64_be(&mut bcs) == expected, 0)
     }
 }
