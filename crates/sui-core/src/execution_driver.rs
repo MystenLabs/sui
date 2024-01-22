@@ -8,7 +8,6 @@ use std::{
 
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use sui_macros::fail_point_async;
-use sui_types::executable_transaction::PendingCertificate;
 use tokio::{
     sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
     time::sleep,
@@ -16,6 +15,7 @@ use tokio::{
 use tracing::{error, error_span, info, trace, Instrument};
 
 use crate::authority::AuthorityState;
+use crate::transaction_manager::PendingCertificate;
 
 #[cfg(test)]
 #[path = "unit_tests/execution_driver_tests.rs"]

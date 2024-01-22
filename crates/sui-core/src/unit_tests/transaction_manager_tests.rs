@@ -4,7 +4,7 @@
 use std::{time::Duration, vec};
 
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::executable_transaction::{PendingCertificate, VerifiedExecutableTransaction};
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::transaction::VerifiedTransaction;
 use sui_types::{
     base_types::ObjectID,
@@ -22,7 +22,7 @@ use tokio::{
 
 use crate::{
     authority::{authority_tests::init_state_with_objects, AuthorityState},
-    transaction_manager::TransactionManager,
+    transaction_manager::{PendingCertificate, TransactionManager},
 };
 
 #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
@@ -103,8 +103,12 @@ async fn transaction_manager_basics() {
         .unwrap();
     // TM should output the transaction eventually.
     let pending_certificate = rx_ready_certificates.recv().await.unwrap();
+
+    // Tests that pending certificate stats are recorded properly.
     assert!(pending_certificate.stats.enqueue_time >= tx_start_time);
-    assert!(pending_certificate.stats.ready_time.unwrap() >= tx_start_time);
+    assert!(
+        pending_certificate.stats.ready_time.unwrap() >= pending_certificate.stats.enqueue_time
+    );
 
     assert_eq!(transaction_manager.inflight_queue_len(), 1);
 
@@ -152,6 +156,9 @@ async fn transaction_manager_basics() {
     );
     // TM should output the transaction eventually.
     let pending_certificate = rx_ready_certificates.recv().await.unwrap();
+
+    // Tests that pending certificate stats are recorded properly. The ready time should be
+    // 2 seconds apart from the enqueue time.
     assert!(pending_certificate.stats.enqueue_time >= tx_start_time);
     assert!(
         pending_certificate.stats.ready_time.unwrap() - pending_certificate.stats.enqueue_time
@@ -163,7 +170,9 @@ async fn transaction_manager_basics() {
         .enqueue(vec![transaction.clone()], &state.epoch_store_for_testing())
         .unwrap();
     sleep(Duration::from_secs(1)).await;
-    assert!(rx_ready_certificates.try_recv().is_err());
+    assert!(rx_ready_certificates
+        .try_recv()
+        .is_err_and(|err| err == TryRecvError::Empty));
 
     // Notify TM about transaction commit
     transaction_manager.notify_commit(

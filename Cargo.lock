@@ -13508,7 +13508,6 @@ dependencies = [
  "sui-protocol-config",
  "tap",
  "thiserror",
- "tokio",
  "tonic 0.10.0",
  "tracing",
  "typed-store-error",

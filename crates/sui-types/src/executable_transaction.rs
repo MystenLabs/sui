@@ -4,13 +4,9 @@
 use crate::messages_checkpoint::CheckpointSequenceNumber;
 use crate::{committee::EpochId, crypto::AuthorityStrongQuorumSignInfo};
 
-use crate::digests::TransactionEffectsDigest;
 use crate::message_envelope::{Envelope, TrustedEnvelope, VerifiedEnvelope};
-use crate::storage::InputKey;
 use crate::transaction::SenderSignedData;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
-use tokio::time::Instant;
 
 /// CertificateProof is a proof that a transaction certs existed at a given epoch and hence can be executed.
 /// There are two types of proofs: one that is proven by inclusion in a checkpoint and one that is proven by quorum signature.
@@ -66,22 +62,4 @@ impl VerifiedExecutableTransaction {
             _ => None,
         }
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct PendingCertificateStats {
-    pub enqueue_time: Instant,
-    pub ready_time: Option<Instant>,
-}
-
-#[derive(Clone, Debug)]
-pub struct PendingCertificate {
-    // Certified transaction to be executed.
-    pub certificate: VerifiedExecutableTransaction,
-    // When executing from checkpoint, the certified effects digest is provided, so that forks can
-    // be detected prior to committing the transaction.
-    pub expected_effects_digest: Option<TransactionEffectsDigest>,
-    // The input object this certifiate is waiting for to become available in order to be executed.
-    pub waiting_input_objects: BTreeSet<InputKey>,
-    pub stats: PendingCertificateStats,
 }

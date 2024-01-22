@@ -21,12 +21,7 @@ use sui_types::{
     storage::InputKey,
     transaction::{TransactionDataAPI, VerifiedCertificate},
 };
-use sui_types::{
-    executable_transaction::{
-        PendingCertificate, PendingCertificateStats, VerifiedExecutableTransaction,
-    },
-    fp_bail,
-};
+use sui_types::{executable_transaction::VerifiedExecutableTransaction, fp_bail};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
 use tracing::{error, info, instrument, trace, warn};
@@ -63,6 +58,27 @@ pub struct TransactionManager {
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
     metrics: Arc<AuthorityMetrics>,
     inner: RwLock<Inner>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PendingCertificateStats {
+    // The time this certificate enters transaction manager.
+    pub enqueue_time: Instant,
+    // The time this certificate becomes ready for execution.
+    pub ready_time: Option<Instant>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PendingCertificate {
+    // Certified transaction to be executed.
+    pub certificate: VerifiedExecutableTransaction,
+    // When executing from checkpoint, the certified effects digest is provided, so that forks can
+    // be detected prior to committing the transaction.
+    pub expected_effects_digest: Option<TransactionEffectsDigest>,
+    // The input object this certifiate is waiting for to become available in order to be executed.
+    pub waiting_input_objects: BTreeSet<InputKey>,
+    // Stores stats about this transaction.
+    pub stats: PendingCertificateStats,
 }
 
 struct CacheInner {
@@ -595,7 +611,7 @@ impl TransactionManager {
                         key
                     );
                     let input_txns = inner.input_objects.entry(key.id()).or_default();
-                    input_txns.insert(digest, Instant::now());
+                    input_txns.insert(digest, pending_cert_enqueue_time);
                 }
             }
 
@@ -657,7 +673,7 @@ impl TransactionManager {
         epoch_store: &AuthorityPerEpochStore,
         input_keys: Vec<InputKey>,
         update_cache: bool,
-        commit_time: Instant,
+        available_time: Instant,
     ) {
         if inner.epoch != epoch_store.epoch() {
             warn!(
@@ -675,7 +691,7 @@ impl TransactionManager {
             for mut ready_cert in
                 inner.find_ready_transactions(input_key, update_cache, &self.metrics)
             {
-                ready_cert.stats.ready_time = Some(commit_time);
+                ready_cert.stats.ready_time = Some(available_time);
                 self.certificate_ready(inner, ready_cert);
             }
         }
