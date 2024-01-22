@@ -615,13 +615,18 @@ impl<
                     checkpoint_seq: None,
                     timestamp: 0.0,
                 };
-                self.execute_tx(
-                    &full_tx,
-                    &protocol_config,
-                    &move_vm,
-                    &epoch_data,
+                Self::async_exec(
+                    full_tx,
+                    self.memory_store.clone(),
+                    HashSet::new(),
+                    move_vm.clone(),
                     reference_gas_price,
+                    epoch_data.epoch_id(),
+                    epoch_data.epoch_start_timestamp(),
+                    protocol_config.clone(),
                     metrics.clone(),
+                    my_id as u8,
+                    &ew_ids,
                 )
                 .await;
             }
