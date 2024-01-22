@@ -638,7 +638,6 @@ impl<
             //     r.unwrap();
             // });
             for tx in txs {
-                let validator = ctx.validator();
                 let memstore = in_memory_store.clone();
                 // validator
                 //     .execute_transaction_in_memory(in_memory_store, tx)
@@ -669,24 +668,26 @@ impl<
                     &protocol_config,
                 );
 
-                let (_inner_temp_store, tx_effects, _execution_error) =
-                    execution_engine::execute_transaction_to_effects::<execution_mode::Normal>(
-                        shared_object_refs,
-                        temporary_store,
-                        kind,
-                        signer,
-                        &mut gas_charger,
-                        *txid,
-                        transaction_dependencies,
-                        &move_vm,
-                        &epoch_data.epoch_id(),
-                        epoch_data.epoch_start_timestamp(),
-                        &protocol_config,
-                        metrics.clone(),
+                let validator = ctx.validator();
+                let (_, effects, _) = validator
+                    .get_epoch_store()
+                    .executor()
+                    .execute_transaction_to_effects(
+                        validator.get_epoch_store().protocol_config(),
+                        validator.get_validator().metrics.limits_metrics.clone(),
                         false,
                         &HashSet::new(),
+                        &validator.get_epoch_store().epoch(),
+                        0,
+                        temporary_store,
+                        shared_object_refs,
+                        &mut gas_charger,
+                        kind,
+                        signer,
+                        *executable.digest(),
+                        transaction_dependencies,
                     );
-                assert!(tx_effects.status().is_ok());
+                assert!(effects.status().is_ok());
             }
             panic!("Done executing txs");
         }
