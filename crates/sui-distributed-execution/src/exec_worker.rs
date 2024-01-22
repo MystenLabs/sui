@@ -558,8 +558,7 @@ impl<
                 .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
         }
 
-        ctx.benchmark_transaction_execution_in_memory(transactions)
-            .await;
+        ctx.benchmark_transaction_execution_in_memory(txs).await;
     }
 
     /// ExecutionWorker main
