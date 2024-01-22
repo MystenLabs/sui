@@ -1,5 +1,6 @@
 # Add 'Foo' to any changes within 'bar' folder or any subfolders
 "Type: Documentation":
-- doc/**/*
+- docs/content/**/*
+- *.md
 "sui-explorer":
 - explorer/**/*
