@@ -8,8 +8,11 @@ import {
 	toEntropy,
 	validateEntropy,
 } from '_shared/utils/bip39';
-import { fromExportedKeypair } from '_shared/utils/from-exported-keypair';
-import { mnemonicToSeedHex, type ExportedKeypair, type Keypair } from '@mysten/sui.js/cryptography';
+import {
+	fromExportedKeypair,
+	type LegacyExportedKeyPair,
+} from '_shared/utils/from-exported-keypair';
+import { mnemonicToSeedHex, type Keypair } from '@mysten/sui.js/cryptography';
 
 import { getFromLocalStorage } from '../storage-utils';
 
@@ -17,7 +20,7 @@ type StoredData = string | { v: 1 | 2; data: string };
 
 type V2DecryptedDataType = {
 	entropy: string;
-	importedKeypairs: ExportedKeypair[];
+	importedKeypairs: LegacyExportedKeyPair[];
 	qredoTokens?: Record<string, string>;
 	mnemonicSeedHex?: string;
 };
