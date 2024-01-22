@@ -3,11 +3,14 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    ops::Bound::{Excluded, Included},
     sync::Arc,
 };
 
+use consensus_config::AuthorityIndex;
+
 use crate::{
-    block::{BlockRef, Round, Slot, VerifiedBlock},
+    block::{BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
     commit::Commit,
     context::Context,
     storage::Store,
@@ -83,26 +86,94 @@ impl DagState {
         self.cached_refs[block_ref.author].insert(block_ref);
     }
 
-    /// Gets a copy of an uncommitted block. Returns None if not found.
-    /// Uncommitted must be in memory, so only in-memory blocks are checked.
+    /// Gets an uncommitted block. Returns None if not found.
+    /// Uncommitted blocks must exist in memory, so only in-memory blocks are checked.
     pub(crate) fn get_uncommitted_block(&self, reference: &BlockRef) -> Option<VerifiedBlock> {
         self.recent_blocks.get(reference).cloned()
     }
 
-    pub(crate) fn get_blocks_at_slot(&self, _slot: Slot) -> Vec<VerifiedBlock> {
-        unimplemented!()
+    /// Gets all uncommitted blocks in a slot.
+    /// Uncommitted blocks must exist in memory, so only in-memory blocks are checked.
+    pub(crate) fn get_uncommitted_blocks_at_slot(&self, slot: Slot) -> Vec<VerifiedBlock> {
+        let mut blocks = vec![];
+        for (block_ref, block) in self.recent_blocks.range((
+            Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
+            Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MAX)),
+        )) {
+            blocks.push(block.clone())
+        }
+        blocks
     }
 
-    pub(crate) fn linked_to_round(
+    pub(crate) fn get_uncommitted_blocks_at_round(&self, round: Round) -> Vec<VerifiedBlock> {
+        if round < self.round_lower_bound() {
+            panic!("Round {} blocks may not be cached in memory!", round);
+        }
+
+        let mut blocks = vec![];
+        for (block_ref, block) in self.recent_blocks.range((
+            Included(BlockRef::new(round, AuthorityIndex::ZERO, BlockDigest::MIN)),
+            Excluded(BlockRef::new(
+                round + 1,
+                AuthorityIndex::ZERO,
+                BlockDigest::MIN,
+            )),
+        )) {
+            blocks.push(block.clone())
+        }
+        blocks
+    }
+
+    pub(crate) fn ancestors_at_uncommitted_round(
         &self,
-        _later_block: &VerifiedBlock,
-        _earlier_round: Round,
+        later_block: &VerifiedBlock,
+        earlier_round: Round,
     ) -> Vec<VerifiedBlock> {
-        unimplemented!()
+        if earlier_round < self.round_lower_bound() {
+            panic!(
+                "Round {} blocks may not be cached in memory!",
+                earlier_round
+            );
+        }
+        if earlier_round >= later_block.round() {
+            panic!(
+                "Round {} is not earlier than block {}!",
+                earlier_round,
+                later_block.reference()
+            );
+        }
+
+        let mut linked: BTreeSet<BlockRef> = later_block.ancestors().iter().cloned().collect();
+        let mut round = later_block.round() - 1;
+        while round > earlier_round {
+            let mut next_linked = BTreeSet::new();
+            for r in linked.into_iter() {
+                let block = self
+                    .recent_blocks
+                    .get(&r)
+                    .unwrap_or_else(|| panic!("Block {:?} not found!", r));
+                next_linked.extend(block.ancestors().iter().cloned());
+            }
+            linked = next_linked;
+            round -= 1;
+        }
+        linked
+            .into_iter()
+            .map(|r| {
+                self.recent_blocks
+                    .get(&r)
+                    .unwrap_or_else(|| panic!("Block {:?} not found!", r))
+                    .clone()
+            })
+            .collect()
     }
 
-    pub(crate) fn get_blocks_by_round(&self, _round: Round) -> Vec<VerifiedBlock> {
-        unimplemented!()
+    /// Lowest round where all known blocks are cached in memory.
+    fn round_lower_bound(&self) -> Round {
+        match &self.last_commit {
+            Some(commit) => commit.leader.round.saturating_sub(CACHED_ROUNDS),
+            None => 0,
+        }
     }
 }
 

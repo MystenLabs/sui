@@ -166,6 +166,8 @@ pub struct Authority {
 pub struct AuthorityIndex(u32);
 
 impl AuthorityIndex {
+    pub const ZERO: AuthorityIndex = AuthorityIndex(0);
+
     pub fn value(&self) -> usize {
         self.0 as usize
     }
