@@ -10,7 +10,7 @@ use crate::storage::InputKey;
 use crate::transaction::SenderSignedData;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
-use std::time::Instant;
+use tokio::time::Instant;
 
 /// CertificateProof is a proof that a transaction certs existed at a given epoch and hence can be executed.
 /// There are two types of proofs: one that is proven by inclusion in a checkpoint and one that is proven by quorum signature.
@@ -70,7 +70,7 @@ impl VerifiedExecutableTransaction {
 
 #[derive(Clone, Debug)]
 pub struct PendingCertificateStats {
-    pub creation_time: Instant,
+    pub enqueue_time: Instant,
     pub ready_time: Option<Instant>,
 }
 

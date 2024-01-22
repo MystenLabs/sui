@@ -5,7 +5,7 @@ use std::{
     cmp::max,
     collections::{BTreeSet, HashMap, HashSet},
     sync::Arc,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use indexmap::IndexMap;
@@ -28,6 +28,7 @@ use sui_types::{
     fp_bail,
 };
 use tokio::sync::mpsc::UnboundedSender;
+use tokio::time::Instant;
 use tracing::{error, info, instrument, trace, warn};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -518,7 +519,7 @@ impl TransactionManager {
         inner.available_objects_cache.disable_unbounded_cache();
 
         let mut pending = Vec::new();
-        let pending_cert_creation_time = Instant::now();
+        let pending_cert_enqueue_time = Instant::now();
 
         for (cert, expected_effects_digest, input_object_keys) in certs {
             pending.push(PendingCertificate {
@@ -526,7 +527,7 @@ impl TransactionManager {
                 expected_effects_digest,
                 waiting_input_objects: input_object_keys,
                 stats: PendingCertificateStats {
-                    creation_time: pending_cert_creation_time,
+                    enqueue_time: pending_cert_enqueue_time,
                     ready_time: None,
                 },
             });
