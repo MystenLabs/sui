@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// IMPORTANT: This script have `sui` cli & local toolchain as a pre-requisite to work!!
-
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 
 import { CONFIG } from '../config';
