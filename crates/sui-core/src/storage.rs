@@ -217,15 +217,21 @@ impl ReadStore for RocksDbStore {
     }
 
     fn get_latest_checkpoint(&self) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
-        todo!()
+        self.checkpoint_store
+            .get_latest_certified_checkpoint()
+            .ok_or_else(|| {
+                sui_types::storage::error::Error::missing("unable to get latest checkpoint")
+            })
     }
 
     fn get_checkpoint_contents_by_digest(
         &self,
-        _digest: &CheckpointContentsDigest,
+        digest: &CheckpointContentsDigest,
     ) -> sui_types::storage::error::Result<Option<sui_types::messages_checkpoint::CheckpointContents>>
     {
-        todo!()
+        self.checkpoint_store
+            .get_checkpoint_contents(digest)
+            .map_err(sui_types::storage::error::Error::custom)
     }
 
     fn get_checkpoint_contents_by_sequence_number(
@@ -240,17 +246,17 @@ impl ReadStore for RocksDbStore {
 impl ObjectStore for RocksDbStore {
     fn get_object(
         &self,
-        _object_id: &sui_types::base_types::ObjectID,
+        object_id: &sui_types::base_types::ObjectID,
     ) -> sui_types::storage::error::Result<Option<Object>> {
-        todo!()
+        ObjectStore::get_object(&self.authority_store, object_id)
     }
 
     fn get_object_by_key(
         &self,
-        _object_id: &sui_types::base_types::ObjectID,
-        _version: sui_types::base_types::VersionNumber,
+        object_id: &sui_types::base_types::ObjectID,
+        version: sui_types::base_types::VersionNumber,
     ) -> sui_types::storage::error::Result<Option<Object>> {
-        todo!()
+        ObjectStore::get_object_by_key(&self.authority_store, object_id, version)
     }
 }
 

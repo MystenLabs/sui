@@ -29,8 +29,8 @@ pub trait ReadStore: ObjectStore {
 
     /// Get the latest available checkpoint. This is the latest executed checkpoint.
     ///
-    /// all transactions, effects, objects and events are gaurenteed to be available for the
-    /// returned checkpoint
+    /// All transactions, effects, objects and events are guaranteed to be available for the
+    /// returned checkpoint.
     fn get_latest_checkpoint(&self) -> Result<VerifiedCheckpoint>;
 
     /// Get the latest available checkpoint sequence number. This is the sequence number of the latest executed checkpoint.
@@ -46,16 +46,16 @@ pub trait ReadStore: ObjectStore {
     }
 
     /// Get the highest verified checkpint. This is the highest checkpoint summary that has been
-    /// verified, generally by state-sync. Only the checkpint header is gaurenteed to be present in
+    /// verified, generally by state-sync. Only the checkpoint header is guaranteed to be present in
     /// the store.
     fn get_highest_verified_checkpoint(&self) -> Result<VerifiedCheckpoint>;
 
     /// Get the highest synced checkpint. This is the highest checkpoint that has been synced from
     /// state-synce. The checkpoint header, contents, transactions, and effects of this checkpoint
-    /// are gaurenteed to be present in the store
+    /// are guaranteed to be present in the store
     fn get_highest_synced_checkpoint(&self) -> Result<VerifiedCheckpoint>;
 
-    /// The lowest available checkpint that hasn't yet been pruned.
+    /// The lowest available checkpoint that hasn't yet been pruned.
     fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber>;
 
     fn get_checkpoint_by_digest(
@@ -143,7 +143,7 @@ pub trait ReadStore: ObjectStore {
         digest: &CheckpointContentsDigest,
     ) -> Result<Option<FullCheckpointContents>>;
 
-    // Fetch all checkpint data
+    // Fetch all checkpoint data
     // TODO fix return type to not be anyhow
     fn get_checkpoint_data(
         &self,
@@ -269,15 +269,8 @@ pub trait ReadStore: ObjectStore {
         }
 
         let checkpoint_data = CheckpointData {
-            checkpoint_summary: checkpoint.clone().into(),
-            checkpoint_contents: self
-                .get_checkpoint_contents_by_digest(&checkpoint.content_digest)?
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "missing checkpoint contents {:?}",
-                        checkpoint.content_digest,
-                    )
-                })?,
+            checkpoint_summary: checkpoint.into(),
+            checkpoint_contents,
             transactions: full_transactions,
         };
 
