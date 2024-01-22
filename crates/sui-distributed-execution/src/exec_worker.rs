@@ -19,7 +19,7 @@ use sui_single_node_benchmark::benchmark_context::BenchmarkContext;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::digests::{ChainIdentifier, ObjectDigest, TransactionDigest};
-use sui_types::effects::TransactionEffects;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::epoch_data::EpochData;
 use sui_types::error::SuiError;
 use sui_types::execution_mode;
@@ -618,7 +618,7 @@ impl<
         if self.mode == ExecutionMode::Channel {
             // self.process_genesis_objects(in_channel).await;
             let (txs, ctx) = self.init_genesis_objects(tx_count, duration).await;
-            let in_memory_store = ctx.validator().create_in_memory_store();
+            let in_memory_store = Arc::new(ctx.validator().create_in_memory_store());
             // let tasks: FuturesUnordered<_> = txs
             //     .into_iter()
             //     .map(|tx| {
@@ -637,31 +637,77 @@ impl<
             // });
             for tx in txs {
                 let validator = ctx.validator();
-                let in_memory_store = in_memory_store.clone();
-                validator
-                    .execute_transaction_in_memory(in_memory_store, tx)
-                    .await;
-                // let full_tx = TransactionWithEffects {
-                //     tx: tx.data().clone(),
-                //     ground_truth_effects: None,
-                //     child_inputs: None,
-                //     checkpoint_seq: None,
-                //     timestamp: 0.0,
-                // };
-                // Self::async_exec(
-                //     full_tx,
-                //     self.memory_store.clone(),
-                //     HashSet::new(),
-                //     move_vm.clone(),
-                //     reference_gas_price,
-                //     epoch_data.epoch_id(),
-                //     epoch_data.epoch_start_timestamp(),
-                //     protocol_config.clone(),
-                //     metrics.clone(),
-                //     my_id as u8,
-                //     &ew_ids,
-                // )
-                // .await;
+                let memstore = in_memory_store.clone();
+                // validator
+                //     .execute_transaction_in_memory(in_memory_store, tx)
+                //     .await;
+
+                let txid = tx.digest();
+                let tx_data = tx.transaction_data();
+                let (kind, signer, gas) = tx_data.execution_parts();
+                let tx_data = tx.transaction_data();
+                let input_object_kinds = tx_data
+                    .input_objects()
+                    .expect("Cannot get input object kinds");
+
+                let mut input_object_data = Vec::new();
+                for kind in &input_object_kinds {
+                    let obj = match kind {
+                        InputObjectKind::MovePackage(id)
+                        | InputObjectKind::SharedMoveObject { id, .. }
+                        | InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => {
+                            memstore.get_object(&id).unwrap().unwrap()
+                        }
+                    };
+                    input_object_data.push(obj);
+                }
+
+                let input_objects = InputObjects::new(
+                    input_object_kinds
+                        .into_iter()
+                        .zip(input_object_data.into_iter())
+                        .collect(),
+                );
+                let gas_status = Self::get_gas_status(
+                    &tx,
+                    &input_objects,
+                    &protocol_config,
+                    reference_gas_price,
+                )
+                .await;
+                let shared_object_refs = input_objects.filter_shared_objects();
+                let transaction_dependencies = input_objects.transaction_dependencies();
+                let mut gas_charger =
+                    GasCharger::new(*tx.digest(), gas, gas_status, &protocol_config);
+                // println!(
+                //     "Dependencies for tx {}: {:?}",
+                //     txid, transaction_dependencies
+                // );
+                let temporary_store = TemporaryStore::new(
+                    memstore.clone(),
+                    input_objects.clone(),
+                    *txid,
+                    &protocol_config,
+                );
+
+                let (_inner_temp_store, tx_effects, _execution_error) =
+                    execution_engine::execute_transaction_to_effects::<execution_mode::Normal>(
+                        shared_object_refs,
+                        temporary_store,
+                        kind,
+                        signer,
+                        &mut gas_charger,
+                        *txid,
+                        transaction_dependencies,
+                        &move_vm,
+                        &epoch_data.epoch_id(),
+                        epoch_data.epoch_start_timestamp(),
+                        &protocol_config,
+                        metrics.clone(),
+                        false,
+                        &HashSet::new(),
+                    );
+                assert!(tx_effects.status().is_ok());
             }
             panic!("Done executing txs");
         }
