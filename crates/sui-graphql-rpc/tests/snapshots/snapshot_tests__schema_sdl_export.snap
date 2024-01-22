@@ -1760,6 +1760,10 @@ type Object implements IOwner {
 	"""
 	owner: ObjectOwner
 	"""
+	The transaction blocks that sent objects to this object.
+	"""
+	receivedTransactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection!
+	"""
 	Attempts to convert the object into a MoveObject
 	"""
 	asMoveObject: MoveObject

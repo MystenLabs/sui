@@ -24,7 +24,6 @@ use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::gas_coin::GAS;
 use sui_types::TypeTag;
 
-use super::balance;
 use super::big_int::BigInt;
 use super::cursor::{self, Page, Target};
 use super::digest::Digest;
@@ -33,7 +32,9 @@ use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::MoveObject;
 use super::move_package::MovePackage;
 use super::suins_registration::SuinsRegistration;
+use super::transaction_block::TransactionBlockFilter;
 use super::type_filter::{ExactTypeFilter, TypeFilter};
+use super::{balance, transaction_block};
 use super::{
     balance::Balance, coin::Coin, owner::Owner, stake::StakedSui, sui_address::SuiAddress,
     transaction_block::TransactionBlock,
@@ -323,6 +324,33 @@ impl Object {
                 initial_shared_version: initial_shared_version.value(),
             })),
         }
+    }
+
+    /// The transaction blocks that sent objects to this object.
+    async fn received_transaction_blocks(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<transaction_block::Cursor>,
+        last: Option<u64>,
+        before: Option<transaction_block::Cursor>,
+        filter: Option<TransactionBlockFilter>,
+    ) -> Result<Connection<String, TransactionBlock>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+
+        let Some(filter) = filter
+            .unwrap_or_default()
+            .intersect(TransactionBlockFilter {
+                recv_address: Some(self.address),
+                ..Default::default()
+            })
+        else {
+            return Ok(Connection::new(false, false));
+        };
+
+        TransactionBlock::paginate(ctx.data_unchecked(), page, filter)
+            .await
+            .extend()
     }
 
     /// Attempts to convert the object into a MoveObject
