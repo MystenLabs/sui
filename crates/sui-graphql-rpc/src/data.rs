@@ -150,13 +150,13 @@ impl RawSqlQuery {
             Some(order_by) => {
                 order_by.push_str(", ");
                 order_by.push_str(field);
-                order_by.push_str(" ");
+                order_by.push(' ');
                 order_by.push_str(order);
             }
             None => {
                 let mut clause = String::from("");
                 clause.push_str(field);
-                clause.push_str(" ");
+                clause.push(' ');
                 clause.push_str(order);
                 self.order_by = Some(clause);
             }
@@ -187,7 +187,7 @@ impl RawSqlQuery {
 
     pub(crate) fn finish(&self) -> String {
         let mut sql = self.build();
-        sql.push_str(";");
+        sql.push(';');
 
         sql
     }

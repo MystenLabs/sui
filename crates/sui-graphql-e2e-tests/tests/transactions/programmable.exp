@@ -24,7 +24,16 @@ Response: {
           "signatures": [
             "ALBzmwiO+blmZMM+1kvAc8rAy5dwEhlavVbyDqntmVRyUaonnHaAOfpaYHFjTn6m3/9Isym/mIZnGxFs5XYTuQd/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
           ],
-          "gasInput": null,
+          "gasInput": {
+            "gasSponsor": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "gasPayment": {
+              "nodes": []
+            },
+            "gasPrice": "1000",
+            "gasBudget": "5000000000"
+          },
           "kind": {
             "__typename": "ProgrammableTransactionBlock",
             "inputs": {
@@ -154,28 +163,7 @@ Response: {
         }
       ]
     }
-  },
-  "errors": [
-    {
-      "message": "Internal error occurred while processing request: Indexer failed to read PostgresDB with error: `current transaction is aborted, commands ignored until end of transaction block`",
-      "locations": [
-        {
-          "line": 105,
-          "column": 17
-        }
-      ],
-      "path": [
-        "transactionBlocks",
-        "nodes",
-        0,
-        "gasInput",
-        "gasPayment"
-      ],
-      "extensions": {
-        "code": "INTERNAL_SERVER_ERROR"
-      }
-    }
-  ]
+  }
 }
 
 task 4 'upgrade'. lines 204-222:
@@ -199,7 +187,16 @@ Response: {
           "signatures": [
             "AGuEK+SoMwu3OPZt9ul+J3TB3YwG4M4SSUzzn2rh1Yjr3fKbgrWg7yrD3lneZS/vsje9SnWbRbm8RHYl+AplegV/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
           ],
-          "gasInput": null,
+          "gasInput": {
+            "gasSponsor": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "gasPayment": {
+              "nodes": []
+            },
+            "gasPrice": "1000",
+            "gasBudget": "5000000000"
+          },
           "kind": {
             "__typename": "ProgrammableTransactionBlock",
             "inputs": {
@@ -433,28 +430,7 @@ Response: {
         }
       ]
     }
-  },
-  "errors": [
-    {
-      "message": "Internal error occurred while processing request: Indexer failed to read PostgresDB with error: `current transaction is aborted, commands ignored until end of transaction block`",
-      "locations": [
-        {
-          "line": 105,
-          "column": 17
-        }
-      ],
-      "path": [
-        "transactionBlocks",
-        "nodes",
-        0,
-        "gasInput",
-        "gasPayment"
-      ],
-      "extensions": {
-        "code": "INTERNAL_SERVER_ERROR"
-      }
-    }
-  ]
+  }
 }
 
 task 7 'programmable'. lines 407-410:
@@ -483,7 +459,16 @@ Response: {
           "signatures": [
             "AElKsCmxMjmA6nQGRUnhCzXnVQUIaj582BIaPvWZgIeItSMC5saVoAuvWTP5SrepJIzMN9k86p/OVXAoel/lRAV/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
           ],
-          "gasInput": null,
+          "gasInput": {
+            "gasSponsor": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "gasPayment": {
+              "nodes": []
+            },
+            "gasPrice": "1000",
+            "gasBudget": "5000000000"
+          },
           "kind": {
             "__typename": "ProgrammableTransactionBlock",
             "inputs": {
@@ -842,28 +827,7 @@ Response: {
         }
       ]
     }
-  },
-  "errors": [
-    {
-      "message": "Internal error occurred while processing request: Indexer failed to read PostgresDB with error: `current transaction is aborted, commands ignored until end of transaction block`",
-      "locations": [
-        {
-          "line": 105,
-          "column": 17
-        }
-      ],
-      "path": [
-        "transactionBlocks",
-        "nodes",
-        0,
-        "gasInput",
-        "gasPayment"
-      ],
-      "extensions": {
-        "code": "INTERNAL_SERVER_ERROR"
-      }
-    }
-  ]
+  }
 }
 
 task 11 'programmable'. lines 615-616:
@@ -886,7 +850,16 @@ Response: {
           "signatures": [
             "ALTqZmENHt1V1sYnnIwRwVwh8diFMNtOAQgAV+P9pVIRzoTzm0Osov8B2PRg3chHWUBx580HYaIac0tXpINR6Qt/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
           ],
-          "gasInput": null,
+          "gasInput": {
+            "gasSponsor": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "gasPayment": {
+              "nodes": []
+            },
+            "gasPrice": "1000",
+            "gasBudget": "5000000000"
+          },
           "kind": {
             "__typename": "ProgrammableTransactionBlock",
             "inputs": {
@@ -983,28 +956,7 @@ Response: {
         }
       ]
     }
-  },
-  "errors": [
-    {
-      "message": "Internal error occurred while processing request: Indexer failed to read PostgresDB with error: `current transaction is aborted, commands ignored until end of transaction block`",
-      "locations": [
-        {
-          "line": 105,
-          "column": 17
-        }
-      ],
-      "path": [
-        "transactionBlocks",
-        "nodes",
-        0,
-        "gasInput",
-        "gasPayment"
-      ],
-      "extensions": {
-        "code": "INTERNAL_SERVER_ERROR"
-      }
-    }
-  ]
+  }
 }
 
 task 14 'run-graphql'. lines 801-811:

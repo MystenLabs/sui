@@ -748,7 +748,7 @@ impl Object {
 
     fn raw_object_filter(query: &mut RawSqlQuery, filter: &ObjectFilter) {
         if let Some(object_ids) = &filter.object_ids {
-            if object_ids.len() == 0 {
+            if object_ids.is_empty() {
                 // Maximally strict - match a vec of 0 elements
                 query.and_filter("1==0".to_string());
             } else {
@@ -764,7 +764,7 @@ impl Object {
         }
 
         if let Some(object_keys) = &filter.object_keys {
-            if object_keys.len() == 0 {
+            if object_keys.is_empty() {
                 // Maximally strict - match a vec of 0 elements
                 query.and_filter("1==0".to_string());
             } else {
@@ -1046,11 +1046,11 @@ impl Paginated<Cursor> for StoredObject {
     type Source = objects::table;
 
     fn filter_ge<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
-        query.filter(objects::dsl::object_id.ge((**cursor).object_id.clone()))
+        query.filter(objects::dsl::object_id.ge(cursor.object_id.clone()))
     }
 
     fn filter_le<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
-        query.filter(objects::dsl::object_id.le((**cursor).object_id.clone()))
+        query.filter(objects::dsl::object_id.le(cursor.object_id.clone()))
     }
 
     fn order<ST, GB>(asc: bool, query: Query<ST, GB>) -> Query<ST, GB> {
@@ -1068,7 +1068,7 @@ impl RawPaginated<Cursor> for StoredHistoryObject {
         query.and_filter(format!(
             "{}.object_id >= '\\x{}'::bytea",
             query.alias,
-            hex::encode((**cursor).object_id.clone())
+            hex::encode(cursor.object_id.clone())
         ))
     }
 
@@ -1076,7 +1076,7 @@ impl RawPaginated<Cursor> for StoredHistoryObject {
         query.and_filter(format!(
             "{}.object_id <= '\\x{}'::bytea",
             query.alias,
-            hex::encode((**cursor).object_id.clone())
+            hex::encode(cursor.object_id.clone())
         ))
     }
 
@@ -1238,7 +1238,7 @@ pub(crate) fn validate_cursor_consistency(
 
     let checkpoint_sequence_number = if let Some(first_val) = values.next() {
         if values.all(|val| val == first_val) {
-            Ok(Some(first_val.clone()))
+            Ok(Some(*first_val))
         } else {
             Err(Error::Client("Inconsistent cursor".to_string()))
         }
