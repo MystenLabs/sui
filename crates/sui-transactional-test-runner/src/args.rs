@@ -170,12 +170,6 @@ pub struct CreateCheckpointCommand {
 }
 
 #[derive(Debug, clap::Parser)]
-pub struct CreateObjectsSnapshotCommand {
-    pub start_cp: u64,
-    pub end_cp: u64,
-}
-
-#[derive(Debug, clap::Parser)]
 pub struct AdvanceEpochCommand {
     pub count: Option<u64>,
     #[clap(long = "create-random-state")]
@@ -220,8 +214,6 @@ pub enum SuiSubcommand {
     ViewCheckpoint,
     #[clap(name = "run-graphql")]
     RunGraphql(RunGraphqlCommand),
-    #[clap(name = "create-objects-snapshot-command")]
-    CreateObjectsSnapshot(CreateObjectsSnapshotCommand),
 }
 
 #[derive(Clone, Debug)]
