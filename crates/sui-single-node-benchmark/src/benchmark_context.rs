@@ -228,7 +228,7 @@ impl BenchmarkContext {
         );
     }
 
-    pub(crate) async fn benchmark_transaction_execution_in_memory(
+    pub async fn benchmark_transaction_execution_in_memory(
         &self,
         mut transactions: Vec<Transaction>,
     ) {

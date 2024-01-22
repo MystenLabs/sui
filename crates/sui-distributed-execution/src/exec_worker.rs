@@ -530,7 +530,7 @@ impl<
     async fn init_genesis_objects(&self, tx_count: u64, duration: Duration) {
         // let (_, objects, _) = import_from_files(working_directory);
         let (ctx, workload) = generate_benchmark_ctx_workload(tx_count, duration).await;
-        let (ctx, move_package_id, _) = generate_benchmark_txs(workload, ctx).await;
+        let (ctx, move_package_id, txs) = generate_benchmark_txs(workload, ctx).await;
 
         // insert the move package into the store first
         if move_package_id.is_some() {
@@ -557,6 +557,9 @@ impl<
             self.memory_store
                 .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
         }
+
+        ctx.benchmark_transaction_execution_in_memory(transactions)
+            .await;
     }
 
     /// ExecutionWorker main
