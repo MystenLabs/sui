@@ -42,7 +42,7 @@ The output directory is the same [dist/](./dist/), all build artifacts will go t
 
 ## Install the extension to Chrome
 
-After building the app, the extension needs to be installed to Chrome. Follow the steps to [load an unpacked extension](https://developer.chrome.com/docs/extensions/mv3/getstarted/#unpacked) and install the app from the [dist/](./dist/) directory.
+After building the app, the extension needs to be installed to Chrome. Follow the steps to [load an unpacked extension](https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked) and install the app from the [dist/](./dist/) directory.
 
 ## Testing
 
