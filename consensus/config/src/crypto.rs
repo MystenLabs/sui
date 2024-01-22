@@ -1,11 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::error::FastCryptoError;
+use fastcrypto::traits::{Signer, VerifyingKey};
 use fastcrypto::{
     bls12381, ed25519,
     hash::{Blake2b256, HashFunction},
 };
-use shared_crypto::intent::INTENT_PREFIX_LENGTH;
+use serde::Serialize;
+use shared_crypto::intent::{Intent, IntentMessage, IntentScope, INTENT_PREFIX_LENGTH};
 
 // Here we select the types that are used by default in the code base.
 // The whole code base should only:
@@ -34,3 +37,46 @@ pub type ProtocolKeyPair = bls12381::min_sig::BLS12381KeyPair;
 pub type DefaultHashFunction = Blake2b256;
 pub const DIGEST_LENGTH: usize = DefaultHashFunction::OUTPUT_SIZE;
 pub const INTENT_MESSAGE_LENGTH: usize = INTENT_PREFIX_LENGTH + DIGEST_LENGTH;
+
+pub trait AuthoritySignature {
+    /// Create a new signature over an intent message.
+    fn new<T>(value: &IntentMessage<T>, secret: &dyn Signer<Self>) -> Self
+    where
+        T: Serialize;
+
+    /// Verify the signature on an intent message against the public key.
+    fn verify<T>(
+        &self,
+        value: &IntentMessage<T>,
+        author: &NetworkPublicKey,
+    ) -> Result<(), FastCryptoError>
+    where
+        T: Serialize;
+}
+
+impl AuthoritySignature for NetworkKeySignature {
+    fn new<T>(value: &IntentMessage<T>, secret: &dyn Signer<Self>) -> Self
+    where
+        T: Serialize,
+    {
+        let message = bcs::to_bytes(&value).expect("Message serialization should not fail");
+        secret.sign(&message)
+    }
+
+    fn verify<T>(
+        &self,
+        value: &IntentMessage<T>,
+        public_key: &NetworkPublicKey,
+    ) -> Result<(), FastCryptoError>
+    where
+        T: Serialize,
+    {
+        let message = bcs::to_bytes(&value).expect("Message serialization should not fail");
+        public_key.verify(&message, self)
+    }
+}
+
+/// Wrap a message in an intent message. Currently in Consensus, the scope is always IntentScope::BlockDigest and the app id is AppId::Consensus.
+pub fn to_intent_message<T>(value: T) -> IntentMessage<T> {
+    IntentMessage::new(Intent::consensus_app(IntentScope::BlockDigest), value)
+}

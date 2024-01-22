@@ -7,6 +7,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+bcs.workspace = true
 fastcrypto.workspace = true
 multiaddr.workspace = true
 rand.workspace = true

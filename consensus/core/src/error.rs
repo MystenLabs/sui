@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::error::FastCryptoError;
 use thiserror::Error;
 use typed_store::TypedStoreError;
 
@@ -13,7 +14,29 @@ pub enum ConsensusError {
 
     #[error("RocksDB failure: {0}")]
     RocksDBFailure(#[from] TypedStoreError),
+
+    #[error("FastCrypto failure: {0}")]
+    CryptographicOperationFailure(#[from] FastCryptoError),
+
+    #[error("Unknown authority provided: {0}")]
+    UnknownAuthority(String),
 }
 
 #[allow(unused)]
 pub type ConsensusResult<T> = Result<T, ConsensusError>;
+
+#[macro_export]
+macro_rules! bail {
+    ($e:expr) => {
+        return Err($e);
+    };
+}
+
+#[macro_export(local_inner_macros)]
+macro_rules! ensure {
+    ($cond:expr, $e:expr) => {
+        if !($cond) {
+            bail!($e);
+        }
+    };
+}

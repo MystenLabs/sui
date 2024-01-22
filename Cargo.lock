@@ -2599,6 +2599,7 @@ dependencies = [
 name = "consensus-config"
 version = "0.1.0"
 dependencies = [
+ "bcs",
  "fastcrypto",
  "insta",
  "multiaddr",

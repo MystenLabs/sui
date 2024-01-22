@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::block_manager::BlockManager;
-use consensus_config::{AuthorityIndex, Committee, Parameters, ProtocolKeyPair};
+use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use prometheus::Registry;
 use sui_protocol_config::ProtocolConfig;
 use tracing::info;
@@ -31,6 +31,7 @@ impl AuthorityNode {
         protocol_config: ProtocolConfig,
         // To avoid accidentally leaking the private key, the key pair should only be
         // stored in the Block signer.
+        block_signer: NetworkKeyPair,
         _signer: ProtocolKeyPair,
         _block_verifier: impl BlockVerifier,
         registry: Registry,
@@ -58,6 +59,7 @@ impl AuthorityNode {
             block_manager,
             core_signals,
             CoreOptions::default(),
+            block_signer,
         );
 
         Self {
@@ -88,7 +90,7 @@ impl AuthorityNode {
 
 #[cfg(test)]
 mod tests {
-    use consensus_config::{Committee, Parameters, ProtocolKeyPair};
+    use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
     use fastcrypto::traits::ToFromBytes;
     use prometheus::Registry;
     use sui_protocol_config::ProtocolConfig;
@@ -104,6 +106,7 @@ mod tests {
         let block_verifier = TestBlockVerifier {};
 
         let (own_index, _) = committee.authorities().last().unwrap();
+        let block_signer = NetworkKeyPair::from_bytes(keypairs[0].0.as_bytes()).unwrap();
         let signer = ProtocolKeyPair::from_bytes(keypairs[0].1.as_bytes()).unwrap();
 
         let authority = AuthorityNode::start(
@@ -111,6 +114,7 @@ mod tests {
             committee,
             parameters,
             ProtocolConfig::get_for_min_version(),
+            block_signer,
             signer,
             block_verifier,
             registry,

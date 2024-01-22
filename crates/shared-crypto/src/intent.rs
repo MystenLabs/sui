@@ -35,6 +35,7 @@ impl TryFrom<u8> for IntentVersion {
 pub enum AppId {
     Sui = 0,
     Narwhal = 1,
+    Consensus = 2,
 }
 
 // TODO(joyqvq): Use num_derive
@@ -65,6 +66,7 @@ pub enum IntentScope {
     ProofOfPossession = 5, // Used as a signature representing an authority's proof of possession of its authority protocol key.
     HeaderDigest = 6,      // Used for narwhal authority signature on header digest.
     BridgeEventUnused = 7, // for bridge purposes but it's currently not included in messages.
+    BlockDigest = 8,       // Used for consensus authority signature on block's digest
 }
 
 impl TryFrom<u8> for IntentScope {
@@ -131,6 +133,14 @@ impl Intent {
             scope,
             version: IntentVersion::V0,
             app_id: AppId::Narwhal,
+        }
+    }
+
+    pub fn consensus_app(scope: IntentScope) -> Self {
+        Self {
+            scope,
+            version: IntentVersion::V0,
+            app_id: AppId::Consensus,
         }
     }
 }
