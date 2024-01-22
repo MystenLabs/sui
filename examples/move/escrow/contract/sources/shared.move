@@ -30,6 +30,7 @@ module escrow::shared {
     use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
+    use sui::event;
 
     use escrow::lock::{Self, Locked, Key};
 
@@ -76,6 +77,13 @@ module escrow::shared {
             escrowed,
         };
 
+        event::emit(EscrowCreated {
+            escrow_id: object::id(&escrow),
+            key_id: exchange_key,
+            sender: escrow.sender,
+            recipient
+        });
+
         transfer::public_share_object(escrow);
     }
 
@@ -86,6 +94,7 @@ module escrow::shared {
         locked: Locked<U>,
         ctx: &TxContext,
     ): T {
+
         let Escrow {
             id,
             sender,
@@ -99,6 +108,11 @@ module escrow::shared {
 
         // Do the actual swap
         transfer::public_transfer(lock::unlock(locked, key), sender);
+
+        event::emit(EscrowSwapped {
+            escrow_id: object::uid_to_inner(&id),
+        });
+
         object::delete(id);
 
         escrowed
@@ -109,6 +123,11 @@ module escrow::shared {
         escrow: Escrow<T>,
         ctx: &TxContext
     ): T {
+
+        event::emit(EscrowCancelled {
+            escrow_id: object::id(&escrow)
+        });
+
         let Escrow {
             id,
             sender,
@@ -120,6 +139,26 @@ module escrow::shared {
         assert!(sender == tx_context::sender(ctx), EMismatchedSenderRecipient);
         object::delete(id);
         escrowed
+    }
+
+    // === Events ===
+    struct EscrowCreated has copy, drop {
+        /// the ID of the escrow that was created
+        escrow_id: ID,
+        /// The ID of the `Key` that unlocks the requested object.
+        key_id: ID,
+        /// The id of the sender who'll receive `T` upon swap
+        sender: address,
+        /// The (original) recipient of the escrowed object
+        recipient: address
+    }
+
+    struct EscrowSwapped has copy, drop {
+        escrow_id: ID
+    }
+
+    struct EscrowCancelled has copy, drop {
+        escrow_id: ID
     }
 
     // === Tests ===

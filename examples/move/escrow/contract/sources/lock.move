@@ -8,7 +8,8 @@
 /// particular, fixed state during escrow.
 module escrow::lock {
     use sui::object::{Self, ID, UID};
-    use sui::tx_context::TxContext;
+    use sui::tx_context::{TxContext, sender};
+    use sui::event;
 
     /// A wrapper that protects access to `obj` by requiring access to a `Key`.
     ///
@@ -41,6 +42,13 @@ module escrow::lock {
             key: object::id(&key),
             obj,
         };
+
+        event::emit(LockCreated {
+            lock_id: object::id(&lock),
+            key_id: object::id(&key),
+            creator: sender(ctx),
+        });
+
         (lock, key)
     }
 
@@ -51,9 +59,26 @@ module escrow::lock {
         let Key { id } = key;
         object::delete(id);
 
+        event::emit(LockDestroyed { lock_id: object::id(&locked) });
+
         let Locked { id, key: _, obj } = locked;
         object::delete(id);
         obj
+    }
+
+    // === Events ===
+    struct LockCreated has copy, drop {
+        /// The ID of the `Locker` object.
+        lock_id: ID,
+        /// The ID of the key that unlocks a locked object in a `Locker`.
+        key_id: ID,
+        /// The creator of the locked object.
+        creator: address
+    }
+
+    struct LockDestroyed has copy, drop {
+        /// The ID of the `Locker` object.
+        lock_id: ID
     }
 
     // === Tests ===
