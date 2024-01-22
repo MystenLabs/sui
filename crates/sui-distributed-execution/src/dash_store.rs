@@ -72,7 +72,14 @@ impl ParentSync for DashMemoryBackedStore {
 
 impl BackingPackageStore for DashMemoryBackedStore {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
-        Ok(self.objects.get(package_id).map(|v| v.1.clone()))
+        // Ok(self.objects.get(package_id).map(|v| v.1.clone()))
+        Ok(self.get_object(package_id).unwrap().and_then(|o| {
+            if o.is_package() {
+                Some(o.clone())
+            } else {
+                None
+            }
+        }))
     }
 }
 
@@ -87,25 +94,34 @@ impl ChildObjectResolver for DashMemoryBackedStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        let child_object = match self.objects.get(child).map(|v| v.1.clone()) {
-            None => return Ok(None),
-            Some(obj) => obj,
-        };
-        let parent = *parent;
-        if child_object.owner != Owner::ObjectOwner(parent.into()) {
-            return Err(SuiError::InvalidChildObjectAccess {
-                object: *child,
-                given_parent: parent,
-                actual_owner: child_object.owner,
-            });
-        }
-        if child_object.version() > child_version_upper_bound {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "TODO InMemoryStorage::read_child_object does not yet support bounded reads"
-                    .to_owned(),
-            });
-        }
-        Ok(Some(child_object))
+        // let child_object = match self.objects.get(child).map(|v| v.1.clone()) {
+        //     None => return Ok(None),
+        //     Some(obj) => obj,
+        // };
+        // let parent = *parent;
+        // if child_object.owner != Owner::ObjectOwner(parent.into()) {
+        //     return Err(SuiError::InvalidChildObjectAccess {
+        //         object: *child,
+        //         given_parent: parent,
+        //         actual_owner: child_object.owner,
+        //     });
+        // }
+        // if child_object.version() > child_version_upper_bound {
+        //     return Err(SuiError::UnsupportedFeatureError {
+        //         error: "TODO InMemoryStorage::read_child_object does not yet support bounded reads"
+        //             .to_owned(),
+        //     });
+        // }
+        // Ok(Some(child_object))
+        Ok(self.get_object(child).unwrap().and_then(|o| {
+            if o.version() <= child_version_upper_bound
+                && o.owner == Owner::ObjectOwner((*parent).into())
+            {
+                Some(o.clone())
+            } else {
+                None
+            }
+        }))
     }
 }
 
@@ -133,20 +149,20 @@ impl ObjectStore for &DashMemoryBackedStore {
     }
 }
 
-impl ModuleResolver for DashMemoryBackedStore {
-    type Error = SuiError;
+// impl ModuleResolver for DashMemoryBackedStore {
+//     type Error = SuiError;
 
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(self
-            .get_package(&ObjectID::from(*module_id.address()))?
-            .and_then(|package| {
-                package
-                    .serialized_module_map()
-                    .get(module_id.name().as_str())
-                    .cloned()
-            }))
-    }
-}
+//     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+//         Ok(self
+//             .get_package(&ObjectID::from(*module_id.address()))?
+//             .and_then(|package| {
+//                 package
+//                     .serialized_module_map()
+//                     .get(module_id.name().as_str())
+//                     .cloned()
+//             }))
+//     }
+// }
 
 impl GetModule for DashMemoryBackedStore {
     type Error = SuiError;

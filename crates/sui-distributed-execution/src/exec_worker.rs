@@ -149,7 +149,7 @@ pub struct ExecutionWorkerState<
         + BackingPackageStore
         + ParentSync
         + ChildObjectResolver
-        + GetModule<Error = SuiError, Item = CompiledModule>
+        // + GetModule<Error = SuiError, Item = CompiledModule>
         + Send
         + Sync
         + 'static,
