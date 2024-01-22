@@ -18,8 +18,8 @@ use sui_indexer::test_utils::force_delete_database;
 use sui_indexer::test_utils::start_test_indexer_v2;
 use sui_indexer::test_utils::start_test_indexer_v2_impl;
 use sui_indexer::test_utils::ReaderWriterConfig;
-use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
+use sui_types::storage::ReadStore;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use tokio::task::JoinHandle;
@@ -96,7 +96,7 @@ pub async fn start_cluster(
 pub async fn serve_executor(
     graphql_connection_config: ConnectionConfig,
     internal_data_source_rpc_port: u16,
-    executor: Arc<dyn NodeStateGetter>,
+    executor: Arc<dyn ReadStore + Send + Sync>,
     snapshot_config: Option<SnapshotLagConfig>,
 ) -> ExecutorCluster {
     let db_url = graphql_connection_config.db_url.clone();

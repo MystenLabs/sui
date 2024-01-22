@@ -13245,8 +13245,6 @@ dependencies = [
  "rand 0.8.5",
  "reqwest",
  "serde",
- "simulacrum",
- "sui-core",
  "sui-types",
  "tokio",
  "workspace-hack",

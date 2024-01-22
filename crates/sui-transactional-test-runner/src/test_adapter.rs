@@ -56,7 +56,6 @@ use sui_graphql_rpc::test_infra::cluster::{serve_executor, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{DevInspectResults, SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
-use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_storage::{
     key_value_store::TransactionKeyValueStore, key_value_store_metrics::KeyValueStoreMetrics,
 };
@@ -65,11 +64,11 @@ use sui_types::base_types::{SequenceNumber, VersionNumber};
 use sui_types::crypto::get_authority_key_pair;
 use sui_types::digests::{ConsensusCommitDigest, TransactionDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
-use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
 };
-use sui_types::storage::{ObjectKey, ObjectStore};
+use sui_types::storage::ObjectStore;
+use sui_types::storage::ReadStore;
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
 use sui_types::DEEPBOOK_PACKAGE_ID;
@@ -612,7 +611,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 let chk = self
                     .executor
-                    .get_verified_checkpoint_by_sequence_number(latest_chk)?;
+                    .get_checkpoint_by_sequence_number(latest_chk)?
+                    .unwrap();
                 Ok(Some(format!("{}", chk.data())))
             }
             SuiSubcommand::CreateCheckpoint(CreateCheckpointCommand { count }) => {
@@ -2113,63 +2113,120 @@ async fn update_named_address_mapping(
     }
 }
 
-impl NodeStateGetter for SuiTestAdapter<'_> {
-    fn get_verified_checkpoint_by_sequence_number(
+impl ObjectStore for SuiTestAdapter<'_> {
+    fn get_object(
         &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> SuiResult<VerifiedCheckpoint> {
-        self.executor
-            .get_verified_checkpoint_by_sequence_number(sequence_number)
-    }
-
-    fn get_latest_checkpoint_sequence_number(&self) -> SuiResult<CheckpointSequenceNumber> {
-        self.executor.get_latest_checkpoint_sequence_number()
-    }
-
-    fn get_checkpoint_contents(
-        &self,
-        content_digest: CheckpointContentsDigest,
-    ) -> SuiResult<CheckpointContents> {
-        self.executor.get_checkpoint_contents(content_digest)
-    }
-
-    fn multi_get_transaction_blocks(
-        &self,
-        tx_digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<VerifiedTransaction>>> {
-        self.executor.multi_get_transaction_blocks(tx_digests)
-    }
-
-    fn multi_get_executed_effects(
-        &self,
-        digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        self.executor.multi_get_executed_effects(digests)
-    }
-
-    fn multi_get_events(
-        &self,
-        event_digests: &[TransactionEventsDigest],
-    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
-        self.executor.multi_get_events(event_digests)
-    }
-
-    fn multi_get_object_by_key(
-        &self,
-        object_keys: &[ObjectKey],
-    ) -> Result<Vec<Option<Object>>, SuiError> {
-        self.executor.multi_get_object_by_key(object_keys)
+        object_id: &ObjectID,
+    ) -> sui_types::storage::error::Result<Option<Object>> {
+        ObjectStore::get_object(&*self.executor, object_id)
     }
 
     fn get_object_by_key(
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
-        ObjectStore::get_object_by_key(&*self.executor, object_id, version).map_err(Into::into)
+    ) -> sui_types::storage::error::Result<Option<Object>> {
+        ObjectStore::get_object_by_key(&*self.executor, object_id, version)
+    }
+}
+
+impl ReadStore for SuiTestAdapter<'_> {
+    fn get_committee(
+        &self,
+        epoch: sui_types::committee::EpochId,
+    ) -> sui_types::storage::error::Result<Option<Arc<sui_types::committee::Committee>>> {
+        self.executor.get_committee(epoch)
     }
 
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        ObjectStore::get_object(&*self.executor, object_id).map_err(Into::into)
+    fn get_latest_checkpoint(&self) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
+        ReadStore::get_latest_checkpoint(&self.executor)
+    }
+
+    fn get_highest_verified_checkpoint(
+        &self,
+    ) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
+        self.executor.get_highest_verified_checkpoint()
+    }
+
+    fn get_highest_synced_checkpoint(
+        &self,
+    ) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
+        self.executor.get_highest_synced_checkpoint()
+    }
+
+    fn get_lowest_available_checkpoint(
+        &self,
+    ) -> sui_types::storage::error::Result<CheckpointSequenceNumber> {
+        self.executor.get_lowest_available_checkpoint()
+    }
+
+    fn get_checkpoint_by_digest(
+        &self,
+        digest: &sui_types::messages_checkpoint::CheckpointDigest,
+    ) -> sui_types::storage::error::Result<Option<VerifiedCheckpoint>> {
+        self.executor.get_checkpoint_by_digest(digest)
+    }
+
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> sui_types::storage::error::Result<Option<VerifiedCheckpoint>> {
+        self.executor
+            .get_checkpoint_by_sequence_number(sequence_number)
+    }
+
+    fn get_checkpoint_contents_by_digest(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> sui_types::storage::error::Result<Option<CheckpointContents>> {
+        self.executor.get_checkpoint_contents_by_digest(digest)
+    }
+
+    fn get_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> sui_types::storage::error::Result<Option<CheckpointContents>> {
+        self.executor
+            .get_checkpoint_contents_by_sequence_number(sequence_number)
+    }
+
+    fn get_transaction(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> sui_types::storage::error::Result<Option<VerifiedTransaction>> {
+        self.executor.get_transaction(tx_digest)
+    }
+
+    fn get_transaction_effects(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> sui_types::storage::error::Result<Option<TransactionEffects>> {
+        self.executor.get_transaction_effects(tx_digest)
+    }
+
+    fn get_events(
+        &self,
+        event_digest: &TransactionEventsDigest,
+    ) -> sui_types::storage::error::Result<Option<TransactionEvents>> {
+        self.executor.get_events(event_digest)
+    }
+
+    fn get_full_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> sui_types::storage::error::Result<
+        Option<sui_types::messages_checkpoint::FullCheckpointContents>,
+    > {
+        self.executor
+            .get_full_checkpoint_contents_by_sequence_number(sequence_number)
+    }
+
+    fn get_full_checkpoint_contents(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> sui_types::storage::error::Result<
+        Option<sui_types::messages_checkpoint::FullCheckpointContents>,
+    > {
+        self.executor.get_full_checkpoint_contents(digest)
     }
 }
