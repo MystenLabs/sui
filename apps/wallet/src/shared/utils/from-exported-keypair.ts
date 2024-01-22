@@ -12,23 +12,23 @@ import { Secp256k1Keypair } from '@mysten/sui.js/keypairs/secp256k1';
 import { Secp256r1Keypair } from '@mysten/sui.js/keypairs/secp256r1';
 import { fromB64 } from '@mysten/sui.js/utils';
 
-export function validateExportedKeypair(keypair: ExportedKeypair): ExportedKeypair {
-	const _kp = decodeSuiPrivateKey(keypair.privateKey);
-	return keypair;
-}
-
-export function fromExportedKeypair(keypair: ExportedKeypair, legacySupport = false): Keypair {
-	const { privateKey } = keypair;
-	let schema = keypair.schema;
-	let secretKey = null;
-	if (!legacySupport || privateKey.startsWith('suiprivkey')) {
-		const decoded = decodeSuiPrivateKey(keypair.privateKey);
-		schema = decoded?.schema;
-		secretKey = decoded.secretKey;
+export function fromExportedKeypair(
+	secret: ExportedKeypair | string,
+	legacySupport = false,
+): Keypair {
+	let schema;
+	let secretKey;
+	if (typeof secret === 'object') {
+		if (!legacySupport) {
+			throw new Error('Invalid type of secret key. A string value was expected.');
+		}
+		secretKey = fromB64(secret.privateKey);
+		schema = secret.schema;
 	} else {
-		secretKey = fromB64(privateKey);
+		const decoded = decodeSuiPrivateKey(secret);
+		schema = decoded.schema;
+		secretKey = decoded.secretKey;
 	}
-
 	switch (schema) {
 		case 'ED25519':
 			let pureSecretKey = secretKey;
@@ -42,6 +42,6 @@ export function fromExportedKeypair(keypair: ExportedKeypair, legacySupport = fa
 		case 'Secp256r1':
 			return Secp256r1Keypair.fromSecretKey(secretKey);
 		default:
-			throw new Error(`Invalid keypair schema ${keypair.schema}`);
+			throw new Error(`Invalid keypair schema ${schema}`);
 	}
 }
