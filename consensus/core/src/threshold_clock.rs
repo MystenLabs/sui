@@ -86,7 +86,7 @@ mod tests {
 
     #[test]
     fn test_threshold_clock_add_block() {
-        let context = Arc::new(Context::new_for_test());
+        let context = Arc::new(Context::new_for_test(None));
         let mut aggregator = ThresholdClock::new(0, context);
 
         aggregator.add_block(BlockRef::new(
@@ -141,7 +141,7 @@ mod tests {
 
     #[test]
     fn test_threshold_clock_add_blocks() {
-        let context = Arc::new(Context::new_for_test());
+        let context = Arc::new(Context::new_for_test(None));
         let mut aggregator = ThresholdClock::new(0, context);
 
         let block_refs = vec![

@@ -1,29 +1,16 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use std::sync::Arc;
 
-use consensus_config::{AuthorityIndex, Committee, Parameters};
+use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
-use sui_protocol_config::ProtocolConfig;
 
 use crate::{
     block::{BlockRef, Round, TestBlock, VerifiedBlock},
     context::Context,
     dag_state::DagState,
-    metrics::test_metrics,
 };
-
-/// A helper function to create a test context with a committee of given size
-/// and even stake
-pub fn context_for_test(committee_size: usize) -> Arc<Context> {
-    let committee = Committee::new_for_test(0, vec![1; committee_size]).0;
-    let metrics = test_metrics();
-    Arc::new(Context::new(
-        AuthorityIndex::new_for_test(0),
-        committee,
-        Parameters::default(),
-        ProtocolConfig::get_for_min_version(),
-        metrics,
-    ))
-}
 
 /// Build a fully interconnected dag up to the specified round. This function
 /// starts building the dag from the specified [`start`] references or from

@@ -83,15 +83,15 @@ impl DagState {
     /// Accepts a block into DagState and keeps it in memory.
     pub(crate) fn accept_block(&mut self, block: VerifiedBlock) {
         let block_ref = block.reference();
-        // Ensure we don't write multiple blocks per slot for our own index
+        // Ensure we don't write multiple unique blocks per slot for our own index
         if block_ref.author == self.context.own_index {
             let existing_blocks = self.get_blocks_at_slot(Slot::from(block_ref));
-            if !existing_blocks.is_empty() {
-                // TODO: should we panic?
-                tracing::error!(
-                    "Block Rejected! Attempted to add block {block} to own slot where block(s) {existing_blocks:#?} already exists."
+            if let Some(existing_block) = existing_blocks.first() {
+                assert!(
+                    existing_block.reference() == block.reference(),
+                    "Block Rejected! Attempted to add block {block} to own slot where \
+                block(s) {existing_block} already exists."
                 );
-                return;
             }
         }
         self.recent_blocks.insert(block_ref, block);

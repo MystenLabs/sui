@@ -159,7 +159,7 @@ mod test {
 
     #[tokio::test]
     async fn test_core_thread() {
-        let context = Arc::new(Context::new_for_test());
+        let context = Arc::new(Context::new_for_test(None));
         let block_manager = BlockManager::new();
         let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
         let transactions_consumer = TransactionsConsumer::new(tx_receiver);

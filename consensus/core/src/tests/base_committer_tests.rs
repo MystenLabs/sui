@@ -7,9 +7,10 @@ use crate::{
     base_committer::base_committer_builder::BaseCommitterBuilder,
     block::{BlockAPI, TestBlock, VerifiedBlock},
     commit::{LeaderStatus, DEFAULT_WAVE_LENGTH},
+    context::Context,
     dag_state::DagState,
     storage::mem_store::MemStore,
-    test_utils::{build_dag, build_dag_layer, context_for_test},
+    test_dag::{build_dag, build_dag_layer},
 };
 use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
@@ -19,7 +20,7 @@ use parking_lot::RwLock;
 #[tracing_test::traced_test]
 fn try_direct_commit() {
     // Commitee of 4 with even stake
-    let context = context_for_test(4);
+    let context = Arc::new(Context::new_for_test(Some(4)));
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
@@ -71,7 +72,7 @@ fn try_direct_commit() {
 #[tracing_test::traced_test]
 fn idempotence() {
     // Commitee of 4 with even stake
-    let context = context_for_test(4);
+    let context = Arc::new(Context::new_for_test(Some(4)));
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
@@ -113,7 +114,7 @@ fn idempotence() {
 #[tracing_test::traced_test]
 fn multiple_direct_commit() {
     // Commitee of 4 with even stake
-    let context = context_for_test(4);
+    let context = Arc::new(Context::new_for_test(Some(4)));
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
@@ -154,7 +155,7 @@ fn multiple_direct_commit() {
 #[tracing_test::traced_test]
 fn direct_skip() {
     // Commitee of 4 with even stake
-    let context = context_for_test(4);
+    let context = Arc::new(Context::new_for_test(Some(4)));
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
@@ -207,7 +208,7 @@ fn direct_skip() {
 #[tracing_test::traced_test]
 fn indirect_commit() {
     // Commitee of 4 with even stake
-    let context = context_for_test(4);
+    let context = Arc::new(Context::new_for_test(Some(4)));
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
@@ -351,7 +352,7 @@ fn indirect_commit() {
 #[tracing_test::traced_test]
 fn indirect_skip() {
     // Commitee of 4 with even stake
-    let context = context_for_test(4);
+    let context = Arc::new(Context::new_for_test(Some(4)));
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
@@ -484,7 +485,7 @@ fn indirect_skip() {
 #[tracing_test::traced_test]
 fn undecided() {
     // Commitee of 4 with even stake
-    let context = context_for_test(4);
+    let context = Arc::new(Context::new_for_test(Some(4)));
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
@@ -567,7 +568,7 @@ fn undecided() {
 #[tracing_test::traced_test]
 fn test_byzantine_validator() {
     // Commitee of 4 with even stake
-    let context = context_for_test(4);
+    let context = Arc::new(Context::new_for_test(Some(4)));
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),

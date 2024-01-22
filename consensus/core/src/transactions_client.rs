@@ -93,7 +93,7 @@ mod tests {
 
     #[tokio::test]
     async fn basic_submit_and_consume() {
-        let context = Arc::new(Context::new_for_test());
+        let context = Arc::new(Context::new_for_test(None));
         let (client, tx_receiver) = TransactionsClient::new(context);
         let mut consumer = TransactionsConsumer::new(tx_receiver);
 
