@@ -4,8 +4,14 @@
 use std::str::FromStr;
 
 use async_graphql::{connection::Connection, *};
+use fastcrypto::encoding::{Base64, Encoding};
+use move_core_types::account_address::AccountAddress;
+use serde::de::DeserializeOwned;
 use sui_json_rpc::name_service::NameServiceConfig;
-use sui_types::{gas_coin::GAS, TypeTag};
+use sui_json_rpc_types::DevInspectArgs;
+use sui_sdk::SuiClient;
+use sui_types::transaction::{TransactionData, TransactionKind};
+use sui_types::{gas_coin::GAS, transaction::TransactionDataAPI, TypeTag};
 
 use super::{
     address::Address,
@@ -16,6 +22,7 @@ use super::{
     coin_metadata::CoinMetadata,
     cursor::Page,
     digest::Digest,
+    dry_run_result::DryRunResult,
     epoch::Epoch,
     event::{self, Event, EventFilter},
     move_type::MoveType,
@@ -25,6 +32,7 @@ use super::{
     sui_address::SuiAddress,
     suins_registration::{Domain, SuinsRegistration},
     transaction_block::{self, TransactionBlock, TransactionBlockFilter},
+    transaction_metadata::TransactionMetadata,
     type_filter::ExactTypeFilter,
 };
 use crate::{
@@ -62,8 +70,109 @@ impl Query {
     }
 
     // availableRange - pending impl. on IndexerV2
-    // dryRunTransactionBlock
     // coinMetadata
+
+    /// Simulate running a transaction to inspect its effects without
+    /// committing to them on-chain.
+    ///
+    /// `txBytes` either a `TransactionData` struct or a `TransactionKind`
+    ///     struct, BCS-encoded and then Base64-encoded.  The expected
+    ///     type is controlled by the presence or absence of `txMeta`: If
+    ///     present, `txBytes` is assumed to be a `TransactionKind`, if
+    ///     absent, then `TransactionData`.
+    ///
+    /// `txMeta` the data that is missing from a `TransactionKind` to make
+    ///     a `TransactionData` (sender address and gas information).  All
+    ///     its fields are nullable.
+    ///
+    /// `skipChecks` optional flag to disable the usual verification
+    ///     checks that prevent access to objects that are owned by
+    ///     addresses other than the sender, and calling non-public,
+    ///     non-entry functions, and some other checks.  Defaults to false.
+    async fn dry_run_transaction_block(
+        &self,
+        ctx: &Context<'_>,
+        tx_bytes: String,
+        tx_meta: Option<TransactionMetadata>,
+        skip_checks: Option<bool>,
+    ) -> Result<DryRunResult> {
+        let skip_checks = skip_checks.unwrap_or(false);
+
+        let sui_sdk_client: &Option<SuiClient> = ctx
+            .data()
+            .map_err(|_| Error::Internal("Unable to fetch Sui SDK client".to_string()))
+            .extend()?;
+        let sui_sdk_client = sui_sdk_client
+            .as_ref()
+            .ok_or_else(|| Error::Internal("Sui SDK client not initialized".to_string()))
+            .extend()?;
+
+        let (sender_address, tx_kind, gas_price, gas_sponsor, gas_budget, gas_objects) =
+            if let Some(TransactionMetadata {
+                sender,
+                gas_price,
+                gas_objects,
+                gas_budget,
+                gas_sponsor,
+            }) = tx_meta
+            {
+                // This implies `TransactionKind`
+                let tx_kind = deserialize_tx_data::<TransactionKind>(&tx_bytes)?;
+
+                // Default is 0x0
+                let sender_address = sender.unwrap_or_else(|| AccountAddress::ZERO.into()).into();
+
+                let gas_sponsor = gas_sponsor.map(|addr| addr.into());
+
+                let gas_objects = gas_objects.map(|objs| {
+                    objs.into_iter()
+                        .map(|obj| (obj.address.into(), obj.version.into(), obj.digest.into()))
+                        .collect()
+                });
+
+                (
+                    sender_address,
+                    tx_kind,
+                    gas_price.map(|p| p.into()),
+                    gas_sponsor,
+                    gas_budget.map(|b| b.into()),
+                    gas_objects,
+                )
+            } else {
+                // This implies `TransactionData`
+                let tx_data = deserialize_tx_data::<TransactionData>(&tx_bytes)?;
+
+                (
+                    tx_data.sender(),
+                    tx_data.clone().into_kind(),
+                    Some(tx_data.gas_price().into()),
+                    Some(tx_data.gas_owner()),
+                    Some(tx_data.gas_budget().into()),
+                    Some(tx_data.gas().to_vec()),
+                )
+            };
+
+        let dev_inspect_args = DevInspectArgs {
+            gas_sponsor,
+            gas_budget,
+            gas_objects,
+            show_raw_txn_data_and_effects: Some(true),
+            skip_checks: Some(skip_checks),
+        };
+
+        let res = sui_sdk_client
+            .read_api()
+            .dev_inspect_transaction_block(
+                sender_address,
+                tx_kind,
+                gas_price,
+                None,
+                Some(dev_inspect_args),
+            )
+            .await?;
+
+        DryRunResult::try_from(res).extend()
+    }
 
     async fn owner(&self, address: SuiAddress) -> Option<Owner> {
         Some(Owner { address })
@@ -257,4 +366,25 @@ impl Query {
             .await
             .extend()
     }
+}
+
+fn deserialize_tx_data<T>(tx_bytes: &str) -> Result<T>
+where
+    T: DeserializeOwned,
+{
+    bcs::from_bytes(
+        &Base64::decode(tx_bytes)
+            .map_err(|e| {
+                Error::Client(format!(
+                    "Unable to deserialize transaction bytes from Base64: {e}"
+                ))
+            })
+            .extend()?,
+    )
+    .map_err(|e| {
+        Error::Client(format!(
+            "Unable to deserialize transaction bytes as BCS: {e}"
+        ))
+    })
+    .extend()
 }

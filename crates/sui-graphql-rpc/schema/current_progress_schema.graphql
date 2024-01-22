@@ -587,6 +587,44 @@ type DisplayEntry {
 	error: String
 }
 
+type DryRunEffect {
+	"""
+	Changes made to arguments that were mutably borrowed by each command in this transaction.
+	"""
+	mutatedReferences: [DryRunMutation!]
+	"""
+	Return results of each command in this transaction.
+	"""
+	returnValues: [DryRunReturn!]
+}
+
+type DryRunMutation {
+	input: TransactionArgument!
+	type: MoveType!
+	bcs: Base64!
+}
+
+type DryRunResult {
+	"""
+	The error that occurred during dry run execution, if any.
+	"""
+	error: String
+	"""
+	The intermediate results for each command of the dry run execution, including
+	contents of mutated references and return values.
+	"""
+	results: [DryRunEffect!]
+	"""
+	The transaction block representing the dry run execution.
+	"""
+	transaction: TransactionBlock
+}
+
+type DryRunReturn {
+	type: MoveType!
+	bcs: Base64!
+}
+
 """
 Dynamic fields are heterogeneous fields that can be added or removed at runtime,
 and can have arbitrary user-assigned names. There are two sub-types of dynamic
@@ -1904,6 +1942,21 @@ The object's owner type: Immutable, Shared, Parent, or Address.
 """
 union ObjectOwner = Immutable | Shared | Parent | AddressOwner
 
+input ObjectRef {
+	"""
+	ID of the object.
+	"""
+	address: SuiAddress!
+	"""
+	Version or sequence number of the object.
+	"""
+	version: Int!
+	"""
+	Digest of the object.
+	"""
+	digest: String!
+}
+
 """
 Represents types that could contain references or free type parameters.  Such types can appear
 as function parameters, in fields of structs, or as actual type parameter.
@@ -2195,6 +2248,26 @@ type Query {
 	Configuration for this RPC service
 	"""
 	serviceConfig: ServiceConfig!
+	"""
+	Simulate running a transaction to inspect its effects without
+	committing to them on-chain.
+	
+	`txBytes` either a `TransactionData` struct or a `TransactionKind`
+	struct, BCS-encoded and then Base64-encoded.  The expected
+	type is controlled by the presence or absence of `txMeta`: If
+	present, `txBytes` is assumed to be a `TransactionKind`, if
+	absent, then `TransactionData`.
+	
+	`txMeta` the data that is missing from a `TransactionKind` to make
+	a `TransactionData` (sender address and gas information).  All
+	its fields are nullable.
+	
+	`skipChecks` optional flag to disable the usual verification
+	checks that prevent access to objects that are owned by
+	addresses other than the sender, and calling non-public,
+	non-entry functions, and some other checks.  Defaults to false.
+	"""
+	dryRunTransactionBlock(txBytes: String!, txMeta: TransactionMetadata, skipChecks: Boolean): DryRunResult!
 	owner(address: SuiAddress!): Owner
 	"""
 	The object corresponding to the given address at the (optionally) given version.
@@ -2933,6 +3006,21 @@ type TransactionInputEdge {
 	A cursor for use in pagination
 	"""
 	cursor: String!
+}
+
+"""
+The optional extra data a user can provide to a transaction dry run.
+`sender` defaults to `0x0`. If gasObjects` is not present, or is an empty list,
+it is substituted with a mock Coin object, `gasPrice` defaults to the reference
+gas price, `gasBudget` defaults to the max gas budget and `gasSponsor` defaults
+to the sender.
+"""
+input TransactionMetadata {
+	sender: SuiAddress
+	gasPrice: Int
+	gasObjects: [ObjectRef!]
+	gasBudget: Int
+	gasSponsor: SuiAddress
 }
 
 """

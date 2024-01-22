@@ -1,16 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{
-    connection::{Connection, CursorType, Edge},
-    *,
-};
-use sui_types::transaction::{
-    Argument as NativeArgument, CallArg as NativeCallArg, Command as NativeProgrammableTransaction,
-    ObjectArg as NativeObjectArg, ProgrammableMoveCall as NativeMoveCallTransaction,
-    ProgrammableTransaction as NativeProgrammableTransactionBlock,
-};
-
 use crate::types::{
     base64::Base64,
     cursor::{JsonCursor, Page},
@@ -18,6 +8,16 @@ use crate::types::{
     move_type::MoveType,
     object_read::ObjectRead,
     sui_address::SuiAddress,
+};
+use async_graphql::{
+    connection::{Connection, CursorType, Edge},
+    *,
+};
+use sui_json_rpc_types::SuiArgument;
+use sui_types::transaction::{
+    Argument as NativeArgument, CallArg as NativeCallArg, Command as NativeProgrammableTransaction,
+    ObjectArg as NativeObjectArg, ProgrammableMoveCall as NativeMoveCallTransaction,
+    ProgrammableTransaction as NativeProgrammableTransactionBlock,
 };
 
 #[derive(Clone, Eq, PartialEq)]
@@ -154,8 +154,8 @@ struct MakeMoveVecTransaction {
 }
 
 /// An argument to a programmable transaction command.
-#[derive(Union, Clone, Eq, PartialEq)]
-enum TransactionArgument {
+#[derive(Union, Clone, Debug, Eq, PartialEq)]
+pub(crate) enum TransactionArgument {
     GasCoin(GasCoin),
     Input(Input),
     Result(TxResult),
@@ -163,24 +163,24 @@ enum TransactionArgument {
 
 /// Access to the gas inputs, after they have been smashed into one coin. The gas coin can only be
 /// used by reference, except for with `TransferObjectsTransaction` that can accept it by value.
-#[derive(SimpleObject, Clone, Eq, PartialEq)]
-struct GasCoin {
+#[derive(SimpleObject, Clone, Debug, Eq, PartialEq)]
+pub(crate) struct GasCoin {
     /// A workaround to define an empty variant of a GraphQL union.
     #[graphql(name = "_")]
     dummy: Option<bool>,
 }
 
 /// One of the input objects or primitive values to the programmable transaction block.
-#[derive(SimpleObject, Clone, Eq, PartialEq)]
-struct Input {
+#[derive(SimpleObject, Clone, Debug, Eq, PartialEq)]
+pub(crate) struct Input {
     /// Index of the programmable transaction block input (0-indexed).
     ix: u16,
 }
 
 /// The result of another transaction command.
-#[derive(SimpleObject, Clone, Eq, PartialEq)]
+#[derive(SimpleObject, Clone, Debug, Eq, PartialEq)]
 #[graphql(name = "Result")]
-struct TxResult {
+pub(crate) struct TxResult {
     /// The index of the previous command (0-indexed) that returned this result.
     cmd: u16,
 
@@ -385,6 +385,19 @@ impl From<NativeArgument> for TransactionArgument {
             N::Input(ix) => A::Input(Input { ix }),
             N::Result(cmd) => A::Result(TxResult { cmd, ix: None }),
             N::NestedResult(cmd, ix) => A::Result(TxResult { cmd, ix: Some(ix) }),
+        }
+    }
+}
+
+impl From<SuiArgument> for TransactionArgument {
+    fn from(argument: SuiArgument) -> Self {
+        use SuiArgument as S;
+        use TransactionArgument as A;
+        match argument {
+            S::GasCoin => A::GasCoin(GasCoin { dummy: None }),
+            S::Input(ix) => A::Input(Input { ix }),
+            S::Result(cmd) => A::Result(TxResult { cmd, ix: None }),
+            S::NestedResult(cmd, ix) => A::Result(TxResult { cmd, ix: Some(ix) }),
         }
     }
 }

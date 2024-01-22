@@ -3,6 +3,7 @@
 
 #[cfg(feature = "pg_integration")]
 mod tests {
+    use fastcrypto::encoding::Base64;
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     use serde_json::json;
@@ -397,6 +398,101 @@ mod tests {
             .as_str()
             .unwrap();
         assert_eq!(sender_read, sender.to_string());
+    }
+
+    // TODO: add more test cases for transaction execution/dry run in transactional test runner.
+    #[tokio::test]
+    #[serial]
+    async fn test_transaction_dry_run() {
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+
+        let cluster =
+            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+
+        let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
+
+        let sender = addresses[0];
+        let recipient = addresses[1];
+        let tx = cluster
+            .validator_fullnode_handle
+            .test_transaction_builder()
+            .await
+            .transfer_sui(Some(1_000), recipient)
+            .build();
+        let tx_bytes = Base64::from_bytes(&bcs::to_bytes(&tx).unwrap());
+        let tx_bytes = tx_bytes.encoded();
+
+        let query = r#"{ dryRunTransactionBlock(txBytes: $tx) {
+                transaction {
+                    digest
+                    sender {
+                        address
+                    }
+                    gasInput {
+                        gasSponsor {
+                            address
+                        }
+                        gasPrice
+                    }
+                }
+                error
+                results {
+                    mutatedReferences {
+                        input {
+                            __typename
+                            ... on Input {
+                                ix
+                            }
+                            ... on Result {
+                                cmd
+                                ix
+                            }
+                        }
+                        type {
+                            repr
+                        }
+                    }
+                    returnValues {
+                        type {
+                            repr
+                        }
+                        bcs
+                    }
+                }
+            }
+        }"#;
+        let variables = vec![GraphqlQueryVariable {
+            name: "tx".to_string(),
+            ty: "String!".to_string(),
+            value: json!(tx_bytes),
+        }];
+        let res = cluster
+            .graphql_client
+            .execute_to_graphql(query.to_string(), true, variables, vec![])
+            .await
+            .unwrap();
+        let binding = res.response_body().data.clone().into_json().unwrap();
+        let res = binding.get("dryRunTransactionBlock").unwrap();
+
+        let digest = res.get("transaction").unwrap().get("digest").unwrap();
+        // Dry run txn does not have digest
+        assert!(digest.is_null());
+        assert!(res.get("error").unwrap().is_null());
+        let sender_read = res
+            .get("transaction")
+            .unwrap()
+            .get("sender")
+            .unwrap()
+            .get("address")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert_eq!(sender_read, sender.to_string());
+        assert!(res.get("results").unwrap().is_array());
     }
 
     use sui_graphql_rpc::server::builder::tests::*;

@@ -269,9 +269,10 @@ scalar OpenMoveTypeSignature
 # `TransactionData` in a dry-run.
 input TransactionMetadata {
   sender: SuiAddress
-  gasPrice: BigInt
-  gasBudget: BigInt
+  gasPrice: Int
+  gasBudget: Int
   gasObjects: [ObjectRef!]
+  gasSponsor: SuiAddress
 }
 
 # A reference to a particular version of an object.
@@ -1275,8 +1276,6 @@ type ExecutionResult {
 type DryRunResult {
   transaction: TransactionBlock
   error: String
-
-  events: [Event!]
   results: [DryRunEffect!]
 }
 
@@ -1290,7 +1289,7 @@ type DryRunEffect {
 }
 
 type DryRunMutation {
-  input: TransactionInput
+  input: TransactionArgument
   type: MoveType
   bcs: Base64
 }

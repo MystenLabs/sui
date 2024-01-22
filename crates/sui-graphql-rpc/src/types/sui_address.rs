@@ -105,6 +105,12 @@ impl From<ObjectID> for SuiAddress {
     }
 }
 
+impl From<SuiAddress> for ObjectID {
+    fn from(value: SuiAddress) -> Self {
+        ObjectID::new(value.0)
+    }
+}
+
 impl From<NativeSuiAddress> for SuiAddress {
     fn from(value: NativeSuiAddress) -> Self {
         SuiAddress(value.to_inner())

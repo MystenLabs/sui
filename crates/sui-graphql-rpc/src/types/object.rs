@@ -27,6 +27,7 @@ use sui_types::TypeTag;
 use super::balance;
 use super::big_int::BigInt;
 use super::cursor::{self, Page, Target};
+use super::digest::Digest;
 use super::display::{get_rendered_fields, DisplayEntry};
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::MoveObject;
@@ -78,6 +79,16 @@ pub enum ObjectStatus {
     /// The object is deleted or wrapped and only partial information can be loaded from the
     /// indexer.
     WrappedOrDeleted,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, InputObject)]
+pub(crate) struct ObjectRef {
+    /// ID of the object.
+    pub address: SuiAddress,
+    /// Version or sequence number of the object.
+    pub version: u64,
+    /// Digest of the object.
+    pub digest: Digest,
 }
 
 /// Constrains the set of objects returned. All filters are optional, and the resulting set of

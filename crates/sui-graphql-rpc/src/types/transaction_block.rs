@@ -44,7 +44,7 @@ use super::{
     type_filter::FqNameFilter,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum TransactionBlock {
     /// A transaction block that has been indexed and stored in the database,
     /// containing all information that the other two variants have, and more.

@@ -212,7 +212,7 @@ impl ServerBuilder {
                     .map_err(|e| Error::Internal(format!("Failed to create SuiClient: {}", e)))?,
             )
         } else {
-            warn!("No fullnode url found in config. Mutations will not work");
+            warn!("No fullnode url found in config. `dryRunTransactionBlock` and `executeTransactionBlock` will not work");
             None
         };
 
