@@ -15,6 +15,7 @@ use sui_core::transaction_input_checker::get_gas_status_no_epoch_store_experimen
 use sui_move_natives;
 use sui_protocol_config::ProtocolConfig;
 use sui_single_node_benchmark::benchmark_context::BenchmarkContext;
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::committee::EpochId;
@@ -35,6 +36,7 @@ use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use sui_types::temporary_store::TemporaryStore;
 use sui_types::transaction::{
     InputObjectKind, InputObjects, SenderSignedData, Transaction, TransactionDataAPI,
+    VerifiedTransaction,
 };
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
@@ -641,48 +643,25 @@ impl<
                 // validator
                 //     .execute_transaction_in_memory(in_memory_store, tx)
                 //     .await;
-
-                let txid = tx.digest();
-                let tx_data = tx.transaction_data();
-                let (kind, signer, gas) = tx_data.execution_parts();
-                let tx_data = tx.transaction_data();
-                let input_object_kinds = tx_data
-                    .input_objects()
-                    .expect("Cannot get input object kinds");
-
-                let mut input_object_data = Vec::new();
-                for kind in &input_object_kinds {
-                    let obj = match kind {
-                        InputObjectKind::MovePackage(id)
-                        | InputObjectKind::SharedMoveObject { id, .. }
-                        | InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => {
-                            memstore.get_object(&id).unwrap().unwrap()
-                        }
-                    };
-                    input_object_data.push(obj);
-                }
-
-                let input_objects = InputObjects::new(
-                    input_object_kinds
-                        .into_iter()
-                        .zip(input_object_data.into_iter())
-                        .collect(),
+                let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
+                    VerifiedTransaction::new_unchecked(tx),
+                    0,
                 );
-                let gas_status = Self::get_gas_status(
-                    &tx,
-                    &input_objects,
+                let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
+                    &memstore,
+                    &*memstore,
+                    &executable,
                     &protocol_config,
                     reference_gas_price,
                 )
-                .await;
+                .unwrap();
+                let txid = executable.digest();
+                let tx_data = executable.transaction_data();
+                let (kind, signer, gas) = tx_data.execution_parts();
                 let shared_object_refs = input_objects.filter_shared_objects();
                 let transaction_dependencies = input_objects.transaction_dependencies();
                 let mut gas_charger =
-                    GasCharger::new(*tx.digest(), gas, gas_status, &protocol_config);
-                // println!(
-                //     "Dependencies for tx {}: {:?}",
-                //     txid, transaction_dependencies
-                // );
+                    GasCharger::new(*executable.digest(), gas, gas_status, &protocol_config);
                 let temporary_store = TemporaryStore::new(
                     memstore.clone(),
                     input_objects.clone(),
