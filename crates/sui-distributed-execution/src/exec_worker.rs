@@ -619,45 +619,50 @@ impl<
             // self.process_genesis_objects(in_channel).await;
             let (txs, ctx) = self.init_genesis_objects(tx_count, duration).await;
             let in_memory_store = ctx.validator().create_in_memory_store();
-            let tasks: FuturesUnordered<_> = txs
-                .into_iter()
-                .map(|tx| {
-                    let validator = ctx.validator();
-                    let in_memory_store = in_memory_store.clone();
-                    tokio::spawn(async move {
-                        validator
-                            .execute_transaction_in_memory(in_memory_store, tx)
-                            .await
-                    })
-                })
-                .collect();
-            let results: Vec<_> = tasks.collect().await;
-            results.into_iter().for_each(|r| {
-                r.unwrap();
-            });
-            // for tx in txs {
-            //     let full_tx = TransactionWithEffects {
-            //         tx: tx.data().clone(),
-            //         ground_truth_effects: None,
-            //         child_inputs: None,
-            //         checkpoint_seq: None,
-            //         timestamp: 0.0,
-            //     };
-            //     Self::async_exec(
-            //         full_tx,
-            //         self.memory_store.clone(),
-            //         HashSet::new(),
-            //         move_vm.clone(),
-            //         reference_gas_price,
-            //         epoch_data.epoch_id(),
-            //         epoch_data.epoch_start_timestamp(),
-            //         protocol_config.clone(),
-            //         metrics.clone(),
-            //         my_id as u8,
-            //         &ew_ids,
-            //     )
-            //     .await;
-            // }
+            // let tasks: FuturesUnordered<_> = txs
+            //     .into_iter()
+            //     .map(|tx| {
+            //         let validator = ctx.validator();
+            //         let in_memory_store = in_memory_store.clone();
+            //         tokio::spawn(async move {
+            //             validator
+            //                 .execute_transaction_in_memory(in_memory_store, tx)
+            //                 .await
+            //         })
+            //     })
+            //     .collect();
+            // let results: Vec<_> = tasks.collect().await;
+            // results.into_iter().for_each(|r| {
+            //     r.unwrap();
+            // });
+            for tx in txs {
+                let validator = ctx.validator();
+                let in_memory_store = in_memory_store.clone();
+                validator
+                    .execute_transaction_in_memory(in_memory_store, tx)
+                    .await;
+                // let full_tx = TransactionWithEffects {
+                //     tx: tx.data().clone(),
+                //     ground_truth_effects: None,
+                //     child_inputs: None,
+                //     checkpoint_seq: None,
+                //     timestamp: 0.0,
+                // };
+                // Self::async_exec(
+                //     full_tx,
+                //     self.memory_store.clone(),
+                //     HashSet::new(),
+                //     move_vm.clone(),
+                //     reference_gas_price,
+                //     epoch_data.epoch_id(),
+                //     epoch_data.epoch_start_timestamp(),
+                //     protocol_config.clone(),
+                //     metrics.clone(),
+                //     my_id as u8,
+                //     &ew_ids,
+                // )
+                // .await;
+            }
             panic!("Done executing txs");
         }
         // Main loop
