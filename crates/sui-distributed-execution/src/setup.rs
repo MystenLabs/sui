@@ -1,10 +1,9 @@
-use std::{collections::BTreeMap, fs, io::BufReader, path::PathBuf, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, fs, io::BufReader, path::PathBuf, time::Duration};
 
 use sui_single_node_benchmark::{
     benchmark_context::BenchmarkContext,
     command::{Component, WorkloadKind},
     mock_account::Account,
-    tx_generator::{MoveTxGenerator, NonMoveTxGenerator, TxGenerator},
     workload::Workload,
 };
 use sui_types::{

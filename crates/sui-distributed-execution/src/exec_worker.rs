@@ -30,7 +30,9 @@ use sui_types::storage::{
 };
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use sui_types::temporary_store::TemporaryStore;
-use sui_types::transaction::{InputObjectKind, InputObjects, SenderSignedData, TransactionDataAPI};
+use sui_types::transaction::{
+    InputObjectKind, InputObjects, SenderSignedData, Transaction, TransactionDataAPI,
+};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, Duration};
@@ -527,7 +529,7 @@ impl<
     //     }
     // }
 
-    async fn init_genesis_objects(&self, tx_count: u64, duration: Duration) {
+    async fn init_genesis_objects(&self, tx_count: u64, duration: Duration) -> Vec<Transaction> {
         // let (_, objects, _) = import_from_files(working_directory);
         let (ctx, workload) = generate_benchmark_ctx_workload(tx_count, duration).await;
         let (ctx, move_package_id, txs) = generate_benchmark_txs(workload, ctx).await;
@@ -557,6 +559,8 @@ impl<
             self.memory_store
                 .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
         }
+
+        txs
     }
 
     /// ExecutionWorker main
@@ -589,10 +593,6 @@ impl<
         let epoch_txs_semaphore = 0;
         let mut epoch_change_tx: Option<TransactionWithEffects> = None;
 
-        if self.mode == ExecutionMode::Channel {
-            // self.process_genesis_objects(in_channel).await;
-            self.init_genesis_objects(tx_count, duration).await;
-        }
         // Start timer for TPS computation
         let mut num_tx: u64 = 0;
         // let now = Instant::now();
@@ -601,26 +601,32 @@ impl<
         let (mut move_vm, mut protocol_config, mut epoch_data, mut reference_gas_price) =
             match self.mode {
                 ExecutionMode::Database => self.process_epoch_start(in_channel).await,
-                ExecutionMode::Channel => {
-                    let native_functions = sui_move_natives::all_natives(/* silent */ true);
-                    let validator = TestAuthorityBuilder::new().build().await;
-                    let epoch_store = validator.epoch_store_for_testing().clone();
-                    let protocol_config = epoch_store.protocol_config();
-                    let move_vm = Arc::new(
-                        adapter::new_move_vm(native_functions, protocol_config, false)
-                            .expect("We defined natives to not fail here"),
-                    );
-                    let epoch_data = EpochData::new_test();
-                    let reference_gas_price = epoch_store.reference_gas_price();
-                    (
-                        move_vm,
-                        protocol_config.clone(),
-                        epoch_data,
-                        reference_gas_price,
-                    )
-                }
+                ExecutionMode::Channel => init_execution_structures().await,
             };
 
+        if self.mode == ExecutionMode::Channel {
+            // self.process_genesis_objects(in_channel).await;
+            let txs = self.init_genesis_objects(tx_count, duration).await;
+            for tx in txs {
+                let full_tx = TransactionWithEffects {
+                    tx: tx.data().clone(),
+                    ground_truth_effects: None,
+                    child_inputs: None,
+                    checkpoint_seq: None,
+                    timestamp: 0.0,
+                };
+                self.execute_tx(
+                    &full_tx,
+                    &protocol_config,
+                    &move_vm,
+                    &epoch_data,
+                    reference_gas_price,
+                    metrics.clone(),
+                )
+                .await;
+            }
+            panic!("Done executing txs");
+        }
         // Main loop
         loop {
             tokio::select! {
@@ -971,4 +977,23 @@ impl<
         const WORKLOAD: &str = "default";
         metrics.register_transaction(tx.timestamp, WORKLOAD);
     }
+}
+
+async fn init_execution_structures() -> (Arc<MoveVM>, ProtocolConfig, EpochData, u64) {
+    let native_functions = sui_move_natives::all_natives(/* silent */ true);
+    let validator = TestAuthorityBuilder::new().build().await;
+    let epoch_store = validator.epoch_store_for_testing().clone();
+    let protocol_config = epoch_store.protocol_config();
+    let move_vm = Arc::new(
+        adapter::new_move_vm(native_functions, protocol_config, false)
+            .expect("We defined natives to not fail here"),
+    );
+    let epoch_data = EpochData::new_test();
+    let reference_gas_price = epoch_store.reference_gas_price();
+    (
+        move_vm,
+        protocol_config.clone(),
+        epoch_data,
+        reference_gas_price,
+    )
 }
