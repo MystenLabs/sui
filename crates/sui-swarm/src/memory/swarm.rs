@@ -10,11 +10,13 @@ use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::time::Duration;
 use std::{
-    mem, ops,
+    ops,
     path::{Path, PathBuf},
 };
+
 use sui_config::node::{DBCheckpointConfig, OverloadThresholdConfig, RunWithRange};
 use sui_config::NodeConfig;
+use sui_macros::nondeterministic;
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
 use sui_swarm_config::genesis_config::{AccountConfig, GenesisConfig, ValidatorGenesisConfig};
@@ -252,7 +254,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
         let dir = if let Some(dir) = self.dir {
             SwarmDirectory::Persistent(dir)
         } else {
-            SwarmDirectory::Temporary(TempDir::new().unwrap())
+            SwarmDirectory::new_temporary()
         };
 
         let network_config = self.network_config.unwrap_or_else(|| {
@@ -374,12 +376,6 @@ impl Swarm {
         self.dir.as_ref()
     }
 
-    /// Ensure that the Swarm data directory will persist and not be cleaned up when this Swarm is
-    /// dropped.
-    pub fn persist_dir(&mut self) {
-        self.dir.persist();
-    }
-
     /// Return a reference to this Swarm's `NetworkConfig`.
     pub fn config(&self) -> &NetworkConfig {
         &self.network_config
@@ -456,22 +452,8 @@ enum SwarmDirectory {
 }
 
 impl SwarmDirectory {
-    fn persist(&mut self) {
-        match self {
-            SwarmDirectory::Persistent(_) => {}
-            SwarmDirectory::Temporary(_) => {
-                let mut temp = SwarmDirectory::Persistent(PathBuf::new());
-                mem::swap(self, &mut temp);
-                let _ = mem::replace(self, temp.into_persistent());
-            }
-        }
-    }
-
-    fn into_persistent(self) -> Self {
-        match self {
-            SwarmDirectory::Temporary(tempdir) => SwarmDirectory::Persistent(tempdir.into_path()),
-            SwarmDirectory::Persistent(dir) => SwarmDirectory::Persistent(dir),
-        }
+    fn new_temporary() -> Self {
+        SwarmDirectory::Temporary(nondeterministic!(TempDir::new().unwrap()))
     }
 }
 
