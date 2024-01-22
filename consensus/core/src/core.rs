@@ -613,6 +613,58 @@ mod test {
         }
     }
 
+    /// This test can't pass yet as we are missing the DagState to fetch the blocks ancestors when proposing. But added
+    /// as test case to showcase the intention of compression.
+    #[ignore]
+    #[tokio::test]
+    async fn test_core_compress_proposal_references() {
+        // create the cores and their signals for all the authorities
+        let mut cores = create_cores(vec![1, 1, 1, 1]);
+
+        let mut last_round_blocks = Vec::new();
+        let mut all_blocks = Vec::new();
+
+        let excluded_authority = AuthorityIndex::new_for_test(3);
+
+        for round in 1..=10 {
+            let mut this_round_blocks = Vec::new();
+
+            for (core, _) in &mut cores {
+                // do not produce any block for authority 3
+                if core.context.own_index == excluded_authority {
+                    continue;
+                }
+
+                // try to propose to ensure that we are covering the case where we miss the leader authority 3
+                core.add_blocks(last_round_blocks.clone());
+                core.try_new_block_leader_timeout(round);
+
+                let block = core.last_proposed_block();
+                assert_eq!(block.round(), round);
+
+                // append the new block to this round blocks
+                this_round_blocks.push(block.clone());
+            }
+
+            last_round_blocks = this_round_blocks.clone();
+            all_blocks.extend(this_round_blocks);
+        }
+
+        // Now send all the produced blocks to core of authority 3. It should produce a new block. If no compression would
+        // be applied the we should expect all the previous blocks to be referenced from round 0..=10. However, since compression
+        // is applied only the last round's (10) blocks should be referenced + the authority's block of round 0.
+        let (core, _) = &mut cores[excluded_authority];
+        core.add_blocks(all_blocks);
+
+        // Assert that a block has been created for round 11 and it references to blocks of round 9
+        let block = core.last_proposed_block();
+        assert_eq!(block.round(), 11);
+        assert_eq!(block.ancestors().len(), 3);
+        for block_ref in block.ancestors() {
+            assert_eq!(block_ref.round, 10); // We expect to reference only to blocks of the previous round
+        }
+    }
+
     /// Creates cores for the specified number of authorities for their corresponding stakes. The method returns the
     /// cores and their respective signal receivers are returned in `AuthorityIndex` order asc.
     fn create_cores(authorities: Vec<Stake>) -> Vec<(Core, CoreSignalsReceivers)> {
