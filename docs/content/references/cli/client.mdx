@@ -422,9 +422,9 @@ Options:
   	--gas <GAS>                   	ID of the gas object for gas payment, in 20 bytes Hex string If not provided, a gas object with at least gas_budget value will be selected
   	--gas-budget <GAS_BUDGET>     	Gas budget for this call
   	--serialize-unsigned-transaction  Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data (TransactionData) using base64 encoding, and print out
-                                    	the string
+                                    	the string <TX_BYTES>. The string can be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
   	--serialize-signed-transaction	Instead of executing the transaction, serialize the bcs bytes of the signed transaction data (SenderSignedData) using base64 encoding, and print out the
-                                    	string
+                                    	string <SIGNED_TX_BYTES>. The string can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes <SIGNED_TX_BYTES>`.
   	--json                        	Return command outputs in json format
   -h, --help                        	Print help
 ```
