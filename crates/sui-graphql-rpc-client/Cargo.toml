@@ -1,6 +1,6 @@
 [package]
 name = "sui-graphql-rpc-client"
-version = "2024.01.0"
+version = "0.1.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
