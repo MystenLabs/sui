@@ -23,14 +23,12 @@ export function ExportAccountPage() {
 			if (!account) {
 				return null;
 			}
-			const key = (
+			return (
 				await backgroundClient.exportAccountKeyPair({
 					password,
 					accountID: account.id,
 				})
 			).keyPair;
-			console.log(key);
-			return key;
 		},
 	});
 	const navigate = useNavigate();
