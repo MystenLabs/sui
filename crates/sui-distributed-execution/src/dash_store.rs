@@ -1,9 +1,11 @@
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
+    digests::TransactionDigest,
     error::{SuiError, SuiResult},
     object::{Object, Owner},
     storage::{
-        get_module_by_id, BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync,
+        get_module_by_id, BackingPackageStore, ChildObjectResolver, GetSharedLocks, ObjectStore,
+        ParentSync,
     },
 };
 
@@ -152,5 +154,14 @@ impl GetModule for DashMemoryBackedStore {
 
     fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
         get_module_by_id(self, id)
+    }
+}
+
+impl GetSharedLocks for DashMemoryBackedStore {
+    fn get_shared_locks(
+        &self,
+        _transaction_digest: &TransactionDigest,
+    ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError> {
+        unreachable!()
     }
 }

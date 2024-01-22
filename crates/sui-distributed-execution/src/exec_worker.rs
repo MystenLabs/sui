@@ -30,7 +30,8 @@ use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::object::Object;
 use sui_types::storage::{
-    BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectStore, ParentSync, WriteKind,
+    BackingPackageStore, ChildObjectResolver, DeleteKind, GetSharedLocks, ObjectStore, ParentSync,
+    WriteKind,
 };
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use sui_types::temporary_store::TemporaryStore;
@@ -169,6 +170,7 @@ impl<
             + ParentSync
             + ChildObjectResolver
             + GetModule<Error = SuiError, Item = CompiledModule>
+            + GetSharedLocks
             + Send
             + Sync
             + 'static,
@@ -620,7 +622,7 @@ impl<
         if self.mode == ExecutionMode::Channel {
             // self.process_genesis_objects(in_channel).await;
             let (txs, ctx) = self.init_genesis_objects(tx_count, duration).await;
-            let in_memory_store = Arc::new(ctx.validator().create_in_memory_store());
+            // let in_memory_store = Arc::new(ctx.validator().create_in_memory_store());
             // let tasks: FuturesUnordered<_> = txs
             //     .into_iter()
             //     .map(|tx| {
@@ -638,7 +640,8 @@ impl<
             //     r.unwrap();
             // });
             for tx in txs {
-                let memstore = in_memory_store.clone();
+                // let memstore = in_memory_store.clone();
+                let memstore = self.memory_store.clone();
                 // validator
                 //     .execute_transaction_in_memory(in_memory_store, tx)
                 //     .await;
