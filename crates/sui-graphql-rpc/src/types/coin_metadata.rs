@@ -16,12 +16,12 @@ use super::sui_address::SuiAddress;
 use super::suins_registration::SuinsRegistration;
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
-use crate::context_data::db_data_provider::PgManager;
 use crate::data::Db;
 use crate::error::Error;
 use async_graphql::connection::Connection;
 use async_graphql::*;
-use sui_types::coin::CoinMetadata as NativeCoinMetadata;
+use sui_types::coin::{CoinMetadata as NativeCoinMetadata, TreasuryCap};
+use sui_types::gas_coin::{GAS, TOTAL_SUPPLY_SUI};
 use sui_types::TypeTag;
 
 pub(crate) struct CoinMetadata {
@@ -293,14 +293,12 @@ impl CoinMetadata {
 
     /// The overall quantity of tokens that will be issued.
     async fn supply(&self, ctx: &Context<'_>) -> Result<Option<BigInt>> {
-        let type_params = self.super_.native.type_().type_params();
-        let Some(coin_type) = type_params.first() else {
+        let mut type_params = self.super_.native.type_().type_params();
+        let Some(coin_type) = type_params.pop() else {
             return Ok(None);
         };
 
-        let supply = ctx
-            .data_unchecked::<PgManager>()
-            .fetch_total_supply(coin_type.to_canonical_string(/* with_prefix */ true))
+        let supply = CoinMetadata::query_total_supply(ctx.data_unchecked(), coin_type)
             .await
             .extend()?;
 
@@ -337,6 +335,39 @@ impl CoinMetadata {
         })?;
 
         Ok(Some(coin_metadata))
+    }
+
+    pub(crate) async fn query_total_supply(
+        db: &Db,
+        coin_type: TypeTag,
+    ) -> Result<Option<u64>, Error> {
+        let TypeTag::Struct(coin_struct) = coin_type else {
+            // If the type supplied is not metadata, we know it's not a valid coin type, so there
+            // won't be CoinMetadata for it.
+            return Ok(None);
+        };
+
+        Ok(Some(if GAS::is_gas(coin_struct.as_ref()) {
+            TOTAL_SUPPLY_SUI
+        } else {
+            let cap_type = TreasuryCap::type_(*coin_struct).into();
+            let Some(object) = Object::query_singleton(db, cap_type).await? else {
+                return Ok(None);
+            };
+
+            let Some(native) = object.native_impl() else {
+                return Ok(None);
+            };
+
+            let treasury_cap = TreasuryCap::try_from(native.clone()).map_err(|e| {
+                Error::Internal(format!(
+                    "Error while deserializing treasury cap {}: {e}",
+                    object.address,
+                ))
+            })?;
+
+            treasury_cap.total_supply.value
+        }))
     }
 }
 
