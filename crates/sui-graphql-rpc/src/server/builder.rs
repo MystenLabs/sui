@@ -199,7 +199,7 @@ impl ServerBuilder {
 
         // DB
         let db = Db::new(reader.clone(), config.service.limits, metrics.clone());
-        let pg_conn_pool = PgManager::new(reader.clone(), config.service.limits);
+        let pg_conn_pool = PgManager::new(reader.clone());
         let package_store = DbPackageStore(reader);
         let package_cache = PackageStoreWithLruCache::new(package_store);
 
@@ -423,7 +423,7 @@ pub mod tests {
 
             let metrics = metrics();
             let db = Db::new(reader.clone(), cfg.limits, metrics.clone());
-            let pg_conn_pool = PgManager::new(reader, cfg.limits);
+            let pg_conn_pool = PgManager::new(reader);
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics)
                 .context_data(db)
                 .context_data(pg_conn_pool)
@@ -477,7 +477,7 @@ pub mod tests {
             };
             let metrics = metrics();
             let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
-            let pg_conn_pool = PgManager::new(reader, service_config.limits);
+            let pg_conn_pool = PgManager::new(reader);
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics.clone())
                 .context_data(db)
                 .context_data(pg_conn_pool)
@@ -550,7 +550,7 @@ pub mod tests {
             };
             let metrics = metrics();
             let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
-            let pg_conn_pool = PgManager::new(reader, service_config.limits);
+            let pg_conn_pool = PgManager::new(reader);
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics.clone())
                 .context_data(db)
                 .context_data(pg_conn_pool)
@@ -623,7 +623,7 @@ pub mod tests {
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
-        let pg_conn_pool = PgManager::new(reader, service_config.limits);
+        let pg_conn_pool = PgManager::new(reader);
         let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics.clone())
             .context_data(db)
             .context_data(pg_conn_pool)
@@ -676,7 +676,7 @@ pub mod tests {
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
         let metrics = metrics();
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
-        let pg_conn_pool = PgManager::new(reader, service_config.limits);
+        let pg_conn_pool = PgManager::new(reader);
         let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics.clone())
             .context_data(db)
             .context_data(pg_conn_pool)
