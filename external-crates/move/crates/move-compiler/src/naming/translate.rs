@@ -1460,9 +1460,11 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
         }
         EE::Block(None, seq) => NE::Block(sequence(context, seq)),
         EE::Lambda(args, body) => {
+            context.new_local_scope();
             let bind_opt = bind_list(context, args);
             context.enter_nominal_block(eloc, None, NominalBlockType::Lambda);
             let body = exp(context, body);
+            context.close_local_scope();
             let return_label = context.exit_lambda(eloc);
             match bind_opt {
                 None => {

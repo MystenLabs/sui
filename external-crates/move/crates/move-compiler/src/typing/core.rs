@@ -6,6 +6,7 @@ use crate::{
     debug_display, diag,
     diagnostics::{codes::NameResolution, Diagnostic},
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Visibility},
+    ice,
     naming::ast::{
         self as N, BlockLabel, BuiltinTypeName_, Color, ResolvedUseFuns, StructDefinition,
         StructTypeParameter, TParam, TParamID, TVar, Type, TypeName, TypeName_, Type_, UseFunKind,
@@ -355,11 +356,22 @@ impl<'env> Context<'env> {
     }
 
     pub fn get_local_type(&mut self, var: &Var) -> Type {
-        // should not fail, already checked in naming
+        if !self.locals.contains_key(var) {
+            let msg = format!("ICE unbound {var:?}. Should have failed in naming");
+            self.env.add_diag(ice!((var.loc, msg)));
+            return self.error_type(var.loc);
+        }
+
         self.locals.get(var).unwrap().ty.clone()
     }
 
     pub fn mark_mutable_usage(&mut self, loc: Loc, var: &Var) -> (Loc, Mutability) {
+        if !self.locals.contains_key(var) {
+            let msg = format!("ICE unbound {var:?}. Should have failed in naming");
+            self.env.add_diag(ice!((loc, msg)));
+            return (loc, Mutability::None);
+        }
+
         // should not fail, already checked in naming
         let decl_loc = *self.locals.get_loc(var).unwrap();
         let local = self.locals.get_mut(var).unwrap();

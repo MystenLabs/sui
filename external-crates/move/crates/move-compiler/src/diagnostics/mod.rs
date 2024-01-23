@@ -453,6 +453,30 @@ macro_rules! diag {
     }};
 }
 
+#[macro_export]
+macro_rules! ice {
+    ($primary: expr $(,)?) => {{
+        $crate::diagnostics::print_stack_trace();
+        diag!($crate::diagnostics::codes::Bug::ICE, $primary)
+    }};
+    ($primary: expr, $($secondary: expr),+ $(,)?) => {{
+        $crate::diagnostics::print_stack_trace();
+        diag!($crate::diagnostics::codes::Bug::ICE, $primary, $($secondary, )*)
+    }}
+}
+
+pub fn print_stack_trace() {
+    use std::backtrace::{Backtrace, BacktraceStatus};
+    let stacktrace = Backtrace::capture();
+    match stacktrace.status() {
+        BacktraceStatus::Captured => {
+            eprintln!("stacktrace:");
+            eprintln!("{}", stacktrace);
+        }
+        _ => (),
+    }
+}
+
 impl WarningFilters {
     pub fn new_for_source() -> Self {
         Self {
