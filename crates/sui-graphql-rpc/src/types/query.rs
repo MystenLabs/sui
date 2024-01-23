@@ -359,10 +359,9 @@ impl Query {
     async fn coin_metadata(
         &self,
         ctx: &Context<'_>,
-        coin_type: String,
+        coin_type: ExactTypeFilter,
     ) -> Result<Option<CoinMetadata>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_coin_metadata(coin_type)
+        CoinMetadata::query(ctx.data_unchecked(), coin_type.0)
             .await
             .extend()
     }

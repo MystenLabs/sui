@@ -5,10 +5,7 @@ use super::db_backend::GenericQueryBuilder;
 use crate::{
     config::{Limits, DEFAULT_SERVER_DB_POOL_SIZE},
     error::Error,
-    types::{
-        address::Address, coin_metadata::CoinMetadata, move_object::MoveObject, object::Object,
-        sui_address::SuiAddress, validator::Validator,
-    },
+    types::{address::Address, sui_address::SuiAddress, validator::Validator},
 };
 use diesel::{OptionalExtension, RunQueryDsl};
 use move_core_types::language_storage::StructTag;
@@ -23,7 +20,7 @@ use sui_json_rpc::coin_api::parse_to_struct_tag;
 use sui_json_rpc_types::Stake as RpcStakedSui;
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,
-    coin::{CoinMetadata as NativeCoinMetadata, TreasuryCap},
+    coin::TreasuryCap,
     gas_coin::{GAS, TOTAL_SUPPLY_SUI},
     governance::StakedSui as NativeStakedSui,
     object::Object as NativeObject,
@@ -192,38 +189,6 @@ impl PgManager {
         };
 
         Ok(stake)
-    }
-
-    pub(crate) async fn fetch_coin_metadata(
-        &self,
-        coin_type: String,
-    ) -> Result<Option<CoinMetadata>, Error> {
-        let coin_struct =
-            parse_to_struct_tag(&coin_type).map_err(|e| Error::InvalidCoinType(e.to_string()))?;
-
-        let coin_metadata_type =
-            NativeCoinMetadata::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
-
-        let Some(coin_metadata) = self.get_obj_by_type(coin_metadata_type).await? else {
-            return Ok(None);
-        };
-
-        let object = Object::try_from(coin_metadata)?;
-        let move_object = MoveObject::try_from(&object).map_err(|_| {
-            Error::Internal(format!(
-                "Expected {} to be coin metadata, but it is not an object.",
-                object.address,
-            ))
-        })?;
-
-        let coin_metadata_object = CoinMetadata::try_from(&move_object).map_err(|_| {
-            Error::Internal(format!(
-                "Expected {} to be coin metadata, but it is not.",
-                object.address,
-            ))
-        })?;
-
-        Ok(Some(coin_metadata_object))
     }
 
     pub(crate) async fn fetch_total_supply(&self, coin_type: String) -> Result<Option<u64>, Error> {

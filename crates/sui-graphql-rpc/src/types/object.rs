@@ -894,6 +894,27 @@ impl Object {
         }
         .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))
     }
+
+    /// Query for a singleton object identified by its type. Note: the object is assumed to be a
+    /// singleton (we either find at least one object with this type and then return it, or return
+    /// nothing).
+    pub(crate) async fn query_singleton(db: &Db, type_: TypeTag) -> Result<Option<Object>, Error> {
+        use objects::dsl;
+
+        let stored_obj: Option<StoredObject> = db
+            .execute(move |conn| {
+                conn.first(move || {
+                    dsl::objects.filter(
+                        dsl::object_type.eq(type_.to_canonical_string(/* with_prefix */ true)),
+                    )
+                })
+                .optional()
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch singleton: {e}")))?;
+
+        stored_obj.map(Self::try_from).transpose()
+    }
 }
 
 impl ObjectFilter {
