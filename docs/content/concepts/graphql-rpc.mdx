@@ -66,7 +66,7 @@ When working with the online GraphQL IDE, paste the variables' values in the `Va
 
 :::
 
-A variable is represented by using the symbol `$` and it's type (in this example `Int`) must be known.
+A variable is declared and referred to using the `$` symbol and its type (in this example `Int`) must be specified. Note that variables must be declared in the root `query`.
 
 ```graphql
 query ($epochID: Int) {
