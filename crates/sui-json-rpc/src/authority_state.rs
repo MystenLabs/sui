@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::AuthorityState;
-use sui_core::in_mem_execution_cache::{ExecutionCacheRead, InMemoryCache};
+use sui_core::in_mem_execution_cache::{ExecutionCache, ExecutionCacheRead};
 use sui_core::subscription_handler::SubscriptionHandler;
 use sui_json_rpc_types::{
     Coin as SuiCoin, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
@@ -88,7 +88,7 @@ pub trait StateRead: Send + Sync {
         limit: usize,
     ) -> StateReadResult<Vec<(ObjectID, DynamicFieldInfo)>>;
 
-    fn get_cache_reader(&self) -> Arc<InMemoryCache>;
+    fn get_cache_reader(&self) -> Arc<ExecutionCache>;
 
     fn get_owner_objects(
         &self,
@@ -303,7 +303,7 @@ impl StateRead for AuthorityState {
         Ok(self.get_dynamic_fields(owner, cursor, limit)?)
     }
 
-    fn get_cache_reader(&self) -> Arc<InMemoryCache> {
+    fn get_cache_reader(&self) -> Arc<ExecutionCache> {
         self.get_cache_reader().clone()
     }
 

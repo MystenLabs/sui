@@ -73,7 +73,7 @@ use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::epoch::data_removal::EpochDataRemover;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
-use sui_core::in_mem_execution_cache::InMemoryCache;
+use sui_core::in_mem_execution_cache::ExecutionCache;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::state_accumulator::StateAccumulator;
@@ -441,7 +441,7 @@ impl SuiNode {
             &prometheus_registry,
         )
         .await?;
-        let execution_cache = Arc::new(InMemoryCache::new(store.clone()));
+        let execution_cache = Arc::new(ExecutionCache::new(store.clone()));
 
         let cur_epoch = store.get_recovery_epoch_at_restart()?;
         let committee = committee_store

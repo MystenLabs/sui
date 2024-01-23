@@ -18,7 +18,7 @@ use std::time::Duration;
 use std::{fs, io};
 use sui_config::{genesis::Genesis, NodeConfig};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
-use sui_core::in_mem_execution_cache::InMemoryCache;
+use sui_core::in_mem_execution_cache::ExecutionCache;
 use sui_network::default_mysten_network_config;
 use sui_protocol_config::Chain;
 use sui_sdk::SuiClientBuilder;
@@ -662,7 +662,7 @@ fn start_summary_sync(
         .await?;
         let state_sync_store = RocksDbStore::new(
             store.clone(),
-            Arc::new(InMemoryCache::new(store)),
+            Arc::new(ExecutionCache::new(store)),
             committee_store,
             checkpoint_store.clone(),
         );
@@ -1240,7 +1240,7 @@ pub async fn state_sync_from_archive(
         .unwrap_or(0);
     let state_sync_store = RocksDbStore::new(
         store.clone(),
-        Arc::new(InMemoryCache::new(store)),
+        Arc::new(ExecutionCache::new(store)),
         committee_store,
         checkpoint_store.clone(),
     );

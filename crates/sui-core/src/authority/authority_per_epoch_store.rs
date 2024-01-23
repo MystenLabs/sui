@@ -55,7 +55,7 @@ use crate::consensus_handler::{
 };
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::reconfiguration::ReconfigState;
-use crate::in_mem_execution_cache::{ExecutionCacheRead, InMemoryCache};
+use crate::in_mem_execution_cache::{ExecutionCache, ExecutionCacheRead};
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::post_consensus_tx_reorder::PostConsensusTxReorder;
 use crate::signature_verifier::*;
@@ -208,7 +208,7 @@ pub struct ExecutionIndicesWithStats {
 pub struct ExecutionComponents {
     pub(crate) executor: Arc<dyn Executor + Send + Sync>,
     // TODO: use strategies (e.g. LRU?) to constraint memory usage
-    pub(crate) module_cache: Arc<SyncModuleCache<ResolverWrapper<InMemoryCache>>>,
+    pub(crate) module_cache: Arc<SyncModuleCache<ResolverWrapper<ExecutionCache>>>,
     metrics: Arc<ResolverMetrics>,
 }
 
@@ -655,7 +655,7 @@ impl AuthorityPerEpochStore {
         db_options: Option<Options>,
         metrics: Arc<EpochMetrics>,
         epoch_start_configuration: EpochStartConfiguration,
-        cache_reader: Arc<InMemoryCache>,
+        cache_reader: Arc<ExecutionCache>,
         cache_metrics: Arc<ResolverMetrics>,
         signature_verifier_metrics: Arc<SignatureVerifierMetrics>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
@@ -860,7 +860,7 @@ impl AuthorityPerEpochStore {
         name: AuthorityName,
         new_committee: Committee,
         epoch_start_configuration: EpochStartConfiguration,
-        cache: Arc<InMemoryCache>,
+        cache: Arc<ExecutionCache>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
         chain_identifier: ChainIdentifier,
     ) -> Arc<Self> {
@@ -920,7 +920,7 @@ impl AuthorityPerEpochStore {
         self.epoch_start_state().protocol_version()
     }
 
-    pub fn module_cache(&self) -> &Arc<SyncModuleCache<ResolverWrapper<InMemoryCache>>> {
+    pub fn module_cache(&self) -> &Arc<SyncModuleCache<ResolverWrapper<ExecutionCache>>> {
         &self.execution_component.module_cache
     }
 
@@ -3013,7 +3013,7 @@ impl GetSharedLocks for AuthorityPerEpochStore {
 impl ExecutionComponents {
     fn new(
         protocol_config: &ProtocolConfig,
-        store: Arc<InMemoryCache>,
+        store: Arc<ExecutionCache>,
         metrics: Arc<ResolverMetrics>,
         // Keep this as a parameter for possible future use
         _expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
