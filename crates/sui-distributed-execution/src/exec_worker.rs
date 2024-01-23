@@ -3,7 +3,6 @@ use dashmap::DashMap;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_vm_runtime::move_vm::MoveVM;
-use sha3::Digest;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use sui_adapter_latest::{adapter, execution_engine};
@@ -367,7 +366,7 @@ impl<
         );
     }
 
-    async fn async_exec(
+    async fn _async_exec(
         full_tx: TransactionWithEffects,
         memory_store: Arc<S>,
         child_inputs: HashSet<ObjectID>,
@@ -615,28 +614,13 @@ impl<
                 ExecutionMode::Channel => init_execution_structures().await,
             };
 
-        if self.mode == ExecutionMode::Channel {
+        let context: Arc<BenchmarkContext> = if self.mode == ExecutionMode::Channel {
             // self.process_genesis_objects(in_channel).await;
-            let (txs, ctx) = self.init_genesis_objects(tx_count, duration).await;
-            for tx in txs {
-                let memstore = self.memory_store.clone();
-                let full_tx = TransactionWithEffects {
-                    tx,
-                    ground_truth_effects: None,
-                    child_inputs: None,
-                    checkpoint_seq: None,
-                    timestamp: 0.0,
-                };
-                Self::async_exec2(
-                    full_tx,
-                    memstore,
-                    &protocol_config,
-                    reference_gas_price,
-                    &ctx,
-                );
-            }
-            panic!("Done executing transactions");
-        }
+            let (_, ctx) = self.init_genesis_objects(tx_count, duration).await;
+            Arc::new(ctx)
+        } else {
+            unreachable!("Database mode not supported");
+        };
         // Main loop
         loop {
             tokio::select! {
@@ -804,18 +788,19 @@ impl<
                             // let tx = &full_tx;
                             *ctr = 0;
 
-                            let mem_store = self.memory_store.clone();
+                            let memstore = self.memory_store.clone();
                             let list = list.clone();
                             let child_list = child_list.clone();
-                            let move_vm = move_vm.clone();
-                            let epoch_data = epoch_data.clone();
+                            // let move_vm = move_vm.clone();
+                            // let epoch_data = epoch_data.clone();
                             let protocol_config = protocol_config.clone();
-                            let metrics = metrics.clone();
+                            // let metrics = metrics.clone();
                             let child_inputs = self.waiting_child_objs.get(&txid)
                             .map(|r| r.clone())
                             .unwrap_or_default();
                             // Push execution task to futures queue
-                            let ew_ids_copy = ew_ids.clone();
+                            // let ew_ids_copy = ew_ids.clone();
+                            let context_copy = context.clone();
 
                             self.ready_txs.remove(&txid);
 
@@ -824,7 +809,7 @@ impl<
                                     for entry_opt in list.into_iter() {
                                         assert!(entry_opt.is_some(), "tx {} aborted, missing obj", txid);
                                         let (obj_ref, obj) = entry_opt.unwrap();
-                                        mem_store.insert(obj_ref.0, (obj_ref, obj));
+                                        memstore.insert(obj_ref.0, (obj_ref, obj));
                                     }
                                 } else {
                                     // Ensure None values from child_inputs are deleted from mem_store!
@@ -835,48 +820,50 @@ impl<
                                         }
                                         let (obj_ref, obj) = entry_opt.unwrap();
                                         children_to_delete.remove(&obj_ref.0);
-                                        mem_store.insert(obj_ref.0, (obj_ref, obj));
+                                        memstore.insert(obj_ref.0, (obj_ref, obj));
                                     }
                                     for obj_id in children_to_delete {
-                                        if mem_store.get_object(&obj_id).unwrap().is_some() {
-                                            mem_store.remove(obj_id);
+                                        if memstore.get_object(&obj_id).unwrap().is_some() {
+                                            memstore.remove(obj_id);
                                         }
                                     }
                                 }
 
                                 // a loop that repeatedly hashes some initial value
                                 // simulates a more compute intensive execution
-                                let mut buf: [u8; 32] = [0u8; 32];
-                                let iterations = 1_000;
-                                for _ in 0..iterations {
-                                    buf = sha3::Sha3_256::digest(&buf).into();
-                                }
+                                // let mut buf: [u8; 32] = [0u8; 32];
+                                // let iterations = 1_000;
+                                // for _ in 0..iterations {
+                                //     buf = sha3::Sha3_256::digest(&buf).into();
+                                // }
 
-                                // Self::async_exec2(tx, memstore, &protocol_config, reference_gas_price, &ctx)
+                                Self::async_exec2(tx, memstore, &protocol_config, reference_gas_price, &context_copy)
                                 // println!("EW {} executing tx {}", my_id, txid);
-                                Self::async_exec(
-                                    tx,
-                                    mem_store,
-                                    child_inputs,
-                                    move_vm,
-                                    reference_gas_price,
-                                    epoch_data.epoch_id(),
-                                    epoch_data.epoch_start_timestamp(),
-                                    protocol_config,
-                                    metrics,
-                                    my_id as u8,
-                                    &ew_ids_copy,
-                                ).await
+                                // Self::async_exec(
+                                //     tx,
+                                //     mem_store,
+                                //     child_inputs,
+                                //     move_vm,
+                                //     reference_gas_price,
+                                //     epoch_data.epoch_id(),
+                                //     epoch_data.epoch_start_timestamp(),
+                                //     protocol_config,
+                                //     metrics,
+                                //     my_id as u8,
+                                //     &ew_ids_copy,
+                                // ).await
                             });
                         }
-                    } else if let SailfishMessage::TxResults { txid, deleted, written } = msg {
+                    } else if let SailfishMessage::TxResults { txid, .. } = msg {
                         if let Some(_) = self.ready_txs.remove(&txid) {
                             manager.clean_up(&txid).await;
                         }
                         // else {
                         //     unreachable!("tx already executed though we did not send LockedExec");
                         // }
-                        Self::write_updates_to_store(self.memory_store.clone(), deleted, written, my_id as u8, &ew_ids);
+
+                        // TODO re-enable writing to store
+                        // Self::write_updates_to_store(self.memory_store.clone(), deleted, written, my_id as u8, &ew_ids);
                         num_tx += 1;
                         if num_tx % 10_000 == 0 {
                             tracing::debug!("[tx-results] EW {my_id} executed {num_tx} txs");
