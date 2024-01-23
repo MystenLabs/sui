@@ -41,12 +41,8 @@ const config = {
     [
       "@graphql-markdown/docusaurus",
       {
-        schema: "../../crates/sui-graphql-rpc/schema/current_progress_schema.graphql",
-        docOptions: {
-          frontMatter: {
-            draft: true, // set draft for generated pages
-          },
-        },
+        schema:
+          "../../crates/sui-graphql-rpc/schema/current_progress_schema.graphql",
         rootPath: "../content", // docs will be generated under rootPath/baseURL
         baseURL: "references/sui-api/graphql/reference",
         loaders: {
@@ -58,7 +54,6 @@ const config = {
       "docusaurus-plugin-includes",
       {
         postBuildDeletedFolders: ["../snippets"],
-        draft: true
       },
     ],
     async function myPlugin(context, options) {
