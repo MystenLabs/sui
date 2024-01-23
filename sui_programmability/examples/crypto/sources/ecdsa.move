@@ -5,7 +5,7 @@
 // 1) Hash a piece of data using Keccak256, output an object with hashed data.
 // 2) Recover a Secp256k1 signature to its public key, output an object with the public key.
 // 3) Verify a Secp256k1 signature, produce an event for whether it is verified.
-module math::ecdsa_k1 {
+module crypto::ecdsa_k1 {
     use sui::ecdsa_k1;
     use sui::event;
     use sui::object::{Self, UID};
