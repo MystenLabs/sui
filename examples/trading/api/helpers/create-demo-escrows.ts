@@ -6,12 +6,14 @@ import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { CONFIG } from '../config';
 import { getActiveAddress, getClient, signAndExecute } from '../sui-utils';
 
+/// A sample on how we could fetch our owned bears that we created.
+/// We're formatting them in an easy to use way for next steps of our demo.
 const getOwnedBears = async () => {
 	const client = getClient(CONFIG.NETWORK);
 
 	const res = await client.getOwnedObjects({
 		filter: {
-			StructType: `${CONFIG.SWAP_CONTRACT.packageId}::demo_bear::DemoBear`,
+			StructType: `${CONFIG.DEMO_CONTRACT.packageId}::demo_bear::DemoBear`,
 		},
 		options: {
 			showContent: true,
@@ -30,6 +32,7 @@ const getOwnedBears = async () => {
 	return formatted;
 };
 
+/// A demo to fetch our owned locked objects, used in our `createEscrows` demo function.
 const getOwnedLockedItems = async () => {
 	const client = getClient(CONFIG.NETWORK);
 

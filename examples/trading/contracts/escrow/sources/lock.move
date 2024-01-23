@@ -58,7 +58,6 @@ module escrow::lock {
         // Adds the `object` as a DOF for the `lock` object
         dof::add(&mut lock.id, LockedObjectKey {}, obj);
 
-
         (lock, key)
     }
 
@@ -80,9 +79,9 @@ module escrow::lock {
 
     // === Events ===
     struct LockCreated has copy, drop {
-        /// The ID of the `Locker` object.
+        /// The ID of the `Locked` object.
         lock_id: ID,
-        /// The ID of the key that unlocks a locked object in a `Locker`.
+        /// The ID of the key that unlocks a locked object in a `Locked`.
         key_id: ID,
         /// The creator of the locked object.
         creator: address,
@@ -91,7 +90,7 @@ module escrow::lock {
     }
 
     struct LockDestroyed has copy, drop {
-        /// The ID of the `Locker` object.
+        /// The ID of the `Locked` object.
         lock_id: ID
     }
 

@@ -12,11 +12,11 @@ const createDemoLockedObjects = async (totalBears: number) => {
 	const txb = new TransactionBlock();
 	const bears = [];
 
-	const DEMO_BEAR_TYPE = `${CONFIG.SWAP_CONTRACT.packageId}::demo_bear::DemoBear`;
+	const DEMO_BEAR_TYPE = `${CONFIG.DEMO_CONTRACT.packageId}::demo_bear::DemoBear`;
 
 	for (let i = 0; i < totalBears; i++) {
 		const bear = txb.moveCall({
-			target: `${CONFIG.SWAP_CONTRACT.packageId}::demo_bear::new`,
+			target: `${CONFIG.DEMO_CONTRACT.packageId}::demo_bear::new`,
 			arguments: [txb.pure.string(`A happy bear`)],
 		});
 

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module escrow::demo_bear {
+module demo::demo_bear {
     use std::string::{String, utf8};
 
     use sui::object::{Self, UID};
@@ -18,7 +18,9 @@ module escrow::demo_bear {
     /// our OTW to create display.
     struct DEMO_BEAR has drop {}
 
-    /// Claim to create display.
+    // It's recommened to create Display using PTBs instead of 
+    // directly on the contracts.
+    // We are only creating it here for demo purposes (one-step setup).
     fun init(otw: DEMO_BEAR, ctx: &mut TxContext){
         let publisher = package::claim(otw, ctx);
          let keys = vector[
@@ -27,12 +29,13 @@ module escrow::demo_bear {
             utf8(b"description"),
         ];
 
+
         let values = vector[
-            // For `name` one can use the `Hero.name` property
+            // Let's add a demo name for our `DemoBear`
             utf8(b"{name}"),
-            // For `image_url` use an IPFS template + `image_url` property.
+            // Adding a happy bear image.
             utf8(b"https://images.unsplash.com/photo-1589656966895-2f33e7653819?q=80&w=1000&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8cG9sYXIlMjBiZWFyfGVufDB8fDB8fHww"),
-            // Description is static for all `Hero` objects.
+            // Description is static for all bears out there.
             utf8(b"The greatest figure for demos"),
         ];
 

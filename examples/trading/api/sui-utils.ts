@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execSync } from 'child_process';
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
@@ -61,4 +61,46 @@ export const signAndExecute = async (txb: TransactionBlock, network: Network) =>
 			showObjectChanges: true,
 		},
 	});
+};
+
+/// Publishes a package and saves the package id to a specified json file.
+export const publishPackage = async ({
+	packagePath,
+	network,
+	exportFileName = 'contract',
+}: {
+	packagePath: string;
+	network: Network;
+	exportFileName: string;
+}) => {
+	const txb = new TransactionBlock();
+	// const packagePath = __dirname + '/../../contract';
+
+	const { modules, dependencies } = JSON.parse(
+		execSync(`${SUI_BIN} move build --dump-bytecode-as-base64 --path ${packagePath}`, {
+			encoding: 'utf-8',
+		}),
+	);
+
+	const cap = txb.publish({
+		modules,
+		dependencies,
+	});
+
+	// Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
+	txb.transferObjects([cap], txb.pure(getActiveAddress()));
+
+	const results = await signAndExecute(txb, network);
+
+	// @ts-ignore-next-line
+	const packageId = results.objectChanges?.find((x) => x.type === 'published')?.packageId;
+
+	// save to an env file
+	writeFileSync(
+		`${exportFileName}.json`,
+		JSON.stringify({
+			packageId,
+		}),
+		{ encoding: 'utf8', flag: 'w' },
+	);
 };
