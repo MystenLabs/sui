@@ -114,7 +114,8 @@ where
 
         loop {
             while latest_cp <= start_cp + self.config.snapshot_max_lag as u64 {
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                tokio::time::sleep(std::time::Duration::from_secs(self.config.sleep_duration))
+                    .await;
                 latest_cp = self
                     .store
                     .get_latest_tx_checkpoint_sequence_number()
