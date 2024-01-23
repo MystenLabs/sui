@@ -66,6 +66,17 @@ pub(crate) fn call(
     for ((mut_, param, param_ty), arg) in macro_params.into_iter().zip(args) {
         let param_ty = core::subst_tparams(&tparam_subst, param_ty);
         if let sp!(loc, Type_::Fun(param_tys, result_ty)) = param_ty {
+            // declare the local here so that if the lambda is used outside
+            // of the VarCall, we still know its type. This will also lead to
+            // an error if it is used since a lambda type will appear during expansion
+            context.declare_local(
+                mut_,
+                param,
+                sp(
+                    arg.exp.loc,
+                    Type_::Fun(param_tys.clone(), result_ty.clone()),
+                ),
+            );
             let param_tys = Type_::multiple(loc, param_tys);
             bind_lambda(
                 context,
@@ -497,8 +508,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
         | N::Exp_::Constant(_, _)
         | N::Exp_::Continue(_)
         | N::Exp_::Unit { .. }
-        | N::Exp_::UnresolvedError
-        | N::Exp_::Var(_) => (),
+        | N::Exp_::UnresolvedError => (),
         N::Exp_::Give(_, e)
         | N::Exp_::Return(e)
         | N::Exp_::Abort(e)
@@ -570,6 +580,11 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             exp(context, e)
         }
         N::Exp_::ExpDotted(_usage, ed) => exp_dotted(context, ed),
+        N::Exp_::Var(v) => {
+            if let Some((lambda, _, _)) = context.lambdas.get(&v.value) {
+                *e_ = N::Exp_::Lambda(lambda.clone())
+            }
+        }
         N::Exp_::VarCall(v, sp!(_, es)) if context.lambdas.contains_key(&v.value) => {
             exps(context, es);
             // param_ty and result_ty have already been substituted

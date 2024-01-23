@@ -64,6 +64,11 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
                         .add_diag(diag!(TypeSafety::UninferredType, (ty.loc, msg)));
                     sp(loc, UnresolvedError)
                 }
+                sp!(loc, Fun(_, _)) if !context.in_macro_function => {
+                    // catch this here for better location infomration (the tvar instead of the fun)
+                    unexpected_lambda_type(context, ty.loc);
+                    sp(loc, UnresolvedError)
+                }
                 t => t,
             };
             *ty = replacement;
@@ -82,17 +87,22 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
             }
         }
         Fun(args, result) => {
-            if !context.in_macro_function {
-                let msg =
-                    "Unexpected lambda type. Lambdas can only be used as parameters for, or direct arguments to, macro functions";
-                context
-                    .env
-                    .add_diag(diag!(TypeSafety::UnexpectedFunctionType, (ty.loc, msg)));
-            }
             types(context, args);
             type_(context, result);
+            if !context.in_macro_function {
+                unexpected_lambda_type(context, ty.loc);
+                *ty = sp(ty.loc, UnresolvedError)
+            }
         }
     }
+}
+
+fn unexpected_lambda_type(context: &mut Context, loc: Loc) {
+    let msg = "Unexpected lambda type. \
+        Lambdas can only be used as parameters for, or direct arguments to, macro functions";
+    context
+        .env
+        .add_diag(diag!(TypeSafety::UnexpectedFunctionType, (loc, msg)));
 }
 
 //**************************************************************************************************
