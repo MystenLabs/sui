@@ -52,6 +52,7 @@ pub(crate) fn call(
                 return None;
             }
         };
+    let return_type = macro_info.signature.return_type.clone();
 
     if macro_type_params.len() != type_args.len() || macro_params.len() != args.len() {
         assert!(context.env.has_errors());
@@ -78,6 +79,7 @@ pub(crate) fn call(
             argument_bindings.push((mut_, param, param_ty, arg))
         }
     }
+    let return_type = core::subst_tparams(&tparam_subst, return_type);
     let break_labels: BTreeSet<_> = BTreeSet::from([return_label]);
     let mut context = Context {
         core: context,
@@ -94,9 +96,10 @@ pub(crate) fn call(
         );
         wrapped_body = Box::new(sp(call_loc, N::Exp_::NamedBlock(label, seq)));
     }
+    let body = Box::new(sp(call_loc, N::Exp_::Annotate(wrapped_body, return_type)));
     Some(ExpandedMacro {
         argument_bindings,
-        body: wrapped_body,
+        body,
     })
 }
 

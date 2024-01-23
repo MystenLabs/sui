@@ -2675,19 +2675,8 @@ fn expand_macro(
                     (sp(v.loc, lvalue_), (e, ty))
                 })
                 .unzip();
-            // type check the arguments against the parameters annotated types
-            let (es, tys): (Vec<_>, _) = es
-                .into_iter()
-                .map(|(e, ty)| {
-                    let arg_loc = e.exp.loc;
-                    let annot_loc = ty.loc;
-                    let e = Box::new(e);
-                    let (ty, e_) =
-                        annotate_(context, || "Invalid macro argument", annot_loc, e, ty);
-                    let e = T::exp(ty.clone(), sp(arg_loc, e_));
-                    (e, ty)
-                })
-                .unzip();
+            // we do not need to annotate the types since they were already checked at the call
+            let (es, tys): (Vec<_>, _) = es.into_iter().unzip();
             // bind the locals  and push it on the macro body
             let tys = Type_::multiple(argloc, tys);
             let es = T::explist(argloc, es);
