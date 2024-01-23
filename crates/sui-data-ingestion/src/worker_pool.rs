@@ -4,7 +4,7 @@
 use crate::executor::MAX_CHECKPOINTS_IN_PROGRESS;
 use crate::workers::Worker;
 use mysten_metrics::spawn_monitored_task;
-use std::collections::{BTreeSet, HashSet, VecDeque};
+use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Instant;
 use sui_types::full_checkpoint_content::CheckpointData;
@@ -37,7 +37,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
             "Starting indexing pipeline {} with concurrency {}. Current watermark is {}.",
             self.task_name, self.concurrency, current_checkpoint_number
         );
-        let mut updates: HashSet<u64> = HashSet::new();
+        let mut updates = HashMap::new();
 
         let (progress_sender, mut progress_receiver) = mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
         let mut workers = vec![];
@@ -76,7 +76,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
                             .await
                             .expect("checkpoint processing failed for checkpoint");
                             info!("finished checkpoint processing {} for workflow {} in {:?}", sequence_number, task_name, start_time.elapsed());
-                            cloned_progress_sender.send((worker_id, sequence_number)).await.expect("failed to update progress");
+                            cloned_progress_sender.send((worker_id, sequence_number, worker.save_progress().await)).await.expect("failed to update progress");
                         }
                     }
                 }
@@ -97,17 +97,23 @@ impl<W: Worker + 'static> WorkerPool<W> {
                         workers[worker_id].0.send(checkpoint).await.expect("failed to dispatch a task");
                     }
                 }
-                Some((worker_id, status_update)) = progress_receiver.recv() => {
+                Some((worker_id, status_update, should_save_progress)) = progress_receiver.recv() => {
                     idle.insert(worker_id);
-                    updates.insert(status_update);
+                    updates.insert(status_update, should_save_progress);
                     if status_update == current_checkpoint_number {
-                        while updates.remove(&current_checkpoint_number) {
+                        let mut executor_status_update = None;
+                        while let Some(should_save_progress) = updates.remove(&current_checkpoint_number) {
+                            if should_save_progress {
+                                executor_status_update = Some(current_checkpoint_number + 1);
+                            }
                             current_checkpoint_number += 1;
                         }
-                        executor_progress_sender
-                            .send((self.task_name.clone(), current_checkpoint_number))
-                            .await
-                            .expect("Failed to send progress update to the executor");
+                        if let Some(update) = executor_status_update {
+                            executor_progress_sender
+                                .send((self.task_name.clone(), update))
+                                .await
+                                .expect("Failed to send progress update to the executor");
+                        }
                     }
                     while !checkpoints.is_empty() && !idle.is_empty() {
                         let checkpoint = checkpoints.pop_front().unwrap();
