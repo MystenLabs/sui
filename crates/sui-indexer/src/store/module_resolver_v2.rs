@@ -1,38 +1,41 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::handlers::tx_processor::IndexingPackageCache;
-use crate::metrics::IndexerMetrics;
-use crate::schema_v2::packages;
-use crate::types_v2::IndexedPackage;
+use async_trait::async_trait;
 use diesel::ExpressionMethods;
-use diesel::QueryDsl;
-use diesel::RunQueryDsl;
-use move_binary_format::CompiledModule;
-use move_bytecode_utils::module_cache::GetModule;
+use diesel::OptionalExtension;
+use diesel::{QueryDsl, RunQueryDsl};
+use std::sync::{Arc, Mutex};
+
+use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::resolver::ModuleResolver;
-use std::sync::{Arc, Mutex};
-use sui_types::base_types::ObjectID;
+use sui_package_resolver::{error::Error as PackageResolverError, Package, PackageStore};
+use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::move_package::MovePackage;
+use sui_types::object::Object;
 
 use crate::errors::{Context, IndexerError};
+use crate::handlers::tx_processor::IndexingPackageBuffer;
+use crate::metrics::IndexerMetrics;
 use crate::models_v2::packages::StoredPackage;
+use crate::schema_v2::{objects, packages};
 use crate::store::diesel_macro::read_only_blocking;
+use crate::types_v2::IndexedPackage;
 use crate::PgConnectionPool;
 
 /// A package resolver that reads packages from the database.
-pub struct IndexerStoreModuleResolver {
+pub struct IndexerStorePackageModuleResolver {
     cp: PgConnectionPool,
 }
 
-impl IndexerStoreModuleResolver {
+impl IndexerStorePackageModuleResolver {
     pub fn new(cp: PgConnectionPool) -> Self {
         Self { cp }
     }
 }
 
-impl ModuleResolver for IndexerStoreModuleResolver {
+impl ModuleResolver for IndexerStorePackageModuleResolver {
     type Error = IndexerError;
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -63,45 +66,126 @@ impl ModuleResolver for IndexerStoreModuleResolver {
     }
 }
 
-/// InterimModuleResolver consists of a backup ModuleResolver
-/// (e.g. IndexerStoreModuleResolver) and an in-mem package cache.
-pub struct InterimModuleResolver<GM> {
-    backup: GM,
-    package_cache: Arc<Mutex<IndexingPackageCache>>,
+#[async_trait]
+impl PackageStore for IndexerStorePackageModuleResolver {
+    async fn version(&self, id: AccountAddress) -> Result<SequenceNumber, PackageResolverError> {
+        let version =
+            self.get_package_version_from_db(id)
+                .map_err(|e| PackageResolverError::Store {
+                    store: "PostgresDB",
+                    source: Box::new(e),
+                })?;
+        Ok(version)
+    }
+
+    async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>, PackageResolverError> {
+        let pkg = self
+            .get_package_from_db(id)
+            .map_err(|e| PackageResolverError::Store {
+                store: "PostgresDB",
+                source: Box::new(e),
+            })?;
+        Ok(Arc::new(pkg))
+    }
+}
+
+impl IndexerStorePackageModuleResolver {
+    fn get_package_version_from_db(
+        &self,
+        id: AccountAddress,
+    ) -> Result<SequenceNumber, IndexerError> {
+        let Some(version) = read_only_blocking!(&self.cp, |conn| {
+            let query = objects::dsl::objects
+                .select(objects::dsl::object_version)
+                .filter(objects::dsl::object_id.eq(id.to_vec()));
+            query.get_result::<i64>(conn).optional()
+        })?
+        else {
+            return Err(IndexerError::PostgresReadError(format!(
+                "Package version not found in DB: {:?}",
+                id
+            )));
+        };
+
+        Ok(SequenceNumber::from_u64(version as u64))
+    }
+
+    fn get_package_from_db(&self, id: AccountAddress) -> Result<Package, IndexerError> {
+        let Some(bcs) = read_only_blocking!(&self.cp, |conn| {
+            let query = objects::dsl::objects
+                .select(objects::dsl::serialized_object)
+                .filter(objects::dsl::object_id.eq(id.to_vec()));
+            query.get_result::<Vec<u8>>(conn).optional()
+        })?
+        else {
+            return Err(IndexerError::PostgresReadError(format!(
+                "Package not found in DB: {:?}",
+                id
+            )));
+        };
+        let object = bcs::from_bytes::<Object>(&bcs)?;
+        Package::read(&object).map_err(|e| {
+            IndexerError::PostgresReadError(format!("Failed parsing object to package: {:?}", e))
+        })
+    }
+}
+
+pub struct InterimPackageResolver {
+    package_db_resolver: IndexerStorePackageModuleResolver,
+    package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
     metrics: IndexerMetrics,
 }
 
-impl<GM> InterimModuleResolver<GM> {
+impl InterimPackageResolver {
     pub fn new(
-        backup: GM,
-        package_cache: Arc<Mutex<IndexingPackageCache>>,
-        new_packages: &[IndexedPackage],
+        package_db_resolver: IndexerStorePackageModuleResolver,
+        package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
+        new_package_objects: &[(IndexedPackage, Object)],
         metrics: IndexerMetrics,
     ) -> Self {
-        package_cache.lock().unwrap().insert_packages(new_packages);
+        package_buffer
+            .lock()
+            .unwrap()
+            .insert_packages(new_package_objects);
         Self {
-            backup,
-            package_cache,
+            package_db_resolver,
+            package_buffer,
             metrics,
         }
     }
 }
 
-impl<GM> GetModule for InterimModuleResolver<GM>
-where
-    GM: GetModule<Item = Arc<CompiledModule>, Error = anyhow::Error>,
-{
-    type Error = IndexerError;
-    type Item = Arc<CompiledModule>;
-
-    fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<Arc<CompiledModule>>, Self::Error> {
-        if let Some(m) = self.package_cache.lock().unwrap().get_module_by_id(id) {
-            self.metrics.indexing_module_resolver_in_mem_hit.inc();
-            Ok(Some(m))
+#[async_trait]
+impl PackageStore for InterimPackageResolver {
+    async fn version(&self, addr: AccountAddress) -> Result<SequenceNumber, PackageResolverError> {
+        let package_id = ObjectID::from(addr);
+        let maybe_version = {
+            let buffer_guard = self.package_buffer.lock().unwrap();
+            buffer_guard.get_version(&package_id)
+        };
+        if let Some(version) = maybe_version {
+            self.metrics.indexing_package_resolver_in_mem_hit.inc();
+            Ok(SequenceNumber::from_u64(version))
         } else {
-            self.backup
-                .get_module_by_id(id)
-                .map_err(|e| IndexerError::ModuleResolutionError(e.to_string()))
+            self.package_db_resolver.version(addr).await
+        }
+    }
+
+    async fn fetch(&self, addr: AccountAddress) -> Result<Arc<Package>, PackageResolverError> {
+        let package_id = ObjectID::from(addr);
+        let maybe_obj = {
+            let buffer_guard = self.package_buffer.lock().unwrap();
+            buffer_guard.get_package(&package_id)
+        };
+        if let Some(obj) = maybe_obj {
+            self.metrics.indexing_package_resolver_in_mem_hit.inc();
+            let pkg = Package::read(&obj).map_err(|e| PackageResolverError::Store {
+                store: "InMemoryPackageBuffer",
+                source: Box::new(e),
+            })?;
+            Ok(Arc::new(pkg))
+        } else {
+            self.package_db_resolver.fetch(addr).await
         }
     }
 }

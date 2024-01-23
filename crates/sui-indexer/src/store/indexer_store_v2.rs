@@ -4,6 +4,7 @@
 use async_trait::async_trait;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
+use std::any::Any;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -14,12 +15,19 @@ use crate::errors::IndexerError;
 use crate::handlers::{EpochToCommit, TransactionObjectChangesToCommit};
 
 use crate::models_v2::display::StoredDisplay;
+use crate::models_v2::objects::{StoredDeletedObject, StoredObject};
 use crate::types_v2::{
     IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex,
 };
 
+#[allow(clippy::large_enum_variant)]
+pub enum ObjectChangeToCommit {
+    MutatedObject(StoredObject),
+    DeletedObject(StoredDeletedObject),
+}
+
 #[async_trait]
-pub trait IndexerStoreV2 {
+pub trait IndexerStoreV2: Any + Clone + Sync + Send + 'static {
     type ModuleCache: GetModule<Item = Arc<CompiledModule>, Error = anyhow::Error>
         + Send
         + Sync
@@ -80,4 +88,6 @@ pub trait IndexerStoreV2 {
     ) -> Result<u64, IndexerError>;
 
     fn module_cache(&self) -> Arc<Self::ModuleCache>;
+
+    fn as_any(&self) -> &dyn Any;
 }
