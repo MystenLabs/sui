@@ -23,7 +23,8 @@ use mysten_metrics::monitored_scope;
 use tokio::sync::watch;
 
 /// The maximum transaction payload defined in bytes.
-const MAX_BLOCK_PAYLOAD_SIZE_BYTES: usize = 100_000; // 100 KB
+/// TODO: move to protocol config
+const MAX_BLOCK_TRANSACTIONS_SIZE_BYTES: usize = 1_000_000; // 1 MB
 
 #[derive(Clone)]
 pub(crate) struct CoreOptions {
@@ -33,7 +34,7 @@ pub(crate) struct CoreOptions {
 impl Default for CoreOptions {
     fn default() -> Self {
         Self {
-            max_payload_size_bytes: MAX_BLOCK_PAYLOAD_SIZE_BYTES,
+            max_payload_size_bytes: MAX_BLOCK_TRANSACTIONS_SIZE_BYTES,
         }
     }
 }
@@ -188,12 +189,12 @@ impl Core {
             // TODO: this will be refactored once the signing path/approach has been introduced. Adding as is for now
             // to keep things rolling in the implementation.
             let block = Block::V1(BlockV1::new(
+                self.context.committee.epoch(),
                 clock_round,
                 self.context.own_index,
                 now,
                 ancestors,
                 payload,
-                self.context.committee.epoch(),
             ));
             let signed_block = SignedBlock::new(block);
             let verified_block = VerifiedBlock::new_verified_unserialized(signed_block)
@@ -457,7 +458,7 @@ mod test {
         assert_eq!(block.ancestors().len(), 4);
 
         let mut total = 0;
-        for (i, transaction) in block.payload().iter().enumerate() {
+        for (i, transaction) in block.transactions().iter().enumerate() {
             total += transaction.data().len();
             let transaction: String = bcs::from_bytes(transaction.data()).unwrap();
             assert_eq!(format!("Transaction {i}"), transaction);
