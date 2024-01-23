@@ -26,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use sui_macros::fail_point;
 use sui_network::default_mysten_network_config;
 use sui_types::base_types::ConciseableName;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::SequencedConsensusTransactionKey;
@@ -45,7 +46,7 @@ use sui_types::committee::StakeUnit;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::SuiResult;
 use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
@@ -631,7 +632,7 @@ impl CheckpointStore {
         // This checkpoints the entire db and not one column family
         self.checkpoint_content
             .checkpoint_db(path)
-            .map_err(SuiError::StorageError)
+            .map_err(Into::into)
     }
 
     pub fn delete_highest_executed_checkpoint_test_only(&self) -> Result<(), TypedStoreError> {
@@ -646,10 +647,7 @@ impl CheckpointStore {
 
     pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
         self.delete_highest_executed_checkpoint_test_only()?;
-        self.watermarks
-            .rocksdb
-            .flush()
-            .map_err(SuiError::StorageError)?;
+        self.watermarks.rocksdb.flush()?;
         Ok(())
     }
 }
@@ -1530,11 +1528,10 @@ async fn diagnose_split_brain(
         );
     }
 
-    let sui_system_state = state
-        .database
-        .get_sui_system_state_object_unsafe()
-        .expect("Failed to get system state object");
-    let committee = sui_system_state.get_current_epoch_committee();
+    let epoch_store = state.load_epoch_store_one_call_per_task();
+    let committee = epoch_store
+        .epoch_start_state()
+        .get_sui_committee_with_network_metadata();
     let network_config = default_mysten_network_config();
     let network_clients =
         make_network_authority_clients_with_network_config(&committee, &network_config)

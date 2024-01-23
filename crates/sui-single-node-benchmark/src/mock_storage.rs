@@ -113,7 +113,10 @@ impl InMemoryObjectStore {
 }
 
 impl ObjectStore for InMemoryObjectStore {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    fn get_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
         self.num_object_reads.inc_by(1);
         Ok(self.objects.get(object_id).cloned())
     }
@@ -122,7 +125,7 @@ impl ObjectStore for InMemoryObjectStore {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
         Ok(self.get_object(object_id).unwrap().and_then(|o| {
             if o.version() == version {
                 Some(o.clone())

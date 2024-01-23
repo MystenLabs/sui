@@ -108,6 +108,10 @@ pub mod checked {
             self.gas_status.move_gas_status_mut()
         }
 
+        pub fn into_gas_status(self) -> SuiGasStatus {
+            self.gas_status
+        }
+
         pub fn summary(&self) -> GasCostSummary {
             self.gas_status.summary()
         }
@@ -196,9 +200,14 @@ pub mod checked {
         // Gas charging operations
         //
 
-        pub fn track_storage_mutation(&mut self, new_size: usize, storage_rebate: u64) -> u64 {
+        pub fn track_storage_mutation(
+            &mut self,
+            object_id: ObjectID,
+            new_size: usize,
+            storage_rebate: u64,
+        ) -> u64 {
             self.gas_status
-                .track_storage_mutation(new_size, storage_rebate)
+                .track_storage_mutation(object_id, new_size, storage_rebate)
         }
 
         pub fn reset_storage_cost_and_rebate(&mut self) {
@@ -281,14 +290,9 @@ pub mod checked {
             temporary_store.ensure_active_inputs_mutated();
             temporary_store.collect_storage_and_rebate(self);
 
-            match &self.gas_status {
-                SuiGasStatus::V2(s) => {
-                    s.log_for_replay();
-                }
-            };
             if self.smashed_gas_coin.is_some() {
                 #[skip_checked_arithmetic]
-                trace!(target: "replay", "Gas smashing has occurred for this transaction");
+                trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
             }
 
             // system transactions (None smashed_gas_coin)  do not have gas and so do not charge

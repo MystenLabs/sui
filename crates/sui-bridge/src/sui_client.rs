@@ -41,6 +41,7 @@ use tracing::warn;
 use crate::crypto::BridgeAuthorityPublicKey;
 use crate::error::{BridgeError, BridgeResult};
 use crate::events::SuiBridgeEvent;
+use crate::sui_transaction_builder::get_bridge_package_id;
 use crate::types::{
     BridgeAction, BridgeAuthority, BridgeCommittee, MoveTypeBridgeCommittee, MoveTypeBridgeInner,
     MoveTypeCommitteeMember,
@@ -108,7 +109,10 @@ where
         // meaning it is intersted in events in transactions after A, globally ordering wise.
         cursor: TransactionDigest,
     ) -> BridgeResult<Page<SuiEvent, TransactionDigest>> {
-        let filter = EventFilter::MoveEventModule { package, module };
+        let filter = EventFilter::MoveEventModule {
+            package,
+            module: module.clone(),
+        };
         let initial_cursor = EventID {
             tx_digest: cursor,
             // Cursor is exclusive, so we use a reasonably large number
@@ -128,6 +132,13 @@ where
                     has_next_page: false,
                 });
             }
+
+            // Safeguard check that all events are emitted from requested package and module
+            assert!(events
+                .data
+                .iter()
+                .all(|event| event.type_.address.as_ref() == package.as_ref()
+                    && event.type_.module == module));
 
             // unwrap safe: we just checked data is not empty
             let new_cursor = events.data.last().unwrap().id;
@@ -178,8 +189,10 @@ where
         }
     }
 
-    // TODO: needs to fix this to match emitted package id
-    pub async fn get_bridge_action_by_tx_digest_and_event_idx(
+    /// Returns BridgeAction from a Sui Transaction with transaction hash
+    /// and the event index. If event is declared in an unrecognized
+    /// package, return error.
+    pub async fn get_bridge_action_by_tx_digest_and_event_idx_maybe(
         &self,
         tx_digest: &TransactionDigest,
         event_idx: u16,
@@ -188,6 +201,9 @@ where
         let event = events
             .get(event_idx as usize)
             .ok_or(BridgeError::NoBridgeEventsInTxPosition)?;
+        if event.type_.address.as_ref() != get_bridge_package_id().as_ref() {
+            return Err(BridgeError::BridgeEventInUnrecognizedSuiPackage);
+        }
         let bridge_event = SuiBridgeEvent::try_from_sui_event(event)?
             .ok_or(BridgeError::NoBridgeEventsInTxPosition)?;
 
@@ -384,13 +400,14 @@ impl SuiClientInner for SuiSdkClient {
 #[cfg(test)]
 mod tests {
     use crate::{
-        events::EmittedSuiToEthTokenBridgeV1,
+        events::{EmittedSuiToEthTokenBridgeV1, MoveTokenBridgeEvent},
         sui_mock_client::SuiMockClient,
-        types::{BridgeChainId, SuiToEthBridgeAction, TokenId},
+        types::{BridgeActionType, BridgeChainId, SuiToEthBridgeAction, TokenId},
     };
     use ethers::types::{
         Address, Block, BlockNumber, Filter, FilterBlockOption, Log, ValueOrArray, U64,
     };
+    use move_core_types::account_address::AccountAddress;
     use prometheus::Registry;
     use std::{collections::HashSet, str::FromStr};
 
@@ -399,9 +416,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_query_events_by_module() {
-        // Note: for random events generated in this test, we only care about
-        // tx_digest and event_seq, so it's ok that package and module does
-        // not match the query parameters.
         telemetry_subscribers::init_for_testing();
         let mock_client = SuiMockClient::default();
         let sui_client = SuiClient::new_for_testing(mock_client.clone());
@@ -452,7 +466,9 @@ mod tests {
         assert_eq!(mock_client.pop_front_past_event_query_params(), None);
 
         // Case 2, only one page (has_next_page = false)
-        let event = SuiEvent::random_for_testing();
+        let mut event = SuiEvent::random_for_testing();
+        event.type_.address = package.into();
+        event.type_.module = module.clone();
         let events = EventPage {
             data: vec![event.clone()],
             next_cursor: None,
@@ -495,7 +511,9 @@ mod tests {
 
         // Case 3, more than one pages, one tx has several events across pages
         // page 1 (event 1)
-        let event_1 = SuiEvent::random_for_testing();
+        let mut event_1 = SuiEvent::random_for_testing();
+        event_1.type_.address = package.into();
+        event_1.type_.module = module.clone();
         let events_page_1 = EventPage {
             data: vec![event_1.clone()],
             next_cursor: Some(event_1.id),
@@ -512,6 +530,8 @@ mod tests {
         );
         // page 2 (event 1, event 2, same tx_digest)
         let mut event_2 = SuiEvent::random_for_testing();
+        event_2.type_.address = package.into();
+        event_2.type_.module = module.clone();
         event_2.id.tx_digest = event_1.id.tx_digest;
         event_2.id.event_seq = event_1.id.event_seq + 1;
         let events_page_2 = EventPage {
@@ -522,9 +542,13 @@ mod tests {
         mock_client.add_event_response(package, module.clone(), event_1.id, events_page_2);
         // page 3 (event 3, event 4, different tx_digest)
         let mut event_3 = SuiEvent::random_for_testing();
+        event_3.type_.address = package.into();
+        event_3.type_.module = module.clone();
         event_3.id.tx_digest = event_2.id.tx_digest;
         event_3.id.event_seq = event_2.id.event_seq + 1;
-        let event_4 = SuiEvent::random_for_testing();
+        let mut event_4 = SuiEvent::random_for_testing();
+        event_4.type_.address = package.into();
+        event_4.type_.module = module.clone();
         assert_ne!(event_3.id.tx_digest, event_4.id.tx_digest);
         let events_page_3 = EventPage {
             data: vec![event_3.clone(), event_4.clone()],
@@ -655,7 +679,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_bridge_action_by_tx_digest_and_event_idx() {
+    async fn get_bridge_action_by_tx_digest_and_event_idx_maybe() {
         // Note: for random events generated in this test, we only care about
         // tx_digest and event_seq, so it's ok that package and module does
         // not match the query parameters.
@@ -666,7 +690,8 @@ mod tests {
 
         // Ensure all struct tags are inited
         init_all_struct_tags();
-        let event_1 = EmittedSuiToEthTokenBridgeV1 {
+
+        let sanitized_event_1 = EmittedSuiToEthTokenBridgeV1 {
             nonce: 1,
             sui_chain_id: BridgeChainId::SuiTestnet,
             sui_address: SuiAddress::random_for_testing_only(),
@@ -675,9 +700,23 @@ mod tests {
             token_id: TokenId::Sui,
             amount: 100,
         };
+        let emitted_event_1 = MoveTokenBridgeEvent {
+            message_type: BridgeActionType::TokenTransfer as u8,
+            seq_num: sanitized_event_1.nonce,
+            source_chain: sanitized_event_1.sui_chain_id as u8,
+            sender_address: sanitized_event_1.sui_address.to_vec(),
+            target_chain: sanitized_event_1.eth_chain_id as u8,
+            target_address: sanitized_event_1.eth_address.as_bytes().to_vec(),
+            token_type: sanitized_event_1.token_id as u8,
+            amount: sanitized_event_1.amount,
+        };
+
+        // TODO: remove once we don't rely on env var to get package id
+        std::env::set_var("BRIDGE_PACKAGE_ID", "0x0b");
+
         let mut sui_event_1 = SuiEvent::random_for_testing();
         sui_event_1.type_ = SuiToEthTokenBridgeV1.get().unwrap().clone();
-        sui_event_1.bcs = bcs::to_bytes(&event_1).unwrap();
+        sui_event_1.bcs = bcs::to_bytes(&emitted_event_1).unwrap();
 
         #[derive(Serialize, Deserialize)]
         struct RandomStruct {};
@@ -685,7 +724,13 @@ mod tests {
         let event_2: RandomStruct = RandomStruct {};
         // undeclared struct tag
         let mut sui_event_2 = SuiEvent::random_for_testing();
+        sui_event_2.type_ = SuiToEthTokenBridgeV1.get().unwrap().clone();
+        sui_event_2.type_.module = Identifier::from_str("unrecognized_module").unwrap();
         sui_event_2.bcs = bcs::to_bytes(&event_2).unwrap();
+
+        // Event 3 is defined in non-bridge package
+        let mut sui_event_3 = sui_event_1.clone();
+        sui_event_3.type_.address = AccountAddress::random();
 
         mock_client.add_events_by_tx_digest(
             tx_digest,
@@ -693,16 +738,17 @@ mod tests {
                 sui_event_1.clone(),
                 sui_event_2.clone(),
                 sui_event_1.clone(),
+                sui_event_3.clone(),
             ],
         );
         let mut expected_action_1 = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
             sui_tx_digest: tx_digest,
             sui_tx_event_index: 0,
-            sui_bridge_event: event_1.clone(),
+            sui_bridge_event: sanitized_event_1.clone(),
         });
         assert_eq!(
             sui_client
-                .get_bridge_action_by_tx_digest_and_event_idx(&tx_digest, 0)
+                .get_bridge_action_by_tx_digest_and_event_idx_maybe(&tx_digest, 0)
                 .await
                 .unwrap(),
             expected_action_1,
@@ -710,25 +756,32 @@ mod tests {
         let mut expected_action_2 = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
             sui_tx_digest: tx_digest,
             sui_tx_event_index: 2,
-            sui_bridge_event: event_1.clone(),
+            sui_bridge_event: sanitized_event_1.clone(),
         });
         assert_eq!(
             sui_client
-                .get_bridge_action_by_tx_digest_and_event_idx(&tx_digest, 2)
+                .get_bridge_action_by_tx_digest_and_event_idx_maybe(&tx_digest, 2)
                 .await
                 .unwrap(),
             expected_action_2,
         );
         assert!(matches!(
             sui_client
-                .get_bridge_action_by_tx_digest_and_event_idx(&tx_digest, 1)
+                .get_bridge_action_by_tx_digest_and_event_idx_maybe(&tx_digest, 1)
                 .await
                 .unwrap_err(),
             BridgeError::NoBridgeEventsInTxPosition
         ),);
         assert!(matches!(
             sui_client
-                .get_bridge_action_by_tx_digest_and_event_idx(&tx_digest, 3)
+                .get_bridge_action_by_tx_digest_and_event_idx_maybe(&tx_digest, 3)
+                .await
+                .unwrap_err(),
+            BridgeError::BridgeEventInUnrecognizedSuiPackage
+        ),);
+        assert!(matches!(
+            sui_client
+                .get_bridge_action_by_tx_digest_and_event_idx_maybe(&tx_digest, 4)
                 .await
                 .unwrap_err(),
             BridgeError::NoBridgeEventsInTxPosition
@@ -738,7 +791,7 @@ mod tests {
         sui_event_2.type_ = SuiToEthTokenBridgeV1.get().unwrap().clone();
         mock_client.add_events_by_tx_digest(tx_digest, vec![sui_event_2]);
         sui_client
-            .get_bridge_action_by_tx_digest_and_event_idx(&tx_digest, 2)
+            .get_bridge_action_by_tx_digest_and_event_idx_maybe(&tx_digest, 2)
             .await
             .unwrap_err();
     }

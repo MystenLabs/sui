@@ -16,7 +16,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
-pub const MAX_CHECKPOINTS_IN_PROGRESS: usize = 1000;
+pub const MAX_CHECKPOINTS_IN_PROGRESS: usize = 10000;
 
 pub struct IndexerExecutor<P> {
     pools: Vec<Pin<Box<dyn Future<Output = ()> + Send>>>,
@@ -28,9 +28,9 @@ pub struct IndexerExecutor<P> {
 }
 
 impl<P: ProgressStore> IndexerExecutor<P> {
-    pub fn new(progress_store: P, metrics: DataIngestionMetrics) -> Self {
+    pub fn new(progress_store: P, number_of_jobs: usize, metrics: DataIngestionMetrics) -> Self {
         let (pool_progress_sender, pool_progress_receiver) =
-            mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
+            mpsc::channel(number_of_jobs * MAX_CHECKPOINTS_IN_PROGRESS);
         Self {
             pools: vec![],
             pool_senders: vec![],

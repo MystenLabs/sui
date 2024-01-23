@@ -260,12 +260,18 @@ impl NodeStateGetter for ValidatorWithFullnode {
     }
 
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        self.validator.database.get_object(object_id)
+        self.validator
+            .database
+            .get_object(object_id)
+            .map_err(Into::into)
     }
 }
 
 impl ObjectStore for ValidatorWithFullnode {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    fn get_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
         self.validator.database.get_object(object_id)
     }
 
@@ -273,7 +279,7 @@ impl ObjectStore for ValidatorWithFullnode {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
         self.validator
             .database
             .get_object_by_key(object_id, version)

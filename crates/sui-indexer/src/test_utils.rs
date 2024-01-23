@@ -13,16 +13,36 @@ use tracing::info;
 
 use crate::errors::IndexerError;
 use crate::indexer_v2::IndexerV2;
+use crate::processors_v2::objects_snapshot_processor::SnapshotLagConfig;
 use crate::store::{PgIndexerStore, PgIndexerStoreV2};
 use crate::utils::reset_database;
 use crate::{new_pg_connection_pool, Indexer, IndexerConfig};
 use crate::{new_pg_connection_pool_impl, IndexerMetrics};
 
+pub enum ReaderWriterConfig {
+    Reader { reader_mode_rpc_url: String },
+    Writer { snapshot_config: SnapshotLagConfig },
+}
+
+impl ReaderWriterConfig {
+    pub fn reader_mode(reader_mode_rpc_url: String) -> Self {
+        Self::Reader {
+            reader_mode_rpc_url,
+        }
+    }
+
+    pub fn writer_mode(snapshot_config: Option<SnapshotLagConfig>) -> Self {
+        Self::Writer {
+            snapshot_config: snapshot_config.unwrap_or_default(),
+        }
+    }
+}
+
 pub async fn start_test_indexer_v2(
     db_url: Option<String>,
     rpc_url: String,
-    reader_mode_rpc_url: Option<String>,
     use_indexer_experimental_methods: bool,
+    reader_writer_config: ReaderWriterConfig,
 ) -> (PgIndexerStoreV2, JoinHandle<Result<(), IndexerError>>) {
     // Reduce the connection pool size to 10 for testing
     // to prevent maxing out
@@ -54,36 +74,46 @@ pub async fn start_test_indexer_v2(
         ..Default::default()
     };
 
-    if let Some(reader_mode_rpc_url) = &reader_mode_rpc_url {
-        let reader_mode_rpc_url = reader_mode_rpc_url
-            .parse::<SocketAddr>()
-            .expect("Unable to parse fullnode address");
-        config.fullnode_sync_worker = false;
-        config.rpc_server_worker = true;
-        config.rpc_server_url = reader_mode_rpc_url.ip().to_string();
-        config.rpc_server_port = reader_mode_rpc_url.port();
-    }
-
-    let parsed_url = config.get_db_url().unwrap();
-    let blocking_pool = new_pg_connection_pool_impl(&parsed_url, Some(5)).unwrap();
-    if config.reset_db && reader_mode_rpc_url.is_none() {
-        reset_database(&mut blocking_pool.get().unwrap(), true, config.use_v2).unwrap();
-    }
-
     let registry = prometheus::Registry::default();
 
     init_metrics(&registry);
 
     let indexer_metrics = IndexerMetrics::new(&registry);
 
-    let store = PgIndexerStoreV2::new(blocking_pool, indexer_metrics.clone());
-    let store_clone = store.clone();
-    let handle = if reader_mode_rpc_url.is_some() {
-        tokio::spawn(async move { IndexerV2::start_reader(&config, &registry, db_url).await })
-    } else {
-        tokio::spawn(
-            async move { IndexerV2::start_writer(&config, store_clone, indexer_metrics).await },
-        )
+    let parsed_url = config.get_db_url().unwrap();
+    let blocking_pool = new_pg_connection_pool_impl(&parsed_url, Some(5)).unwrap();
+    let store = PgIndexerStoreV2::new(blocking_pool.clone(), indexer_metrics.clone());
+
+    let handle = match reader_writer_config {
+        ReaderWriterConfig::Reader {
+            reader_mode_rpc_url,
+        } => {
+            let reader_mode_rpc_url = reader_mode_rpc_url
+                .parse::<SocketAddr>()
+                .expect("Unable to parse fullnode address");
+            config.fullnode_sync_worker = false;
+            config.rpc_server_worker = true;
+            config.rpc_server_url = reader_mode_rpc_url.ip().to_string();
+            config.rpc_server_port = reader_mode_rpc_url.port();
+
+            tokio::spawn(async move { IndexerV2::start_reader(&config, &registry, db_url).await })
+        }
+        ReaderWriterConfig::Writer { snapshot_config } => {
+            if config.reset_db {
+                reset_database(&mut blocking_pool.get().unwrap(), true, config.use_v2).unwrap();
+            }
+            let store_clone = store.clone();
+
+            tokio::spawn(async move {
+                IndexerV2::start_writer_with_config(
+                    &config,
+                    store_clone,
+                    indexer_metrics,
+                    snapshot_config,
+                )
+                .await
+            })
+        }
     };
 
     (store, handle)

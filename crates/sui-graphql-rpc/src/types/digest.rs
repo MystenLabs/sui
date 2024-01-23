@@ -5,7 +5,7 @@ use super::string_input::impl_string_input;
 use async_graphql::*;
 use fastcrypto::encoding::{Base58, Encoding};
 use std::{fmt, str::FromStr};
-use sui_types::digests::TransactionDigest;
+use sui_types::digests::{ObjectDigest, TransactionDigest};
 
 pub(crate) const BASE58_DIGEST_LENGTH: usize = 32;
 
@@ -53,6 +53,12 @@ impl TryFrom<&[u8]> for Digest {
 
         result.copy_from_slice(value);
         Ok(Digest(result))
+    }
+}
+
+impl From<Digest> for ObjectDigest {
+    fn from(digest: Digest) -> Self {
+        ObjectDigest::new(digest.0)
     }
 }
 

@@ -24,9 +24,7 @@ Response: {
                       "module": {
                         "name": "m",
                         "package": {
-                          "asObject": {
-                            "address": "0x9dab6eff01734a7030671a671d1752ba5445710aab39969cf112a769c292add3"
-                          }
+                          "address": "0x9dab6eff01734a7030671a671d1752ba5445710aab39969cf112a769c292add3"
                         },
                         "fileFormatVersion": 6,
                         "bytes": "oRzrCwYAAAAIAQAGAgYKAxARBCEEBSUfB0QiCGZADKYBMAAFAQMBBgEADAEAAQIBAgAABAABAQIAAgIBAAEHBQEBAAIEAAYCAwYLAAEJAAEDAQYLAAEIAQABCQABBgsAAQkAAQgBBENvaW4DU1VJA2JhcgRjb2luA2ZvbwFtA3N1aQV2YWx1ZZ2rbv8Bc0pwMGcaZx0XUrpURXEKqzmWnPESp2nCkq3TAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAQAAAwULATgACwAWAgEBAAADCAYqAAAAAAAAAAoAOAEGKwAAAAAAAAALADgBGAIA",

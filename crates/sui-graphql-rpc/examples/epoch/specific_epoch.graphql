@@ -20,10 +20,8 @@
         imageUrl
         projectUrl
         exchangeRates {
-          asObject {
-            storageRebate
-            bcs
-          }
+          storageRebate
+          bcs
           hasPublicTransfer
         }
         exchangeRatesSize

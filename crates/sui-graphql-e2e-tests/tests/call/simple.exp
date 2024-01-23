@@ -76,9 +76,9 @@ task 15 'run-graphql'. lines 66-71:
 Headers: {
     "content-type": "application/json",
     "content-length": "157",
-    "x-sui-rpc-version": "0.1.0",
+    "x-sui-rpc-version": "2024.1.0",
 }
-Service version: 0.1.0
+Service version: 2024.1.0
 Response: {
   "data": {
     "checkpoint": {

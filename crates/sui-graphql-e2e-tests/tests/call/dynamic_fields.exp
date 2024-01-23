@@ -30,7 +30,7 @@ task 6 'run-graphql'. lines 64-87:
 Response: {
   "data": {
     "object": {
-      "dynamicFieldConnection": {
+      "dynamicFields": {
         "nodes": [
           {
             "name": {
@@ -114,7 +114,7 @@ task 10 'run-graphql'. lines 118-143:
 Response: {
   "data": {
     "owner": {
-      "dynamicFieldConnection": {
+      "dynamicFields": {
         "nodes": [
           {
             "name": {

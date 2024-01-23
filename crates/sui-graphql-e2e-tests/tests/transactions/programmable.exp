@@ -208,7 +208,24 @@ Response: {
                     "address": "0x14043fb88ed2857ee366fee3fd2155eb4fe5569e9dab14c48229b89151f1a0a9",
                     "version": 2,
                     "digest": "Ex7H23fectwo59agH3BtGX77gM9rtQbJYm9nUVJGThRV",
-                    "object": null
+                    "object": {
+                      "address": "0x14043fb88ed2857ee366fee3fd2155eb4fe5569e9dab14c48229b89151f1a0a9",
+                      "version": 2,
+                      "digest": "Ex7H23fectwo59agH3BtGX77gM9rtQbJYm9nUVJGThRV",
+                      "asMoveObject": {
+                        "contents": {
+                          "type": {
+                            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::package::UpgradeCap"
+                          },
+                          "json": {
+                            "id": "0x14043fb88ed2857ee366fee3fd2155eb4fe5569e9dab14c48229b89151f1a0a9",
+                            "package": "0x0dc6221c3bb4d12091bb422710fbe4983f2ff1d1961c779d01f4785f1e21dba1",
+                            "version": "1",
+                            "policy": 0
+                          }
+                        }
+                      }
+                    }
                   }
                 },
                 {

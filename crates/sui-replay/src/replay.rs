@@ -7,6 +7,7 @@ use crate::{
     data_fetcher::{
         extract_epoch_and_version, DataFetcher, Fetchers, NodeStateDumpFetcher, RemoteFetcher,
     },
+    displays::Pretty,
     types::*,
 };
 use futures::executor::block_on;
@@ -44,6 +45,7 @@ use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsA
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::storage::{get_module, PackageObject};
+use sui_types::transaction::TransactionKind::ProgrammableTransaction;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
     committee::EpochId,
@@ -64,7 +66,7 @@ use sui_types::{
     },
     DEEPBOOK_PACKAGE_ID,
 };
-use tracing::{error, info, warn};
+use tracing::{error, info, trace, warn};
 
 // TODO: add persistent cache. But perf is good enough already.
 
@@ -735,8 +737,9 @@ impl LocalExec {
 
         // All prep done
         let expensive_checks = true;
+        let transaction_kind = override_transaction_kind.unwrap_or(tx_info.kind.clone());
         let certificate_deny_set = HashSet::new();
-        let res = if let Ok(gas_status) =
+        let (inner_store, gas_status, effects, result) = if let Ok(gas_status) =
             SuiGasStatus::new(tx_info.gas_budget, tx_info.gas_price, rgp, protocol_config)
         {
             executor.execute_transaction_to_effects(
@@ -750,7 +753,7 @@ impl LocalExec {
                 CheckedInputObjects::new_for_replay(input_objects),
                 tx_info.gas.clone(),
                 gas_status,
-                override_transaction_kind.unwrap_or(tx_info.kind.clone()),
+                transaction_kind.clone(),
                 tx_info.sender,
                 *tx_digest,
             )
@@ -758,16 +761,22 @@ impl LocalExec {
             unreachable!("Transaction was valid so gas status must be valid");
         };
 
+        trace!(target: "replay_gas_info", "{}", Pretty(&gas_status));
+
+        if let ProgrammableTransaction(pt) = transaction_kind {
+            trace!(target: "replay_ptb_info", "{}", Pretty(&pt));
+        };
+
         let all_required_objects = self.storage.all_objects();
         let effects =
-            SuiTransactionBlockEffects::try_from(res.1).map_err(ReplayEngineError::from)?;
+            SuiTransactionBlockEffects::try_from(effects).map_err(ReplayEngineError::from)?;
 
         Ok(ExecutionSandboxState {
             transaction_info: tx_info.clone(),
             required_objects: all_required_objects,
-            local_exec_temporary_store: Some(res.0),
+            local_exec_temporary_store: Some(inner_store),
             local_exec_effects: effects,
-            local_exec_status: Some(res.2),
+            local_exec_status: Some(result),
             pre_exec_diag: self.diag.clone(),
         })
     }
@@ -899,8 +908,7 @@ impl LocalExec {
 
         // hack to simulate an epoch change just for this transaction
         {
-            let db = authority_state.db();
-            let mut execution_lock = db.execution_lock_for_reconfiguration().await;
+            let mut execution_lock = authority_state.execution_lock_for_reconfiguration().await;
             *execution_lock = executed_epoch;
             drop(execution_lock);
         }
@@ -1726,7 +1734,7 @@ impl BackingPackageStore for LocalExec {
             // If package not present fetch it from the network
             self_
                 .get_or_download_object(package_id, true /* we expect a Move package*/)
-                .map_err(|e| SuiError::GenericStorageError(e.to_string()))
+                .map_err(|e| SuiError::Storage(e.to_string()))
         }
 
         let res = inner(self, package_id);
@@ -1949,16 +1957,19 @@ impl ModuleResolver for &mut LocalExec {
 impl ObjectStore for LocalExec {
     /// The object must be present in store by normal process we used to backfill store in init
     /// We dont download if not present
-    fn get_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
-        let res = Ok(self.storage.live_objects_store.get(object_id).cloned());
+    fn get_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> sui_types::storage::error::Result<Option<Object>> {
+        let res = self.storage.live_objects_store.get(object_id).cloned();
         self.exec_store_events
             .lock()
             .expect("Unable to lock events list")
             .push(ExecutionStoreEvent::ObjectStoreGetObject {
                 object_id: *object_id,
-                result: res.clone(),
+                result: Ok(res.clone()),
             });
-        res
+        Ok(res)
     }
 
     /// The object must be present in store by normal process we used to backfill store in init
@@ -1967,8 +1978,8 @@ impl ObjectStore for LocalExec {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> SuiResult<Option<Object>> {
-        let res = Ok(self
+    ) -> sui_types::storage::error::Result<Option<Object>> {
+        let res = self
             .storage
             .live_objects_store
             .get(object_id)
@@ -1978,7 +1989,7 @@ impl ObjectStore for LocalExec {
                 } else {
                     None
                 }
-            }));
+            });
 
         self.exec_store_events
             .lock()
@@ -1986,15 +1997,18 @@ impl ObjectStore for LocalExec {
             .push(ExecutionStoreEvent::ObjectStoreGetObjectByKey {
                 object_id: *object_id,
                 version,
-                result: res.clone(),
+                result: Ok(res.clone()),
             });
 
-        res
+        Ok(res)
     }
 }
 
 impl ObjectStore for &mut LocalExec {
-    fn get_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> sui_types::storage::error::Result<Option<Object>> {
         // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_object(object_id)
     }
@@ -2003,7 +2017,7 @@ impl ObjectStore for &mut LocalExec {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> SuiResult<Option<Object>> {
+    ) -> sui_types::storage::error::Result<Option<Object>> {
         // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_object_by_key(object_id, version)
     }

@@ -19,7 +19,7 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
-use tracing::info;
+use tracing::{debug, info};
 use url::Url;
 
 pub(crate) const ENV_VAR_LOCAL_READ_TIMEOUT_MS: &str = "LOCAL_READ_TIMEOUT_MS";
@@ -53,10 +53,7 @@ impl CheckpointReader {
             }
         }
         files.sort();
-        info!(
-            "local reader: current checkpoint number is {}. Unprocessed local files are {:?}",
-            self.current_checkpoint_number, files
-        );
+        debug!("unprocessed local files {:?}", files);
         let mut checkpoints = vec![];
         for (idx, (sequence_number, filename)) in files.iter().enumerate() {
             if self.current_checkpoint_number + idx as u64 != *sequence_number {
@@ -71,9 +68,12 @@ impl CheckpointReader {
     async fn remote_fetch(&self) -> Result<Vec<CheckpointData>> {
         let mut checkpoints = vec![];
         if let Some(ref store) = self.remote_store {
-            let futures = (self.current_checkpoint_number
-                ..(REMOTE_READ_BATCH_SIZE as u64 + self.last_pruned_watermark))
-                .map(|checkpoint_number| async move {
+            let limit = std::cmp::min(
+                self.current_checkpoint_number + REMOTE_READ_BATCH_SIZE as u64,
+                self.last_pruned_watermark + MAX_CHECKPOINTS_IN_PROGRESS as u64,
+            );
+            let futures =
+                (self.current_checkpoint_number..limit).map(|checkpoint_number| async move {
                     let path = Path::from(format!("{}.chk", checkpoint_number));
                     match store.get(&path).await {
                         Ok(resp) => resp.bytes().await,
@@ -101,7 +101,15 @@ impl CheckpointReader {
             checkpoints = self.remote_fetch().await?;
         }
 
+        info!(
+            "Local reader. Current checkpoint number: {}, pruning watermark: {}, unprocessed checkpoints: {:?}",
+            self.current_checkpoint_number, self.last_pruned_watermark, checkpoints.len(),
+        );
         for checkpoint in checkpoints {
+            assert_eq!(
+                checkpoint.checkpoint_summary.sequence_number,
+                self.current_checkpoint_number
+            );
             if (MAX_CHECKPOINTS_IN_PROGRESS as u64 + self.last_pruned_watermark)
                 <= checkpoint.checkpoint_summary.sequence_number
             {

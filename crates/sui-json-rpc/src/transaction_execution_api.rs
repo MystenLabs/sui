@@ -193,6 +193,12 @@ impl TransactionExecutionApi {
             None
         };
 
+        let raw_effects = if opts.show_raw_effects {
+            bcs::to_bytes(&effects.effects)?
+        } else {
+            vec![]
+        };
+
         Ok(SuiTransactionBlockResponse {
             digest,
             transaction,
@@ -205,6 +211,7 @@ impl TransactionExecutionApi {
             confirmed_local_execution: Some(is_executed_locally),
             checkpoint: None,
             errors: vec![],
+            raw_effects,
         })
     }
 
@@ -286,7 +293,7 @@ impl WriteApiServer for TransactionExecutionApi {
         sender_address: SuiAddress,
         tx_bytes: Base64,
         gas_price: Option<BigInt<u64>>,
-        epoch: Option<BigInt<u64>>,
+        _epoch: Option<BigInt<u64>>,
         additional_args: Option<DevInspectArgs>,
     ) -> RpcResult<DevInspectResults> {
         with_tracing!(async move {
@@ -294,6 +301,7 @@ impl WriteApiServer for TransactionExecutionApi {
                 gas_sponsor,
                 gas_budget,
                 gas_objects,
+                show_raw_txn_data_and_effects,
                 skip_checks,
             } = additional_args.unwrap_or_default();
             let tx_kind: TransactionKind = self.convert_bytes(tx_bytes)?;
@@ -305,7 +313,7 @@ impl WriteApiServer for TransactionExecutionApi {
                     gas_budget.map(|i| *i),
                     gas_sponsor,
                     gas_objects,
-                    epoch.map(|i| *i),
+                    show_raw_txn_data_and_effects,
                     skip_checks,
                 )
                 .await

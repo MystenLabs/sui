@@ -48,9 +48,9 @@ use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_graphql_rpc::config::ConnectionConfig;
-use sui_graphql_rpc::test_infra::cluster::serve_executor;
 use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
 use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
+use sui_graphql_rpc::test_infra::cluster::{serve_executor, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{DevInspectResults, SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
@@ -70,7 +70,6 @@ use sui_types::messages_checkpoint::{
 use sui_types::storage::{ObjectKey, ObjectStore};
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
-use sui_types::DEEPBOOK_ADDRESS;
 use sui_types::DEEPBOOK_PACKAGE_ID;
 use sui_types::MOVE_STDLIB_PACKAGE_ID;
 use sui_types::SUI_SYSTEM_ADDRESS;
@@ -92,6 +91,7 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder, SUI_FRAMEWORK_PACKAGE_ID,
 };
 use sui_types::{utils::to_sender_signed_transaction, SUI_SYSTEM_PACKAGE_ID};
+use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
 use tempfile::NamedTempFile;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -109,6 +109,7 @@ const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
     SUI_SYSTEM_PACKAGE_ID,
     SUI_SYSTEM_STATE_OBJECT_ID,
     SUI_CLOCK_OBJECT_ID,
+    SUI_DENY_LIST_OBJECT_ID,
 ];
 // TODO use the file name as a seed
 const RNG_SEED: [u8; 32] = [
@@ -204,6 +205,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             custom_validator_account,
             reference_gas_price,
             default_gas_price,
+            object_snapshot_min_checkpoint_lag,
+            object_snapshot_max_checkpoint_lag,
         ) = match task_opt.map(|t| t.command) {
             Some((
                 InitCommand { named_addresses },
@@ -216,6 +219,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     custom_validator_account,
                     reference_gas_price,
                     default_gas_price,
+                    object_snapshot_min_checkpoint_lag,
+                    object_snapshot_max_checkpoint_lag,
                 },
             )) => {
                 let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -243,6 +248,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 if reference_gas_price.is_some() && !simulator {
                     panic!("Can only set reference gas price in simulator mode");
                 }
+
                 (
                     map,
                     accounts,
@@ -251,6 +257,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     custom_validator_account,
                     reference_gas_price,
                     default_gas_price,
+                    object_snapshot_min_checkpoint_lag,
+                    object_snapshot_max_checkpoint_lag,
                 )
             }
             None => {
@@ -261,6 +269,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     protocol_config,
                     false,
                     false,
+                    None,
+                    None,
                     None,
                     None,
                 )
@@ -285,6 +295,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 &protocol_config,
                 custom_validator_account,
                 reference_gas_price,
+                object_snapshot_min_checkpoint_lag,
+                object_snapshot_max_checkpoint_lag,
             )
             .await
         } else {
@@ -539,6 +551,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
                 cluster
                     .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(30))
+                    .await;
+
+                cluster
+                    .wait_for_objects_snapshot_catchup(Duration::from_secs(30))
                     .await;
 
                 let interpolated = self.interpolate_query(&contents, &cursors)?;
@@ -990,6 +1006,28 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 Ok(None)
             }
         }
+    }
+
+    /// Process the error string such that it's less dependent on specific addresses or object IDs. Instead, they are
+    /// replaced by the account names or fake IDs as much as possible. This reduces the effort of updating tests
+    /// when something changed.
+    async fn process_error(&self, error: anyhow::Error) -> anyhow::Error {
+        let mut err = error.to_string();
+        for (name, account) in &self.accounts {
+            let addr = account.address.to_string();
+            let replace = format!("@{}", name);
+            err = err.replace(&addr, &replace);
+            // Also match without 0x since different error messages may use different format.
+            err = err.replace(&addr[2..], &replace);
+        }
+        for (id, fake_id) in &self.object_enumeration {
+            let id = id.to_string();
+            let replace = format!("object({})", fake_id);
+            err = err.replace(&id, &replace);
+            // Also match without 0x since different error messages may use different format.
+            err = err.replace(&id[2..], &replace);
+        }
+        anyhow!(err)
     }
 }
 
@@ -1814,6 +1852,8 @@ async fn init_sim_executor(
     protocol_config: &ProtocolConfig,
     custom_validator_account: bool,
     reference_gas_price: Option<u64>,
+    object_snapshot_min_checkpoint_lag: Option<usize>,
+    object_snapshot_max_checkpoint_lag: Option<usize>,
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
@@ -1883,6 +1923,11 @@ async fn init_sim_executor(
         ConnectionConfig::ci_integration_test_cfg(),
         DEFAULT_INTERNAL_DATA_SOURCE_PORT,
         Arc::new(read_replica),
+        Some(SnapshotLagConfig::new(
+            object_snapshot_min_checkpoint_lag,
+            object_snapshot_max_checkpoint_lag,
+            Some(1),
+        )),
     )
     .await;
 
@@ -2041,10 +2086,10 @@ impl NodeStateGetter for SuiTestAdapter<'_> {
         object_id: &ObjectID,
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
-        ObjectStore::get_object_by_key(&*self.executor, object_id, version)
+        ObjectStore::get_object_by_key(&*self.executor, object_id, version).map_err(Into::into)
     }
 
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        ObjectStore::get_object(&*self.executor, object_id)
+        ObjectStore::get_object(&*self.executor, object_id).map_err(Into::into)
     }
 }

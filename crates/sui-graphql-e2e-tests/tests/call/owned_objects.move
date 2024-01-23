@@ -50,10 +50,10 @@ module Test::M1 {
       edges {
         node {
           owner {
-            __typename
-            ... on AddressOwner {
+              __typename
+              ... on AddressOwner {
               owner {
-                address
+                  address
               }
             }
           }
@@ -96,10 +96,10 @@ module Test::M1 {
       edges {
         node {
           owner {
-            __typename
-            ... on AddressOwner {
+              __typename
+              ... on AddressOwner {
               owner {
-                address
+                  address
               }
             }
           }
@@ -116,10 +116,10 @@ module Test::M1 {
       edges {
         node {
           owner {
-            __typename
-            ... on AddressOwner {
+              __typename
+              ... on AddressOwner {
               owner {
-                address
+                  address
               }
             }
           }
@@ -136,10 +136,10 @@ module Test::M1 {
       edges {
         node {
           owner {
-            __typename
-            ... on AddressOwner {
+              __typename
+              ... on AddressOwner {
               owner {
-                address
+                  address
               }
             }
           }
@@ -156,10 +156,10 @@ module Test::M1 {
       edges {
         node {
           owner {
-            __typename
-            ... on AddressOwner {
+              __typename
+              ... on AddressOwner {
               owner {
-                address
+                  address
               }
             }
           }

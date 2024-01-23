@@ -15,6 +15,7 @@ use sui_package_resolver::Module as ParsedMoveModule;
 use super::cursor::{JsonCursor, Page};
 use super::move_function::MoveFunction;
 use super::move_struct::MoveStruct;
+use super::object::ObjectVersionKey;
 use super::{base64::Base64, move_package::MovePackage, sui_address::SuiAddress};
 
 #[derive(Clone)]
@@ -34,17 +35,21 @@ pub(crate) type CFunction = JsonCursor<String>;
 impl MoveModule {
     /// The package that this Move module was defined in
     async fn package(&self, ctx: &Context<'_>) -> Result<MovePackage> {
-        MovePackage::query(ctx.data_unchecked(), self.storage_id, None)
-            .await
-            .extend()?
-            .ok_or_else(|| {
-                Error::Internal(format!(
-                    "Cannot load package for module {}::{}",
-                    self.storage_id,
-                    self.parsed.name(),
-                ))
-            })
-            .extend()
+        MovePackage::query(
+            ctx.data_unchecked(),
+            self.storage_id,
+            ObjectVersionKey::Latest,
+        )
+        .await
+        .extend()?
+        .ok_or_else(|| {
+            Error::Internal(format!(
+                "Cannot load package for module {}::{}",
+                self.storage_id,
+                self.parsed.name(),
+            ))
+        })
+        .extend()
     }
 
     /// The module's (unqualified) name.
@@ -79,9 +84,13 @@ impl MoveModule {
         connection.has_next_page = next;
 
         let runtime_id = *bytecode.self_id().address();
-        let Some(package) = MovePackage::query(ctx.data_unchecked(), self.storage_id, None)
-            .await
-            .extend()?
+        let Some(package) = MovePackage::query(
+            ctx.data_unchecked(),
+            self.storage_id,
+            ObjectVersionKey::Latest,
+        )
+        .await
+        .extend()?
         else {
             return Err(Error::Internal(format!(
                 "Failed to load package for module: {}",
@@ -292,7 +301,7 @@ impl MoveModule {
         address: SuiAddress,
         name: &str,
     ) -> Result<Option<Self>, Error> {
-        let Some(package) = MovePackage::query(db, address, None).await? else {
+        let Some(package) = MovePackage::query(db, address, ObjectVersionKey::Latest).await? else {
             return Ok(None);
         };
 

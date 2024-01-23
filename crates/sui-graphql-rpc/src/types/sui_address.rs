@@ -93,15 +93,33 @@ impl From<AccountAddress> for SuiAddress {
     }
 }
 
+impl From<SuiAddress> for AccountAddress {
+    fn from(value: SuiAddress) -> Self {
+        AccountAddress::new(value.0)
+    }
+}
+
 impl From<ObjectID> for SuiAddress {
     fn from(value: ObjectID) -> Self {
         SuiAddress(value.into_bytes())
     }
 }
 
+impl From<SuiAddress> for ObjectID {
+    fn from(value: SuiAddress) -> Self {
+        ObjectID::new(value.0)
+    }
+}
+
 impl From<NativeSuiAddress> for SuiAddress {
     fn from(value: NativeSuiAddress) -> Self {
         SuiAddress(value.to_inner())
+    }
+}
+
+impl From<SuiAddress> for NativeSuiAddress {
+    fn from(value: SuiAddress) -> Self {
+        AccountAddress::from(value).into()
     }
 }
 

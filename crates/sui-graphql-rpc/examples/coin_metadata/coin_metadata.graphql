@@ -6,8 +6,6 @@ query CoinMetadata {
     description
     iconUrl
     supply
-    asMoveObject {
-      hasPublicTransfer
-    }
+    hasPublicTransfer
   }
 }

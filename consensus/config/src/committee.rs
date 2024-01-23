@@ -82,7 +82,7 @@ impl Committee {
         (committee, key_pairs)
     }
 
-    /// Public accessors for Committee data.
+    /// Public accessors for Committee fields.
 
     pub fn epoch(&self) -> Epoch {
         self.epoch
@@ -114,6 +114,14 @@ impl Committee {
         self.authorities[authority_index].stake
     }
 
+    pub fn to_authority_index(&self, index: usize) -> Option<AuthorityIndex> {
+        if index < self.authorities.len() {
+            Some(AuthorityIndex(index as u32))
+        } else {
+            None
+        }
+    }
+
     pub fn authority(&self, authority_index: AuthorityIndex) -> &Authority {
         &self.authorities[authority_index]
     }
@@ -140,7 +148,7 @@ pub struct Authority {
     pub stake: Stake,
     /// Network address for communicating with the authority.
     pub address: Multiaddr,
-    /// The validator's hostname, for metrics and logging.
+    /// The authority's hostname, for metrics and logging.
     pub hostname: String,
     /// The authority's ed25519 publicKey for signing network messages and blocks.
     pub network_key: NetworkPublicKey,

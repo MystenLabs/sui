@@ -7,14 +7,15 @@ use std::{
 };
 
 use crate::{
-    block::{BlockAPI as _, BlockRef, Round, Slot, VerifiedBlock},
+    block::{BlockRef, Round, Slot, VerifiedBlock},
+    commit::Commit,
     context::Context,
     storage::Store,
 };
 
-/// Recent rounds of blocks to cached in memory, counted from the last committed leader round.
+/// Rounds of recently committed blocks cached in memory, per authority.
 #[allow(unused)]
-const BLOCK_CACHED_ROUNDS: Round = 100;
+const CACHED_ROUNDS: Round = 100;
 
 /// DagState provides the API to write and read accepted blocks from the DAG.
 /// Only uncommited and last committed blocks are cached in memory.
@@ -27,13 +28,16 @@ const BLOCK_CACHED_ROUNDS: Round = 100;
 pub(crate) struct DagState {
     context: Arc<Context>,
 
-    // Caches uncommitted blocks, and recent blocks within BLOCK_CACHED_ROUNDS from the
-    // last committed leader round.
+    // Caches blocks within CACHED_ROUNDS from the last committed round per authority.
+    // Note: uncommitted blocks will always be in memory.
     recent_blocks: BTreeMap<BlockRef, VerifiedBlock>,
 
-    // All accepted blocks have their refs cached. Cached refs are never removed for now.
-    // Each element in the vector contains refs for the authority corresponding to its index.
+    // Accepted blocks have their refs cached. Cached refs are never removed until restart.
+    // Each element in the Vec corresponds to the authority with the index.
     cached_refs: Vec<BTreeSet<BlockRef>>,
+
+    // Last consensus commit of the dag.
+    last_commit: Option<Commit>,
 
     // Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
@@ -41,34 +45,48 @@ pub(crate) struct DagState {
 
 #[allow(unused)]
 impl DagState {
-    pub(crate) fn new(
-        context: Arc<Context>,
-        blocks: Vec<VerifiedBlock>,
-        store: Arc<dyn Store>,
-    ) -> Self {
+    /// Initializes DagState from storage.
+    pub(crate) fn new(context: Arc<Context>, store: Arc<dyn Store>) -> Self {
         let num_authorities = context.committee.size();
+        let last_commit = store.read_last_commit().unwrap();
+        let last_committed_rounds = match &last_commit {
+            Some(commit) => commit.last_committed_rounds.clone(),
+            None => vec![0; num_authorities],
+        };
+
         let mut state = Self {
             context,
             recent_blocks: BTreeMap::new(),
             cached_refs: vec![BTreeSet::new(); num_authorities],
+            last_commit,
             store,
         };
 
-        for block in blocks {
-            state.add_block(block);
+        for (i, round) in last_committed_rounds.into_iter().enumerate() {
+            let authority_index = state.context.committee.to_authority_index(i).unwrap();
+            let blocks = state
+                .store
+                .scan_blocks_by_author(authority_index, round.saturating_sub(CACHED_ROUNDS))
+                .unwrap();
+            for block in blocks {
+                state.accept_block(block);
+            }
         }
 
         state
     }
 
-    pub(crate) fn add_block(&mut self, block: VerifiedBlock) {
+    /// Accepts a block into DagState and keeps it in memory.
+    pub(crate) fn accept_block(&mut self, block: VerifiedBlock) {
         let block_ref = block.reference();
         self.recent_blocks.insert(block_ref, block);
         self.cached_refs[block_ref.author].insert(block_ref);
     }
 
-    pub(crate) fn get_block(&self, _reference: BlockRef) -> Option<VerifiedBlock> {
-        unimplemented!()
+    /// Gets a copy of an uncommitted block. Returns None if not found.
+    /// Uncommitted must be in memory, so only in-memory blocks are checked.
+    pub(crate) fn get_uncommitted_block(&self, reference: &BlockRef) -> Option<VerifiedBlock> {
+        self.recent_blocks.get(reference).cloned()
     }
 
     pub(crate) fn get_blocks_at_slot(&self, _slot: Slot) -> Vec<VerifiedBlock> {
@@ -87,3 +105,5 @@ impl DagState {
         unimplemented!()
     }
 }
+
+// TODO: add unit tests.

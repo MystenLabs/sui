@@ -202,7 +202,7 @@ impl SingleValidator {
         )
         .unwrap();
         let (kind, signer, gas) = executable.transaction_data().execution_parts();
-        let (_, effects, _) = self.epoch_store.executor().execute_transaction_to_effects(
+        let (_, _, effects, _) = self.epoch_store.executor().execute_transaction_to_effects(
             &store,
             self.epoch_store.protocol_config(),
             self.get_validator().metrics.limits_metrics.clone(),

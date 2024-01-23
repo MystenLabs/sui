@@ -23,7 +23,6 @@ use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::{AuthorityName, ObjectID, VersionNumber};
 use sui_types::crypto::AuthoritySignature;
 use sui_types::digests::ConsensusCommitDigest;
-use sui_types::error::SuiError;
 use sui_types::object::Object;
 use sui_types::storage::ObjectStore;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
@@ -170,7 +169,7 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
         let transaction = transaction.verify(&VerifyParams::default())?;
 
-        let (inner_temporary_store, effects, execution_error_opt) = self
+        let (inner_temporary_store, _, effects, execution_error_opt) = self
             .epoch_state
             .execute_transaction(&self.store, &self.deny_config, &transaction)?;
 
@@ -391,7 +390,10 @@ impl ValidatorKeypairProvider for CommitteeWithKeys<'_> {
 }
 
 impl<T, V: store::SimulatorStore> ObjectStore for Simulacrum<T, V> {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    fn get_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
         Ok(store::SimulatorStore::get_object(&self.store, object_id))
     }
 
@@ -399,7 +401,7 @@ impl<T, V: store::SimulatorStore> ObjectStore for Simulacrum<T, V> {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
         self.store.get_object_by_key(object_id, version)
     }
 }

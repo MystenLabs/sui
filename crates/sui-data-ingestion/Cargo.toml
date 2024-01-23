@@ -15,6 +15,7 @@ aws-sdk-s3.workspace = true
 backoff.workspace = true
 base64-url.workspace = true
 bcs.workspace = true
+bytes.workspace = true
 futures.workspace = true
 mysten-metrics.workspace = true
 notify.workspace = true

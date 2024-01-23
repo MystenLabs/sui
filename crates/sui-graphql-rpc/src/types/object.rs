@@ -3,75 +3,93 @@
 
 use std::collections::BTreeMap;
 
-use async_graphql::connection::{CursorType, Edge};
-use async_graphql::{connection::Connection, *};
-use diesel::{
-    BoolExpressionMethods, ExpressionMethods, NullableExpressionMethods, OptionalExtension,
-    QueryDsl,
-};
-use fastcrypto::encoding::{Base58, Encoding};
-use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
-use move_core_types::language_storage::StructTag;
-use sui_indexer::models_v2::objects::StoredObject;
-use sui_indexer::schema_v2::objects;
-use sui_indexer::types_v2::OwnerType;
-use sui_json_rpc::name_service::NameServiceConfig;
-use sui_package_resolver::Resolver;
-use sui_types::dynamic_field::DynamicFieldType;
-use sui_types::TypeTag;
-
+use super::balance::{self, Balance};
 use super::big_int::BigInt;
+use super::coin::Coin;
+use super::coin_metadata::CoinMetadata;
 use super::cursor::{self, Page, Target};
-use super::display::{get_rendered_fields, DisplayEntry};
+use super::digest::Digest;
+use super::display::{Display, DisplayEntry};
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::MoveObject;
 use super::move_package::MovePackage;
+use super::owner::OwnerImpl;
+use super::stake::StakedSui;
 use super::suins_registration::SuinsRegistration;
-use super::type_filter::TypeFilter;
-use super::{
-    balance::Balance, coin::Coin, owner::Owner, stake::StakedSui, sui_address::SuiAddress,
-    transaction_block::TransactionBlock,
-};
-use crate::context_data::db_data_provider::PgManager;
+use super::transaction_block;
+use super::transaction_block::TransactionBlockFilter;
+use super::type_filter::{ExactTypeFilter, TypeFilter};
+use super::{owner::Owner, sui_address::SuiAddress, transaction_block::TransactionBlock};
 use crate::context_data::package_cache::PackageCache;
 use crate::data::{self, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
 use crate::types::base64::Base64;
 use crate::types::intersect;
+use async_graphql::connection::{CursorType, Edge};
+use async_graphql::{connection::Connection, *};
+use diesel::{
+    BoolExpressionMethods, CombineDsl, ExpressionMethods, NullableExpressionMethods,
+    OptionalExtension, QueryDsl,
+};
+use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
+use move_core_types::language_storage::StructTag;
+use sui_indexer::models_v2::objects::{
+    StoredDeletedHistoryObject, StoredHistoryObject, StoredObject,
+};
+use sui_indexer::schema_v2::{checkpoints, objects, objects_history, objects_snapshot};
+use sui_indexer::types_v2::ObjectStatus as NativeObjectStatus;
+use sui_indexer::types_v2::OwnerType;
+use sui_package_resolver::Resolver;
 use sui_types::object::{
     MoveObject as NativeMoveObject, Object as NativeObject, Owner as NativeOwner,
 };
+use sui_types::TypeTag;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Object {
     pub address: SuiAddress,
-
-    /// Representation of an Object in the Indexer's Store.
-    pub stored: Option<StoredObject>,
-
-    /// Deserialized representation of `stored_object.serialized_object`.
-    pub native: NativeObject,
+    pub kind: ObjectKind,
 }
 
-/// Previous implementation of `ObjectFilter`, kept around to use in the legacy DB provider APIs,
-/// while we are in the process of migrating over to the DB APIs.
-#[derive(Default, Clone)]
-pub(crate) struct DeprecatedObjectFilter {
-    /// This field is used to specify the type of objects that should be included in the query
-    /// results.
-    ///
-    /// Objects can be filtered by their type's package, package::module, or their fully qualified
-    /// type name.
-    ///
-    /// Generic types can be queried by either the generic type name, e.g. `0x2::coin::Coin`, or by
-    /// the full type name, such as `0x2::coin::Coin<0x2::sui::SUI>`.
-    pub type_: Option<String>,
+/// Type to implement GraphQL fields that are shared by all Objects.
+pub(crate) struct ObjectImpl<'o>(pub &'o Object);
 
-    /// Filter for live objects by their current owners.
-    pub owner: Option<SuiAddress>,
+#[derive(Clone, Debug)]
+pub(crate) enum ObjectKind {
+    /// An object loaded from serialized data, such as the contents of a transaction.
+    NotIndexed(NativeObject),
+    /// An object fetched from the live objects table.
+    Live(NativeObject, StoredObject),
+    /// An object fetched from the snapshot or historical objects table.
+    Historical(NativeObject, StoredHistoryObject),
+    /// The object is wrapped or deleted and only partial information can be loaded from the
+    /// indexer.
+    WrappedOrDeleted(StoredDeletedHistoryObject),
+}
 
-    /// Filter for live objects by their IDs.
-    pub object_ids: Option<Vec<SuiAddress>>,
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
+#[graphql(name = "ObjectKind")]
+pub enum ObjectStatus {
+    /// The object is loaded from serialized data, such as the contents of a transaction.
+    NotIndexed,
+    /// The object is currently live and is not deleted or wrapped.
+    Live,
+    /// The object is referenced at some version, and thus is fetched from the snapshot or
+    /// historical objects table.
+    Historical,
+    /// The object is deleted or wrapped and only partial information can be loaded from the
+    /// indexer.
+    WrappedOrDeleted,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, InputObject)]
+pub(crate) struct ObjectRef {
+    /// ID of the object.
+    pub address: SuiAddress,
+    /// Version or sequence number of the object.
+    pub version: u64,
+    /// Digest of the object.
+    pub digest: Digest,
 }
 
 /// Constrains the set of objects returned. All filters are optional, and the resulting set of
@@ -148,128 +166,290 @@ pub struct AddressOwner {
     owner: Option<Owner>,
 }
 
+#[allow(dead_code)]
+pub(crate) enum ObjectVersionKey {
+    Latest,
+    LatestAt(u64),   // checkpoint_sequence_number
+    Historical(u64), // version
+}
+
 pub(crate) type Cursor = cursor::BcsCursor<Vec<u8>>;
 type Query<ST, GB> = data::Query<ST, objects::table, GB>;
+
+/// Interface implemented by on-chain values that are addressable by an ID (also referred to as its
+/// address). This includes Move objects and packages.
+#[derive(Interface)]
+#[graphql(
+    name = "IObject",
+    field(name = "version", ty = "u64"),
+    field(
+        name = "status",
+        ty = "ObjectStatus",
+        desc = "The current status of the object as read from the off-chain store. The possible \
+                states are: NOT_INDEXED, the object is loaded from serialized data, such as the \
+                contents of a genesis or system package upgrade transaction. LIVE, the version \
+                returned is the most recent for the object, and it is not deleted or wrapped at \
+                that version. HISTORICAL, the object was referenced at a specific version or \
+                checkpoint, so is fetched from historical tables and may not be the latest version \
+                of the object. WRAPPED_OR_DELETED, the object is deleted or wrapped and only \
+                partial information can be loaded."
+    ),
+    field(
+        name = "digest",
+        ty = "Option<String>",
+        desc = "32-byte hash that identifies the object's current contents, encoded as a Base58 \
+                string."
+    ),
+    field(
+        name = "owner",
+        ty = "Option<ObjectOwner>",
+        desc = "The owner type of this object: Immutable, Shared, Parent, Address\n\
+                Immutable and Shared Objects do not have owners."
+    ),
+    field(
+        name = "previous_transaction_block",
+        ty = "Option<TransactionBlock>",
+        desc = "The transaction block that created this version of the object."
+    ),
+    field(name = "storage_rebate", ty = "Option<BigInt>", desc = "",),
+    field(
+        name = "received_transaction_blocks",
+        arg(name = "first", ty = "Option<u64>"),
+        arg(name = "after", ty = "Option<transaction_block::Cursor>"),
+        arg(name = "last", ty = "Option<u64>"),
+        arg(name = "before", ty = "Option<transaction_block::Cursor>"),
+        arg(name = "filter", ty = "Option<TransactionBlockFilter>"),
+        ty = "Connection<String, TransactionBlock>",
+        desc = "The transaction blocks that sent objects to this object."
+    ),
+    field(
+        name = "bcs",
+        ty = "Option<Base64>",
+        desc = "The Base64-encoded BCS serialization of the object's content."
+    )
+)]
+pub(crate) enum IObject {
+    Object(Object),
+    MovePackage(MovePackage),
+    MoveObject(MoveObject),
+    Coin(Coin),
+    CoinMetadata(CoinMetadata),
+    StakedSui(StakedSui),
+    SuinsRegistration(SuinsRegistration),
+}
 
 /// An object in Sui is a package (set of Move bytecode modules) or object (typed data structure
 /// with fields) with additional metadata detailing its id, version, transaction digest, owner
 /// field indicating how this object can be accessed.
 #[Object]
 impl Object {
-    async fn version(&self) -> u64 {
-        self.native.version().value()
+    pub(crate) async fn address(&self) -> SuiAddress {
+        OwnerImpl(self.address).address().await
+    }
+
+    /// Objects owned by this object, optionally `filter`-ed.
+    pub(crate) async fn objects(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<Cursor>,
+        last: Option<u64>,
+        before: Option<Cursor>,
+        filter: Option<ObjectFilter>,
+    ) -> Result<Connection<String, MoveObject>> {
+        OwnerImpl(self.address)
+            .objects(ctx, first, after, last, before, filter)
+            .await
+    }
+
+    /// Total balance of all coins with marker type owned by this object. If type is not supplied,
+    /// it defaults to `0x2::sui::SUI`.
+    pub(crate) async fn balance(
+        &self,
+        ctx: &Context<'_>,
+        type_: Option<ExactTypeFilter>,
+    ) -> Result<Option<Balance>> {
+        OwnerImpl(self.address).balance(ctx, type_).await
+    }
+
+    /// The balances of all coin types owned by this object.
+    pub(crate) async fn balances(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<balance::Cursor>,
+        last: Option<u64>,
+        before: Option<balance::Cursor>,
+    ) -> Result<Connection<String, Balance>> {
+        OwnerImpl(self.address)
+            .balances(ctx, first, after, last, before)
+            .await
+    }
+
+    /// The coin objects for this object.
+    ///
+    ///`type` is a filter on the coin's type parameter, defaulting to `0x2::sui::SUI`.
+    pub(crate) async fn coins(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<Cursor>,
+        last: Option<u64>,
+        before: Option<Cursor>,
+        type_: Option<ExactTypeFilter>,
+    ) -> Result<Connection<String, Coin>> {
+        OwnerImpl(self.address)
+            .coins(ctx, first, after, last, before, type_)
+            .await
+    }
+
+    /// The `0x3::staking_pool::StakedSui` objects owned by this object.
+    pub(crate) async fn staked_suis(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<Cursor>,
+        last: Option<u64>,
+        before: Option<Cursor>,
+    ) -> Result<Connection<String, StakedSui>> {
+        OwnerImpl(self.address)
+            .staked_suis(ctx, first, after, last, before)
+            .await
+    }
+
+    /// The domain explicitly configured as the default domain pointing to this object.
+    pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+        OwnerImpl(self.address).default_suins_name(ctx).await
+    }
+
+    /// The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
+    /// manage the associated domain.
+    pub(crate) async fn suins_registrations(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<Cursor>,
+        last: Option<u64>,
+        before: Option<Cursor>,
+    ) -> Result<Connection<String, SuinsRegistration>> {
+        OwnerImpl(self.address)
+            .suins_registrations(ctx, first, after, last, before)
+            .await
+    }
+
+    pub(crate) async fn version(&self) -> u64 {
+        ObjectImpl(self).version().await
+    }
+
+    /// The current status of the object as read from the off-chain store. The possible states are:
+    /// NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
+    /// system package upgrade transaction. LIVE, the version returned is the most recent for the
+    /// object, and it is not deleted or wrapped at that version. HISTORICAL, the object was
+    /// referenced at a specific version or checkpoint, so is fetched from historical tables and may
+    /// not be the latest version of the object. WRAPPED_OR_DELETED, the object is deleted or
+    /// wrapped and only partial information can be loaded."
+    pub(crate) async fn status(&self) -> ObjectStatus {
+        ObjectImpl(self).status().await
     }
 
     /// 32-byte hash that identifies the object's current contents, encoded as a Base58 string.
-    async fn digest(&self) -> String {
-        if let Some(stored) = &self.stored {
-            Base58::encode(&stored.object_digest)
-        } else {
-            self.native.digest().base58_encode()
-        }
-    }
-
-    /// The amount of SUI we would rebate if this object gets deleted or mutated.
-    /// This number is recalculated based on the present storage gas price.
-    async fn storage_rebate(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.native.storage_rebate))
-    }
-
-    /// The set of named templates defined on-chain for the type of this object,
-    /// to be handled off-chain. The server substitutes data from the object
-    /// into these templates to generate a display string per template.
-    async fn display(&self, ctx: &Context<'_>) -> Result<Option<Vec<DisplayEntry>>> {
-        let resolver: &Resolver<PackageCache> = ctx
-            .data()
-            .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
-            .extend()?;
-        let move_object = self
-            .native
-            .data
-            .try_as_move()
-            .ok_or_else(|| Error::Internal("Failed to convert object into MoveObject".to_string()))
-            .extend()?;
-
-        let (struct_tag, move_struct) = deserialize_move_struct(move_object, resolver)
-            .await
-            .extend()?;
-
-        let stored_display = ctx
-            .data_unchecked::<PgManager>()
-            .fetch_display_object_by_type(&struct_tag)
-            .await
-            .extend()?;
-
-        let Some(stored_display) = stored_display else {
-            return Ok(None);
-        };
-
-        let event = stored_display
-            .to_display_update_event()
-            .map_err(|e| Error::Internal(e.to_string()))
-            .extend()?;
-
-        Ok(Some(
-            get_rendered_fields(event.fields, &move_struct).extend()?,
-        ))
-    }
-
-    /// The Base64 encoded bcs serialization of the object's content.
-    async fn bcs(&self) -> Result<Option<Base64>> {
-        if let Some(stored) = &self.stored {
-            Ok(Some(Base64::from(&stored.serialized_object)))
-        } else {
-            let bytes = bcs::to_bytes(&self.native)
-                .map_err(|e| {
-                    Error::Internal(format!(
-                        "Failed to serialize object at {}: {e}",
-                        self.address,
-                    ))
-                })
-                .extend()?;
-
-            Ok(Some(Base64::from(&bytes)))
-        }
-    }
-
-    /// The transaction block that created this version of the object.
-    async fn previous_transaction_block(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<TransactionBlock>> {
-        let digest = self.native.previous_transaction;
-        TransactionBlock::query(ctx.data_unchecked(), digest.into())
-            .await
-            .extend()
+    pub(crate) async fn digest(&self) -> Option<String> {
+        ObjectImpl(self).digest().await
     }
 
     /// The owner type of this object: Immutable, Shared, Parent, Address
     /// Immutable and Shared Objects do not have owners.
-    async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwner> {
-        use NativeOwner as O;
+    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwner> {
+        ObjectImpl(self).owner(ctx).await
+    }
 
-        match self.native.owner {
-            O::AddressOwner(address) => {
-                let address = SuiAddress::from(address);
-                Some(ObjectOwner::Address(AddressOwner {
-                    owner: Some(Owner { address }),
-                }))
-            }
-            O::Immutable => Some(ObjectOwner::Immutable(Immutable { dummy: None })),
-            O::ObjectOwner(address) => {
-                let parent = Object::query(ctx.data_unchecked(), address.into(), None)
-                    .await
-                    .ok()
-                    .flatten();
+    /// The transaction block that created this version of the object.
+    pub(crate) async fn previous_transaction_block(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<TransactionBlock>> {
+        ObjectImpl(self).previous_transaction_block(ctx).await
+    }
 
-                return Some(ObjectOwner::Parent(Parent { parent }));
-            }
-            O::Shared {
-                initial_shared_version,
-            } => Some(ObjectOwner::Shared(Shared {
-                initial_shared_version: initial_shared_version.value(),
-            })),
-        }
+    /// The amount of SUI we would rebate if this object gets deleted or mutated. This number is
+    /// recalculated based on the present storage gas price.
+    pub(crate) async fn storage_rebate(&self) -> Option<BigInt> {
+        ObjectImpl(self).storage_rebate().await
+    }
+
+    /// The transaction blocks that sent objects to this object.
+    pub(crate) async fn received_transaction_blocks(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<transaction_block::Cursor>,
+        last: Option<u64>,
+        before: Option<transaction_block::Cursor>,
+        filter: Option<TransactionBlockFilter>,
+    ) -> Result<Connection<String, TransactionBlock>> {
+        ObjectImpl(self)
+            .received_transaction_blocks(ctx, first, after, last, before, filter)
+            .await
+    }
+
+    /// The Base64-encoded BCS serialization of the object's content.
+    pub(crate) async fn bcs(&self) -> Result<Option<Base64>> {
+        ObjectImpl(self).bcs().await
+    }
+
+    /// The set of named templates defined on-chain for the type of this object, to be handled
+    /// off-chain. The server substitutes data from the object into these templates to generate a
+    /// display string per template.
+    async fn display(&self, ctx: &Context<'_>) -> Result<Option<Vec<DisplayEntry>>> {
+        ObjectImpl(self).display(ctx).await
+    }
+
+    /// Access a dynamic field on an object using its name. Names are arbitrary Move values whose
+    /// type have `copy`, `drop`, and `store`, and are specified using their type, and their BCS
+    /// contents, Base64 encoded.
+    ///
+    /// Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+    /// type.
+    async fn dynamic_field(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>> {
+        OwnerImpl(self.address).dynamic_field(ctx, name).await
+    }
+
+    /// Access a dynamic object field on an object using its name. Names are arbitrary Move values
+    /// whose type have `copy`, `drop`, and `store`, and are specified using their type, and their
+    /// BCS contents, Base64 encoded. The value of a dynamic object field can also be accessed
+    /// off-chain directly via its address (e.g. using `Query.object`).
+    ///
+    /// Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+    /// type.
+    async fn dynamic_object_field(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>> {
+        OwnerImpl(self.address)
+            .dynamic_object_field(ctx, name)
+            .await
+    }
+
+    /// The dynamic fields and dynamic object fields on an object.
+    ///
+    /// Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+    /// type.
+    async fn dynamic_fields(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<Cursor>,
+        last: Option<u64>,
+        before: Option<Cursor>,
+    ) -> Result<Connection<String, DynamicField>> {
+        OwnerImpl(self.address)
+            .dynamic_fields(ctx, first, after, last, before)
+            .await
     }
 
     /// Attempts to convert the object into a MoveObject
@@ -281,176 +461,154 @@ impl Object {
     async fn as_move_package(&self) -> Option<MovePackage> {
         MovePackage::try_from(self).ok()
     }
+}
 
-    // =========== Owner interface methods =============
-
-    /// The address of the object, named as such to avoid conflict with the address type.
-    pub async fn address(&self) -> SuiAddress {
-        self.address
+impl ObjectImpl<'_> {
+    pub(crate) async fn version(&self) -> u64 {
+        self.0.version_impl()
     }
 
-    /// The objects owned by this object
-    pub async fn objects(
+    pub(crate) async fn status(&self) -> ObjectStatus {
+        ObjectStatus::from(&self.0.kind)
+    }
+
+    pub(crate) async fn digest(&self) -> Option<String> {
+        self.0
+            .native_impl()
+            .map(|native| native.digest().base58_encode())
+    }
+
+    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Option<ObjectOwner> {
+        use NativeOwner as O;
+
+        let Some(native) = self.0.native_impl() else {
+            return None;
+        };
+
+        match native.owner {
+            O::AddressOwner(address) => {
+                let address = SuiAddress::from(address);
+                Some(ObjectOwner::Address(AddressOwner {
+                    owner: Some(Owner { address }),
+                }))
+            }
+            O::Immutable => Some(ObjectOwner::Immutable(Immutable { dummy: None })),
+            O::ObjectOwner(address) => {
+                let parent = Object::query(
+                    ctx.data_unchecked(),
+                    address.into(),
+                    ObjectVersionKey::Latest,
+                )
+                .await
+                .ok()
+                .flatten();
+
+                Some(ObjectOwner::Parent(Parent { parent }))
+            }
+            O::Shared {
+                initial_shared_version,
+            } => Some(ObjectOwner::Shared(Shared {
+                initial_shared_version: initial_shared_version.value(),
+            })),
+        }
+    }
+
+    pub(crate) async fn previous_transaction_block(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<TransactionBlock>> {
+        let Some(native) = self.0.native_impl() else {
+            return Ok(None);
+        };
+        let digest = native.previous_transaction;
+
+        TransactionBlock::query(ctx.data_unchecked(), digest.into())
+            .await
+            .extend()
+    }
+
+    pub(crate) async fn storage_rebate(&self) -> Option<BigInt> {
+        self.0
+            .native_impl()
+            .map(|native| BigInt::from(native.storage_rebate))
+    }
+
+    pub(crate) async fn received_transaction_blocks(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<self::Cursor>,
+        after: Option<transaction_block::Cursor>,
         last: Option<u64>,
-        before: Option<self::Cursor>,
-        filter: Option<ObjectFilter>,
-    ) -> Result<Connection<String, Object>> {
+        before: Option<transaction_block::Cursor>,
+        filter: Option<TransactionBlockFilter>,
+    ) -> Result<Connection<String, TransactionBlock>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
-        let Some(filter) = filter.unwrap_or_default().intersect(ObjectFilter {
-            owner: Some(self.address),
-            ..Default::default()
-        }) else {
+        let Some(filter) = filter
+            .unwrap_or_default()
+            .intersect(TransactionBlockFilter {
+                recv_address: Some(self.0.address),
+                ..Default::default()
+            })
+        else {
             return Ok(Connection::new(false, false));
         };
 
-        Object::paginate(ctx.data_unchecked(), page, None, filter)
+        TransactionBlock::paginate(ctx.data_unchecked(), page, filter)
             .await
             .extend()
     }
 
-    /// The balance of coin objects of a particular coin type owned by the object.
-    pub async fn balance(
-        &self,
-        ctx: &Context<'_>,
-        type_: Option<String>,
-    ) -> Result<Option<Balance>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_balance(self.address, type_)
-            .await
-            .extend()
+    pub(crate) async fn bcs(&self) -> Result<Option<Base64>> {
+        use ObjectKind as K;
+        Ok(match &self.0.kind {
+            K::WrappedOrDeleted(_) => None,
+            K::Live(_, stored) => Some(Base64::from(&stored.serialized_object)),
+
+            // WrappedOrDeleted objects are also read from the historical objects table, and they do
+            // not have a serialized object, so the column is also nullable for stored historical
+            // objects.
+            K::Historical(_, stored) => stored.serialized_object.as_ref().map(Base64::from),
+
+            K::NotIndexed(native) => {
+                let bytes = bcs::to_bytes(native)
+                    .map_err(|e| {
+                        Error::Internal(format!(
+                            "Failed to serialize object at {}: {e}",
+                            self.0.address
+                        ))
+                    })
+                    .extend()?;
+                Some(Base64::from(&bytes))
+            }
+        })
     }
 
-    /// The balances of all coin types owned by the object. Coins of the same type are grouped
-    /// together into one Balance.
-    pub async fn balance_connection(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, Balance>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_balances(self.address, first, after, last, before)
-            .await
-            .extend()
-    }
+    /// `display` is part of the `IMoveObject` interface, but is implemented on `ObjectImpl` to
+    /// allow for a convenience function on `Object`.
+    pub(crate) async fn display(&self, ctx: &Context<'_>) -> Result<Option<Vec<DisplayEntry>>> {
+        let Some(native) = self.0.native_impl() else {
+            return Ok(None);
+        };
 
-    /// The coin objects for the given address.
-    ///
-    /// The type field is a string of the inner type of the coin by which to filter
-    /// (e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
-    pub async fn coin_connection(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        type_: Option<String>,
-    ) -> Result<Option<Connection<String, Coin>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_coins(Some(self.address), type_, first, after, last, before)
-            .await
-            .extend()
-    }
+        let move_object = native
+            .data
+            .try_as_move()
+            .ok_or_else(|| Error::Internal("Failed to convert object into MoveObject".to_string()))
+            .extend()?;
 
-    /// The `0x3::staking_pool::StakedSui` objects owned by the given object.
-    pub async fn staked_sui_connection(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, StakedSui>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_staked_sui(self.address, first, after, last, before)
+        let (struct_tag, move_struct) = deserialize_move_struct(move_object, ctx.data_unchecked())
             .await
-            .extend()
-    }
+            .extend()?;
 
-    /// The domain that a user address has explicitly configured as their default domain
-    pub async fn default_name_service_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        ctx.data_unchecked::<PgManager>()
-            .default_name_service_name(ctx.data_unchecked::<NameServiceConfig>(), self.address)
+        let Some(display) = Display::query(ctx.data_unchecked(), struct_tag.into())
             .await
-            .extend()
-    }
+            .extend()?
+        else {
+            return Ok(None);
+        };
 
-    /// The SuinsRegistration NFTs owned by the given object. These grant the owner
-    /// the capability to manage the associated domain.
-    pub async fn suins_registrations(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, SuinsRegistration>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_suins_registrations(
-                first,
-                after,
-                last,
-                before,
-                ctx.data_unchecked::<NameServiceConfig>(),
-                self.address,
-            )
-            .await
-            .extend()
-    }
-
-    /// Access a dynamic field on an object using its name.
-    /// Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
-    /// using their type, and their BCS contents, Base64 encoded.
-    /// Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
-    pub async fn dynamic_field(
-        &self,
-        ctx: &Context<'_>,
-        name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_dynamic_field(self.address, name, DynamicFieldType::DynamicField)
-            .await
-            .extend()
-    }
-
-    /// Access a dynamic object field on an object using its name.
-    /// Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
-    /// using their type, and their BCS contents, Base64 encoded.
-    /// The value of a dynamic object field can also be accessed off-chain directly via its address (e.g. using `Query.object`).
-    /// Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
-    pub async fn dynamic_object_field(
-        &self,
-        ctx: &Context<'_>,
-        name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_dynamic_field(self.address, name, DynamicFieldType::DynamicObject)
-            .await
-            .extend()
-    }
-
-    /// The dynamic fields on an object.
-    /// Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
-    pub async fn dynamic_field_connection(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, DynamicField>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_dynamic_fields(first, after, last, before, self.address)
-            .await
-            .extend()
+        Ok(Some(display.render(&move_struct).extend()?))
     }
 }
 
@@ -459,56 +617,48 @@ impl Object {
     pub(crate) fn from_native(address: SuiAddress, native: NativeObject) -> Object {
         Object {
             address,
-            stored: None,
-            native,
+            kind: ObjectKind::NotIndexed(native),
         }
     }
 
-    pub(crate) async fn query(
-        db: &Db,
-        address: SuiAddress,
-        version: Option<u64>,
-    ) -> Result<Option<Self>, Error> {
-        use objects::dsl;
+    pub(crate) fn native_impl(&self) -> Option<&NativeObject> {
+        use ObjectKind as K;
 
-        let address = address.into_vec();
-        let version = version.map(|v| v as i64);
-
-        let stored_obj: Option<StoredObject> = db
-            .execute(move |conn| {
-                conn.first(move || {
-                    let mut query = dsl::objects
-                        .filter(dsl::object_id.eq(address.clone()))
-                        .limit(1)
-                        .into_boxed();
-
-                    // TODO: leverage objects_history
-                    if let Some(version) = version {
-                        query = query.filter(dsl::object_version.eq(version));
-                    }
-
-                    query
-                })
-                .optional()
-            })
-            .await
-            .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))?;
-
-        stored_obj.map(Self::try_from).transpose()
+        match &self.kind {
+            K::Live(native, _) | K::NotIndexed(native) | K::Historical(native, _) => Some(native),
+            K::WrappedOrDeleted(_) => None,
+        }
     }
 
-    /// Query the database for a `page` of objects. The page uses the bytes of an Object ID as the
-    /// cursor, and can optionally be further `filter`-ed. The `owner_type` is an optional
-    /// additional filter, to constrain the objects to be those whose owner is of a particular kind
-    /// (address-owned, object-owned, shared, immutable). This kind of filter is not exposed
-    /// directly in the GraphQL API, but we can take advantage of it when constructing DB queries to
-    /// serve certain other queries (e.g. dynamic field queries).
+    pub(crate) fn version_impl(&self) -> u64 {
+        use ObjectKind as K;
+
+        match &self.kind {
+            K::Live(native, _) | K::NotIndexed(native) | K::Historical(native, _) => {
+                native.version().value()
+            }
+            K::WrappedOrDeleted(stored) => stored.object_version as u64,
+        }
+    }
+
+    /// Query the database for a `page` of objects, optionally `filter`-ed.
     pub(crate) async fn paginate(
         db: &Db,
         page: Page<Cursor>,
-        owner_type: Option<OwnerType>,
         filter: ObjectFilter,
     ) -> Result<Connection<String, Object>, Error> {
+        Self::paginate_subtype(db, page, filter, Ok).await
+    }
+
+    /// Query the database for a `page` of some sub-type of Object. The page uses the bytes of an
+    /// Object ID as the cursor, and can optionally be further `filter`-ed. The subtype is created
+    /// using the `downcast` function, which is allowed to fail, if the downcast has failed.
+    pub(crate) async fn paginate_subtype<T: OutputType>(
+        db: &Db,
+        page: Page<Cursor>,
+        filter: ObjectFilter,
+        downcast: impl Fn(Object) -> Result<T, Error>,
+    ) -> Result<Connection<String, T>, Error> {
         let (prev, next, results) = db
             .execute(move |conn| {
                 page.paginate_query::<StoredObject, _, _, _>(conn, move || {
@@ -531,10 +681,6 @@ impl Object {
                         );
                     }
 
-                    if let Some(owner_type) = &owner_type {
-                        query = query.filter(dsl::owner_type.eq(*owner_type as i16));
-                    }
-
                     if let Some(type_) = &filter.type_ {
                         query = query.filter(dsl::object_type.is_not_null());
                         query = type_.apply(query, dsl::object_type.assume_not_null());
@@ -545,10 +691,7 @@ impl Object {
 
                         // If we are supplying an address as the owner, we know that the object must
                         // be owned by an address, or by an object.
-                        query = query.filter(
-                            dsl::owner_type
-                                .eq_any([OwnerType::Address as i16, OwnerType::Object as i16]),
-                        );
+                        query = query.filter(dsl::owner_type.eq(OwnerType::Address as i16));
                     }
 
                     query
@@ -561,10 +704,205 @@ impl Object {
         for stored in results {
             let cursor = stored.cursor().encode_cursor();
             let object = Object::try_from(stored)?;
-            conn.edges.push(Edge::new(cursor, object));
+            conn.edges.push(Edge::new(cursor, downcast(object)?));
         }
 
         Ok(conn)
+    }
+
+    async fn query_live(db: &Db, address: SuiAddress) -> Result<Option<Self>, Error> {
+        use objects::dsl as objects;
+        let vec_address = address.into_vec();
+
+        let stored_obj: Option<StoredObject> = db
+            .execute(move |conn| {
+                conn.first(move || {
+                    objects::objects.filter(objects::object_id.eq(vec_address.clone()))
+                })
+                .optional()
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))?;
+
+        stored_obj.map(Self::try_from).transpose()
+    }
+
+    async fn query_at_version(
+        db: &Db,
+        address: SuiAddress,
+        version: u64,
+    ) -> Result<Option<Self>, Error> {
+        use checkpoints::dsl as checkpoints;
+        use objects_history::dsl as history;
+        use objects_snapshot::dsl as snapshot;
+
+        let version = version as i64;
+
+        let results: Option<Vec<StoredHistoryObject>> = db
+            .execute(move |conn| {
+                conn.results(move || {
+                    // If an object was created or mutated in a checkpoint outside the current
+                    // available range, and never touched again, it will not show up in the
+                    // objects_history table. Thus, we always need to check the objects_snapshot
+                    // table as well.
+                    let snapshot_query = snapshot::objects_snapshot
+                        .filter(snapshot::object_id.eq(address.into_vec()))
+                        .filter(snapshot::object_version.eq(version))
+                        .into_boxed();
+                    let mut historical_query = history::objects_history
+                        .filter(history::object_id.eq(address.into_vec()))
+                        .filter(history::object_version.eq(version))
+                        .order_by(history::object_version.desc())
+                        .limit(1)
+                        .into_boxed();
+
+                    let left = snapshot::objects_snapshot
+                        .select(snapshot::checkpoint_sequence_number)
+                        .order(snapshot::checkpoint_sequence_number.desc())
+                        .limit(1);
+
+                    let right = checkpoints::checkpoints
+                        .select(checkpoints::sequence_number)
+                        .order(checkpoints::sequence_number.desc())
+                        .limit(1);
+
+                    historical_query = historical_query
+                        .filter(
+                            left.single_value()
+                                .is_null()
+                                .or(history::checkpoint_sequence_number
+                                    .nullable()
+                                    .ge(left.single_value())),
+                        )
+                        .filter(
+                            history::checkpoint_sequence_number
+                                .nullable()
+                                .le(right.single_value()),
+                        );
+
+                    snapshot_query.union(historical_query)
+                })
+                .optional()
+            })
+            .await?;
+
+        // For the moment, if the object existed at some point, it will have eventually be written
+        // to objects_snapshot. Therefore, if both results are None, the object has never existed.
+        let Some(stored_objs) = results else {
+            return Ok(None);
+        };
+
+        // Select the max by key after the union query, because Diesel currently does not support order_by on union
+        stored_objs
+            .into_iter()
+            .max_by_key(|o| o.object_version)
+            .map(Self::try_from)
+            .transpose()
+    }
+
+    async fn query_latest_at_checkpoint(
+        db: &Db,
+        address: SuiAddress,
+        checkpoint_sequence_number: u64,
+    ) -> Result<Option<Self>, Error> {
+        use objects_history::dsl as history;
+        use objects_snapshot::dsl as snapshot;
+
+        let checkpoint_sequence_number = checkpoint_sequence_number as i64;
+
+        let results: Option<Vec<StoredHistoryObject>> = db
+            .execute(move |conn| {
+                conn.results(move || {
+                    // If an object was created or mutated in a checkpoint outside the current
+                    // available range, and never touched again, it will not show up in the
+                    // objects_history table. Thus, we always need to check the objects_snapshot
+                    // table as well.
+                    let mut snapshot_query = snapshot::objects_snapshot
+                        .filter(snapshot::object_id.eq(address.into_vec()))
+                        .into_boxed();
+
+                    let mut historical_query = history::objects_history
+                        .filter(history::object_id.eq(address.into_vec()))
+                        .order_by(history::object_version.desc())
+                        .limit(1)
+                        .into_boxed();
+
+                    let left = snapshot::objects_snapshot
+                        .select(snapshot::checkpoint_sequence_number)
+                        .order(snapshot::checkpoint_sequence_number.desc())
+                        .limit(1);
+
+                    historical_query = historical_query.filter(
+                        left.single_value()
+                            .is_null()
+                            .or(history::checkpoint_sequence_number
+                                .nullable()
+                                .ge(left.single_value())),
+                    );
+
+                    historical_query = historical_query
+                        .filter(history::checkpoint_sequence_number.le(checkpoint_sequence_number));
+
+                    snapshot_query = snapshot_query.filter(
+                        snapshot::checkpoint_sequence_number.le(checkpoint_sequence_number),
+                    );
+
+                    snapshot_query.union(historical_query)
+                })
+                .optional()
+            })
+            .await?;
+
+        // For the moment, if the object existed at some point, it will have eventually be written
+        // to objects_snapshot. Therefore, if both results are None, the object has never existed.
+        let Some(stored_objs) = results else {
+            return Ok(None);
+        };
+
+        // Select the max by key after the union query, because Diesel currently does not support order_by on union
+        stored_objs
+            .into_iter()
+            .max_by_key(|o| o.object_version)
+            .map(Self::try_from)
+            .transpose()
+    }
+
+    pub(crate) async fn query(
+        db: &Db,
+        address: SuiAddress,
+        key: ObjectVersionKey,
+    ) -> Result<Option<Self>, Error> {
+        match key {
+            ObjectVersionKey::Latest => Self::query_live(db, address).await,
+            ObjectVersionKey::LatestAt(checkpoint_sequence_number) => {
+                Self::query_latest_at_checkpoint(db, address, checkpoint_sequence_number).await
+            }
+            ObjectVersionKey::Historical(version) => {
+                Self::query_at_version(db, address, version).await
+            }
+        }
+        .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))
+    }
+
+    /// Query for a singleton object identified by its type. Note: the object is assumed to be a
+    /// singleton (we either find at least one object with this type and then return it, or return
+    /// nothing).
+    pub(crate) async fn query_singleton(db: &Db, type_: TypeTag) -> Result<Option<Object>, Error> {
+        use objects::dsl;
+
+        let stored_obj: Option<StoredObject> = db
+            .execute(move |conn| {
+                conn.first(move || {
+                    dsl::objects.filter(
+                        dsl::object_type.eq(type_.to_canonical_string(/* with_prefix */ true)),
+                    )
+                })
+                .optional()
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch singleton: {e}")))?;
+
+        stored_obj.map(Self::try_from).transpose()
     }
 }
 
@@ -689,9 +1027,64 @@ impl TryFrom<StoredObject> for Object {
 
         Ok(Self {
             address,
-            stored: Some(stored_object),
-            native: native_object,
+            kind: ObjectKind::Live(native_object, stored_object),
         })
+    }
+}
+
+impl TryFrom<StoredHistoryObject> for Object {
+    type Error = Error;
+
+    fn try_from(history_object: StoredHistoryObject) -> Result<Self, Error> {
+        let address = addr(&history_object.object_id)?;
+
+        let object_status =
+            NativeObjectStatus::try_from(history_object.object_status).map_err(|_| {
+                Error::Internal(format!(
+                    "Unknown object status {} for object {} at version {}",
+                    history_object.object_status, address, history_object.object_version
+                ))
+            })?;
+
+        match object_status {
+            NativeObjectStatus::Active => {
+                let Some(serialized_object) = &history_object.serialized_object else {
+                    return Err(Error::Internal(format!(
+                        "Live object {} at version {} cannot have missing serialized_object field",
+                        address, history_object.object_version
+                    )));
+                };
+
+                let native_object = bcs::from_bytes(serialized_object).map_err(|_| {
+                    Error::Internal(format!("Failed to deserialize object {address}"))
+                })?;
+
+                Ok(Self {
+                    address,
+                    kind: ObjectKind::Historical(native_object, history_object),
+                })
+            }
+            NativeObjectStatus::WrappedOrDeleted => Ok(Self {
+                address,
+                kind: ObjectKind::WrappedOrDeleted(StoredDeletedHistoryObject {
+                    object_id: history_object.object_id,
+                    object_version: history_object.object_version,
+                    object_status: history_object.object_status,
+                    checkpoint_sequence_number: history_object.checkpoint_sequence_number,
+                }),
+            }),
+        }
+    }
+}
+
+impl From<&ObjectKind> for ObjectStatus {
+    fn from(kind: &ObjectKind) -> Self {
+        match kind {
+            ObjectKind::NotIndexed(_) => ObjectStatus::NotIndexed,
+            ObjectKind::Live(_, _) => ObjectStatus::Live,
+            ObjectKind::Historical(_, _) => ObjectStatus::Historical,
+            ObjectKind::WrappedOrDeleted(_) => ObjectStatus::WrappedOrDeleted,
+        }
     }
 }
 

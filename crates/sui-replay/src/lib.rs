@@ -26,6 +26,7 @@ use sui_types::digests::TransactionDigest;
 use tracing::{error, info};
 pub mod config;
 mod data_fetcher;
+mod displays;
 pub mod fuzz;
 pub mod fuzz_mutations;
 mod replay;

@@ -1322,7 +1322,7 @@ impl IndexStore {
         self.tables
             .transactions_from_addr
             .checkpoint_db(path)
-            .map_err(SuiError::StorageError)
+            .map_err(Into::into)
     }
 
     /// This method first gets the balance from `per_coin_type_balance` cache. On a cache miss, it

@@ -14,7 +14,7 @@ use super::open_move_type::MoveAbility;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct MoveType {
-    native: TypeTag,
+    pub native: TypeTag,
 }
 
 scalar!(

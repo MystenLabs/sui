@@ -863,17 +863,17 @@ impl Command {
     }
 }
 
-fn write_sep<T: Display>(
+pub fn write_sep<T: Display>(
     f: &mut Formatter<'_>,
     items: impl IntoIterator<Item = T>,
     sep: &str,
 ) -> std::fmt::Result {
     let mut xs = items.into_iter().peekable();
     while let Some(x) = xs.next() {
+        write!(f, "{x}")?;
         if xs.peek().is_some() {
             write!(f, "{sep}")?;
         }
-        write!(f, "{x}")?;
     }
     Ok(())
 }

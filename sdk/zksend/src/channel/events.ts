@@ -10,7 +10,7 @@ export const ZkSendRequestData = variant('type', [
 	}),
 	object({
 		type: literal('sign-transaction-block'),
-		bytes: string('`bytes` is required'),
+		data: string('`data` is required'),
 		address: string('`address` is required'),
 	}),
 	object({

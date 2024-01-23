@@ -137,13 +137,20 @@ pub fn verify_signed_bridge_action(
 
 #[cfg(test)]
 mod tests {
+    use crate::events::EmittedSuiToEthTokenBridgeV1;
     use crate::test_utils::{get_test_authority_and_key, get_test_sui_to_eth_bridge_action};
-    use crate::types::BridgeAction;
     use crate::types::SignedBridgeAction;
-    use fastcrypto::traits::KeyPair;
+    use crate::types::{
+        BridgeAction, BridgeAuthority, BridgeChainId, SuiToEthBridgeAction, TokenId,
+    };
+    use ethers::types::Address as EthAddress;
+    use fastcrypto::traits::{KeyPair, ToFromBytes};
     use prometheus::Registry;
+    use std::str::FromStr;
     use std::sync::Arc;
+    use sui_types::base_types::SuiAddress;
     use sui_types::crypto::get_key_pair;
+    use sui_types::digests::TransactionDigest;
 
     use super::*;
 
@@ -220,5 +227,106 @@ mod tests {
             .unwrap_err();
 
         Ok(())
+    }
+
+    #[test]
+    fn test_bridge_sig_verification_regression_test() {
+        telemetry_subscribers::init_for_testing();
+        let registry = Registry::new();
+        mysten_metrics::init_metrics(&registry);
+
+        let public_key_bytes =
+            Hex::decode("02321ede33d2c2d7a8a152f275a1484edef2098f034121a602cb7d767d38680aa4")
+                .unwrap();
+        let pubkey1 = BridgeAuthorityPublicKey::from_bytes(&public_key_bytes).unwrap();
+        let authority1 = BridgeAuthority {
+            pubkey: pubkey1.clone(),
+            voting_power: 2500,
+            is_blocklisted: false,
+            base_url: "".into(),
+        };
+
+        let public_key_bytes =
+            Hex::decode("027f1178ff417fc9f5b8290bd8876f0a157a505a6c52db100a8492203ddd1d4279")
+                .unwrap();
+        let pubkey2 = BridgeAuthorityPublicKey::from_bytes(&public_key_bytes).unwrap();
+        let authority2 = BridgeAuthority {
+            pubkey: pubkey2.clone(),
+            voting_power: 2500,
+            is_blocklisted: false,
+            base_url: "".into(),
+        };
+
+        let public_key_bytes =
+            Hex::decode("026f311bcd1c2664c14277c7a80e4857c690626597064f89edc33b8f67b99c6bc0")
+                .unwrap();
+        let pubkey3 = BridgeAuthorityPublicKey::from_bytes(&public_key_bytes).unwrap();
+        let authority3 = BridgeAuthority {
+            pubkey: pubkey3.clone(),
+            voting_power: 2500,
+            is_blocklisted: false,
+            base_url: "".into(),
+        };
+
+        let public_key_bytes =
+            Hex::decode("03a57b85771aedeb6d31c808be9a6e73194e4b70e679608f2bca68bcc684773736")
+                .unwrap();
+        let pubkey4 = BridgeAuthorityPublicKey::from_bytes(&public_key_bytes).unwrap();
+        let authority4 = BridgeAuthority {
+            pubkey: pubkey4.clone(),
+            voting_power: 2500,
+            is_blocklisted: false,
+            base_url: "".into(),
+        };
+
+        let committee = BridgeCommittee::new(vec![
+            authority1.clone(),
+            authority2.clone(),
+            authority3.clone(),
+            authority4.clone(),
+        ])
+        .unwrap();
+
+        let action = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
+            sui_tx_digest: TransactionDigest::random(),
+            sui_tx_event_index: 0,
+            sui_bridge_event: EmittedSuiToEthTokenBridgeV1 {
+                nonce: 1,
+                sui_chain_id: BridgeChainId::SuiTestnet,
+                sui_address: SuiAddress::from_str(
+                    "0x80ab1ee086210a3a37355300ca24672e81062fcdb5ced6618dab203f6a3b291c",
+                )
+                .unwrap(),
+                eth_chain_id: BridgeChainId::EthSepolia,
+                eth_address: EthAddress::from_str("0xb18f79Fe671db47393315fFDB377Da4Ea1B7AF96")
+                    .unwrap(),
+                token_id: TokenId::ETH,
+                amount: 100000u64,
+            },
+        });
+        let sig = BridgeAuthoritySignInfo {
+            authority_pub_key: pubkey1,
+            signature: BridgeAuthorityRecoverableSignature::from_bytes(
+                &Hex::decode("e1cf11b380855ff1d4a451ebc2fd68477cf701b7d4ec88da3082709fe95201a5061b4b60cf13815a80ba9dfead23e220506aa74c4a863ba045d95715b4cc6b6e00").unwrap(),
+            ).unwrap(),
+        };
+        sig.verify(&action, &committee).unwrap();
+
+        let sig = BridgeAuthoritySignInfo {
+            authority_pub_key: pubkey4.clone(),
+            signature: BridgeAuthorityRecoverableSignature::from_bytes(
+                &Hex::decode("8ba9ec92c2d5a44ecc123182f689b901a93921fd35f581354fea20b25a0ded6d055b96a64bdda77dd5a62b93d29abe93640aa3c1a136348093cd7a2418c6bfa301").unwrap(),
+            ).unwrap(),
+        };
+        sig.verify(&action, &committee).unwrap();
+
+        let sig = BridgeAuthoritySignInfo {
+            authority_pub_key: pubkey4,
+            signature: BridgeAuthorityRecoverableSignature::from_bytes(
+                // invalid sdig
+                &Hex::decode("8ba9ec92c2d5a44ecc123182f689b901a93921fd35f581354fea20b25a0ded6d055b96a64bdda77dd5a62b93d29abe93640aa3c1a136348093cd7a2418c6bfa302").unwrap(),
+            ).unwrap(),
+        };
+        sig.verify(&action, &committee).unwrap_err();
     }
 }

@@ -11,9 +11,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_graphql_rpc_client::simple_client::SimpleClient;
 use sui_indexer::errors::IndexerError;
+pub use sui_indexer::processors_v2::objects_snapshot_processor::SnapshotLagConfig;
 use sui_indexer::store::indexer_store_v2::IndexerStoreV2;
 use sui_indexer::store::PgIndexerStoreV2;
 use sui_indexer::test_utils::start_test_indexer_v2;
+use sui_indexer::test_utils::ReaderWriterConfig;
 use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use test_cluster::TestCluster;
@@ -34,6 +36,7 @@ pub struct ExecutorCluster {
     pub indexer_join_handle: JoinHandle<Result<(), IndexerError>>,
     pub graphql_server_join_handle: JoinHandle<()>,
     pub graphql_client: SimpleClient,
+    pub snapshot_config: SnapshotLagConfig,
 }
 
 pub struct Cluster {
@@ -44,6 +47,7 @@ pub struct Cluster {
     pub graphql_client: SimpleClient,
 }
 
+/// Starts a validator, fullnode, indexer, and graphql service for testing.
 pub async fn start_cluster(
     graphql_connection_config: ConnectionConfig,
     internal_data_source_rpc_port: Option<u16>,
@@ -53,8 +57,13 @@ pub async fn start_cluster(
     let val_fn = start_validator_with_fullnode(internal_data_source_rpc_port).await;
 
     // Starts indexer
-    let (pg_store, pg_handle) =
-        start_test_indexer_v2(Some(db_url), val_fn.rpc_url().to_string(), None, true).await;
+    let (pg_store, pg_handle) = start_test_indexer_v2(
+        Some(db_url),
+        val_fn.rpc_url().to_string(),
+        true,
+        ReaderWriterConfig::writer_mode(None),
+    )
+    .await;
 
     // Starts graphql server
     let fn_rpc_url = val_fn.rpc_url().to_string();
@@ -79,10 +88,13 @@ pub async fn start_cluster(
     }
 }
 
+/// Takes in a simulated instantiation of a Sui blockchain and builds a cluster around it. This
+/// cluster is typically used in e2e tests to emulate and test behaviors.
 pub async fn serve_executor(
     graphql_connection_config: ConnectionConfig,
     internal_data_source_rpc_port: u16,
     executor: Arc<dyn NodeStateGetter>,
+    snapshot_config: Option<SnapshotLagConfig>,
 ) -> ExecutorCluster {
     let db_url = graphql_connection_config.db_url.clone();
 
@@ -94,12 +106,11 @@ pub async fn serve_executor(
         sui_rest_api::start_service(executor_server_url, executor, Some("/rest".to_owned())).await;
     });
 
-    // Starts indexer
     let (pg_store, pg_handle) = start_test_indexer_v2(
         Some(db_url),
         format!("http://{}", executor_server_url),
-        None,
         true,
+        ReaderWriterConfig::writer_mode(snapshot_config.clone()),
     )
     .await;
 
@@ -121,6 +132,7 @@ pub async fn serve_executor(
         indexer_join_handle: pg_handle,
         graphql_server_join_handle: graphql_server_handle,
         graphql_client: client,
+        snapshot_config: snapshot_config.unwrap_or_default(),
     }
 }
 
@@ -196,5 +208,36 @@ impl ExecutorCluster {
         })
         .await
         .expect("Timeout waiting for indexer to catchup to checkpoint");
+    }
+
+    /// The ObjectsSnapshotProcessor is a long-running task that periodically takes a snapshot of
+    /// the objects table. This leads to flakiness in tests, so we wait until the objects_snapshot
+    /// has reached the expected state.
+    pub async fn wait_for_objects_snapshot_catchup(&self, base_timeout: Duration) {
+        let mut latest_snapshot_cp = 0;
+
+        let latest_cp = self
+            .indexer_store
+            .get_latest_tx_checkpoint_sequence_number()
+            .await
+            .unwrap()
+            .unwrap();
+
+        tokio::time::timeout(base_timeout, async {
+            while latest_cp > latest_snapshot_cp + self.snapshot_config.snapshot_max_lag as u64 {
+                tokio::time::sleep(std::time::Duration::from_secs(
+                    self.snapshot_config.sleep_duration,
+                ))
+                .await;
+                latest_snapshot_cp = self
+                    .indexer_store
+                    .get_latest_object_snapshot_checkpoint_sequence_number()
+                    .await
+                    .unwrap()
+                    .unwrap_or_default();
+            }
+        })
+        .await
+        .expect("Timeout waiting for indexer to update objects snapshot");
     }
 }

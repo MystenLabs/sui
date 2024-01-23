@@ -1,11 +1,11 @@
-# Get last 3 coins before coins at cursor 13034947
+# Get last 3 coins owned by `0x0`.
 {
   address(
     address: "0x0000000000000000000000000000000000000000000000000000000000000000"
   ) {
-    coinConnection(last: 3, before: "0x13034947") {
+    coins(last: 3) {
       nodes {
-        balance
+        coinBalance
       }
       pageInfo {
         endCursor

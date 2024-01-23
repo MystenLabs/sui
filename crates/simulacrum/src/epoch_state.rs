@@ -10,6 +10,7 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     committee::{Committee, EpochId},
     effects::TransactionEffects,
+    gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     metrics::BytecodeVerifierMetrics,
     metrics::LimitsMetrics,
@@ -93,6 +94,7 @@ impl EpochState {
         transaction: &VerifiedTransaction,
     ) -> Result<(
         InnerTemporaryStore,
+        SuiGasStatus,
         TransactionEffects,
         Result<(), sui_types::error::ExecutionError>,
     )> {

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
-    Registry,
+    register_histogram_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
 use std::sync::Arc;
 
@@ -15,12 +15,17 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 
 pub(crate) struct Metrics {
     pub node_metrics: NodeMetrics,
+    pub channel_metrics: ChannelMetrics,
 }
 
 pub(crate) fn initialise_metrics(registry: Registry) -> Arc<Metrics> {
     let node_metrics = NodeMetrics::new(&registry);
+    let channel_metrics = ChannelMetrics::new(&registry);
 
-    Arc::new(Metrics { node_metrics })
+    Arc::new(Metrics {
+        node_metrics,
+        channel_metrics,
+    })
 }
 
 #[cfg(test)]
@@ -34,6 +39,7 @@ pub(crate) struct NodeMetrics {
     pub core_lock_enqueued: IntCounter,
     pub core_lock_dequeued: IntCounter,
     pub leader_timeout_total: IntCounter,
+    pub threshold_clock_round: IntGauge,
 }
 
 impl NodeMetrics {
@@ -70,6 +76,49 @@ impl NodeMetrics {
                 registry,
             )
             .unwrap(),
+            threshold_clock_round: register_int_gauge_with_registry!(
+                "threshold_clock_round",
+                "The current threshold clock round. We only advance to a new round when a quorum of parents have been synced.",
+                registry,
+            ).unwrap(),
+        }
+    }
+}
+
+pub(crate) struct ChannelMetrics {
+    /// occupancy of the channel from TransactionsClient to TransactionsConsumer
+    pub tx_transactions_submit: IntGauge,
+    /// total received on channel from TransactionsClient to TransactionsConsumer
+    pub tx_transactions_submit_total: IntCounter,
+    /// occupancy of the CoreThread commands channel
+    pub core_thread: IntGauge,
+    /// total received on the CoreThread commands channel
+    pub core_thread_total: IntCounter,
+}
+
+impl ChannelMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            tx_transactions_submit: register_int_gauge_with_registry!(
+                "tx_transactions_submit",
+                "occupancy of the channel from the `TransactionsClient` to the `TransactionsConsumer`",
+                registry
+            ).unwrap(),
+            tx_transactions_submit_total: register_int_counter_with_registry!(
+                "tx_transactions_submit_total",
+                "total received on channel from the `TransactionsClient` to the `TransactionsConsumer`",
+                registry
+            ).unwrap(),
+            core_thread: register_int_gauge_with_registry!(
+                "core_thread",
+                "occupancy of the `CoreThread` commands channel",
+                registry
+            ).unwrap(),
+            core_thread_total: register_int_counter_with_registry!(
+                "core_thread_total",
+                "total received on the `CoreThread` commands channel",
+                registry
+            ).unwrap(),
         }
     }
 }

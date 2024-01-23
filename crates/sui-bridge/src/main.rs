@@ -155,7 +155,8 @@ async fn start_client_components(
                 contract, client_config.eth_bridge_contracts_start_block_override[contract], cursor
             );
         } else if let Some(cursor) = cursor {
-            eth_contracts_to_watch.insert(*contract, cursor);
+            // +1: The stored value is the last block that was processed, so we start from the next block.
+            eth_contracts_to_watch.insert(*contract, cursor + 1);
         } else {
             return Err(anyhow::anyhow!(
                 "No cursor found for eth contract {} in storage or config override",

@@ -831,7 +831,7 @@ fn statement(
 
             let (body_entry_block, body_blocks) = block_(
                 context,
-                with_last(body, make_jump(sloc, start_label, false)),
+                with_last(body, make_jump(sloc, end_label, false)),
             );
 
             context.exit_named_block(&name);

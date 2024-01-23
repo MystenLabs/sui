@@ -43,7 +43,7 @@ use sui_config::NodeConfig;
 use sui_types::type_resolver::LayoutResolver;
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, RwLock};
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, instrument, trace, warn, Instrument};
 
@@ -625,6 +625,12 @@ pub struct AuthorityState {
 
     epoch_store: ArcSwap<AuthorityPerEpochStore>,
 
+    /// This lock denotes current 'execution epoch'.
+    /// Execution acquires read lock, checks certificate epoch and holds it until all writes are complete.
+    /// Reconfiguration acquires write lock, changes the epoch and revert all transactions
+    /// from previous epoch that are executed but did not make into checkpoint.
+    execution_lock: RwLock<EpochId>,
+
     pub indexes: Option<Arc<IndexStore>>,
 
     pub subscription_handler: Arc<SubscriptionHandler>,
@@ -1093,7 +1099,6 @@ impl AuthorityState {
             return Ok((effects, None));
         }
         let execution_guard = self
-            .database
             .execution_lock_for_executable_transaction(certificate)
             .await;
         // Any caller that verifies the signatures on the certificate will have already checked the
@@ -1381,7 +1386,7 @@ impl AuthorityState {
         let (kind, signer, gas) = transaction_data.execution_parts();
 
         #[allow(unused_mut)]
-        let (inner_temp_store, mut effects, execution_error_opt) =
+        let (inner_temp_store, _, mut effects, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
                 &self.database,
                 protocol_config,
@@ -1511,7 +1516,7 @@ impl AuthorityState {
             .expect("Creating an executor should not fail here");
 
         let expensive_checks = false;
-        let (inner_temp_store, effects, _execution_error) = executor
+        let (inner_temp_store, _, effects, _execution_error) = executor
             .execute_transaction_to_effects(
                 &self.database,
                 protocol_config,
@@ -1607,7 +1612,7 @@ impl AuthorityState {
         gas_budget: Option<u64>,
         gas_sponsor: Option<SuiAddress>,
         gas_objects: Option<Vec<ObjectRef>>,
-        epoch: Option<u64>,
+        show_raw_txn_data_and_effects: Option<bool>,
         skip_checks: Option<bool>,
     ) -> SuiResult<DevInspectResults> {
         let epoch_store = self.load_epoch_store_one_call_per_task();
@@ -1623,6 +1628,8 @@ impl AuthorityState {
                 error: "system transactions are not supported".to_string(),
             });
         }
+
+        let show_raw_txn_data_and_effects = show_raw_txn_data_and_effects.unwrap_or(false);
         let skip_checks = skip_checks.unwrap_or(true);
         let reference_gas_price = epoch_store.reference_gas_price();
         let protocol_config = epoch_store.protocol_config();
@@ -1633,7 +1640,6 @@ impl AuthorityState {
         let owner = gas_sponsor.unwrap_or(sender);
         // Payment might be empty here, but it's fine we'll have to deal with it later after reading all the input objects.
         let payment = gas_objects.unwrap_or_default();
-        let expiration = epoch.map_or(TransactionExpiration::None, TransactionExpiration::Epoch);
         let transaction = TransactionData::V1(TransactionDataV1 {
             kind: transaction_kind.clone(),
             sender,
@@ -1643,8 +1649,16 @@ impl AuthorityState {
                 price,
                 budget,
             },
-            expiration,
+            expiration: TransactionExpiration::None,
         });
+
+        let raw_txn_data = if show_raw_txn_data_and_effects {
+            bcs::to_bytes(&transaction).map_err(|_| SuiError::TransactionSerializationError {
+                error: "Failed to serialize transaction during dev inspect".to_string(),
+            })?
+        } else {
+            vec![]
+        };
 
         transaction.check_version_supported(protocol_config)?;
         transaction.validity_check_no_gas_check(protocol_config)?;
@@ -1743,7 +1757,7 @@ impl AuthorityState {
             transaction,
         );
         let transaction_digest = TransactionDigest::new(default_hash(&intent_msg.value));
-        let (inner_temp_store, effects, execution_result) = executor.dev_inspect_transaction(
+        let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
             &self.database,
             protocol_config,
             self.metrics.limits_metrics.clone(),
@@ -1763,6 +1777,14 @@ impl AuthorityState {
             skip_checks,
         );
 
+        let raw_effects = if show_raw_txn_data_and_effects {
+            bcs::to_bytes(&effects).map_err(|_| SuiError::TransactionSerializationError {
+                error: "Failed to serialize transaction effects during dev inspect".to_string(),
+            })?
+        } else {
+            vec![]
+        };
+
         let package_store = TemporaryPackageStore::new(&inner_temp_store, self.database.clone());
 
         let mut layout_resolver = epoch_store
@@ -1773,6 +1795,8 @@ impl AuthorityState {
             effects,
             inner_temp_store.events.clone(),
             execution_result,
+            raw_txn_data,
+            raw_effects,
             layout_resolver.as_mut(),
         )
     }
@@ -2374,9 +2398,11 @@ impl AuthorityState {
             archive_readers,
         );
         let input_loader = TransactionInputLoader::new(store.clone());
+        let epoch = epoch_store.epoch();
         let state = Arc::new(AuthorityState {
             name,
             secret,
+            execution_lock: RwLock::new(epoch),
             epoch_store: ArcSwap::new(epoch_store.clone()),
             input_loader,
             database: store,
@@ -2511,6 +2537,28 @@ impl AuthorityState {
         })
     }
 
+    /// Attempts to acquire execution lock for an executable transaction.
+    /// Returns the lock if the transaction is matching current executed epoch
+    /// Returns None otherwise
+    pub async fn execution_lock_for_executable_transaction(
+        &self,
+        transaction: &VerifiedExecutableTransaction,
+    ) -> SuiResult<ExecutionLockReadGuard> {
+        let lock = self.execution_lock.read().await;
+        if *lock == transaction.auth_sig().epoch() {
+            Ok(lock)
+        } else {
+            Err(SuiError::WrongEpoch {
+                expected_epoch: *lock,
+                actual_epoch: transaction.auth_sig().epoch(),
+            })
+        }
+    }
+
+    pub async fn execution_lock_for_reconfiguration(&self) -> ExecutionLockWriteGuard {
+        self.execution_lock.write().await
+    }
+
     #[instrument(level = "error", skip_all)]
     pub async fn reconfigure(
         &self,
@@ -2530,8 +2578,7 @@ impl AuthorityState {
         );
 
         self.committee_store.insert_new_committee(&new_committee)?;
-        let db = self.db();
-        let mut execution_lock = db.execution_lock_for_reconfiguration().await;
+        let mut execution_lock = self.execution_lock_for_reconfiguration().await;
         self.revert_uncommitted_epoch_transactions(cur_epoch_store)
             .await?;
         self.check_system_consistency(
@@ -2857,7 +2904,7 @@ impl AuthorityState {
 
     #[instrument(level = "trace", skip_all)]
     pub async fn get_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
-        self.database.get_object(object_id)
+        self.database.get_object(object_id).map_err(Into::into)
     }
 
     pub async fn get_sui_system_package_object_ref(&self) -> SuiResult<ObjectRef> {
@@ -4368,7 +4415,6 @@ impl AuthorityState {
         }
 
         let execution_guard = self
-            .database
             .execution_lock_for_executable_transaction(&executable_tx)
             .await?;
 
@@ -4651,7 +4697,9 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         object_id: ObjectID,
         version: VersionNumber,
     ) -> SuiResult<Option<Object>> {
-        self.database.get_object_by_key(&object_id, version)
+        self.database
+            .get_object_by_key(&object_id, version)
+            .map_err(Into::into)
     }
 
     async fn multi_get_transaction_checkpoint(

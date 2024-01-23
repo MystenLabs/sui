@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod authority_node;
 mod base_committer;
 mod block;
+mod block_manager;
 mod block_verifier;
 mod commit;
 mod context;
@@ -15,5 +17,4 @@ mod metrics;
 mod stake_aggregator;
 mod storage;
 mod threshold_clock;
-mod utils;
-mod validator;
+mod transactions_client;

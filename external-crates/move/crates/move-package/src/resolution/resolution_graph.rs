@@ -193,7 +193,7 @@ impl ResolvedGraph {
                          Dev addresses cannot introduce new named addresses",
                         name,
                         addr.short_str_lossless(),
-                        graph.root_package,
+                        graph.root_package_orig_name,
                     );
                 }
 
@@ -203,7 +203,7 @@ impl ResolvedGraph {
                         format!(
                             "Unable to resolve named address '{}' in package '{}' when resolving \
                              dependencies in dev mode",
-                            name, graph.root_package,
+                            name, graph.root_package_orig_name,
                         )
                     })?;
 
@@ -216,7 +216,7 @@ impl ResolvedGraph {
                          Assignment conflicts with previous assignments: {conflicts} = 0x{addr}",
                         name = name,
                         addr = addr.short_str_lossless(),
-                        pkg = graph.root_package,
+                        pkg = graph.root_package_orig_name,
                         conflicts = conflicts
                             .iter()
                             .map(NamedAddress::as_str)

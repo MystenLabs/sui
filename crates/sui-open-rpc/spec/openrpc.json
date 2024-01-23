@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.17.0"
+    "version": "1.18.0"
   },
   "methods": [
     {
@@ -376,7 +376,8 @@
                 "showEffects": true,
                 "showEvents": true,
                 "showObjectChanges": true,
-                "showBalanceChanges": true
+                "showBalanceChanges": true,
+                "showRawEffects": false
               }
             },
             {
@@ -1973,7 +1974,8 @@
                 "showEffects": true,
                 "showEvents": true,
                 "showObjectChanges": false,
-                "showBalanceChanges": false
+                "showBalanceChanges": false,
+                "showRawEffects": false
               }
             }
           ],
@@ -2350,7 +2352,8 @@
                 "showEffects": true,
                 "showEvents": true,
                 "showObjectChanges": false,
-                "showBalanceChanges": false
+                "showBalanceChanges": false,
+                "showRawEffects": false
               }
             }
           ],
@@ -5669,6 +5672,13 @@
               }
             ]
           },
+          "showRawTxnDataAndEffects": {
+            "description": "Whether to return the raw transaction data and effects.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "skipChecks": {
             "description": "Whether to skip transaction checks for the transaction.",
             "type": [
@@ -5706,6 +5716,24 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Event"
+            }
+          },
+          "rawEffects": {
+            "description": "The raw effects of the transaction that was dev inspected.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "rawTxnData": {
+            "description": "The raw transaction data that was dev inspected.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
             }
           },
           "results": {
@@ -10414,6 +10442,14 @@
               "$ref": "#/components/schemas/ObjectChange"
             }
           },
+          "rawEffects": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
           "rawTransaction": {
             "description": "BCS encoded [SenderSignedData] that includes input object references returns empty array if `show_raw_transaction` is false",
             "allOf": [
@@ -10470,6 +10506,11 @@
           },
           "showObjectChanges": {
             "description": "Whether to show object_changes. Default to be False",
+            "default": false,
+            "type": "boolean"
+          },
+          "showRawEffects": {
+            "description": "Whether to show raw transaction effects. Default to be False",
             "default": false,
             "type": "boolean"
           },

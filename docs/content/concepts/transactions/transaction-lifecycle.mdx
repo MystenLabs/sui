@@ -139,7 +139,7 @@ Step 4: Transaction finalization
 
 The Full node broadcasts the transaction certificate to all validators. Validators receive the transaction certificate, verify its validity (for example, there are indeed enough signatures), execute the transaction, and unlock the previously locked owned objects. Transaction effects are the output of an executed transaction. Validators sign the transaction effects and return them to the Full node, along with their signatures.
 
-The Full node verifies that effects returned from valdiators are identical. After it collects a supermajority of signatures, it forms an `EffectsCertificate` object. The effects certificate contains the transaction effects and signatures from a supermajority of validators.
+The Full node verifies that effects returned from validators are identical. After it collects a supermajority of signatures, it forms an `EffectsCertificate` object. The effects certificate contains the transaction effects and signatures from a supermajority of validators.
 
 At this point, as your wallet app gets back the effects certificate from the Full node, you can share this effect certified transaction with the coffee shop. The coffee shop can then be sure that the transaction is executed and irreversible.
 
@@ -159,7 +159,7 @@ The Full node that the coffee shop's terminal connects to knows about your trans
 
 Before the Full node sends back an effects certificate to your wallet app, it may try to execute the transaction locally, if the request asks it to.
 
-The purpose of this extra step is to keep the Full node up to date as much as possible, especially when the wallet app frequently hits the same Full node. In this coffee shop example, this might be trivial, but for a high freuqency application, such as gaming, it could be important.
+The purpose of this extra step is to keep the Full node up to date as much as possible, especially when the wallet app frequently hits the same Full node. In this coffee shop example, this might be trivial, but for a high frequency application, such as gaming, it could be important.
 
 When an app constructs a transaction, it typically requests that the Full node choose a gas object for it. Gas objects are owned objects, meaning that if the Full node is stale and not aware of the right version of the object, it could lead to invalid transactions, or worse, client equivocation if the client software does not handle it properly. Executing on Full node before returning `EffectsCertificate` is one way to avoid this situation. A request can ask for such behavior by using the `WaitForLocalExecution` parameter. See [Sponsored Transactions](./sponsored-transactions.mdx) for more on client equivocation.
 

@@ -94,16 +94,13 @@
 >      coinObjectCount
 >      totalBalance
 >    }
->    coinConnection {
+>    coins {
 >      nodes {
->        asMoveObject {
->          contents {
->            type {
->              repr
->            }
+>        contents {
+>          type {
+>            repr
 >          }
 >        }
->
 >      }
 >    }
 >  }
@@ -158,7 +155,7 @@
 >      coinObjectCount
 >      totalBalance
 >    }
->    balanceConnection {
+>    balances {
 >      nodes {
 >        coinType {
 >          repr
@@ -449,15 +446,15 @@
 ## Coin Connection
 ### <a id=327675></a>
 ### Coin Connection
-####  Get last 3 coins before coins at cursor 13034947
+####  Get last 3 coins owned by `0x0`.
 
 ><pre>{
 >  address(
 >    address: "0x0000000000000000000000000000000000000000000000000000000000000000"
 >  ) {
->    coinConnection(last: 3, before: "0x13034947") {
+>    coins(last: 3) {
 >      nodes {
->        balance
+>        coinBalance
 >      }
 >      pageInfo {
 >        endCursor
@@ -480,9 +477,7 @@
 >    description
 >    iconUrl
 >    supply
->    asMoveObject {
->      hasPublicTransfer
->    }
+>    hasPublicTransfer
 >  }
 >}</pre>
 
@@ -529,10 +524,8 @@
 >        imageUrl
 >        projectUrl
 >        exchangeRates {
->          asObject {
->            storageRebate
->            bcs
->          }
+>          storageRebate
+>          bcs
 >          hasPublicTransfer
 >        }
 >        exchangeRatesSize
@@ -677,11 +670,7 @@
 >    nodes {
 >      sendingModule {
 >        name
->        package {
->          asObject {
->            digest
->          }
->        }
+>        package { digest }
 >      }
 >      type {
 >        repr
@@ -766,7 +755,7 @@
 ### Name Service
 
 ><pre>{
->  resolveNameServiceAddress(name: "example.sui") {
+>  resolveSuinsAddress(domain: "example.sui") {
 >    address
 >  }
 >  address(
@@ -780,7 +769,7 @@
 >      coinObjectCount
 >      totalBalance
 >    }
->    defaultNameServiceName
+>    defaultSuinsName
 >  }
 >}</pre>
 
@@ -866,9 +855,7 @@
 >      node {
 >        asMoveObject {
 >          contents {
->            type {
->              repr
->            }
+>            type { repr }
 >          }
 >        }
 >      }
@@ -940,9 +927,7 @@
 >      storageRebate
 >      previousTransactionBlock {
 >        digest
->        sender {
->          defaultNameServiceName
->        }
+>        sender { defaultSuinsName }
 >        gasInput {
 >          gasPrice
 >          gasBudget
@@ -1050,11 +1035,11 @@
 >  }
 >}
 >
->query DynamicFieldConnection {
+>query DynamicFields {
 >  object(
 >    address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
 >  ) {
->    dynamicFieldConnection {
+>    dynamicFields {
 >      pageInfo {
 >        hasNextPage
 >        endCursor
@@ -1222,7 +1207,7 @@
 >      }
 >      totalBalance
 >    }
->    stakedSuiConnection {
+>    stakedSuis {
 >      nodes {
 >        status
 >        principal
