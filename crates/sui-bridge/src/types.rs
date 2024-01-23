@@ -202,7 +202,7 @@ pub enum TokenId {
     USDT = 4,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BridgeActionStatus {
     RecordNotFound,
     Pending,
