@@ -7,6 +7,7 @@ use super::cursor::Page;
 use super::dynamic_field::DynamicField;
 use super::dynamic_field::DynamicFieldName;
 use super::move_package::MovePackage;
+use super::object::ObjectVersionKey;
 use super::stake::StakedSui;
 use super::suins_registration::SuinsRegistration;
 use crate::data::Db;
@@ -220,10 +221,11 @@ impl Owner {
         })
     }
 
-    async fn as_object(&self) -> Option<Object> {
-        // TODO: extend when send to object imnplementation is done
-        // For now only addresses can be owners
-        None
+    async fn as_object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
+        // TODO: Make consistent
+        Object::query(ctx.data_unchecked(), self.address, ObjectVersionKey::Latest)
+            .await
+            .extend()
     }
 
     /// Access a dynamic field on an object using its name. Names are arbitrary Move values whose
