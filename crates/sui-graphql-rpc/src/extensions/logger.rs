@@ -197,9 +197,9 @@ impl Extension for LoggerExtension {
                     );
                 }
                 _ => info!(
-                    query_id = %query_id,
-                    session_id = %session_id,
-                    "[Response] {}", resp.data
+                        query_id = %query_id,
+                        session_id = %session_id,
+                        "[Response] {}", resp.data
                 ),
             }
         }
