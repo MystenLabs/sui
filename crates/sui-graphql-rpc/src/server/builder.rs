@@ -46,6 +46,8 @@ use tower::{Layer, Service};
 use tracing::{info, warn};
 use uuid::Uuid;
 
+const HEALTH_UUID: Uuid = Uuid::nil();
+
 pub struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
 }
@@ -304,10 +306,11 @@ async fn health_checks(
     req: GraphQLRequest,
 ) -> impl axum::response::IntoResponse {
     // Simple request to check if the DB is up
-    // TODO: add more checks
+    // TODO: add more checks and figure out better ways to do these health checks
     let mut req = req.into_inner();
     req.data.insert(addr);
-    req.data.insert(Uuid::new_v4());
+    // insert the NIL UUID which helps avoid logging these health requests
+    req.data.insert(HEALTH_UUID);
     req.query = r#"
         query {
             chainIdentifier

@@ -85,12 +85,14 @@ impl Extension for LoggerExtension {
         if !is_schema && self.config.log_request_query {
             let query_id: &Uuid = ctx.data_unchecked();
             let session_id: &SocketAddr = ctx.data_unchecked();
-            info!(
-                %query_id,
-                %session_id,
-                "[Query] {}",
-                ctx.stringify_execute_doc(&document, variables)
-            );
+            if !is_health_check_request(query_id) {
+                info!(
+                    %query_id,
+                    %session_id,
+                    "[Query] {}",
+                    ctx.stringify_execute_doc(&document, variables)
+                );
+            }
         }
         Ok(document)
     }
@@ -104,13 +106,15 @@ impl Extension for LoggerExtension {
         if self.config.log_complexity {
             let query_id: &Uuid = ctx.data_unchecked();
             let session_id: &SocketAddr = ctx.data_unchecked();
-            info!(
-                %query_id,
-                %session_id,
-                complexity = res.complexity,
-                depth = res.depth,
-                "[Validation]",
-            );
+            if !is_health_check_request(query_id) {
+                info!(
+                    %query_id,
+                    %session_id,
+                    complexity = res.complexity,
+                    depth = res.depth,
+                    "[Validation]",
+                );
+            }
         }
         Ok(res)
     }
@@ -196,6 +200,7 @@ impl Extension for LoggerExtension {
                         "[Schema] {}", resp.data
                     );
                 }
+                _ if is_health_check_request(&query_id) => {}
                 _ => info!(
                         %query_id,
                         %session_id,
@@ -205,4 +210,9 @@ impl Extension for LoggerExtension {
         }
         resp
     }
+}
+
+/// Check if the request comes from the `health` endpoint, which has the nil uuid
+fn is_health_check_request(id: &Uuid) -> bool {
+    id.is_nil()
 }
