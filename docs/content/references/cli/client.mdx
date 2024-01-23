@@ -242,62 +242,64 @@ will verify that all transactions local execution results match the effects on-c
 ### Profile a transaction
 
 Use the `sui client profile-transaction --tx-digest <TRANSACTION-DIGEST>` command to re-execute a transaction locally
-and produce a gas profile. Similarly to the replay command, this command will fetch the transaction dependencies from the
-fullnode specified in the client env that are needed to execute the transaction. During the local execution of the transaction,
-this command will record all the move function invocations and the gas cost breakdown for each invocation.
+and produce a gas profile. Similar to the `replay` command, this command fetches the transaction dependencies from the
+Full node specified in the client environment that are needed to execute the transaction. During the local execution of the transaction,
+this command records all the Move function invocations and the gas cost breakdown for each invocation.
 
-In order for the profiler to be enabled, the Sui Client binary must be locally built or installed with `--features gas-profiler`.
+To enable the profiler, you must build the Sui Client binary locally or install it with the `--features gas-profiler` flag set.
+
 ```shell
 cargo install --locked --git https://github.com/MystenLabs/sui.git --branch <BRANCH-NAME> --features gas-profiler sui
 ```
 
-The command outputs a profile to the current working directory of the format `gas_profile_{tx_digest}_{unix_timestamp}.json`.
-An optional flag `--profile-output </PATH/OUTPUT.json>` can be provided to write the profile to `/PATH/OUTPUT_{tx_digest}_{unix_timestamp}.json`.
+The command outputs a profile to the current working directory in the format `gas_profile_{tx_digest}_{unix_timestamp}.json`.
+You can include the optional flag `--profile-output </PATH/OUTPUT.json>` to write the profile to `/PATH/OUTPUT_{tx_digest}_{unix_timestamp}.json` instead.
 This profile can then be inspected using speedscope.
 
 To install speedscope run
-```shell
+
+```bash npm2yarn
 npm install -g speedscope
 ```
 
 To open a profile in speedscope run
-```shell
+
+```bash npm2yarn
 speedscope <PATH/PROFILE-OUTPUT-FILE>
 ```
 
-When looking at the profile in speedscope, there are 3 different views available from the top left menu: `Timer Order`,
-`Left Heavy`, and `Sandwich`. In each view, each bar's vertical width corresponds to the percentage of gas consumption incurred by the function,
-and you can hover your mouse over a bar or click a bar to see the precise amount of gas consumed in nano-sui.
+When looking at the profile in speedscope, there are three different views available from the top left menu: **Timer Order**,
+**Left Heavy**, and **Sandwich**. In each view, each bar's vertical width corresponds to the percentage of gas consumption incurred by the function,
+and you can hover your mouse over a bar or click a bar to see the precise amount of gas consumed in MIST (nano-SUI).
 
-`Time Order` will show the callstack of function invocations from left to right in the order
-of invocation, while `Left Heavy` will combine repeated sequences of nested invocations into a single combined call stack,
-and will display these from left to right by total incurred gas consumption per combined call stack. This is useful when there have
+**Time Order** shows the callstack of function invocations from left to right in the order
+of invocation, while **Left Heavy** combines repeated sequences of nested invocations into a single combined call stack. **Left Heavy** 
+displays these sequences from left to right by total incurred gas consumption per combined call stack. This is useful when there have
 been hundreds of repeated calls to the same function to quickly observe the total gas consumption over all calls to that function.
-In both these views the top section can be clicked and dragged to zoom in and out over different sections of the profile.
+In both these views, you can click the top section and drag to zoom in and out over different sections of the profile.
 
-`Sandwich` view shows a list of discrete values that correspond to gas consumption per function, with `Total` showing
-gas cost incurred in all the functions called by the function, and `Self` showing the gas cost done by only the given function.
+**Sandwich** view shows a list of discrete values that correspond to gas consumption per function, with **Total** showing
+gas cost incurred in all the functions called by the function, and **Self** showing the gas cost done by only the given function.
 
 Observing a transaction's gas consumption provides useful insight of expected gas cost usage of a smart contract.
-When developing a smart contract, you can run a local network and publish it to the local network. See
-https://docs.sui.io/guides/developer/getting-started/local-network for more details. Then create a transaction that calls
+When developing a smart contract, you can [run a local network](../../guides/developer/getting-started/local-network.mdx) and publish the package to the local network. Then create a transaction that calls
 your published smart contract, and finally run the profiler on the transaction to see a breakdown of the gas cost.
 
-This tool can also be used to do analysis on daily, weekly, or monthly cost by multiplying the gas cost by the expected
-number of transactions that will call the smart contract within that timeframe.
+You can also use this tool to perform analysis on daily, weekly, or monthly cost by multiplying the gas cost by the expected
+number of transactions that calls the smart contract within that timeframe.
 
 ## Publish a Move package
 
-One of the main uses of the `sui client` command is to publish smart contracts on the Sui network. This example switches the current environment to the Devnet network, then builds, tests, and publishes one of the existing Move examples available in the Sui repository: `https://github.com/MystenLabs/sui/tree/main/examples/move`
+One of the main uses of the `sui client` command is to publish smart contracts on the Sui network. This example switches the current environment to the Devnet network, then builds, tests, and publishes one of the existing Move examples available in the Sui repository: [sui/examples/move](https://github.com/MystenLabs/sui/tree/main/examples/move)
 
 This example also makes use of `sui move` commands. To learn more about those commands, see [Sui Move CLI](./move.mdx).
 
-1. Open a terminal or console to the root of your local Sui repository and navigate to the move_tutorial example.
+1. Open a terminal or console to the root of your local Sui repository and navigate to the `move_tutorial` example.
     ```shell
     cd examples/move
     cd first_package
     ```
-1. Switch to the Devnet network. This command uses an alias, so the `devnet` value might be different for you, depending on the alias name set in your configuration.
+1. Switch to the Devnet network. This command uses an alias, so the `devnet` value might be different for you, depending on the alias name set in your configuration (use `sui client envs` for a list of your aliases).
     ```shell
     sui client switch --env devnet
     ```
@@ -319,7 +321,7 @@ This example also makes use of `sui move` commands. To learn more about those co
     [ PASS    ] 0x0::example::test_sword_transactions
     Test result: OK. Total tests: 2; passed: 2; failed: 0
      ```
-1. Use the `sui client verify-bytecode-meter` to check if the module passes the bytecode meter. The console responds with the maximum allowed values as well as the amount the package uses.
+1. Use the `sui client verify-bytecode-meter` to check if the module passes the bytecode meter. The console responds with the maximum allowed values, as well as the amount the package uses.
     ```shell
     $ sui client verify-bytecode-meter
     Running bytecode verifier for 1 modules
