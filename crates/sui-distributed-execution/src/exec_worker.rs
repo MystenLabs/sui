@@ -81,28 +81,28 @@ impl QueuesManager {
 
         // Add tx to wait lists
         for obj in r_set.union(&w_set) {
-            let prev_write = self.writing_tx.insert(*obj, txid);
+            let prev_write = self.writing_tx.insert(*obj, *txid);
             if let Some(other_txid) = prev_write {
-                self.wait_table.entry(txid).or_default().insert(other_txid);
+                self.wait_table.entry(*txid).or_default().insert(other_txid);
                 self.reverse_wait_table
                     .entry(other_txid)
                     .or_default()
-                    .insert(txid);
+                    .insert(*txid);
                 wait_ctr += 1;
             }
         }
 
         // Set this transaction as the current writer
         for obj in &w_set {
-            self.writing_tx.insert(*obj, txid);
+            self.writing_tx.insert(*obj, *txid);
         }
 
         // Store tx
-        self.tx_store.insert(txid, full_tx);
+        self.tx_store.insert(*txid, full_tx.clone());
 
         // Set the wait table and check if tx is ready
         if wait_ctr == 0 {
-            self.ready.send(txid).await.expect("send failed");
+            self.ready.send(*txid).await.expect("send failed");
         }
     }
 
@@ -327,12 +327,12 @@ impl<
             Self::get_gas_status(tx, &input_objects, protocol_config, reference_gas_price).await;
         let shared_object_refs = input_objects.filter_shared_objects();
         let transaction_dependencies = input_objects.transaction_dependencies();
-        let mut gas_charger = GasCharger::new(tx.digest(), gas, gas_status, &protocol_config);
+        let mut gas_charger = GasCharger::new(*tx.digest(), gas, gas_status, &protocol_config);
 
         let temporary_store = TemporaryStore::new(
             self.memory_store.clone(),
             input_objects.clone(),
-            tx.digest(),
+            *tx.digest(),
             protocol_config,
         );
 
@@ -343,7 +343,7 @@ impl<
                 kind,
                 signer,
                 &mut gas_charger,
-                tx.digest(),
+                *tx.digest(),
                 transaction_dependencies,
                 &move_vm,
                 &epoch_data.epoch_id(),
@@ -398,7 +398,7 @@ impl<
             Self::get_gas_status(&tx, &input_objects, &protocol_config, reference_gas_price).await;
         let shared_object_refs = input_objects.filter_shared_objects();
         let transaction_dependencies = input_objects.transaction_dependencies();
-        let mut gas_charger = GasCharger::new(tx.digest(), gas, gas_status, &protocol_config);
+        let mut gas_charger = GasCharger::new(*tx.digest(), gas, gas_status, &protocol_config);
         // println!(
         //     "Dependencies for tx {}: {:?}",
         //     txid, transaction_dependencies
@@ -406,7 +406,7 @@ impl<
         let temporary_store = TemporaryStore::new(
             memory_store.clone(),
             input_objects.clone(),
-            txid,
+            *txid,
             &protocol_config,
         );
 
@@ -417,7 +417,7 @@ impl<
                 kind,
                 signer,
                 &mut gas_charger,
-                txid,
+                *txid,
                 transaction_dependencies,
                 &move_vm,
                 &epoch_id,
@@ -620,10 +620,22 @@ impl<
             let (txs, ctx) = self.init_genesis_objects(tx_count, duration).await;
             for tx in txs {
                 let memstore = self.memory_store.clone();
-                Self::async_exec2(tx, memstore, &protocol_config, reference_gas_price, &ctx);
+                let full_tx = TransactionWithEffects {
+                    tx,
+                    ground_truth_effects: None,
+                    child_inputs: None,
+                    checkpoint_seq: None,
+                    timestamp: 0.0,
+                };
+                Self::async_exec2(
+                    full_tx,
+                    memstore,
+                    &protocol_config,
+                    reference_gas_price,
+                    &ctx,
+                );
             }
-            println!("Done executing txs");
-            return;
+            panic!("Done executing transactions");
         }
         // Main loop
         loop {
@@ -681,7 +693,7 @@ impl<
                             continue;
                         }
                         let msg = NetworkMessage { src: 0, dst: *ew_id, payload: SailfishMessage::TxResults {
-                            txid,
+                            txid: *txid,
                             deleted: tx_with_results.deleted.clone(),
                             written: tx_with_results.written.clone(),
                         }};
@@ -774,7 +786,8 @@ impl<
                     } else if let SailfishMessage::LockedExec { full_tx , mut objects, mut child_objects } = msg {
 
                         // TODO: deal with possible duplicate LockedExec messages
-                        let txid = full_tx.tx.digest();
+                        let tx = full_tx.clone();
+                        let txid = tx.tx.digest().clone();
                         let mut list = self.received_objs.entry(txid).or_default();
                         list.append(&mut objects);
                         // println!("EW {} received LockedExec for tx {}: {:?}", my_id, txid, list.into_iter());
@@ -788,7 +801,7 @@ impl<
                         // if *ctr == num_ews && self.ready_txs.contains_key(&txid) && (self.waiting_child_objs.get(&txid).is_none() || child_list.len() == self.waiting_child_objs.get(&txid).unwrap().len()) {
                         if *ctr == get_ews_for_tx(&full_tx, &ew_ids).len() as u8 {
                             // let tx = manager.get_tx(&txid).clone();
-                            let tx = full_tx;
+                            // let tx = &full_tx;
                             *ctr = 0;
 
                             let mem_store = self.memory_store.clone();
@@ -839,7 +852,7 @@ impl<
                                     buf = sha3::Sha3_256::digest(&buf).into();
                                 }
 
-
+                                // Self::async_exec2(tx, memstore, &protocol_config, reference_gas_price, &ctx)
                                 // println!("EW {} executing tx {}", my_id, txid);
                                 Self::async_exec(
                                     tx,
@@ -913,7 +926,7 @@ impl<
                     let full_tx = epoch_change_tx.as_ref().unwrap();
                     let txid = full_tx.tx.digest();
 
-                    if my_id == get_designated_executor_for_tx(txid, full_tx, &ew_ids) {
+                    if my_id == get_designated_executor_for_tx(*txid, full_tx, &ew_ids) {
                         self.execute_tx(
                             full_tx,
                             &protocol_config,
@@ -977,12 +990,13 @@ impl<
     }
 
     fn async_exec2(
-        tx: Transaction,
+        full_tx: TransactionWithEffects,
         memstore: Arc<S>,
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
         ctx: &BenchmarkContext,
-    ) {
+    ) -> TransactionWithResults {
+        let tx = full_tx.tx.clone();
         let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
             VerifiedTransaction::new_unchecked(tx),
             0,
@@ -1010,7 +1024,7 @@ impl<
         );
 
         let validator = ctx.validator();
-        let (_, effects, _) = validator
+        let (inner_temp_store, tx_effects, _) = validator
             .get_epoch_store()
             .executor()
             .execute_transaction_to_effects(
@@ -1028,7 +1042,26 @@ impl<
                 *executable.digest(),
                 transaction_dependencies,
             );
-        assert!(effects.status().is_ok());
+        assert!(tx_effects.status().is_ok());
+
+        // TODO write updates to store here?
+        // if get_ews_for_tx(&full_tx, ew_ids).contains(&(my_id as UniqueId)) {
+        //     Self::write_updates_to_store(
+        //         memory_store,
+        //         inner_temp_store.deleted.clone(),
+        //         inner_temp_store.written.clone(),
+        //         my_id,
+        //         ew_ids,
+        //     );
+        // }
+
+        TransactionWithResults {
+            full_tx,
+            tx_effects,
+            deleted: BTreeMap::from_iter(inner_temp_store.deleted),
+            written: BTreeMap::from_iter(inner_temp_store.written),
+            missing_objs: HashSet::new(),
+        }
     }
 }
 

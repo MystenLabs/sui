@@ -13,7 +13,7 @@ use anyhow::Result;
 use dashmap::DashMap;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
+use move_core_types::language_storage::ModuleId;
 
 use crate::types::WritableObjectStore;
 

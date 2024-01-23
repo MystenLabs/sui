@@ -6,7 +6,7 @@ use std::{
 use std::{fmt::Debug, path::Path};
 use std::{fs, net::IpAddr};
 use sui_protocol_config::ProtocolVersion;
-use sui_types::transaction::SenderSignedData;
+use sui_types::transaction::Transaction;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     digests::TransactionDigest,
@@ -217,7 +217,7 @@ impl Message for SailfishMessage {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionWithEffects {
-    pub tx: SenderSignedData,
+    pub tx: Transaction,
     pub ground_truth_effects: Option<TransactionEffects>, // full effects of tx, as ground truth exec result
     pub child_inputs: Option<Vec<ObjectID>>,              // TODO: mark mutable
     pub checkpoint_seq: Option<u64>,

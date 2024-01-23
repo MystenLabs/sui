@@ -384,7 +384,7 @@ impl SequenceWorkerState {
 
                     let _ = tx.digest();
                     let full_tx = TransactionWithEffects {
-                        tx: tx.data().clone(),
+                        tx: tx.clone().into(),
                         ground_truth_effects: Some(tx_effects.clone()),
                         child_inputs: None,
                         checkpoint_seq: Some(checkpoint_seq),
@@ -508,7 +508,7 @@ impl SequenceWorkerState {
             for tx in chunk {
                 let now = Metrics::now().as_secs_f64();
                 let full_tx = TransactionWithEffects {
-                    tx: tx.data().clone(),
+                    tx: tx.clone(),
                     ground_truth_effects: None,
                     child_inputs: None,
                     checkpoint_seq: None,
