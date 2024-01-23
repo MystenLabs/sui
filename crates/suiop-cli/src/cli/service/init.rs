@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
 use clap::ValueEnum;
@@ -9,6 +10,7 @@ use std::fs::create_dir_all;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
+use tracing::debug;
 use tracing::info;
 
 // include the boilerplate code in this binary
@@ -27,12 +29,57 @@ pub fn bootstrap_service(lang: &ServiceLanguage, path: &Path) -> Result<()> {
     }
 }
 
+/// Add the new service to the sui-services dockerfile in the sui repository
+fn add_to_sui_dockerfile(path: &Path) -> Result<()> {
+    let path = path.canonicalize().context("canonicalizing service path")?;
+    let crates_dir = path.parent().unwrap();
+    if !crates_dir.ends_with("sui/crates") {
+        panic!("directory wasn't in the sui repo");
+    }
+    let sui_services_dockerfile_path = &crates_dir.join("../docker/sui-services/Dockerfile");
+    // read the dockerfile
+    let dockerfile = std::fs::read_to_string(sui_services_dockerfile_path)
+        .context("reading sui-services dockerfile")?;
+
+    // find the line with the build cmd
+    let build_line = dockerfile
+        .lines()
+        .enumerate()
+        .find(|(_, line)| line.contains("RUN cargo build --release \\"))
+        .expect("couldn't find build line in sui-services dockerfile")
+        .0;
+    // update with the new service
+    let mut final_dockerfile = dockerfile.lines().collect::<Vec<_>>();
+    let bin_str = format!(
+        "    --bin {} \\",
+        path.file_name()
+            .expect("getting the project name from the given path")
+            .to_str()
+            .unwrap()
+    );
+    final_dockerfile.insert(build_line + 1, &bin_str);
+    // write the file back
+    std::fs::write(sui_services_dockerfile_path, final_dockerfile.join("\n"))
+        .context("writing sui-services dockerfile after modifying it")?;
+
+    Ok(())
+}
+
 fn create_rust_service(path: &Path) -> Result<()> {
     info!("creating rust service in {}", path.to_string_lossy());
-    let cargo_toml_path = if path.to_string_lossy().contains("sui/crates") {
-        "Cargo-sui.toml"
-    } else {
+    // create the dir to ensure we can canonicalize any relative paths
+    create_dir_all(path)?;
+    let is_sui_service = path
+        // expand relative paths and symlinks
+        .canonicalize()
+        .context("canonicalizing service path")?
+        .to_string_lossy()
+        .contains("sui/crates");
+    debug!("sui service: {:?}", is_sui_service);
+    let cargo_toml_path = if is_sui_service {
         "Cargo.toml"
+    } else {
+        "Cargo-external.toml"
     };
     let cargo_toml = PROJECT_DIR.get_file(cargo_toml_path).unwrap();
     let main_rs = PROJECT_DIR.get_file("src/main.rs").unwrap();
@@ -43,5 +90,18 @@ fn create_rust_service(path: &Path) -> Result<()> {
     main_file.write_all(main_body)?;
     let mut cargo_file = File::create(path.join("Cargo.toml"))?;
     cargo_file.write_all(cargo_body)?;
+
+    // add the project as a member of the cargo workspace
+    if is_sui_service {
+        // TODO: add_member_to_workspace(path)?;
+    }
+    // now that the source directory works, let's update/add a dockerfile
+    if is_sui_service {
+        // update sui-services dockerfile
+        add_to_sui_dockerfile(path)?;
+    } else {
+        // TODO: create a new dockerfile where the user designates
+    }
+
     Ok(())
 }
