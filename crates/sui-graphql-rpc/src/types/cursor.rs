@@ -246,7 +246,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         ))
     }
 
-    pub(crate) fn paginate_consistent_query<T, F>(
+    pub(crate) fn paginate_raw_query<T, F>(
         &self,
         conn: &mut Conn<'_>,
         cursor_fn: F,
@@ -276,7 +276,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
             // Avoid the database roundtrip in the degenerate case.
             vec![]
         } else {
-            let mut results: Vec<T> = conn.boxed_results(new_query)?;
+            let mut results: Vec<T> = conn.results_from_raw(new_query)?;
             if !self.is_from_front() {
                 results.reverse();
             }

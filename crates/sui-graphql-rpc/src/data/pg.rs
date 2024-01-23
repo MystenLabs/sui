@@ -116,7 +116,15 @@ impl<'c> super::DbConnection for PgConnection<'c> {
         query().get_results(self.conn)
     }
 
-    fn boxed_results<U>(&mut self, query: impl Fn() -> RawQueryWrapper) -> QueryResult<Vec<U>>
+    fn result_from_raw<U>(&mut self, query: impl Fn() -> RawQueryWrapper) -> QueryResult<U>
+    where
+        U: FromSqlRow<Untyped, Self::Backend> + 'static,
+    {
+        query_cost::log(self.conn, self.max_cost, query().boxed);
+        query().boxed.get_result::<U>(self.conn)
+    }
+
+    fn results_from_raw<U>(&mut self, query: impl Fn() -> RawQueryWrapper) -> QueryResult<Vec<U>>
     where
         U: FromSqlRow<Untyped, Self::Backend> + 'static,
     {

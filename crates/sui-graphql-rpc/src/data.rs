@@ -96,7 +96,11 @@ pub(crate) trait DbConnection {
         Q: LoadQuery<'static, Self::Connection, U>,
         Q: QueryId + QueryFragment<Self::Backend>;
 
-    fn boxed_results<U>(&mut self, query: impl Fn() -> RawQueryWrapper) -> QueryResult<Vec<U>>
+    fn result_from_raw<U>(&mut self, query: impl Fn() -> RawQueryWrapper) -> QueryResult<U>
+    where
+        U: FromSqlRow<Untyped, Self::Backend> + 'static;
+
+    fn results_from_raw<U>(&mut self, query: impl Fn() -> RawQueryWrapper) -> QueryResult<Vec<U>>
     where
         U: FromSqlRow<Untyped, Self::Backend> + 'static;
 

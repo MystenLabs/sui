@@ -809,7 +809,7 @@ impl Object {
                     rhs = checkpoint_sequence_number as i64;
                 }
 
-                let result = page.paginate_consistent_query::<StoredHistoryObject, _>(
+                let result = page.paginate_raw_query::<StoredHistoryObject, _>(
                     conn,
                     move |element| {
                         element.map(|obj| {
@@ -897,7 +897,35 @@ impl Object {
         Ok(conn)
     }
 
-    fn raw_object_filter(
+    pub(crate) fn raw_coin_filter(
+        mut helper: RawQueryWrapper,
+        coin_type: Option<TypeTag>,
+        owner: SuiAddress,
+    ) -> RawQueryWrapper {
+        let statement = helper.build_condition(format!(
+            "owner_id = '\\x{}'::bytea AND owner_type = {}",
+            hex::encode(owner.into_vec()),
+            OwnerType::Address as i16
+        ));
+        helper = helper.sql(statement);
+
+        if let Some(coin_type) = coin_type {
+            let bind_idx = helper.get_bind_idx();
+            let statement = helper.build_condition(format!("coin_type = {}", bind_idx));
+
+            helper = helper.sql(statement);
+            helper = helper.bind::<diesel::sql_types::Text, _>(
+                coin_type.to_canonical_string(/* with_prefix */ true),
+            );
+        }
+
+        let statement = helper.build_condition("coin_type IS NOT NULL");
+        helper = helper.sql(statement);
+
+        helper
+    }
+
+    pub(crate) fn raw_object_filter(
         mut helper: RawQueryWrapper,
         filter_wrapper: &ObjectFilterWrapper,
     ) -> RawQueryWrapper {
