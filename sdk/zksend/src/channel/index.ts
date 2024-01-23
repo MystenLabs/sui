@@ -33,10 +33,15 @@ export class ZkSendPopup {
 	async createRequest<T extends ZkSendRequestData>(
 		request: T,
 	): Promise<ZkSendResponseTypes[T['type']]> {
+		const popup = window.open('about:blank', '_blank');
+
+		if (!popup) {
+			throw new Error('Failed to open new window');
+		}
+
 		const { promise, resolve, reject } = withResolvers<ZkSendResponseTypes[T['type']]>();
 
 		let interval: NodeJS.Timer | null = null;
-		let popup: Window | null = null;
 
 		function cleanup() {
 			if (interval) {
@@ -70,17 +75,13 @@ export class ZkSendPopup {
 
 		const { type, ...data } = request;
 
-		popup = window.open(
+		popup?.location.assign(
 			`${this.#origin}/dapp/${type}?${new URLSearchParams({
 				id: this.#id,
 				origin: window.origin,
 				name: this.#name,
 			})}${data ? `#${new URLSearchParams(data as Record<string, string>)}` : ''}`,
 		);
-
-		if (!popup) {
-			throw new Error('Failed to open zkSend window');
-		}
 
 		interval = setInterval(() => {
 			try {
