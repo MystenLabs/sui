@@ -87,14 +87,19 @@ pub(crate) fn call(
         tparam_subst,
         macro_color: next_color,
     };
-    seq(&mut context, &mut macro_body);
+    block(&mut context, &mut macro_body);
     let mut wrapped_body = Box::new(sp(call_loc, N::Exp_::Block(macro_body)));
     for label in break_labels {
         let seq = (
             N::UseFuns::new(next_color),
             VecDeque::from([sp(call_loc, N::SequenceItem_::Seq(wrapped_body))]),
         );
-        wrapped_body = Box::new(sp(call_loc, N::Exp_::NamedBlock(label, seq)));
+        let block = N::Block {
+            name: Some(label),
+            from_lambda_expansion: None,
+            seq,
+        };
+        wrapped_body = Box::new(sp(call_loc, N::Exp_::Block(block)));
     }
     let body = Box::new(sp(call_loc, N::Exp_::Annotate(wrapped_body, return_type)));
     Some(ExpandedMacro {
@@ -114,7 +119,7 @@ fn recolor_macro(
     (
         Vec<TParamID>,
         Vec<(Option<Loc>, Var, N::Type)>,
-        N::Sequence,
+        N::Block,
         BlockLabel,
     ),
     Option<Box<Diagnostic>>,
@@ -154,7 +159,11 @@ fn recolor_macro(
     let body = {
         let mut body = macro_body.clone();
         recolor_seq(recolor, &mut body);
-        body
+        N::Block {
+            name: None,
+            from_lambda_expansion: None,
+            seq: body,
+        }
     };
     Ok((tparam_ids, parameters, body, return_label))
 }
@@ -368,12 +377,11 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
             recolor_exp(ctx, econd);
             recolor_exp(ctx, ebody)
         }
-        N::Exp_::Block(s) => recolor_seq(ctx, s),
-        N::Exp_::NamedBlock(name, s) => {
-            ctx.add_block_label(*name);
-            recolor_block_label(ctx, name);
-            recolor_seq(ctx, s)
-        }
+        N::Exp_::Block(N::Block {
+            name: _,
+            from_lambda_expansion: _,
+            seq: s,
+        }) => recolor_seq(ctx, s),
         N::Exp_::FieldMutate(ed, e) => {
             recolor_exp_dotted(ctx, ed);
             recolor_exp(ctx, e)
@@ -446,6 +454,10 @@ fn type_(context: &mut Context, ty: &mut N::Type) {
     *ty = core::subst_tparams(&context.tparam_subst, ty.clone())
 }
 
+fn block(context: &mut Context, b: &mut N::Block) {
+    seq(context, &mut b.seq)
+}
+
 fn seq(context: &mut Context, (_use_funs, seq): &mut N::Sequence) {
     for sp!(_, item_) in seq {
         match item_ {
@@ -479,7 +491,7 @@ fn lvalue(context: &mut Context, sp!(_, lv_): &mut N::LValue) {
     }
 }
 
-fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
+fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
     match e_ {
         N::Exp_::Value(_)
         | N::Exp_::Constant(_, _)
@@ -510,7 +522,11 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             exp(context, econd);
             exp(context, ebody)
         }
-        N::Exp_::NamedBlock(_, s) | N::Exp_::Block(s) => seq(context, s),
+        N::Exp_::Block(N::Block {
+            name: _,
+            from_lambda_expansion: _,
+            seq: s,
+        }) => seq(context, s),
         N::Exp_::FieldMutate(ed, e) => {
             exp_dotted(context, ed);
             exp(context, e)
@@ -591,14 +607,22 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             let body_loc = lambda_body.loc;
             let annot_body = Box::new(sp(body_loc, N::Exp_::Annotate(lambda_body, result_ty)));
             let labeled_seq = VecDeque::from([sp(body_loc, N::SequenceItem_::Seq(annot_body))]);
-            let labeled_body_ =
-                N::Exp_::NamedBlock(return_label, (N::UseFuns::new(use_fun_color), labeled_seq));
+            let labeled_body_ = N::Exp_::Block(N::Block {
+                name: Some(return_label),
+                // mark lambda expansion for recursive macro check
+                from_lambda_expansion: Some(*eloc),
+                seq: (N::UseFuns::new(use_fun_color), labeled_seq),
+            });
             let labeled_body = Box::new(sp(body_loc, labeled_body_));
             let result = VecDeque::from([
                 sp(param_loc, N::SequenceItem_::Bind(lambda_params, annot_args)),
                 sp(body_loc, N::SequenceItem_::Seq(labeled_body)),
             ]);
-            *e_ = N::Exp_::Block((N::UseFuns::new(context.macro_color), result));
+            *e_ = N::Exp_::Block(N::Block {
+                name: None,
+                from_lambda_expansion: None,
+                seq: (N::UseFuns::new(context.macro_color), result),
+            });
         }
         N::Exp_::VarCall(_, sp!(_, es)) => exps(context, es),
     }

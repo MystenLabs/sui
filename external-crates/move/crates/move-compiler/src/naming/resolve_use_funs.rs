@@ -333,8 +333,11 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             exp(context, econd);
             exp(context, ebody)
         }
-        N::Exp_::NamedBlock(_, s) => sequence(context, s),
-        N::Exp_::Block(s) => sequence(context, s),
+        N::Exp_::Block(N::Block {
+            name: _,
+            from_lambda_expansion: _,
+            seq,
+        }) => sequence(context, seq),
         N::Exp_::FieldMutate(ed, e) => {
             exp_dotted(context, ed);
             exp(context, e)

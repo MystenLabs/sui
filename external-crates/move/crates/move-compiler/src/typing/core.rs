@@ -84,6 +84,10 @@ pub struct Context<'env> {
     pub used_module_members: BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
     /// Current macros being expanded
     pub macro_expansion: IndexMap<(ModuleIdent, FunctionName), Loc>,
+    /// Stack of items from `macro_expansion` pushed/popped when entering/leaving a lambda expansion
+    /// This is to prevent accidentally thinking we are in a recursive call if a macro is used
+    /// inside a lambda body
+    pub lambda_expansion: Vec<((ModuleIdent, FunctionName), Loc)>,
 }
 
 pub struct ResolvedFunctionType {
@@ -156,6 +160,7 @@ impl<'env> Context<'env> {
             new_friends: BTreeSet::new(),
             used_module_members: BTreeMap::new(),
             macro_expansion: IndexMap::new(),
+            lambda_expansion: vec![],
         }
     }
 
@@ -275,6 +280,21 @@ impl<'env> Context<'env> {
         );
     }
 
+    pub fn maybe_enter_lambda_expansion(&mut self, from_lambda_expansion: Option<Loc>) {
+        if from_lambda_expansion.is_some() {
+            let (cur_macro, cur_macro_loc) = self.macro_expansion.pop().unwrap();
+            self.lambda_expansion.push((cur_macro, cur_macro_loc));
+        }
+    }
+
+    pub fn maybe_exit_lambda_expansion(&mut self, from_lambda_expansion: Option<Loc>) {
+        if from_lambda_expansion.is_some() {
+            let (cur_macro, cur_macro_loc) = self.lambda_expansion.pop().unwrap();
+            let prev = self.macro_expansion.insert(cur_macro, cur_macro_loc);
+            assert!(prev.is_none());
+        }
+    }
+
     pub fn reset_for_module_item(&mut self) {
         self.named_block_map = BTreeMap::new();
         self.return_type = None;
@@ -285,6 +305,7 @@ impl<'env> Context<'env> {
         self.in_macro_function = false;
         self.max_variable_color = 0;
         self.macro_expansion = IndexMap::new();
+        self.lambda_expansion = vec![];
     }
 
     pub fn error_type(&mut self, loc: Loc) -> Type {

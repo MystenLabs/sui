@@ -297,6 +297,13 @@ pub struct Lambda {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct Block {
+    pub name: Option<BlockLabel>,
+    pub from_lambda_expansion: Option<Loc>,
+    pub seq: Sequence,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum Exp_ {
     Value(Value),
@@ -324,8 +331,7 @@ pub enum Exp_ {
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
     While(BlockLabel, Box<Exp>, Box<Exp>),
     Loop(BlockLabel, Box<Exp>),
-    NamedBlock(BlockLabel, Sequence),
-    Block(Sequence),
+    Block(Block),
     Lambda(Lambda),
 
     Assign(LValueList, Box<Exp>),
@@ -1324,11 +1330,6 @@ impl AstDebug for Exp_ {
                 w.write("loop ");
                 e.ast_debug(w);
             }
-            E::NamedBlock(name, seq) => {
-                name.ast_debug(w);
-                w.write(": ");
-                seq.ast_debug(w);
-            }
             E::Block(seq) => seq.ast_debug(w),
             E::Lambda(l) => l.ast_debug(w),
             E::ExpList(es) => {
@@ -1433,6 +1434,24 @@ impl AstDebug for Lambda {
         w.write("|");
         w.write(&format!("use_funs#{}", use_fun_color));
         e.ast_debug(w);
+    }
+}
+
+impl AstDebug for Block {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let Block {
+            name,
+            from_lambda_expansion,
+            seq,
+        } = self;
+        if let Some(name) = name {
+            name.ast_debug(w);
+            w.write(": ");
+        }
+        if from_lambda_expansion.is_some() {
+            w.write("from_lambda#");
+        }
+        seq.ast_debug(w);
     }
 }
 

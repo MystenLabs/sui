@@ -1247,25 +1247,33 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             };
             (sp(eloc, ty.value), eloop)
         }
-        NE::NamedBlock(name, body) => {
-            let seq = sequence(context, body);
-            let seq_ty = sequence_type(&seq).clone();
-            let final_type = if let Some(local_return_type) = context.named_block_type_opt(name) {
-                join(
-                    context,
-                    eloc,
-                    || "Invalid named block",
-                    seq_ty,
-                    local_return_type,
-                )
-            } else {
-                seq_ty
-            };
-            (sp(eloc, final_type.value), TE::NamedBlock(name, seq))
-        }
-        NE::Block(nseq) => {
+        NE::Block(N::Block {
+            name,
+            from_lambda_expansion,
+            seq: nseq,
+        }) => {
+            context.maybe_enter_lambda_expansion(from_lambda_expansion);
             let seq = sequence(context, nseq);
-            (sequence_type(&seq).clone(), TE::Block(seq))
+            let seq_ty = sequence_type(&seq).clone();
+            let res = if let Some(name) = name {
+                let final_type = if let Some(local_return_type) = context.named_block_type_opt(name)
+                {
+                    join(
+                        context,
+                        eloc,
+                        || "Invalid named block",
+                        seq_ty,
+                        local_return_type,
+                    )
+                } else {
+                    seq_ty
+                };
+                (sp(eloc, final_type.value), TE::NamedBlock(name, seq))
+            } else {
+                (seq_ty, TE::Block(seq))
+            };
+            context.maybe_exit_lambda_expansion(from_lambda_expansion);
+            res
         }
 
         NE::Lambda(lambda) => (core::make_tvar(context, eloc), TE::Lambda(lambda)),

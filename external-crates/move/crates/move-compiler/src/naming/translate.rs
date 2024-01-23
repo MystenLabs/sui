@@ -1453,12 +1453,20 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             let body = exp(context, el);
             NE::Loop(context.exit_nominal_block(eloc), body)
         }
-        EE::Block(Some(name), seq) => {
+        EE::Block(Some(name), eseq) => {
             context.enter_nominal_block(eloc, Some(name), NominalBlockType::Block);
-            let body = sequence(context, seq);
-            NE::NamedBlock(context.exit_nominal_block(eloc), body)
+            let seq = sequence(context, eseq);
+            NE::Block(N::Block {
+                name: Some(context.exit_nominal_block(eloc)),
+                from_lambda_expansion: None,
+                seq,
+            })
         }
-        EE::Block(None, seq) => NE::Block(sequence(context, seq)),
+        EE::Block(None, eseq) => NE::Block(N::Block {
+            name: None,
+            from_lambda_expansion: None,
+            seq: sequence(context, eseq),
+        }),
         EE::Lambda(args, body) => {
             context.new_local_scope();
             let bind_opt = bind_list(context, args);
@@ -2199,8 +2207,11 @@ fn remove_unused_bindings_exp(
             remove_unused_bindings_exp(context, used, econd);
             remove_unused_bindings_exp(context, used, ebody)
         }
-        N::Exp_::NamedBlock(_, s) => remove_unused_bindings_seq(context, used, s),
-        N::Exp_::Block(s) => remove_unused_bindings_seq(context, used, s),
+        N::Exp_::Block(N::Block {
+            name: _,
+            from_lambda_expansion: _,
+            seq,
+        }) => remove_unused_bindings_seq(context, used, seq),
         N::Exp_::Lambda(N::Lambda {
             parameters,
             return_label: _,

@@ -1,0 +1,33 @@
+error[E04032]: unable to expand macro function
+   ┌─ tests/move_2024/typing/recursive_macros_invalid.move:4:13
+   │
+ 4 │         1 + self_cyle!()
+   │             ^^^^^^^^^^^^ Recursive macro expansion. 'a::m::self_cyle' has already been expanded
+   ·
+31 │         self_cyle!();
+   │         ------------ 'a::m::self_cyle' previously expanded here
+
+error[E04032]: unable to expand macro function
+   ┌─ tests/move_2024/typing/recursive_macros_invalid.move:17:9
+   │
+ 9 │         cycle2!()
+   │         --------- From this macro expansion
+   ·
+13 │         cycle3!()
+   │         --------- From this macro expansion
+   ·
+17 │         cycle1!()
+   │         ^^^^^^^^^ Recursive macro expansion. 'a::m::cycle1' has already been expanded
+   ·
+32 │         cycle1!();
+   │         --------- 'a::m::cycle1' previously expanded here
+
+error[E04032]: unable to expand macro function
+   ┌─ tests/move_2024/typing/recursive_macros_invalid.move:22:19
+   │
+22 │         apply!(|| cycle_app!(|| f()))
+   │                   ^^^^^^^^^^^^^^^^^^ Recursive macro expansion. 'a::m::cycle_app' has already been expanded
+   ·
+33 │         cycle_app!(|| 1);
+   │         ---------------- 'a::m::cycle_app' previously expanded here
+
