@@ -749,7 +749,7 @@ impl Object {
     pub(crate) async fn paginate_subtype<T: OutputType>(
         db: &Db,
         page: Page<Cursor>,
-        checkpoint_sequence_number: Option<u64>, // why optional? say address { objects(cursor) }. address will inherit latest checkpoint, but objects(cursor) at that checkpoint should still be valid until it goes out of range. however, for txBlock { address { objects(cursor)}}, that cursor should be consistent with txblock
+        checkpoint_sequence_number: Option<u64>,
         filter: ObjectFilterWrapper,
         downcast: impl Fn(Object) -> Result<T, Error>,
     ) -> Result<Connection<String, T>, Error> {
@@ -763,10 +763,7 @@ impl Object {
             page.after(),
             page.before(),
         ) {
-            Ok(checkpoint_sequence_number) => {
-                println!("Consistent");
-                checkpoint_sequence_number
-            }
+            Ok(checkpoint_sequence_number) => checkpoint_sequence_number,
             Err(e) => return Err(e),
         };
 

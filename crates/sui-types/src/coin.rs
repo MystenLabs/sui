@@ -178,24 +178,6 @@ impl TryFrom<Object> for TreasuryCap {
     }
 }
 
-impl TryFrom<&Object> for TreasuryCap {
-    type Error = SuiError;
-    fn try_from(object: &Object) -> Result<Self, Self::Error> {
-        match &object.data {
-            Data::Move(o) => {
-                if o.type_().is_treasury_cap() {
-                    return TreasuryCap::from_bcs_bytes(o.contents());
-                }
-            }
-            Data::Package(_) => {}
-        }
-
-        Err(SuiError::TypeError {
-            error: format!("Object type is not a TreasuryCap: {:?}", object),
-        })
-    }
-}
-
 // Rust version of the Move sui::coin::CoinMetadata type
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Eq, PartialEq)]
 pub struct CoinMetadata {
