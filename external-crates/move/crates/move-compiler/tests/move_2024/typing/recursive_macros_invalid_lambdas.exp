@@ -1,0 +1,12 @@
+error[E04032]: unable to expand macro function
+   ┌─ tests/move_2024/typing/recursive_macros_invalid_lambdas.move:8:9
+   │
+ 4 │         bar!(|| foo!(f))
+   │         ---------------- From this macro expansion
+   ·
+ 8 │         foo!(|| bar!(f))
+   │         ^^^^^^^^^^^^^^^^ Recursive macro expansion. 'a::m::foo' has already been expanded
+   ·
+11 │         foo!(|| 0);
+   │         ---------- 'a::m::foo' previously expanded here
+

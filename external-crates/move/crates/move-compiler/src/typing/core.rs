@@ -18,7 +18,6 @@ use crate::{
     shared::{known_attributes::TestingAttribute, program_info::*, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
-use indexmap::IndexMap;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -55,6 +54,19 @@ pub struct Local {
     pub used_mut: Option<Loc>,
 }
 
+#[derive(Debug)]
+pub enum MacroExpansion {
+    Call {
+        module: ModuleIdent,
+        function: FunctionName,
+        invocation: Loc,
+        use_funs_scope: Color,
+    },
+    Lambda {
+        use_funs_scope: Color,
+    },
+}
+
 pub struct Context<'env> {
     pub modules: NamingProgramInfo,
     macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
@@ -83,11 +95,11 @@ pub struct Context<'env> {
     /// that it may contain other identifiers that do not in fact represent a function or a constant
     pub used_module_members: BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
     /// Current macros being expanded
-    pub macro_expansion: IndexMap<(ModuleIdent, FunctionName), Loc>,
+    pub macro_expansion: Vec<MacroExpansion>,
     /// Stack of items from `macro_expansion` pushed/popped when entering/leaving a lambda expansion
     /// This is to prevent accidentally thinking we are in a recursive call if a macro is used
     /// inside a lambda body
-    pub lambda_expansion: Vec<((ModuleIdent, FunctionName), Loc)>,
+    pub lambda_expansion: Vec<Vec<MacroExpansion>>,
 }
 
 pub struct ResolvedFunctionType {
@@ -159,7 +171,7 @@ impl<'env> Context<'env> {
             env,
             new_friends: BTreeSet::new(),
             used_module_members: BTreeMap::new(),
-            macro_expansion: IndexMap::new(),
+            macro_expansion: vec![],
             lambda_expansion: vec![],
         }
     }
@@ -250,13 +262,53 @@ impl<'env> Context<'env> {
     /// true iff it is safe to expand,
     /// false with an error otherwise (e.g. a recursive expansion)
     pub fn add_macro_expansion(&mut self, m: ModuleIdent, f: FunctionName, loc: Loc) -> bool {
-        if let Some(idx) = self.macro_expansion.get_index_of(&(m, f)) {
+        let current_call_color = self.use_funs.last().unwrap().color.unwrap();
+
+        let mut prev_opt = None;
+        for (idx, mexp) in self.macro_expansion.iter().enumerate().rev() {
+            match mexp {
+                MacroExpansion::Lambda { use_funs_scope } => {
+                    // the lambda has a smaller (or equal) color, meaning this lambda was written
+                    // and invoked from an outer scope
+                    if current_call_color > *use_funs_scope {
+                        break;
+                    }
+                }
+                MacroExpansion::Call {
+                    module,
+                    function,
+                    use_funs_scope,
+                    ..
+                } => {
+                    // recursive call is found if we call the same module
+                    // but at a color that is less than or equal to the current color is safe
+                    // since it means it is from some outer scope (likely from a lambda)
+                    if current_call_color > *use_funs_scope && module == &m && function == &f {
+                        prev_opt = Some(idx);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if let Some(idx) = prev_opt {
             let msg = format!(
                 "Recursive macro expansion. '{}::{}' has already been expanded",
                 m, f
             );
             let mut diag = diag!(TypeSafety::CannotExpandMacro, (loc, msg));
-            for ((prev_m, prev_f), prev_loc) in self.macro_expansion.get_range(idx..).unwrap() {
+            let cycle = self.macro_expansion[idx..]
+                .iter()
+                .filter_map(|case| match case {
+                    MacroExpansion::Call {
+                        module,
+                        function,
+                        invocation,
+                        ..
+                    } => Some((module, function, invocation)),
+                    MacroExpansion::Lambda { .. } => None,
+                });
+            for (prev_m, prev_f, prev_loc) in cycle {
                 let msg = if prev_m == &m && prev_f == &f {
                     format!("'{}::{}' previously expanded here", prev_m, prev_f)
                 } else {
@@ -267,31 +319,46 @@ impl<'env> Context<'env> {
             self.env.add_diag(diag);
             false
         } else {
-            self.macro_expansion.insert((m, f), loc);
+            self.macro_expansion.push(MacroExpansion::Call {
+                module: m,
+                function: f,
+                invocation: loc,
+                use_funs_scope: current_call_color,
+            });
             true
         }
     }
 
     pub fn pop_macro_expansion(&mut self, m: &ModuleIdent, f: &FunctionName) {
-        let ((prev_m, prev_f), _) = self.macro_expansion.pop().unwrap();
+        let Some(MacroExpansion::Call {
+            module, function, ..
+        }) = self.macro_expansion.pop()
+        else {
+            panic!("ICE macro expansion stack should have a call when leaving a macro expansion")
+        };
         assert!(
-            m == &prev_m && f == &prev_f,
+            m == &module && f == &function,
             "ICE macro expansion stack should be popped in reverse order"
         );
     }
 
-    pub fn maybe_enter_lambda_expansion(&mut self, from_lambda_expansion: Option<Loc>) {
+    pub fn maybe_enter_lambda_expansion(
+        &mut self,
+        from_lambda_expansion: Option<Loc>,
+        color: Color,
+    ) {
         if from_lambda_expansion.is_some() {
-            let (cur_macro, cur_macro_loc) = self.macro_expansion.pop().unwrap();
-            self.lambda_expansion.push((cur_macro, cur_macro_loc));
+            self.macro_expansion.push(MacroExpansion::Lambda {
+                use_funs_scope: color,
+            })
         }
     }
 
     pub fn maybe_exit_lambda_expansion(&mut self, from_lambda_expansion: Option<Loc>) {
         if from_lambda_expansion.is_some() {
-            let (cur_macro, cur_macro_loc) = self.lambda_expansion.pop().unwrap();
-            let prev = self.macro_expansion.insert(cur_macro, cur_macro_loc);
-            assert!(prev.is_none());
+            let Some(MacroExpansion::Lambda { .. }) = self.macro_expansion.pop() else {
+                panic!("ICE macro expansion stack should have a lambda when leaving a lambda")
+            };
         }
     }
 
@@ -304,7 +371,7 @@ impl<'env> Context<'env> {
         self.current_function = None;
         self.in_macro_function = false;
         self.max_variable_color = 0;
-        self.macro_expansion = IndexMap::new();
+        self.macro_expansion = vec![];
         self.lambda_expansion = vec![];
     }
 

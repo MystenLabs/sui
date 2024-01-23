@@ -26,7 +26,10 @@ error[E04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/recursive_macros_invalid.move:22:19
    │
 22 │         apply!(|| cycle_app!(|| f()))
-   │                   ^^^^^^^^^^^^^^^^^^ Recursive macro expansion. 'a::m::cycle_app' has already been expanded
+   │         ----------^^^^^^^^^^^^^^^^^^-
+   │         │         │
+   │         │         Recursive macro expansion. 'a::m::cycle_app' has already been expanded
+   │         From this macro expansion
    ·
 33 │         cycle_app!(|| 1);
    │         ---------------- 'a::m::cycle_app' previously expanded here

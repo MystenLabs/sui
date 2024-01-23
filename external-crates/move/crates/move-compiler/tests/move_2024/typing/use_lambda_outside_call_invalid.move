@@ -8,8 +8,13 @@ module a::m {
         f = || 0;
     }
 
+    macro fun baz(f: || || u64): || u64 {
+        f()
+    }
+
     fun t() {
         foo!(|| 0);
         bar!(|| 0);
+        foo!(baz!(|| || 0));
     }
 }

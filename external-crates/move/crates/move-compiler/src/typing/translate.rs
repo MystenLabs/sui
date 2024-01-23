@@ -1252,7 +1252,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             from_lambda_expansion,
             seq: nseq,
         }) => {
-            context.maybe_enter_lambda_expansion(from_lambda_expansion);
+            context.maybe_enter_lambda_expansion(from_lambda_expansion, nseq.0.color);
             let seq = sequence(context, nseq);
             let seq_ty = sequence_type(&seq).clone();
             let res = if let Some(name) = name {
