@@ -16,7 +16,7 @@ fragment Modules on Object  @deprecated {
     asMovePackage {
         module(name: "m") {
             name
-            package { asObject { address } }
+            package { address }
 
             fileFormatVersion
             bytes

@@ -13,14 +13,11 @@
     }
     coins {
       nodes {
-        asMoveObject {
-          contents {
-            type {
-              repr
-            }
+        contents {
+          type {
+            repr
           }
         }
-
       }
     }
   }

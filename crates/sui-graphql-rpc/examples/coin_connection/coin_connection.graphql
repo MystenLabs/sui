@@ -5,7 +5,7 @@
   ) {
     coins(last: 3) {
       nodes {
-        balance
+        coinBalance
       }
       pageInfo {
         endCursor

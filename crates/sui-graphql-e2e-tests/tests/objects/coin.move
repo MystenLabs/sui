@@ -39,10 +39,8 @@ module P0::fake {
 
 //# run-graphql
 fragment C on Coin {
-  balance
-  asMoveObject {
-    contents { type { repr } }
-  }
+  coinBalance
+  contents { type { repr } }
 }
 
 {

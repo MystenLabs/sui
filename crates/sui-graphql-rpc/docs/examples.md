@@ -96,14 +96,11 @@
 >    }
 >    coins {
 >      nodes {
->        asMoveObject {
->          contents {
->            type {
->              repr
->            }
+>        contents {
+>          type {
+>            repr
 >          }
 >        }
->
 >      }
 >    }
 >  }
@@ -457,7 +454,7 @@
 >  ) {
 >    coins(last: 3) {
 >      nodes {
->        balance
+>        coinBalance
 >      }
 >      pageInfo {
 >        endCursor
@@ -480,9 +477,7 @@
 >    description
 >    iconUrl
 >    supply
->    asMoveObject {
->      hasPublicTransfer
->    }
+>    hasPublicTransfer
 >  }
 >}</pre>
 
@@ -529,10 +524,8 @@
 >        imageUrl
 >        projectUrl
 >        exchangeRates {
->          asObject {
->            storageRebate
->            bcs
->          }
+>          storageRebate
+>          bcs
 >          hasPublicTransfer
 >        }
 >        exchangeRatesSize
@@ -677,11 +670,7 @@
 >    nodes {
 >      sendingModule {
 >        name
->        package {
->          asObject {
->            digest
->          }
->        }
+>        package { digest }
 >      }
 >      type {
 >        repr
@@ -866,9 +855,7 @@
 >      node {
 >        asMoveObject {
 >          contents {
->            type {
->              repr
->            }
+>            type { repr }
 >          }
 >        }
 >      }

@@ -4,9 +4,7 @@
       node {
         asMoveObject {
           contents {
-            type {
-              repr
-            }
+            type { repr }
           }
         }
       }

@@ -49,7 +49,7 @@ module P0::m {
 
 # Get the signature of a function published in a third-party package
 fragment Signature on MoveFunction {
-    module { package { asObject { address } } }
+    module { package { address } }
     name
     visibility
     isEntry
@@ -98,7 +98,7 @@ module P0::m {
 
 # Get the signature of a function published in a third-party package
 fragment Signature on MoveFunction {
-    module { package { asObject { address } } }
+    module { package { address } }
     name
     visibility
     isEntry

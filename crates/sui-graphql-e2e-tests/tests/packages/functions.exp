@@ -109,9 +109,7 @@ Response: {
                         "function": {
                           "module": {
                             "package": {
-                              "asObject": {
-                                "address": "0xdbeef2078b7cc0e735192a6536a348213ebdff814d6bc281a18dc00e910a068e"
-                              }
+                              "address": "0xdbeef2078b7cc0e735192a6536a348213ebdff814d6bc281a18dc00e910a068e"
                             }
                           },
                           "name": "f",
@@ -188,9 +186,7 @@ Response: {
                         "f": {
                           "module": {
                             "package": {
-                              "asObject": {
-                                "address": "0xa60541a851229bdfc6bf7c5a2256563cb430ab6d4a03c077d53066be580d6ef8"
-                              }
+                              "address": "0xa60541a851229bdfc6bf7c5a2256563cb430ab6d4a03c077d53066be580d6ef8"
                             }
                           },
                           "name": "f",
@@ -220,9 +216,7 @@ Response: {
                         "g": {
                           "module": {
                             "package": {
-                              "asObject": {
-                                "address": "0xa60541a851229bdfc6bf7c5a2256563cb430ab6d4a03c077d53066be580d6ef8"
-                              }
+                              "address": "0xa60541a851229bdfc6bf7c5a2256563cb430ab6d4a03c077d53066be580d6ef8"
                             }
                           },
                           "name": "g",

@@ -7,11 +7,7 @@
     nodes {
       sendingModule {
         name
-        package {
-          asObject {
-            digest
-          }
-        }
+        package { digest }
       }
       type {
         repr

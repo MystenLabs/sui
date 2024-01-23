@@ -1076,11 +1076,11 @@ type Balance {
 }
 
 type Coin implements IOwner & IObject {
-  balance: BigInt
+  coinBalance: BigInt
 }
 
 type StakedSui implements IOwner & IObject {
-  status: StakeStatus!
+  stakeStatus: StakeStatus!
   requestEpoch: Epoch
   activeEpoch: Epoch
   principal: BigInt
