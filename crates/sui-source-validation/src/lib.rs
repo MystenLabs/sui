@@ -491,7 +491,7 @@ fn legacy_toolchain() -> ToolchainVersion {
 fn units_for_toolchain(
     compiled_units: &Vec<(PackageName, CompiledUnitWithSource)>,
 ) -> anyhow::Result<Vec<(PackageName, CompiledUnitWithSource)>> {
-    if std::env::var("VERIFIED_SOURCE_BUILD").is_err() {
+    if std::env::var("SUI_RUN_TOOLCHAIN_BUILD").is_err() {
         return Ok(compiled_units.clone());
     }
     let mut package_version_map: HashMap<Symbol, (ToolchainVersion, Vec<CompiledUnitWithSource>)> =

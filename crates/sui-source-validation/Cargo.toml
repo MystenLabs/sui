@@ -28,11 +28,13 @@ move-compiler.workspace = true
 move-core-types.workspace = true
 move-package.workspace = true
 move-symbol-pool.workspace = true
-workspace-hack.workspace = true
-tar = "0.4.40"
+
+tar.workspace = true
 tempfile.workspace = true
-flate2 = "1.0.28"
-ureq = "2.9.1"
+flate2.workspace = true
+ureq.workspace = true
+workspace-hack.workspace = true
+
 
 [dev-dependencies]
 
