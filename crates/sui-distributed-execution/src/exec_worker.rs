@@ -717,7 +717,7 @@ impl<
 
                     let mut locked_objs = Vec::new();
                     for obj_id in full_tx.get_read_set() {
-                        println!("EW {} checking if obj {} is locked", my_id, obj_id);
+                        // println!("EW {} checking if obj {} is locked", my_id, obj_id);
                         if my_id != get_ew_owner_for_object(obj_id, &ew_ids) {
                             continue;
                         }
@@ -729,7 +729,7 @@ impl<
                             locked_objs.push(None);
                         }
                     }
-                    println!("Sending LockedExec for tx {}, locked_objs: {:?}", txid, locked_objs);
+                    // println!("Sending LockedExec for tx {}, locked_objs: {:?}", txid, locked_objs);
 
                     let execute_on_ew = get_designated_executor_for_tx(txid, full_tx,&ew_ids);
                     let msg = NetworkMessage{
