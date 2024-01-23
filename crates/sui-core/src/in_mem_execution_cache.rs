@@ -500,6 +500,8 @@ pub struct InMemoryCache {
 
     transaction_effects: DashMap<TransactionEffectsDigest, TransactionEffects>,
 
+    transaction_events: DashMap<TransactionEventsDigest, TransactionEvents>,
+
     executed_effects_digests: DashMap<TransactionDigest, TransactionEffectsDigest>,
 
     // Transaction outputs that have not yet been written to the DB. Items are removed from this
@@ -541,6 +543,7 @@ impl InMemoryCache {
             executed_effects_digests: DashMap::new(),
             pending_transaction_writes: DashMap::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
+            transaction_events: DashMap::new(),
             store,
         }
     }
@@ -620,12 +623,14 @@ impl ExecutionCacheRead for InMemoryCache {
         if let Some(p) = self.packages.get(package_id) {
             #[cfg(debug_assertions)]
             {
-                assert_eq!(
-                    self.store.get_object(package_id).unwrap().unwrap().digest(),
-                    p.object().digest(),
-                    "Package object cache is inconsistent for package {:?}",
-                    package_id
-                )
+                if let Some(store_package) = self.store.get_object(package_id).unwrap() {
+                    assert_eq!(
+                        store_package.digest(),
+                        p.object().digest(),
+                        "Package object cache is inconsistent for package {:?}",
+                        package_id
+                    );
+                }
             }
             return Ok(Some(p));
         }
@@ -956,8 +961,29 @@ impl ExecutionCacheRead for InMemoryCache {
         &self,
         event_digests: &[TransactionEventsDigest],
     ) -> SuiResult<Vec<Option<TransactionEvents>>> {
-        // TODO: use cache?
-        self.store.multi_get_events(event_digests)
+        let mut results = vec![None; event_digests.len()];
+        let mut fallback_digests = Vec::with_capacity(event_digests.len());
+        let mut fallback_indices = Vec::with_capacity(event_digests.len());
+
+        for (i, digest) in event_digests.iter().enumerate() {
+            if let Some(events) = self.transaction_events.get(digest) {
+                results[i] = Some(events.clone());
+            } else {
+                fallback_digests.push(*digest);
+                fallback_indices.push(i);
+            }
+        }
+
+        let fallback_results = self.store.multi_get_events(&fallback_digests)?;
+        assert_eq!(fallback_results.len(), fallback_indices.len());
+        assert_eq!(fallback_results.len(), fallback_digests.len());
+        for (i, result) in fallback_indices
+            .into_iter()
+            .zip(fallback_results.into_iter())
+        {
+            results[i] = result;
+        }
+        Ok(results)
     }
 
     fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState> {
@@ -1028,6 +1054,7 @@ impl ExecutionCacheWrite for InMemoryCache {
             wrapped,
             locks_to_delete,
             new_locks_to_init,
+            events,
             ..
         } = &tx_outputs;
 
@@ -1089,6 +1116,9 @@ impl ExecutionCacheWrite for InMemoryCache {
 
         self.transaction_effects
             .insert(effects_digest, effects.clone());
+
+        self.transaction_events
+            .insert(events.digest(), events.clone());
 
         self.executed_effects_digests
             .insert(tx_digest, effects_digest);
