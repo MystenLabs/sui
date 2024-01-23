@@ -299,15 +299,21 @@ async fn graphql_handler(
 }
 
 async fn health_checks(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
+    req: GraphQLRequest,
 ) -> impl axum::response::IntoResponse {
     // Simple request to check if the DB is up
     // TODO: add more checks
-    let req = r#"
+    let mut req = req.into_inner();
+    req.data.insert(addr);
+    req.data.insert(Uuid::new_v4());
+    req.query = r#"
         query {
             chainIdentifier
         }
-        "#;
+        "#
+    .to_string();
     let db_up = match schema.execute(req).await.is_ok() {
         true => "UP",
         false => "DOWN",
