@@ -1,7 +1,5 @@
 use core::panic;
 use dashmap::DashMap;
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_vm_runtime::move_vm::MoveVM;
@@ -548,7 +546,7 @@ impl<
     ) -> (Vec<Transaction>, BenchmarkContext) {
         // let (_, objects, _) = import_from_files(working_directory);
         let (ctx, workload) = generate_benchmark_ctx_workload(tx_count, duration).await;
-        let (ctx, move_package_id, txs) = generate_benchmark_txs(workload, ctx).await;
+        let (ctx, _, txs) = generate_benchmark_txs(workload, ctx).await;
 
         let objects: HashMap<_, _> = ctx
             .validator()
@@ -620,77 +618,12 @@ impl<
         if self.mode == ExecutionMode::Channel {
             // self.process_genesis_objects(in_channel).await;
             let (txs, ctx) = self.init_genesis_objects(tx_count, duration).await;
-            // let in_memory_store = Arc::new(ctx.validator().create_in_memory_store());
-            // let tasks: FuturesUnordered<_> = txs
-            //     .into_iter()
-            //     .map(|tx| {
-            //         let validator = ctx.validator();
-            //         let in_memory_store = in_memory_store.clone();
-            //         tokio::spawn(async move {
-            //             validator
-            //                 .execute_transaction_in_memory(in_memory_store, tx)
-            //                 .await
-            //         })
-            //     })
-            //     .collect();
-            // let results: Vec<_> = tasks.collect().await;
-            // results.into_iter().for_each(|r| {
-            //     r.unwrap();
-            // });
             for tx in txs {
-                // let memstore = in_memory_store.clone();
                 let memstore = self.memory_store.clone();
-                // validator
-                //     .execute_transaction_in_memory(in_memory_store, tx)
-                //     .await;
-                let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
-                    VerifiedTransaction::new_unchecked(tx),
-                    0,
-                );
-                let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
-                    &memstore,
-                    &*memstore,
-                    &executable,
-                    &protocol_config,
-                    reference_gas_price,
-                )
-                .unwrap();
-                let txid = executable.digest();
-                let tx_data = executable.transaction_data();
-                let (kind, signer, gas) = tx_data.execution_parts();
-                let shared_object_refs = input_objects.filter_shared_objects();
-                let transaction_dependencies = input_objects.transaction_dependencies();
-                let mut gas_charger =
-                    GasCharger::new(*executable.digest(), gas, gas_status, &protocol_config);
-                let temporary_store = TemporaryStore::new(
-                    memstore.clone(),
-                    input_objects.clone(),
-                    *txid,
-                    &protocol_config,
-                );
-
-                let validator = ctx.validator();
-                let (_, effects, _) = validator
-                    .get_epoch_store()
-                    .executor()
-                    .execute_transaction_to_effects(
-                        validator.get_epoch_store().protocol_config(),
-                        validator.get_validator().metrics.limits_metrics.clone(),
-                        false,
-                        &HashSet::new(),
-                        &validator.get_epoch_store().epoch(),
-                        0,
-                        temporary_store,
-                        shared_object_refs,
-                        &mut gas_charger,
-                        kind,
-                        signer,
-                        *executable.digest(),
-                        transaction_dependencies,
-                    );
-                assert!(effects.status().is_ok());
+                Self::async_exec2(tx, memstore, &protocol_config, reference_gas_price, &ctx);
             }
-            panic!("Done executing txs");
+            println!("Done executing txs");
+            return;
         }
         // Main loop
         loop {
@@ -1041,6 +974,61 @@ impl<
     fn update_metrics(&self, tx: &TransactionWithEffects, metrics: &Arc<Metrics>) {
         const WORKLOAD: &str = "default";
         metrics.register_transaction(tx.timestamp, WORKLOAD);
+    }
+
+    fn async_exec2(
+        tx: Transaction,
+        memstore: Arc<S>,
+        protocol_config: &ProtocolConfig,
+        reference_gas_price: u64,
+        ctx: &BenchmarkContext,
+    ) {
+        let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
+            VerifiedTransaction::new_unchecked(tx),
+            0,
+        );
+        let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
+            &memstore,
+            &*memstore,
+            &executable,
+            protocol_config,
+            reference_gas_price,
+        )
+        .unwrap();
+        let txid = executable.digest();
+        let tx_data = executable.transaction_data();
+        let (kind, signer, gas) = tx_data.execution_parts();
+        let shared_object_refs = input_objects.filter_shared_objects();
+        let transaction_dependencies = input_objects.transaction_dependencies();
+        let mut gas_charger =
+            GasCharger::new(*executable.digest(), gas, gas_status, protocol_config);
+        let temporary_store = TemporaryStore::new(
+            memstore.clone(),
+            input_objects.clone(),
+            *txid,
+            protocol_config,
+        );
+
+        let validator = ctx.validator();
+        let (_, effects, _) = validator
+            .get_epoch_store()
+            .executor()
+            .execute_transaction_to_effects(
+                validator.get_epoch_store().protocol_config(),
+                validator.get_validator().metrics.limits_metrics.clone(),
+                false,
+                &HashSet::new(),
+                &validator.get_epoch_store().epoch(),
+                0,
+                temporary_store,
+                shared_object_refs,
+                &mut gas_charger,
+                kind,
+                signer,
+                *executable.digest(),
+                transaction_dependencies,
+            );
+        assert!(effects.status().is_ok());
     }
 }
 
