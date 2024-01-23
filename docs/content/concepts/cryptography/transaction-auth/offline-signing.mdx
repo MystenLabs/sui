@@ -82,10 +82,10 @@ Alternatively, you can use the active key in Sui Keystore to sign and output a B
 sui client transfer-sui --to <SUI-ADDRESS> --sui-coin-object-id <COIN-OBJECT-ID> --gas-budget <GAS-AMOUNT> --serialize-signed-transaction
 ```
 
-The console responds with the resulting `<SIGNED_TX_BYTES>` value.
+The console responds with the resulting `<SIGNED-TX-BYTES>` value.
 
-After you obtain the signed transaction bytes, you can submit it using the execute combined signed transaction command. This command takes `--signed-tx-bytes` as the signed transaction bytes to execute (see output of the previous `sui client transfer` command). This executes the signed transaction and returns the certificate and transaction effects if successful.
+After you obtain the signed transaction bytes, you can submit it using the `execute-combined-signed-tx` command. This command takes `--signed-tx-bytes` as the signed transaction bytes to execute (see output of the previous `sui client transfer-sui` command). This executes the signed transaction and returns the certificate and transaction effects if successful.
 
 ```shell
-sui client execute-combined-signed-tx --signed-tx-bytes <SIGNED_TX_BYTES>
+sui client execute-combined-signed-tx --signed-tx-bytes <SIGNED-TX-BYTES>
 ```

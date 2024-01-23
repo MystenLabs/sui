@@ -196,7 +196,7 @@ pub enum SuiClientCommands {
 
     /// Execute a Signed Transaction. This is useful when the user prefers to sign elsewhere and use this command to execute.
     ExecuteSignedTx {
-        /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string. This is the output of sui client command using --serialize-unsigned-transaction.
+        /// BCS serialized transaction data bytes without its type tag, as base64 encoded string. This is the output of sui client command using --serialize-unsigned-transaction.
         #[clap(long)]
         tx_bytes: String,
 
@@ -206,7 +206,7 @@ pub enum SuiClientCommands {
     },
     /// Execute a combined serialized SenderSignedData string.
     ExecuteCombinedSignedTx {
-        /// BCS serialized sender signed data, as base-64 encoded string. This is the output of sui client command using --serialize-signed-transaction.
+        /// BCS serialized sender signed data, as base64 encoded string. This is the output of sui client command using --serialize-signed-transaction.
         #[clap(long)]
         signed_tx_bytes: String,
     },
