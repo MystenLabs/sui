@@ -11,19 +11,13 @@ use diesel::{OptionalExtension, RunQueryDsl};
 use move_core_types::language_storage::StructTag;
 use std::collections::BTreeMap;
 use sui_indexer::{
-    apis::GovernanceReadApiV2,
-    indexer_reader::IndexerReader,
-    models_v2::{display::StoredDisplay, objects::StoredObject},
+    apis::GovernanceReadApiV2, indexer_reader::IndexerReader, models_v2::display::StoredDisplay,
     PgConnectionPoolConfig,
 };
-use sui_json_rpc::coin_api::parse_to_struct_tag;
 use sui_json_rpc_types::Stake as RpcStakedSui;
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,
-    coin::TreasuryCap,
-    gas_coin::{GAS, TOTAL_SUPPLY_SUI},
     governance::StakedSui as NativeStakedSui,
-    object::Object as NativeObject,
     sui_system_state::sui_system_state_summary::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
     },
@@ -91,14 +85,6 @@ impl PgManager {
 
 /// Implement methods to query db and return StoredData
 impl PgManager {
-    async fn get_obj_by_type(&self, object_type: String) -> Result<Option<StoredObject>, Error> {
-        self.run_query_async_with_cost(
-            move || Ok(QueryBuilder::get_obj_by_type(object_type.clone())),
-            |query| move |conn| query.get_result::<StoredObject>(conn).optional(),
-        )
-        .await
-    }
-
     async fn get_display_by_obj_type(
         &self,
         object_type: String,
@@ -189,33 +175,6 @@ impl PgManager {
         };
 
         Ok(stake)
-    }
-
-    pub(crate) async fn fetch_total_supply(&self, coin_type: String) -> Result<Option<u64>, Error> {
-        let coin_struct =
-            parse_to_struct_tag(&coin_type).map_err(|e| Error::InvalidCoinType(e.to_string()))?;
-
-        let supply = if GAS::is_gas(&coin_struct) {
-            TOTAL_SUPPLY_SUI
-        } else {
-            let treasury_cap_type =
-                TreasuryCap::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
-
-            let Some(treasury_cap) = self.get_obj_by_type(treasury_cap_type).await? else {
-                return Ok(None);
-            };
-
-            let native_object = NativeObject::try_from(treasury_cap)?;
-            let object_id = native_object.id();
-            let treasury_cap_object = TreasuryCap::try_from(native_object).map_err(|e| {
-                Error::Internal(format!(
-                    "Error while deserializing treasury cap object {object_id}: {e}"
-                ))
-            })?;
-            treasury_cap_object.total_supply.value
-        };
-
-        Ok(Some(supply))
     }
 }
 

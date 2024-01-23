@@ -9,7 +9,7 @@ use diesel::{
     query_builder::{AstPass, QueryFragment},
     ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl,
 };
-use sui_indexer::schema_v2::{display, objects};
+use sui_indexer::schema_v2::display;
 use tap::TapFallible;
 use tracing::{info, warn};
 
@@ -18,13 +18,6 @@ pub(crate) const EXPLAIN_COSTING_LOG_TARGET: &str = "gql-explain-costing";
 pub(crate) struct PgQueryBuilder;
 
 impl GenericQueryBuilder<Pg> for PgQueryBuilder {
-    fn get_obj_by_type(object_type: String) -> objects::BoxedQuery<'static, Pg> {
-        objects::dsl::objects
-            .filter(objects::dsl::object_type.eq(object_type))
-            .limit(1) // Fetches for a single object and as such has a limit of 1
-            .into_boxed()
-    }
-
     fn get_display_by_obj_type(object_type: String) -> display::BoxedQuery<'static, Pg> {
         display::dsl::display
             .filter(display::dsl::object_type.eq(object_type))
