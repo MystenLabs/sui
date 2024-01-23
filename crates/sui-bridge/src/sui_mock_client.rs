@@ -67,10 +67,6 @@ impl SuiMockClient {
             .insert((package, module, cursor), events);
     }
 
-    pub fn pop_front_past_event_query_params(&self) -> Option<(ObjectID, Identifier, EventID)> {
-        self.past_event_query_params.lock().unwrap().pop_front()
-    }
-
     pub fn add_events_by_tx_digest(&self, tx_digest: TransactionDigest, events: Vec<SuiEvent>) {
         self.events_by_tx_digest
             .lock()

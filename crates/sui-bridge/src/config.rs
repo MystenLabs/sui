@@ -19,6 +19,7 @@ use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::SuiKeyPair;
 use sui_types::digests::TransactionDigest;
+use sui_types::event::EventID;
 use sui_types::object::Owner;
 use sui_types::Identifier;
 use tracing::info;
@@ -59,7 +60,7 @@ pub struct BridgeNodeConfig {
     pub eth_bridge_contracts_start_block_override: Option<BTreeMap<String, u64>>,
     /// Override the start transaction digest for each bridge module. Key must be in `sui_bridge_modules`.
     /// When set, SuiSyncer will start from this transaction digest instead of the one in storage.
-    pub sui_bridge_modules_start_tx_override: Option<BTreeMap<String, String>>,
+    pub sui_bridge_modules_start_tx_override: Option<BTreeMap<String, (String, u64)>>,
 }
 
 impl Config for BridgeNodeConfig {}
@@ -161,11 +162,17 @@ impl BridgeNodeConfig {
         let mut sui_bridge_modules_start_tx_override = BTreeMap::new();
         match &self.sui_bridge_modules_start_tx_override {
             Some(overrides) => {
-                for (module, tx_digest) in overrides {
+                for (module, cursor) in overrides {
                     let module = Identifier::from_str(module)?;
                     if sui_bridge_modules.contains(&module) {
-                        let tx_digest = TransactionDigest::from_str(tx_digest)?;
-                        sui_bridge_modules_start_tx_override.insert(module, tx_digest);
+                        let tx_digest = TransactionDigest::from_str(&cursor.0)?;
+                        sui_bridge_modules_start_tx_override.insert(
+                            module,
+                            EventID {
+                                tx_digest,
+                                event_seq: cursor.1,
+                            },
+                        );
                     } else {
                         return Err(anyhow!(
                             "Override start tx digest for module {:?} is not in `sui_bridge_modules`",
@@ -226,7 +233,8 @@ pub struct BridgeClientConfig {
     pub eth_bridge_contracts: Vec<EthAddress>,
     pub sui_bridge_modules: Vec<Identifier>,
     pub eth_bridge_contracts_start_block_override: BTreeMap<EthAddress, u64>,
-    pub sui_bridge_modules_start_tx_override: BTreeMap<Identifier, TransactionDigest>,
+    /// The EventID needs to be valid, namely it exists and matches the filter. Otherwise, it will miss one event.
+    pub sui_bridge_modules_start_tx_override: BTreeMap<Identifier, EventID>,
 }
 
 /// Read Bridge Authority key (Secp256k1KeyPair) from a file.

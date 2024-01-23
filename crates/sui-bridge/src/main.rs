@@ -120,7 +120,7 @@ async fn start_client_components(
                 client_config.sui_bridge_modules_start_tx_override[module],
             );
             info!(
-                "Overriding cursor for sui bridge module {} to {}. Stored cursor: {:?}",
+                "Overriding cursor for sui bridge module {} to {:?}. Stored cursor: {:?}",
                 module, client_config.sui_bridge_modules_start_tx_override[module], cursor
             );
         } else if let Some(cursor) = cursor {

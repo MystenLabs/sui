@@ -49,7 +49,7 @@ where
         self,
     ) -> BridgeResult<(
         Vec<JoinHandle<()>>,
-        mysten_metrics::metered_channel::Receiver<(EthAddress, Vec<EthLog>)>,
+        mysten_metrics::metered_channel::Receiver<(EthAddress, u64, Vec<EthLog>)>,
         watch::Receiver<u64>,
     )> {
         let (eth_evnets_tx, eth_events_rx) = mysten_metrics::metered_channel::channel(
@@ -119,7 +119,7 @@ where
         contract_address: EthAddress,
         mut start_block: u64,
         mut last_finalized_block_receiver: watch::Receiver<u64>,
-        events_sender: mysten_metrics::metered_channel::Sender<(EthAddress, Vec<EthLog>)>,
+        events_sender: mysten_metrics::metered_channel::Sender<(EthAddress, u64, Vec<EthLog>)>,
         eth_client: Arc<EthClient<P>>,
     ) {
         tracing::info!(contract_address=?contract_address, "Starting eth events listening task from block {start_block}");
@@ -156,16 +156,23 @@ where
                 continue;
             };
             let len = events.len();
-            if !events.is_empty() {
-                // Note: it's extremely critical to make sure the Logs we send via this channel
-                // are complete per block height. Namely, we should never send a partial list
-                // of events for a block. Otherwise, we may end up missing events.
-                events_sender
-                    .send((contract_address, events))
-                    .await
-                    .expect("All Eth event channel receivers are closed");
-                tracing::info!(?contract_address, "Observed {len} new Eth events",);
-            }
+
+            // Note 1: we send an empty list of events to the channel. This is because of how
+            // `eth_getLogs` api is designed - we want cursor to move forward continuously.
+
+            // Note 2: it's extremely critical to make sure the Logs we send via this channel
+            // are complete per block height. Namely, we should never send a partial list
+            // of events for a block. Otherwise, we may end up missing events.
+            events_sender
+                .send((contract_address, end_block, events))
+                .await
+                .expect("All Eth event channel receivers are closed");
+            tracing::info!(
+                ?contract_address,
+                start_block,
+                end_block,
+                "Observed {len} new Eth events",
+            );
             start_block = end_block + 1;
         }
     }
@@ -231,8 +238,9 @@ mod tests {
         // The latest finalized block stays at 777, event listener should not query again.
         finalized_block_rx.changed().await.unwrap();
         assert_eq!(*finalized_block_rx.borrow(), 777);
-        let (contract_address, received_logs) = logs_rx.recv().await.unwrap();
+        let (contract_address, end_block, received_logs) = logs_rx.recv().await.unwrap();
         assert_eq!(contract_address, EthAddress::zero());
+        assert_eq!(end_block, 777);
         assert_eq!(received_logs, vec![eth_log.clone()]);
         assert_eq!(logs_rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
@@ -247,8 +255,9 @@ mod tests {
         mock_last_finalized_block(&mock_provider, 888);
         finalized_block_rx.changed().await.unwrap();
         assert_eq!(*finalized_block_rx.borrow(), 888);
-        let (contract_address, received_logs) = logs_rx.recv().await.unwrap();
+        let (contract_address, end_block, received_logs) = logs_rx.recv().await.unwrap();
         assert_eq!(contract_address, EthAddress::zero());
+        assert_eq!(end_block, 888);
         assert_eq!(received_logs, vec![eth_log]);
         assert_eq!(logs_rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
@@ -319,7 +328,9 @@ mod tests {
         // The latest finalized block stays at 198.
         finalized_block_rx.changed().await.unwrap();
         assert_eq!(*finalized_block_rx.borrow(), 198);
-        assert_eq!(logs_rx.recv().await.unwrap().1, vec![eth_log1.clone()]);
+        let (_contract_address, end_block, received_logs) = logs_rx.recv().await.unwrap();
+        assert_eq!(end_block, 198);
+        assert_eq!(received_logs, vec![eth_log1.clone()]);
         // log2 should not be received as another_address's start block is 200.
         assert_eq!(logs_rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
@@ -368,10 +379,10 @@ mod tests {
         finalized_block_rx.changed().await.unwrap();
         assert_eq!(*finalized_block_rx.borrow(), 400);
         let mut logs_set = HashSet::new();
-        logs_rx.recv().await.unwrap().1.into_iter().for_each(|log| {
+        logs_rx.recv().await.unwrap().2.into_iter().for_each(|log| {
             logs_set.insert(format!("{:?}", log));
         });
-        logs_rx.recv().await.unwrap().1.into_iter().for_each(|log| {
+        logs_rx.recv().await.unwrap().2.into_iter().for_each(|log| {
             logs_set.insert(format!("{:?}", log));
         });
         assert_eq!(
@@ -453,11 +464,13 @@ mod tests {
 
         finalized_block_rx.changed().await.unwrap();
         assert_eq!(*finalized_block_rx.borrow(), last_finalized_block);
-        let (contract_address, received_logs) = logs_rx.recv().await.unwrap();
+        let (contract_address, end_block, received_logs) = logs_rx.recv().await.unwrap();
         assert_eq!(contract_address, EthAddress::zero());
+        assert_eq!(end_block, start_block + ETH_LOG_QUERY_MAX_BLOCK_RANGE - 1);
         assert_eq!(received_logs, vec![eth_log.clone()]);
-        let (contract_address, received_logs) = logs_rx.recv().await.unwrap();
+        let (contract_address, end_block, received_logs) = logs_rx.recv().await.unwrap();
         assert_eq!(contract_address, EthAddress::zero());
+        assert_eq!(end_block, last_finalized_block);
         assert_eq!(received_logs, vec![eth_log2.clone()]);
         Ok(())
     }
