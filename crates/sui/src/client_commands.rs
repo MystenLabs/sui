@@ -46,11 +46,12 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
-    crypto::SignatureScheme,
+    crypto::{EmptySignInfo, SignatureScheme},
     digests::TransactionDigest,
     dynamic_field::DynamicFieldInfo,
     error::SuiError,
     gas_coin::GasCoin,
+    message_envelope::Envelope,
     metrics::BytecodeVerifierMetrics,
     move_package::UpgradeCap,
     object::Owner,
@@ -159,12 +160,15 @@ pub enum SuiClientCommands {
         gas_budget: u64,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -192,7 +196,7 @@ pub enum SuiClientCommands {
 
     /// Execute a Signed Transaction. This is useful when the user prefers to sign elsewhere and use this command to execute.
     ExecuteSignedTx {
-        /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
+        /// BCS serialized transaction data bytes without its type tag, as base64 encoded string. This is the output of sui client command using --serialize-unsigned-transaction.
         #[clap(long)]
         tx_bytes: String,
 
@@ -200,7 +204,12 @@ pub enum SuiClientCommands {
         #[clap(long)]
         signatures: Vec<String>,
     },
-
+    /// Execute a combined serialized SenderSignedData string.
+    ExecuteCombinedSignedTx {
+        /// BCS serialized sender signed data, as base64 encoded string. This is the output of sui client command using --serialize-signed-transaction.
+        #[clap(long)]
+        signed_tx_bytes: String,
+    },
     /// Obtain all gas objects owned by the address.
     /// An address' alias can be used instead of the address.
     #[clap(name = "gas")]
@@ -228,12 +237,15 @@ pub enum SuiClientCommands {
         gas_budget: u64,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -308,12 +320,15 @@ pub enum SuiClientCommands {
         gas_budget: u64,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -334,12 +349,15 @@ pub enum SuiClientCommands {
         gas_budget: u64,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -366,12 +384,15 @@ pub enum SuiClientCommands {
         gas_budget: u64,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -406,12 +427,15 @@ pub enum SuiClientCommands {
         with_unpublished_dependencies: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -437,12 +461,15 @@ pub enum SuiClientCommands {
         gas_budget: u64,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -489,12 +516,15 @@ pub enum SuiClientCommands {
         gas_budget: u64,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -521,12 +551,15 @@ pub enum SuiClientCommands {
         amount: Option<u64>,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -565,12 +598,14 @@ pub enum SuiClientCommands {
         with_unpublished_dependencies: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
-        /// (TransactionData) using base64 encoding, and print out the string.
-        #[clap(long, required = false)]
+        /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
+        /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
-        /// (SenderSignedData) using base64 encoding, and print out the string.
+        /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The string
+        /// can be used to execute transaction with `sui client execute-combined-signed-tx --signed-tx-bytes
+        /// <SIGNED_TX_BYTES>`.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
     },
@@ -1311,25 +1346,36 @@ impl SuiClientCommands {
             } => {
                 let data = bcs::from_bytes(
                     &Base64::try_from(tx_bytes)
-                        .map_err(|e| anyhow!(e))?
-                        .to_vec()
-                        .map_err(|e| anyhow!(e))?,
-                )?;
+                    .map_err(|_| anyhow!("Invalid Base64 encoding"))?
+                    .to_vec()
+                    .map_err(|_| anyhow!("Invalid Base64 encoding"))?
+                ).map_err(|_| anyhow!("Failed to parse tx bytes, check if it matches the output of sui client commands with --serialize-unsigned-transaction"))?;
 
                 let mut sigs = Vec::new();
                 for sig in signatures {
                     sigs.push(
                         GenericSignature::from_bytes(
                             &Base64::try_from(sig)
-                                .map_err(|e| anyhow!(e))?
+                                .map_err(|_| anyhow!("Invalid Base64 encoding"))?
                                 .to_vec()
                                 .map_err(|e| anyhow!(e))?,
                         )
-                        .map_err(|e| anyhow!(e))?,
+                        .map_err(|_| anyhow!("Invalid generic signature"))?,
                     );
                 }
                 let transaction = Transaction::from_generic_sig_data(data, sigs);
 
+                let response = context.execute_transaction_may_fail(transaction).await?;
+                SuiClientCommandResult::ExecuteSignedTx(response)
+            }
+            SuiClientCommands::ExecuteCombinedSignedTx { signed_tx_bytes } => {
+                let data: SenderSignedData = bcs::from_bytes(
+                    &Base64::try_from(signed_tx_bytes)
+                        .map_err(|_| anyhow!("Invalid Base64 encoding"))?
+                        .to_vec()
+                        .map_err(|_| anyhow!("Invalid Base64 encoding"))?
+                ).map_err(|_| anyhow!("Failed to parse SenderSignedData bytes, check if it matches the output of sui client commands with --serialize-signed-transaction"))?;
+                let transaction = Envelope::<SenderSignedData, EmptySignInfo>::new(data);
                 let response = context.execute_transaction_may_fail(transaction).await?;
                 SuiClientCommandResult::ExecuteSignedTx(response)
             }
