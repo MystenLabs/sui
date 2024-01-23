@@ -28,6 +28,10 @@ module bridge::chain_ids {
         SuiTestnet
     }
 
+    public fun sui_local_test(): u8 {
+        SuiLocalTest
+    }
+
     public fun sui_devnet(): u8 {
         SuiDevnet
     }
