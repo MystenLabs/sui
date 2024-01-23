@@ -73,6 +73,18 @@ There are two types of orders, `limit order` and `market order` in DeepBook.
 
 For limit order, users need to create a custodian account the first time they interact with a particular Pool and deposit assets to the Pool.
 
+### 2.05 Scaling Precision {#scaling-precision}
+
+Our tokens are created with different decimal precision. For example SUI has 9 decimals of precision, while the wormhole wrapped ethereum USDC has
+6 decimals of precision. In order to accommodate proper pricing within deepbook, we scale every decimal with 10^9 precision. All the decimals in deepbook
+meet the eqation: 10^9 \* (priceInRealWorld/priceInDeepBook) = (10^baseAssetDecimal)/ (10^quoteAssetDecimal).
+
+Let's walk through an example between SUI / USDC written at the time of this example: Sui price in real world is $1.10, and is the base asset
+of the SUI / USDC trading pair.
+
+Thus we get 10^9 \* (1.10/ P_d) = 1000, where P_d should be the price of sui in the deepbook sui/usdc trading pair. We can solve for P_d = 1100000,
+so if the user wants to sell SUI at the market price in deepbook they should enter a price with 6 decimal points of precision.
+
 ### 2.1 Limit Order {#limit-order}
 
 #### 2.1.1 Limit Order Type {#limit-order-type}
