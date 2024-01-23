@@ -160,7 +160,7 @@ pub struct Authority {
 /// AuthorityIndex is between 0 (inclusive) and the total number of authorities (exclusive).
 ///
 /// NOTE: for safety, invalid AuthorityIndex should be impossible to create. So AuthorityIndex
-/// should not be created outside of this file or be incremented.
+/// should not be created or incremented outside of this file.
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Default, Hash, Serialize, Deserialize,
 )]
