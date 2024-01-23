@@ -237,6 +237,22 @@ fn consume_identifier(tokens: &mut Lexer, value: &str) -> Result<(), Box<Diagnos
     }
 }
 
+// If the next token is the specified kind, consume it and return
+// its source location.
+fn consume_optional_token_with_loc(
+    tokens: &mut Lexer,
+    tok: Tok,
+) -> Result<Option<Loc>, Box<Diagnostic>> {
+    if tokens.peek() == tok {
+        let start_loc = tokens.start_loc();
+        tokens.advance()?;
+        let end_loc = tokens.previous_end_loc();
+        Ok(Some(make_loc(tokens.file_hash(), start_loc, end_loc)))
+    } else {
+        Ok(None)
+    }
+}
+
 // While parsing a list and expecting a ">" token to mark the end, replace
 // a ">>" token with the expected ">". This handles the situation where there
 // are nested type parameters that result in two adjacent ">" tokens, e.g.,
@@ -951,6 +967,13 @@ fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagno
 // Fields and Bindings
 //**************************************************************************************************
 
+// Parse an optional ellipis token. Consumes and returns the location of the token if present, and
+// returns `Ok(None)` if not present.
+//      Ellipsis = "..."?
+fn parse_ellipsis_opt(context: &mut Context) -> Result<Option<Loc>, Box<Diagnostic>> {
+    consume_optional_token_with_loc(context.tokens, Tok::PeriodPeriod)
+}
+
 // Parse an optional "mut" modifier token. Consumes and returns the location of the token if present
 // and returns None otherwise.
 //     MutOpt = "mut"?
@@ -989,10 +1012,14 @@ fn parse_exp_field(context: &mut Context) -> Result<(Field, Exp), Box<Diagnostic
 //      BindField =
 //          <Field> <":" <Bind>>?
 //          | "mut" <Field>
+//          | <Ellipsis>
 //
 // If the binding is not specified, the default is to use a variable
 // with the same name as the field.
-fn parse_bind_field(context: &mut Context) -> Result<(Field, Bind), Box<Diagnostic>> {
+fn parse_bind_field(context: &mut Context) -> Result<Ellipsis<(Field, Bind)>, Box<Diagnostic>> {
+    if let Some(loc) = parse_ellipsis_opt(context)? {
+        return Ok(Ellipsis::Ellipsis(loc));
+    }
     let mut_ = parse_mut_opt(context)?;
     let f = parse_field(context).or_else(|diag| match mut_ {
         Some(mut_loc)
@@ -1010,14 +1037,14 @@ fn parse_bind_field(context: &mut Context) -> Result<(Field, Bind), Box<Diagnost
     } else {
         sp(f.loc(), Bind_::Var(None, Var(f.0)))
     };
-    Ok((f, arg))
+    Ok(Ellipsis::Binder((f, arg)))
 }
 
 // Parse a binding:
 //      Bind =
 //          "mut"? <Var>
 //          | <NameAccessChain> <OptionalTypeArgs> "{" Comma<BindField> "}"
-//          | <NameAccessChain> <OptionalTypeArgs> "(" Comma<Bind> ")"
+//          | <NameAccessChain> <OptionalTypeArgs> "(" Comma<BindOrEllipsis> ")"
 fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     if matches!(
@@ -1066,7 +1093,7 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
             context,
             Tok::LParen,
             Tok::RParen,
-            parse_bind,
+            parse_bind_or_ellipsis,
             "a field binding",
         )?;
         FieldBindings::Positional(args)
@@ -1088,6 +1115,16 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
         end_loc,
         unpack,
     ))
+}
+
+// Parse an inner field binding -- either a normal binding or an ellipsis:
+//      EllipsisOrBind = <Bind> | <Ellipsis>
+fn parse_bind_or_ellipsis(context: &mut Context) -> Result<Ellipsis<Bind>, Box<Diagnostic>> {
+    if let Some(loc) = parse_ellipsis_opt(context)? {
+        return Ok(Ellipsis::Ellipsis(loc));
+    }
+    let b = parse_bind(context)?;
+    Ok(Ellipsis::Binder(b))
 }
 
 // Parse a list of bindings, which can be zero, one, or more bindings:
@@ -1829,7 +1866,7 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
                                 context,
                                 Tok::LParen,
                                 Tok::RParen,
-                                parse_match_pattern,
+                                parse_positional_field_pattern,
                                 "a pattern",
                             )?
                         );
@@ -1864,10 +1901,25 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
         }
     }
 
+    fn parse_positional_field_pattern(
+        context: &mut Context,
+    ) -> Result<Ellipsis<MatchPattern>, Box<Diagnostic>> {
+        if let Some(loc) = parse_ellipsis_opt(context)? {
+            return Ok(Ellipsis::Ellipsis(loc));
+        }
+
+        parse_match_pattern(context).map(Ellipsis::Binder)
+    }
+
     fn parse_field_pattern(
         context: &mut Context,
-    ) -> Result<(Field, MatchPattern), Box<Diagnostic>> {
+    ) -> Result<Ellipsis<(Field, MatchPattern)>, Box<Diagnostic>> {
         const INVALID_MUT_ERROR_MSG: &str = "'mut' modifier can only be used on variable bindings";
+
+        if let Some(loc) = parse_ellipsis_opt(context)? {
+            return Ok(Ellipsis::Ellipsis(loc));
+        }
+
         let mut_ = parse_mut_opt(context)?;
         let field = parse_field(context)?;
         let pattern = if match_token(context.tokens, Tok::Colon)? {
@@ -1884,7 +1936,7 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
                 MP::Name(mut_, sp(field.loc(), NameAccessChain_::single(field.0))),
             )
         };
-        Ok((field, pattern))
+        Ok(Ellipsis::Binder((field, pattern)))
     }
 
     fn parse_optional_at_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagnostic>> {
