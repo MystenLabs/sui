@@ -70,6 +70,7 @@ impl GasProfiler {
 
     const TOP_LEVEL_FRAME_NAME: &'static str = "root";
 
+    #[cfg(feature = "gas-profiler")]
     pub fn init(config: &Option<VMProfilerConfig>, name: String, start_gas: u64) -> Self {
         let mut prof = GasProfiler {
             exporter: "speedscope@1.15.2".to_string(),
@@ -100,6 +101,7 @@ impl GasProfiler {
         prof
     }
 
+    #[cfg(feature = "gas-profiler")]
     pub fn init_default_cfg(name: String, start_gas: u64) -> Self {
         Self::init(
             &VMProfilerConfig::get_default_config_if_enabled(),
@@ -108,18 +110,22 @@ impl GasProfiler {
         )
     }
 
+    #[cfg(feature = "gas-profiler")]
     pub fn short_name(s: &String) -> String {
         s.split("::").last().unwrap_or(s).to_string()
     }
 
+    #[cfg(feature = "gas-profiler")]
     fn is_metered(&self) -> bool {
         (self.profiles[0].end_value != 0) && (self.start_gas != 0)
     }
 
+    #[cfg(feature = "gas-profiler")]
     fn start_gas(&self) -> u64 {
         self.start_gas
     }
 
+    #[cfg(feature = "gas-profiler")]
     fn add_frame(
         &mut self,
         frame_name: String,
@@ -140,6 +146,7 @@ impl GasProfiler {
         }
     }
 
+    #[cfg(feature = "gas-profiler")]
     pub fn open_frame(&mut self, frame_name: String, metadata: String, gas_start: u64) {
         if self.config.is_none() || self.start_gas == 0 {
             return;
@@ -155,6 +162,7 @@ impl GasProfiler {
         });
     }
 
+    #[cfg(feature = "gas-profiler")]
     pub fn close_frame(&mut self, frame_name: String, metadata: String, gas_end: u64) {
         if self.config.is_none() || self.start_gas == 0 {
             return;
@@ -170,6 +178,7 @@ impl GasProfiler {
         self.profiles[0].end_value = start - gas_end;
     }
 
+    #[cfg(feature = "gas-profiler")]
     pub fn to_file(&self) {
         let Some(config) = &self.config else {
             return;
@@ -209,6 +218,7 @@ impl GasProfiler {
         info!("Gas profile written to file: {}", path_str);
     }
 
+    #[cfg(feature = "gas-profiler")]
     pub fn finish(&mut self) {
         if self.finished {
             return;
