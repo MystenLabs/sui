@@ -40,7 +40,6 @@ use typed_store::{
 use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use mysten_common::sync::notify_read::NotifyRead;
-use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
 use typed_store::rocks::util::is_ref_count_value;
@@ -136,8 +135,6 @@ pub struct AuthorityStore {
     enable_epoch_sui_conservation_check: bool,
 
     metrics: AuthorityStoreMetrics,
-
-    package_cache: Arc<PackageObjectCache>,
 }
 
 pub type ExecutionLockReadGuard<'a> = RwLockReadGuard<'a, EpochId>;
@@ -239,7 +236,6 @@ impl AuthorityStore {
             indirect_objects_threshold,
             enable_epoch_sui_conservation_check,
             metrics: AuthorityStoreMetrics::new(registry),
-            package_cache: PackageObjectCache::new(),
         });
         // Only initialize an empty database.
         if store
@@ -670,15 +666,8 @@ impl AuthorityStore {
         Ok(())
     }
 
-    /// NOTE: this function is only to be used for fuzzing and testing. Never use in prod
-    pub async fn insert_objects_unsafe_for_testing_only(&self, objects: &[Object]) -> SuiResult {
-        self.bulk_insert_genesis_objects(objects).await?;
-        self.force_reload_system_packages_into_cache();
-        Ok(())
-    }
-
     /// This function should only be used for initializing genesis and should remain private.
-    async fn bulk_insert_genesis_objects(&self, objects: &[Object]) -> SuiResult<()> {
+    pub(super) async fn bulk_insert_genesis_objects(&self, objects: &[Object]) -> SuiResult<()> {
         let mut batch = self.perpetual_tables.objects.batch();
         let ref_and_objects: Vec<_> = objects
             .iter()
@@ -794,12 +783,6 @@ impl AuthorityStore {
         Ok(self.perpetual_tables.epoch_start_configuration.get(&())?)
     }
 
-    fn force_reload_system_packages_into_cache(&self) {
-        info!("Reload all system packages in the cache");
-        self.package_cache
-            .force_reload_system_packages(BuiltInFramework::all_package_ids(), self);
-    }
-
     /// Acquires read locks for affected indirect objects
     #[instrument(level = "trace", skip_all)]
     async fn acquire_read_locks_for_indirect_objects(
@@ -830,7 +813,7 @@ impl AuthorityStore {
     /// Internally it checks that all locks for active inputs are at the correct
     /// version, and then writes objects, certificates, parents and clean up locks atomically.
     #[instrument(level = "debug", skip_all)]
-    pub async fn update_state(
+    pub async fn write_transaction_outputs(
         &self,
         epoch_id: EpochId,
         tx_outputs: TransactionOutputs,
@@ -843,6 +826,8 @@ impl AuthorityStore {
             deleted,
             written,
             events,
+            locks_to_delete,
+            new_locks_to_init,
             ..
         } = tx_outputs;
 
@@ -929,10 +914,6 @@ impl AuthorityStore {
 
         write_batch.insert_batch(&self.perpetual_tables.events, events)?;
 
-        // TODO(cache): once we cache locks (see TODO in in_mem_execution_cache.rs) we will have to
-        // re-enable this code
-        /*
-
         // NOTE: We just check here that locks exist, not that they are locked to a specific TX. Why?
         // 1. Lock existence prevents re-execution of old certs when objects have been upgraded
         // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
@@ -949,7 +930,6 @@ impl AuthorityStore {
         // Note: deletes locks for received objects as well (but not for objects that were in
         // `Receiving` arguments which were not received)
         self.delete_locks(&mut write_batch, &locks_to_delete)?;
-        */
 
         write_batch
             .insert_batch(
@@ -966,12 +946,6 @@ impl AuthorityStore {
 
         // Commit.
         write_batch.write()?;
-
-        if transaction.transaction_data().is_end_of_epoch_tx() {
-            // At the end of epoch, since system packages may have been upgraded, force
-            // reload them in the cache.
-            self.force_reload_system_packages_into_cache();
-        }
 
         // test crashing before notifying
         fail_point_async!("crash");
@@ -1519,7 +1493,7 @@ impl AuthorityStore {
         // Note that this can only be called at reconfiguration time, at which time the
         // db is fully consistent. Therefore the system cache (in AuthorityState) has no
         // dirty data and is not needed.
-        let cache = Arc::new(InMemoryCache::new(self.clone()));
+        let cache = Arc::new(ExecutionCache::new(self.clone()));
 
         let executor = old_epoch_store.executor();
         info!("Starting SUI conservation check. This may take a while..");

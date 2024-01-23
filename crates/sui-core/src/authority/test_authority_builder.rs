@@ -8,7 +8,7 @@ use crate::authority::{AuthorityState, AuthorityStore};
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
-use crate::in_mem_execution_cache::InMemoryCache;
+use crate::in_mem_execution_cache::ExecutionCache;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::signature_verifier::SignatureVerifierMetrics;
 use fastcrypto::traits::KeyPair;
@@ -208,7 +208,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             None => ExpensiveSafetyCheckConfig::default(),
             Some(config) => config,
         };
-        let cache = Arc::new(InMemoryCache::new(authority_store.clone()));
+        let cache = Arc::new(ExecutionCache::new(authority_store.clone()));
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -307,7 +307,6 @@ impl<'a> TestAuthorityBuilder<'a> {
         // TODO: we should probably have a better way to do this.
         if let Some(starting_objects) = self.starting_objects {
             state
-                .database
                 .insert_objects_unsafe_for_testing_only(starting_objects)
                 .await
                 .unwrap();

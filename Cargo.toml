@@ -297,7 +297,6 @@ criterion = { version = "0.5.0", features = [
 crossterm = "0.25.0"
 csv = "1.2.1"
 dashmap = "5.4.0"
-moka = { version = "0.12", features = ["sync"] }
 # datatest-stable = "0.1.2"
 datatest-stable = { git = "https://github.com/nextest-rs/datatest-stable.git", rev = "72db7f6d1bbe36a5407e96b9488a581f763e106f" }
 derivative = "2.2.0"

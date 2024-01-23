@@ -138,7 +138,7 @@ use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_driver::execution_process;
-use crate::in_mem_execution_cache::{ExecutionCacheRead, ExecutionCacheWrite, InMemoryCache};
+use crate::in_mem_execution_cache::{ExecutionCache, ExecutionCacheRead, ExecutionCacheWrite};
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
 use crate::state_accumulator::{StateAccumulator, WrappedObject};
@@ -625,7 +625,7 @@ pub struct AuthorityState {
 
     /// The database
     input_loader: TransactionInputLoader,
-    execution_cache: Arc<InMemoryCache>,
+    execution_cache: Arc<ExecutionCache>,
 
     pub database: Arc<AuthorityStore>, // TODO: remove pub
 
@@ -1295,7 +1295,15 @@ impl AuthorityState {
             inner_temporary_store,
         );
         self.execution_cache
-            .write_transaction_outputs(epoch_store.epoch(), transaction_outputs);
+            .write_transaction_outputs(epoch_store.epoch(), transaction_outputs)
+            .await?;
+
+        if certificate.transaction_data().is_end_of_epoch_tx() {
+            // At the end of epoch, since system packages may have been upgraded, force
+            // reload them in the cache.
+            self.execution_cache
+                .force_reload_system_packages(&BuiltInFramework::all_package_ids());
+        }
 
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
@@ -1819,7 +1827,7 @@ impl AuthorityState {
     }
 
     pub fn is_tx_already_executed(&self, digest: &TransactionDigest) -> SuiResult<bool> {
-        self.database.is_tx_already_executed(digest)
+        self.execution_cache.is_tx_already_executed(digest)
     }
 
     #[instrument(level = "debug", skip_all, err)]
@@ -2242,7 +2250,7 @@ impl AuthorityState {
         };
 
         let object = self
-            .database
+            .execution_cache
             .get_object_by_key(&request.object_id, requested_object_seq)?
             .ok_or_else(|| {
                 SuiError::from(UserInputError::ObjectNotFound {
@@ -2368,7 +2376,7 @@ impl AuthorityState {
         secret: StableSyncAuthoritySigner,
         supported_protocol_versions: SupportedProtocolVersions,
         store: Arc<AuthorityStore>,
-        execution_cache: Arc<InMemoryCache>,
+        execution_cache: Arc<ExecutionCache>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         committee_store: Arc<CommitteeStore>,
         indexes: Option<Arc<IndexStore>>,
@@ -2453,7 +2461,7 @@ impl AuthorityState {
         state
     }
 
-    pub fn get_cache_reader(&self) -> &Arc<InMemoryCache> {
+    pub fn get_cache_reader(&self) -> &Arc<ExecutionCache> {
         &self.execution_cache
     }
 
@@ -3861,7 +3869,7 @@ impl AuthorityState {
         let tx_digest = *transaction.digest();
 
         // Acquire the lock on input objects
-        self.database
+        self.execution_cache
             .acquire_transaction_locks(epoch_store.epoch(), owned_input_objects, tx_digest)
             .await?;
 
@@ -4646,6 +4654,14 @@ impl AuthorityState {
         )
         .await;
         let _ = AuthorityStorePruner::compact(&self.database.perpetual_tables);
+    }
+
+    /// NOTE: this function is only to be used for fuzzing and testing. Never use in prod
+    pub async fn insert_objects_unsafe_for_testing_only(&self, objects: &[Object]) -> SuiResult {
+        self.database.bulk_insert_genesis_objects(objects).await?;
+        self.execution_cache
+            .force_reload_system_packages(&BuiltInFramework::all_package_ids());
+        Ok(())
     }
 }
 
