@@ -57,8 +57,11 @@ CREATE TABLE objects_history (
     df_object_id                bytea,
     CONSTRAINT objects_history_pk PRIMARY KEY (checkpoint_sequence_number, object_id, object_version)
 ) PARTITION BY RANGE (checkpoint_sequence_number);
+CREATE INDEX objects_history_owner ON objects_history (checkpoint_sequence_number, owner_type, owner_id) WHERE owner_type BETWEEN 1 AND 2 AND owner_id IS NOT NULL;
+CREATE INDEX objects_history_coin ON objects_history (checkpoint_sequence_number, owner_id, coin_type) WHERE coin_type IS NOT NULL AND owner_type = 1;
+CREATE INDEX objects_history_type ON objects_history (checkpoint_sequence_number, object_type);
+-- init with first partition of the history table
 CREATE TABLE objects_history_partition_0 PARTITION OF objects_history FOR VALUES FROM (0) TO (MAXVALUE);
--- TODO(gegaowp): add corresponding indices for consistent reads of objects_history table
 
 -- snapshot table by folding objects_history table until certain checkpoint,
 -- effectively the snapshot of objects at the same checkpoint,
