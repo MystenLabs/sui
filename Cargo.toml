@@ -324,6 +324,7 @@ enum_dispatch = "^0.3"
 expect-test = "1.4.0"
 eyre = "0.6.8"
 fdlimit = "0.2.1"
+flate2 = "1.0.28"
 fs_extra = "1.3.0"
 futures = "0.3.28"
 futures-core = "0.3.21"
@@ -462,6 +463,7 @@ synstructure = "0.12"
 sysinfo = "0.27.5"
 tabled = { version = "0.12" }
 tap = "1.0.1"
+tar = "0.4.40"
 tempfile = "3.3.0"
 test-fuzz = "3.0.4"
 thiserror = "1.0.40"
@@ -507,6 +509,7 @@ tracing-subscriber = { version = "0.3.15", default-features = false, features = 
 ttl_cache = "0.5.1"
 uint = "0.9.4"
 unescape = "0.1.0"
+ureq = "2.9.1"
 url = "2.3.1"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng"] }
 webpki = { version = "0.101.0", package = "rustls-webpki", features = [
@@ -521,6 +524,7 @@ versions = "4.1.0"
 # Move dependencies
 move-binary-format = { path = "external-crates/move/crates/move-binary-format" }
 move-bytecode-utils = { path = "external-crates/move/crates/move-bytecode-utils" }
+move-bytecode-source-map = { path = "external-crates/move/crates/move-bytecode-source-map" }
 move-cli = { path = "external-crates/move/crates/move-cli" }
 move-compiler = { path = "external-crates/move/crates/move-compiler" }
 move-core-types = { path = "external-crates/move/crates/move-core-types" }
