@@ -3,7 +3,7 @@
 
 query getDynamicFields($parentId: SuiAddress!, $first: Int, $cursor: String) {
 	object(address: $parentId) {
-		dynamicFieldConnection(first: $first, after: $cursor) {
+		dynamicFields(first: $first, after: $cursor) {
 			pageInfo {
 				hasNextPage
 				endCursor
@@ -27,12 +27,10 @@ query getDynamicFields($parentId: SuiAddress!, $first: Int, $cursor: String) {
 							json
 						}
 
-						asObject {
-							storageRebate
-							address
-							digest
-							version
-						}
+						storageRebate
+						address
+						digest
+						version
 					}
 				}
 			}

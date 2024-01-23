@@ -8,9 +8,8 @@ query getNormalizedMoveModulesByPackage(
 ) {
 	object(address: $packageId) {
 		asMovePackage {
-			asObject {
-				address
-			}
+			address
+
 			modules(first: $limit, after: $cursor) {
 				pageInfo {
 					hasNextPage

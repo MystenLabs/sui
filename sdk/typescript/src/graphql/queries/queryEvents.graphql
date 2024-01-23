@@ -13,7 +13,7 @@ query queryEvents(
 	$first: Int
 	$last: Int
 ) {
-	eventConnection(filter: $filter, first: $first, after: $after, last: $last, before: $before) {
+	events(filter: $filter, first: $first, after: $after, last: $last, before: $before) {
 		pageInfo {
 			hasNextPage
 			hasPreviousPage
@@ -29,13 +29,11 @@ query queryEvents(
 fragment RPC_EVENTS_FIELDS on Event {
 	sendingModule {
 		package {
-			asObject {
-				address
-			}
+			address
 		}
 		name
 	}
-	senders {
+	sender {
 		address
 	}
 	type {

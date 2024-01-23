@@ -17,6 +17,7 @@ export type Scalars = {
   Boolean: { input: boolean; output: boolean; }
   Int: { input: number; output: number; }
   Float: { input: number; output: number; }
+  /** String containing Base64-encoded binary data. */
   Base64: { input: any; output: any; }
   /** String representation of an arbitrary width, possibly signed integer. */
   BigInt: { input: any; output: any; }
@@ -138,45 +139,50 @@ export type ActiveJwkEdge = {
   node: ActiveJwk;
 };
 
-export type Address = ObjectOwner & {
+/** The 32-byte address that is an account address (corresponding to a public key). */
+export type Address = IOwner & {
   __typename?: 'Address';
   address: Scalars['SuiAddress']['output'];
+  /**
+   * Total balance of all coins with marker type owned by this address. If type is not supplied,
+   * it defaults to `0x2::sui::SUI`.
+   */
   balance?: Maybe<Balance>;
-  balanceConnection?: Maybe<BalanceConnection>;
+  /** The balances of all coin types owned by this address. */
+  balances: BalanceConnection;
   /**
-   * The coin objects for the given address.
-   * The type field is a string of the inner type of the coin
-   * by which to filter (e.g., 0x2::sui::SUI).
+   * The coin objects for this address.
+   *
+   * `type` is a filter on the coin's type parameter, defaulting to `0x2::sui::SUI`.
    */
-  coinConnection?: Maybe<CoinConnection>;
-  defaultNameServiceName?: Maybe<Scalars['String']['output']>;
-  /** This resolver is not supported on the Address type. */
-  dynamicField?: Maybe<DynamicField>;
-  dynamicFieldConnection?: Maybe<DynamicFieldConnection>;
-  /** This resolver is not supported on the Address type. */
-  dynamicObjectField?: Maybe<DynamicField>;
-  objectConnection?: Maybe<ObjectConnection>;
-  /** The `0x3::staking_pool::StakedSui` objects owned by the given address. */
-  stakedSuiConnection?: Maybe<StakedSuiConnection>;
+  coins: CoinConnection;
+  /** The domain explicitly configured as the default domain pointing to this address. */
+  defaultSuinsName?: Maybe<Scalars['String']['output']>;
+  /** Objects owned by this address, optionally `filter`-ed. */
+  objects: MoveObjectConnection;
+  /** The `0x3::staking_pool::StakedSui` objects owned by this address. */
+  stakedSuis: StakedSuiConnection;
   /**
-   * The SuinsRegistration NFTs owned by the given object. These grant the owner
-   * the capability to manage the associated domain.
+   * The SuinsRegistration NFTs owned by this address. These grant the owner the capability to
+   * manage the associated domain.
    */
-  suinsRegistrations?: Maybe<SuinsRegistrationConnection>;
+  suinsRegistrations: SuinsRegistrationConnection;
   /**
-   * Similar behavior to the `transactionBlockConnection` in Query but
-   * supports additional `AddressTransactionBlockRelationship` filter
+   * Similar behavior to the `transactionBlocks` in Query but supporting the additional
+   * `AddressTransactionBlockRelationship` filter, which defaults to `SIGN`.
    */
-  transactionBlockConnection?: Maybe<TransactionBlockConnection>;
+  transactionBlocks: TransactionBlockConnection;
 };
 
 
+/** The 32-byte address that is an account address (corresponding to a public key). */
 export type AddressBalanceArgs = {
   type?: InputMaybe<Scalars['String']['input']>;
 };
 
 
-export type AddressBalanceConnectionArgs = {
+/** The 32-byte address that is an account address (corresponding to a public key). */
+export type AddressBalancesArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -184,7 +190,8 @@ export type AddressBalanceConnectionArgs = {
 };
 
 
-export type AddressCoinConnectionArgs = {
+/** The 32-byte address that is an account address (corresponding to a public key). */
+export type AddressCoinsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -193,25 +200,8 @@ export type AddressCoinConnectionArgs = {
 };
 
 
-export type AddressDynamicFieldArgs = {
-  name: DynamicFieldName;
-};
-
-
-export type AddressDynamicFieldConnectionArgs = {
-  after?: InputMaybe<Scalars['String']['input']>;
-  before?: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type AddressDynamicObjectFieldArgs = {
-  name: DynamicFieldName;
-};
-
-
-export type AddressObjectConnectionArgs = {
+/** The 32-byte address that is an account address (corresponding to a public key). */
+export type AddressObjectsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   filter?: InputMaybe<ObjectFilter>;
@@ -220,7 +210,8 @@ export type AddressObjectConnectionArgs = {
 };
 
 
-export type AddressStakedSuiConnectionArgs = {
+/** The 32-byte address that is an account address (corresponding to a public key). */
+export type AddressStakedSuisArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -228,6 +219,7 @@ export type AddressStakedSuiConnectionArgs = {
 };
 
 
+/** The 32-byte address that is an account address (corresponding to a public key). */
 export type AddressSuinsRegistrationsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
@@ -236,7 +228,8 @@ export type AddressSuinsRegistrationsArgs = {
 };
 
 
-export type AddressTransactionBlockConnectionArgs = {
+/** The 32-byte address that is an account address (corresponding to a public key). */
+export type AddressTransactionBlocksArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   filter?: InputMaybe<TransactionBlockFilter>;
@@ -245,13 +238,25 @@ export type AddressTransactionBlockConnectionArgs = {
   relation?: InputMaybe<AddressTransactionBlockRelationship>;
 };
 
+/**
+ * An address-owned object is owned by a specific 32-byte address that is
+ * either an account address (derived from a particular signature scheme) or
+ * an object ID. An address-owned object is accessible only to its owner and no others.
+ */
+export type AddressOwner = {
+  __typename?: 'AddressOwner';
+  owner?: Maybe<Owner>;
+};
+
+/** The possible relationship types for a transaction block: sign, sent, received, or paid. */
 export enum AddressTransactionBlockRelationship {
-  Paid = 'PAID',
+  /** Transactions that sent objects to this address. */
   Recv = 'RECV',
-  Sent = 'SENT',
+  /** Transactions this address has signed either as a sender or as a sponsor. */
   Sign = 'SIGN'
 }
 
+/** System transaction for creating the on-chain state used by zkLogin. */
 export type AuthenticatorStateCreateTransaction = {
   __typename?: 'AuthenticatorStateCreateTransaction';
   /** A workaround to define an empty variant of a GraphQL union. */
@@ -288,18 +293,20 @@ export type AuthenticatorStateUpdateTransactionNewActiveJwksArgs = {
   last?: InputMaybe<Scalars['Int']['input']>;
 };
 
+/** Range of checkpoints that the RPC is guaranteed to produce a consistent response for. */
 export type AvailableRange = {
   __typename?: 'AvailableRange';
   first?: Maybe<Checkpoint>;
   last?: Maybe<Checkpoint>;
 };
 
+/** The total balance for a particular coin type. */
 export type Balance = {
   __typename?: 'Balance';
   /** How many coins of this type constitute the balance */
   coinObjectCount?: Maybe<Scalars['Int']['output']>;
   /** Coin type for the balance, such as 0x2::sui::SUI */
-  coinType?: Maybe<MoveType>;
+  coinType: MoveType;
   /** Total balance across all coin objects of the coin type */
   totalBalance?: Maybe<Scalars['BigInt']['output']>;
 };
@@ -313,6 +320,25 @@ export type BalanceChange = {
   coinType?: Maybe<MoveType>;
   /** The address or object whose balance has changed. */
   owner?: Maybe<Owner>;
+};
+
+export type BalanceChangeConnection = {
+  __typename?: 'BalanceChangeConnection';
+  /** A list of edges. */
+  edges: Array<BalanceChangeEdge>;
+  /** A list of nodes. */
+  nodes: Array<BalanceChange>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+};
+
+/** An edge in a connection. */
+export type BalanceChangeEdge = {
+  __typename?: 'BalanceChangeEdge';
+  /** A cursor for use in pagination */
+  cursor: Scalars['String']['output'];
+  /** The item at the end of the edge */
+  node: BalanceChange;
 };
 
 export type BalanceConnection = {
@@ -383,6 +409,10 @@ export type ChangeEpochTransactionSystemPackagesArgs = {
   last?: InputMaybe<Scalars['Int']['input']>;
 };
 
+/**
+ * Checkpoints contain finalized transactions and are used for node synchronization
+ * and global transaction ordering.
+ */
 export type Checkpoint = {
   __typename?: 'Checkpoint';
   /**
@@ -419,7 +449,7 @@ export type Checkpoint = {
    */
   timestamp: Scalars['DateTime']['output'];
   /** Transactions in this checkpoint. */
-  transactionBlockConnection?: Maybe<TransactionBlockConnection>;
+  transactionBlocks: TransactionBlockConnection;
   /**
    * This is an aggregation of signatures from a quorum of validators for the checkpoint
    * proposal.
@@ -428,7 +458,11 @@ export type Checkpoint = {
 };
 
 
-export type CheckpointTransactionBlockConnectionArgs = {
+/**
+ * Checkpoints contain finalized transactions and are used for node synchronization
+ * and global transaction ordering.
+ */
+export type CheckpointTransactionBlocksArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   filter?: InputMaybe<TransactionBlockFilter>;
@@ -461,12 +495,190 @@ export type CheckpointId = {
   sequenceNumber?: InputMaybe<Scalars['Int']['input']>;
 };
 
-export type Coin = {
+/** Some 0x2::coin::Coin Move object. */
+export type Coin = IMoveObject & IObject & IOwner & {
   __typename?: 'Coin';
-  /** Convert the coin object into a Move object */
-  asMoveObject: MoveObject;
-  /** Balance of the coin object */
-  balance?: Maybe<Scalars['BigInt']['output']>;
+  address: Scalars['SuiAddress']['output'];
+  /**
+   * Total balance of all coins with marker type owned by this object. If type is not supplied,
+   * it defaults to `0x2::sui::SUI`.
+   */
+  balance?: Maybe<Balance>;
+  /** The balances of all coin types owned by this object. */
+  balances: BalanceConnection;
+  /** The Base64-encoded BCS serialization of the object's content. */
+  bcs?: Maybe<Scalars['Base64']['output']>;
+  /** Balance of this coin object. */
+  coinBalance?: Maybe<Scalars['BigInt']['output']>;
+  /**
+   * The coin objects for this object.
+   *
+   * `type` is a filter on the coin's type parameter, defaulting to `0x2::sui::SUI`.
+   */
+  coins: CoinConnection;
+  /**
+   * Displays the contents of the Move object in a JSON string and through GraphQL types. Also
+   * provides the flat representation of the type signature, and the BCS of the corresponding
+   * data.
+   */
+  contents?: Maybe<MoveValue>;
+  /** The domain explicitly configured as the default domain pointing to this object. */
+  defaultSuinsName?: Maybe<Scalars['String']['output']>;
+  /** 32-byte hash that identifies the object's contents, encoded as a Base58 string. */
+  digest?: Maybe<Scalars['String']['output']>;
+  /**
+   * The set of named templates defined on-chain for the type of this object, to be handled
+   * off-chain. The server substitutes data from the object into these templates to generate a
+   * display string per template.
+   */
+  display?: Maybe<Array<DisplayEntry>>;
+  /**
+   * Access a dynamic field on an object using its name. Names are arbitrary Move values whose
+   * type have `copy`, `drop`, and `store`, and are specified using their type, and their BCS
+   * contents, Base64 encoded.
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+   * type.
+   */
+  dynamicField?: Maybe<DynamicField>;
+  /**
+   * The dynamic fields and dynamic object fields on an object.
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+   * type.
+   */
+  dynamicFields: DynamicFieldConnection;
+  /**
+   * Access a dynamic object field on an object using its name. Names are arbitrary Move values
+   * whose type have `copy`, `drop`, and `store`, and are specified using their type, and their
+   * BCS contents, Base64 encoded. The value of a dynamic object field can also be accessed
+   * off-chain directly via its address (e.g. using `Query.object`).
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+   * type.
+   */
+  dynamicObjectField?: Maybe<DynamicField>;
+  /**
+   * Determines whether a transaction can transfer this object, using the TransferObjects
+   * transaction command or `sui::transfer::public_transfer`, both of which require the object to
+   * have the `key` and `store` abilities.
+   */
+  hasPublicTransfer: Scalars['Boolean']['output'];
+  /** Objects owned by this object, optionally `filter`-ed. */
+  objects: MoveObjectConnection;
+  /** The owner type of this object: Immutable, Shared, Parent, Address */
+  owner?: Maybe<ObjectOwner>;
+  /** The transaction block that created this version of the object. */
+  previousTransactionBlock?: Maybe<TransactionBlock>;
+  /** The transaction blocks that sent objects to this object. */
+  receivedTransactionBlocks: TransactionBlockConnection;
+  /** The `0x3::staking_pool::StakedSui` objects owned by this object. */
+  stakedSuis: StakedSuiConnection;
+  /**
+   * The current status of the object as read from the off-chain store. The possible states are:
+   * NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
+   * system package upgrade transaction. LIVE, the version returned is the most recent for the
+   * object, and it is not deleted or wrapped at that version. HISTORICAL, the object was
+   * referenced at a specific version or checkpoint, so is fetched from historical tables and may
+   * not be the latest version of the object. WRAPPED_OR_DELETED, the object is deleted or
+   * wrapped and only partial information can be loaded."
+   */
+  status: ObjectKind;
+  /**
+   * The amount of SUI we would rebate if this object gets deleted or mutated. This number is
+   * recalculated based on the present storage gas price.
+   */
+  storageRebate?: Maybe<Scalars['BigInt']['output']>;
+  /**
+   * The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
+   * manage the associated domain.
+   */
+  suinsRegistrations: SuinsRegistrationConnection;
+  version: Scalars['Int']['output'];
+};
+
+
+/** Some 0x2::coin::Coin Move object. */
+export type CoinBalanceArgs = {
+  type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/** Some 0x2::coin::Coin Move object. */
+export type CoinBalancesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/** Some 0x2::coin::Coin Move object. */
+export type CoinCoinsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/** Some 0x2::coin::Coin Move object. */
+export type CoinDynamicFieldArgs = {
+  name: DynamicFieldName;
+};
+
+
+/** Some 0x2::coin::Coin Move object. */
+export type CoinDynamicFieldsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/** Some 0x2::coin::Coin Move object. */
+export type CoinDynamicObjectFieldArgs = {
+  name: DynamicFieldName;
+};
+
+
+/** Some 0x2::coin::Coin Move object. */
+export type CoinObjectsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<ObjectFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/** Some 0x2::coin::Coin Move object. */
+export type CoinReceivedTransactionBlocksArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<TransactionBlockFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/** Some 0x2::coin::Coin Move object. */
+export type CoinStakedSuisArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/** Some 0x2::coin::Coin Move object. */
+export type CoinSuinsRegistrationsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type CoinConnection = {
@@ -479,6 +691,12 @@ export type CoinConnection = {
   pageInfo: PageInfo;
 };
 
+export type CoinDenyListStateCreateTransaction = {
+  __typename?: 'CoinDenyListStateCreateTransaction';
+  /** A workaround to define an empty variant of a GraphQL union. */
+  _?: Maybe<Scalars['Boolean']['output']>;
+};
+
 /** An edge in a connection. */
 export type CoinEdge = {
   __typename?: 'CoinEdge';
@@ -488,21 +706,199 @@ export type CoinEdge = {
   node: Coin;
 };
 
-export type CoinMetadata = {
+/** The metadata for a coin type. */
+export type CoinMetadata = IMoveObject & IObject & IOwner & {
   __typename?: 'CoinMetadata';
-  /** Convert the coin metadata object into a Move object. */
-  asMoveObject: MoveObject;
+  address: Scalars['SuiAddress']['output'];
+  /**
+   * Total balance of all coins with marker type owned by this object. If type is not supplied,
+   * it defaults to `0x2::sui::SUI`.
+   */
+  balance?: Maybe<Balance>;
+  /** The balances of all coin types owned by this object. */
+  balances: BalanceConnection;
+  /** The Base64-encoded BCS serialization of the object's content. */
+  bcs?: Maybe<Scalars['Base64']['output']>;
+  /**
+   * The coin objects for this object.
+   *
+   * `type` is a filter on the coin's type parameter, defaulting to `0x2::sui::SUI`.
+   */
+  coins: CoinConnection;
+  /**
+   * Displays the contents of the Move object in a JSON string and through GraphQL types. Also
+   * provides the flat representation of the type signature, and the BCS of the corresponding
+   * data.
+   */
+  contents?: Maybe<MoveValue>;
   /** The number of decimal places used to represent the token. */
   decimals?: Maybe<Scalars['Int']['output']>;
+  /** The domain explicitly configured as the default domain pointing to this object. */
+  defaultSuinsName?: Maybe<Scalars['String']['output']>;
   /** Optional description of the token, provided by the creator of the token. */
   description?: Maybe<Scalars['String']['output']>;
+  /** 32-byte hash that identifies the object's contents, encoded as a Base58 string. */
+  digest?: Maybe<Scalars['String']['output']>;
+  /**
+   * The set of named templates defined on-chain for the type of this object, to be handled
+   * off-chain. The server substitutes data from the object into these templates to generate a
+   * display string per template.
+   */
+  display?: Maybe<Array<DisplayEntry>>;
+  /**
+   * Access a dynamic field on an object using its name. Names are arbitrary Move values whose
+   * type have `copy`, `drop`, and `store`, and are specified using their type, and their BCS
+   * contents, Base64 encoded.
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+   * type.
+   */
+  dynamicField?: Maybe<DynamicField>;
+  /**
+   * The dynamic fields and dynamic object fields on an object.
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+   * type.
+   */
+  dynamicFields: DynamicFieldConnection;
+  /**
+   * Access a dynamic object field on an object using its name. Names are arbitrary Move values
+   * whose type have `copy`, `drop`, and `store`, and are specified using their type, and their
+   * BCS contents, Base64 encoded. The value of a dynamic object field can also be accessed
+   * off-chain directly via its address (e.g. using `Query.object`).
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+   * type.
+   */
+  dynamicObjectField?: Maybe<DynamicField>;
+  /**
+   * Determines whether a transaction can transfer this object, using the TransferObjects
+   * transaction command or `sui::transfer::public_transfer`, both of which require the object to
+   * have the `key` and `store` abilities.
+   */
+  hasPublicTransfer: Scalars['Boolean']['output'];
   iconUrl?: Maybe<Scalars['String']['output']>;
   /** Full, official name of the token. */
   name?: Maybe<Scalars['String']['output']>;
+  /** Objects owned by this object, optionally `filter`-ed. */
+  objects: MoveObjectConnection;
+  /** The owner type of this object: Immutable, Shared, Parent, Address */
+  owner?: Maybe<ObjectOwner>;
+  /** The transaction block that created this version of the object. */
+  previousTransactionBlock?: Maybe<TransactionBlock>;
+  /** The transaction blocks that sent objects to this object. */
+  receivedTransactionBlocks: TransactionBlockConnection;
+  /** The `0x3::staking_pool::StakedSui` objects owned by this object. */
+  stakedSuis: StakedSuiConnection;
+  /**
+   * The current status of the object as read from the off-chain store. The possible states are:
+   * NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
+   * system package upgrade transaction. LIVE, the version returned is the most recent for the
+   * object, and it is not deleted or wrapped at that version. HISTORICAL, the object was
+   * referenced at a specific version or checkpoint, so is fetched from historical tables and may
+   * not be the latest version of the object. WRAPPED_OR_DELETED, the object is deleted or
+   * wrapped and only partial information can be loaded."
+   */
+  status: ObjectKind;
+  /**
+   * The amount of SUI we would rebate if this object gets deleted or mutated. This number is
+   * recalculated based on the present storage gas price.
+   */
+  storageRebate?: Maybe<Scalars['BigInt']['output']>;
+  /**
+   * The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
+   * manage the associated domain.
+   */
+  suinsRegistrations: SuinsRegistrationConnection;
   /** The overall quantity of tokens that will be issued. */
   supply?: Maybe<Scalars['BigInt']['output']>;
   /** The token's identifying abbreviation. */
   symbol?: Maybe<Scalars['String']['output']>;
+  version: Scalars['Int']['output'];
+};
+
+
+/** The metadata for a coin type. */
+export type CoinMetadataBalanceArgs = {
+  type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/** The metadata for a coin type. */
+export type CoinMetadataBalancesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/** The metadata for a coin type. */
+export type CoinMetadataCoinsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/** The metadata for a coin type. */
+export type CoinMetadataDynamicFieldArgs = {
+  name: DynamicFieldName;
+};
+
+
+/** The metadata for a coin type. */
+export type CoinMetadataDynamicFieldsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/** The metadata for a coin type. */
+export type CoinMetadataDynamicObjectFieldArgs = {
+  name: DynamicFieldName;
+};
+
+
+/** The metadata for a coin type. */
+export type CoinMetadataObjectsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<ObjectFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/** The metadata for a coin type. */
+export type CoinMetadataReceivedTransactionBlocksArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<TransactionBlockFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/** The metadata for a coin type. */
+export type CoinMetadataStakedSuisArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/** The metadata for a coin type. */
+export type CoinMetadataSuinsRegistrationsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
 };
 
 /**
@@ -524,6 +920,25 @@ export type ConsensusCommitPrologueTransaction = {
   round: Scalars['Int']['output'];
 };
 
+export type DependencyConnection = {
+  __typename?: 'DependencyConnection';
+  /** A list of edges. */
+  edges: Array<DependencyEdge>;
+  /** A list of nodes. */
+  nodes: Array<TransactionBlock>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+};
+
+/** An edge in a connection. */
+export type DependencyEdge = {
+  __typename?: 'DependencyEdge';
+  /** A cursor for use in pagination */
+  cursor: Scalars['String']['output'];
+  /** The item at the end of the edge */
+  node?: Maybe<TransactionBlock>;
+};
+
 /**
  * The set of named templates defined on-chain for the type of this object,
  * to be handled off-chain. The server substitutes data from the object
@@ -539,6 +954,52 @@ export type DisplayEntry = {
   value?: Maybe<Scalars['String']['output']>;
 };
 
+export type DryRunEffect = {
+  __typename?: 'DryRunEffect';
+  /** Changes made to arguments that were mutably borrowed by each command in this transaction. */
+  mutatedReferences?: Maybe<Array<DryRunMutation>>;
+  /** Return results of each command in this transaction. */
+  returnValues?: Maybe<Array<DryRunReturn>>;
+};
+
+export type DryRunMutation = {
+  __typename?: 'DryRunMutation';
+  bcs: Scalars['Base64']['output'];
+  input: TransactionArgument;
+  type: MoveType;
+};
+
+export type DryRunResult = {
+  __typename?: 'DryRunResult';
+  /** The error that occurred during dry run execution, if any. */
+  error?: Maybe<Scalars['String']['output']>;
+  /**
+   * The intermediate results for each command of the dry run execution, including
+   * contents of mutated references and return values.
+   */
+  results?: Maybe<Array<DryRunEffect>>;
+  /** The transaction block representing the dry run execution. */
+  transaction?: Maybe<TransactionBlock>;
+};
+
+export type DryRunReturn = {
+  __typename?: 'DryRunReturn';
+  bcs: Scalars['Base64']['output'];
+  type: MoveType;
+};
+
+/**
+ * Dynamic fields are heterogeneous fields that can be added or removed at runtime,
+ * and can have arbitrary user-assigned names. There are two sub-types of dynamic
+ * fields:
+ *
+ * 1) Dynamic Fields can store any value that has the `store` ability, however an object
+ * stored in this kind of field will be considered wrapped and will not be accessible
+ * directly via its ID by external tools (explorers, wallets, etc) accessing storage.
+ * 2) Dynamic Object Fields values must be Sui objects (have the `key` and `store`
+ * abilities, and id: UID as the first field), but will still be directly accessible off-chain
+ * via their object ID after being attached.
+ */
 export type DynamicField = {
   __typename?: 'DynamicField';
   /**
@@ -609,7 +1070,7 @@ export type EndOfEpochTransactionTransactionsArgs = {
   last?: InputMaybe<Scalars['Int']['input']>;
 };
 
-export type EndOfEpochTransactionKind = AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | ChangeEpochTransaction | RandomnessStateCreateTransaction;
+export type EndOfEpochTransactionKind = AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | ChangeEpochTransaction | CoinDenyListStateCreateTransaction | RandomnessStateCreateTransaction;
 
 export type EndOfEpochTransactionKindConnection = {
   __typename?: 'EndOfEpochTransactionKindConnection';
@@ -630,19 +1091,28 @@ export type EndOfEpochTransactionKindEdge = {
   node: EndOfEpochTransactionKind;
 };
 
+/**
+ * Operation of the Sui network is temporally partitioned into non-overlapping epochs,
+ * and the network aims to keep epochs roughly the same duration as each other.
+ * During a particular epoch the following data is fixed:
+ *
+ * - the protocol version
+ * - the reference gas price
+ * - the set of participating validators
+ */
 export type Epoch = {
   __typename?: 'Epoch';
-  /** The epoch's corresponding checkpoints */
+  /** The epoch's corresponding checkpoints. */
   checkpoints: CheckpointConnection;
-  /** The epoch's ending timestamp */
+  /** The epoch's ending timestamp. */
   endTimestamp?: Maybe<Scalars['DateTime']['output']>;
-  /** The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change */
+  /** The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change. */
   epochId: Scalars['Int']['output'];
   /** The storage fees paid for transactions executed during the epoch. */
   fundInflow?: Maybe<Scalars['BigInt']['output']>;
   /**
-   * The storage fee rebates paid to users
-   * who deleted the data associated with past transactions.
+   * The storage fee rebates paid to users who deleted the data associated with past
+   * transactions.
    */
   fundOutflow?: Maybe<Scalars['BigInt']['output']>;
   /**
@@ -656,16 +1126,19 @@ export type Epoch = {
    * the net amount of storage fees accumulated in this epoch.
    */
   netInflow?: Maybe<Scalars['BigInt']['output']>;
-  /** The epoch's corresponding protocol configuration, including the feature flags and the configuration options */
+  /**
+   * The epoch's corresponding protocol configuration, including the feature flags and the
+   * configuration options.
+   */
   protocolConfigs: ProtocolConfigs;
-  /** The minimum gas price that a quorum of validators are guaranteed to sign a transaction for */
+  /** The minimum gas price that a quorum of validators are guaranteed to sign a transaction for. */
   referenceGasPrice?: Maybe<Scalars['BigInt']['output']>;
   /**
    * Information about whether this epoch was started in safe mode, which happens if the full epoch
    * change logic fails for some reason.
    */
   safeMode?: Maybe<SafeMode>;
-  /** The epoch's starting timestamp */
+  /** The epoch's starting timestamp. */
   startTimestamp: Scalars['DateTime']['output'];
   /**
    * SUI set aside to account for objects stored on-chain, at the start of the epoch.
@@ -690,13 +1163,22 @@ export type Epoch = {
   totalStakeRewards?: Maybe<Scalars['BigInt']['output']>;
   /** The amount added to total gas fees to make up the total stake rewards. */
   totalStakeSubsidies?: Maybe<Scalars['BigInt']['output']>;
-  /** The epoch's corresponding transaction blocks */
-  transactionBlockConnection?: Maybe<TransactionBlockConnection>;
-  /** Validator related properties, including the active validators */
+  /** The epoch's corresponding transaction blocks. */
+  transactionBlocks: TransactionBlockConnection;
+  /** Validator related properties, including the active validators. */
   validatorSet?: Maybe<ValidatorSet>;
 };
 
 
+/**
+ * Operation of the Sui network is temporally partitioned into non-overlapping epochs,
+ * and the network aims to keep epochs roughly the same duration as each other.
+ * During a particular epoch the following data is fixed:
+ *
+ * - the protocol version
+ * - the reference gas price
+ * - the set of participating validators
+ */
 export type EpochCheckpointsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
@@ -705,7 +1187,16 @@ export type EpochCheckpointsArgs = {
 };
 
 
-export type EpochTransactionBlockConnectionArgs = {
+/**
+ * Operation of the Sui network is temporally partitioned into non-overlapping epochs,
+ * and the network aims to keep epochs roughly the same duration as each other.
+ * During a particular epoch the following data is fixed:
+ *
+ * - the protocol version
+ * - the reference gas price
+ * - the set of participating validators
+ */
+export type EpochTransactionBlocksArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   filter?: InputMaybe<TransactionBlockFilter>;
@@ -715,6 +1206,7 @@ export type EpochTransactionBlockConnectionArgs = {
 
 export type Event = {
   __typename?: 'Event';
+  /** The BCS representation of this value, Base64 encoded. */
   bcs: Scalars['Base64']['output'];
   /** Structured contents of a Move value. */
   data: Scalars['MoveData']['output'];
@@ -733,8 +1225,8 @@ export type Event = {
    * known by the client.
    */
   json: Scalars['JSON']['output'];
-  /** Addresses of the senders of the event */
-  senders?: Maybe<Array<Address>>;
+  /** Address of the sender of the event */
+  sender?: Maybe<Address>;
   /**
    * The Move module containing some function that when called by
    * a programmable transaction block (PTB) emitted this event.
@@ -745,6 +1237,7 @@ export type Event = {
   sendingModule?: Maybe<MoveModule>;
   /** UTC timestamp in milliseconds since epoch (1/1/1970) */
   timestamp?: Maybe<Scalars['DateTime']['output']>;
+  /** The value's Move type. */
   type: MoveType;
 };
 
@@ -791,16 +1284,24 @@ export type EventFilter = {
   transactionDigest?: InputMaybe<Scalars['String']['input']>;
 };
 
+/** The result of an execution, including errors that occurred during said execution. */
 export type ExecutionResult = {
   __typename?: 'ExecutionResult';
-  /** The digest field captures the digest of the transaction block */
-  digest: Scalars['String']['output'];
+  /**
+   * The effects of the executed transaction. Since the transaction was just executed
+   * and not indexed yet, fields including `balance_changes`, `timestamp` and `checkpoint`
+   * are not available.
+   */
+  effects: TransactionBlockEffects;
   /** The errors field captures any errors that occurred during execution */
   errors?: Maybe<Array<Scalars['String']['output']>>;
 };
 
+/** The execution status of this transaction block: success or failure. */
 export enum ExecutionStatus {
+  /** The transaction block could not be executed */
   Failure = 'FAILURE',
+  /** The transaction block was successfully executed */
   Success = 'SUCCESS'
 }
 
@@ -836,6 +1337,7 @@ export type GasCoin = {
   _?: Maybe<Scalars['Boolean']['output']>;
 };
 
+/** Breakdown of gas costs in effects. */
 export type GasCostSummary = {
   __typename?: 'GasCostSummary';
   /** Gas paid for executing this transaction (in MIST). */
@@ -855,18 +1357,20 @@ export type GasCostSummary = {
   storageRebate?: Maybe<Scalars['BigInt']['output']>;
 };
 
+/** Effects related to gas (costs incurred and the identity of the smashed gas object returned). */
 export type GasEffects = {
   __typename?: 'GasEffects';
   gasObject?: Maybe<Object>;
   gasSummary?: Maybe<GasCostSummary>;
 };
 
+/** Configuration for this transaction's gas price and the coins used to pay for gas. */
 export type GasInput = {
   __typename?: 'GasInput';
   /** The maximum number of gas units that can be expended by executing this transaction */
   gasBudget?: Maybe<Scalars['BigInt']['output']>;
   /** Objects used to pay for a transaction's execution and storage */
-  gasPayment?: Maybe<ObjectConnection>;
+  gasPayment: ObjectConnection;
   /**
    * An unsigned integer specifying the number of native tokens per gas unit this transaction
    * will pay (in MIST).
@@ -877,6 +1381,7 @@ export type GasInput = {
 };
 
 
+/** Configuration for this transaction's gas price and the coins used to pay for gas. */
 export type GasInputGasPaymentArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
@@ -898,6 +1403,224 @@ export type GenesisTransactionObjectsArgs = {
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
   last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/**
+ * This interface is implemented by types that represent a Move object on-chain (A Move value whose
+ * type has `key`).
+ */
+export type IMoveObject = {
+  /** Displays the contents of the Move object in a JSON string and through GraphQL types. Also provides the flat representation of the type signature, and the BCS of the corresponding data. */
+  contents?: Maybe<MoveValue>;
+  /** The set of named templates defined on-chain for the type of this object, to be handled off-chain. The server substitutes data from the object into these templates to generate a display string per template. */
+  display?: Maybe<Array<DisplayEntry>>;
+  /**
+   * Access a dynamic field on an object using its name. Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified using their type, and their BCS contents, Base64 encoded.
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Ownertype.
+   */
+  dynamicField?: Maybe<DynamicField>;
+  /**
+   * The dynamic fields and dynamic object fields on an object.
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
+   */
+  dynamicFields: DynamicFieldConnection;
+  /**
+   * Access a dynamic object field on an object using its name. Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified using their type, and their BCS contents, Base64 encoded. The value of a dynamic object field can also be accessed off-chain directly via its address (e.g. using `Query.object`).
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
+   */
+  dynamicObjectField?: Maybe<DynamicField>;
+  /** Determines whether a transaction can transfer this object, using the TransferObjects transaction command or `sui::transfer::public_transfer`, both of which require the object to have the `key` and `store` abilities. */
+  hasPublicTransfer: Scalars['Boolean']['output'];
+};
+
+
+/**
+ * This interface is implemented by types that represent a Move object on-chain (A Move value whose
+ * type has `key`).
+ */
+export type IMoveObjectDynamicFieldArgs = {
+  name: DynamicFieldName;
+};
+
+
+/**
+ * This interface is implemented by types that represent a Move object on-chain (A Move value whose
+ * type has `key`).
+ */
+export type IMoveObjectDynamicFieldsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/**
+ * This interface is implemented by types that represent a Move object on-chain (A Move value whose
+ * type has `key`).
+ */
+export type IMoveObjectDynamicObjectFieldArgs = {
+  name: DynamicFieldName;
+};
+
+/**
+ * Interface implemented by on-chain values that are addressable by an ID (also referred to as its
+ * address). This includes Move objects and packages.
+ */
+export type IObject = {
+  /** The Base64-encoded BCS serialization of the object's content. */
+  bcs?: Maybe<Scalars['Base64']['output']>;
+  /** 32-byte hash that identifies the object's current contents, encoded as a Base58 string. */
+  digest?: Maybe<Scalars['String']['output']>;
+  /**
+   * The owner type of this object: Immutable, Shared, Parent, Address
+   * Immutable and Shared Objects do not have owners.
+   */
+  owner?: Maybe<ObjectOwner>;
+  /** The transaction block that created this version of the object. */
+  previousTransactionBlock?: Maybe<TransactionBlock>;
+  /** The transaction blocks that sent objects to this object. */
+  receivedTransactionBlocks: TransactionBlockConnection;
+  /** The current status of the object as read from the off-chain store. The possible states are: NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or system package upgrade transaction. LIVE, the version returned is the most recent for the object, and it is not deleted or wrapped at that version. HISTORICAL, the object was referenced at a specific version or checkpoint, so is fetched from historical tables and may not be the latest version of the object. WRAPPED_OR_DELETED, the object is deleted or wrapped and only partial information can be loaded. */
+  status: ObjectKind;
+  storageRebate?: Maybe<Scalars['BigInt']['output']>;
+  version: Scalars['Int']['output'];
+};
+
+
+/**
+ * Interface implemented by on-chain values that are addressable by an ID (also referred to as its
+ * address). This includes Move objects and packages.
+ */
+export type IObjectReceivedTransactionBlocksArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<TransactionBlockFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/**
+ * Interface implemented by GraphQL types representing entities that can own objects. Object owners
+ * are identified by an address which can represent either the public key of an account or another
+ * object. The same address can only refer to an account or an object, never both, but it is not
+ * possible to know which up-front.
+ */
+export type IOwner = {
+  address: Scalars['SuiAddress']['output'];
+  /** Total balance of all coins with marker type owned by this object or address. If type is not supplied, it defaults to `0x2::sui::SUI`. */
+  balance?: Maybe<Balance>;
+  /** The balances of all coin types owned by this object or address. */
+  balances: BalanceConnection;
+  /**
+   * The coin objects for this object or address.
+   *
+   * `type` is a filter on the coin's type parameter, defaulting to `0x2::sui::SUI`.
+   */
+  coins: CoinConnection;
+  /** The domain explicitly configured as the default domain pointing to this object or address. */
+  defaultSuinsName?: Maybe<Scalars['String']['output']>;
+  /** Objects owned by this object or address, optionally `filter`-ed. */
+  objects: MoveObjectConnection;
+  /** The `0x3::staking_pool::StakedSui` objects owned by this object or address. */
+  stakedSuis: StakedSuiConnection;
+  /** The SuinsRegistration NFTs owned by this object or address. These grant the owner the capability to manage the associated domain. */
+  suinsRegistrations: SuinsRegistrationConnection;
+};
+
+
+/**
+ * Interface implemented by GraphQL types representing entities that can own objects. Object owners
+ * are identified by an address which can represent either the public key of an account or another
+ * object. The same address can only refer to an account or an object, never both, but it is not
+ * possible to know which up-front.
+ */
+export type IOwnerBalanceArgs = {
+  type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/**
+ * Interface implemented by GraphQL types representing entities that can own objects. Object owners
+ * are identified by an address which can represent either the public key of an account or another
+ * object. The same address can only refer to an account or an object, never both, but it is not
+ * possible to know which up-front.
+ */
+export type IOwnerBalancesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/**
+ * Interface implemented by GraphQL types representing entities that can own objects. Object owners
+ * are identified by an address which can represent either the public key of an account or another
+ * object. The same address can only refer to an account or an object, never both, but it is not
+ * possible to know which up-front.
+ */
+export type IOwnerCoinsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/**
+ * Interface implemented by GraphQL types representing entities that can own objects. Object owners
+ * are identified by an address which can represent either the public key of an account or another
+ * object. The same address can only refer to an account or an object, never both, but it is not
+ * possible to know which up-front.
+ */
+export type IOwnerObjectsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<ObjectFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/**
+ * Interface implemented by GraphQL types representing entities that can own objects. Object owners
+ * are identified by an address which can represent either the public key of an account or another
+ * object. The same address can only refer to an account or an object, never both, but it is not
+ * possible to know which up-front.
+ */
+export type IOwnerStakedSuisArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/**
+ * Interface implemented by GraphQL types representing entities that can own objects. Object owners
+ * are identified by an address which can represent either the public key of an account or another
+ * object. The same address can only refer to an account or an object, never both, but it is not
+ * possible to know which up-front.
+ */
+export type IOwnerSuinsRegistrationsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/**
+ * An immutable object is an object that can't be mutated, transferred, or deleted.
+ * Immutable objects have no owner, so anyone can use them.
+ */
+export type Immutable = {
+  __typename?: 'Immutable';
+  _?: Maybe<Scalars['Boolean']['output']>;
 };
 
 /** One of the input objects or primitive values to the programmable transaction block. */
@@ -936,10 +1659,15 @@ export type MergeCoinsTransaction = {
   coins: Array<TransactionArgument>;
 };
 
+/** Abilities are keywords in Sui Move that define how types behave at the compiler level. */
 export enum MoveAbility {
+  /** Enables values to be copied. */
   Copy = 'COPY',
+  /** Enables values to be popped/dropped. */
   Drop = 'DROP',
+  /** Enables values to be held directly in global storage. */
   Key = 'KEY',
+  /** Enables values to be held inside a struct in global storage. */
   Store = 'STORE'
 }
 
@@ -960,6 +1688,7 @@ export type MoveCallTransaction = {
   typeArguments: Array<MoveType>;
 };
 
+/** Information for a particular field on a Move struct. */
 export type MoveField = {
   __typename?: 'MoveField';
   name: Scalars['String']['output'];
@@ -1124,41 +1853,287 @@ export type MoveModuleEdge = {
   node: MoveModule;
 };
 
-export type MoveObject = {
+/**
+ * The representation of an object as a Move Object, which exposes additional information
+ * (content, module that governs it, version, is transferrable, etc.) about this object.
+ */
+export type MoveObject = IMoveObject & IObject & IOwner & {
   __typename?: 'MoveObject';
+  address: Scalars['SuiAddress']['output'];
   /** Attempts to convert the Move object into a `0x2::coin::Coin`. */
   asCoin?: Maybe<Coin>;
   /** Attempts to convert the Move object into a `0x2::coin::CoinMetadata`. */
   asCoinMetadata?: Maybe<CoinMetadata>;
-  /**
-   * Attempts to convert the Move object into an Object
-   * This provides additional information such as version and digest on the top-level
-   */
-  asObject: Object;
   /** Attempts to convert the Move object into a `0x3::staking_pool::StakedSui`. */
   asStakedSui?: Maybe<StakedSui>;
+  /** Attempts to convert the Move object into a `SuinsRegistration` object. */
+  asSuinsRegistration?: Maybe<SuinsRegistration>;
   /**
-   * Displays the contents of the MoveObject in a JSON string and through graphql types.  Also
-   * provides the flat representation of the type signature, and the bcs of the corresponding
-   * data
+   * Total balance of all coins with marker type owned by this object. If type is not supplied,
+   * it defaults to `0x2::sui::SUI`.
+   */
+  balance?: Maybe<Balance>;
+  /** The balances of all coin types owned by this object. */
+  balances: BalanceConnection;
+  /** The Base64-encoded BCS serialization of the object's content. */
+  bcs?: Maybe<Scalars['Base64']['output']>;
+  /**
+   * The coin objects for this object.
+   *
+   * `type` is a filter on the coin's type parameter, defaulting to `0x2::sui::SUI`.
+   */
+  coins: CoinConnection;
+  /**
+   * Displays the contents of the Move object in a JSON string and through GraphQL types. Also
+   * provides the flat representation of the type signature, and the BCS of the corresponding
+   * data.
    */
   contents?: Maybe<MoveValue>;
+  /** The domain explicitly configured as the default domain pointing to this object. */
+  defaultSuinsName?: Maybe<Scalars['String']['output']>;
+  /** 32-byte hash that identifies the object's contents, encoded as a Base58 string. */
+  digest?: Maybe<Scalars['String']['output']>;
+  /**
+   * The set of named templates defined on-chain for the type of this object, to be handled
+   * off-chain. The server substitutes data from the object into these templates to generate a
+   * display string per template.
+   */
+  display?: Maybe<Array<DisplayEntry>>;
+  /**
+   * Access a dynamic field on an object using its name. Names are arbitrary Move values whose
+   * type have `copy`, `drop`, and `store`, and are specified using their type, and their BCS
+   * contents, Base64 encoded.
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+   * type.
+   */
+  dynamicField?: Maybe<DynamicField>;
+  /**
+   * The dynamic fields and dynamic object fields on an object.
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+   * type.
+   */
+  dynamicFields: DynamicFieldConnection;
+  /**
+   * Access a dynamic object field on an object using its name. Names are arbitrary Move values
+   * whose type have `copy`, `drop`, and `store`, and are specified using their type, and their
+   * BCS contents, Base64 encoded. The value of a dynamic object field can also be accessed
+   * off-chain directly via its address (e.g. using `Query.object`).
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+   * type.
+   */
+  dynamicObjectField?: Maybe<DynamicField>;
   /**
    * Determines whether a transaction can transfer this object, using the TransferObjects
    * transaction command or `sui::transfer::public_transfer`, both of which require the object to
    * have the `key` and `store` abilities.
    */
   hasPublicTransfer: Scalars['Boolean']['output'];
+  /** Objects owned by this object, optionally `filter`-ed. */
+  objects: MoveObjectConnection;
+  /** The owner type of this object: Immutable, Shared, Parent, Address */
+  owner?: Maybe<ObjectOwner>;
+  /** The transaction block that created this version of the object. */
+  previousTransactionBlock?: Maybe<TransactionBlock>;
+  /** The transaction blocks that sent objects to this object. */
+  receivedTransactionBlocks: TransactionBlockConnection;
+  /** The `0x3::staking_pool::StakedSui` objects owned by this object. */
+  stakedSuis: StakedSuiConnection;
+  /**
+   * The current status of the object as read from the off-chain store. The possible states are:
+   * NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
+   * system package upgrade transaction. LIVE, the version returned is the most recent for the
+   * object, and it is not deleted or wrapped at that version. HISTORICAL, the object was
+   * referenced at a specific version or checkpoint, so is fetched from historical tables and may
+   * not be the latest version of the object. WRAPPED_OR_DELETED, the object is deleted or
+   * wrapped and only partial information can be loaded."
+   */
+  status: ObjectKind;
+  /**
+   * The amount of SUI we would rebate if this object gets deleted or mutated. This number is
+   * recalculated based on the present storage gas price.
+   */
+  storageRebate?: Maybe<Scalars['BigInt']['output']>;
+  /**
+   * The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
+   * manage the associated domain.
+   */
+  suinsRegistrations: SuinsRegistrationConnection;
+  version: Scalars['Int']['output'];
 };
 
-export type MovePackage = {
+
+/**
+ * The representation of an object as a Move Object, which exposes additional information
+ * (content, module that governs it, version, is transferrable, etc.) about this object.
+ */
+export type MoveObjectBalanceArgs = {
+  type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/**
+ * The representation of an object as a Move Object, which exposes additional information
+ * (content, module that governs it, version, is transferrable, etc.) about this object.
+ */
+export type MoveObjectBalancesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/**
+ * The representation of an object as a Move Object, which exposes additional information
+ * (content, module that governs it, version, is transferrable, etc.) about this object.
+ */
+export type MoveObjectCoinsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/**
+ * The representation of an object as a Move Object, which exposes additional information
+ * (content, module that governs it, version, is transferrable, etc.) about this object.
+ */
+export type MoveObjectDynamicFieldArgs = {
+  name: DynamicFieldName;
+};
+
+
+/**
+ * The representation of an object as a Move Object, which exposes additional information
+ * (content, module that governs it, version, is transferrable, etc.) about this object.
+ */
+export type MoveObjectDynamicFieldsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/**
+ * The representation of an object as a Move Object, which exposes additional information
+ * (content, module that governs it, version, is transferrable, etc.) about this object.
+ */
+export type MoveObjectDynamicObjectFieldArgs = {
+  name: DynamicFieldName;
+};
+
+
+/**
+ * The representation of an object as a Move Object, which exposes additional information
+ * (content, module that governs it, version, is transferrable, etc.) about this object.
+ */
+export type MoveObjectObjectsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<ObjectFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/**
+ * The representation of an object as a Move Object, which exposes additional information
+ * (content, module that governs it, version, is transferrable, etc.) about this object.
+ */
+export type MoveObjectReceivedTransactionBlocksArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<TransactionBlockFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/**
+ * The representation of an object as a Move Object, which exposes additional information
+ * (content, module that governs it, version, is transferrable, etc.) about this object.
+ */
+export type MoveObjectStakedSuisArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/**
+ * The representation of an object as a Move Object, which exposes additional information
+ * (content, module that governs it, version, is transferrable, etc.) about this object.
+ */
+export type MoveObjectSuinsRegistrationsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type MoveObjectConnection = {
+  __typename?: 'MoveObjectConnection';
+  /** A list of edges. */
+  edges: Array<MoveObjectEdge>;
+  /** A list of nodes. */
+  nodes: Array<MoveObject>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+};
+
+/** An edge in a connection. */
+export type MoveObjectEdge = {
+  __typename?: 'MoveObjectEdge';
+  /** A cursor for use in pagination */
+  cursor: Scalars['String']['output'];
+  /** The item at the end of the edge */
+  node: MoveObject;
+};
+
+/**
+ * A MovePackage is a kind of Move object that represents code that has been published on chain.
+ * It exposes information about its modules, type definitions, functions, and dependencies.
+ */
+export type MovePackage = IObject & IOwner & {
   __typename?: 'MovePackage';
-  asObject: Object;
+  address: Scalars['SuiAddress']['output'];
   /**
-   * BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
-   * name, followed by module bytes), in alphabetic order by module name.
+   * Total balance of all coins with marker type owned by this package. If type is not supplied,
+   * it defaults to `0x2::sui::SUI`.
+   *
+   * Note that coins owned by a package are inaccessible, because packages are immutable and
+   * cannot be owned by an address.
    */
+  balance?: Maybe<Balance>;
+  /**
+   * The balances of all coin types owned by this package.
+   *
+   * Note that coins owned by a package are inaccessible, because packages are immutable and
+   * cannot be owned by an address.
+   */
+  balances: BalanceConnection;
+  /** The Base64-encoded BCS serialization of the package's content. */
   bcs?: Maybe<Scalars['Base64']['output']>;
+  /**
+   * The coin objects owned by this package.
+   *
+   * `type` is a filter on the coin's type parameter, defaulting to `0x2::sui::SUI`.
+   *
+   * Note that coins owned by a package are inaccessible, because packages are immutable and
+   * cannot be owned by an address.
+   */
+  coins: CoinConnection;
+  /** The domain explicitly configured as the default domain pointing to this object. */
+  defaultSuinsName?: Maybe<Scalars['String']['output']>;
+  /** 32-byte hash that identifies the package's contents, encoded as a Base58 string. */
+  digest?: Maybe<Scalars['String']['output']>;
   /** The transitive dependencies of this package. */
   linkage?: Maybe<Array<Linkage>>;
   /**
@@ -1166,19 +2141,170 @@ export type MovePackage = {
    * structs and functions it defines.
    */
   module?: Maybe<MoveModule>;
+  /**
+   * BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
+   * name, followed by module bytes), in alphabetic order by module name.
+   */
+  moduleBcs?: Maybe<Scalars['Base64']['output']>;
   /** Paginate through the MoveModules defined in this package. */
   modules?: Maybe<MoveModuleConnection>;
+  /**
+   * Objects owned by this package, optionally `filter`-ed.
+   *
+   * Note that objects owned by a package are inaccessible, because packages are immutable and
+   * cannot be owned by an address.
+   */
+  objects: MoveObjectConnection;
+  /**
+   * The owner type of this object: Immutable, Shared, Parent, Address
+   * Packages are always Immutable.
+   */
+  owner?: Maybe<ObjectOwner>;
+  /** The transaction block that published or upgraded this package. */
+  previousTransactionBlock?: Maybe<TransactionBlock>;
+  /**
+   * The transaction blocks that sent objects to this package.
+   *
+   * Note that objects that have been sent to a package become inaccessible.
+   */
+  receivedTransactionBlocks: TransactionBlockConnection;
+  /**
+   * The `0x3::staking_pool::StakedSui` objects owned by this package.
+   *
+   * Note that objects owned by a package are inaccessible, because packages are immutable and
+   * cannot be owned by an address.
+   */
+  stakedSuis: StakedSuiConnection;
+  /**
+   * The current status of the object as read from the off-chain store. The possible states are:
+   * NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
+   * system package upgrade transaction. LIVE, the version returned is the most recent for the
+   * object, and it is not deleted or wrapped at that version. HISTORICAL, the object was
+   * referenced at a specific version or checkpoint, so is fetched from historical tables and may
+   * not be the latest version of the object. WRAPPED_OR_DELETED, the object is deleted or
+   * wrapped and only partial information can be loaded."
+   */
+  status: ObjectKind;
+  /**
+   * The amount of SUI we would rebate if this object gets deleted or mutated. This number is
+   * recalculated based on the present storage gas price.
+   *
+   * Note that packages cannot be deleted or mutated, so this number is provided purely for
+   * reference.
+   */
+  storageRebate?: Maybe<Scalars['BigInt']['output']>;
+  /**
+   * The SuinsRegistration NFTs owned by this package. These grant the owner the capability to
+   * manage the associated domain.
+   *
+   * Note that objects owned by a package are inaccessible, because packages are immutable and
+   * cannot be owned by an address.
+   */
+  suinsRegistrations: SuinsRegistrationConnection;
   /** The (previous) versions of this package that introduced its types. */
   typeOrigins?: Maybe<Array<TypeOrigin>>;
+  version: Scalars['Int']['output'];
 };
 
 
+/**
+ * A MovePackage is a kind of Move object that represents code that has been published on chain.
+ * It exposes information about its modules, type definitions, functions, and dependencies.
+ */
+export type MovePackageBalanceArgs = {
+  type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/**
+ * A MovePackage is a kind of Move object that represents code that has been published on chain.
+ * It exposes information about its modules, type definitions, functions, and dependencies.
+ */
+export type MovePackageBalancesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/**
+ * A MovePackage is a kind of Move object that represents code that has been published on chain.
+ * It exposes information about its modules, type definitions, functions, and dependencies.
+ */
+export type MovePackageCoinsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/**
+ * A MovePackage is a kind of Move object that represents code that has been published on chain.
+ * It exposes information about its modules, type definitions, functions, and dependencies.
+ */
 export type MovePackageModuleArgs = {
   name: Scalars['String']['input'];
 };
 
 
+/**
+ * A MovePackage is a kind of Move object that represents code that has been published on chain.
+ * It exposes information about its modules, type definitions, functions, and dependencies.
+ */
 export type MovePackageModulesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/**
+ * A MovePackage is a kind of Move object that represents code that has been published on chain.
+ * It exposes information about its modules, type definitions, functions, and dependencies.
+ */
+export type MovePackageObjectsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<ObjectFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/**
+ * A MovePackage is a kind of Move object that represents code that has been published on chain.
+ * It exposes information about its modules, type definitions, functions, and dependencies.
+ */
+export type MovePackageReceivedTransactionBlocksArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<TransactionBlockFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/**
+ * A MovePackage is a kind of Move object that represents code that has been published on chain.
+ * It exposes information about its modules, type definitions, functions, and dependencies.
+ */
+export type MovePackageStakedSuisArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/**
+ * A MovePackage is a kind of Move object that represents code that has been published on chain.
+ * It exposes information about its modules, type definitions, functions, and dependencies.
+ */
+export type MovePackageSuinsRegistrationsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -1251,7 +2377,7 @@ export type MoveStructTypeParameter = {
   isPhantom: Scalars['Boolean']['output'];
 };
 
-/** Represents concrete types (no type parameters, no references) */
+/** Represents concrete types (no type parameters, no references). */
 export type MoveType = {
   __typename?: 'MoveType';
   /** The abilities this concrete type has. */
@@ -1266,6 +2392,7 @@ export type MoveType = {
 
 export type MoveValue = {
   __typename?: 'MoveValue';
+  /** The BCS representation of this value, Base64 encoded. */
   bcs: Scalars['Base64']['output'];
   /** Structured contents of a Move value. */
   data: Scalars['MoveData']['output'];
@@ -1284,15 +2411,27 @@ export type MoveValue = {
    * known by the client.
    */
   json: Scalars['JSON']['output'];
+  /** The value's Move type. */
   type: MoveType;
 };
 
+/**
+ * The visibility modifier describes which modules can access this module member.
+ * By default, a module member can be called only within the same module.
+ */
 export enum MoveVisibility {
+  /**
+   * A friend member can be accessed in the module it is defined in and any other module in
+   * its package that is explicitly specified in its friend list.
+   */
   Friend = 'FRIEND',
+  /** A private member can be accessed in the module it is defined in. */
   Private = 'PRIVATE',
+  /** A public member can be accessed by any module. */
   Public = 'PUBLIC'
 }
 
+/** Mutations are used to write to the Sui network. */
 export type Mutation = {
   __typename?: 'Mutation';
   /**
@@ -1311,98 +2450,128 @@ export type Mutation = {
 };
 
 
+/** Mutations are used to write to the Sui network. */
 export type MutationExecuteTransactionBlockArgs = {
   signatures: Array<Scalars['String']['input']>;
   txBytes: Scalars['String']['input'];
 };
 
-export type Object = ObjectOwner & {
+/**
+ * An object in Sui is a package (set of Move bytecode modules) or object (typed data structure
+ * with fields) with additional metadata detailing its id, version, transaction digest, owner
+ * field indicating how this object can be accessed.
+ */
+export type Object = IObject & IOwner & {
   __typename?: 'Object';
-  /** The address of the object, named as such to avoid conflict with the address type. */
   address: Scalars['SuiAddress']['output'];
   /** Attempts to convert the object into a MoveObject */
   asMoveObject?: Maybe<MoveObject>;
   /** Attempts to convert the object into a MovePackage */
   asMovePackage?: Maybe<MovePackage>;
-  /** The balance of coin objects of a particular coin type owned by the object. */
+  /**
+   * Total balance of all coins with marker type owned by this object. If type is not supplied,
+   * it defaults to `0x2::sui::SUI`.
+   */
   balance?: Maybe<Balance>;
-  /** The balances of all coin types owned by the object. Coins of the same type are grouped together into one Balance. */
-  balanceConnection?: Maybe<BalanceConnection>;
-  /** The Base64 encoded bcs serialization of the object's content. */
+  /** The balances of all coin types owned by this object. */
+  balances: BalanceConnection;
+  /** The Base64-encoded BCS serialization of the object's content. */
   bcs?: Maybe<Scalars['Base64']['output']>;
   /**
-   * The coin objects for the given address.
+   * The coin objects for this object.
    *
-   * The type field is a string of the inner type of the coin by which to filter
-   * (e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
+   * `type` is a filter on the coin's type parameter, defaulting to `0x2::sui::SUI`.
    */
-  coinConnection?: Maybe<CoinConnection>;
-  /** The domain that a user address has explicitly configured as their default domain */
-  defaultNameServiceName?: Maybe<Scalars['String']['output']>;
+  coins: CoinConnection;
+  /** The domain explicitly configured as the default domain pointing to this object. */
+  defaultSuinsName?: Maybe<Scalars['String']['output']>;
   /** 32-byte hash that identifies the object's current contents, encoded as a Base58 string. */
-  digest: Scalars['String']['output'];
+  digest?: Maybe<Scalars['String']['output']>;
   /**
-   * The set of named templates defined on-chain for the type of this object,
-   * to be handled off-chain. The server substitutes data from the object
-   * into these templates to generate a display string per template.
+   * The set of named templates defined on-chain for the type of this object, to be handled
+   * off-chain. The server substitutes data from the object into these templates to generate a
+   * display string per template.
    */
   display?: Maybe<Array<DisplayEntry>>;
   /**
-   * Access a dynamic field on an object using its name.
-   * Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
-   * using their type, and their BCS contents, Base64 encoded.
-   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
+   * Access a dynamic field on an object using its name. Names are arbitrary Move values whose
+   * type have `copy`, `drop`, and `store`, and are specified using their type, and their BCS
+   * contents, Base64 encoded.
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+   * type.
    */
   dynamicField?: Maybe<DynamicField>;
   /**
-   * The dynamic fields on an object.
-   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
+   * The dynamic fields and dynamic object fields on an object.
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+   * type.
    */
-  dynamicFieldConnection?: Maybe<DynamicFieldConnection>;
+  dynamicFields: DynamicFieldConnection;
   /**
-   * Access a dynamic object field on an object using its name.
-   * Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
-   * using their type, and their BCS contents, Base64 encoded.
-   * The value of a dynamic object field can also be accessed off-chain directly via its address (e.g. using `Query.object`).
-   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
+   * Access a dynamic object field on an object using its name. Names are arbitrary Move values
+   * whose type have `copy`, `drop`, and `store`, and are specified using their type, and their
+   * BCS contents, Base64 encoded. The value of a dynamic object field can also be accessed
+   * off-chain directly via its address (e.g. using `Query.object`).
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+   * type.
    */
   dynamicObjectField?: Maybe<DynamicField>;
+  /** Objects owned by this object, optionally `filter`-ed. */
+  objects: MoveObjectConnection;
   /**
-   * Objects can either be immutable, shared, owned by an address,
-   * or are child objects (part of a dynamic field)
+   * The owner type of this object: Immutable, Shared, Parent, Address
+   * Immutable and Shared Objects do not have owners.
    */
-  kind?: Maybe<ObjectKind>;
-  /** The objects owned by this object */
-  objectConnection?: Maybe<ObjectConnection>;
-  /**
-   * The Address or Object that owns this Object.  Immutable and Shared Objects do not have
-   * owners.
-   */
-  owner?: Maybe<Owner>;
+  owner?: Maybe<ObjectOwner>;
   /** The transaction block that created this version of the object. */
   previousTransactionBlock?: Maybe<TransactionBlock>;
-  /** The `0x3::staking_pool::StakedSui` objects owned by the given object. */
-  stakedSuiConnection?: Maybe<StakedSuiConnection>;
+  /** The transaction blocks that sent objects to this object. */
+  receivedTransactionBlocks: TransactionBlockConnection;
+  /** The `0x3::staking_pool::StakedSui` objects owned by this object. */
+  stakedSuis: StakedSuiConnection;
   /**
-   * The amount of SUI we would rebate if this object gets deleted or mutated.
-   * This number is recalculated based on the present storage gas price.
+   * The current status of the object as read from the off-chain store. The possible states are:
+   * NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
+   * system package upgrade transaction. LIVE, the version returned is the most recent for the
+   * object, and it is not deleted or wrapped at that version. HISTORICAL, the object was
+   * referenced at a specific version or checkpoint, so is fetched from historical tables and may
+   * not be the latest version of the object. WRAPPED_OR_DELETED, the object is deleted or
+   * wrapped and only partial information can be loaded."
+   */
+  status: ObjectKind;
+  /**
+   * The amount of SUI we would rebate if this object gets deleted or mutated. This number is
+   * recalculated based on the present storage gas price.
    */
   storageRebate?: Maybe<Scalars['BigInt']['output']>;
   /**
-   * The SuinsRegistration NFTs owned by the given object. These grant the owner
-   * the capability to manage the associated domain.
+   * The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
+   * manage the associated domain.
    */
-  suinsRegistrations?: Maybe<SuinsRegistrationConnection>;
+  suinsRegistrations: SuinsRegistrationConnection;
   version: Scalars['Int']['output'];
 };
 
 
+/**
+ * An object in Sui is a package (set of Move bytecode modules) or object (typed data structure
+ * with fields) with additional metadata detailing its id, version, transaction digest, owner
+ * field indicating how this object can be accessed.
+ */
 export type ObjectBalanceArgs = {
   type?: InputMaybe<Scalars['String']['input']>;
 };
 
 
-export type ObjectBalanceConnectionArgs = {
+/**
+ * An object in Sui is a package (set of Move bytecode modules) or object (typed data structure
+ * with fields) with additional metadata detailing its id, version, transaction digest, owner
+ * field indicating how this object can be accessed.
+ */
+export type ObjectBalancesArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -1410,7 +2579,12 @@ export type ObjectBalanceConnectionArgs = {
 };
 
 
-export type ObjectCoinConnectionArgs = {
+/**
+ * An object in Sui is a package (set of Move bytecode modules) or object (typed data structure
+ * with fields) with additional metadata detailing its id, version, transaction digest, owner
+ * field indicating how this object can be accessed.
+ */
+export type ObjectCoinsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -1419,12 +2593,22 @@ export type ObjectCoinConnectionArgs = {
 };
 
 
+/**
+ * An object in Sui is a package (set of Move bytecode modules) or object (typed data structure
+ * with fields) with additional metadata detailing its id, version, transaction digest, owner
+ * field indicating how this object can be accessed.
+ */
 export type ObjectDynamicFieldArgs = {
   name: DynamicFieldName;
 };
 
 
-export type ObjectDynamicFieldConnectionArgs = {
+/**
+ * An object in Sui is a package (set of Move bytecode modules) or object (typed data structure
+ * with fields) with additional metadata detailing its id, version, transaction digest, owner
+ * field indicating how this object can be accessed.
+ */
+export type ObjectDynamicFieldsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -1432,12 +2616,22 @@ export type ObjectDynamicFieldConnectionArgs = {
 };
 
 
+/**
+ * An object in Sui is a package (set of Move bytecode modules) or object (typed data structure
+ * with fields) with additional metadata detailing its id, version, transaction digest, owner
+ * field indicating how this object can be accessed.
+ */
 export type ObjectDynamicObjectFieldArgs = {
   name: DynamicFieldName;
 };
 
 
-export type ObjectObjectConnectionArgs = {
+/**
+ * An object in Sui is a package (set of Move bytecode modules) or object (typed data structure
+ * with fields) with additional metadata detailing its id, version, transaction digest, owner
+ * field indicating how this object can be accessed.
+ */
+export type ObjectObjectsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   filter?: InputMaybe<ObjectFilter>;
@@ -1446,7 +2640,26 @@ export type ObjectObjectConnectionArgs = {
 };
 
 
-export type ObjectStakedSuiConnectionArgs = {
+/**
+ * An object in Sui is a package (set of Move bytecode modules) or object (typed data structure
+ * with fields) with additional metadata detailing its id, version, transaction digest, owner
+ * field indicating how this object can be accessed.
+ */
+export type ObjectReceivedTransactionBlocksArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<TransactionBlockFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/**
+ * An object in Sui is a package (set of Move bytecode modules) or object (typed data structure
+ * with fields) with additional metadata detailing its id, version, transaction digest, owner
+ * field indicating how this object can be accessed.
+ */
+export type ObjectStakedSuisArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -1454,6 +2667,11 @@ export type ObjectStakedSuiConnectionArgs = {
 };
 
 
+/**
+ * An object in Sui is a package (set of Move bytecode modules) or object (typed data structure
+ * with fields) with additional metadata detailing its id, version, transaction digest, owner
+ * field indicating how this object can be accessed.
+ */
 export type ObjectSuinsRegistrationsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
@@ -1476,6 +2694,25 @@ export type ObjectChange = {
   outputState?: Maybe<Object>;
 };
 
+export type ObjectChangeConnection = {
+  __typename?: 'ObjectChangeConnection';
+  /** A list of edges. */
+  edges: Array<ObjectChangeEdge>;
+  /** A list of nodes. */
+  nodes: Array<ObjectChange>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+};
+
+/** An edge in a connection. */
+export type ObjectChangeEdge = {
+  __typename?: 'ObjectChangeEdge';
+  /** A cursor for use in pagination */
+  cursor: Scalars['String']['output'];
+  /** The item at the end of the edge */
+  node: ObjectChange;
+};
+
 export type ObjectConnection = {
   __typename?: 'ObjectConnection';
   /** A list of edges. */
@@ -1495,6 +2732,14 @@ export type ObjectEdge = {
   node: Object;
 };
 
+/**
+ * Constrains the set of objects returned. All filters are optional, and the resulting set of
+ * objects are ones whose
+ *
+ * - Type matches the `type` filter,
+ * - AND, whose owner matches the `owner` filter,
+ * - AND, whose ID is in `objectIds` OR whose ID and version is in `objectKeys`.
+ */
 export type ObjectFilter = {
   /** Filter for live objects by their IDs. */
   objectIds?: InputMaybe<Array<Scalars['SuiAddress']['input']>>;
@@ -1521,89 +2766,32 @@ export type ObjectKey = {
 };
 
 export enum ObjectKind {
-  Child = 'CHILD',
-  Immutable = 'IMMUTABLE',
-  Owned = 'OWNED',
-  Shared = 'SHARED'
+  /**
+   * The object is referenced at some version, and thus is fetched from the snapshot or
+   * historical objects table.
+   */
+  Historical = 'HISTORICAL',
+  /** The object is currently live and is not deleted or wrapped. */
+  Live = 'LIVE',
+  /** The object is loaded from serialized data, such as the contents of a transaction. */
+  NotIndexed = 'NOT_INDEXED',
+  /**
+   * The object is deleted or wrapped and only partial information can be loaded from the
+   * indexer.
+   */
+  WrappedOrDeleted = 'WRAPPED_OR_DELETED'
 }
 
-export type ObjectOwner = {
-  address: Scalars['SuiAddress']['output'];
-  balance?: Maybe<Balance>;
-  balanceConnection?: Maybe<BalanceConnection>;
-  coinConnection?: Maybe<CoinConnection>;
-  defaultNameServiceName?: Maybe<Scalars['String']['output']>;
-  dynamicField?: Maybe<DynamicField>;
-  dynamicFieldConnection?: Maybe<DynamicFieldConnection>;
-  dynamicObjectField?: Maybe<DynamicField>;
-  objectConnection?: Maybe<ObjectConnection>;
-  stakedSuiConnection?: Maybe<StakedSuiConnection>;
-  suinsRegistrations?: Maybe<SuinsRegistrationConnection>;
-};
+/** The object's owner type: Immutable, Shared, Parent, or Address. */
+export type ObjectOwner = AddressOwner | Immutable | Parent | Shared;
 
-
-export type ObjectOwnerBalanceArgs = {
-  type?: InputMaybe<Scalars['String']['input']>;
-};
-
-
-export type ObjectOwnerBalanceConnectionArgs = {
-  after?: InputMaybe<Scalars['String']['input']>;
-  before?: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type ObjectOwnerCoinConnectionArgs = {
-  after?: InputMaybe<Scalars['String']['input']>;
-  before?: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  type?: InputMaybe<Scalars['String']['input']>;
-};
-
-
-export type ObjectOwnerDynamicFieldArgs = {
-  name: DynamicFieldName;
-};
-
-
-export type ObjectOwnerDynamicFieldConnectionArgs = {
-  after?: InputMaybe<Scalars['String']['input']>;
-  before?: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type ObjectOwnerDynamicObjectFieldArgs = {
-  name: DynamicFieldName;
-};
-
-
-export type ObjectOwnerObjectConnectionArgs = {
-  after?: InputMaybe<Scalars['String']['input']>;
-  before?: InputMaybe<Scalars['String']['input']>;
-  filter?: InputMaybe<ObjectFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type ObjectOwnerStakedSuiConnectionArgs = {
-  after?: InputMaybe<Scalars['String']['input']>;
-  before?: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type ObjectOwnerSuinsRegistrationsArgs = {
-  after?: InputMaybe<Scalars['String']['input']>;
-  before?: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
+export type ObjectRef = {
+  /** ID of the object. */
+  address: Scalars['SuiAddress']['input'];
+  /** Digest of the object. */
+  digest: Scalars['String']['input'];
+  /** Version or sequence number of the object. */
+  version: Scalars['Int']['input'];
 };
 
 /**
@@ -1634,58 +2822,82 @@ export type OwnedOrImmutable = {
   version: Scalars['Int']['output'];
 };
 
-export type Owner = ObjectOwner & {
+/**
+ * An Owner is an entity that can own an object. Each Owner is identified by a SuiAddress which
+ * represents either an Address (corresponding to a public key of an account) or an Object, but
+ * never both (it is not known up-front whether a given Owner is an Address or an Object).
+ */
+export type Owner = IOwner & {
   __typename?: 'Owner';
   address: Scalars['SuiAddress']['output'];
   asAddress?: Maybe<Address>;
   asObject?: Maybe<Object>;
-  balance?: Maybe<Balance>;
-  balanceConnection?: Maybe<BalanceConnection>;
   /**
-   * The coin objects for the given address or object.
-   *
-   * The type field is a string of the inner type of the coin by which to filter
-   * (e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
+   * Total balance of all coins with marker type owned by this object or address. If type is not
+   * supplied, it defaults to `0x2::sui::SUI`.
    */
-  coinConnection?: Maybe<CoinConnection>;
-  defaultNameServiceName?: Maybe<Scalars['String']['output']>;
+  balance?: Maybe<Balance>;
+  /** The balances of all coin types owned by this object or address. */
+  balances: BalanceConnection;
   /**
-   * Access a dynamic field on an object using its name.
-   * Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
-   * using their type, and their BCS contents, Base64 encoded.
+   * The coin objects for this object or address.
+   *
+   * `type` is a filter on the coin's type parameter, defaulting to `0x2::sui::SUI`.
+   */
+  coins: CoinConnection;
+  /** The domain explicitly configured as the default domain pointing to this object or address. */
+  defaultSuinsName?: Maybe<Scalars['String']['output']>;
+  /**
+   * Access a dynamic field on an object using its name. Names are arbitrary Move values whose
+   * type have `copy`, `drop`, and `store`, and are specified using their type, and their BCS
+   * contents, Base64 encoded.
+   *
    * This field exists as a convenience when accessing a dynamic field on a wrapped object.
    */
   dynamicField?: Maybe<DynamicField>;
   /**
-   * The dynamic fields on an object.
+   * The dynamic fields and dynamic object fields on an object.
+   *
    * This field exists as a convenience when accessing a dynamic field on a wrapped object.
    */
-  dynamicFieldConnection?: Maybe<DynamicFieldConnection>;
+  dynamicFields: DynamicFieldConnection;
   /**
-   * Access a dynamic object field on an object using its name.
-   * Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
-   * using their type, and their BCS contents, Base64 encoded.
-   * The value of a dynamic object field can also be accessed off-chain directly via its address (e.g. using `Query.object`).
+   * Access a dynamic object field on an object using its name. Names are arbitrary Move values
+   * whose type have `copy`, `drop`, and `store`, and are specified using their type, and their
+   * BCS contents, Base64 encoded. The value of a dynamic object field can also be accessed
+   * off-chain directly via its address (e.g. using `Query.object`).
+   *
    * This field exists as a convenience when accessing a dynamic field on a wrapped object.
    */
   dynamicObjectField?: Maybe<DynamicField>;
-  objectConnection?: Maybe<ObjectConnection>;
-  /** The `0x3::staking_pool::StakedSui` objects owned by the given object. */
-  stakedSuiConnection?: Maybe<StakedSuiConnection>;
+  /** Objects owned by this object or address, optionally `filter`-ed. */
+  objects: MoveObjectConnection;
+  /** The `0x3::staking_pool::StakedSui` objects owned by this object or address. */
+  stakedSuis: StakedSuiConnection;
   /**
-   * The SuinsRegistration NFTs owned by the given object. These grant the owner
-   * the capability to manage the associated domain.
+   * The SuinsRegistration NFTs owned by this object or address. These grant the owner the
+   * capability to manage the associated domain.
    */
-  suinsRegistrations?: Maybe<SuinsRegistrationConnection>;
+  suinsRegistrations: SuinsRegistrationConnection;
 };
 
 
+/**
+ * An Owner is an entity that can own an object. Each Owner is identified by a SuiAddress which
+ * represents either an Address (corresponding to a public key of an account) or an Object, but
+ * never both (it is not known up-front whether a given Owner is an Address or an Object).
+ */
 export type OwnerBalanceArgs = {
   type?: InputMaybe<Scalars['String']['input']>;
 };
 
 
-export type OwnerBalanceConnectionArgs = {
+/**
+ * An Owner is an entity that can own an object. Each Owner is identified by a SuiAddress which
+ * represents either an Address (corresponding to a public key of an account) or an Object, but
+ * never both (it is not known up-front whether a given Owner is an Address or an Object).
+ */
+export type OwnerBalancesArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -1693,7 +2905,12 @@ export type OwnerBalanceConnectionArgs = {
 };
 
 
-export type OwnerCoinConnectionArgs = {
+/**
+ * An Owner is an entity that can own an object. Each Owner is identified by a SuiAddress which
+ * represents either an Address (corresponding to a public key of an account) or an Object, but
+ * never both (it is not known up-front whether a given Owner is an Address or an Object).
+ */
+export type OwnerCoinsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -1702,12 +2919,22 @@ export type OwnerCoinConnectionArgs = {
 };
 
 
+/**
+ * An Owner is an entity that can own an object. Each Owner is identified by a SuiAddress which
+ * represents either an Address (corresponding to a public key of an account) or an Object, but
+ * never both (it is not known up-front whether a given Owner is an Address or an Object).
+ */
 export type OwnerDynamicFieldArgs = {
   name: DynamicFieldName;
 };
 
 
-export type OwnerDynamicFieldConnectionArgs = {
+/**
+ * An Owner is an entity that can own an object. Each Owner is identified by a SuiAddress which
+ * represents either an Address (corresponding to a public key of an account) or an Object, but
+ * never both (it is not known up-front whether a given Owner is an Address or an Object).
+ */
+export type OwnerDynamicFieldsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -1715,12 +2942,22 @@ export type OwnerDynamicFieldConnectionArgs = {
 };
 
 
+/**
+ * An Owner is an entity that can own an object. Each Owner is identified by a SuiAddress which
+ * represents either an Address (corresponding to a public key of an account) or an Object, but
+ * never both (it is not known up-front whether a given Owner is an Address or an Object).
+ */
 export type OwnerDynamicObjectFieldArgs = {
   name: DynamicFieldName;
 };
 
 
-export type OwnerObjectConnectionArgs = {
+/**
+ * An Owner is an entity that can own an object. Each Owner is identified by a SuiAddress which
+ * represents either an Address (corresponding to a public key of an account) or an Object, but
+ * never both (it is not known up-front whether a given Owner is an Address or an Object).
+ */
+export type OwnerObjectsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   filter?: InputMaybe<ObjectFilter>;
@@ -1729,7 +2966,12 @@ export type OwnerObjectConnectionArgs = {
 };
 
 
-export type OwnerStakedSuiConnectionArgs = {
+/**
+ * An Owner is an entity that can own an object. Each Owner is identified by a SuiAddress which
+ * represents either an Address (corresponding to a public key of an account) or an Object, but
+ * never both (it is not known up-front whether a given Owner is an Address or an Object).
+ */
+export type OwnerStakedSuisArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -1737,6 +2979,11 @@ export type OwnerStakedSuiConnectionArgs = {
 };
 
 
+/**
+ * An Owner is an entity that can own an object. Each Owner is identified by a SuiAddress which
+ * represents either an Address (corresponding to a public key of an account) or an Object, but
+ * never both (it is not known up-front whether a given Owner is an Address or an Object).
+ */
 export type OwnerSuinsRegistrationsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
@@ -1755,6 +3002,16 @@ export type PageInfo = {
   hasPreviousPage: Scalars['Boolean']['output'];
   /** When paginating backwards, the cursor to continue. */
   startCursor?: Maybe<Scalars['String']['output']>;
+};
+
+/**
+ * If the object's owner is a Parent, this object is part of a dynamic field (it is the value of
+ * the dynamic field, or the intermediate Field object itself). Also note that if the owner
+ * is a parent, then it's guaranteed to be an object.
+ */
+export type Parent = {
+  __typename?: 'Parent';
+  parent?: Maybe<Object>;
 };
 
 /** A single transaction, or command, in the programmable transaction block. */
@@ -1896,6 +3153,7 @@ export type Pure = {
 
 export type Query = {
   __typename?: 'Query';
+  /** Look-up an Account by its SuiAddress. */
   address?: Maybe<Address>;
   /**
    * Range of checkpoints that the RPC has data available for (for data
@@ -1912,33 +3170,62 @@ export type Query = {
    * checkpoint).
    */
   checkpoint?: Maybe<Checkpoint>;
+  /** The checkpoints that exist in the network. */
   checkpoints: CheckpointConnection;
+  /** The coin metadata associated with the given coin type. */
+  coinMetadata?: Maybe<CoinMetadata>;
   /**
    * The coin objects that exist in the network.
    *
-   * The type field is a string of the inner type of the coin by which to filter
-   * (e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
+   * The type field is a string of the inner type of the coin by which to filter (e.g.
+   * `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
    */
-  coinConnection?: Maybe<CoinConnection>;
-  coinMetadata?: Maybe<CoinMetadata>;
+  coins: CoinConnection;
+  /**
+   * Simulate running a transaction to inspect its effects without
+   * committing to them on-chain.
+   *
+   * `txBytes` either a `TransactionData` struct or a `TransactionKind`
+   * struct, BCS-encoded and then Base64-encoded.  The expected
+   * type is controlled by the presence or absence of `txMeta`: If
+   * present, `txBytes` is assumed to be a `TransactionKind`, if
+   * absent, then `TransactionData`.
+   *
+   * `txMeta` the data that is missing from a `TransactionKind` to make
+   * a `TransactionData` (sender address and gas information).  All
+   * its fields are nullable.
+   *
+   * `skipChecks` optional flag to disable the usual verification
+   * checks that prevent access to objects that are owned by
+   * addresses other than the sender, and calling non-public,
+   * non-entry functions, and some other checks.  Defaults to false.
+   */
+  dryRunTransactionBlock: DryRunResult;
   /** Fetch epoch information by ID (defaults to the latest epoch). */
   epoch?: Maybe<Epoch>;
-  eventConnection?: Maybe<EventConnection>;
+  /** The events that exist in the network. */
+  events: EventConnection;
+  /**
+   * The object corresponding to the given address at the (optionally) given version.
+   * When no version is given, the latest version is returned.
+   */
   object?: Maybe<Object>;
-  objectConnection?: Maybe<ObjectConnection>;
-  owner?: Maybe<ObjectOwner>;
+  /** The objects that exist in the network. */
+  objects: ObjectConnection;
+  owner?: Maybe<Owner>;
   /**
    * Fetch the protocol config by protocol version (defaults to the latest protocol
-   * version known to the GraphQL)
+   * version known to the GraphQL service).
    */
   protocolConfig: ProtocolConfigs;
-  /** Resolves the owner address of the provided domain name */
-  resolveNameServiceAddress?: Maybe<Address>;
+  /** Resolves a SuiNS `domain` name to an address, if it has been bound. */
+  resolveSuinsAddress?: Maybe<Address>;
   /** Configuration for this RPC service */
   serviceConfig: ServiceConfig;
   /** Fetch a transaction block by its transaction digest. */
   transactionBlock?: Maybe<TransactionBlock>;
-  transactionBlockConnection?: Maybe<TransactionBlockConnection>;
+  /** The transaction blocks that exist in the network. */
+  transactionBlocks: TransactionBlockConnection;
   /**
    * Fetch a structured representation of a concrete type, including its layout information.
    * Fails if the type is malformed.
@@ -1965,7 +3252,12 @@ export type QueryCheckpointsArgs = {
 };
 
 
-export type QueryCoinConnectionArgs = {
+export type QueryCoinMetadataArgs = {
+  coinType: Scalars['String']['input'];
+};
+
+
+export type QueryCoinsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -1974,8 +3266,10 @@ export type QueryCoinConnectionArgs = {
 };
 
 
-export type QueryCoinMetadataArgs = {
-  coinType: Scalars['String']['input'];
+export type QueryDryRunTransactionBlockArgs = {
+  skipChecks?: InputMaybe<Scalars['Boolean']['input']>;
+  txBytes: Scalars['String']['input'];
+  txMeta?: InputMaybe<TransactionMetadata>;
 };
 
 
@@ -1984,7 +3278,7 @@ export type QueryEpochArgs = {
 };
 
 
-export type QueryEventConnectionArgs = {
+export type QueryEventsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   filter?: InputMaybe<EventFilter>;
@@ -1999,7 +3293,7 @@ export type QueryObjectArgs = {
 };
 
 
-export type QueryObjectConnectionArgs = {
+export type QueryObjectsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   filter?: InputMaybe<ObjectFilter>;
@@ -2018,8 +3312,8 @@ export type QueryProtocolConfigArgs = {
 };
 
 
-export type QueryResolveNameServiceAddressArgs = {
-  name: Scalars['String']['input'];
+export type QueryResolveSuinsAddressArgs = {
+  domain: Scalars['String']['input'];
 };
 
 
@@ -2028,7 +3322,7 @@ export type QueryTransactionBlockArgs = {
 };
 
 
-export type QueryTransactionBlockConnectionArgs = {
+export type QueryTransactionBlocksArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   filter?: InputMaybe<TransactionBlockFilter>;
@@ -2103,6 +3397,7 @@ export type SafeMode = {
   gasSummary?: Maybe<GasCostSummary>;
 };
 
+/** The enabled features and service limits configured by the server. */
 export type ServiceConfig = {
   __typename?: 'ServiceConfig';
   /** Default number of elements allowed on a single page of a connection. */
@@ -2121,13 +3416,14 @@ export type ServiceConfig = {
   /**
    * The maximum number of output nodes in a GraphQL response.
    *
-   * If a node is a connection, it is counted as the specified 'first' or 'last' number of items,
-   * or the default_page_size as set by the server. Non-connection nodes and fields are not included
-   * in this count.
+   * Non-connection nodes have a count of 1, while connection nodes are counted as
+   * the specified 'first' or 'last' number of items, or the default_page_size
+   * as set by the server if those arguments are not set.
    *
-   * The count of output nodes is multiplicative. For example, if the current node is a connection
-   * with first: 10 and has a field to a connection with last: 20, the total estimated output nodes
-   * would be 10 * 20 = 200.
+   * Counts accumulate multiplicatively down the query tree. For example, if a query starts
+   * with a connection of first: 10 and has a field to a connection with last: 20, the count
+   * at the second level would be 200 nodes. This is then summed to the count of 10 nodes
+   * at the first level, for a total of 210 nodes.
    */
   maxOutputNodes: Scalars['Int']['output'];
   /** Maximum number of elements allowed on a single page of a connection. */
@@ -2155,8 +3451,18 @@ export type ServiceConfig = {
 };
 
 
+/** The enabled features and service limits configured by the server. */
 export type ServiceConfigIsEnabledArgs = {
   feature: Feature;
+};
+
+/**
+ * A shared object is an object that is shared using the 0x2::transfer::share_object function.
+ * Unlike owned objects, once an object is shared, it stays mutable and is accessible by anyone.
+ */
+export type Shared = {
+  __typename?: 'Shared';
+  initialSharedVersion: Scalars['Int']['output'];
 };
 
 /** A Move object that's shared. */
@@ -2223,16 +3529,17 @@ export type SplitCoinsTransaction = {
   coin: TransactionArgument;
 };
 
+/** The stake's possible status: active, pending, or unstaked. */
 export enum StakeStatus {
-  /** The stake object is active in a staking pool and it is generating rewards */
+  /** The stake object is active in a staking pool and it is generating rewards. */
   Active = 'ACTIVE',
-  /** The stake awaits to join a staking pool in the next epoch */
+  /** The stake awaits to join a staking pool in the next epoch. */
   Pending = 'PENDING',
-  /** The stake is no longer active in any staking pool */
+  /** The stake is no longer active in any staking pool. */
   Unstaked = 'UNSTAKED'
 }
 
-/** Parameters related to subsiding staking rewards */
+/** Parameters that control the distribution of the stake subsidy. */
 export type StakeSubsidy = {
   __typename?: 'StakeSubsidy';
   /**
@@ -2259,12 +3566,69 @@ export type StakeSubsidy = {
   periodLength?: Maybe<Scalars['Int']['output']>;
 };
 
-export type StakedSui = {
+/** Represents a `0x3::staking_pool::StakedSui` Move object on-chain. */
+export type StakedSui = IMoveObject & IObject & IOwner & {
   __typename?: 'StakedSui';
-  /** The epoch at which this stake became active */
+  /** The epoch at which this stake became active. */
   activatedEpoch?: Maybe<Epoch>;
-  /** The corresponding `0x3::staking_pool::StakedSui` Move object. */
-  asMoveObject: MoveObject;
+  address: Scalars['SuiAddress']['output'];
+  /**
+   * Total balance of all coins with marker type owned by this object. If type is not supplied,
+   * it defaults to `0x2::sui::SUI`.
+   */
+  balance?: Maybe<Balance>;
+  /** The balances of all coin types owned by this object. */
+  balances: BalanceConnection;
+  /** The Base64-encoded BCS serialization of the object's content. */
+  bcs?: Maybe<Scalars['Base64']['output']>;
+  /**
+   * The coin objects for this object.
+   *
+   * `type` is a filter on the coin's type parameter, defaulting to `0x2::sui::SUI`.
+   */
+  coins: CoinConnection;
+  /**
+   * Displays the contents of the Move object in a JSON string and through GraphQL types. Also
+   * provides the flat representation of the type signature, and the BCS of the corresponding
+   * data.
+   */
+  contents?: Maybe<MoveValue>;
+  /** The domain explicitly configured as the default domain pointing to this object. */
+  defaultSuinsName?: Maybe<Scalars['String']['output']>;
+  /** 32-byte hash that identifies the object's contents, encoded as a Base58 string. */
+  digest?: Maybe<Scalars['String']['output']>;
+  /**
+   * The set of named templates defined on-chain for the type of this object, to be handled
+   * off-chain. The server substitutes data from the object into these templates to generate a
+   * display string per template.
+   */
+  display?: Maybe<Array<DisplayEntry>>;
+  /**
+   * Access a dynamic field on an object using its name. Names are arbitrary Move values whose
+   * type have `copy`, `drop`, and `store`, and are specified using their type, and their BCS
+   * contents, Base64 encoded.
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+   * type.
+   */
+  dynamicField?: Maybe<DynamicField>;
+  /**
+   * The dynamic fields and dynamic object fields on an object.
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+   * type.
+   */
+  dynamicFields: DynamicFieldConnection;
+  /**
+   * Access a dynamic object field on an object using its name. Names are arbitrary Move values
+   * whose type have `copy`, `drop`, and `store`, and are specified using their type, and their
+   * BCS contents, Base64 encoded. The value of a dynamic object field can also be accessed
+   * off-chain directly via its address (e.g. using `Query.object`).
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+   * type.
+   */
+  dynamicObjectField?: Maybe<DynamicField>;
   /**
    * The estimated reward for this stake object, calculated as:
    *
@@ -2278,12 +3642,133 @@ export type StakedSui = {
    * This value is only available if the stake is active.
    */
   estimatedReward?: Maybe<Scalars['BigInt']['output']>;
+  /**
+   * Determines whether a transaction can transfer this object, using the TransferObjects
+   * transaction command or `sui::transfer::public_transfer`, both of which require the object to
+   * have the `key` and `store` abilities.
+   */
+  hasPublicTransfer: Scalars['Boolean']['output'];
+  /** Objects owned by this object, optionally `filter`-ed. */
+  objects: MoveObjectConnection;
+  /** The owner type of this object: Immutable, Shared, Parent, Address */
+  owner?: Maybe<ObjectOwner>;
+  /** The transaction block that created this version of the object. */
+  previousTransactionBlock?: Maybe<TransactionBlock>;
   /** The SUI that was initially staked. */
   principal?: Maybe<Scalars['BigInt']['output']>;
-  /** The epoch at which this object was requested to join a stake pool */
+  /** The transaction blocks that sent objects to this object. */
+  receivedTransactionBlocks: TransactionBlockConnection;
+  /** The epoch at which this object was requested to join a stake pool. */
   requestedEpoch?: Maybe<Epoch>;
   /** A stake can be pending, active, or unstaked */
-  status: StakeStatus;
+  stakeStatus: StakeStatus;
+  /** The `0x3::staking_pool::StakedSui` objects owned by this object. */
+  stakedSuis: StakedSuiConnection;
+  /**
+   * The current status of the object as read from the off-chain store. The possible states are:
+   * NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
+   * system package upgrade transaction. LIVE, the version returned is the most recent for the
+   * object, and it is not deleted or wrapped at that version. HISTORICAL, the object was
+   * referenced at a specific version or checkpoint, so is fetched from historical tables and may
+   * not be the latest version of the object. WRAPPED_OR_DELETED, the object is deleted or
+   * wrapped and only partial information can be loaded."
+   */
+  status: ObjectKind;
+  /**
+   * The amount of SUI we would rebate if this object gets deleted or mutated. This number is
+   * recalculated based on the present storage gas price.
+   */
+  storageRebate?: Maybe<Scalars['BigInt']['output']>;
+  /**
+   * The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
+   * manage the associated domain.
+   */
+  suinsRegistrations: SuinsRegistrationConnection;
+  version: Scalars['Int']['output'];
+};
+
+
+/** Represents a `0x3::staking_pool::StakedSui` Move object on-chain. */
+export type StakedSuiBalanceArgs = {
+  type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/** Represents a `0x3::staking_pool::StakedSui` Move object on-chain. */
+export type StakedSuiBalancesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/** Represents a `0x3::staking_pool::StakedSui` Move object on-chain. */
+export type StakedSuiCoinsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/** Represents a `0x3::staking_pool::StakedSui` Move object on-chain. */
+export type StakedSuiDynamicFieldArgs = {
+  name: DynamicFieldName;
+};
+
+
+/** Represents a `0x3::staking_pool::StakedSui` Move object on-chain. */
+export type StakedSuiDynamicFieldsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/** Represents a `0x3::staking_pool::StakedSui` Move object on-chain. */
+export type StakedSuiDynamicObjectFieldArgs = {
+  name: DynamicFieldName;
+};
+
+
+/** Represents a `0x3::staking_pool::StakedSui` Move object on-chain. */
+export type StakedSuiObjectsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<ObjectFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/** Represents a `0x3::staking_pool::StakedSui` Move object on-chain. */
+export type StakedSuiReceivedTransactionBlocksArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<TransactionBlockFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/** Represents a `0x3::staking_pool::StakedSui` Move object on-chain. */
+export type StakedSuiStakedSuisArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/** Represents a `0x3::staking_pool::StakedSui` Move object on-chain. */
+export type StakedSuiSuinsRegistrationsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type StakedSuiConnection = {
@@ -2320,12 +3805,179 @@ export type StorageFund = {
   totalObjectStorageRebates?: Maybe<Scalars['BigInt']['output']>;
 };
 
-export type SuinsRegistration = {
+export type SuinsRegistration = IMoveObject & IObject & IOwner & {
   __typename?: 'SuinsRegistration';
-  /** Convert the SuinsRegistration object into a Move object */
-  asMoveObject: MoveObject;
+  address: Scalars['SuiAddress']['output'];
+  /**
+   * Total balance of all coins with marker type owned by this object. If type is not supplied,
+   * it defaults to `0x2::sui::SUI`.
+   */
+  balance?: Maybe<Balance>;
+  /** The balances of all coin types owned by this object. */
+  balances: BalanceConnection;
+  /** The Base64-encoded BCS serialization of the object's content. */
+  bcs?: Maybe<Scalars['Base64']['output']>;
+  /**
+   * The coin objects for this object.
+   *
+   * `type` is a filter on the coin's type parameter, defaulting to `0x2::sui::SUI`.
+   */
+  coins: CoinConnection;
+  /**
+   * Displays the contents of the Move object in a JSON string and through GraphQL types. Also
+   * provides the flat representation of the type signature, and the BCS of the corresponding
+   * data.
+   */
+  contents?: Maybe<MoveValue>;
+  /** The domain explicitly configured as the default domain pointing to this object. */
+  defaultSuinsName?: Maybe<Scalars['String']['output']>;
+  /** 32-byte hash that identifies the object's contents, encoded as a Base58 string. */
+  digest?: Maybe<Scalars['String']['output']>;
+  /**
+   * The set of named templates defined on-chain for the type of this object, to be handled
+   * off-chain. The server substitutes data from the object into these templates to generate a
+   * display string per template.
+   */
+  display?: Maybe<Array<DisplayEntry>>;
   /** Domain name of the SuinsRegistration object */
   domain: Scalars['String']['output'];
+  /**
+   * Access a dynamic field on an object using its name. Names are arbitrary Move values whose
+   * type have `copy`, `drop`, and `store`, and are specified using their type, and their BCS
+   * contents, Base64 encoded.
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+   * type.
+   */
+  dynamicField?: Maybe<DynamicField>;
+  /**
+   * The dynamic fields and dynamic object fields on an object.
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+   * type.
+   */
+  dynamicFields: DynamicFieldConnection;
+  /**
+   * Access a dynamic object field on an object using its name. Names are arbitrary Move values
+   * whose type have `copy`, `drop`, and `store`, and are specified using their type, and their
+   * BCS contents, Base64 encoded. The value of a dynamic object field can also be accessed
+   * off-chain directly via its address (e.g. using `Query.object`).
+   *
+   * Dynamic fields on wrapped objects can be accessed by using the same API under the Owner
+   * type.
+   */
+  dynamicObjectField?: Maybe<DynamicField>;
+  /**
+   * Determines whether a transaction can transfer this object, using the TransferObjects
+   * transaction command or `sui::transfer::public_transfer`, both of which require the object to
+   * have the `key` and `store` abilities.
+   */
+  hasPublicTransfer: Scalars['Boolean']['output'];
+  /** Objects owned by this object, optionally `filter`-ed. */
+  objects: MoveObjectConnection;
+  /** The owner type of this object: Immutable, Shared, Parent, Address */
+  owner?: Maybe<ObjectOwner>;
+  /** The transaction block that created this version of the object. */
+  previousTransactionBlock?: Maybe<TransactionBlock>;
+  /** The transaction blocks that sent objects to this object. */
+  receivedTransactionBlocks: TransactionBlockConnection;
+  /** The `0x3::staking_pool::StakedSui` objects owned by this object. */
+  stakedSuis: StakedSuiConnection;
+  /**
+   * The current status of the object as read from the off-chain store. The possible states are:
+   * NOT_INDEXED, the object is loaded from serialized data, such as the contents of a genesis or
+   * system package upgrade transaction. LIVE, the version returned is the most recent for the
+   * object, and it is not deleted or wrapped at that version. HISTORICAL, the object was
+   * referenced at a specific version or checkpoint, so is fetched from historical tables and may
+   * not be the latest version of the object. WRAPPED_OR_DELETED, the object is deleted or
+   * wrapped and only partial information can be loaded."
+   */
+  status: ObjectKind;
+  /**
+   * The amount of SUI we would rebate if this object gets deleted or mutated. This number is
+   * recalculated based on the present storage gas price.
+   */
+  storageRebate?: Maybe<Scalars['BigInt']['output']>;
+  /**
+   * The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
+   * manage the associated domain.
+   */
+  suinsRegistrations: SuinsRegistrationConnection;
+  version: Scalars['Int']['output'];
+};
+
+
+export type SuinsRegistrationBalanceArgs = {
+  type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type SuinsRegistrationBalancesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type SuinsRegistrationCoinsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type SuinsRegistrationDynamicFieldArgs = {
+  name: DynamicFieldName;
+};
+
+
+export type SuinsRegistrationDynamicFieldsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type SuinsRegistrationDynamicObjectFieldArgs = {
+  name: DynamicFieldName;
+};
+
+
+export type SuinsRegistrationObjectsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<ObjectFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type SuinsRegistrationReceivedTransactionBlocksArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<TransactionBlockFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type SuinsRegistrationStakedSuisArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type SuinsRegistrationSuinsRegistrationsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type SuinsRegistrationConnection = {
@@ -2388,11 +4040,9 @@ export type TransactionBlock = {
    * A 32-byte hash that uniquely identifies the transaction block contents, encoded in Base58.
    * This serves as a unique id for the block on chain.
    */
-  digest: Scalars['String']['output'];
+  digest?: Maybe<Scalars['String']['output']>;
   /** The effects field captures the results to the chain of executing this transaction. */
   effects?: Maybe<TransactionBlockEffects>;
-  /** Events emitted by this transaction block. */
-  events: EventConnection;
   /**
    * This field is set by senders of a transaction block. It is an epoch reference that sets a
    * deadline after which validators will no longer consider the transaction valid. By default,
@@ -2424,14 +4074,6 @@ export type TransactionBlock = {
   signatures?: Maybe<Array<Scalars['Base64']['output']>>;
 };
 
-
-export type TransactionBlockEventsArgs = {
-  after?: InputMaybe<Scalars['String']['input']>;
-  before?: InputMaybe<Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-};
-
 export type TransactionBlockConnection = {
   __typename?: 'TransactionBlockConnection';
   /** A list of edges. */
@@ -2451,23 +4093,26 @@ export type TransactionBlockEdge = {
   node: TransactionBlock;
 };
 
+/** The effects representing the result of executing a transaction block. */
 export type TransactionBlockEffects = {
   __typename?: 'TransactionBlockEffects';
   /**
    * The effect this transaction had on the balances (sum of coin values per coin type) of
    * addresses and objects.
    */
-  balanceChanges?: Maybe<Array<BalanceChange>>;
+  balanceChanges: BalanceChangeConnection;
   /** Base64 encoded bcs serialization of the on-chain transaction effects. */
   bcs: Scalars['Base64']['output'];
   /** The checkpoint this transaction was finalized in. */
   checkpoint?: Maybe<Checkpoint>;
   /** Transactions whose outputs this transaction depends upon. */
-  dependencies?: Maybe<Array<TransactionBlock>>;
+  dependencies: DependencyConnection;
   /** The epoch this transaction was finalized in. */
   epoch?: Maybe<Epoch>;
   /** The reason for a transaction failure, if it did fail. */
   errors?: Maybe<Scalars['String']['output']>;
+  /** Events emitted by this transaction block. */
+  events: EventConnection;
   /** Effects to the gas object. */
   gasEffects?: Maybe<GasEffects>;
   /**
@@ -2476,7 +4121,7 @@ export type TransactionBlockEffects = {
    */
   lamportVersion: Scalars['Int']['output'];
   /** The effect this transaction had on objects on-chain. */
-  objectChanges?: Maybe<Array<ObjectChange>>;
+  objectChanges: ObjectChangeConnection;
   /** Whether the transaction executed successfully or not. */
   status?: Maybe<ExecutionStatus>;
   /** Timestamp corresponding to the checkpoint this transaction was finalized in. */
@@ -2484,7 +4129,52 @@ export type TransactionBlockEffects = {
   /** The transaction that ran to produce these effects. */
   transactionBlock?: Maybe<TransactionBlock>;
   /** Shared objects that are referenced by but not changed by this transaction. */
-  unchangedSharedObjects?: Maybe<Array<UnchangedSharedObject>>;
+  unchangedSharedObjects: UnchangedSharedObjectConnection;
+};
+
+
+/** The effects representing the result of executing a transaction block. */
+export type TransactionBlockEffectsBalanceChangesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/** The effects representing the result of executing a transaction block. */
+export type TransactionBlockEffectsDependenciesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/** The effects representing the result of executing a transaction block. */
+export type TransactionBlockEffectsEventsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/** The effects representing the result of executing a transaction block. */
+export type TransactionBlockEffectsObjectChangesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/** The effects representing the result of executing a transaction block. */
+export type TransactionBlockEffectsUnchangedSharedObjectsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type TransactionBlockFilter = {
@@ -2494,20 +4184,24 @@ export type TransactionBlockFilter = {
   changedObject?: InputMaybe<Scalars['SuiAddress']['input']>;
   function?: InputMaybe<Scalars['String']['input']>;
   inputObject?: InputMaybe<Scalars['SuiAddress']['input']>;
+  /** An input filter selecting for either system or programmable transactions. */
   kind?: InputMaybe<TransactionBlockKindInput>;
-  module?: InputMaybe<Scalars['String']['input']>;
-  package?: InputMaybe<Scalars['SuiAddress']['input']>;
-  paidAddress?: InputMaybe<Scalars['SuiAddress']['input']>;
   recvAddress?: InputMaybe<Scalars['SuiAddress']['input']>;
-  sentAddress?: InputMaybe<Scalars['SuiAddress']['input']>;
   signAddress?: InputMaybe<Scalars['SuiAddress']['input']>;
   transactionIds?: InputMaybe<Array<Scalars['String']['input']>>;
 };
 
+/** The kind of transaction block, either a programmable transaction or a system transaction. */
 export type TransactionBlockKind = AuthenticatorStateUpdateTransaction | ChangeEpochTransaction | ConsensusCommitPrologueTransaction | EndOfEpochTransaction | GenesisTransaction | ProgrammableTransactionBlock | RandomnessStateUpdateTransaction;
 
+/** An input filter selecting for either system or programmable transactions. */
 export enum TransactionBlockKindInput {
+  /** A user submitted transaction block. */
   ProgrammableTx = 'PROGRAMMABLE_TX',
+  /**
+   * A system transaction can be one of several types of transactions.
+   * See [unions/transaction-block-kind] for more details.
+   */
   SystemTx = 'SYSTEM_TX'
 }
 
@@ -2530,6 +4224,21 @@ export type TransactionInputEdge = {
   cursor: Scalars['String']['output'];
   /** The item at the end of the edge */
   node: TransactionInput;
+};
+
+/**
+ * The optional extra data a user can provide to a transaction dry run.
+ * `sender` defaults to `0x0`. If gasObjects` is not present, or is an empty list,
+ * it is substituted with a mock Coin object, `gasPrice` defaults to the reference
+ * gas price, `gasBudget` defaults to the max gas budget and `gasSponsor` defaults
+ * to the sender.
+ */
+export type TransactionMetadata = {
+  gasBudget?: InputMaybe<Scalars['Int']['input']>;
+  gasObjects?: InputMaybe<Array<ObjectRef>>;
+  gasPrice?: InputMaybe<Scalars['Int']['input']>;
+  gasSponsor?: InputMaybe<Scalars['SuiAddress']['input']>;
+  sender?: InputMaybe<Scalars['SuiAddress']['input']>;
 };
 
 /**
@@ -2563,6 +4272,25 @@ export type TypeOrigin = {
  */
 export type UnchangedSharedObject = SharedObjectDelete | SharedObjectRead;
 
+export type UnchangedSharedObjectConnection = {
+  __typename?: 'UnchangedSharedObjectConnection';
+  /** A list of edges. */
+  edges: Array<UnchangedSharedObjectEdge>;
+  /** A list of nodes. */
+  nodes: Array<UnchangedSharedObject>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+};
+
+/** An edge in a connection. */
+export type UnchangedSharedObjectEdge = {
+  __typename?: 'UnchangedSharedObjectEdge';
+  /** A cursor for use in pagination */
+  cursor: Scalars['String']['output'];
+  /** The item at the end of the edge */
+  node: UnchangedSharedObject;
+};
+
 /** Upgrades a Move Package. */
 export type UpgradeTransaction = {
   __typename?: 'UpgradeTransaction';
@@ -2578,7 +4306,7 @@ export type UpgradeTransaction = {
 
 export type Validator = {
   __typename?: 'Validator';
-  /** Validator's address. */
+  /** The validator's address. */
   address: Address;
   /**
    * The APY of this validator in basis points.
@@ -2592,7 +4320,7 @@ export type Validator = {
   atRisk?: Maybe<Scalars['Int']['output']>;
   /** The fee charged by the validator for staking services. */
   commissionRate?: Maybe<Scalars['Int']['output']>;
-  /** Validator's set of credentials. */
+  /** Validator's set of credentials such as public keys, network addresses and others. */
   credentials?: Maybe<ValidatorCredentials>;
   /** Validator's description. */
   description?: Maybe<Scalars['String']['output']>;
@@ -2653,6 +4381,7 @@ export type Validator = {
   votingPower?: Maybe<Scalars['Int']['output']>;
 };
 
+/** The credentials related fields associated with a validator. */
 export type ValidatorCredentials = {
   __typename?: 'ValidatorCredentials';
   netAddress?: Maybe<Scalars['String']['output']>;
@@ -2688,7 +4417,7 @@ export type GetCheckpointQueryVariables = Exact<{
 }>;
 
 
-export type GetCheckpointQuery = { __typename?: 'Query', checkpoint?: { __typename?: 'Checkpoint', digest: string, networkTotalTransactions?: number | null, previousCheckpointDigest?: string | null, sequenceNumber: number, timestamp: any, validatorSignatures: any, epoch?: { __typename?: 'Epoch', epochId: number } | null, rollingGasSummary?: { __typename?: 'GasCostSummary', computationCost?: any | null, storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null } | null, transactionBlockConnection?: { __typename?: 'TransactionBlockConnection', nodes: Array<{ __typename?: 'TransactionBlock', digest: string }> } | null } | null };
+export type GetCheckpointQuery = { __typename?: 'Query', checkpoint?: { __typename?: 'Checkpoint', digest: string, networkTotalTransactions?: number | null, previousCheckpointDigest?: string | null, sequenceNumber: number, timestamp: any, validatorSignatures: any, epoch?: { __typename?: 'Epoch', epochId: number } | null, rollingGasSummary?: { __typename?: 'GasCostSummary', computationCost?: any | null, storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null } | null, transactionBlocks: { __typename?: 'TransactionBlockConnection', nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> } } | null };
 
 export type GetCheckpointsQueryVariables = Exact<{
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -2698,9 +4427,9 @@ export type GetCheckpointsQueryVariables = Exact<{
 }>;
 
 
-export type GetCheckpointsQuery = { __typename?: 'Query', checkpoints: { __typename?: 'CheckpointConnection', pageInfo: { __typename?: 'PageInfo', startCursor?: string | null, endCursor?: string | null, hasNextPage: boolean, hasPreviousPage: boolean }, nodes: Array<{ __typename?: 'Checkpoint', digest: string, networkTotalTransactions?: number | null, previousCheckpointDigest?: string | null, sequenceNumber: number, timestamp: any, validatorSignatures: any, epoch?: { __typename?: 'Epoch', epochId: number } | null, rollingGasSummary?: { __typename?: 'GasCostSummary', computationCost?: any | null, storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null } | null, transactionBlockConnection?: { __typename?: 'TransactionBlockConnection', nodes: Array<{ __typename?: 'TransactionBlock', digest: string }> } | null }> } };
+export type GetCheckpointsQuery = { __typename?: 'Query', checkpoints: { __typename?: 'CheckpointConnection', pageInfo: { __typename?: 'PageInfo', startCursor?: string | null, endCursor?: string | null, hasNextPage: boolean, hasPreviousPage: boolean }, nodes: Array<{ __typename?: 'Checkpoint', digest: string, networkTotalTransactions?: number | null, previousCheckpointDigest?: string | null, sequenceNumber: number, timestamp: any, validatorSignatures: any, epoch?: { __typename?: 'Epoch', epochId: number } | null, rollingGasSummary?: { __typename?: 'GasCostSummary', computationCost?: any | null, storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null } | null, transactionBlocks: { __typename?: 'TransactionBlockConnection', nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> } }> } };
 
-export type Rpc_Checkpoint_FieldsFragment = { __typename?: 'Checkpoint', digest: string, networkTotalTransactions?: number | null, previousCheckpointDigest?: string | null, sequenceNumber: number, timestamp: any, validatorSignatures: any, epoch?: { __typename?: 'Epoch', epochId: number } | null, rollingGasSummary?: { __typename?: 'GasCostSummary', computationCost?: any | null, storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null } | null, transactionBlockConnection?: { __typename?: 'TransactionBlockConnection', nodes: Array<{ __typename?: 'TransactionBlock', digest: string }> } | null };
+export type Rpc_Checkpoint_FieldsFragment = { __typename?: 'Checkpoint', digest: string, networkTotalTransactions?: number | null, previousCheckpointDigest?: string | null, sequenceNumber: number, timestamp: any, validatorSignatures: any, epoch?: { __typename?: 'Epoch', epochId: number } | null, rollingGasSummary?: { __typename?: 'GasCostSummary', computationCost?: any | null, storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null } | null, transactionBlocks: { __typename?: 'TransactionBlockConnection', nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> } };
 
 export type GetAllBalancesQueryVariables = Exact<{
   owner: Scalars['SuiAddress']['input'];
@@ -2709,7 +4438,7 @@ export type GetAllBalancesQueryVariables = Exact<{
 }>;
 
 
-export type GetAllBalancesQuery = { __typename?: 'Query', address?: { __typename?: 'Address', balanceConnection?: { __typename?: 'BalanceConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Balance', coinObjectCount?: number | null, totalBalance?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null }> } | null } | null };
+export type GetAllBalancesQuery = { __typename?: 'Query', address?: { __typename?: 'Address', balances: { __typename?: 'BalanceConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Balance', coinObjectCount?: number | null, totalBalance?: any | null, coinType: { __typename?: 'MoveType', repr: string } }> } } | null };
 
 export type GetBalanceQueryVariables = Exact<{
   owner: Scalars['SuiAddress']['input'];
@@ -2717,7 +4446,7 @@ export type GetBalanceQueryVariables = Exact<{
 }>;
 
 
-export type GetBalanceQuery = { __typename?: 'Query', address?: { __typename?: 'Address', balance?: { __typename?: 'Balance', coinObjectCount?: number | null, totalBalance?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null } | null } | null };
+export type GetBalanceQuery = { __typename?: 'Query', address?: { __typename?: 'Address', balance?: { __typename?: 'Balance', coinObjectCount?: number | null, totalBalance?: any | null, coinType: { __typename?: 'MoveType', repr: string } } | null } | null };
 
 export type GetChainIdentifierQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -2729,7 +4458,7 @@ export type GetCoinMetadataQueryVariables = Exact<{
 }>;
 
 
-export type GetCoinMetadataQuery = { __typename?: 'Query', coinMetadata?: { __typename?: 'CoinMetadata', decimals?: number | null, name?: string | null, symbol?: string | null, description?: string | null, iconUrl?: string | null, asMoveObject: { __typename?: 'MoveObject', asObject: { __typename?: 'Object', address: any } } } | null };
+export type GetCoinMetadataQuery = { __typename?: 'Query', coinMetadata?: { __typename?: 'CoinMetadata', decimals?: number | null, name?: string | null, symbol?: string | null, description?: string | null, iconUrl?: string | null, address: any } | null };
 
 export type GetCoinsQueryVariables = Exact<{
   owner: Scalars['SuiAddress']['input'];
@@ -2739,14 +4468,14 @@ export type GetCoinsQueryVariables = Exact<{
 }>;
 
 
-export type GetCoinsQuery = { __typename?: 'Query', address?: { __typename?: 'Address', address: any, coinConnection?: { __typename?: 'CoinConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Coin', balance?: any | null, asMoveObject: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null, asObject: { __typename?: 'Object', version: number, digest: string, coinObjectId: any, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest: string } | null } } }> } | null } | null };
+export type GetCoinsQuery = { __typename?: 'Query', address?: { __typename?: 'Address', address: any, coins: { __typename?: 'CoinConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Coin', coinBalance?: any | null, address: any, version: number, digest?: string | null, contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null }> } } | null };
 
 export type GetCurrentEpochQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type GetCurrentEpochQuery = { __typename?: 'Query', epoch?: { __typename?: 'Epoch', epochId: number, startTimestamp: any, endTimestamp?: any | null, referenceGasPrice?: any | null, validatorSet?: { __typename?: 'ValidatorSet', activeValidators?: Array<{ __typename?: 'Validator', atRisk?: number | null, commissionRate?: number | null, exchangeRatesSize?: number | null, description?: string | null, gasPrice?: any | null, imageUrl?: string | null, name?: string | null, nextEpochCommissionRate?: number | null, nextEpochGasPrice?: any | null, nextEpochStake?: any | null, pendingPoolTokenWithdraw?: any | null, pendingStake?: any | null, pendingTotalSuiWithdraw?: any | null, poolTokenBalance?: any | null, projectUrl?: string | null, rewardsPool?: any | null, stakingPoolActivationEpoch?: number | null, stakingPoolSuiBalance?: any | null, votingPower?: number | null, exchangeRates?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', json: any } | null, asObject: { __typename?: 'Object', address: any } } | null, credentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, nextEpochCredentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, operationCap?: { __typename?: 'MoveObject', asObject: { __typename?: 'Object', address: any } } | null, stakingPool?: { __typename?: 'MoveObject', asObject: { __typename?: 'Object', address: any } } | null, address: { __typename?: 'Address', address: any }, reportRecords?: Array<{ __typename?: 'Address', address: any }> | null }> | null } | null, firstCheckpoint: { __typename?: 'CheckpointConnection', nodes: Array<{ __typename?: 'Checkpoint', sequenceNumber: number }> } } | null };
+export type GetCurrentEpochQuery = { __typename?: 'Query', epoch?: { __typename?: 'Epoch', epochId: number, startTimestamp: any, endTimestamp?: any | null, referenceGasPrice?: any | null, validatorSet?: { __typename?: 'ValidatorSet', activeValidators?: Array<{ __typename?: 'Validator', atRisk?: number | null, commissionRate?: number | null, exchangeRatesSize?: number | null, description?: string | null, gasPrice?: any | null, imageUrl?: string | null, name?: string | null, nextEpochCommissionRate?: number | null, nextEpochGasPrice?: any | null, nextEpochStake?: any | null, pendingPoolTokenWithdraw?: any | null, pendingStake?: any | null, pendingTotalSuiWithdraw?: any | null, poolTokenBalance?: any | null, projectUrl?: string | null, rewardsPool?: any | null, stakingPoolActivationEpoch?: number | null, stakingPoolSuiBalance?: any | null, votingPower?: number | null, exchangeRates?: { __typename?: 'MoveObject', address: any, contents?: { __typename?: 'MoveValue', json: any } | null } | null, credentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, nextEpochCredentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, operationCap?: { __typename?: 'MoveObject', address: any } | null, stakingPool?: { __typename?: 'MoveObject', address: any } | null, address: { __typename?: 'Address', address: any }, reportRecords?: Array<{ __typename?: 'Address', address: any }> | null }> | null } | null, firstCheckpoint: { __typename?: 'CheckpointConnection', nodes: Array<{ __typename?: 'Checkpoint', sequenceNumber: number }> } } | null };
 
-export type Rpc_Validator_FieldsFragment = { __typename?: 'Validator', atRisk?: number | null, commissionRate?: number | null, exchangeRatesSize?: number | null, description?: string | null, gasPrice?: any | null, imageUrl?: string | null, name?: string | null, nextEpochCommissionRate?: number | null, nextEpochGasPrice?: any | null, nextEpochStake?: any | null, pendingPoolTokenWithdraw?: any | null, pendingStake?: any | null, pendingTotalSuiWithdraw?: any | null, poolTokenBalance?: any | null, projectUrl?: string | null, rewardsPool?: any | null, stakingPoolActivationEpoch?: number | null, stakingPoolSuiBalance?: any | null, votingPower?: number | null, exchangeRates?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', json: any } | null, asObject: { __typename?: 'Object', address: any } } | null, credentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, nextEpochCredentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, operationCap?: { __typename?: 'MoveObject', asObject: { __typename?: 'Object', address: any } } | null, stakingPool?: { __typename?: 'MoveObject', asObject: { __typename?: 'Object', address: any } } | null, address: { __typename?: 'Address', address: any }, reportRecords?: Array<{ __typename?: 'Address', address: any }> | null };
+export type Rpc_Validator_FieldsFragment = { __typename?: 'Validator', atRisk?: number | null, commissionRate?: number | null, exchangeRatesSize?: number | null, description?: string | null, gasPrice?: any | null, imageUrl?: string | null, name?: string | null, nextEpochCommissionRate?: number | null, nextEpochGasPrice?: any | null, nextEpochStake?: any | null, pendingPoolTokenWithdraw?: any | null, pendingStake?: any | null, pendingTotalSuiWithdraw?: any | null, poolTokenBalance?: any | null, projectUrl?: string | null, rewardsPool?: any | null, stakingPoolActivationEpoch?: number | null, stakingPoolSuiBalance?: any | null, votingPower?: number | null, exchangeRates?: { __typename?: 'MoveObject', address: any, contents?: { __typename?: 'MoveValue', json: any } | null } | null, credentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, nextEpochCredentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, operationCap?: { __typename?: 'MoveObject', address: any } | null, stakingPool?: { __typename?: 'MoveObject', address: any } | null, address: { __typename?: 'Address', address: any }, reportRecords?: Array<{ __typename?: 'Address', address: any }> | null };
 
 export type Rpc_Credential_FieldsFragment = { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null };
 
@@ -2756,7 +4485,7 @@ export type GetDynamicFieldObjectQueryVariables = Exact<{
 }>;
 
 
-export type GetDynamicFieldObjectQuery = { __typename?: 'Query', object?: { __typename?: 'Object', dynamicObjectField?: { __typename?: 'DynamicField', name?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null, value?: { __typename: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, type: { __typename?: 'MoveType', layout: any, repr: string } } | null, asObject: { __typename?: 'Object', address: any, digest: string, version: number, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null } } | { __typename: 'MoveValue' } | null } | null } | null };
+export type GetDynamicFieldObjectQuery = { __typename?: 'Query', object?: { __typename?: 'Object', dynamicObjectField?: { __typename?: 'DynamicField', name?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null, value?: { __typename: 'MoveObject', hasPublicTransfer: boolean, address: any, digest?: string | null, version: number, contents?: { __typename?: 'MoveValue', data: any, type: { __typename?: 'MoveType', layout: any, repr: string } } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null } | { __typename: 'MoveValue' } | null } | null } | null };
 
 export type GetDynamicFieldsQueryVariables = Exact<{
   parentId: Scalars['SuiAddress']['input'];
@@ -2765,7 +4494,7 @@ export type GetDynamicFieldsQueryVariables = Exact<{
 }>;
 
 
-export type GetDynamicFieldsQuery = { __typename?: 'Query', object?: { __typename?: 'Object', dynamicFieldConnection?: { __typename?: 'DynamicFieldConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'DynamicField', name?: { __typename?: 'MoveValue', bcs: any, json: any, type: { __typename?: 'MoveType', layout: any, repr: string } } | null, value?: { __typename: 'MoveObject', contents?: { __typename?: 'MoveValue', json: any, type: { __typename?: 'MoveType', repr: string } } | null, asObject: { __typename?: 'Object', storageRebate?: any | null, address: any, digest: string, version: number } } | { __typename: 'MoveValue' } | null }> } | null } | null };
+export type GetDynamicFieldsQuery = { __typename?: 'Query', object?: { __typename?: 'Object', dynamicFields: { __typename?: 'DynamicFieldConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'DynamicField', name?: { __typename?: 'MoveValue', bcs: any, json: any, type: { __typename?: 'MoveType', layout: any, repr: string } } | null, value?: { __typename: 'MoveObject', storageRebate?: any | null, address: any, digest?: string | null, version: number, contents?: { __typename?: 'MoveValue', json: any, type: { __typename?: 'MoveType', repr: string } } | null } | { __typename: 'MoveValue' } | null }> } } | null };
 
 export type GetLatestCheckpointSequenceNumberQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -2775,7 +4504,7 @@ export type GetLatestCheckpointSequenceNumberQuery = { __typename?: 'Query', che
 export type GetLatestSuiSystemStateQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type GetLatestSuiSystemStateQuery = { __typename?: 'Query', epoch?: { __typename?: 'Epoch', epochId: number, startTimestamp: any, endTimestamp?: any | null, referenceGasPrice?: any | null, systemStateVersion?: number | null, safeMode?: { __typename?: 'SafeMode', enabled?: boolean | null, gasSummary?: { __typename?: 'GasCostSummary', computationCost?: any | null, nonRefundableStorageFee?: any | null, storageCost?: any | null, storageRebate?: any | null } | null } | null, systemStakeSubsidy?: { __typename?: 'StakeSubsidy', balance?: any | null, currentDistributionAmount?: any | null, decreaseRate?: number | null, distributionCounter?: number | null, periodLength?: number | null } | null, storageFund?: { __typename?: 'StorageFund', nonRefundableBalance?: any | null, totalObjectStorageRebates?: any | null } | null, systemParameters?: { __typename?: 'SystemParameters', minValidatorCount?: number | null, maxValidatorCount?: number | null, minValidatorJoiningStake?: any | null, durationMs?: any | null, validatorLowStakeThreshold?: any | null, validatorLowStakeGracePeriod?: any | null, validatorVeryLowStakeThreshold?: any | null, stakeSubsidyStartEpoch?: number | null } | null, protocolConfigs: { __typename?: 'ProtocolConfigs', protocolVersion: number }, validatorSet?: { __typename?: 'ValidatorSet', inactivePoolsSize?: number | null, pendingActiveValidatorsSize?: number | null, stakePoolMappingsSize?: number | null, validatorCandidatesSize?: number | null, pendingRemovals?: Array<number> | null, totalStake?: any | null, activeValidators?: Array<{ __typename?: 'Validator', atRisk?: number | null, commissionRate?: number | null, exchangeRatesSize?: number | null, description?: string | null, gasPrice?: any | null, imageUrl?: string | null, name?: string | null, nextEpochCommissionRate?: number | null, nextEpochGasPrice?: any | null, nextEpochStake?: any | null, pendingPoolTokenWithdraw?: any | null, pendingStake?: any | null, pendingTotalSuiWithdraw?: any | null, poolTokenBalance?: any | null, projectUrl?: string | null, rewardsPool?: any | null, stakingPoolActivationEpoch?: number | null, stakingPoolSuiBalance?: any | null, votingPower?: number | null, exchangeRates?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', json: any } | null, asObject: { __typename?: 'Object', address: any } } | null, credentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, nextEpochCredentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, operationCap?: { __typename?: 'MoveObject', asObject: { __typename?: 'Object', address: any } } | null, stakingPool?: { __typename?: 'MoveObject', asObject: { __typename?: 'Object', address: any } } | null, address: { __typename?: 'Address', address: any }, reportRecords?: Array<{ __typename?: 'Address', address: any }> | null }> | null } | null } | null };
+export type GetLatestSuiSystemStateQuery = { __typename?: 'Query', epoch?: { __typename?: 'Epoch', epochId: number, startTimestamp: any, endTimestamp?: any | null, referenceGasPrice?: any | null, systemStateVersion?: number | null, safeMode?: { __typename?: 'SafeMode', enabled?: boolean | null, gasSummary?: { __typename?: 'GasCostSummary', computationCost?: any | null, nonRefundableStorageFee?: any | null, storageCost?: any | null, storageRebate?: any | null } | null } | null, systemStakeSubsidy?: { __typename?: 'StakeSubsidy', balance?: any | null, currentDistributionAmount?: any | null, decreaseRate?: number | null, distributionCounter?: number | null, periodLength?: number | null } | null, storageFund?: { __typename?: 'StorageFund', nonRefundableBalance?: any | null, totalObjectStorageRebates?: any | null } | null, systemParameters?: { __typename?: 'SystemParameters', minValidatorCount?: number | null, maxValidatorCount?: number | null, minValidatorJoiningStake?: any | null, durationMs?: any | null, validatorLowStakeThreshold?: any | null, validatorLowStakeGracePeriod?: any | null, validatorVeryLowStakeThreshold?: any | null, stakeSubsidyStartEpoch?: number | null } | null, protocolConfigs: { __typename?: 'ProtocolConfigs', protocolVersion: number }, validatorSet?: { __typename?: 'ValidatorSet', inactivePoolsSize?: number | null, pendingActiveValidatorsSize?: number | null, stakePoolMappingsSize?: number | null, validatorCandidatesSize?: number | null, pendingRemovals?: Array<number> | null, totalStake?: any | null, activeValidators?: Array<{ __typename?: 'Validator', atRisk?: number | null, commissionRate?: number | null, exchangeRatesSize?: number | null, description?: string | null, gasPrice?: any | null, imageUrl?: string | null, name?: string | null, nextEpochCommissionRate?: number | null, nextEpochGasPrice?: any | null, nextEpochStake?: any | null, pendingPoolTokenWithdraw?: any | null, pendingStake?: any | null, pendingTotalSuiWithdraw?: any | null, poolTokenBalance?: any | null, projectUrl?: string | null, rewardsPool?: any | null, stakingPoolActivationEpoch?: number | null, stakingPoolSuiBalance?: any | null, votingPower?: number | null, exchangeRates?: { __typename?: 'MoveObject', address: any, contents?: { __typename?: 'MoveValue', json: any } | null } | null, credentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, nextEpochCredentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, operationCap?: { __typename?: 'MoveObject', address: any } | null, stakingPool?: { __typename?: 'MoveObject', address: any } | null, address: { __typename?: 'Address', address: any }, reportRecords?: Array<{ __typename?: 'Address', address: any }> | null }> | null } | null } | null };
 
 export type GetMoveFunctionArgTypesQueryVariables = Exact<{
   packageId: Scalars['SuiAddress']['input'];
@@ -2803,9 +4532,9 @@ export type GetNormalizedMoveModuleQueryVariables = Exact<{
 }>;
 
 
-export type GetNormalizedMoveModuleQuery = { __typename?: 'Query', object?: { __typename?: 'Object', asMovePackage?: { __typename?: 'MovePackage', module?: { __typename?: 'MoveModule', name: string, fileFormatVersion: number, friends: { __typename?: 'MoveModuleConnection', nodes: Array<{ __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', asObject: { __typename?: 'Object', address: any } } }> }, structs?: { __typename?: 'MoveStructConnection', nodes: Array<{ __typename?: 'MoveStruct', name: string, abilities?: Array<MoveAbility> | null, fields?: Array<{ __typename?: 'MoveField', name: string, type?: { __typename?: 'OpenMoveType', signature: any } | null }> | null, typeParameters?: Array<{ __typename?: 'MoveStructTypeParameter', isPhantom: boolean, constraints: Array<MoveAbility> }> | null }> } | null, functions?: { __typename?: 'MoveFunctionConnection', nodes: Array<{ __typename?: 'MoveFunction', name: string, visibility?: MoveVisibility | null, isEntry?: boolean | null, parameters?: Array<{ __typename?: 'OpenMoveType', signature: any }> | null, typeParameters?: Array<{ __typename?: 'MoveFunctionTypeParameter', constraints: Array<MoveAbility> }> | null, return?: Array<{ __typename?: 'OpenMoveType', repr: string, signature: any }> | null }> } | null } | null } | null } | null };
+export type GetNormalizedMoveModuleQuery = { __typename?: 'Query', object?: { __typename?: 'Object', asMovePackage?: { __typename?: 'MovePackage', module?: { __typename?: 'MoveModule', name: string, fileFormatVersion: number, friends: { __typename?: 'MoveModuleConnection', nodes: Array<{ __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } }> }, structs?: { __typename?: 'MoveStructConnection', nodes: Array<{ __typename?: 'MoveStruct', name: string, abilities?: Array<MoveAbility> | null, fields?: Array<{ __typename?: 'MoveField', name: string, type?: { __typename?: 'OpenMoveType', signature: any } | null }> | null, typeParameters?: Array<{ __typename?: 'MoveStructTypeParameter', isPhantom: boolean, constraints: Array<MoveAbility> }> | null }> } | null, functions?: { __typename?: 'MoveFunctionConnection', nodes: Array<{ __typename?: 'MoveFunction', name: string, visibility?: MoveVisibility | null, isEntry?: boolean | null, parameters?: Array<{ __typename?: 'OpenMoveType', signature: any }> | null, typeParameters?: Array<{ __typename?: 'MoveFunctionTypeParameter', constraints: Array<MoveAbility> }> | null, return?: Array<{ __typename?: 'OpenMoveType', repr: string, signature: any }> | null }> } | null } | null } | null } | null };
 
-export type Rpc_Move_Module_FieldsFragment = { __typename?: 'MoveModule', name: string, fileFormatVersion: number, friends: { __typename?: 'MoveModuleConnection', nodes: Array<{ __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', asObject: { __typename?: 'Object', address: any } } }> }, structs?: { __typename?: 'MoveStructConnection', nodes: Array<{ __typename?: 'MoveStruct', name: string, abilities?: Array<MoveAbility> | null, fields?: Array<{ __typename?: 'MoveField', name: string, type?: { __typename?: 'OpenMoveType', signature: any } | null }> | null, typeParameters?: Array<{ __typename?: 'MoveStructTypeParameter', isPhantom: boolean, constraints: Array<MoveAbility> }> | null }> } | null, functions?: { __typename?: 'MoveFunctionConnection', nodes: Array<{ __typename?: 'MoveFunction', name: string, visibility?: MoveVisibility | null, isEntry?: boolean | null, parameters?: Array<{ __typename?: 'OpenMoveType', signature: any }> | null, typeParameters?: Array<{ __typename?: 'MoveFunctionTypeParameter', constraints: Array<MoveAbility> }> | null, return?: Array<{ __typename?: 'OpenMoveType', repr: string, signature: any }> | null }> } | null };
+export type Rpc_Move_Module_FieldsFragment = { __typename?: 'MoveModule', name: string, fileFormatVersion: number, friends: { __typename?: 'MoveModuleConnection', nodes: Array<{ __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } }> }, structs?: { __typename?: 'MoveStructConnection', nodes: Array<{ __typename?: 'MoveStruct', name: string, abilities?: Array<MoveAbility> | null, fields?: Array<{ __typename?: 'MoveField', name: string, type?: { __typename?: 'OpenMoveType', signature: any } | null }> | null, typeParameters?: Array<{ __typename?: 'MoveStructTypeParameter', isPhantom: boolean, constraints: Array<MoveAbility> }> | null }> } | null, functions?: { __typename?: 'MoveFunctionConnection', nodes: Array<{ __typename?: 'MoveFunction', name: string, visibility?: MoveVisibility | null, isEntry?: boolean | null, parameters?: Array<{ __typename?: 'OpenMoveType', signature: any }> | null, typeParameters?: Array<{ __typename?: 'MoveFunctionTypeParameter', constraints: Array<MoveAbility> }> | null, return?: Array<{ __typename?: 'OpenMoveType', repr: string, signature: any }> | null }> } | null };
 
 export type GetNormalizedMoveModulesByPackageQueryVariables = Exact<{
   packageId: Scalars['SuiAddress']['input'];
@@ -2814,7 +4543,7 @@ export type GetNormalizedMoveModulesByPackageQueryVariables = Exact<{
 }>;
 
 
-export type GetNormalizedMoveModulesByPackageQuery = { __typename?: 'Query', object?: { __typename?: 'Object', asMovePackage?: { __typename?: 'MovePackage', asObject: { __typename?: 'Object', address: any }, modules?: { __typename?: 'MoveModuleConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'MoveModule', name: string, fileFormatVersion: number, friends: { __typename?: 'MoveModuleConnection', nodes: Array<{ __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', asObject: { __typename?: 'Object', address: any } } }> }, structs?: { __typename?: 'MoveStructConnection', nodes: Array<{ __typename?: 'MoveStruct', name: string, abilities?: Array<MoveAbility> | null, fields?: Array<{ __typename?: 'MoveField', name: string, type?: { __typename?: 'OpenMoveType', signature: any } | null }> | null, typeParameters?: Array<{ __typename?: 'MoveStructTypeParameter', isPhantom: boolean, constraints: Array<MoveAbility> }> | null }> } | null, functions?: { __typename?: 'MoveFunctionConnection', nodes: Array<{ __typename?: 'MoveFunction', name: string, visibility?: MoveVisibility | null, isEntry?: boolean | null, parameters?: Array<{ __typename?: 'OpenMoveType', signature: any }> | null, typeParameters?: Array<{ __typename?: 'MoveFunctionTypeParameter', constraints: Array<MoveAbility> }> | null, return?: Array<{ __typename?: 'OpenMoveType', repr: string, signature: any }> | null }> } | null }> } | null } | null } | null };
+export type GetNormalizedMoveModulesByPackageQuery = { __typename?: 'Query', object?: { __typename?: 'Object', asMovePackage?: { __typename?: 'MovePackage', address: any, modules?: { __typename?: 'MoveModuleConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'MoveModule', name: string, fileFormatVersion: number, friends: { __typename?: 'MoveModuleConnection', nodes: Array<{ __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } }> }, structs?: { __typename?: 'MoveStructConnection', nodes: Array<{ __typename?: 'MoveStruct', name: string, abilities?: Array<MoveAbility> | null, fields?: Array<{ __typename?: 'MoveField', name: string, type?: { __typename?: 'OpenMoveType', signature: any } | null }> | null, typeParameters?: Array<{ __typename?: 'MoveStructTypeParameter', isPhantom: boolean, constraints: Array<MoveAbility> }> | null }> } | null, functions?: { __typename?: 'MoveFunctionConnection', nodes: Array<{ __typename?: 'MoveFunction', name: string, visibility?: MoveVisibility | null, isEntry?: boolean | null, parameters?: Array<{ __typename?: 'OpenMoveType', signature: any }> | null, typeParameters?: Array<{ __typename?: 'MoveFunctionTypeParameter', constraints: Array<MoveAbility> }> | null, return?: Array<{ __typename?: 'OpenMoveType', repr: string, signature: any }> | null }> } | null }> } | null } | null } | null };
 
 export type GetNormalizedMoveStructQueryVariables = Exact<{
   packageId: Scalars['SuiAddress']['input'];
@@ -2823,7 +4552,7 @@ export type GetNormalizedMoveStructQueryVariables = Exact<{
 }>;
 
 
-export type GetNormalizedMoveStructQuery = { __typename?: 'Query', object?: { __typename?: 'Object', asMovePackage?: { __typename?: 'MovePackage', asObject: { __typename?: 'Object', address: any }, module?: { __typename?: 'MoveModule', fileFormatVersion: number, struct?: { __typename?: 'MoveStruct', name: string, abilities?: Array<MoveAbility> | null, fields?: Array<{ __typename?: 'MoveField', name: string, type?: { __typename?: 'OpenMoveType', signature: any } | null }> | null, typeParameters?: Array<{ __typename?: 'MoveStructTypeParameter', isPhantom: boolean, constraints: Array<MoveAbility> }> | null } | null } | null } | null } | null };
+export type GetNormalizedMoveStructQuery = { __typename?: 'Query', object?: { __typename?: 'Object', asMovePackage?: { __typename?: 'MovePackage', address: any, module?: { __typename?: 'MoveModule', fileFormatVersion: number, struct?: { __typename?: 'MoveStruct', name: string, abilities?: Array<MoveAbility> | null, fields?: Array<{ __typename?: 'MoveField', name: string, type?: { __typename?: 'OpenMoveType', signature: any } | null }> | null, typeParameters?: Array<{ __typename?: 'MoveStructTypeParameter', isPhantom: boolean, constraints: Array<MoveAbility> }> | null } | null } | null } | null } | null };
 
 export type Rpc_Move_Struct_FieldsFragment = { __typename?: 'MoveStruct', name: string, abilities?: Array<MoveAbility> | null, fields?: Array<{ __typename?: 'MoveField', name: string, type?: { __typename?: 'OpenMoveType', signature: any } | null }> | null, typeParameters?: Array<{ __typename?: 'MoveStructTypeParameter', isPhantom: boolean, constraints: Array<MoveAbility> }> | null };
 
@@ -2857,11 +4586,11 @@ export type GetValidatorsApyQueryVariables = Exact<{ [key: string]: never; }>;
 export type GetValidatorsApyQuery = { __typename?: 'Query', epoch?: { __typename?: 'Epoch', epochId: number, validatorSet?: { __typename?: 'ValidatorSet', activeValidators?: Array<{ __typename?: 'Validator', apy?: number | null, address: { __typename?: 'Address', address: any } }> | null } | null } | null };
 
 export type ResolveNameServiceAddressQueryVariables = Exact<{
-  name: Scalars['String']['input'];
+  domain: Scalars['String']['input'];
 }>;
 
 
-export type ResolveNameServiceAddressQuery = { __typename?: 'Query', resolveNameServiceAddress?: { __typename?: 'Address', address: any } | null };
+export type ResolveNameServiceAddressQuery = { __typename?: 'Query', resolveSuinsAddress?: { __typename?: 'Address', address: any } | null };
 
 export type ResolveNameServiceNamesQueryVariables = Exact<{
   address: Scalars['SuiAddress']['input'];
@@ -2870,7 +4599,7 @@ export type ResolveNameServiceNamesQueryVariables = Exact<{
 }>;
 
 
-export type ResolveNameServiceNamesQuery = { __typename?: 'Query', address?: { __typename?: 'Address', suinsRegistrations?: { __typename?: 'SuinsRegistrationConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'SuinsRegistration', domain: string }> } | null } | null };
+export type ResolveNameServiceNamesQuery = { __typename?: 'Query', address?: { __typename?: 'Address', suinsRegistrations: { __typename?: 'SuinsRegistrationConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'SuinsRegistration', domain: string }> } } | null };
 
 export type GetOwnedObjectsQueryVariables = Exact<{
   owner: Scalars['SuiAddress']['input'];
@@ -2887,7 +4616,7 @@ export type GetOwnedObjectsQueryVariables = Exact<{
 }>;
 
 
-export type GetOwnedObjectsQuery = { __typename?: 'Query', address?: { __typename?: 'Address', objectConnection?: { __typename?: 'ObjectConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Object', bcs?: any | null, version: number, storageRebate?: any | null, digest: string, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null } | null, owner?: { __typename?: 'Owner', address: any, asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest: string } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null }> } | null } | null };
+export type GetOwnedObjectsQuery = { __typename?: 'Query', address?: { __typename?: 'Address', objects: { __typename?: 'MoveObjectConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'MoveObject', bcs?: any | null, version: number, hasPublicTransfer?: boolean, storageRebate?: any | null, digest?: string | null, objectId: any, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null }> } } | null };
 
 export type GetObjectQueryVariables = Exact<{
   id: Scalars['SuiAddress']['input'];
@@ -2901,7 +4630,7 @@ export type GetObjectQueryVariables = Exact<{
 }>;
 
 
-export type GetObjectQuery = { __typename?: 'Query', object?: { __typename?: 'Object', bcs?: any | null, version: number, storageRebate?: any | null, digest: string, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null } | null, owner?: { __typename?: 'Owner', address: any, asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest: string } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null } | null };
+export type GetObjectQuery = { __typename?: 'Query', object?: { __typename?: 'Object', bcs?: any | null, version: number, storageRebate?: any | null, digest?: string | null, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null } | null };
 
 export type TryGetPastObjectQueryVariables = Exact<{
   id: Scalars['SuiAddress']['input'];
@@ -2916,7 +4645,7 @@ export type TryGetPastObjectQueryVariables = Exact<{
 }>;
 
 
-export type TryGetPastObjectQuery = { __typename?: 'Query', object?: { __typename?: 'Object', bcs?: any | null, version: number, storageRebate?: any | null, digest: string, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null } | null, owner?: { __typename?: 'Owner', address: any, asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest: string } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null } | null };
+export type TryGetPastObjectQuery = { __typename?: 'Query', object?: { __typename?: 'Object', bcs?: any | null, version: number, storageRebate?: any | null, digest?: string | null, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null } | null };
 
 export type MultiGetObjectsQueryVariables = Exact<{
   ids: Array<Scalars['SuiAddress']['input']> | Scalars['SuiAddress']['input'];
@@ -2932,9 +4661,21 @@ export type MultiGetObjectsQueryVariables = Exact<{
 }>;
 
 
-export type MultiGetObjectsQuery = { __typename?: 'Query', objectConnection?: { __typename?: 'ObjectConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Object', bcs?: any | null, version: number, storageRebate?: any | null, digest: string, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null } | null, owner?: { __typename?: 'Owner', address: any, asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest: string } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null }> } | null };
+export type MultiGetObjectsQuery = { __typename?: 'Query', objects: { __typename?: 'ObjectConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Object', bcs?: any | null, version: number, storageRebate?: any | null, digest?: string | null, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null }> } };
 
-export type Rpc_Object_FieldsFragment = { __typename?: 'Object', bcs?: any | null, version: number, storageRebate?: any | null, digest: string, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null } | null, owner?: { __typename?: 'Owner', address: any, asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest: string } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null };
+export type Rpc_Object_FieldsFragment = { __typename?: 'Object', bcs?: any | null, version: number, storageRebate?: any | null, digest?: string | null, objectId: any, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null };
+
+export type Rpc_Move_Object_FieldsFragment = { __typename?: 'MoveObject', bcs?: any | null, version: number, hasPublicTransfer?: boolean, storageRebate?: any | null, digest?: string | null, objectId: any, contents?: { __typename?: 'MoveValue', data: any, bcs: any, type: { __typename?: 'MoveType', repr: string, layout: any, signature: any } } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null };
+
+type Rpc_Object_Owner_Fields_AddressOwner_Fragment = { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null };
+
+type Rpc_Object_Owner_Fields_Immutable_Fragment = { __typename: 'Immutable' };
+
+type Rpc_Object_Owner_Fields_Parent_Fragment = { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null };
+
+type Rpc_Object_Owner_Fields_Shared_Fragment = { __typename: 'Shared', initialSharedVersion: number };
+
+export type Rpc_Object_Owner_FieldsFragment = Rpc_Object_Owner_Fields_AddressOwner_Fragment | Rpc_Object_Owner_Fields_Immutable_Fragment | Rpc_Object_Owner_Fields_Parent_Fragment | Rpc_Object_Owner_Fields_Shared_Fragment;
 
 export type QueryEventsQueryVariables = Exact<{
   filter: EventFilter;
@@ -2945,9 +4686,9 @@ export type QueryEventsQueryVariables = Exact<{
 }>;
 
 
-export type QueryEventsQuery = { __typename?: 'Query', eventConnection?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, endCursor?: string | null, startCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', asObject: { __typename?: 'Object', address: any } } } | null, senders?: Array<{ __typename?: 'Address', address: any }> | null, type: { __typename?: 'MoveType', repr: string } }> } | null };
+export type QueryEventsQuery = { __typename?: 'Query', events: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, endCursor?: string | null, startCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> } };
 
-export type Rpc_Events_FieldsFragment = { __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', asObject: { __typename?: 'Object', address: any } } } | null, senders?: Array<{ __typename?: 'Address', address: any }> | null, type: { __typename?: 'MoveType', repr: string } };
+export type Rpc_Events_FieldsFragment = { __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } };
 
 export type GetStakesQueryVariables = Exact<{
   owner: Scalars['SuiAddress']['input'];
@@ -2956,7 +4697,7 @@ export type GetStakesQueryVariables = Exact<{
 }>;
 
 
-export type GetStakesQuery = { __typename?: 'Query', address?: { __typename?: 'Address', stakedSuiConnection?: { __typename?: 'StakedSuiConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'StakedSui', principal?: any | null, estimatedReward?: any | null, activatedEpoch?: { __typename?: 'Epoch', epochId: number, referenceGasPrice?: any | null } | null, requestedEpoch?: { __typename?: 'Epoch', epochId: number } | null, asMoveObject: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', json: any } | null, asObject: { __typename?: 'Object', address: any } } }> } | null } | null };
+export type GetStakesQuery = { __typename?: 'Query', address?: { __typename?: 'Address', stakedSuis: { __typename?: 'StakedSuiConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'StakedSui', principal?: any | null, address: any, estimatedReward?: any | null, activatedEpoch?: { __typename?: 'Epoch', epochId: number, referenceGasPrice?: any | null } | null, requestedEpoch?: { __typename?: 'Epoch', epochId: number } | null, contents?: { __typename?: 'MoveValue', json: any } | null }> } } | null };
 
 export type GetStakesByIdsQueryVariables = Exact<{
   ids: Array<Scalars['SuiAddress']['input']> | Scalars['SuiAddress']['input'];
@@ -2965,9 +4706,9 @@ export type GetStakesByIdsQueryVariables = Exact<{
 }>;
 
 
-export type GetStakesByIdsQuery = { __typename?: 'Query', objectConnection?: { __typename?: 'ObjectConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Object', asMoveObject?: { __typename?: 'MoveObject', asStakedSui?: { __typename?: 'StakedSui', principal?: any | null, estimatedReward?: any | null, activatedEpoch?: { __typename?: 'Epoch', epochId: number, referenceGasPrice?: any | null } | null, requestedEpoch?: { __typename?: 'Epoch', epochId: number } | null, asMoveObject: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', json: any } | null, asObject: { __typename?: 'Object', address: any } } } | null } | null }> } | null };
+export type GetStakesByIdsQuery = { __typename?: 'Query', objects: { __typename?: 'ObjectConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Object', asMoveObject?: { __typename?: 'MoveObject', asStakedSui?: { __typename?: 'StakedSui', principal?: any | null, address: any, estimatedReward?: any | null, activatedEpoch?: { __typename?: 'Epoch', epochId: number, referenceGasPrice?: any | null } | null, requestedEpoch?: { __typename?: 'Epoch', epochId: number } | null, contents?: { __typename?: 'MoveValue', json: any } | null } | null } | null }> } };
 
-export type Rpc_Stake_FieldsFragment = { __typename?: 'StakedSui', principal?: any | null, estimatedReward?: any | null, activatedEpoch?: { __typename?: 'Epoch', epochId: number, referenceGasPrice?: any | null } | null, requestedEpoch?: { __typename?: 'Epoch', epochId: number } | null, asMoveObject: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', json: any } | null, asObject: { __typename?: 'Object', address: any } } };
+export type Rpc_Stake_FieldsFragment = { __typename?: 'StakedSui', principal?: any | null, address: any, estimatedReward?: any | null, activatedEpoch?: { __typename?: 'Epoch', epochId: number, referenceGasPrice?: any | null } | null, requestedEpoch?: { __typename?: 'Epoch', epochId: number } | null, contents?: { __typename?: 'MoveValue', json: any } | null };
 
 export type QueryTransactionBlocksQueryVariables = Exact<{
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -2984,7 +4725,7 @@ export type QueryTransactionBlocksQueryVariables = Exact<{
 }>;
 
 
-export type QueryTransactionBlocksQuery = { __typename?: 'Query', transactionBlockConnection?: { __typename?: 'TransactionBlockConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor?: string | null, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest: string, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, events?: { __typename?: 'EventConnection', nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', asObject: { __typename?: 'Object', address: any } } } | null, senders?: Array<{ __typename?: 'Address', address: any }> | null, type: { __typename?: 'MoveType', repr: string } }> }, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null }> | null, dependencies?: Array<{ __typename?: 'TransactionBlock', digest: string }> | null, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest: string, version: number, address: any, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest: string, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null } | null, outputState?: { __typename?: 'Object', version: number, digest: string, address: any, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null }> | null } | null }> } | null };
+export type QueryTransactionBlocksQuery = { __typename?: 'Query', transactionBlocks: { __typename?: 'TransactionBlockConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor?: string | null, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null }> } } | null }> } };
 
 export type GetTransactionBlockQueryVariables = Exact<{
   digest: Scalars['String']['input'];
@@ -2997,7 +4738,7 @@ export type GetTransactionBlockQueryVariables = Exact<{
 }>;
 
 
-export type GetTransactionBlockQuery = { __typename?: 'Query', transactionBlock?: { __typename?: 'TransactionBlock', digest: string, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, events?: { __typename?: 'EventConnection', nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', asObject: { __typename?: 'Object', address: any } } } | null, senders?: Array<{ __typename?: 'Address', address: any }> | null, type: { __typename?: 'MoveType', repr: string } }> }, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null }> | null, dependencies?: Array<{ __typename?: 'TransactionBlock', digest: string }> | null, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest: string, version: number, address: any, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest: string, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null } | null, outputState?: { __typename?: 'Object', version: number, digest: string, address: any, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null }> | null } | null } | null };
+export type GetTransactionBlockQuery = { __typename?: 'Query', transactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null }> } } | null } | null };
 
 export type MultiGetTransactionBlocksQueryVariables = Exact<{
   digests: Array<Scalars['String']['input']> | Scalars['String']['input'];
@@ -3012,9 +4753,9 @@ export type MultiGetTransactionBlocksQueryVariables = Exact<{
 }>;
 
 
-export type MultiGetTransactionBlocksQuery = { __typename?: 'Query', transactionBlockConnection?: { __typename?: 'TransactionBlockConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor?: string | null, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest: string, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, events?: { __typename?: 'EventConnection', nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', asObject: { __typename?: 'Object', address: any } } } | null, senders?: Array<{ __typename?: 'Address', address: any }> | null, type: { __typename?: 'MoveType', repr: string } }> }, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null }> | null, dependencies?: Array<{ __typename?: 'TransactionBlock', digest: string }> | null, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest: string, version: number, address: any, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest: string, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null } | null, outputState?: { __typename?: 'Object', version: number, digest: string, address: any, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null }> | null } | null }> } | null };
+export type MultiGetTransactionBlocksQuery = { __typename?: 'Query', transactionBlocks: { __typename?: 'TransactionBlockConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor?: string | null, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null }> } } | null }> } };
 
-export type Rpc_Transaction_FieldsFragment = { __typename?: 'TransactionBlock', digest: string, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, events?: { __typename?: 'EventConnection', nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', asObject: { __typename?: 'Object', address: any } } } | null, senders?: Array<{ __typename?: 'Address', address: any }> | null, type: { __typename?: 'MoveType', repr: string } }> }, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null }> | null, dependencies?: Array<{ __typename?: 'TransactionBlock', digest: string }> | null, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest: string, version: number, address: any, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest: string, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null } | null, outputState?: { __typename?: 'Object', version: number, digest: string, address: any, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', address: any } | null, asObject?: { __typename?: 'Object', address: any } | null } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null }> | null } | null };
+export type Rpc_Transaction_FieldsFragment = { __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null }> } } | null };
 
 export class TypedDocumentString<TResult, TVariables>
   extends String
@@ -3046,7 +4787,7 @@ export const Rpc_Checkpoint_FieldsFragmentDoc = new TypedDocumentString(`
   previousCheckpointDigest
   sequenceNumber
   timestamp
-  transactionBlockConnection {
+  transactionBlocks {
     nodes {
       digest
     }
@@ -3075,9 +4816,7 @@ export const Rpc_Validator_FieldsFragmentDoc = new TypedDocumentString(`
     contents {
       json
     }
-    asObject {
-      address
-    }
+    address
   }
   description
   gasPrice
@@ -3094,9 +4833,7 @@ export const Rpc_Validator_FieldsFragmentDoc = new TypedDocumentString(`
   nextEpochStake
   nextEpochCommissionRate
   operationCap {
-    asObject {
-      address
-    }
+    address
   }
   pendingPoolTokenWithdraw
   pendingStake
@@ -3105,9 +4842,7 @@ export const Rpc_Validator_FieldsFragmentDoc = new TypedDocumentString(`
   projectUrl
   rewardsPool
   stakingPool {
-    asObject {
-      address
-    }
+    address
   }
   stakingPoolActivationEpoch
   stakingPoolSuiBalance
@@ -3169,9 +4904,7 @@ export const Rpc_Move_Module_FieldsFragmentDoc = new TypedDocumentString(`
     nodes {
       name
       package {
-        asObject {
-          address
-        }
+        address
       }
     }
   }
@@ -3216,6 +4949,29 @@ fragment RPC_MOVE_STRUCT_FIELDS on MoveStruct {
     constraints
   }
 }`, {"fragmentName":"RPC_MOVE_MODULE_FIELDS"}) as unknown as TypedDocumentString<Rpc_Move_Module_FieldsFragment, unknown>;
+export const Rpc_Object_Owner_FieldsFragmentDoc = new TypedDocumentString(`
+    fragment RPC_OBJECT_OWNER_FIELDS on ObjectOwner {
+  __typename
+  ... on AddressOwner {
+    owner {
+      asObject {
+        address
+      }
+      asAddress {
+        address
+      }
+    }
+  }
+  ... on Parent {
+    parent {
+      address
+    }
+  }
+  ... on Shared {
+    initialSharedVersion
+  }
+}
+    `, {"fragmentName":"RPC_OBJECT_OWNER_FIELDS"}) as unknown as TypedDocumentString<Rpc_Object_Owner_FieldsFragment, unknown>;
 export const Rpc_Object_FieldsFragmentDoc = new TypedDocumentString(`
     fragment RPC_OBJECT_FIELDS on Object {
   objectId: address
@@ -3249,13 +5005,7 @@ export const Rpc_Object_FieldsFragmentDoc = new TypedDocumentString(`
     }
   }
   owner @include(if: $showOwner) {
-    address
-    asAddress {
-      address
-    }
-    asObject {
-      address
-    }
+    ...RPC_OBJECT_OWNER_FIELDS
   }
   previousTransactionBlock @include(if: $showPreviousTransaction) {
     digest
@@ -3269,7 +5019,89 @@ export const Rpc_Object_FieldsFragmentDoc = new TypedDocumentString(`
     error
   }
 }
-    `, {"fragmentName":"RPC_OBJECT_FIELDS"}) as unknown as TypedDocumentString<Rpc_Object_FieldsFragment, unknown>;
+    fragment RPC_OBJECT_OWNER_FIELDS on ObjectOwner {
+  __typename
+  ... on AddressOwner {
+    owner {
+      asObject {
+        address
+      }
+      asAddress {
+        address
+      }
+    }
+  }
+  ... on Parent {
+    parent {
+      address
+    }
+  }
+  ... on Shared {
+    initialSharedVersion
+  }
+}`, {"fragmentName":"RPC_OBJECT_FIELDS"}) as unknown as TypedDocumentString<Rpc_Object_FieldsFragment, unknown>;
+export const Rpc_Move_Object_FieldsFragmentDoc = new TypedDocumentString(`
+    fragment RPC_MOVE_OBJECT_FIELDS on MoveObject {
+  objectId: address
+  bcs @include(if: $showBcs)
+  version @include(if: $showType)
+  contents {
+    type {
+      repr
+    }
+  }
+  hasPublicTransfer @include(if: $showContent)
+  contents @include(if: $showContent) {
+    data
+    type {
+      repr
+      layout
+      signature
+    }
+  }
+  hasPublicTransfer @include(if: $showBcs)
+  contents @include(if: $showBcs) {
+    bcs
+    type {
+      repr
+    }
+  }
+  owner @include(if: $showOwner) {
+    ...RPC_OBJECT_OWNER_FIELDS
+  }
+  previousTransactionBlock @include(if: $showPreviousTransaction) {
+    digest
+  }
+  storageRebate @include(if: $showStorageRebate)
+  digest
+  version
+  display @include(if: $showDisplay) {
+    key
+    value
+    error
+  }
+}
+    fragment RPC_OBJECT_OWNER_FIELDS on ObjectOwner {
+  __typename
+  ... on AddressOwner {
+    owner {
+      asObject {
+        address
+      }
+      asAddress {
+        address
+      }
+    }
+  }
+  ... on Parent {
+    parent {
+      address
+    }
+  }
+  ... on Shared {
+    initialSharedVersion
+  }
+}`, {"fragmentName":"RPC_MOVE_OBJECT_FIELDS"}) as unknown as TypedDocumentString<Rpc_Move_Object_FieldsFragment, unknown>;
 export const Rpc_Stake_FieldsFragmentDoc = new TypedDocumentString(`
     fragment RPC_STAKE_FIELDS on StakedSui {
   principal
@@ -3280,14 +5112,10 @@ export const Rpc_Stake_FieldsFragmentDoc = new TypedDocumentString(`
   requestedEpoch {
     epochId
   }
-  asMoveObject {
-    contents {
-      json
-    }
-    asObject {
-      address
-    }
+  contents {
+    json
   }
+  address
   estimatedReward
 }
     `, {"fragmentName":"RPC_STAKE_FIELDS"}) as unknown as TypedDocumentString<Rpc_Stake_FieldsFragment, unknown>;
@@ -3295,13 +5123,11 @@ export const Rpc_Events_FieldsFragmentDoc = new TypedDocumentString(`
     fragment RPC_EVENTS_FIELDS on Event {
   sendingModule {
     package {
-      asObject {
-        address
-      }
+      address
     }
     name
   }
-  senders {
+  sender {
     address
   }
   type {
@@ -3321,43 +5147,42 @@ export const Rpc_Transaction_FieldsFragmentDoc = new TypedDocumentString(`
     address
   }
   signatures
-  events(first: 50) @include(if: $showEvents) {
-    nodes {
-      ...RPC_EVENTS_FIELDS
-    }
-  }
   effects {
+    events(first: 50) @include(if: $showEvents) {
+      nodes {
+        ...RPC_EVENTS_FIELDS
+      }
+    }
     checkpoint {
       sequenceNumber
     }
     timestamp
-    balanceChanges @include(if: $showBalanceChanges) {
-      coinType {
-        repr
-      }
-      owner {
-        asAddress {
-          address
+    balanceChanges(first: 50) @include(if: $showBalanceChanges) {
+      nodes {
+        coinType {
+          repr
         }
-        asObject {
-          address
+        owner {
+          asObject {
+            address
+          }
+          asAddress {
+            address
+          }
         }
+        amount
       }
-      amount
     }
-    dependencies @include(if: $showEffects) {
-      digest
+    dependencies(first: 50) @include(if: $showEffects) {
+      nodes {
+        digest
+      }
     }
     status @include(if: $showEffects)
     gasEffects @include(if: $showEffects) {
       gasObject {
         owner {
-          asAddress {
-            address
-          }
-          asObject {
-            address
-          }
+          ...RPC_OBJECT_OWNER_FIELDS
         }
         digest
         version
@@ -3373,84 +5198,92 @@ export const Rpc_Transaction_FieldsFragmentDoc = new TypedDocumentString(`
     executedEpoch: epoch @include(if: $showEffects) {
       epochId
     }
-    objectChanges @include(if: $showEffects) {
-      idCreated
-      idDeleted
-      inputState {
-        version
-        digest
-        address
-      }
-      outputState {
-        version
-        digest
-        address
-        owner {
-          asAddress {
-            address
-          }
-          asObject {
-            address
+    objectChanges(first: 50) @include(if: $showEffects) {
+      nodes {
+        idCreated
+        idDeleted
+        inputState {
+          version
+          digest
+          address
+        }
+        outputState {
+          version
+          digest
+          address
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
           }
         }
       }
     }
-    objectChanges @include(if: $showObjectChanges) {
-      idCreated
-      idDeleted
-      inputState {
-        version
-        digest
-        address
-        asMoveObject {
-          contents {
-            type {
-              repr
+    objectChanges(first: 50) @include(if: $showObjectChanges) {
+      nodes {
+        idCreated
+        idDeleted
+        inputState {
+          version
+          digest
+          address
+          asMoveObject {
+            contents {
+              type {
+                repr
+              }
             }
           }
-        }
-        owner {
-          asAddress {
-            address
-          }
-          asObject {
-            address
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
           }
         }
-      }
-      outputState {
-        version
-        digest
-        address
-        asMoveObject {
-          contents {
-            type {
-              repr
+        outputState {
+          version
+          digest
+          address
+          asMoveObject {
+            contents {
+              type {
+                repr
+              }
             }
           }
-        }
-        owner {
-          asAddress {
-            address
-          }
-          asObject {
-            address
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
           }
         }
       }
     }
   }
 }
-    fragment RPC_EVENTS_FIELDS on Event {
-  sendingModule {
-    package {
+    fragment RPC_OBJECT_OWNER_FIELDS on ObjectOwner {
+  __typename
+  ... on AddressOwner {
+    owner {
       asObject {
         address
       }
+      asAddress {
+        address
+      }
+    }
+  }
+  ... on Parent {
+    parent {
+      address
+    }
+  }
+  ... on Shared {
+    initialSharedVersion
+  }
+}
+fragment RPC_EVENTS_FIELDS on Event {
+  sendingModule {
+    package {
+      address
     }
     name
   }
-  senders {
+  sender {
     address
   }
   type {
@@ -3481,7 +5314,7 @@ export const GetCheckpointDocument = new TypedDocumentString(`
   previousCheckpointDigest
   sequenceNumber
   timestamp
-  transactionBlockConnection {
+  transactionBlocks {
     nodes {
       digest
     }
@@ -3517,7 +5350,7 @@ export const GetCheckpointsDocument = new TypedDocumentString(`
   previousCheckpointDigest
   sequenceNumber
   timestamp
-  transactionBlockConnection {
+  transactionBlocks {
     nodes {
       digest
     }
@@ -3527,7 +5360,7 @@ export const GetCheckpointsDocument = new TypedDocumentString(`
 export const GetAllBalancesDocument = new TypedDocumentString(`
     query getAllBalances($owner: SuiAddress!, $limit: Int, $cursor: String) {
   address(address: $owner) {
-    balanceConnection(first: $limit, after: $cursor) {
+    balances(first: $limit, after: $cursor) {
       pageInfo {
         hasNextPage
         endCursor
@@ -3569,11 +5402,7 @@ export const GetCoinMetadataDocument = new TypedDocumentString(`
     symbol
     description
     iconUrl
-    asMoveObject {
-      asObject {
-        address
-      }
-    }
+    address
   }
 }
     `) as unknown as TypedDocumentString<GetCoinMetadataQuery, GetCoinMetadataQueryVariables>;
@@ -3581,27 +5410,23 @@ export const GetCoinsDocument = new TypedDocumentString(`
     query getCoins($owner: SuiAddress!, $first: Int, $cursor: String, $type: String = "0x2::sui::SUI") {
   address(address: $owner) {
     address
-    coinConnection(first: $first, after: $cursor, type: $type) {
+    coins(first: $first, after: $cursor, type: $type) {
       pageInfo {
         hasNextPage
         endCursor
       }
       nodes {
-        balance
-        asMoveObject {
-          contents {
-            type {
-              repr
-            }
+        coinBalance
+        contents {
+          type {
+            repr
           }
-          asObject {
-            coinObjectId: address
-            version
-            digest
-            previousTransactionBlock {
-              digest
-            }
-          }
+        }
+        address
+        version
+        digest
+        previousTransactionBlock {
+          digest
         }
       }
     }
@@ -3635,9 +5460,7 @@ export const GetCurrentEpochDocument = new TypedDocumentString(`
     contents {
       json
     }
-    asObject {
-      address
-    }
+    address
   }
   description
   gasPrice
@@ -3654,9 +5477,7 @@ export const GetCurrentEpochDocument = new TypedDocumentString(`
   nextEpochStake
   nextEpochCommissionRate
   operationCap {
-    asObject {
-      address
-    }
+    address
   }
   pendingPoolTokenWithdraw
   pendingStake
@@ -3665,9 +5486,7 @@ export const GetCurrentEpochDocument = new TypedDocumentString(`
   projectUrl
   rewardsPool
   stakingPool {
-    asObject {
-      address
-    }
+    address
   }
   stakingPoolActivationEpoch
   stakingPoolSuiBalance
@@ -3709,15 +5528,13 @@ export const GetDynamicFieldObjectDocument = new TypedDocumentString(`
             }
           }
           hasPublicTransfer
-          asObject {
-            address
-            digest
-            version
-            display {
-              key
-              value
-              error
-            }
+          address
+          digest
+          version
+          display {
+            key
+            value
+            error
           }
         }
       }
@@ -3728,7 +5545,7 @@ export const GetDynamicFieldObjectDocument = new TypedDocumentString(`
 export const GetDynamicFieldsDocument = new TypedDocumentString(`
     query getDynamicFields($parentId: SuiAddress!, $first: Int, $cursor: String) {
   object(address: $parentId) {
-    dynamicFieldConnection(first: $first, after: $cursor) {
+    dynamicFields(first: $first, after: $cursor) {
       pageInfo {
         hasNextPage
         endCursor
@@ -3751,12 +5568,10 @@ export const GetDynamicFieldsDocument = new TypedDocumentString(`
               }
               json
             }
-            asObject {
-              storageRebate
-              address
-              digest
-              version
-            }
+            storageRebate
+            address
+            digest
+            version
           }
         }
       }
@@ -3833,9 +5648,7 @@ export const GetLatestSuiSystemStateDocument = new TypedDocumentString(`
     contents {
       json
     }
-    asObject {
-      address
-    }
+    address
   }
   description
   gasPrice
@@ -3852,9 +5665,7 @@ export const GetLatestSuiSystemStateDocument = new TypedDocumentString(`
   nextEpochStake
   nextEpochCommissionRate
   operationCap {
-    asObject {
-      address
-    }
+    address
   }
   pendingPoolTokenWithdraw
   pendingStake
@@ -3863,9 +5674,7 @@ export const GetLatestSuiSystemStateDocument = new TypedDocumentString(`
   projectUrl
   rewardsPool
   stakingPool {
-    asObject {
-      address
-    }
+    address
   }
   stakingPoolActivationEpoch
   stakingPoolSuiBalance
@@ -3963,9 +5772,7 @@ fragment RPC_MOVE_MODULE_FIELDS on MoveModule {
     nodes {
       name
       package {
-        asObject {
-          address
-        }
+        address
       }
     }
   }
@@ -3999,9 +5806,7 @@ export const GetNormalizedMoveModulesByPackageDocument = new TypedDocumentString
     query getNormalizedMoveModulesByPackage($packageId: SuiAddress!, $limit: Int = 50, $cursor: String) {
   object(address: $packageId) {
     asMovePackage {
-      asObject {
-        address
-      }
+      address
       modules(first: $limit, after: $cursor) {
         pageInfo {
           hasNextPage
@@ -4035,9 +5840,7 @@ fragment RPC_MOVE_MODULE_FIELDS on MoveModule {
     nodes {
       name
       package {
-        asObject {
-          address
-        }
+        address
       }
     }
   }
@@ -4071,9 +5874,7 @@ export const GetNormalizedMoveStructDocument = new TypedDocumentString(`
     query getNormalizedMoveStruct($packageId: SuiAddress!, $module: String!, $struct: String!) {
   object(address: $packageId) {
     asMovePackage {
-      asObject {
-        address
-      }
+      address
       module(name: $module) {
         fileFormatVersion
         struct(name: $struct) {
@@ -4150,8 +5951,8 @@ export const GetValidatorsApyDocument = new TypedDocumentString(`
 }
     `) as unknown as TypedDocumentString<GetValidatorsApyQuery, GetValidatorsApyQueryVariables>;
 export const ResolveNameServiceAddressDocument = new TypedDocumentString(`
-    query resolveNameServiceAddress($name: String!) {
-  resolveNameServiceAddress(name: $name) {
+    query resolveNameServiceAddress($domain: String!) {
+  resolveSuinsAddress(domain: $domain) {
     address
   }
 }
@@ -4174,56 +5975,44 @@ export const ResolveNameServiceNamesDocument = new TypedDocumentString(`
 export const GetOwnedObjectsDocument = new TypedDocumentString(`
     query getOwnedObjects($owner: SuiAddress!, $limit: Int, $cursor: String, $showBcs: Boolean = false, $showContent: Boolean = false, $showDisplay: Boolean = false, $showType: Boolean = false, $showOwner: Boolean = false, $showPreviousTransaction: Boolean = false, $showStorageRebate: Boolean = false, $filter: ObjectFilter) {
   address(address: $owner) {
-    objectConnection(first: $limit, after: $cursor, filter: $filter) {
+    objects(first: $limit, after: $cursor, filter: $filter) {
       pageInfo {
         hasNextPage
         endCursor
       }
       nodes {
-        ...RPC_OBJECT_FIELDS
+        ...RPC_MOVE_OBJECT_FIELDS
       }
     }
   }
 }
-    fragment RPC_OBJECT_FIELDS on Object {
+    fragment RPC_MOVE_OBJECT_FIELDS on MoveObject {
   objectId: address
   bcs @include(if: $showBcs)
-  version
-  asMoveObject @include(if: $showType) {
-    contents {
-      type {
-        repr
-      }
+  version @include(if: $showType)
+  contents {
+    type {
+      repr
     }
   }
-  asMoveObject @include(if: $showContent) {
-    hasPublicTransfer
-    contents {
-      data
-      type {
-        repr
-        layout
-        signature
-      }
+  hasPublicTransfer @include(if: $showContent)
+  contents @include(if: $showContent) {
+    data
+    type {
+      repr
+      layout
+      signature
     }
   }
-  asMoveObject @include(if: $showBcs) {
-    hasPublicTransfer
-    contents {
-      bcs
-      type {
-        repr
-      }
+  hasPublicTransfer @include(if: $showBcs)
+  contents @include(if: $showBcs) {
+    bcs
+    type {
+      repr
     }
   }
   owner @include(if: $showOwner) {
-    address
-    asAddress {
-      address
-    }
-    asObject {
-      address
-    }
+    ...RPC_OBJECT_OWNER_FIELDS
   }
   previousTransactionBlock @include(if: $showPreviousTransaction) {
     digest
@@ -4235,6 +6024,27 @@ export const GetOwnedObjectsDocument = new TypedDocumentString(`
     key
     value
     error
+  }
+}
+fragment RPC_OBJECT_OWNER_FIELDS on ObjectOwner {
+  __typename
+  ... on AddressOwner {
+    owner {
+      asObject {
+        address
+      }
+      asAddress {
+        address
+      }
+    }
+  }
+  ... on Parent {
+    parent {
+      address
+    }
+  }
+  ... on Shared {
+    initialSharedVersion
   }
 }`) as unknown as TypedDocumentString<GetOwnedObjectsQuery, GetOwnedObjectsQueryVariables>;
 export const GetObjectDocument = new TypedDocumentString(`
@@ -4275,13 +6085,7 @@ export const GetObjectDocument = new TypedDocumentString(`
     }
   }
   owner @include(if: $showOwner) {
-    address
-    asAddress {
-      address
-    }
-    asObject {
-      address
-    }
+    ...RPC_OBJECT_OWNER_FIELDS
   }
   previousTransactionBlock @include(if: $showPreviousTransaction) {
     digest
@@ -4293,6 +6097,27 @@ export const GetObjectDocument = new TypedDocumentString(`
     key
     value
     error
+  }
+}
+fragment RPC_OBJECT_OWNER_FIELDS on ObjectOwner {
+  __typename
+  ... on AddressOwner {
+    owner {
+      asObject {
+        address
+      }
+      asAddress {
+        address
+      }
+    }
+  }
+  ... on Parent {
+    parent {
+      address
+    }
+  }
+  ... on Shared {
+    initialSharedVersion
   }
 }`) as unknown as TypedDocumentString<GetObjectQuery, GetObjectQueryVariables>;
 export const TryGetPastObjectDocument = new TypedDocumentString(`
@@ -4333,13 +6158,7 @@ export const TryGetPastObjectDocument = new TypedDocumentString(`
     }
   }
   owner @include(if: $showOwner) {
-    address
-    asAddress {
-      address
-    }
-    asObject {
-      address
-    }
+    ...RPC_OBJECT_OWNER_FIELDS
   }
   previousTransactionBlock @include(if: $showPreviousTransaction) {
     digest
@@ -4352,10 +6171,31 @@ export const TryGetPastObjectDocument = new TypedDocumentString(`
     value
     error
   }
+}
+fragment RPC_OBJECT_OWNER_FIELDS on ObjectOwner {
+  __typename
+  ... on AddressOwner {
+    owner {
+      asObject {
+        address
+      }
+      asAddress {
+        address
+      }
+    }
+  }
+  ... on Parent {
+    parent {
+      address
+    }
+  }
+  ... on Shared {
+    initialSharedVersion
+  }
 }`) as unknown as TypedDocumentString<TryGetPastObjectQuery, TryGetPastObjectQueryVariables>;
 export const MultiGetObjectsDocument = new TypedDocumentString(`
     query multiGetObjects($ids: [SuiAddress!]!, $limit: Int, $cursor: String, $showBcs: Boolean = false, $showContent: Boolean = false, $showDisplay: Boolean = false, $showType: Boolean = false, $showOwner: Boolean = false, $showPreviousTransaction: Boolean = false, $showStorageRebate: Boolean = false) {
-  objectConnection(first: $limit, after: $cursor, filter: {objectIds: $ids}) {
+  objects(first: $limit, after: $cursor, filter: {objectIds: $ids}) {
     pageInfo {
       hasNextPage
       endCursor
@@ -4397,13 +6237,7 @@ export const MultiGetObjectsDocument = new TypedDocumentString(`
     }
   }
   owner @include(if: $showOwner) {
-    address
-    asAddress {
-      address
-    }
-    asObject {
-      address
-    }
+    ...RPC_OBJECT_OWNER_FIELDS
   }
   previousTransactionBlock @include(if: $showPreviousTransaction) {
     digest
@@ -4416,10 +6250,31 @@ export const MultiGetObjectsDocument = new TypedDocumentString(`
     value
     error
   }
+}
+fragment RPC_OBJECT_OWNER_FIELDS on ObjectOwner {
+  __typename
+  ... on AddressOwner {
+    owner {
+      asObject {
+        address
+      }
+      asAddress {
+        address
+      }
+    }
+  }
+  ... on Parent {
+    parent {
+      address
+    }
+  }
+  ... on Shared {
+    initialSharedVersion
+  }
 }`) as unknown as TypedDocumentString<MultiGetObjectsQuery, MultiGetObjectsQueryVariables>;
 export const QueryEventsDocument = new TypedDocumentString(`
     query queryEvents($filter: EventFilter!, $before: String, $after: String, $first: Int, $last: Int) {
-  eventConnection(
+  events(
     filter: $filter
     first: $first
     after: $after
@@ -4440,13 +6295,11 @@ export const QueryEventsDocument = new TypedDocumentString(`
     fragment RPC_EVENTS_FIELDS on Event {
   sendingModule {
     package {
-      asObject {
-        address
-      }
+      address
     }
     name
   }
-  senders {
+  sender {
     address
   }
   type {
@@ -4459,7 +6312,7 @@ export const QueryEventsDocument = new TypedDocumentString(`
 export const GetStakesDocument = new TypedDocumentString(`
     query getStakes($owner: SuiAddress!, $limit: Int, $cursor: String) {
   address(address: $owner) {
-    stakedSuiConnection(first: $limit, after: $cursor) {
+    stakedSuis(first: $limit, after: $cursor) {
       pageInfo {
         hasNextPage
         endCursor
@@ -4479,19 +6332,15 @@ export const GetStakesDocument = new TypedDocumentString(`
   requestedEpoch {
     epochId
   }
-  asMoveObject {
-    contents {
-      json
-    }
-    asObject {
-      address
-    }
+  contents {
+    json
   }
+  address
   estimatedReward
 }`) as unknown as TypedDocumentString<GetStakesQuery, GetStakesQueryVariables>;
 export const GetStakesByIdsDocument = new TypedDocumentString(`
     query getStakesByIds($ids: [SuiAddress!]!, $limit: Int, $cursor: String) {
-  objectConnection(first: $limit, after: $cursor, filter: {objectIds: $ids}) {
+  objects(first: $limit, after: $cursor, filter: {objectIds: $ids}) {
     pageInfo {
       hasNextPage
       endCursor
@@ -4514,19 +6363,15 @@ export const GetStakesByIdsDocument = new TypedDocumentString(`
   requestedEpoch {
     epochId
   }
-  asMoveObject {
-    contents {
-      json
-    }
-    asObject {
-      address
-    }
+  contents {
+    json
   }
+  address
   estimatedReward
 }`) as unknown as TypedDocumentString<GetStakesByIdsQuery, GetStakesByIdsQueryVariables>;
 export const QueryTransactionBlocksDocument = new TypedDocumentString(`
     query queryTransactionBlocks($first: Int, $last: Int, $before: String, $after: String, $showBalanceChanges: Boolean = false, $showEffects: Boolean = false, $showEvents: Boolean = false, $showInput: Boolean = false, $showObjectChanges: Boolean = false, $showRawInput: Boolean = false, $filter: TransactionBlockFilter) {
-  transactionBlockConnection(
+  transactionBlocks(
     first: $first
     after: $after
     last: $last
@@ -4544,16 +6389,35 @@ export const QueryTransactionBlocksDocument = new TypedDocumentString(`
     }
   }
 }
-    fragment RPC_EVENTS_FIELDS on Event {
-  sendingModule {
-    package {
+    fragment RPC_OBJECT_OWNER_FIELDS on ObjectOwner {
+  __typename
+  ... on AddressOwner {
+    owner {
       asObject {
         address
       }
+      asAddress {
+        address
+      }
+    }
+  }
+  ... on Parent {
+    parent {
+      address
+    }
+  }
+  ... on Shared {
+    initialSharedVersion
+  }
+}
+fragment RPC_EVENTS_FIELDS on Event {
+  sendingModule {
+    package {
+      address
     }
     name
   }
-  senders {
+  sender {
     address
   }
   type {
@@ -4571,43 +6435,42 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
     address
   }
   signatures
-  events(first: 50) @include(if: $showEvents) {
-    nodes {
-      ...RPC_EVENTS_FIELDS
-    }
-  }
   effects {
+    events(first: 50) @include(if: $showEvents) {
+      nodes {
+        ...RPC_EVENTS_FIELDS
+      }
+    }
     checkpoint {
       sequenceNumber
     }
     timestamp
-    balanceChanges @include(if: $showBalanceChanges) {
-      coinType {
-        repr
-      }
-      owner {
-        asAddress {
-          address
+    balanceChanges(first: 50) @include(if: $showBalanceChanges) {
+      nodes {
+        coinType {
+          repr
         }
-        asObject {
-          address
+        owner {
+          asObject {
+            address
+          }
+          asAddress {
+            address
+          }
         }
+        amount
       }
-      amount
     }
-    dependencies @include(if: $showEffects) {
-      digest
+    dependencies(first: 50) @include(if: $showEffects) {
+      nodes {
+        digest
+      }
     }
     status @include(if: $showEffects)
     gasEffects @include(if: $showEffects) {
       gasObject {
         owner {
-          asAddress {
-            address
-          }
-          asObject {
-            address
-          }
+          ...RPC_OBJECT_OWNER_FIELDS
         }
         digest
         version
@@ -4623,68 +6486,57 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
     executedEpoch: epoch @include(if: $showEffects) {
       epochId
     }
-    objectChanges @include(if: $showEffects) {
-      idCreated
-      idDeleted
-      inputState {
-        version
-        digest
-        address
-      }
-      outputState {
-        version
-        digest
-        address
-        owner {
-          asAddress {
-            address
-          }
-          asObject {
-            address
+    objectChanges(first: 50) @include(if: $showEffects) {
+      nodes {
+        idCreated
+        idDeleted
+        inputState {
+          version
+          digest
+          address
+        }
+        outputState {
+          version
+          digest
+          address
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
           }
         }
       }
     }
-    objectChanges @include(if: $showObjectChanges) {
-      idCreated
-      idDeleted
-      inputState {
-        version
-        digest
-        address
-        asMoveObject {
-          contents {
-            type {
-              repr
+    objectChanges(first: 50) @include(if: $showObjectChanges) {
+      nodes {
+        idCreated
+        idDeleted
+        inputState {
+          version
+          digest
+          address
+          asMoveObject {
+            contents {
+              type {
+                repr
+              }
             }
           }
-        }
-        owner {
-          asAddress {
-            address
-          }
-          asObject {
-            address
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
           }
         }
-      }
-      outputState {
-        version
-        digest
-        address
-        asMoveObject {
-          contents {
-            type {
-              repr
+        outputState {
+          version
+          digest
+          address
+          asMoveObject {
+            contents {
+              type {
+                repr
+              }
             }
           }
-        }
-        owner {
-          asAddress {
-            address
-          }
-          asObject {
-            address
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
           }
         }
       }
@@ -4697,16 +6549,35 @@ export const GetTransactionBlockDocument = new TypedDocumentString(`
     ...RPC_TRANSACTION_FIELDS
   }
 }
-    fragment RPC_EVENTS_FIELDS on Event {
-  sendingModule {
-    package {
+    fragment RPC_OBJECT_OWNER_FIELDS on ObjectOwner {
+  __typename
+  ... on AddressOwner {
+    owner {
       asObject {
         address
       }
+      asAddress {
+        address
+      }
+    }
+  }
+  ... on Parent {
+    parent {
+      address
+    }
+  }
+  ... on Shared {
+    initialSharedVersion
+  }
+}
+fragment RPC_EVENTS_FIELDS on Event {
+  sendingModule {
+    package {
+      address
     }
     name
   }
-  senders {
+  sender {
     address
   }
   type {
@@ -4724,43 +6595,42 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
     address
   }
   signatures
-  events(first: 50) @include(if: $showEvents) {
-    nodes {
-      ...RPC_EVENTS_FIELDS
-    }
-  }
   effects {
+    events(first: 50) @include(if: $showEvents) {
+      nodes {
+        ...RPC_EVENTS_FIELDS
+      }
+    }
     checkpoint {
       sequenceNumber
     }
     timestamp
-    balanceChanges @include(if: $showBalanceChanges) {
-      coinType {
-        repr
-      }
-      owner {
-        asAddress {
-          address
+    balanceChanges(first: 50) @include(if: $showBalanceChanges) {
+      nodes {
+        coinType {
+          repr
         }
-        asObject {
-          address
+        owner {
+          asObject {
+            address
+          }
+          asAddress {
+            address
+          }
         }
+        amount
       }
-      amount
     }
-    dependencies @include(if: $showEffects) {
-      digest
+    dependencies(first: 50) @include(if: $showEffects) {
+      nodes {
+        digest
+      }
     }
     status @include(if: $showEffects)
     gasEffects @include(if: $showEffects) {
       gasObject {
         owner {
-          asAddress {
-            address
-          }
-          asObject {
-            address
-          }
+          ...RPC_OBJECT_OWNER_FIELDS
         }
         digest
         version
@@ -4776,68 +6646,57 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
     executedEpoch: epoch @include(if: $showEffects) {
       epochId
     }
-    objectChanges @include(if: $showEffects) {
-      idCreated
-      idDeleted
-      inputState {
-        version
-        digest
-        address
-      }
-      outputState {
-        version
-        digest
-        address
-        owner {
-          asAddress {
-            address
-          }
-          asObject {
-            address
+    objectChanges(first: 50) @include(if: $showEffects) {
+      nodes {
+        idCreated
+        idDeleted
+        inputState {
+          version
+          digest
+          address
+        }
+        outputState {
+          version
+          digest
+          address
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
           }
         }
       }
     }
-    objectChanges @include(if: $showObjectChanges) {
-      idCreated
-      idDeleted
-      inputState {
-        version
-        digest
-        address
-        asMoveObject {
-          contents {
-            type {
-              repr
+    objectChanges(first: 50) @include(if: $showObjectChanges) {
+      nodes {
+        idCreated
+        idDeleted
+        inputState {
+          version
+          digest
+          address
+          asMoveObject {
+            contents {
+              type {
+                repr
+              }
             }
           }
-        }
-        owner {
-          asAddress {
-            address
-          }
-          asObject {
-            address
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
           }
         }
-      }
-      outputState {
-        version
-        digest
-        address
-        asMoveObject {
-          contents {
-            type {
-              repr
+        outputState {
+          version
+          digest
+          address
+          asMoveObject {
+            contents {
+              type {
+                repr
+              }
             }
           }
-        }
-        owner {
-          asAddress {
-            address
-          }
-          asObject {
-            address
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
           }
         }
       }
@@ -4846,7 +6705,7 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 }`) as unknown as TypedDocumentString<GetTransactionBlockQuery, GetTransactionBlockQueryVariables>;
 export const MultiGetTransactionBlocksDocument = new TypedDocumentString(`
     query multiGetTransactionBlocks($digests: [String!]!, $limit: Int, $cursor: String, $showBalanceChanges: Boolean = false, $showEffects: Boolean = false, $showEvents: Boolean = false, $showInput: Boolean = false, $showObjectChanges: Boolean = false, $showRawInput: Boolean = false) {
-  transactionBlockConnection(
+  transactionBlocks(
     first: $limit
     after: $cursor
     filter: {transactionIds: $digests}
@@ -4862,16 +6721,35 @@ export const MultiGetTransactionBlocksDocument = new TypedDocumentString(`
     }
   }
 }
-    fragment RPC_EVENTS_FIELDS on Event {
-  sendingModule {
-    package {
+    fragment RPC_OBJECT_OWNER_FIELDS on ObjectOwner {
+  __typename
+  ... on AddressOwner {
+    owner {
       asObject {
         address
       }
+      asAddress {
+        address
+      }
+    }
+  }
+  ... on Parent {
+    parent {
+      address
+    }
+  }
+  ... on Shared {
+    initialSharedVersion
+  }
+}
+fragment RPC_EVENTS_FIELDS on Event {
+  sendingModule {
+    package {
+      address
     }
     name
   }
-  senders {
+  sender {
     address
   }
   type {
@@ -4889,43 +6767,42 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
     address
   }
   signatures
-  events(first: 50) @include(if: $showEvents) {
-    nodes {
-      ...RPC_EVENTS_FIELDS
-    }
-  }
   effects {
+    events(first: 50) @include(if: $showEvents) {
+      nodes {
+        ...RPC_EVENTS_FIELDS
+      }
+    }
     checkpoint {
       sequenceNumber
     }
     timestamp
-    balanceChanges @include(if: $showBalanceChanges) {
-      coinType {
-        repr
-      }
-      owner {
-        asAddress {
-          address
+    balanceChanges(first: 50) @include(if: $showBalanceChanges) {
+      nodes {
+        coinType {
+          repr
         }
-        asObject {
-          address
+        owner {
+          asObject {
+            address
+          }
+          asAddress {
+            address
+          }
         }
+        amount
       }
-      amount
     }
-    dependencies @include(if: $showEffects) {
-      digest
+    dependencies(first: 50) @include(if: $showEffects) {
+      nodes {
+        digest
+      }
     }
     status @include(if: $showEffects)
     gasEffects @include(if: $showEffects) {
       gasObject {
         owner {
-          asAddress {
-            address
-          }
-          asObject {
-            address
-          }
+          ...RPC_OBJECT_OWNER_FIELDS
         }
         digest
         version
@@ -4941,68 +6818,57 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
     executedEpoch: epoch @include(if: $showEffects) {
       epochId
     }
-    objectChanges @include(if: $showEffects) {
-      idCreated
-      idDeleted
-      inputState {
-        version
-        digest
-        address
-      }
-      outputState {
-        version
-        digest
-        address
-        owner {
-          asAddress {
-            address
-          }
-          asObject {
-            address
+    objectChanges(first: 50) @include(if: $showEffects) {
+      nodes {
+        idCreated
+        idDeleted
+        inputState {
+          version
+          digest
+          address
+        }
+        outputState {
+          version
+          digest
+          address
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
           }
         }
       }
     }
-    objectChanges @include(if: $showObjectChanges) {
-      idCreated
-      idDeleted
-      inputState {
-        version
-        digest
-        address
-        asMoveObject {
-          contents {
-            type {
-              repr
+    objectChanges(first: 50) @include(if: $showObjectChanges) {
+      nodes {
+        idCreated
+        idDeleted
+        inputState {
+          version
+          digest
+          address
+          asMoveObject {
+            contents {
+              type {
+                repr
+              }
             }
           }
-        }
-        owner {
-          asAddress {
-            address
-          }
-          asObject {
-            address
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
           }
         }
-      }
-      outputState {
-        version
-        digest
-        address
-        asMoveObject {
-          contents {
-            type {
-              repr
+        outputState {
+          version
+          digest
+          address
+          asMoveObject {
+            contents {
+              type {
+                repr
+              }
             }
           }
-        }
-        owner {
-          asAddress {
-            address
-          }
-          asObject {
-            address
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
           }
         }
       }

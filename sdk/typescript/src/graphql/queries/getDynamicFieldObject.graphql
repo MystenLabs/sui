@@ -20,15 +20,14 @@ query getDynamicFieldObject($parentId: SuiAddress!, $name: DynamicFieldName!) {
 						}
 					}
 					hasPublicTransfer
-					asObject {
-						address
-						digest
-						version
-						display {
-							key
-							value
-							error
-						}
+
+					address
+					digest
+					version
+					display {
+						key
+						value
+						error
 					}
 				}
 			}

@@ -4,9 +4,8 @@
 query getNormalizedMoveStruct($packageId: SuiAddress!, $module: String!, $struct: String!) {
 	object(address: $packageId) {
 		asMovePackage {
-			asObject {
-				address
-			}
+			address
+
 			module(name: $module) {
 				fileFormatVersion
 				struct(name: $struct) {

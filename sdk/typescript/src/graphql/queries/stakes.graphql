@@ -3,8 +3,7 @@
 
 query getStakes($owner: SuiAddress!, $limit: Int, $cursor: String) {
 	address(address: $owner) {
-		# exceeds query cost?
-		stakedSuiConnection(first: $limit, after: $cursor) {
+		stakedSuis(first: $limit, after: $cursor) {
 			pageInfo {
 				hasNextPage
 				endCursor
@@ -17,7 +16,7 @@ query getStakes($owner: SuiAddress!, $limit: Int, $cursor: String) {
 }
 
 query getStakesByIds($ids: [SuiAddress!]!, $limit: Int, $cursor: String) {
-	objectConnection(first: $limit, after: $cursor, filter: { objectIds: $ids }) {
+	objects(first: $limit, after: $cursor, filter: { objectIds: $ids }) {
 		pageInfo {
 			hasNextPage
 			endCursor
@@ -41,16 +40,14 @@ fragment RPC_STAKE_FIELDS on StakedSui {
 	requestedEpoch {
 		epochId
 	}
-	asMoveObject {
-		# staking pool can be read from contents
-		contents {
-			json
-		}
-		# bad nesting
-		asObject {
-			address
-		}
+
+	# staking pool can be read from contents
+	contents {
+		json
 	}
+
+	address
+
 	estimatedReward
 	# validatorAddress?
 }

@@ -51,10 +51,10 @@ describe('GraphQL SuiClient compatibility', () => {
 	});
 
 	test('getCoins', async () => {
-		const rpcCoins = await toolbox.client.getCoins({
+		const { data: rpcCoins } = await toolbox.client.getCoins({
 			owner: toolbox.address(),
 		});
-		const graphQLCoins = await toolbox.graphQLClient!.getCoins({
+		const { data: graphQLCoins } = await toolbox.graphQLClient!.getCoins({
 			owner: toolbox.address(),
 		});
 
@@ -62,10 +62,10 @@ describe('GraphQL SuiClient compatibility', () => {
 	});
 
 	test('getAllCoins', async () => {
-		const rpcCoins = await toolbox.client.getAllCoins({
+		const { data: rpcCoins } = await toolbox.client.getAllCoins({
 			owner: toolbox.address(),
 		});
-		const graphQLCoins = await toolbox.graphQLClient!.getAllCoins({
+		const { data: graphQLCoins } = await toolbox.graphQLClient!.getAllCoins({
 			owner: toolbox.address(),
 		});
 
@@ -203,7 +203,7 @@ describe('GraphQL SuiClient compatibility', () => {
 	});
 
 	test('getOwnedObjects', async () => {
-		const rpcObjects = await toolbox.client.getOwnedObjects({
+		const { data: rpcObjects } = await toolbox.client.getOwnedObjects({
 			owner: toolbox.address(),
 			options: {
 				showBcs: true,
@@ -215,7 +215,7 @@ describe('GraphQL SuiClient compatibility', () => {
 				showType: true,
 			},
 		});
-		const graphQLObjects = await toolbox.graphQLClient!.getOwnedObjects({
+		const { data: graphQLObjects } = await toolbox.graphQLClient!.getOwnedObjects({
 			owner: toolbox.address(),
 			options: {
 				showBcs: true,

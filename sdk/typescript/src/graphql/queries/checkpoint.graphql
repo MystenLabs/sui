@@ -39,7 +39,7 @@ fragment RPC_Checkpoint_Fields on Checkpoint {
 	sequenceNumber
 	timestamp
 	# might be truncated? should we set a higher limit or paginate?
-	transactionBlockConnection {
+	transactionBlocks {
 		nodes {
 			digest
 		}

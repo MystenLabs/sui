@@ -8,10 +8,6 @@ query getCoinMetadata($coinType: String!) {
 		symbol
 		description
 		iconUrl
-		asMoveObject {
-			asObject {
-				address
-			}
-		}
+		address
 	}
 }

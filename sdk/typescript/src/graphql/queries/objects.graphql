@@ -15,13 +15,13 @@ query getOwnedObjects(
 	$filter: ObjectFilter
 ) {
 	address(address: $owner) {
-		objectConnection(first: $limit, after: $cursor, filter: $filter) {
+		objects(first: $limit, after: $cursor, filter: $filter) {
 			pageInfo {
 				hasNextPage
 				endCursor
 			}
 			nodes {
-				...RPC_OBJECT_FIELDS
+				...RPC_MOVE_OBJECT_FIELDS
 			}
 		}
 	}
@@ -70,7 +70,7 @@ query multiGetObjects(
 	$showPreviousTransaction: Boolean = false
 	$showStorageRebate: Boolean = false
 ) {
-	objectConnection(first: $limit, after: $cursor, filter: { objectIds: $ids }) {
+	objects(first: $limit, after: $cursor, filter: { objectIds: $ids }) {
 		pageInfo {
 			hasNextPage
 			endCursor
@@ -114,13 +114,7 @@ fragment RPC_OBJECT_FIELDS on Object {
 		}
 	}
 	owner @include(if: $showOwner) {
-		address
-		asAddress {
-			address
-		}
-		asObject {
-			address
-		}
+		...RPC_OBJECT_OWNER_FIELDS
 	}
 	previousTransactionBlock @include(if: $showPreviousTransaction) {
 		digest
@@ -133,5 +127,71 @@ fragment RPC_OBJECT_FIELDS on Object {
 		key
 		value
 		error
+	}
+}
+
+fragment RPC_MOVE_OBJECT_FIELDS on MoveObject {
+	objectId: address
+	bcs @include(if: $showBcs)
+	version @include(if: $showType)
+	contents {
+		type {
+			repr
+		}
+	}
+	hasPublicTransfer @include(if: $showContent)
+	contents @include(if: $showContent) {
+		data
+		type {
+			repr
+			layout
+			signature
+		}
+	}
+
+	hasPublicTransfer @include(if: $showBcs)
+	contents @include(if: $showBcs) {
+		bcs
+		type {
+			repr
+		}
+	}
+
+	owner @include(if: $showOwner) {
+		...RPC_OBJECT_OWNER_FIELDS
+	}
+	previousTransactionBlock @include(if: $showPreviousTransaction) {
+		digest
+	}
+
+	storageRebate @include(if: $showStorageRebate)
+	digest
+	version
+	display @include(if: $showDisplay) {
+		key
+		value
+		error
+	}
+}
+
+fragment RPC_OBJECT_OWNER_FIELDS on ObjectOwner {
+	__typename
+	... on AddressOwner {
+		owner {
+			asObject {
+				address
+			}
+			asAddress {
+				address
+			}
+		}
+	}
+	... on Parent {
+		parent {
+			address
+		}
+	}
+	... on Shared {
+		initialSharedVersion
 	}
 }

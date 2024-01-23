@@ -17,9 +17,7 @@ fragment RPC_MOVE_MODULE_FIELDS on MoveModule {
 		nodes {
 			name
 			package {
-				asObject {
-					address
-				}
+				address
 			}
 		}
 	}

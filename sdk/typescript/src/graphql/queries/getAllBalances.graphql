@@ -3,7 +3,7 @@
 
 query getAllBalances($owner: SuiAddress!, $limit: Int, $cursor: String) {
 	address(address: $owner) {
-		balanceConnection(first: $limit, after: $cursor) {
+		balances(first: $limit, after: $cursor) {
 			pageInfo {
 				hasNextPage
 				endCursor

@@ -29,9 +29,7 @@ fragment RPC_VALIDATOR_FIELDS on Validator {
 		contents {
 			json
 		}
-		asObject {
-			address
-		}
+		address
 	}
 	description
 	gasPrice
@@ -48,9 +46,7 @@ fragment RPC_VALIDATOR_FIELDS on Validator {
 	nextEpochStake
 	nextEpochCommissionRate
 	operationCap {
-		asObject {
-			address
-		}
+		address
 	}
 	pendingPoolTokenWithdraw
 	pendingStake
@@ -59,9 +55,7 @@ fragment RPC_VALIDATOR_FIELDS on Validator {
 	projectUrl
 	rewardsPool
 	stakingPool {
-		asObject {
-			address
-		}
+		address
 	}
 	stakingPoolActivationEpoch
 	stakingPoolSuiBalance

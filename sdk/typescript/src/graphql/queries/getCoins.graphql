@@ -4,27 +4,23 @@
 query getCoins($owner: SuiAddress!, $first: Int, $cursor: String, $type: String = "0x2::sui::SUI") {
 	address(address: $owner) {
 		address
-		coinConnection(first: $first, after: $cursor, type: $type) {
+		coins(first: $first, after: $cursor, type: $type) {
 			pageInfo {
 				hasNextPage
 				endCursor
 			}
 			nodes {
-				balance
-				asMoveObject {
-					contents {
-						type {
-							repr
-						}
+				coinBalance
+				contents {
+					type {
+						repr
 					}
-					asObject {
-						coinObjectId: address
-						version
-						digest
-						previousTransactionBlock {
-							digest
-						}
-					}
+				}
+				address
+				version
+				digest
+				previousTransactionBlock {
+					digest
 				}
 			}
 		}
