@@ -6,6 +6,7 @@ use anyhow::Result;
 use clap::Parser;
 use clap::ValueEnum;
 use include_dir::{include_dir, Dir};
+use std::fs;
 use std::fs::create_dir_all;
 use std::fs::File;
 use std::io::prelude::*;
@@ -38,7 +39,7 @@ fn add_to_sui_dockerfile(path: &Path) -> Result<()> {
     }
     let sui_services_dockerfile_path = &crates_dir.join("../docker/sui-services/Dockerfile");
     // read the dockerfile
-    let dockerfile = std::fs::read_to_string(sui_services_dockerfile_path)
+    let dockerfile = fs::read_to_string(sui_services_dockerfile_path)
         .context("reading sui-services dockerfile")?;
 
     // find the line with the build cmd
@@ -59,9 +60,35 @@ fn add_to_sui_dockerfile(path: &Path) -> Result<()> {
     );
     final_dockerfile.insert(build_line + 1, &bin_str);
     // write the file back
-    std::fs::write(sui_services_dockerfile_path, final_dockerfile.join("\n"))
+    fs::write(sui_services_dockerfile_path, final_dockerfile.join("\n"))
         .context("writing sui-services dockerfile after modifying it")?;
 
+    Ok(())
+}
+
+fn add_member_to_workspace(path: &Path) -> Result<()> {
+    // test
+    let path = path.canonicalize().context("canonicalizing service path")?;
+    let crates_dir = path.parent().unwrap();
+    if !crates_dir.ends_with("sui/crates") {
+        panic!("directory wasn't in the sui repo");
+    }
+    let workspace_toml_path = &crates_dir.join("../Cargo.toml");
+    // read the workspace toml
+    let toml_content = fs::read_to_string(workspace_toml_path)?;
+    let mut toml = toml_content.parse::<toml_edit::Document>()?;
+    toml["workspace"]["members"]
+        .as_array_mut()
+        .unwrap()
+        .push_formatted(toml_edit::Value::String(toml_edit::Formatted::new(
+            path.file_name()
+                .expect("getting the project name from the given path")
+                .to_str()
+                .unwrap()
+                .to_string(),
+        )));
+    fs::write(workspace_toml_path, toml.to_string())
+        .context("failed to write workspace Cargo.toml back after update")?;
     Ok(())
 }
 
@@ -93,7 +120,7 @@ fn create_rust_service(path: &Path) -> Result<()> {
 
     // add the project as a member of the cargo workspace
     if is_sui_service {
-        // TODO: add_member_to_workspace(path)?;
+        add_member_to_workspace(path)?;
     }
     // now that the source directory works, let's update/add a dockerfile
     if is_sui_service {
