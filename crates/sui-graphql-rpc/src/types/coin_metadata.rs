@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::context_data::db_data_provider::PgManager;
-
 use super::balance::{self, Balance};
 use super::base64::Base64;
 use super::big_int::BigInt;
@@ -11,17 +9,20 @@ use super::display::DisplayEntry;
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::{MoveObject, MoveObjectImpl};
 use super::move_value::MoveValue;
-use super::object::{self, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus};
+use super::object::{self, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus};
 use super::owner::OwnerImpl;
 use super::stake::StakedSui;
 use super::sui_address::SuiAddress;
 use super::suins_registration::SuinsRegistration;
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
-use async_graphql::*;
-
+use crate::context_data::db_data_provider::PgManager;
+use crate::data::Db;
+use crate::error::Error;
 use async_graphql::connection::Connection;
+use async_graphql::*;
 use sui_types::coin::CoinMetadata as NativeCoinMetadata;
+use sui_types::TypeTag;
 
 pub(crate) struct CoinMetadata {
     pub super_: MoveObject,
@@ -304,6 +305,38 @@ impl CoinMetadata {
             .extend()?;
 
         Ok(supply.map(BigInt::from))
+    }
+}
+
+impl CoinMetadata {
+    /// Read a `CoinMetadata` from the `db` for the coin whose inner type is `coin_type`.
+    pub(crate) async fn query(db: &Db, coin_type: TypeTag) -> Result<Option<CoinMetadata>, Error> {
+        let TypeTag::Struct(coin_struct) = coin_type else {
+            // If the type supplied is not metadata, we know it's not a valid coin type, so there
+            // won't be CoinMetadata for it.
+            return Ok(None);
+        };
+
+        let metadata_type = NativeCoinMetadata::type_(*coin_struct).into();
+        let Some(object) = Object::query_singleton(db, metadata_type).await? else {
+            return Ok(None);
+        };
+
+        let move_object = MoveObject::try_from(&object).map_err(|_| {
+            Error::Internal(format!(
+                "Expected {} to be CoinMetadata, but it is not an object.",
+                object.address,
+            ))
+        })?;
+
+        let coin_metadata = CoinMetadata::try_from(&move_object).map_err(|_| {
+            Error::Internal(format!(
+                "Expected {} to be CoinMetadata, but it is not.",
+                object.address,
+            ))
+        })?;
+
+        Ok(Some(coin_metadata))
     }
 }
 
