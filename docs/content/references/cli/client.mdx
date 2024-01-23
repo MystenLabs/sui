@@ -239,6 +239,52 @@ Execution finished successfully. Local and on-chain effects match.
 Use `sui client replay-batch --path <FILEPATH>` to replay several transactions listed in a newline-separated file. This
 will verify that all transactions local execution results match the effects on-chain.
 
+### Profile a transaction
+
+Use the `sui client profile-transaction --tx-digest <TRANSACTION-DIGEST>` command to re-execute a transaction locally
+and produce a gas profile. Similarly to the replay command, this command will fetch the transaction dependencies from the
+fullnode specified in the client env that are needed to execute the transaction. During the local execution of the transaction,
+this command will record all the move function invocations and the gas cost breakdown for each invocation.
+
+In order for the profiler to be enabled, the Sui Client binary must be locally built or installed with `--features gas-profiler`.
+```shell
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch <BRANCH-NAME> --features gas-profiler sui
+```
+
+The command outputs a profile to the current working directory of the format `gas_profile_{tx_digest}_{unix_timestamp}.json`.
+An optional flag `--profile-output </PATH/OUTPUT.json>` can be provided to write the profile to `/PATH/OUTPUT_{tx_digest}_{unix_timestamp}.json`.
+This profile can then be inspected using speedscope.
+
+To install speedscope run
+```shell
+npm install -g speedscope
+```
+
+To open a profile in speedscope run
+```shell
+speedscope <PATH/PROFILE-OUTPUT-FILE>
+```
+
+When looking at the profile in speedscope, there are 3 different views available from the top left menu: `Timer Order`,
+`Left Heavy`, and `Sandwich`. In each view, each bar's vertical width corresponds to the percentage of gas consumption incurred by the function,
+and you can hover your mouse over a bar or click a bar to see the precise amount of gas consumed in nano-sui.
+
+`Time Order` will show the callstack of function invocations from left to right in the order
+of invocation, while `Left Heavy` will combine repeated sequences of nested invocations into a single combined call stack,
+and will display these from left to right by total incurred gas consumption per combined call stack. This is useful when there have
+been hundreds of repeated calls to the same function to quickly observe the total gas consumption over all calls to that function.
+In both these views the top section can be clicked and dragged to zoom in and out over different sections of the profile.
+
+`Sandwich` view shows a list of discrete values that correspond to gas consumption per function, with `Total` showing
+gas cost incurred in all the functions called by the function, and `Self` showing the gas cost done by only the given function.
+
+Observing a transaction's gas consumption provides useful insight of expected gas cost usage of a smart contract.
+When developing a smart contract, you can run a local network and publish it to the local network. See
+https://docs.sui.io/guides/developer/getting-started/local-network for more details. Then create a transaction that calls
+your published smart contract, and finally run the profiler on the transaction to see a breakdown of the gas cost.
+
+This tool can also be used to do analysis on daily, weekly, or monthly cost by multiplying the gas cost by the expected
+number of transactions that will call the smart contract within that timeframe.
 
 ## Publish a Move package
 
