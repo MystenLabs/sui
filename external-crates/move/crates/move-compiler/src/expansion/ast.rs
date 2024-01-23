@@ -289,8 +289,8 @@ pub type Type = Spanned<Type_>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FieldBindings {
-    Named(Fields<LValue>),
-    Positional(Vec<LValue>),
+    Named(Fields<LValue>, Option<Loc>),
+    Positional(Vec<Ellipsis<LValue>>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -426,9 +426,24 @@ pub struct MatchArm_ {
 pub type MatchArm = Spanned<MatchArm_>;
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum Ellipsis<T> {
+    Binder(T),
+    Ellipsis(Loc),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum MatchPattern_ {
-    PositionalConstructor(ModuleAccess, Option<Vec<Type>>, Spanned<Vec<MatchPattern>>),
-    FieldConstructor(ModuleAccess, Option<Vec<Type>>, Fields<MatchPattern>),
+    PositionalConstructor(
+        ModuleAccess,
+        Option<Vec<Type>>,
+        Spanned<Vec<Ellipsis<MatchPattern>>>,
+    ),
+    FieldConstructor(
+        ModuleAccess,
+        Option<Vec<Type>>,
+        Fields<MatchPattern>,
+        Option<Loc>,
+    ),
     HeadConstructor(ModuleAccess, Option<Vec<Type>>),
     Binder(Mutability, Var),
     Literal(Value),
@@ -1652,6 +1667,17 @@ impl AstDebug for MatchArm_ {
     }
 }
 
+impl<T: AstDebug> AstDebug for Ellipsis<T> {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            Ellipsis::Binder(p) => p.ast_debug(w),
+            Ellipsis::Ellipsis(_) => {
+                w.write("..");
+            }
+        }
+    }
+}
+
 impl AstDebug for MatchPattern_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         use MatchPattern_::*;
@@ -1669,7 +1695,7 @@ impl AstDebug for MatchPattern_ {
                 });
                 w.write(") ");
             }
-            FieldConstructor(name, tys_opt, fields) => {
+            FieldConstructor(name, tys_opt, fields, ellipsis) => {
                 name.ast_debug(w);
                 if let Some(ss) = tys_opt {
                     w.write("<");
@@ -1681,6 +1707,9 @@ impl AstDebug for MatchPattern_ {
                     w.write(format!(" {}#{} : ", field, idx));
                     pat.ast_debug(w);
                 });
+                if ellipsis.is_some() {
+                    w.write(" ..");
+                }
                 w.write("} ");
             }
             HeadConstructor(name, tys_opt) => {
@@ -1691,7 +1720,9 @@ impl AstDebug for MatchPattern_ {
                     w.write(">");
                 }
             }
-            Binder(mut_, name) => w.write(format!("{}{}", mut_.map(|_| "mut ").unwrap_or(""), name)),
+            Binder(mut_, name) => {
+                w.write(format!("{}{}", mut_.map(|_| "mut ").unwrap_or(""), name))
+            }
             Literal(v) => v.ast_debug(w),
             Wildcard => w.write("_"),
             Or(lhs, rhs) => {
@@ -1782,13 +1813,16 @@ impl AstDebug for Vec<Vec<Exp>> {
 impl AstDebug for FieldBindings {
     fn ast_debug(&self, w: &mut AstWriter) {
         match self {
-            FieldBindings::Named(fields) => {
+            FieldBindings::Named(fields, ellipsis) => {
                 w.write("{");
                 w.comma(fields, |w, (_, f, idx_b)| {
                     let (idx, b) = idx_b;
                     w.write(&format!("{}#{}: ", idx, f));
                     b.ast_debug(w);
                 });
+                if ellipsis.is_some() {
+                    w.write("..");
+                }
                 w.write("}");
             }
             FieldBindings::Positional(vals) => {

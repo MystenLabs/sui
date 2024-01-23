@@ -1161,11 +1161,12 @@ fn make_arm_unpack(
             TP::Constructor(mident, enum_, variant, tyargs, fields)
             | TP::BorrowConstructor(mident, enum_, variant, tyargs, fields) => {
                 let all_wild = fields
-                         .iter()
-                         .all(|(_, _, (_, (_, pat)))| matches!(pat.pat.value, TP::Wildcard)) || fields.is_empty();
+                    .iter()
+                    .all(|(_, _, (_, (_, pat)))| matches!(pat.pat.value, TP::Wildcard))
+                    || fields.is_empty();
                 if matches!(entry.ty.value, N::Type_::Ref(_, _)) && all_wild {
-                     continue;
-                 }
+                    continue;
+                }
                 let field_pats = fields.clone().map(|_key, (ndx, (_, pat))| (ndx, pat));
 
                 let field_tys = fields.map(|_key, (ndx, (ty, _))| (ndx, ty));
