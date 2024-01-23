@@ -1,5 +1,5 @@
 ---
-title: Overview
+title: GraphQL RPC
 description: test
 draft: true
 ---
@@ -54,24 +54,32 @@ x-sui-rpc-version: 0.1.0
 
 ## Working with variables
 
-Variables are a powerful way for passing different object IDs, Digests, Sui addresses, and other kinds of data for full flexibility. The following is an example for querying the reference gas price for epoch `100`, by passing the epoch as a variable:
+Variables are a powerful way for passing different object IDs, Digests, Sui addresses, and other kinds of data for full flexibility. The following is an example for querying the reference gas price for epoch `100`, by passing the epoch as a variable.
+
+
+:::info
+
+When working with the online GraphQL IDE, paste the variables' values in the `Variables` pane on the bottom left of the window, without the `variables` keyword. When not using variables, these need to be removed from the query.
+
+:::
+
+A variable is represented by using the symbol `$` and it's type (in this example `Int`) must be known.
 
 ```graphql
-query ($epochID: Int!) {
+query ($epochID: Int) {
   epoch(id: $epochID) {
     referenceGasPrice
   }
 }
-variables {
+```
+where the variable is:
+```graphql
+{
    "epochID": 100
 }
 ```
 
-:::info
 
-When working with the online GraphQL IDE, paste the variables' values in the `Variables` pane on the bottom left of the window, without the `variables` keyword.
-
-:::
 
 ## Multiple data in one query
 The previous RPC service required multiple queries for more complex data retrieval. Now, with GraphQL, you can specify the data you need in one single query. 
@@ -118,7 +126,7 @@ By default, the number of results is limited to 50 items. To learn more about ho
 :::
 
 ## Pagination
-The Sui GraphQL RPC limits the number of items that are returned in a request. The default page limit size is set to 50 items. If there are more items requested than the max default page limit, use `cursors` to navigate between pages. A cursor refers to a specific position in the dataset. To access the start and end cursors of a page, use the `pageInfo` field  that exposes the cursor data and two additional fields indicating if there is a previous or next page. For example, if we want to get the `checkpoints` data:
+Sui GraphQL RPC limits the number of items that are returned in a request. The default page limit size is set to 50 items. If there are more items requested than the max default page limit, use `cursors` to navigate between pages. A cursor refers to a specific position in the dataset. To access the start and end cursors of a page, use the `pageInfo` field  that exposes the cursor data and two additional fields indicating if there is a previous or next page. For example, if we want to get the `checkpoints` data:
 
 ```graphql
 query {
@@ -371,6 +379,7 @@ The cursor is now passed in the `after` (or `before`) fields on the connection, 
 </TabItem>
 </Tabs>
 
+<!--
 ### Typescript SDK
 TBD
 
@@ -379,3 +388,4 @@ TBD
 
 ### Writing your own queries
 A good start for writing your own queries is either by browsing the [examples](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples) folder or referring to the [Typescript SDK implementation](https://github.com/MystenLabs/sui/tree/main/sdk/typescript/src/graphql/queries).
+-->

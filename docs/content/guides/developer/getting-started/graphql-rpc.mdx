@@ -15,7 +15,7 @@ The quickest way to access the Sui GraphQL service is through the online IDE tha
 features such as auto-completion (use Ctrl-Space or just start typing), built-in documentation (click on the top-left icon), multi-tabs, and more. 
 
 The online IDE is available for [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql). 
-In the following section, you can find query examples that you can use direcetly in the IDE.
+Later in this document, you can find query [examples](#examples) that you can use directly in the IDE.
 
 :::info
 
@@ -23,8 +23,11 @@ Both [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https:/
 
 :::
 
-For more details about concepts exposed in the rest of this page, please see the [GraphQL concepts](https://google.com) page.
+For more details about some concepts used in the examples below, please see the [GraphQL concepts](concepts/graphql-rpc.mdx) page.
 
+
+## Discovering the schema
+GraphQL offers an introspection feature that allows you to query for the schema that is loaded by a service instance. The [official documentation](https://graphql.org/learn/introspection/) provides an overview on introspection.
 
 ## Examples
 
@@ -32,11 +35,45 @@ Many examples can also be found in the [repository](https://github.com/MystenLab
 
 Any existing addresses/object IDs in these examples refer to `mainnet` data only.
 
-### Get a transaction block
+### Find the reference gas price for last epoch
 
 ```graphql
 query {
-  transactionBlock(digest: "Hay2tj3GcDYcE3AMHrej5WDsHGPVAYsegcubixLUvXUF") {
+  epoch {
+    referenceGasPrice
+  }
+}
+```
+
+### Find the stake information for epoch 100
+
+Find the total stake rewards, the reference gas price, the number of checkpoints and the total gas fees for epoch 100. Note that in the query, the `id` argument is optional. When no id is provided, it will return the data for the last known epoch.
+
+```graphql
+query {
+  epoch(id: 100) # note that id is optional, and without it, last epoch is returned
+  {
+    epochId
+    totalStakeRewards
+    referenceGasPrice
+    totalCheckpoints
+    totalGasFees
+    totalStakeSubsidies
+    storageFund {
+      totalObjectStorageRebates
+      nonRefundableBalance
+    }
+  }
+}
+```
+
+### Find a transaction block by its digest
+
+Get a transaction block object by its digest and show information such as the gas sponsor's address, the gas price, the gas budget, and the effects from executing that transaction block.
+
+```graphql
+query {
+  transactionBlock(digest: "FdKFgsQ9iRrxW6b1dh9WPGuNuaJWMXHJn1wqBQSqVqK2") {
     gasInput {
       gasSponsor {
         address
@@ -53,6 +90,21 @@ query {
       epoch {
         epochId
         referenceGasPrice
+      }
+    }
+  }
+}
+```
+
+### Find the last 10 transactions that are not a system transaction
+
+```graphql
+query {
+  transactionBlocks(last: 10, filter: {kind: PROGRAMMABLE_TX}) {
+    nodes {
+      digest
+      kind {
+        __typename
       }
     }
   }
@@ -80,7 +132,9 @@ query ($objectID: SuiAddress!) {
       digest
       effects {
         objectChanges {
-          address
+          nodes {
+            address
+          }
         }
       }
     }
@@ -95,20 +149,37 @@ where the variables are:
 }
 ```
 
+### Filter transaction blocks by a function
+
+Find the last transaction blocks that called the `public_transfer` function. 
+
+:::info 
+
+This example makes usage of the filter `last`, which indicates that the user only wants the last 10 transaction blocks known to the service. It also uses cursors, which in this examples are used to aid for future pagination needs.
+
+:::
+
+```graphql
+{ # Filtering by function
+    transactionBlocks(
+        last: 10,
+        filter: {
+            function: "0x2::transfer::public_transfer"
+        }
+    ) {
+        edges { cursor }
+    }
+}
+```
 
 ### Find the balance changes of all the transactions
 
 Find the balance changes of all the transactions where a certain address called certain Move functions. This is useful when someone wants to get their staking and unstaking history, since you stake/unstake by calling specific Move functions.
 
-:::info
-:::
-
 ```graphql
 query ($address: SuiAddress!) {
   stakeTxns: transactionBlocks(filter: {
-    package: "0x3"
-    module: "sui_system"
-    function: "request_add_stake"
+    function: "0x3::sui_system::request_add_stake"
     signAddress: $address
   }) {
     nodes {
@@ -118,18 +189,18 @@ query ($address: SuiAddress!) {
       digest
       effects {
         balanceChanges {
-          owner {
-            address
+          nodes {
+            owner {
+              address
+            }
+            amount
           }
-          amount
         }
       }
     }
   }
   unstakeTxns: transactionBlocks(filter: {
-    package: "0x3"
-    module: "sui_system"
-    function: "request_withdraw_stake"
+    function: "0x3::sui_system::request_withdraw_stake"
     signAddress: $address
   }) {
     nodes {
@@ -139,10 +210,12 @@ query ($address: SuiAddress!) {
       digest
       effects {
         balanceChanges {
-          owner {
-            address
+          nodes {
+            owner {
+              address
+            }
+            amount
           }
-          amount
         }
       }
     }
@@ -157,8 +230,114 @@ where address is
 }
 ```
 
+### Coins on address and its balances
 
+:::info
+This example uses aliases and [fragments](/concepts/graphql-rpc#fragments).
+:::
 
+```graphql
+fragment C on Coin {
+  balance
+  asMoveObject {
+    contents { type { repr } }
+  }
+}
+
+{
+  suiCoins: coins {
+    edges {
+      cursor
+      node { ...C }
+    }
+  }
+
+  address(address: "0x576f3566219e81748bb599646a5f4f7317068bbe62b143518427b1977b03256d") {
+    coins {
+      edges {
+        cursor
+        node { ...C }
+      }
+    }
+
+    allBalances: balances {
+      edges {
+        cursor
+        node {
+          coinType { repr }
+          coinObjectCount
+          totalBalance
+        }
+      }
+    }
+
+    firstBalance: balances(first: 1) {
+      edges { cursor }
+    }
+
+    lastBalance: balances(last: 1) {
+      edges { cursor }
+    }
+  }
+}
+
+```
+
+### Find the dynamic fields of an object
+
+```graphql
+query DynamicField {
+  object(
+    address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
+  ) {
+    dynamicField(
+      name: {
+        type: "0x2::kiosk::Listing",
+        bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1VhfwA",
+      }
+    ) {
+      ...DynamicFieldSelect
+    }
+  }
+}
+
+fragment DynamicFieldSelect on DynamicField {
+  name {
+    ...DynamicFieldNameSelection
+  }
+  value {
+    ...DynamicFieldValueSelection
+  }
+}
+
+fragment DynamicFieldNameSelection on MoveValue {
+  type {
+    repr
+  }
+  data
+  bcs
+}
+
+fragment DynamicFieldValueSelection on DynamicFieldValue {
+  ... on MoveValue {
+    type {
+      repr
+    }
+    data
+    __typename
+  }
+  ... on MoveObject {
+    hasPublicTransfer
+    contents {
+      type {
+        repr
+      }
+      data
+    }
+    __typename
+  }
+}
+```
 
 ## Limits
 
