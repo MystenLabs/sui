@@ -2236,19 +2236,6 @@ dependencies = [
 
 [[package]]
 name = "cargo_metadata"
-version = "0.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4acbb09d9ee8e23699b9634375c72795d095bf268439da88562cf9b501f181fa"
-dependencies = [
- "camino",
- "cargo-platform",
- "semver 1.0.16",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "cargo_metadata"
 version = "0.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eee4243f1f26fc7a42710e7439c149e2b10b05472f88090acce52632f231a73a"
@@ -4047,15 +4034,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "error-chain"
-version = "0.12.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d2f06b9cac1506ece98fe3231e3cc9c4410ec3d5b1f24ae1c8946f0742cdefc"
-dependencies = [
- "version_check",
-]
-
-[[package]]
 name = "error-code"
 version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4230,7 +4208,7 @@ checksum = "40bf114f1017ace0f622f1652f59c2c5e1abfe7d88891cca0c43da979b351de0"
 dependencies = [
  "arrayvec 0.7.2",
  "bytes",
- "cargo_metadata 0.15.4",
+ "cargo_metadata",
  "chrono",
  "convert_case 0.6.0",
  "elliptic-curve 0.13.4",
@@ -5077,7 +5055,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f822a2716041492e071691606474f5a7e4fa7c2acbfd7da7b29884fb448291c7"
 dependencies = [
  "camino",
- "cargo_metadata 0.15.4",
+ "cargo_metadata",
  "cfg-if",
  "debug-ignore",
  "fixedbitset 0.4.2",
@@ -6563,27 +6541,6 @@ dependencies = [
  "proc-macro2 1.0.66",
  "quote 1.0.33",
  "syn 1.0.107",
-]
-
-[[package]]
-name = "moka"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8017ec3548ffe7d4cef7ac0e12b044c01164a74c0f3119420faeaf13490ad8b"
-dependencies = [
- "crossbeam-channel",
- "crossbeam-epoch",
- "crossbeam-utils",
- "once_cell",
- "parking_lot 0.12.1",
- "quanta",
- "rustc_version",
- "skeptic",
- "smallvec",
- "tagptr",
- "thiserror",
- "triomphe",
- "uuid 1.2.2",
 ]
 
 [[package]]
@@ -9589,17 +9546,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pulldown-cmark"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77a1a2f1f0a7ecff9c31abbe177637be0e97a0aef46cf8738ece09327985d998"
-dependencies = [
- "bitflags 1.3.2",
- "memchr",
- "unicase",
-]
-
-[[package]]
 name = "quanta"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11298,21 +11244,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "skeptic"
-version = "0.13.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16d23b015676c90a0f01c197bfdc786c20342c73a0afdda9025adb0bc42940a8"
-dependencies = [
- "bytecount",
- "cargo_metadata 0.14.2",
- "error-chain",
- "glob",
- "pulldown-cmark",
- "tempfile",
- "walkdir",
-]
-
-[[package]]
 name = "slab"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12097,7 +12028,6 @@ dependencies = [
  "indexmap 2.1.0",
  "itertools 0.10.5",
  "lru 0.10.0",
- "moka",
  "more-asserts",
  "move-binary-format",
  "move-bytecode-utils",
@@ -12288,7 +12218,7 @@ dependencies = [
 name = "sui-execution"
 version = "0.1.0"
 dependencies = [
- "cargo_metadata 0.15.4",
+ "cargo_metadata",
  "move-binary-format",
  "move-bytecode-verifier",
  "move-bytecode-verifier-next-vm",
@@ -14208,12 +14138,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tagptr"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b2093cf4c8eb1e67749a6762251bc9cd836b6fc171623bd0a9d324d37af2417"
-
-[[package]]
 name = "tap"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14384,7 +14308,7 @@ version = "3.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a9186daca5c58cb307d09731e0ba06b13fd6c036c90672b9bfc31cecf76cf689"
 dependencies = [
- "cargo_metadata 0.15.4",
+ "cargo_metadata",
  "proc-macro2 1.0.66",
  "quote 1.0.33",
  "serde",
@@ -15089,12 +15013,6 @@ name = "treeline"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7f741b240f1a48843f9b8e0444fb55fb2a4ff67293b50a9179dfd5ea67f8d41"
-
-[[package]]
-name = "triomphe"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0eee8098afad3fb0c54a9007aab6804558410503ad676d4633f9c2559a00ac0f"
 
 [[package]]
 name = "try-lock"
@@ -16123,7 +16041,7 @@ dependencies = [
  "cached_proc_macro_types",
  "camino",
  "cargo-platform",
- "cargo_metadata 0.15.4",
+ "cargo_metadata",
  "cassowary",
  "cast",
  "cbc",
