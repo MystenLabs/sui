@@ -221,26 +221,28 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             )
         })?;
         let root_pkg_orig_name = root_manifest.package.name;
-        let (mut dep_graphs, resolved_name_deps, mut dep_orig_names) = self.collect_graphs(
-            parent,
-            root_pkg_name,
-            root_pkg_orig_name,
-            root_path.clone(),
-            DependencyMode::Always,
-            root_manifest.dependencies.clone(),
-        )?;
+        let (mut dep_graphs, resolved_name_deps, mut dep_orig_names, mut overrides) = self
+            .collect_graphs(
+                parent,
+                root_pkg_name,
+                root_pkg_orig_name,
+                root_path.clone(),
+                DependencyMode::Always,
+                root_manifest.dependencies.clone(),
+            )?;
         let dep_lock_files = dep_graphs
             .values()
             .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone()))
             .collect::<Result<Vec<LockFile>>>()?;
-        let (dev_dep_graphs, dev_resolved_name_deps, dev_dep_orig_names) = self.collect_graphs(
-            parent,
-            root_pkg_name,
-            root_pkg_orig_name,
-            root_path.clone(),
-            DependencyMode::DevOnly,
-            root_manifest.dev_dependencies.clone(),
-        )?;
+        let (dev_dep_graphs, dev_resolved_name_deps, dev_dep_orig_names, dev_overrides) = self
+            .collect_graphs(
+                parent,
+                root_pkg_name,
+                root_pkg_orig_name,
+                root_path.clone(),
+                DependencyMode::DevOnly,
+                root_manifest.dev_dependencies.clone(),
+            )?;
 
         let dev_dep_lock_files = dev_dep_graphs
             .values()
@@ -283,10 +285,6 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         combined_graph
             .package_graph
             .add_node(combined_graph.root_package);
-
-        // get overrides
-        let mut overrides = collect_overrides(parent, &resolved_name_deps)?;
-        let dev_overrides = collect_overrides(parent, &dev_resolved_name_deps)?;
 
         for (
             dep_name,
@@ -345,10 +343,12 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         BTreeMap<PM::PackageName, DependencyGraphInfo>,
         PM::Dependencies,
         BTreeMap<Symbol, PM::PackageName>,
+        BTreeMap<Symbol, Package>,
     )> {
         let mut dep_graphs = BTreeMap::new();
         let mut resolved_name_deps = PM::Dependencies::new();
         let mut dep_orig_names = BTreeMap::new();
+        let mut overrides = BTreeMap::new();
         for (dep_pkg_name, dep) in dependencies {
             let (pkg_graph, is_override, is_external, resolved_pkg_name) = self
                 .new_for_dep(
@@ -369,10 +369,26 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 resolved_pkg_name,
                 DependencyGraphInfo::new(pkg_graph, mode, is_override, is_external),
             );
-            resolved_name_deps.insert(resolved_pkg_name, dep);
+            resolved_name_deps.insert(resolved_pkg_name, dep.clone());
             dep_orig_names.insert(resolved_pkg_name, dep_pkg_name);
+
+            if is_override {
+                let kind = match dep {
+                    PM::Dependency::Internal(d) => d.kind,
+                    PM::Dependency::External(_) => {
+                        // external dependencies cannot be overrides
+                        panic!("Unexpected external dependency override")
+                    }
+                };
+                let mut dep_pkg = Package {
+                    kind,
+                    resolver: None,
+                };
+                dep_pkg.kind.reroot(parent)?;
+                overrides.insert(resolved_pkg_name, dep_pkg);
+            }
         }
-        Ok((dep_graphs, resolved_name_deps, dep_orig_names))
+        Ok((dep_graphs, resolved_name_deps, dep_orig_names, overrides))
     }
 
     /// Given a dependency in the parent's manifest file, creates a sub-graph for this dependency.
@@ -1613,27 +1629,6 @@ fn deps_equal<'a>(
     } else {
         Err((graph1_pkgs, graph2_pkgs))
     }
-}
-
-/// Collects overridden dependencies.
-fn collect_overrides(
-    parent: &PM::DependencyKind,
-    dependencies: &PM::Dependencies,
-) -> Result<BTreeMap<Symbol, Package>> {
-    let mut overrides = BTreeMap::new();
-    for (dep_pkg_name, dep) in dependencies {
-        if let PM::Dependency::Internal(internal) = dep {
-            if internal.dep_override {
-                let mut dep_pkg = Package {
-                    kind: internal.kind.clone(),
-                    resolver: None,
-                };
-                dep_pkg.kind.reroot(parent)?;
-                overrides.insert(*dep_pkg_name, dep_pkg);
-            }
-        }
-    }
-    Ok(overrides)
 }
 
 /// Cycle detection to avoid infinite recursion due to the way we construct internally resolved
