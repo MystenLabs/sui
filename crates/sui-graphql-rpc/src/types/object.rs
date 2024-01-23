@@ -9,7 +9,7 @@ use super::coin::Coin;
 use super::coin_metadata::CoinMetadata;
 use super::cursor::{self, Page, Target};
 use super::digest::Digest;
-use super::display::{get_rendered_fields, DisplayEntry};
+use super::display::{Display, DisplayEntry};
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::MoveObject;
 use super::move_package::MovePackage;
@@ -20,7 +20,6 @@ use super::transaction_block;
 use super::transaction_block::TransactionBlockFilter;
 use super::type_filter::{ExactTypeFilter, TypeFilter};
 use super::{owner::Owner, sui_address::SuiAddress, transaction_block::TransactionBlock};
-use crate::context_data::db_data_provider::PgManager;
 use crate::context_data::package_cache::PackageCache;
 use crate::data::{self, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
@@ -602,24 +601,14 @@ impl ObjectImpl<'_> {
             .await
             .extend()?;
 
-        let stored_display = ctx
-            .data_unchecked::<PgManager>()
-            .fetch_display_object_by_type(&struct_tag)
+        let Some(display) = Display::query(ctx.data_unchecked(), struct_tag.into())
             .await
-            .extend()?;
-
-        let Some(stored_display) = stored_display else {
+            .extend()?
+        else {
             return Ok(None);
         };
 
-        let event = stored_display
-            .to_display_update_event()
-            .map_err(|e| Error::Internal(e.to_string()))
-            .extend()?;
-
-        Ok(Some(
-            get_rendered_fields(event.fields, &move_struct).extend()?,
-        ))
+        Ok(Some(display.render(&move_struct).extend()?))
     }
 }
 

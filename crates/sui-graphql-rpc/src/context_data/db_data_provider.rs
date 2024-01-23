@@ -1,18 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::db_backend::GenericQueryBuilder;
 use crate::{
-    config::{Limits, DEFAULT_SERVER_DB_POOL_SIZE},
+    config::DEFAULT_SERVER_DB_POOL_SIZE,
     error::Error,
     types::{address::Address, sui_address::SuiAddress, validator::Validator},
 };
-use diesel::{OptionalExtension, RunQueryDsl};
-use move_core_types::language_storage::StructTag;
 use std::collections::BTreeMap;
 use sui_indexer::{
-    apis::GovernanceReadApiV2, indexer_reader::IndexerReader, models_v2::display::StoredDisplay,
-    PgConnectionPoolConfig,
+    apis::GovernanceReadApiV2, indexer_reader::IndexerReader, PgConnectionPoolConfig,
 };
 use sui_json_rpc_types::Stake as RpcStakedSui;
 use sui_types::{
@@ -22,49 +18,14 @@ use sui_types::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
     },
 };
-use tracing::error;
-
-#[cfg(feature = "pg_backend")]
-use super::pg_backend::{PgQueryExecutor, QueryBuilder};
-
-#[derive(thiserror::Error, Debug, Eq, PartialEq)]
-pub enum DbValidationError {
-    #[error("Invalid checkpoint combination. 'before' or 'after' checkpoint cannot be used with 'at' checkpoint")]
-    InvalidCheckpointCombination,
-    #[error("Before checkpoint must be greater than after checkpoint")]
-    InvalidCheckpointOrder,
-    #[error("Filtering objects by package::module::type is not currently supported")]
-    UnsupportedPMT,
-    #[error("Filtering objects by object keys is not currently supported")]
-    UnsupportedObjectKeys,
-    #[error("Requires package and module")]
-    RequiresPackageAndModule,
-    #[error("Requires package")]
-    RequiresPackage,
-    #[error("'first' can only be used with 'after")]
-    FirstAfter,
-    #[error("'last' can only be used with 'before'")]
-    LastBefore,
-    #[error("Pagination is currently disabled on balances")]
-    PaginationDisabledOnBalances,
-    #[error("Invalid owner type. Must be Address or Object")]
-    InvalidOwnerType,
-    #[error("Query cost exceeded - cost: {0}, limit: {1}")]
-    QueryCostExceeded(u64, u64),
-    #[error("Page size exceeded - requested: {0}, limit: {1}")]
-    PageSizeExceeded(u64, u64),
-    #[error("Invalid type provided as filter: {0}")]
-    InvalidType(String),
-}
 
 pub(crate) struct PgManager {
     pub inner: IndexerReader,
-    pub limits: Limits,
 }
 
 impl PgManager {
-    pub(crate) fn new(inner: IndexerReader, limits: Limits) -> Self {
-        Self { inner, limits }
+    pub(crate) fn new(inner: IndexerReader) -> Self {
+        Self { inner }
     }
 
     /// Create a new underlying reader, which is used by this type as well as other data providers.
@@ -83,20 +44,6 @@ impl PgManager {
     }
 }
 
-/// Implement methods to query db and return StoredData
-impl PgManager {
-    async fn get_display_by_obj_type(
-        &self,
-        object_type: String,
-    ) -> Result<Option<StoredDisplay>, Error> {
-        self.run_query_async_with_cost(
-            move || Ok(QueryBuilder::get_display_by_obj_type(object_type.clone())),
-            |query| move |conn| query.get_result::<StoredDisplay>(conn).optional(),
-        )
-        .await
-    }
-}
-
 /// Implement methods to be used by graphql resolvers
 impl PgManager {
     /// Retrieve the validator APYs
@@ -110,14 +57,6 @@ impl PgManager {
             .get_validator_apy(address)
             .await
             .map_err(|e| Error::Internal(format!("{e}")))
-    }
-
-    pub(crate) async fn fetch_display_object_by_type(
-        &self,
-        object_type: &StructTag,
-    ) -> Result<Option<StoredDisplay>, Error> {
-        let object_type = object_type.to_canonical_string(/* with_prefix */ true);
-        self.get_display_by_obj_type(object_type).await
     }
 
     pub(crate) async fn available_range(&self) -> Result<(u64, u64), Error> {
