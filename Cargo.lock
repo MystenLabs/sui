@@ -12566,6 +12566,7 @@ dependencies = [
  "sui-keys",
  "sui-move-build",
  "sui-open-rpc",
+ "sui-package-resolver",
  "sui-protocol-config",
  "sui-rest-api",
  "sui-sdk",
