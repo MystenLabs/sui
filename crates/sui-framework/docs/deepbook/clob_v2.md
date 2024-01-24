@@ -68,6 +68,10 @@
 -  [Function `open_orders`](#0xdee9_clob_v2_open_orders)
 -  [Function `order_id`](#0xdee9_clob_v2_order_id)
 -  [Function `tick_level`](#0xdee9_clob_v2_tick_level)
+-  [Function `original_quantity`](#0xdee9_clob_v2_original_quantity)
+-  [Function `quantity`](#0xdee9_clob_v2_quantity)
+-  [Function `is_bid`](#0xdee9_clob_v2_is_bid)
+-  [Function `owner`](#0xdee9_clob_v2_owner)
 -  [Function `expire_timestamp`](#0xdee9_clob_v2_expire_timestamp)
 -  [Function `quote_asset_trading_fees_value`](#0xdee9_clob_v2_quote_asset_trading_fees_value)
 -  [Function `clone_order`](#0xdee9_clob_v2_clone_order)
@@ -2482,7 +2486,7 @@ Place a market order to the order book.
         );
         quote_coin = <a href="dependencies/sui-framework/coin.md#0x2_coin_from_balance">coin::from_balance</a>(quote_balance_left, ctx);
     } <b>else</b> {
-        <b>assert</b>!(quantity &lt;= <a href="dependencies/sui-framework/coin.md#0x2_coin_value">coin::value</a>(&base_coin), <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientBaseCoin">EInsufficientBaseCoin</a>);
+        <b>assert</b>!(<a href="clob_v2.md#0xdee9_clob_v2_quantity">quantity</a> &lt;= <a href="dependencies/sui-framework/coin.md#0x2_coin_value">coin::value</a>(&base_coin), <a href="clob_v2.md#0xdee9_clob_v2_EInsufficientBaseCoin">EInsufficientBaseCoin</a>);
         <b>let</b> base_coin_to_sell = <a href="dependencies/sui-framework/coin.md#0x2_coin_split">coin::split</a>(&<b>mut</b> base_coin, quantity, ctx);
         <b>let</b> (base_balance_left, quote_balance_filled) = <a href="clob_v2.md#0xdee9_clob_v2_match_ask">match_ask</a>(
             pool,
@@ -3758,6 +3762,102 @@ internal func to retrive single depth of a tick price
 
 <pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_tick_level">tick_level</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): u64 {
     order.price
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_clob_v2_original_quantity"></a>
+
+## Function `original_quantity`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_original_quantity">original_quantity</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_original_quantity">original_quantity</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): u64 {
+    order.original_quantity
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_clob_v2_quantity"></a>
+
+## Function `quantity`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_quantity">quantity</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_quantity">quantity</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): u64 {
+    order.quantity
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_clob_v2_is_bid"></a>
+
+## Function `is_bid`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_is_bid">is_bid</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_is_bid">is_bid</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): bool {
+    order.is_bid
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_clob_v2_owner"></a>
+
+## Function `owner`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_owner">owner</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): <b>address</b>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_owner">owner</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): <b>address</b> {
+    order.owner
 }
 </code></pre>
 
