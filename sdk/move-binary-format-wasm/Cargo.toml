@@ -9,6 +9,7 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
+bcs = "0.1.4"
 hex = "0.4.3"
 move-binary-format = { path = "../../external-crates/move/crates/move-binary-format", features = ["wasm"] }
 move-core-types = { path = "../../external-crates/move/crates/move-core-types", default-features = false}

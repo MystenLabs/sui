@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use move_binary_format::{file_format::StructFieldInformation, CompiledModule};
+use move_binary_format::{file_format::{SignatureToken, StructFieldInformation}, CompiledModule};
 use move_core_types::identifier::Identifier;
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen::to_value;
@@ -93,6 +93,65 @@ pub fn update_identifiers(binary: String, map: JsValue) -> Result<JsValue, JsErr
         })?;
 
     Ok(to_value(&hex::encode(binary))?)
+}
+
+#[wasm_bindgen]
+/// Updates a constant in the constant pool.
+pub fn change_constant(
+    binary: String,
+    value: String,
+    expected_value: String,
+    expected_type: String
+) -> Result<JsValue, JsErr>  {
+    let bytes = hex::decode(binary)?;
+    let mut compiled_module = CompiledModule::deserialize_with_defaults(&bytes[..])?;
+
+    compiled_module
+        .constant_pool
+        .iter_mut()
+        .for_each(|handle| {
+            let exp_value = hex::decode(expected_value.clone()).unwrap();
+            let type_ = format!("{:?}", handle.type_);
+
+            if (handle.data == exp_value) && (type_ == expected_type) {
+                handle.data = hex::decode(value.clone()).unwrap();
+            };
+        });
+
+    let mut binary = Vec::new();
+    compiled_module
+        .serialize(&mut binary)
+        .map_err(|err| JsErr {
+            display: format!("{}", err),
+            message: err.to_string(),
+        })?;
+
+    Ok(to_value(&hex::encode(binary))?)
+}
+
+#[derive(Serialize, Deserialize)]
+/// A transformed constant from the constant pool.
+struct Constant {
+    type_: String,
+    value_bcs: String
+}
+
+#[wasm_bindgen]
+/// Convenience method to analyze the constant pool; returns all constants in order
+/// with their type and BCS value. The index can be used to update a constant.
+pub fn get_constants(binary: String) -> Result<JsValue, JsErr> {
+    let bytes = hex::decode(binary)?;
+    let compiled_module = CompiledModule::deserialize_with_defaults(&bytes[..])?;
+    let constants: Vec<Constant> = compiled_module
+        .constant_pool
+        .into_iter()
+        .map(|constant| Constant {
+            type_: format!("{:?}", constant.type_),
+            value_bcs: hex::encode(&constant.data),
+        })
+        .collect();
+
+    Ok(to_value(&constants)?)
 }
 
 #[wasm_bindgen]

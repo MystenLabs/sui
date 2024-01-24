@@ -246,6 +246,7 @@ dependencies = [
 name = "move-binary-format-wasm"
 version = "0.1.0"
 dependencies = [
+ "bcs",
  "hex",
  "move-binary-format",
  "move-core-types",
