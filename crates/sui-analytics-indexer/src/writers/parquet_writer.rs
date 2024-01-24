@@ -128,4 +128,11 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         self.data = vec![];
         Ok(())
     }
+
+    fn file_size(&self) -> Result<Option<u64>> {
+        // parquet writer doesn't write records in a temp staging file
+        // and only flushes records after serializing and compressing them
+        // when flush is invoked
+        Ok(None)
+    }
 }

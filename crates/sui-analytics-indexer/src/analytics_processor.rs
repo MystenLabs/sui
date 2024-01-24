@@ -41,7 +41,10 @@ pub struct AnalyticsProcessor<S: Serialize + ParquetSchema> {
     kill_sender: oneshot::Sender<()>,
     #[allow(dead_code)]
     max_checkpoint_sender: oneshot::Sender<()>,
+    num_checkpoint_iterations: u64,
 }
+
+const CHECK_FILE_SIZE_ITERATION_CYCLE: u64 = 50;
 
 #[async_trait::async_trait]
 impl<S: Serialize + ParquetSchema + 'static> Handler for AnalyticsProcessor<S> {
@@ -70,7 +73,10 @@ impl<S: Serialize + ParquetSchema + 'static> Handler for AnalyticsProcessor<S> {
         let num_checkpoints_processed =
             self.current_checkpoint_range.end - self.current_checkpoint_range.start;
         let cut_new_files = (num_checkpoints_processed >= self.config.checkpoint_interval)
-            || (self.last_commit_instant.elapsed().as_secs() > self.config.time_interval_s);
+            || (self.last_commit_instant.elapsed().as_secs() > self.config.time_interval_s)
+            || (self.num_checkpoint_iterations % CHECK_FILE_SIZE_ITERATION_CYCLE == 0
+                && self.writer.file_size()?.unwrap_or(0)
+                    > self.config.max_file_size_mb * 1024 * 1024);
         if cut_new_files {
             self.cut().await?;
             self.reset()?;
@@ -87,7 +93,7 @@ impl<S: Serialize + ParquetSchema + 'static> Handler for AnalyticsProcessor<S> {
             .end
             .checked_add(1)
             .context("Checkpoint sequence num overflow")?;
-
+        self.num_checkpoint_iterations += 1;
         Ok(())
     }
 }
@@ -141,6 +147,7 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
             max_checkpoint_sender,
             metrics,
             config,
+            num_checkpoint_iterations: 0,
         })
     }
 
