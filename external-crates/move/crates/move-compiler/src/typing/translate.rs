@@ -78,13 +78,41 @@ pub fn program(
 }
 
 fn extract_macros(context: &mut Context, modules: &UniqueMap<ModuleIdent, N::ModuleDefinition>) {
+    fn merge_use_funs(module_use_funs: &N::UseFuns, mut macro_use_funs: N::UseFuns) -> N::UseFuns {
+        let N::UseFuns {
+            color: _,
+            resolved,
+            implicit_candidates,
+        } = module_use_funs;
+        for (tn, module_methods) in resolved {
+            let macro_methods = macro_use_funs
+                .resolved
+                .entry(tn.clone())
+                .or_insert_with(UniqueMap::new);
+            for (name, method) in module_methods.key_cloned_iter() {
+                if !macro_methods.contains_key(&name) {
+                    macro_methods.add(name, method.clone()).unwrap();
+                }
+            }
+        }
+        for (name, module_candidate) in implicit_candidates.key_cloned_iter() {
+            if !macro_use_funs.implicit_candidates.contains_key(&name) {
+                macro_use_funs
+                    .implicit_candidates
+                    .add(name, module_candidate.clone())
+                    .unwrap();
+            }
+        }
+        macro_use_funs
+    }
     let all_macro_definitions = modules.ref_map(|_mident, mdef| {
         mdef.functions.ref_filter_map(|_name, f| {
             if f.macro_.is_none() {
                 return None;
             }
-            if let N::FunctionBody_::Defined(body) = &f.body.value {
-                Some(body.clone())
+            if let N::FunctionBody_::Defined((use_funs, body)) = &f.body.value {
+                let use_funs = merge_use_funs(&mdef.use_funs, use_funs.clone());
+                Some((use_funs, body.clone()))
             } else {
                 None
             }

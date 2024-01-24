@@ -7,6 +7,36 @@ error[E04032]: unable to expand macro function
  8 │         foo!(|| bar!(f))
    │         ^^^^^^^^^^^^^^^^ Recursive macro expansion. 'a::m::foo' has already been expanded
    ·
-11 │         foo!(|| 0);
+28 │         foo!(|| 0);
    │         ---------- 'a::m::foo' previously expanded here
+
+error[E04032]: unable to expand macro function
+   ┌─ tests/move_2024/typing/recursive_macros_invalid_lambdas.move:12:11
+   │
+12 │         f(arg!(f))
+   │           ^^^^^^^ Recursive macro expansion. 'a::m::arg' has already been expanded
+   ·
+29 │         arg!(|x| x);
+   │         ----------- 'a::m::arg' previously expanded here
+
+error[E04032]: unable to expand macro function
+   ┌─ tests/move_2024/typing/recursive_macros_invalid_lambdas.move:16:11
+   │
+16 │         f(arg_eta!(|| f()))
+   │           ^^^^^^^^^^^^^^^^ Recursive macro expansion. 'a::m::arg_eta' has already been expanded
+   ·
+30 │         arg_eta!(|x| x);
+   │         --------------- 'a::m::arg_eta' previously expanded here
+
+error[E04032]: unable to expand macro function
+   ┌─ tests/move_2024/typing/recursive_macros_invalid_lambdas.move:20:21
+   │
+20 │         f(apply!(|| arg_apply!(f)))
+   │           ----------^^^^^^^^^^^^^-
+   │           │         │
+   │           │         Recursive macro expansion. 'a::m::arg_apply' has already been expanded
+   │           From this macro expansion
+   ·
+31 │         arg_apply!(|x| x);
+   │         ----------------- 'a::m::arg_apply' previously expanded here
 

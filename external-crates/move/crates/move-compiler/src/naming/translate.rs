@@ -776,7 +776,7 @@ fn module(
     context.current_package = package_name;
     context.env.add_warning_filter_scope(warning_filter.clone());
     let unscoped = context.save_unscoped();
-    let use_funs = use_funs(context, euse_funs);
+    let mut use_funs = use_funs(context, euse_funs);
     let friends = efriends.filter_map(|mident, f| friend(context, mident, f));
     let structs = estructs.map(|name, s| {
         context.restore_unscoped(unscoped.clone());
@@ -790,6 +790,15 @@ fn module(
         context.restore_unscoped(unscoped.clone());
         constant(context, name, c)
     });
+    // silence unused use fun warnings if a module has public macros. The macro will pull in
+    // the use fun, and we will which case we will be unable to tell if it is used or not
+    // TODO we could approximate this by just checking for the name, regardless of the type
+    let has_public_macro = functions
+        .iter()
+        .any(|(_, _, f)| f.macro_.is_some() && !matches!(f.visibility, Visibility::Internal));
+    if has_public_macro {
+        mark_all_use_funs_as_used(&mut use_funs);
+    }
     context.restore_unscoped(unscoped);
     context.env.pop_warning_filter_scope();
     context.current_package = None;
@@ -972,6 +981,25 @@ fn use_fun_module_defines(
             }
         }
         N::TypeName_::Multiple(_) => panic!("ICE tuple should not be reachable from use fun"),
+    }
+}
+
+fn mark_all_use_funs_as_used(use_funs: &mut N::UseFuns) {
+    let N::UseFuns {
+        color: _,
+        resolved,
+        implicit_candidates,
+    } = use_funs;
+    for methods in resolved.values_mut() {
+        for (_, _, uf) in methods {
+            uf.used = true;
+        }
+    }
+    for (_, _, uf) in implicit_candidates {
+        match &mut uf.kind {
+            E::ImplicitUseFunKind::UseAlias { used } => *used = true,
+            E::ImplicitUseFunKind::FunctionDeclaration => (),
+        }
     }
 }
 
