@@ -107,8 +107,8 @@ impl DagState {
     }
 
     pub(crate) fn get_uncommitted_blocks_at_round(&self, round: Round) -> Vec<VerifiedBlock> {
-        if round < self.round_lower_bound() {
-            panic!("Round {} blocks may not be cached in memory!", round);
+        if round <= self.last_commit_round() {
+            panic!("Round {} have committed blocks!", round);
         }
 
         let mut blocks = vec![];
@@ -132,11 +132,8 @@ impl DagState {
         later_block: &VerifiedBlock,
         earlier_round: Round,
     ) -> Vec<VerifiedBlock> {
-        if earlier_round < self.round_lower_bound() {
-            panic!(
-                "Round {} blocks may not be cached in memory!",
-                earlier_round
-            );
+        if earlier_round <= self.last_commit_round() {
+            panic!("Round {} have committed blocks!", earlier_round);
         }
         if earlier_round >= later_block.round() {
             panic!(
@@ -178,10 +175,10 @@ impl DagState {
             .collect()
     }
 
-    /// Lowest round where all known blocks are cached in memory.
-    fn round_lower_bound(&self) -> Round {
+    /// Highest round where a block is committed, which is last commit's leader round.
+    fn last_commit_round(&self) -> Round {
         match &self.last_commit {
-            Some(commit) => commit.leader.round.saturating_sub(CACHED_ROUNDS),
+            Some(commit) => commit.leader.round,
             None => 0,
         }
     }
