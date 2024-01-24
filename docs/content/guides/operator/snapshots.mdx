@@ -68,17 +68,16 @@ Add an entry to the config file for `db-checkpoint-config`. Using Amazon's S3 se
 
 ### Enabling Formal snapshots
 
-Add an entry to the config file for `db-checkpoint-config`. Using Amazon's S3 service as an example:
+ Add an entry to the config file for `state-snapshot-write-config`. Using Amazon's S3 service as an example:
    ```yaml
-   db-checkpoint-config:
-     state-snapshot-write-config:
-       object-store-config:
-         object-store: "S3"
-         bucket: "<BUCKET-NAME>"
-         aws-access-key-id: “<ACCESS-KEY>”
-         aws-secret-access-key: “<SHARED-KEY>”
-         aws-region: "<BUCKET-REGION>"
-         object-store-connection-limit: 200
+   state-snapshot-write-config:
+     object-store-config:
+       object-store: "S3"
+       bucket: "<BUCKET-NAME>"
+       aws-access-key-id: “<ACCESS-KEY>”
+       aws-secret-access-key: “<SHARED-KEY>”
+       aws-region: "<BUCKET-REGION>"
+       object-store-connection-limit: 200
    ```
    The configuration settings shown in the example are specific to AWS S3, but GCS, Azure Storage, and Cloudflare R2 are all supported.
 
