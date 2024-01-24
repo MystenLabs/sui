@@ -1,9 +1,9 @@
-processed 12 tasks
+processed 15 tasks
 
-task 1 'create-checkpoint'. lines 22-22:
+task 1 'create-checkpoint'. lines 29-29:
 Checkpoint created: 12
 
-task 2 'run-graphql'. lines 24-36:
+task 2 'run-graphql'. lines 31-43:
 Response: {
   "data": {
     "checkpoints": {
@@ -41,7 +41,7 @@ Response: {
   }
 }
 
-task 3 'run-graphql'. lines 38-50:
+task 3 'run-graphql'. lines 45-57:
 Response: {
   "data": {
     "checkpoints": {
@@ -61,7 +61,7 @@ Response: {
   }
 }
 
-task 4 'run-graphql'. lines 52-64:
+task 4 'run-graphql'. lines 59-71:
 Response: {
   "data": {
     "checkpoints": {
@@ -99,7 +99,65 @@ Response: {
   }
 }
 
-task 5 'run-graphql'. lines 66-78:
+task 5 'run-graphql'. lines 73-85:
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "NA",
+          "node": {
+            "sequenceNumber": 4
+          }
+        },
+        {
+          "cursor": "NQ",
+          "node": {
+            "sequenceNumber": 5
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 6 'run-graphql'. lines 87-99:
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "MA",
+          "node": {
+            "sequenceNumber": 0
+          }
+        },
+        {
+          "cursor": "MQ",
+          "node": {
+            "sequenceNumber": 1
+          }
+        },
+        {
+          "cursor": "Mg",
+          "node": {
+            "sequenceNumber": 2
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 7 'run-graphql'. lines 101-113:
 Response: {
   "data": {
     "checkpoints": {
@@ -137,7 +195,7 @@ Response: {
   }
 }
 
-task 6 'run-graphql'. lines 80-92:
+task 8 'run-graphql'. lines 115-127:
 Response: {
   "data": {
     "checkpoints": {
@@ -175,7 +233,7 @@ Response: {
   }
 }
 
-task 7 'run-graphql'. lines 94-106:
+task 9 'run-graphql'. lines 129-141:
 Response: {
   "data": {
     "checkpoints": {
@@ -201,7 +259,39 @@ Response: {
   }
 }
 
-task 8 'run-graphql'. lines 108-120:
+task 10 'run-graphql'. lines 143-155:
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "MTA",
+          "node": {
+            "sequenceNumber": 10
+          }
+        },
+        {
+          "cursor": "MTE",
+          "node": {
+            "sequenceNumber": 11
+          }
+        },
+        {
+          "cursor": "MTI",
+          "node": {
+            "sequenceNumber": 12
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 11 'run-graphql'. lines 157-169:
 Response: {
   "data": {
     "checkpoints": {
@@ -293,7 +383,7 @@ Response: {
   }
 }
 
-task 9 'run-graphql'. lines 122-134:
+task 12 'run-graphql'. lines 171-183:
 Response: {
   "data": {
     "checkpoints": {
@@ -331,7 +421,7 @@ Response: {
   }
 }
 
-task 10 'run-graphql'. lines 136-148:
+task 13 'run-graphql'. lines 185-197:
 Response: {
   "data": {
     "checkpoints": {
@@ -369,7 +459,7 @@ Response: {
   }
 }
 
-task 11 'run-graphql'. lines 150-162:
+task 14 'run-graphql'. lines 199-211:
 Response: {
   "data": null,
   "errors": [
