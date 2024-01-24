@@ -89,10 +89,10 @@ The previous RPC service required multiple queries for more complex data retriev
 For example, the following query retrieves the first 20 transaction blocks (along with the digest, the sender's address, the gas object used to pay for the transaction, the gas price, and the gas budget) after a specific transaction block at epoch `97`. In the previous RPC, this would have required multiple API calls.
 
 ```graphql
-# Fetch the first 20 transactions after 231220100 for epoch 97
+# Fetch the first 10 transactions for epoch 97
 query {
   epoch(id:97) {
-    transactionBlocks(first: 20, after:"231220100") {
+    transactionBlocks(first: 10) {
       pageInfo {
         hasNextPage
         endCursor
@@ -153,8 +153,8 @@ The query's result is:
       "pageInfo": {
         "hasPreviousPage": false,
         "hasNextPage": true,
-        "startCursor": "0",
-        "endCursor": "49"
+        "startCursor": "MA",
+        "endCursor": "NA"
       }
     }
   }
@@ -165,8 +165,11 @@ The `pageInfo.startCursor` and `pageInfo.endCursor` indicate the index of the fi
 
 ```graphql
 query {
-  checkpoints(after: "49") {
-    [...]
+  checkpoints(after: "MA") {
+    nodes {
+      digest
+    }
+  }
 }
 ```
 
@@ -363,17 +366,13 @@ query {
 ```graphql
 query {
   address(address: "0x5094652429957619e6efa79a404a6714d1126e63f551f4b6c7fb76440f8118c9") {
-    coinConnection(
+    coins(
       first: 3, 
-      after: "0x5094652429957619e6efa79a404a6714d1126e63f551f4b6c7fb76440f8118c9", 
+      after: "IAB3ha2PEA4ESRF4UErsJufJEwYpmSbCq7UNpxIHnLhG",
       type: "0x2::sui::SUI"
     ) {
       nodes {
-        asMoveObject {
-          asCoin {
-            address
-          }
-        }
+        address     
       }
     }
   }
