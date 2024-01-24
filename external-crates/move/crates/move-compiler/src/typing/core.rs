@@ -440,7 +440,11 @@ impl<'env> Context<'env> {
             ty,
             used_mut: None,
         };
-        self.locals.add(var, local).unwrap()
+        if let Err((_, prev_loc)) = self.locals.add(var, local) {
+            let msg = format!("ICE duplicate {var:?}. Should have been made unique in naming");
+            self.env
+                .add_diag(ice!((var.loc, msg), (prev_loc, "Previously declared here")));
+        }
     }
 
     pub fn get_local_type(&mut self, var: &Var) -> Type {

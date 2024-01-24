@@ -21,17 +21,23 @@ module 0x42::m {
         }
     }
 
-    entry fun t0() {
-        let mut count = 0;
-        0x42::m::for!(0, 10, |x| count = count + x*x);
-        assert!(count == 285, 0);
+    macro fun new<T>(len: u64, f: |u64| T): vector<T> {
+        let mut v = vector[];
+        for!(0, len, |i| v.push_back(f(i)));
+        v
+    }
 
-        let es = vector[0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-        let mut sum = 0;
-        0x42::m::for_each!<u64>(&es, |x| sum = sum + *x);
-        assert!(sum == 45, 0);
+    macro fun sum(v: &vector<u64>): u64 {
+        let mut s = 0;
+        for_each!(v, |i| s = s + i);
+        s
+    }
+
+    entry fun main() {
+        let v = new!(10, |i| i);
+        assert!(sum!(&v) == 45, 0);
     }
 
 }
 
-//# run 0x42::m::t0
+//# run 0x42::m::main
