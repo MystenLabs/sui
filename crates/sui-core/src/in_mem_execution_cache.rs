@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_notify_read::EffectsNotifyRead;
+use crate::authority::authority_store::SuiLockResult;
 use crate::authority::AuthorityStore;
 use crate::transaction_outputs::TransactionOutputs;
 use async_trait::async_trait;
@@ -208,6 +209,8 @@ pub trait ExecutionCacheRead: Send + Sync {
         object_id: ObjectID,
         version: SequenceNumber,
     ) -> Option<Object>;
+
+    fn get_lock(&self, obj_ref: ObjectRef, epoch_id: EpochId) -> SuiLockResult;
 
     fn get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef>;
 
@@ -518,6 +521,10 @@ impl ExecutionCacheRead for PassthroughCache {
         version: SequenceNumber,
     ) -> Option<Object> {
         self.store.find_object_lt_or_eq_version(object_id, version)
+    }
+
+    fn get_lock(&self, obj_ref: ObjectRef, epoch_id: EpochId) -> SuiLockResult {
+        self.store.get_lock(obj_ref, epoch_id)
     }
 
     fn get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
