@@ -25,6 +25,16 @@ Formal snapshots are not suitable for use if you are running an RPC node that do
 You can configure a Full node snapshot to generate a state snapshot at the end of each epoch.
 A single Full node can generate RocksDB snapshots, Formal snapshots, or both.
 
+## Formal snapshots
+
+Formal snapshots provide a mechanism for a node to restore to a canonical state (the state of a full pruned and compacted node at the end of an epoch) at some prior point in time without having to execute all the transactions that have occurred since genesis. Unlike existing database snapshots, these formal snapshots have the following properties:
+
+1. **Minimalism:** Formal snapshots currently contain only the end of epoch live object set (the set of all object versions eligible for use as input objects for future transactions). Sui syncs all other critical chain information from the chain or derives it. Thus, formal snapshots contain only the necessary data required for a node to startup at epoch boundary and participate in the network.
+1. **Agnosticism:** Formal snapshots are by nature agnostic to the underlying database choice or implementation of the protocol. As the live object set is protocol defined, so is the formal snapshot.
+1. **Verifiability:** Formal snapshots have first-class support in the core Sui protocol. As such, they must be trustless/verifiable by the node operator upon download. To support this, the protocol signs a commitment to the live object state at end of epoch, which formal snapshots are checked against at restore time. If this verification fails, the node state is moved back to the state before the snapshot restore attempt.
+
+Because these snapshots do not contain indexes, they are most immediately useful for validators and state sync Full nodes (SSFNs). You can upload snapshots to remote object stores like S3, Google Cloud Storage, Azure Blob Storage, and similar services. These services typically run the export process in the background so there is no degradation in performance for your Full node. With snapshots stored in the cloud, you can recover from catastrophic failures in your system or hardware more efficiently.
+
 ## Enabling snapshots
 
 Full nodes do not take snapshots by default. To enable this feature you must apply specific configs to your Full node.
@@ -60,8 +70,9 @@ Add an entry to the config file for `db-checkpoint-config`. Using Amazon's S3 se
 
 Add an entry to the config file for `db-checkpoint-config`. Using Amazon's S3 service as an example:
    ```yaml
-   state-snapshot-write-config:
-      object-store-config:
+   db-checkpoint-config:
+     state-snapshot-write-config:
+       object-store-config:
          object-store: "S3"
          bucket: "<BUCKET-NAME>"
          aws-access-key-id: “<ACCESS-KEY>”
