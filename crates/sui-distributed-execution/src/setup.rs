@@ -16,7 +16,7 @@ use sui_types::{
 pub const WORKLOAD: WorkloadKind = WorkloadKind::Move {
     num_input_objects: 2,
     num_dynamic_fields: 0,
-    computation: 50,
+    computation: 25,
 };
 pub const COMPONENT: Component = Component::PipeTxsToChannel;
 
