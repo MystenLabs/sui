@@ -240,7 +240,7 @@ fn create_basic_project(
     run_pulumi_new(project_name, project_dir_str, project_opts).map_err(|e| {
         remove_project_dir(project_dir).unwrap();
         let backend = get_current_backend().unwrap();
-        remove_stack(&backend, project_name, "dev").unwrap();
+        remove_stack(&backend, project_name, "mysten/dev").unwrap();
         e
     })?;
     // try a pulumi preview to make sure it's good
@@ -264,7 +264,7 @@ fn create_mysten_k8s_project(
         |e| {
             remove_project_dir(project_dir).unwrap();
             let backend = get_current_backend().unwrap();
-            remove_stack(&backend, project_name, "dev").unwrap();
+            remove_stack(&backend, project_name, "mysten/dev").unwrap();
             e
         },
     )
