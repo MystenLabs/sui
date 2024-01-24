@@ -83,6 +83,9 @@ pub struct AnalyticsIndexerConfig {
     /// Number of checkpoints to process before uploading to the datastore.
     #[clap(long, default_value = "10000", global = true)]
     pub checkpoint_interval: u64,
+    /// Maximum file size in mb before uploading to the datastore.
+    #[clap(long, default_value = "100", global = true)]
+    pub max_file_size_mb: u64,
     /// Checkpoint sequence number to start the download from
     #[clap(long, default_value = None, global = true)]
     pub starting_checkpoint_seq_num: Option<u64>,
