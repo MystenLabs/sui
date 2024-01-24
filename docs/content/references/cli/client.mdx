@@ -242,11 +242,11 @@ will verify that all transactions local execution results match the effects on-c
 ### Profile a transaction
 
 Use the `sui client profile-transaction --tx-digest <TRANSACTION-DIGEST>` command to re-execute a transaction locally
-and produce a gas profile. Similar to the `replay` command, this command fetches the transaction dependencies from the
-Full node specified in the client environment that are needed to execute the transaction. During the local execution of the transaction,
+and produce a gas profile. Similarly to the `replay` command, this command fetches the transaction dependencies from the
+full node specified in the client environment that are needed to execute the transaction. During the local execution of the transaction,
 this command records all the Move function invocations and the gas cost breakdown for each invocation.
 
-To enable the profiler, you must build the Sui Client binary locally or install it with the `--features gas-profiler` flag set.
+To enable the profiler, you must either install or build the Sui Client binary locally with the `--features gas-profiler` flag.
 
 ```shell
 cargo install --locked --git https://github.com/MystenLabs/sui.git --branch <BRANCH-NAME> --features gas-profiler sui
@@ -258,7 +258,7 @@ This profile can then be inspected using speedscope.
 
 To install speedscope run
 
-```bash npm2yarn
+```bash
 npm install -g speedscope
 ```
 
@@ -285,9 +285,6 @@ Observing a transaction's gas consumption provides useful insight of expected ga
 When developing a smart contract, you can [run a local network](../../guides/developer/getting-started/local-network.mdx) and publish the package to the local network. Then create a transaction that calls
 your published smart contract, and finally run the profiler on the transaction to see a breakdown of the gas cost.
 
-You can also use this tool to perform analysis on daily, weekly, or monthly cost by multiplying the gas cost by the expected
-number of transactions that calls the smart contract within that timeframe.
-
 ## Publish a Move package
 
 One of the main uses of the `sui client` command is to publish smart contracts on the Sui network. This example switches the current environment to the Devnet network, then builds, tests, and publishes one of the existing Move examples available in the Sui repository: [sui/examples/move](https://github.com/MystenLabs/sui/tree/main/examples/move)
@@ -299,7 +296,7 @@ This example also makes use of `sui move` commands. To learn more about those co
     cd examples/move
     cd first_package
     ```
-1. Switch to the Devnet network. This command uses an alias, so the `devnet` value might be different for you, depending on the alias name set in your configuration (use `sui client envs` for a list of your aliases).
+1. Switch to the Devnet network. This command uses an alias, so the `devnet` value might be different for you, depending on the alias name set in your configuration (use `sui client envs` for a list of your defined networks and their aliases).
     ```shell
     sui client switch --env devnet
     ```
