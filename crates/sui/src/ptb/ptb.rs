@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client_commands::SuiClientCommandResult;
 use crate::ptb::ptb_parser::build_ptb::PTBBuilder;
-use crate::ptb::ptb_parser::parser::ParsedPTBCommand;
+use crate::ptb::ptb_parser::parser::PTBParser;
 use anyhow::anyhow;
 use clap::parser::ValuesRef;
 use clap::ArgMatches;
@@ -16,16 +15,15 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use sui_json_rpc_types::SuiTransactionBlockResponse;
+
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
-use sui_types::transaction::ProgrammableTransaction;
+
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
 
-use json_to_table::json_to_table;
 use tabled::{
     builder::Builder as TableBuilder,
     settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
@@ -421,10 +419,23 @@ impl PTB {
         }
 
         // Build the PTB
-        let mut parsed = vec![];
-        for command in &commands {
-            let p = ParsedPTBCommand::parse(command.1)?;
-            parsed.push(p);
+        let mut parser = PTBParser::new();
+        for command in commands {
+            parser.parse(command.1);
+        }
+
+        let (parsed, errors) = parser.finish();
+
+        if !errors.is_empty() {
+            let errs: Vec<_> = errors
+                .iter()
+                .enumerate()
+                .map(|(i, e)| format!("[{i}]: {e}"))
+                .collect();
+            anyhow::bail!(
+                "Encountered errors when parsing the PTB\n{}",
+                errs.join("\n")
+            );
         }
 
         // We need to resolve object IDs, so we need a fullnode to access
@@ -435,11 +446,23 @@ impl PTB {
         let mut builder = PTBBuilder::new(client.read_api());
 
         for p in parsed.into_iter() {
-            builder.handle_command(p).await?;
+            builder.handle_command(p).await;
         }
 
-        println!("Successfully parsed the PTB");
-        let (ptb, budget, _preview) = builder.finish()?;
+        let (ptb, budget, _preview) = match builder.finish() {
+            Err(errors) => {
+                let errs: Vec<_> = errors
+                    .iter()
+                    .enumerate()
+                    .map(|(i, e)| format!("[{i}]: {e}"))
+                    .collect();
+                anyhow::bail!(
+                    "Encountered errors when building the PTB:\n{}",
+                    errs.join("\n")
+                );
+            }
+            Ok(x) => x,
+        };
 
         // get all the metadata needed for executing the PTB: sender, gas, signing tx
         // get sender's address -- active address

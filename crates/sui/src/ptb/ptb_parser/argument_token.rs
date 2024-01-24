@@ -26,14 +26,13 @@ use move_core_types::identifier;
 // arg :=
 //     <value>
 //     <ident> // input
-//     <ident> ("." <digit>)+  // result access
+//     <ident> ("." <digit>)?  // result access
 //     "<arg> <arg>*"          // space separated args
-//     "tx" "." "sender"       // sender
-//     "tx" "." "gas"          // gas coin
+//     "gas"          // gas coin
 //
 // ty :=
 //     <prim_type> // u64, bool, u32, address (etc)
-//     <addr>::<ident>::<ident> ("<" (<ty>,)+ ">")?
+//     <addr>::<ident>::<ident> (<ty_arg>)?
 //
 // ty_arg :=
 //     "<" (<ty>,)+ ">"
@@ -163,6 +162,11 @@ impl Token for ArgumentToken {
             return Ok(Some((Self::None_, len)));
         }
 
+        if s.starts_with("gas") {
+            let len = "gas".len();
+            return Ok(Some((Self::Gas, len)));
+        }
+
         // other tokens
         let mut chars = s.chars().peekable();
         let c = match chars.next() {
@@ -276,9 +280,11 @@ fn parse_sub_token_string(mut s: &str, start: &str, end: &str) -> anyhow::Result
     Ok(len)
 }
 
+#[cfg(test)]
 mod tests {
-    use super::ArgumentToken;
     use move_command_line_common::parser::Token;
+
+    use crate::ptb::ptb_parser::argument_token::ArgumentToken;
 
     #[test]
     fn tokenize_vector() {
@@ -344,6 +350,22 @@ mod tests {
             "@0x1 1 1u8 1_u128 1_000 100_000_000 100_000u64 1 [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] vector[] vector[1,2,3] vector[1]",
             "some(@0x1) none some(vector[1,2,3])",
         ];
+        for s in &args {
+            assert!(dbg!(ArgumentToken::tokenize(s)).is_ok());
+        }
+    }
+
+    #[test]
+    fn dotted_idents() {
+        let args = vec!["a", "a.b", "a.b.c", "a.b.c.d", "a.b.c.d.e"];
+        for s in &args {
+            assert!(dbg!(ArgumentToken::tokenize(s)).is_ok());
+        }
+    }
+
+    #[test]
+    fn gas() {
+        let args = vec!["gas"];
         for s in &args {
             assert!(dbg!(ArgumentToken::tokenize(s)).is_ok());
         }
