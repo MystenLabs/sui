@@ -164,7 +164,7 @@ jobs:
         working-directory: chocolatey
         shell: bash
         run: |
-          export sui_version=$(echo ${{ env.sui_tag }} | sed s/'testnet-v'//)
+          export sui_version=$(echo ${{ env.sui_tag }} | sed s/'test-v'//)
           choco install checksum
           # export sui_sha=$(checksum -t sha256 ../target/release/sui.exe)
           export sui_sha=$(checksum -t sha256 ./sui.nuspec)
