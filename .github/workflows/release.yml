@@ -167,8 +167,9 @@ jobs:
         shell: bash
         run: |
           choco install checksum
-          # export sui_sha=$(checksum -t sha256 ../target/release/sui.exe)
-          export sui_sha=$(checksum -t sha256 ./sui.nuspec)
+          mkdir -p ../target/release/
+          echo "this is a test" >> ../target/release/sui.exe
+          export sui_sha=$(checksum -t sha256 ../target/release/sui.exe)
 
           cat <<EOF >>VERIFICATION.txt
           Sui Binary verification steps
