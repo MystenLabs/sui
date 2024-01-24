@@ -168,7 +168,6 @@ const guides = [
 			'guides/operator/validator-committee',
 			'guides/operator/validator-tasks',
 			'guides/operator/node-tools',
-			'guides/operator/formal-snapshot',
 			'guides/operator/exchange-integration',
 		],
 	},
