@@ -50,6 +50,8 @@ jobs:
           export sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)
           [[ "${sui_tag}" == "main" ]] && echo "tag cannot be equals to 'main'" && exit 1
           echo "sui_tag=${sui_tag}" >> $GITHUB_ENV
+          export sui_version=$(echo ${sui_tag} | sed s/'test-v'//)
+          echo "sui_version=${sui_version}" >> $GITHUB_ENV
 
       - name: Configure AWS credentials
         if: ${{ env.TAG_NAME != 'main' }}
@@ -164,7 +166,6 @@ jobs:
         working-directory: chocolatey
         shell: bash
         run: |
-          export sui_version=$(echo ${{ env.sui_tag }} | sed s/'test-v'//)
           choco install checksum
           # export sui_sha=$(checksum -t sha256 ../target/release/sui.exe)
           export sui_sha=$(checksum -t sha256 ./sui.nuspec)
@@ -178,9 +179,9 @@ jobs:
           File 'LICENSE.txt' is obtained from: https://github.com/MystenLabs/sui/blob/main/LICENSE
           EOF
 
-          choco pack --version ${sui_version} configuration=release
+          choco pack --version ${{ env.sui_version }} configuration=release
           # choco apikey --api-key ${{ secrets.CHOCO_API_KEY }} --source https://push.chocolatey.org/
-          # choco push sui.${sui_version}.nupkg --source https://push.chocolatey.org/
+          # choco push sui.${{ env.sui_version }}.nupkg --source https://push.chocolatey.org/
 
       # - name: Upload release artifacts for ${{ matrix.os }} platform
       #   uses: actions/upload-artifact@v3
