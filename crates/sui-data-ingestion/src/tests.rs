@@ -44,13 +44,13 @@ async fn run(
     let result = match duration {
         None => {
             indexer
-                .run(path.unwrap_or_else(temp_dir), None, vec![], recv)
+                .run(path.unwrap_or_else(temp_dir), None, vec![], 1, recv)
                 .await
         }
         Some(duration) => {
             let handle = tokio::task::spawn(async move {
                 indexer
-                    .run(path.unwrap_or_else(temp_dir), None, vec![], recv)
+                    .run(path.unwrap_or_else(temp_dir), None, vec![], 1, recv)
                     .await
             });
             tokio::time::sleep(duration).await;

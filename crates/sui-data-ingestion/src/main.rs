@@ -47,6 +47,8 @@ struct IndexerConfig {
     remote_store_url: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     remote_store_options: Vec<(String, String)>,
+    #[serde(default = "default_remote_read_batch_size")]
+    remote_read_batch_size: usize,
     #[serde(default = "default_metrics_host")]
     metrics_host: String,
     #[serde(default = "default_metrics_port")]
@@ -59,6 +61,10 @@ fn default_metrics_host() -> String {
 
 fn default_metrics_port() -> u16 {
     8081
+}
+
+fn default_remote_read_batch_size() -> usize {
+    100
 }
 
 fn setup_env(exit_sender: oneshot::Sender<()>) {
@@ -132,6 +138,7 @@ async fn main() -> Result<()> {
             config.path,
             config.remote_store_url,
             config.remote_store_options,
+            config.remote_read_batch_size,
             exit_receiver,
         )
         .await?;
