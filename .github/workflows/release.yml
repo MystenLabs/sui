@@ -161,7 +161,7 @@ jobs:
           
       - name: "Publish Windows sui binary to Chocolately"
         if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' && contains( env.sui_tag, 'mainnet') }}
-        working-directory: ./chocolatey
+        working-directory: chocolatey
         shell: bash
         run: |
           echo "sui_version=$(echo ${{ env.sui_tag }} | sed s/'mainnet-v'//)" >> $GITHUB_ENV
