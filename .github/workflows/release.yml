@@ -165,22 +165,22 @@ jobs:
         working-directory: chocolatey
         shell: bash
         run: |
-          echo "sui_version=$(echo ${{ env.sui_tag }} | sed s/'mainnet-v'//)" >> $GITHUB_ENV
+          export sui_version=$(echo ${{ env.sui_tag }} | sed s/'mainnet-v'//)
           choco install checksum
-          echo "sui_sha=$(checksum -t sha256 ./target/release/sui.exe)" >> $GITHUB_ENV
+          export sui_sha=$(checksum -t sha256 ./target/release/sui.exe)
 
           cat <<EOF >>VERIFICATION.txt
           Sui Binary verification steps
           1. Go to https://github.com/MystenLabs/sui/releases/download/${{ env.sui_tag }}/sui-${{ env.sui_tag }}-windows-x86_64.tgz
           2. Extract sui-windows-x86_64.exe
-          3. checksum.exe -t sha256 sui-windows-x86_64.exe: ${{ env.sui_sha }}
+          3. checksum.exe -t sha256 sui-windows-x86_64.exe: ${sui_sha}
 
           File 'LICENSE.txt' is obtained from: https://github.com/MystenLabs/sui/blob/main/LICENSE
           EOF
 
-          choco pack --version ${{ env.sui_version }} configuration=release
+          choco pack --version ${sui_version} configuration=release
           choco apikey --api-key ${{ secrets.CHOCO_API_KEY }} --source https://push.chocolatey.org/
-          choco push sui.${{ env.sui_version }}.nupkg --source https://push.chocolatey.org/
+          choco push sui.${sui_version}.nupkg --source https://push.chocolatey.org/
 
       # - name: Upload release artifacts for ${{ matrix.os }} platform
       #   uses: actions/upload-artifact@v3
