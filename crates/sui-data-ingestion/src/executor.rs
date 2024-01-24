@@ -60,6 +60,7 @@ impl<P: ProgressStore> IndexerExecutor<P> {
         path: PathBuf,
         remote_store_url: Option<String>,
         remote_store_options: Vec<(String, String)>,
+        remote_read_batch_size: usize,
         mut exit_receiver: oneshot::Receiver<()>,
     ) -> Result<ExecutorProgress> {
         let mut reader_checkpoint_number = self.progress_store.min_watermark()?;
@@ -69,6 +70,7 @@ impl<P: ProgressStore> IndexerExecutor<P> {
                 reader_checkpoint_number,
                 remote_store_url,
                 remote_store_options,
+                remote_read_batch_size,
             );
         spawn_monitored_task!(checkpoint_reader.run());
 
