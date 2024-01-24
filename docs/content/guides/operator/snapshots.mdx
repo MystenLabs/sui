@@ -1,5 +1,5 @@
 ---
-title: Snapshots
+title: Database Snapshots
 description: Database snapshots of the Sui network enable Full node operators a way to bootstrap a Full node without having to execute all the transactions that occurred after genesis.
 ---
 
@@ -45,7 +45,7 @@ Follow these steps to change the configs for a Full node:
 2. Open your fullnode.yaml config file and apply config updates as the following sections show.
 3. Save the fullnode.yaml file and restart the node.
 
-### Enabling RocksDB snapshots
+### Enabling DB snapshots
 
 Add an entry to the config file for `db-checkpoint-config`. Using Amazon's S3 service as an example:
    ```yaml
