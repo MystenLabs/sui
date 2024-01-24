@@ -11,13 +11,10 @@ module sui::balance {
 
     /// For when trying to destroy a non-zero balance.
     const ENonZero: u64 = 0;
-
     /// For when an overflow is happening on Supply operations.
     const EOverflow: u64 = 1;
-
     /// For when trying to withdraw more than there is.
     const ENotEnough: u64 = 2;
-
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 3;
 

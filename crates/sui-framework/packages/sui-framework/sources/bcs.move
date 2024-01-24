@@ -40,10 +40,8 @@ module sui::bcs {
 
     /// For when bytes length is less than required for deserialization.
     const EOutOfRange: u64 = 0;
-
     /// For when the boolean value different than `0` or `1`.
     const ENotBool: u64 = 1;
-
     /// For when ULEB byte is out of range (or not found).
     const ELenOutOfRange: u64 = 2;
 
