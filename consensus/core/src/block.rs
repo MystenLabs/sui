@@ -57,6 +57,7 @@ pub trait BlockAPI {
     fn author(&self) -> AuthorityIndex;
     fn timestamp_ms(&self) -> BlockTimestampMs;
     fn ancestors(&self) -> &[BlockRef];
+    fn transactions(&self) -> &[Transaction];
     // TODO: add accessor for transactions.
 }
 
@@ -66,6 +67,7 @@ pub struct BlockV1 {
     author: AuthorityIndex,
     timestamp_ms: BlockTimestampMs,
     ancestors: Vec<BlockRef>,
+    transactions: Vec<Transaction>,
 }
 
 impl BlockV1 {
@@ -75,12 +77,14 @@ impl BlockV1 {
         author: AuthorityIndex,
         timestamp_ms: BlockTimestampMs,
         ancestors: Vec<BlockRef>,
+        transactions: Vec<Transaction>,
     ) -> BlockV1 {
         Self {
             round,
             author,
             timestamp_ms,
             ancestors,
+            transactions,
         }
     }
 }
@@ -100,6 +104,10 @@ impl BlockAPI for BlockV1 {
 
     fn ancestors(&self) -> &[BlockRef] {
         &self.ancestors
+    }
+
+    fn transactions(&self) -> &[Transaction] {
+        &self.transactions
     }
 }
 
@@ -365,6 +373,11 @@ impl TestBlock {
 
     pub(crate) fn set_ancestors(mut self, ancestors: Vec<BlockRef>) -> Self {
         self.block.ancestors = ancestors;
+        self
+    }
+
+    pub(crate) fn set_transactions(mut self, transactions: Vec<Transaction>) -> Self {
+        self.block.transactions = transactions;
         self
     }
 

@@ -159,13 +159,18 @@ pub struct Authority {
 /// Each authority is uniquely identified by its AuthorityIndex in the Committee.
 /// AuthorityIndex is between 0 (inclusive) and the total number of authorities (exclusive).
 ///
-/// NOTE: AuthorityIndex should not need to be created outside of this file or incremented.
+/// NOTE: for safety, invalid AuthorityIndex should be impossible to create. So AuthorityIndex
+/// should not be created or incremented outside of this file. AuthorityIndex received from peers
+/// should be validated before use.
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug, Default, Hash, Serialize, Deserialize,
 )]
 pub struct AuthorityIndex(u32);
 
 impl AuthorityIndex {
+    // Minimum committee size is 4, so 0 index is always valid.
+    pub const ZERO: AuthorityIndex = AuthorityIndex(0);
+
     pub fn value(&self) -> usize {
         self.0 as usize
     }

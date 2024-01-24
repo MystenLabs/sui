@@ -90,7 +90,7 @@ impl BaseCommitter {
         // (created by Byzantine leaders).
         let wave = self.wave_number(leader.round);
         let decision_round = self.decision_round(wave);
-        let leader_blocks = self.dag_state.read().get_blocks_at_slot(leader);
+        let leader_blocks = self.dag_state.read().get_uncommitted_blocks_at_slot(leader);
         let mut leaders_with_enough_support: Vec<_> = leader_blocks
             .into_iter()
             .filter(|l| self.enough_leader_support(decision_round, l))
@@ -258,8 +258,11 @@ impl BaseCommitter {
     /// skip the target leader.
     fn decide_leader_from_anchor(&self, anchor: &VerifiedBlock, leader_slot: Slot) -> LeaderStatus {
         // Get the block(s) proposed by the leader. There could be more than one leader block
-        // per round (produced by a Byzantine leader).
-        let leader_blocks = self.dag_state.read().get_blocks_at_slot(leader_slot);
+        // in the slot from a Byzantine authority.
+        let leader_blocks = self
+            .dag_state
+            .read()
+            .get_uncommitted_blocks_at_slot(leader_slot);
 
         // TODO: Re-evaluate this check once we have a better way to handle/track byzantine authorities.
         if leader_blocks.len() > 1 {
@@ -276,7 +279,7 @@ impl BaseCommitter {
         let potential_certificates = self
             .dag_state
             .read()
-            .linked_to_round(anchor, decision_round);
+            .ancestors_at_uncommitted_round(anchor, decision_round);
 
         // Use those potential certificates to determine which (if any) of the target leader
         // blocks can be committed.
@@ -305,7 +308,10 @@ impl BaseCommitter {
 
     /// Check whether the specified leader has 2f+1 non-votes (blames) to be directly skipped.
     fn enough_leader_blame(&self, voting_round: Round, leader: AuthorityIndex) -> bool {
-        let voting_blocks = self.dag_state.read().get_blocks_by_round(voting_round);
+        let voting_blocks = self
+            .dag_state
+            .read()
+            .get_uncommitted_blocks_at_round(voting_round);
 
         let mut blame_stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
         for voting_block in &voting_blocks {
@@ -330,7 +336,10 @@ impl BaseCommitter {
     /// Check whether the specified leader has 2f+1 certificates to be directly
     /// committed.
     fn enough_leader_support(&self, decision_round: Round, leader_block: &VerifiedBlock) -> bool {
-        let decision_blocks = self.dag_state.read().get_blocks_by_round(decision_round);
+        let decision_blocks = self
+            .dag_state
+            .read()
+            .get_uncommitted_blocks_at_round(decision_round);
 
         // Quickly reject if there isn't enough stake to support the leader from
         // the potential certificates.
