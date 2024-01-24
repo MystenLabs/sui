@@ -21,6 +21,7 @@ use crate::{
 use consensus_config::AuthorityIndex;
 use mysten_metrics::monitored_scope;
 use tokio::sync::watch;
+use crate::dag_state::DagState;
 
 /// The maximum transaction payload defined in bytes.
 /// TODO: move to protocol config
@@ -50,10 +51,9 @@ pub(crate) struct Core {
     transactions_consumer: TransactionsConsumer,
     /// The transactions that haven't been proposed yet and are to be included in the next proposal
     pending_transactions: Vec<Transaction>,
-    /// The pending blocks refs to be included as ancestors to the next block. Every block ref that is included in this list
-    /// we assume that has already been sanitised according to the timestamp thresholds during block receive and their
-    /// timestamps are already <= now().
-    pending_ancestors: VecDeque<(BlockRef, BlockTimestampMs)>,
+    /// The last ancestor proposed for each author. Each author is represented by the corresponding vec slot by its
+    /// AuthorityIndex value.
+    last_ancestor_proposed: Vec<BlockRef>,
     /// The block manager which is responsible for keeping track of the DAG dependencies when processing new blocks
     /// and accept them or suspend if we are missing their causal history
     block_manager: BlockManager,
@@ -61,6 +61,8 @@ pub(crate) struct Core {
     signals: CoreSignals,
     /// The options for the component
     options: CoreOptions,
+    /// The DagState object
+    dag_state: Arc<parking_lot::RwLock<DagState>>
 }
 
 #[allow(dead_code)]
@@ -71,6 +73,7 @@ impl Core {
         block_manager: BlockManager,
         mut signals: CoreSignals,
         options: CoreOptions,
+        dag_state: Arc<parking_lot::RwLock<DagState>>
     ) -> Self {
         // TODO: restore the threshold clock round based on the last quorum data in storage when crash/recover
         let mut threshold_clock = ThresholdClock::new(0, context.clone());
@@ -99,10 +102,11 @@ impl Core {
             last_own_block: genesis_my,
             transactions_consumer,
             pending_transactions: Vec::new(),
-            pending_ancestors,
+            last_ancestor_proposed: Vec::new(),
             block_manager,
             signals,
             options,
+            dag_state
         }
     }
 
@@ -129,12 +133,6 @@ impl Core {
             .node_metrics
             .threshold_clock_round
             .set(self.threshold_clock.get_round() as i64);
-
-        // Add the processed blocks to the list of pending
-        for block in accepted_blocks {
-            self.pending_ancestors
-                .push_back((block.reference(), block.timestamp_ms()));
-        }
 
         // Attempt to create a new block
         let _ = self.try_new_block(false);
@@ -229,7 +227,7 @@ impl Core {
     ) -> Vec<BlockRef> {
         // Now take all the ancestors up to the clock_round (excluded) and then filter only the ones with acceptable timestamp.
         let first_include_index = self
-            .pending_ancestors
+            .last_ancestor_proposed
             .iter()
             .position(|(block_ref, timestamp)| {
                 // We assume that our system's clock can't go backwards when we perform the check here (ex due to ntp corrections)
@@ -237,10 +235,10 @@ impl Core {
 
                 block_ref.round >= clock_round
             })
-            .unwrap_or(self.pending_ancestors.len());
+            .unwrap_or(self.last_ancestor_proposed.len());
 
-        let mut taken = self.pending_ancestors.split_off(first_include_index);
-        mem::swap(&mut taken, &mut self.pending_ancestors);
+        let mut taken = self.last_ancestor_proposed.split_off(first_include_index);
+        mem::swap(&mut taken, &mut self.last_ancestor_proposed);
 
         // Compress the references in the block. We don't want to include an ancestors that already referenced by other blocks
         // we are about to include.
@@ -294,7 +292,7 @@ impl Core {
     /// per authority in case of equivocation.
     fn blocks_at_round(&self, round: Round, authorities: &[AuthorityIndex]) -> Vec<BlockRef> {
         // TODO: this is super dummy for now to make it work - it will be replaced by the corresponding DagState method
-        let mut ancestors = self.pending_ancestors.clone();
+        let mut ancestors = self.last_ancestor_proposed.clone();
         ancestors.push_back((
             self.last_own_block.reference(),
             self.last_own_block.timestamp_ms(),
