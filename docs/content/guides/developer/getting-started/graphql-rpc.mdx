@@ -335,6 +335,8 @@ fragment DynamicFieldValueSelection on DynamicFieldValue {
 ```
 ### Execute a transaction
 
+Transaction execution takes in two arguments, `txBytes` and `signatures`. `txBytes` is the serialized unsigned transaction data, which can be generated using Sui CLI's `--serialize-unsigned-transaction` option. The `signatures` can be generated using Sui CLI's keytool command `sui keytool sign`. More information on Sui CLI can be found [here](/references/cli).
+
 ```graphql
 mutation ($tx: String!, $sigs: [String!]!) {
   executeTransactionBlock(txBytes: $tx, signatures: $sigs) {
@@ -354,7 +356,7 @@ mutation ($tx: String!, $sigs: [String!]!) {
 }
 ```
 
-where `$tx` and `$sigs` are
+where `$tx` and `$sigs` are your generated data, which may look like this:
 
 ```json
 {
