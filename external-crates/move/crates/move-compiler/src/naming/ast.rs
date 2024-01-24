@@ -288,6 +288,13 @@ pub enum BuiltinFunction_ {
 }
 pub type BuiltinFunction = Spanned<BuiltinFunction_>;
 
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+pub enum NominalBlockUsage {
+    Return,
+    Break,
+    Continue,
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct Lambda {
     pub parameters: LValueList,
@@ -340,7 +347,7 @@ pub enum Exp_ {
 
     Return(Box<Exp>),
     Abort(Box<Exp>),
-    Give(BlockLabel, Box<Exp>),
+    Give(NominalBlockUsage, BlockLabel, Box<Exp>),
     Continue(BlockLabel),
 
     Dereference(Box<Exp>),
@@ -781,6 +788,20 @@ impl fmt::Display for TypeName_ {
             Builtin(b) => write!(f, "{}", b),
             ModuleType(m, n) => write!(f, "{}::{}", m, n),
         }
+    }
+}
+
+impl std::fmt::Display for NominalBlockUsage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                NominalBlockUsage::Return => "return",
+                NominalBlockUsage::Break => "break",
+                NominalBlockUsage::Continue => "continue",
+            }
+        )
     }
 }
 
@@ -1363,8 +1384,8 @@ impl AstDebug for Exp_ {
                 w.write("abort ");
                 e.ast_debug(w);
             }
-            E::Give(name, e) => {
-                w.write("give @");
+            E::Give(usage, name, e) => {
+                w.write(&format!("give#{usage} '"));
                 name.ast_debug(w);
                 w.write(" ");
                 e.ast_debug(w);

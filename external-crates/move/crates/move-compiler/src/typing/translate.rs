@@ -1286,13 +1286,12 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             let res = if let Some(name) = name {
                 let final_type = if let Some(local_return_type) = context.named_block_type_opt(name)
                 {
-                    join(
-                        context,
-                        eloc,
-                        || "Invalid named block",
-                        seq_ty,
-                        local_return_type,
-                    )
+                    let msg = if from_lambda_expansion.is_some() {
+                        || "Invalid lambda return"
+                    } else {
+                        || "Invalid named block"
+                    };
+                    join(context, eloc, msg, seq_ty, local_return_type)
                 } else {
                     seq_ty
                 };
@@ -1341,13 +1340,13 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             subtype(context, eloc, || "Invalid abort", ecode.ty.clone(), code_ty);
             (sp(eloc, Type_::Anything), TE::Abort(ecode))
         }
-        NE::Give(name, rhs) => {
+        NE::Give(usage, name, rhs) => {
             let break_rhs = exp(context, rhs);
             let loop_ty = context.named_block_type(name, eloc);
             subtype(
                 context,
                 eloc,
-                || "Invalid break",
+                || format!("Invalid {usage}"),
                 break_rhs.ty.clone(),
                 loop_ty,
             );

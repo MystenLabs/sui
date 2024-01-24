@@ -344,7 +344,7 @@ fn recolor_lvalue(ctx: &mut Recolor, sp!(_, lvalue_): &mut N::LValue) {
 fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
     match e_ {
         N::Exp_::Value(_) | N::Exp_::Constant(_, _) => (),
-        N::Exp_::Give(label, e) => {
+        N::Exp_::Give(_usage, label, e) => {
             recolor_block_label(ctx, label);
             recolor_exp(ctx, e)
         }
@@ -359,7 +359,7 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
                 else {
                     unreachable!()
                 };
-                *e_ = N::Exp_::Give(label, e)
+                *e_ = N::Exp_::Give(N::NominalBlockUsage::Return, label, e)
             }
         }
 
@@ -509,7 +509,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
         | N::Exp_::Continue(_)
         | N::Exp_::Unit { .. }
         | N::Exp_::UnresolvedError => (),
-        N::Exp_::Give(_, e)
+        N::Exp_::Give(_, _, e)
         | N::Exp_::Return(e)
         | N::Exp_::Abort(e)
         | N::Exp_::Dereference(e)

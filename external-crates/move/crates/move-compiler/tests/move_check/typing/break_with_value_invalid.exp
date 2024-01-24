@@ -50,7 +50,7 @@ error[E04007]: incompatible types
    │         ---------------^^^^^^^^^^--
    │         │              │     │
    │         │              │     Given: 'bool'
-   │         │              Invalid break
+   │         │              Invalid return
    │         Expected: '()'
 
 error[E04007]: incompatible types
@@ -60,7 +60,7 @@ error[E04007]: incompatible types
    │         ---------------^^^^^^^^^^--
    │         │              │     │
    │         │              │     Given: 'bool'
-   │         │              Invalid break
+   │         │              Invalid return
    │         Expected: '()'
 
 error[E04007]: incompatible types

@@ -10,7 +10,7 @@ use crate::{
         ast::{self as E, AbilitySet, ModuleIdent, Visibility},
         translate::is_valid_struct_constant_or_schema_name as is_constant_name,
     },
-    naming::ast::{self as N, BlockLabel},
+    naming::ast::{self as N, BlockLabel, NominalBlockUsage},
     parser::ast::{self as P, ConstantName, Field, FunctionName, StructName},
     shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *},
     FullyCompiledProgram,
@@ -74,13 +74,6 @@ enum NominalBlockType {
     Loop(LoopType),
     Block,
     Lambda,
-}
-
-#[derive(PartialEq, Eq, Copy, Clone, Debug)]
-enum NominalBlockUsage {
-    Return,
-    Break,
-    Continue,
 }
 
 struct Context<'env> {
@@ -711,20 +704,6 @@ impl std::fmt::Display for NominalBlockType {
                 NominalBlockType::Loop(_) => "loop",
                 NominalBlockType::Block => "named",
                 NominalBlockType::Lambda => "lambda",
-            }
-        )
-    }
-}
-
-impl std::fmt::Display for NominalBlockUsage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                NominalBlockUsage::Return => "return",
-                NominalBlockUsage::Break => "break",
-                NominalBlockUsage::Continue => "continue",
             }
         )
     }
@@ -1550,10 +1529,10 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             if let Some(block_name) = name_opt {
                 context
                     .resolve_nominal_label(NominalBlockUsage::Return, block_name)
-                    .map(|name| NE::Give(name, out_rhs))
+                    .map(|name| NE::Give(NominalBlockUsage::Return, name, out_rhs))
                     .unwrap_or_else(|| NE::UnresolvedError)
             } else if let Some(return_name) = context.current_return(eloc) {
-                NE::Give(return_name, out_rhs)
+                NE::Give(NominalBlockUsage::Return, return_name, out_rhs)
             } else {
                 NE::Return(out_rhs)
             }
@@ -1563,12 +1542,12 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             if let Some(loop_name) = name_opt {
                 context
                     .resolve_nominal_label(NominalBlockUsage::Break, loop_name)
-                    .map(|name| NE::Give(name, out_rhs))
+                    .map(|name| NE::Give(NominalBlockUsage::Return, name, out_rhs))
                     .unwrap_or_else(|| NE::UnresolvedError)
             } else {
                 context
                     .current_break(eloc)
-                    .map(|name| NE::Give(name, out_rhs))
+                    .map(|name| NE::Give(NominalBlockUsage::Return, name, out_rhs))
                     .unwrap_or_else(|e| {
                         let diag = e.unwrap_or_else(|| {
                             let msg = "Invalid usage of 'break'. \
@@ -2224,7 +2203,7 @@ fn remove_unused_bindings_exp(
         | N::Exp_::Cast(e, _)
         | N::Exp_::Assign(_, e)
         | N::Exp_::Loop(_, e)
-        | N::Exp_::Give(_, e)
+        | N::Exp_::Give(_, _, e)
         | N::Exp_::Annotate(e, _) => remove_unused_bindings_exp(context, used, e),
         N::Exp_::IfElse(econd, et, ef) => {
             remove_unused_bindings_exp(context, used, econd);

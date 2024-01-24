@@ -311,7 +311,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
         | N::Exp_::UnresolvedError => (),
         N::Exp_::Return(e)
         | N::Exp_::Abort(e)
-        | N::Exp_::Give(_, e)
+        | N::Exp_::Give(_, _, e)
         | N::Exp_::Dereference(e)
         | N::Exp_::UnaryExp(_, e)
         | N::Exp_::Cast(e, _)
