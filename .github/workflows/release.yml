@@ -160,7 +160,8 @@ jobs:
           # [[ ${{ env.sui_tag }} == *"mainnet"* ]] && aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz || true
           
       - name: "Publish Windows sui binary to Chocolately"
-        if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' && contains( env.sui_tag, 'mainnet') }}
+        # if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' && contains( env.sui_tag, 'mainnet') }}
+        if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' }}
         working-directory: chocolatey
         shell: bash
         run: |
