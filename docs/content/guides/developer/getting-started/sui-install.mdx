@@ -38,18 +38,19 @@ Each Sui release provides a set of binaries for several operating systems. You c
     ![Sui releases in GitHub](./images/releases.png)
 1. Click the release tagged **Latest** to open the release's page.
 1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
-1. Double-click the downloaded file. If the file doesn't automatically expand, manually unzip the file.
-1. Open the expanded folder. Navigate to the `target/release` directory and double-click the appropriate binary to install, beginning with `sui-ubuntu-x86_64`:
+1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the user root of your system for demonstration purposes. Replace references to this location in subsequent steps if you choose a different directory.
+1. Navigate to the `target/release` directory of the expanded folder. Rename each file to remove the `-ubuntu-x86_64` suffix from each file name. For example, rename `sui-ubuntu-x86_64` to `sui`. If you don't do this step, you must type `sui-ubuntu-x86_64` to execute commands instead of simply `sui`. When complete, you should have the following files:
 
-    - `sui-data-ingestion-ubuntu-x86_64`: Massage Full node data for indexer to store in a database.
-    - `sui-faucet-ubuntu-x86_64`: Local faucet to mint coins on local network.
-    - `sui-indexer-ubuntu-x86_64`: An indexer for a local Sui network.
-    - `sui-ubuntu-x86_64`: Main Sui binary.
-    - `sui-node-ubuntu-x86_64`: Run a local node.
-    - `sui-test-validator-ubuntu-x86_64`: Run test validators on a local network for development.
-    - `sui-tool-ubuntu-x86_64`: Provides utilities for Sui.
+    - `sui-data-ingestion`: Capture Full node data for indexer to store in a database.
+    - `sui-faucet`: Local faucet to mint coins on local network.
+    - `sui-indexer`: An indexer for a local Sui network.
+    - `sui`: Main Sui binary.
+    - `sui-node`: Run a local node.
+    - `sui-test-validator`: Run test validators on a local network for development.
+    - `sui-tool`: Provides utilities for Sui.
 
-    The Sui binary takes several minutes to download and install files, so make sure you allocate enough time for it to complete. Actual time to complete depends on your network connection and computer specifications.
+1. Add both folders containing the extracted files to your `PATH` variable. Update your `~/.profile` or `~/.bash_profile` to include the location of the sui binaries. If using the suggested location, add `export PATH="~/sui/target/release:~/sui/external-crates/move/target/release:$PATH"`.
+1. Start a new Terminal session or type `source ~/.profile` (or `.bash_profile`) to load the new `PATH` value.
 
 </TabItem>
 
@@ -61,18 +62,24 @@ Each Sui release provides a set of binaries for several operating systems. You c
     ![Sui releases in GitHub](./images/releases.png)
 1. Click the release tagged **Latest** to open the release's page.
 1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
-1. Double-click the downloaded file. If the file doesn't automatically expand, manually unzip the file.
-1. Open the expanded folder. Navigate to the `target/release` directory and double-click the appropriate binary to install, beginning with `sui-macos-<ARCHITECTURE>`:
+1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the user root of your system for demonstration purposes. Replace references to this location in subsequent steps if you choose a different directory.
+1. Navigate to the `target/release` directory of the expanded folder. Rename each file to remove the `-macos-<ARCHITECTURE>` suffix from each file name. For example, rename `sui-macos-arm64` to `sui`. If you don't do this step, you must type `sui-macos-<ARCHITECTURE>` to execute commands instead of simply `sui`. When complete, you should have the following files:
 
-    - `sui-data-ingestion-macos-<ARCHITECTURE>`: Massage Full node data for indexer to store in a database.
-    - `sui-faucet-macos-<ARCHITECTURE>`: Local faucet to mint coins on local network.
-    - `sui-indexer-macos-<ARCHITECTURE>`: An indexer for a local Sui network.
-    - `sui-macos-<ARCHITECTURE>`: Main Sui binary.
-    - `sui-node-macos-<ARCHITECTURE>`: Run a local node.
-    - `sui-test-validator-macos-<ARCHITECTURE>`: Run test validators on a local network for development.
-    - `sui-tool-macos-<ARCHITECTURE>`: Provides utilities for Sui.
+    - `sui-data-ingestion`: Capture Full node data for indexer to store in a database.
+    - `sui-faucet`: Local faucet to mint coins on local network.
+    - `sui-indexer`: An indexer for a local Sui network.
+    - `sui`: Main Sui binary.
+    - `sui-node`: Run a local node.
+    - `sui-test-validator`: Run test validators on a local network for development.
+    - `sui-tool`: Provides utilities for Sui.
 
-    The Sui binary takes several minutes to download and install files, so make sure you allocate enough time for it to complete. Actual time to complete depends on your network connection and computer specifications.
+    :::info
+
+    Rename `external-crates/move/target/release/move-analyzer-macos-<ARCHITECTURE>` in the same way.
+
+    :::
+1. Add both folders containing the extracted files to your `PATH` variable. Update your `~/.zshrc` or `~/.bashrc` to include the location of the sui binaries. If using the suggested location, add `export PATH="~/sui/target/release:~/sui/external-crates/move/target/release:$PATH"`.
+1. Start a new Terminal session or type `source ~/.zshrc` (or `.bashrc`) to load the new `PATH` value.
 
 </TabItem>
 
@@ -87,7 +94,7 @@ Each Sui release provides a set of binaries for several operating systems. You c
 1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the root of your C drive for demonstration purposes. Replace references to this location in subsequent steps if you choose a different directory.
 1. Navigate to the `target\release` directory of the expanded folder. Rename each file to remove the `-windows-x86_64` suffix from each file name. For example, rename `sui-windows-x86_64.exe` to `sui.exe`. If you don't do this step, you must type `sui-windows-x86_64` to execute commands instead of simply `sui`. When complete, you should have the following .exe files:
 
-    - `sui-data-ingestion`: Massage Full node data for indexer to store in a database.
+    - `sui-data-ingestion`: Capture Full node data for indexer to store in a database.
     - `sui-faucet`: Local faucet to mint coins on local network.
     - `sui-indexer`: An indexer for a local Sui network.
     - `sui`: Main Sui binary.
