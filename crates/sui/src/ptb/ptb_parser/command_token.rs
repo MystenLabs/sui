@@ -7,8 +7,6 @@ use std::{
 };
 
 use anyhow::bail;
-use move_command_line_common::parser::Token;
-use move_core_types::identifier;
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
 pub enum CommandToken {
@@ -173,8 +171,9 @@ impl CommandToken {
     }
 }
 
+#[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::ptb::ptb_parser::command_token::*;
 
     #[test]
     fn round_trip() {

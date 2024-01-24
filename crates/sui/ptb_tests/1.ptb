@@ -38,3 +38,10 @@ sui client ptb --gas-budget 1000 --make-move-vec "<std::option::Option<u64>>" "[
  sui client ptb --assign "a" none --move-call "0x1::option::is_none" "<u64>" a --gas-budget 1000
 
  sui client ptb --assign "a" @0xf3ecaddd15877e590d66a1181381efda4f49607a29bdfd8b4205cfdfa9b09afc --move-call "0x2::coin::destroy_zero" "<0x2::sui::SUI>" a --gas-budget 1000
+
+  # Doesn't work since we expect an array here
+  sui client ptb --gas-budget 100000000 --split-coins gas "[1,2,3]" --assign s --transfer-objects @0x1 s
+
+  sui client ptb --assign "a" none --assign "a" 1 --move-call "0x1::option::is_none" "<u64>" a --gas-budget 10000000
+
+  sui client ptb --assign "a" none --move-call "0x1::option::is_none" "<u64>" a --assign a 1 --move-call "0x1::option::is_none" "<u64>" a --gas-budget 10000000
