@@ -22,6 +22,6 @@ enclosed in quotation marks, you should use an editor that supports UTF-8, not t
 	<files>
 		<file src="../target/release/sui.exe" target="bin/sui.exe" />
 		<file src="../LICENSE" target="bin/LICENSE.txt" />
-		<file src="./chocolatey/VERIFICATION.txt" target="bin/VERIFICATION.txt" />
+		<file src="./VERIFICATION.txt" target="bin/VERIFICATION.txt" />
 	</files>
 </package>
