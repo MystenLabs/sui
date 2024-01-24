@@ -13,9 +13,9 @@ use crate::{
 };
 
 /// Build a fully interconnected dag up to the specified round. This function
-/// starts building the dag from the specified [`start`] references or from
-/// genesis if none are specified. The round [`stop``] references is not inclusive
-/// to account for the rounds being zero indexed.
+/// starts building the dag from the specified [`start`] parameter or from
+/// genesis if none are specified up to and including the specified round [`stop`]
+/// parameter.
 pub fn build_dag(
     context: Arc<Context>,
     dag_state: Arc<RwLock<DagState>>,
@@ -49,7 +49,7 @@ pub fn build_dag(
     };
 
     let starting_round = ancestors.first().unwrap().round + 1;
-    for round in starting_round..stop {
+    for round in starting_round..=stop {
         let (references, blocks): (Vec<_>, Vec<_>) = context
             .committee
             .authorities()

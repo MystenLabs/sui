@@ -85,7 +85,7 @@ impl DagState {
         let block_ref = block.reference();
         // Ensure we don't write multiple unique blocks per slot for our own index
         if block_ref.author == self.context.own_index {
-            let existing_blocks = self.get_blocks_at_slot(Slot::from(block_ref));
+            let existing_blocks = self.get_uncommitted_blocks_at_slot(block_ref.into());
             if let Some(existing_block) = existing_blocks.first() {
                 assert!(
                     existing_block.reference() == block.reference(),
@@ -215,7 +215,7 @@ mod test {
 
     #[test]
     fn get_unncommitted_blocks() {
-        let context = Arc::new(Context::new_for_test());
+        let context = Arc::new(Context::new_for_test(None));
         let store = Arc::new(MemStore::new());
         let mut dag_state = DagState::new(context.clone(), store.clone());
 
@@ -303,7 +303,7 @@ mod test {
     #[test]
     fn ancestors_at_uncommitted_round() {
         // Initialize DagState.
-        let context = Arc::new(Context::new_for_test());
+        let context = Arc::new(Context::new_for_test(None));
         let store = Arc::new(MemStore::new());
         let mut dag_state = DagState::new(context.clone(), store.clone());
 

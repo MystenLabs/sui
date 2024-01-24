@@ -3,22 +3,24 @@
 
 use std::sync::Arc;
 
+use consensus_config::AuthorityIndex;
+use parking_lot::RwLock;
+use tracing::info;
+
 use crate::{
     base_committer::base_committer_builder::BaseCommitterBuilder,
-    block::{BlockAPI, TestBlock, VerifiedBlock},
+    block::{BlockAPI, TestBlock, Transaction, VerifiedBlock},
     commit::{LeaderStatus, DEFAULT_WAVE_LENGTH},
     context::Context,
     dag_state::DagState,
     storage::mem_store::MemStore,
     test_dag::{build_dag, build_dag_layer},
 };
-use consensus_config::AuthorityIndex;
-use parking_lot::RwLock;
 
 /// Commit one leader.  
 #[test]
-#[tracing_test::traced_test]
 fn try_direct_commit() {
+    telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
     let context = Arc::new(Context::new_for_test(Some(4)));
     let dag_state = Arc::new(RwLock::new(DagState::new(
@@ -29,10 +31,12 @@ fn try_direct_commit() {
 
     // Build fully connected dag with empty blocks. Adding 8 rounds to the dag
     // so that we have 2 completed waves and one incomplete wave.
+    // note: rounds & waves are zero indexed.
     let num_rounds_in_dag = 8;
+    let voting_round_wave_2 = num_rounds_in_dag - 1;
     let wave_length = DEFAULT_WAVE_LENGTH;
     let incomplete_wave_leader_round = 6;
-    build_dag(context, dag_state, None, num_rounds_in_dag);
+    build_dag(context, dag_state, None, voting_round_wave_2);
 
     // Leader rounds are the first rounds of each wave. In this case rounds 0, 3 & 6.
     let leader_rounds = (0..num_rounds_in_dag)
@@ -44,9 +48,9 @@ fn try_direct_commit() {
         let leader = committer
             .elect_leader(round)
             .expect("should have elected leader");
-        tracing::info!("Try direct commit for leader {leader}",);
+        info!("Try direct commit for leader {leader}",);
         let leader_status = committer.try_direct_decide(leader);
-        tracing::info!("Leader commit status: {leader_status}");
+        info!("Leader commit status: {leader_status}");
 
         if round < incomplete_wave_leader_round {
             if let LeaderStatus::Commit(ref committed_block) = leader_status {
@@ -69,8 +73,8 @@ fn try_direct_commit() {
 
 /// Ensure idempotent replies.
 #[test]
-#[tracing_test::traced_test]
 fn idempotence() {
+    telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
     let context = Arc::new(Context::new_for_test(Some(4)));
     let dag_state = Arc::new(RwLock::new(DagState::new(
@@ -79,17 +83,19 @@ fn idempotence() {
     )));
     let committer = BaseCommitterBuilder::new(context.clone(), dag_state.clone()).build();
 
-    // Build fully connected dag with empty blocks. Adding 5 rounds to the dag.
-    build_dag(context, dag_state, None, 5);
+    // Build fully connected dag with empty blocks. Adding 5 rounds to the dag
+    // aka thte decision round of wave 1.
+    let decision_round_wave_1 = 5;
+    build_dag(context, dag_state, None, decision_round_wave_1);
 
     // Commit one leader.
-    let leader_round = 0;
+    let leader_round_wave_1 = 3;
     let leader = committer
-        .elect_leader(leader_round)
+        .elect_leader(leader_round_wave_1)
         .expect("should have elected leader");
-    tracing::info!("Try direct commit for leader {leader}",);
+    info!("Try direct commit for leader {leader}",);
     let leader_status = committer.try_direct_decide(leader);
-    tracing::info!("Leader commit status: {leader_status}");
+    info!("Leader commit status: {leader_status}");
 
     if let LeaderStatus::Commit(ref block) = leader_status {
         assert_eq!(block.author(), leader.authority)
@@ -98,9 +104,9 @@ fn idempotence() {
     };
 
     // Commit the same leader again on the same dag state and get the same result
-    tracing::info!("Try direct commit for leader {leader} again",);
+    info!("Try direct commit for leader {leader} again",);
     let leader_status = committer.try_direct_decide(leader);
-    tracing::info!("Leader commit status: {leader_status}");
+    info!("Leader commit status: {leader_status}");
 
     if let LeaderStatus::Commit(ref committed_block) = leader_status {
         assert_eq!(committed_block.author(), leader.authority)
@@ -111,8 +117,8 @@ fn idempotence() {
 
 /// Commit one by one each leader as the dag progresses in ideal conditions.
 #[test]
-#[tracing_test::traced_test]
 fn multiple_direct_commit() {
+    telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
     let context = Arc::new(Context::new_for_test(Some(4)));
     let dag_state = Arc::new(RwLock::new(DagState::new(
@@ -125,22 +131,24 @@ fn multiple_direct_commit() {
     let mut ancestors = None;
 
     for n in 1..=10 {
-        let round_with_enough_blocks = wave_length * n;
+        // note: rounds are zero indexed.
+        let decision_round = (wave_length * n) - 1;
         ancestors = Some(build_dag(
             context.clone(),
             dag_state.clone(),
             ancestors,
-            round_with_enough_blocks,
+            decision_round,
         ));
 
         // Leader round is the first round of each wave.
-        let leader_round = round_with_enough_blocks - wave_length;
+        // note: rounds are zero indexed.
+        let leader_round = wave_length * (n - 1);
         let leader = committer
             .elect_leader(leader_round)
             .expect("should have elected leader");
-        tracing::info!("Try direct commit for leader {leader}",);
+        info!("Try direct commit for leader {leader}",);
         let leader_status = committer.try_direct_decide(leader);
-        tracing::info!("Leader commit status: {leader_status}");
+        info!("Leader commit status: {leader_status}");
 
         if let LeaderStatus::Commit(ref committed_block) = leader_status {
             assert_eq!(committed_block.author(), leader.authority)
@@ -152,8 +160,8 @@ fn multiple_direct_commit() {
 
 /// We directly skip the leader if it has enough blame.
 #[test]
-#[tracing_test::traced_test]
 fn direct_skip() {
+    telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
     let context = Arc::new(Context::new_for_test(Some(4)));
     let dag_state = Arc::new(RwLock::new(DagState::new(
@@ -162,39 +170,38 @@ fn direct_skip() {
     )));
     let committer = BaseCommitterBuilder::new(context.clone(), dag_state.clone()).build();
 
-    let wave_length = DEFAULT_WAVE_LENGTH;
-
-    // Add enough blocks to reach the leader of wave 1.
-    let voting_round_wave_1 = wave_length + 1;
-    let references_round_2 = build_dag(
+    // Add enough blocks to reach the leader round of wave 1.
+    let leader_round_wave_1 = 3;
+    let references_leader_round_wave_1 = build_dag(
         context.clone(),
         dag_state.clone(),
         None,
-        voting_round_wave_1,
+        leader_round_wave_1,
     );
 
+    // Votes in round 4 will not include the leader of wave 1.
     // Filter out that leader.
     let leader_wave_1 = committer
-        .elect_leader(voting_round_wave_1 - 1)
+        .elect_leader(leader_round_wave_1)
         .expect("should have elected leader");
-    let references_without_leader_wave_1: Vec<_> = references_round_2
+    let references_without_leader_wave_1: Vec<_> = references_leader_round_wave_1
         .into_iter()
         .filter(|x| x.author != leader_wave_1.authority)
         .collect();
 
     // Add enough blocks to reach the decision round of wave 1.
-    let leader_round_wave_2 = 2 * wave_length;
+    let decision_round_wave_1 = 5;
     build_dag(
         context.clone(),
         dag_state.clone(),
         Some(references_without_leader_wave_1),
-        leader_round_wave_2,
+        decision_round_wave_1,
     );
 
     // Ensure no blocks are committed.
-    tracing::info!("Try direct commit for leader {leader_wave_1}",);
+    info!("Try direct commit for leader {leader_wave_1}",);
     let leader_status = committer.try_direct_decide(leader_wave_1);
-    tracing::info!("Leader commit status: {leader_status}");
+    info!("Leader commit status: {leader_status}");
 
     if let LeaderStatus::Skip(skipped_leader) = leader_status {
         assert_eq!(skipped_leader, leader_wave_1);
@@ -205,8 +212,8 @@ fn direct_skip() {
 
 /// Indirect-commit the first leader.
 #[test]
-#[tracing_test::traced_test]
 fn indirect_commit() {
+    telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
     let context = Arc::new(Context::new_for_test(Some(4)));
     let dag_state = Arc::new(RwLock::new(DagState::new(
@@ -217,20 +224,20 @@ fn indirect_commit() {
 
     let wave_length = DEFAULT_WAVE_LENGTH;
 
-    // Add enough blocks to reach the leader of wave 1.
-    let voting_round_wave_1 = wave_length + 1;
-    let references_leader_wave_1 = build_dag(
+    // Add enough blocks to reach the leader round of wave 1.
+    let leader_round_wave_1 = 3;
+    let references_leader_round_wave_1 = build_dag(
         context.clone(),
         dag_state.clone(),
         None,
-        voting_round_wave_1,
+        leader_round_wave_1,
     );
 
     // Filter out that leader.
     let leader_wave_1 = committer
-        .elect_leader(voting_round_wave_1 - 1)
+        .elect_leader(leader_round_wave_1)
         .expect("should have elected leader");
-    let references_without_leader_wave_1: Vec<_> = references_leader_wave_1
+    let references_without_leader_wave_1: Vec<_> = references_leader_round_wave_1
         .iter()
         .cloned()
         .filter(|x| x.author != leader_wave_1.authority)
@@ -241,7 +248,7 @@ fn indirect_commit() {
         .committee
         .authorities()
         .take(context.committee.quorum_threshold() as usize)
-        .map(|authority| (authority.0, references_leader_wave_1.clone()))
+        .map(|authority| (authority.0, references_leader_round_wave_1.clone()))
         .collect();
     let references_with_votes_for_leader_wave_1 =
         build_dag_layer(connections_with_leader_wave_1, dag_state.clone());
@@ -291,21 +298,21 @@ fn indirect_commit() {
 
     // Add enough blocks to decide the leader of wave 2 connecting to the references
     // manually constructed of the decision round of wave 1.
-    let leader_round_wave_3 = 3 * wave_length;
+    let decision_round_wave_2 = (3 * wave_length) - 1;
     build_dag(
         context.clone(),
         dag_state.clone(),
         Some(references_decision_round_wave_1),
-        leader_round_wave_3,
+        decision_round_wave_2,
     );
 
     // Try direct commit leader from wave 2 which should result in Commit
     let leader_wave_2 = committer
         .elect_leader(2 * wave_length)
         .expect("should have elected leader");
-    tracing::info!("Try direct commit for leader {leader_wave_2}");
+    info!("Try direct commit for leader {leader_wave_2}");
     let leader_status = committer.try_direct_decide(leader_wave_2);
-    tracing::info!("Leader commit status: {leader_status}");
+    info!("Leader commit status: {leader_status}");
 
     let mut decided_leaders = vec![];
     if let LeaderStatus::Commit(ref committed_block) = leader_status {
@@ -316,9 +323,9 @@ fn indirect_commit() {
     };
 
     // Try direct commit leader from wave 1 which should result in Undecided
-    tracing::info!("Try direct commit for leader {leader_wave_1}");
+    info!("Try direct commit for leader {leader_wave_1}");
     let leader_status = committer.try_direct_decide(leader_wave_1);
-    tracing::info!("Leader commit status: {leader_status}");
+    info!("Leader commit status: {leader_status}");
 
     if let LeaderStatus::Undecided(undecided_slot) = leader_status {
         assert_eq!(undecided_slot, leader_wave_1)
@@ -328,7 +335,7 @@ fn indirect_commit() {
 
     // Quick Summary:
     // Leader of wave 2 or C6 has the necessary votes/certs to be directly commited.
-    // When we get to the leader of wave 1 or D3. We see that we cannot direct commit
+    // Then, when we get to the leader of wave 1 or D3, we see that we cannot direct commit
     // and it is marked as undecided. But this time we have a committed anchor so we
     // check if there is a certified link from the anchor (c6) to the undecided leader
     // (d3). There is a certified link through A5 with votes A4,B4,C4. So we can mark
@@ -336,9 +343,9 @@ fn indirect_commit() {
 
     // Ensure we commit the leader of wave 1 indirectly with the committed leader
     // of wave 2 as the anchor.
-    tracing::info!("Try indirect commit for leader {leader_wave_1}",);
+    info!("Try indirect commit for leader {leader_wave_1}",);
     let leader_status = committer.try_indirect_decide(leader_wave_1, decided_leaders.iter());
-    tracing::info!("Leader commit status: {leader_status}");
+    info!("Leader commit status: {leader_status}");
 
     if let LeaderStatus::Commit(ref committed_block) = leader_status {
         assert_eq!(committed_block.author(), leader_wave_1.authority)
@@ -349,8 +356,8 @@ fn indirect_commit() {
 
 /// Commit the first leader, indirectly skip the 2nd, and commit the 3rd leader.
 #[test]
-#[tracing_test::traced_test]
 fn indirect_skip() {
+    telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
     let context = Arc::new(Context::new_for_test(Some(4)));
     let dag_state = Arc::new(RwLock::new(DagState::new(
@@ -361,21 +368,20 @@ fn indirect_skip() {
 
     let wave_length = DEFAULT_WAVE_LENGTH;
 
-    // Add enough blocks to reach the leader of wave 2.
+    // Add enough blocks to reach the leader round of wave 2.
     let leader_round_wave_2 = 2 * wave_length;
-    let voting_round_wave_2 = leader_round_wave_2 + 1;
     let references_leader_round_wave_2 = build_dag(
         context.clone(),
         dag_state.clone(),
         None,
-        voting_round_wave_2,
+        leader_round_wave_2,
     );
 
     // Filter out that leader.
     let leader_wave_2 = committer
         .elect_leader(leader_round_wave_2)
         .expect("should have elected leader");
-    let references_without_leader_2: Vec<_> = references_leader_round_wave_2
+    let references_without_leader_wave_2: Vec<_> = references_leader_round_wave_2
         .iter()
         .cloned()
         .filter(|x| x.author != leader_wave_2.authority)
@@ -400,7 +406,7 @@ fn indirect_skip() {
         .committee
         .authorities()
         .skip(context.committee.validity_threshold() as usize)
-        .map(|authority| (authority.0, references_without_leader_2.clone()))
+        .map(|authority| (authority.0, references_without_leader_wave_2.clone()))
         .collect();
 
     references_voting_round_wave_2.extend(build_dag_layer(
@@ -408,25 +414,25 @@ fn indirect_skip() {
         dag_state.clone(),
     ));
 
-    // Add enough blocks to reach the decision round of the leader of wave 3.
-    let leader_round_wave_4 = 4 * wave_length;
+    // Add enough blocks to reach the decison round of wave 3.
+    let decision_round_wave_3 = (4 * wave_length) - 1;
     build_dag(
         context.clone(),
         dag_state.clone(),
         Some(references_voting_round_wave_2),
-        leader_round_wave_4,
+        decision_round_wave_3,
     );
 
     // Ensure we commit the leaders of wave 1 and 3 and skip the leader of wave 2
 
-    // Ensure we commit the leader of wave 3.
+    // 1. Ensure we commit the leader of wave 3.
     let leader_round_wave_3 = 3 * wave_length;
     let leader_wave_3 = committer
         .elect_leader(leader_round_wave_3)
         .expect("should have elected leader");
-    tracing::info!("Try direct commit for leader {leader_wave_3}");
+    info!("Try direct commit for leader {leader_wave_3}");
     let leader_status = committer.try_direct_decide(leader_wave_3);
-    tracing::info!("Leader commit status: {leader_status}");
+    info!("Leader commit status: {leader_status}");
 
     let mut decided_leaders = vec![];
     if let LeaderStatus::Commit(ref committed_block) = leader_status {
@@ -439,13 +445,13 @@ fn indirect_skip() {
     // Leader of wave 2 is undecided directly and then skipped indirectly because
     // of lack of certified links.
 
-    // Ensure we directly mark leader of wave 2 undecided.
+    // 2. Ensure we directly mark leader of wave 2 undecided.
     let leader_wave_2 = committer
         .elect_leader(leader_round_wave_2)
         .expect("should have elected leader");
-    tracing::info!("Try direct commit for leader {leader_wave_2}");
+    info!("Try direct commit for leader {leader_wave_2}");
     let leader_status = committer.try_direct_decide(leader_wave_2);
-    tracing::info!("Leader commit status: {leader_status}");
+    info!("Leader commit status: {leader_status}");
 
     if let LeaderStatus::Undecided(undecided_slot) = leader_status {
         assert_eq!(undecided_slot, leader_wave_2)
@@ -453,10 +459,10 @@ fn indirect_skip() {
         panic!("Expected an undecided leader")
     };
 
-    // Ensure we skip leader of wave 2 indirectly.
-    tracing::info!("Try indirect commit for leader {leader_wave_2}",);
+    // 3. Ensure we skip leader of wave 2 indirectly.
+    info!("Try indirect commit for leader {leader_wave_2}",);
     let leader_status = committer.try_indirect_decide(leader_wave_2, decided_leaders.iter());
-    tracing::info!("Leader commit status: {leader_status}");
+    info!("Leader commit status: {leader_status}");
 
     if let LeaderStatus::Skip(skipped_slot) = leader_status {
         assert_eq!(skipped_slot, leader_wave_2)
@@ -469,9 +475,9 @@ fn indirect_skip() {
     let leader_wave_1 = committer
         .elect_leader(leader_round_wave_1)
         .expect("should have elected leader");
-    tracing::info!("Try direct commit for leader {leader_wave_1}");
+    info!("Try direct commit for leader {leader_wave_1}");
     let leader_status = committer.try_direct_decide(leader_wave_1);
-    tracing::info!("Leader commit status: {leader_status}");
+    info!("Leader commit status: {leader_status}");
 
     if let LeaderStatus::Commit(ref committed_block) = leader_status {
         assert_eq!(committed_block.author(), leader_wave_1.authority);
@@ -482,8 +488,8 @@ fn indirect_skip() {
 
 /// If there is no leader with enough support nor blame, we commit nothing.
 #[test]
-#[tracing_test::traced_test]
 fn undecided() {
+    telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
     let context = Arc::new(Context::new_for_test(Some(4)));
     let dag_state = Arc::new(RwLock::new(DagState::new(
@@ -494,14 +500,13 @@ fn undecided() {
 
     let wave_length = DEFAULT_WAVE_LENGTH;
 
-    // Add enough blocks to reach the leader of wave 1.
+    // Add enough blocks to reach the leader round of wave 1.
     let leader_round_wave_1 = wave_length;
-    let voting_round_wave_1 = leader_round_wave_1 + 1;
     let references_leader_round_wave_1 = build_dag(
         context.clone(),
         dag_state.clone(),
         None,
-        voting_round_wave_1,
+        leader_round_wave_1,
     );
 
     // Filter out that leader.
@@ -532,19 +537,20 @@ fn undecided() {
     let references_voting_round_wave_1 =
         build_dag_layer(connections_voting_round_wave_1, dag_state.clone());
 
-    // Add enough blocks to reach the decision round of the leader of wave 1.
-    let leader_round_wave_2 = 2 * wave_length;
+    // Add enough blocks to reach the decision round of wave 1.
+    let decision_round_wave_1 = (2 * wave_length) - 1;
     build_dag(
         context.clone(),
         dag_state.clone(),
         Some(references_voting_round_wave_1),
-        leader_round_wave_2,
+        decision_round_wave_1,
     );
 
-    // Ensure we directly mark leader of wave 1 undecided.
-    tracing::info!("Try direct commit for leader {leader_wave_1}");
+    // Ensure we directly mark leader of wave 1 undecided as there are less than
+    // 2f+1 blames and 2f+1 certs
+    info!("Try direct commit for leader {leader_wave_1}");
     let leader_status = committer.try_direct_decide(leader_wave_1);
-    tracing::info!("Leader commit status: {leader_status}");
+    info!("Leader commit status: {leader_status}");
 
     if let LeaderStatus::Undecided(undecided_slot) = leader_status {
         assert_eq!(undecided_slot, leader_wave_1)
@@ -552,10 +558,11 @@ fn undecided() {
         panic!("Expected an undecided leader")
     };
 
-    // Ensure we indirectly mark leader of wave 1 undecided.
-    tracing::info!("Try indirect commit for leader {leader_wave_1}");
+    // Ensure we indirectly mark leader of wave 1 undecided as there is no anchor
+    // to make an indirect decision.
+    info!("Try indirect commit for leader {leader_wave_1}");
     let leader_status = committer.try_indirect_decide(leader_wave_1, [].iter());
-    tracing::info!("Leader commit status: {leader_status}");
+    info!("Leader commit status: {leader_status}");
 
     if let LeaderStatus::Undecided(undecided_slot) = leader_status {
         assert_eq!(undecided_slot, leader_wave_1)
@@ -565,8 +572,8 @@ fn undecided() {
 }
 
 #[test]
-#[tracing_test::traced_test]
 fn test_byzantine_validator() {
+    telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
     let context = Arc::new(Context::new_for_test(Some(4)));
     let dag_state = Arc::new(RwLock::new(DagState::new(
@@ -576,32 +583,29 @@ fn test_byzantine_validator() {
     let committer = BaseCommitterBuilder::new(context.clone(), dag_state.clone()).build();
     let wave_length = DEFAULT_WAVE_LENGTH;
 
-    // Add enough blocks to reach leader of wave 4
+    // Add enough blocks to reach leader round of wave 4
     let leader_round_wave_4 = 4 * wave_length;
-    let voting_round_wave_4 = leader_round_wave_4 + 1;
     let references_leader_round_wave_4 = build_dag(
         context.clone(),
         dag_state.clone(),
         None,
-        voting_round_wave_4,
+        leader_round_wave_4,
     );
 
-    let leader_round_wave_5 = 5 * wave_length;
     // Add blocks to reach voting round of wave 4
+    let voting_round_wave_4 = (4 * wave_length) + 1;
     // This includes a "good vote" from validator C which is acting as a byzantine validator
     let good_references_voting_round_wave_4 = build_dag(
         context.clone(),
         dag_state.clone(),
         Some(references_leader_round_wave_4.clone()),
-        leader_round_wave_5 - 1,
+        voting_round_wave_4,
     );
 
-    // DagState:
-    // - A got a good vote from C above
-    // - A will then get a bad vote from C indirectly through the ancenstors of
+    // DagState Update:
+    // - 'A' got a good vote from 'C' above
+    // - 'A' will then get a bad vote from 'C' indirectly through the ancenstors of
     //   the wave 4 decision blocks of B C D
-    // TODO: we should reject the any ancestors from C's decision round that do
-    //       not match what they sent in the voting round for that wave
 
     // Add block layer for wave 4 decision round with no votes for leader A12
     // from a byzantine validator C that sent different blocks to all validators.
@@ -617,17 +621,11 @@ fn test_byzantine_validator() {
         .filter(|x| x.author != leader_wave_4.authority)
         .collect();
 
-    // accept these references/blocks as ancestors from decision round blocks in dag state
-    // TODO: have to vary the ancestors for now or the block digests will be the same
-    //       revisit when transactions have been added to the block.
+    // Accept these references/blocks as ancestors from decision round blocks in dag state
     let byzantine_block_c13_1 = VerifiedBlock::new_for_test(
         TestBlock::new(13, 2)
-            .set_ancestors(
-                references_without_leader_round_wave_4
-                    .clone()
-                    .into_iter()
-                    .collect(),
-            )
+            .set_ancestors(references_without_leader_round_wave_4.clone())
+            .set_transactions(vec![Transaction::new(vec![1])])
             .build(),
     );
     dag_state
@@ -636,13 +634,8 @@ fn test_byzantine_validator() {
 
     let byzantine_block_c13_2 = VerifiedBlock::new_for_test(
         TestBlock::new(13, 2)
-            .set_ancestors(
-                references_without_leader_round_wave_4
-                    .clone()
-                    .into_iter()
-                    .skip(1)
-                    .collect(),
-            )
+            .set_ancestors(references_without_leader_round_wave_4.clone())
+            .set_transactions(vec![Transaction::new(vec![2])])
             .build(),
     );
     dag_state
@@ -651,20 +644,15 @@ fn test_byzantine_validator() {
 
     let byzantine_block_c13_3 = VerifiedBlock::new_for_test(
         TestBlock::new(13, 2)
-            .set_ancestors(
-                references_without_leader_round_wave_4
-                    .clone()
-                    .into_iter()
-                    .skip(2)
-                    .collect(),
-            )
+            .set_ancestors(references_without_leader_round_wave_4)
+            .set_transactions(vec![Transaction::new(vec![3])])
             .build(),
     );
     dag_state
         .write()
         .accept_block(byzantine_block_c13_3.clone());
 
-    // ancestors of decision block round 14 should include multiple byzantine non-votes C13
+    // Ancestors of decision blocks in round 14 should include multiple byzantine non-votes C13
     // but there are enough good votes to prevent a skip. Additionally only one of the non-votes
     // per authority should be counted so we should not skip leader A12.
     let decison_block_a14 = VerifiedBlock::new_for_test(
@@ -718,17 +706,17 @@ fn test_byzantine_validator() {
     );
     dag_state.write().accept_block(decison_block_d14.clone());
 
-    // DagState
-    // - We have A13, B13, D13, C13 as good votes in the voting round of wave 4
+    // DagState Update:
+    // - We have A13, B13, D13 & C13 as good votes in the voting round of wave 4
     // - We have 3 byzantine C13 nonvotes that we received as ancestors from decision
-    //   round blocks from B C D.
-    // - We have  B14, C14, D14 that include this byzantine nonvote and A14 from the
-    //   decision round. But all of these blocks also have good votes from A B C D.
-    // Expect a successul direct commit.
+    //   round blocks from B, C, & D.
+    // - We have  B14, C14 & D14 that include this byzantine nonvote and A14 from the
+    //   decision round. But all of these blocks also have good votes from A, B, C & D.
+    // Expect a successful direct commit.
 
-    tracing::info!("Try direct commit for leader {leader_wave_4}");
+    info!("Try direct commit for leader {leader_wave_4}");
     let leader_status = committer.try_direct_decide(leader_wave_4);
-    tracing::info!("Leader commit status: {leader_status}");
+    info!("Leader commit status: {leader_status}");
 
     if let LeaderStatus::Commit(ref committed_block) = leader_status {
         assert_eq!(committed_block.author(), leader_wave_4.authority);
