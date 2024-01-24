@@ -4431,6 +4431,47 @@ export type GetCheckpointsQuery = { __typename?: 'Query', checkpoints: { __typen
 
 export type Rpc_Checkpoint_FieldsFragment = { __typename?: 'Checkpoint', digest: string, networkTotalTransactions?: number | null, previousCheckpointDigest?: string | null, sequenceNumber: number, timestamp: any, validatorSignatures: any, epoch?: { __typename?: 'Epoch', epochId: number } | null, rollingGasSummary?: { __typename?: 'GasCostSummary', computationCost?: any | null, storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null } | null, transactionBlocks: { __typename?: 'TransactionBlockConnection', nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> } };
 
+export type DevInspectTransactionBlockQueryVariables = Exact<{
+  txBytes: Scalars['String']['input'];
+  txMeta: TransactionMetadata;
+  showBalanceChanges?: InputMaybe<Scalars['Boolean']['input']>;
+  showEffects?: InputMaybe<Scalars['Boolean']['input']>;
+  showEvents?: InputMaybe<Scalars['Boolean']['input']>;
+  showInput?: InputMaybe<Scalars['Boolean']['input']>;
+  showObjectChanges?: InputMaybe<Scalars['Boolean']['input']>;
+  showRawInput?: InputMaybe<Scalars['Boolean']['input']>;
+}>;
+
+
+export type DevInspectTransactionBlockQuery = { __typename?: 'Query', dryRunTransactionBlock: { __typename?: 'DryRunResult', error?: string | null, results?: Array<{ __typename?: 'DryRunEffect', mutatedReferences?: Array<{ __typename?: 'DryRunMutation', bcs: any, input: { __typename: 'GasCoin' } | { __typename: 'Input', inputIndex: number } | { __typename: 'Result', cmd: number, resultIndex?: number | null }, type: { __typename?: 'MoveType', repr: string } }> | null, returnValues?: Array<{ __typename?: 'DryRunReturn', bcs: any, type: { __typename?: 'MoveType', repr: string } }> | null }> | null, transaction?: { __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null }> } } | null } | null } };
+
+export type DryRunTransactionBlockQueryVariables = Exact<{
+  txBytes: Scalars['String']['input'];
+  showBalanceChanges?: InputMaybe<Scalars['Boolean']['input']>;
+  showEffects?: InputMaybe<Scalars['Boolean']['input']>;
+  showEvents?: InputMaybe<Scalars['Boolean']['input']>;
+  showInput?: InputMaybe<Scalars['Boolean']['input']>;
+  showObjectChanges?: InputMaybe<Scalars['Boolean']['input']>;
+  showRawInput?: InputMaybe<Scalars['Boolean']['input']>;
+}>;
+
+
+export type DryRunTransactionBlockQuery = { __typename?: 'Query', dryRunTransactionBlock: { __typename?: 'DryRunResult', error?: string | null, transaction?: { __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null }> } } | null } | null } };
+
+export type ExecuteTransactionBlockMutationVariables = Exact<{
+  txBytes: Scalars['String']['input'];
+  signatures: Array<Scalars['String']['input']> | Scalars['String']['input'];
+  showBalanceChanges?: InputMaybe<Scalars['Boolean']['input']>;
+  showEffects?: InputMaybe<Scalars['Boolean']['input']>;
+  showEvents?: InputMaybe<Scalars['Boolean']['input']>;
+  showInput?: InputMaybe<Scalars['Boolean']['input']>;
+  showObjectChanges?: InputMaybe<Scalars['Boolean']['input']>;
+  showRawInput?: InputMaybe<Scalars['Boolean']['input']>;
+}>;
+
+
+export type ExecuteTransactionBlockMutation = { __typename?: 'Mutation', executeTransactionBlock: { __typename?: 'ExecutionResult', errors?: Array<string> | null, effects: { __typename?: 'TransactionBlockEffects', transactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null }> } } | null } | null } } };
+
 export type GetAllBalancesQueryVariables = Exact<{
   owner: Scalars['SuiAddress']['input'];
   limit?: InputMaybe<Scalars['Int']['input']>;
@@ -5357,6 +5398,521 @@ export const GetCheckpointsDocument = new TypedDocumentString(`
   }
   validatorSignatures
 }`) as unknown as TypedDocumentString<GetCheckpointsQuery, GetCheckpointsQueryVariables>;
+export const DevInspectTransactionBlockDocument = new TypedDocumentString(`
+    query devInspectTransactionBlock($txBytes: String!, $txMeta: TransactionMetadata!, $showBalanceChanges: Boolean = false, $showEffects: Boolean = false, $showEvents: Boolean = false, $showInput: Boolean = false, $showObjectChanges: Boolean = false, $showRawInput: Boolean = false) {
+  dryRunTransactionBlock(txBytes: $txBytes, txMeta: $txMeta) {
+    error
+    results {
+      mutatedReferences {
+        input {
+          __typename
+          ... on Input {
+            inputIndex: ix
+          }
+          ... on Result {
+            cmd
+            resultIndex: ix
+          }
+        }
+        type {
+          repr
+        }
+        bcs
+      }
+      returnValues {
+        type {
+          repr
+        }
+        bcs
+      }
+    }
+    transaction {
+      ...RPC_TRANSACTION_FIELDS
+    }
+  }
+}
+    fragment RPC_OBJECT_OWNER_FIELDS on ObjectOwner {
+  __typename
+  ... on AddressOwner {
+    owner {
+      asObject {
+        address
+      }
+      asAddress {
+        address
+      }
+    }
+  }
+  ... on Parent {
+    parent {
+      address
+    }
+  }
+  ... on Shared {
+    initialSharedVersion
+  }
+}
+fragment RPC_EVENTS_FIELDS on Event {
+  sendingModule {
+    package {
+      address
+    }
+    name
+  }
+  sender {
+    address
+  }
+  type {
+    repr
+  }
+  json
+  bcs
+  timestamp
+}
+fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
+  digest
+  rawTransaction: bcs @include(if: $showInput)
+  rawTransaction: bcs @include(if: $showRawInput)
+  sender {
+    address
+  }
+  signatures
+  effects {
+    events(first: 50) @include(if: $showEvents) {
+      nodes {
+        ...RPC_EVENTS_FIELDS
+      }
+    }
+    checkpoint {
+      sequenceNumber
+    }
+    timestamp
+    balanceChanges(first: 50) @include(if: $showBalanceChanges) {
+      nodes {
+        coinType {
+          repr
+        }
+        owner {
+          asObject {
+            address
+          }
+          asAddress {
+            address
+          }
+        }
+        amount
+      }
+    }
+    dependencies(first: 50) @include(if: $showEffects) {
+      nodes {
+        digest
+      }
+    }
+    status @include(if: $showEffects)
+    gasEffects @include(if: $showEffects) {
+      gasObject {
+        owner {
+          ...RPC_OBJECT_OWNER_FIELDS
+        }
+        digest
+        version
+        address
+      }
+      gasSummary {
+        storageCost
+        storageRebate
+        nonRefundableStorageFee
+        computationCost
+      }
+    }
+    executedEpoch: epoch @include(if: $showEffects) {
+      epochId
+    }
+    objectChanges(first: 50) @include(if: $showEffects) {
+      nodes {
+        idCreated
+        idDeleted
+        inputState {
+          version
+          digest
+          address
+        }
+        outputState {
+          version
+          digest
+          address
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
+          }
+        }
+      }
+    }
+    objectChanges(first: 50) @include(if: $showObjectChanges) {
+      nodes {
+        idCreated
+        idDeleted
+        inputState {
+          version
+          digest
+          address
+          asMoveObject {
+            contents {
+              type {
+                repr
+              }
+            }
+          }
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
+          }
+        }
+        outputState {
+          version
+          digest
+          address
+          asMoveObject {
+            contents {
+              type {
+                repr
+              }
+            }
+          }
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
+          }
+        }
+      }
+    }
+  }
+}`) as unknown as TypedDocumentString<DevInspectTransactionBlockQuery, DevInspectTransactionBlockQueryVariables>;
+export const DryRunTransactionBlockDocument = new TypedDocumentString(`
+    query dryRunTransactionBlock($txBytes: String!, $showBalanceChanges: Boolean = false, $showEffects: Boolean = false, $showEvents: Boolean = false, $showInput: Boolean = false, $showObjectChanges: Boolean = false, $showRawInput: Boolean = false) {
+  dryRunTransactionBlock(txBytes: $txBytes) {
+    error
+    transaction {
+      ...RPC_TRANSACTION_FIELDS
+    }
+  }
+}
+    fragment RPC_OBJECT_OWNER_FIELDS on ObjectOwner {
+  __typename
+  ... on AddressOwner {
+    owner {
+      asObject {
+        address
+      }
+      asAddress {
+        address
+      }
+    }
+  }
+  ... on Parent {
+    parent {
+      address
+    }
+  }
+  ... on Shared {
+    initialSharedVersion
+  }
+}
+fragment RPC_EVENTS_FIELDS on Event {
+  sendingModule {
+    package {
+      address
+    }
+    name
+  }
+  sender {
+    address
+  }
+  type {
+    repr
+  }
+  json
+  bcs
+  timestamp
+}
+fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
+  digest
+  rawTransaction: bcs @include(if: $showInput)
+  rawTransaction: bcs @include(if: $showRawInput)
+  sender {
+    address
+  }
+  signatures
+  effects {
+    events(first: 50) @include(if: $showEvents) {
+      nodes {
+        ...RPC_EVENTS_FIELDS
+      }
+    }
+    checkpoint {
+      sequenceNumber
+    }
+    timestamp
+    balanceChanges(first: 50) @include(if: $showBalanceChanges) {
+      nodes {
+        coinType {
+          repr
+        }
+        owner {
+          asObject {
+            address
+          }
+          asAddress {
+            address
+          }
+        }
+        amount
+      }
+    }
+    dependencies(first: 50) @include(if: $showEffects) {
+      nodes {
+        digest
+      }
+    }
+    status @include(if: $showEffects)
+    gasEffects @include(if: $showEffects) {
+      gasObject {
+        owner {
+          ...RPC_OBJECT_OWNER_FIELDS
+        }
+        digest
+        version
+        address
+      }
+      gasSummary {
+        storageCost
+        storageRebate
+        nonRefundableStorageFee
+        computationCost
+      }
+    }
+    executedEpoch: epoch @include(if: $showEffects) {
+      epochId
+    }
+    objectChanges(first: 50) @include(if: $showEffects) {
+      nodes {
+        idCreated
+        idDeleted
+        inputState {
+          version
+          digest
+          address
+        }
+        outputState {
+          version
+          digest
+          address
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
+          }
+        }
+      }
+    }
+    objectChanges(first: 50) @include(if: $showObjectChanges) {
+      nodes {
+        idCreated
+        idDeleted
+        inputState {
+          version
+          digest
+          address
+          asMoveObject {
+            contents {
+              type {
+                repr
+              }
+            }
+          }
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
+          }
+        }
+        outputState {
+          version
+          digest
+          address
+          asMoveObject {
+            contents {
+              type {
+                repr
+              }
+            }
+          }
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
+          }
+        }
+      }
+    }
+  }
+}`) as unknown as TypedDocumentString<DryRunTransactionBlockQuery, DryRunTransactionBlockQueryVariables>;
+export const ExecuteTransactionBlockDocument = new TypedDocumentString(`
+    mutation executeTransactionBlock($txBytes: String!, $signatures: [String!]!, $showBalanceChanges: Boolean = false, $showEffects: Boolean = false, $showEvents: Boolean = false, $showInput: Boolean = false, $showObjectChanges: Boolean = false, $showRawInput: Boolean = false) {
+  executeTransactionBlock(txBytes: $txBytes, signatures: $signatures) {
+    errors
+    effects {
+      transactionBlock {
+        ...RPC_TRANSACTION_FIELDS
+      }
+    }
+  }
+}
+    fragment RPC_OBJECT_OWNER_FIELDS on ObjectOwner {
+  __typename
+  ... on AddressOwner {
+    owner {
+      asObject {
+        address
+      }
+      asAddress {
+        address
+      }
+    }
+  }
+  ... on Parent {
+    parent {
+      address
+    }
+  }
+  ... on Shared {
+    initialSharedVersion
+  }
+}
+fragment RPC_EVENTS_FIELDS on Event {
+  sendingModule {
+    package {
+      address
+    }
+    name
+  }
+  sender {
+    address
+  }
+  type {
+    repr
+  }
+  json
+  bcs
+  timestamp
+}
+fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
+  digest
+  rawTransaction: bcs @include(if: $showInput)
+  rawTransaction: bcs @include(if: $showRawInput)
+  sender {
+    address
+  }
+  signatures
+  effects {
+    events(first: 50) @include(if: $showEvents) {
+      nodes {
+        ...RPC_EVENTS_FIELDS
+      }
+    }
+    checkpoint {
+      sequenceNumber
+    }
+    timestamp
+    balanceChanges(first: 50) @include(if: $showBalanceChanges) {
+      nodes {
+        coinType {
+          repr
+        }
+        owner {
+          asObject {
+            address
+          }
+          asAddress {
+            address
+          }
+        }
+        amount
+      }
+    }
+    dependencies(first: 50) @include(if: $showEffects) {
+      nodes {
+        digest
+      }
+    }
+    status @include(if: $showEffects)
+    gasEffects @include(if: $showEffects) {
+      gasObject {
+        owner {
+          ...RPC_OBJECT_OWNER_FIELDS
+        }
+        digest
+        version
+        address
+      }
+      gasSummary {
+        storageCost
+        storageRebate
+        nonRefundableStorageFee
+        computationCost
+      }
+    }
+    executedEpoch: epoch @include(if: $showEffects) {
+      epochId
+    }
+    objectChanges(first: 50) @include(if: $showEffects) {
+      nodes {
+        idCreated
+        idDeleted
+        inputState {
+          version
+          digest
+          address
+        }
+        outputState {
+          version
+          digest
+          address
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
+          }
+        }
+      }
+    }
+    objectChanges(first: 50) @include(if: $showObjectChanges) {
+      nodes {
+        idCreated
+        idDeleted
+        inputState {
+          version
+          digest
+          address
+          asMoveObject {
+            contents {
+              type {
+                repr
+              }
+            }
+          }
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
+          }
+        }
+        outputState {
+          version
+          digest
+          address
+          asMoveObject {
+            contents {
+              type {
+                repr
+              }
+            }
+          }
+          owner {
+            ...RPC_OBJECT_OWNER_FIELDS
+          }
+        }
+      }
+    }
+  }
+}`) as unknown as TypedDocumentString<ExecuteTransactionBlockMutation, ExecuteTransactionBlockMutationVariables>;
 export const GetAllBalancesDocument = new TypedDocumentString(`
     query getAllBalances($owner: SuiAddress!, $limit: Int, $cursor: String) {
   address(address: $owner) {

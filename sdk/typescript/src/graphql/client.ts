@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
+import { fromB64, toB64 } from '@mysten/bcs';
 import { print } from 'graphql';
 import type { DocumentNode } from 'graphql';
 
+import { TransactionBlock } from '../builder/index.js';
 import type { PaginationArguments, SuiClientOptions } from '../client/client.js';
 import { SuiClient } from '../client/client.js';
 import type {
@@ -37,6 +39,7 @@ import type {
 	PaginatedTransactionResponse,
 	ProtocolConfig,
 	ProtocolConfigValue,
+	SuiArgument,
 	SuiEvent,
 	SuiMoveFunctionArgType,
 	SuiMoveNormalizedFunction,
@@ -91,6 +94,9 @@ import type {
 	TransactionBlockKindInput,
 } from './generated.js';
 import {
+	DevInspectTransactionBlockDocument,
+	DryRunTransactionBlockDocument,
+	ExecuteTransactionBlockDocument,
 	GetAllBalancesDocument,
 	GetBalanceDocument,
 	GetChainIdentifierDocument,
@@ -884,8 +890,77 @@ export class GraphQLSuiClient extends SuiClient {
 	override async devInspectTransactionBlock(
 		input: DevInspectTransactionBlockParams,
 	): Promise<DevInspectResults> {
-		void input;
-		throw new Error('Method not implemented.');
+		// TODO handle epoch
+		let devInspectTxBytes;
+		if (typeof input.transactionBlock === 'string') {
+			devInspectTxBytes = input.transactionBlock;
+		} else if (input.transactionBlock instanceof Uint8Array) {
+			devInspectTxBytes = toB64(input.transactionBlock);
+		} else {
+			input.transactionBlock.setSenderIfNotSet(input.sender);
+			devInspectTxBytes = toB64(
+				await input.transactionBlock.build({
+					client: this,
+					onlyTransactionKind: true,
+				}),
+			);
+		}
+
+		const { transaction, error, results } = await this.#graphqlQuery(
+			{
+				query: DevInspectTransactionBlockDocument,
+				variables: {
+					txBytes: devInspectTxBytes,
+					txMeta: {
+						gasPrice: typeof input.gasPrice === 'bigint' ? Number(input.gasPrice) : input.gasPrice,
+						sender: input.sender,
+					},
+					showEffects: true,
+					showEvents: true,
+				},
+			},
+			(data) => data.dryRunTransactionBlock,
+		);
+
+		if (!transaction) {
+			throw new Error('Unexpected error during dry run');
+		}
+
+		const result = mapGraphQLTransactionBlockToRpcTransactionBlock(transaction, {
+			showEffects: true,
+			showEvents: true,
+		});
+
+		return {
+			error,
+			effects: result.effects!,
+			events: result.events!,
+			results: results?.map((result) => ({
+				mutableReferenceOutputs: result.mutatedReferences?.map(
+					(ref): [SuiArgument, number[], string] => [
+						ref.input.__typename === 'GasCoin'
+							? 'GasCoin'
+							: ref.input.__typename === 'Input'
+							? {
+									Input: ref.input.inputIndex,
+							  }
+							: typeof ref.input.resultIndex === 'number'
+							? {
+									NestedResult: [ref.input.cmd, ref.input.resultIndex!] as [number, number],
+							  }
+							: {
+									Result: ref.input.cmd,
+							  },
+						Array.from(fromB64(ref.bcs)),
+						toShortTypeString(ref.type.repr),
+					],
+				),
+				returnValues: result.returnValues?.map((value) => [
+					Array.from(fromB64(value.bcs)),
+					toShortTypeString(value.type.repr),
+				]),
+			})),
+		};
 	}
 
 	override async getDynamicFields(input: GetDynamicFieldsParams): Promise<DynamicFieldPage> {
@@ -981,15 +1056,82 @@ export class GraphQLSuiClient extends SuiClient {
 	override async executeTransactionBlock(
 		input: ExecuteTransactionBlockParams,
 	): Promise<SuiTransactionBlockResponse> {
-		void input;
-		throw new Error('Method not implemented.');
+		const { effects, errors } = await this.#graphqlQuery(
+			{
+				query: ExecuteTransactionBlockDocument,
+				variables: {
+					txBytes:
+						typeof input.transactionBlock === 'string'
+							? input.transactionBlock
+							: toB64(input.transactionBlock),
+					signatures: Array.isArray(input.signature) ? input.signature : [input.signature],
+					showBalanceChanges: input.options?.showBalanceChanges,
+					showEffects: input.options?.showEffects,
+					showInput: input.options?.showInput,
+					showEvents: input.options?.showEvents,
+					showObjectChanges: input.options?.showObjectChanges,
+					showRawInput: input.options?.showRawInput,
+				},
+			},
+			(data) => data.executeTransactionBlock,
+		);
+
+		if (!effects?.transactionBlock) {
+			const txb = TransactionBlock.from(
+				typeof input.transactionBlock === 'string'
+					? fromB64(input.transactionBlock)
+					: input.transactionBlock,
+			);
+			return { errors: errors ?? undefined, digest: await txb.getDigest() };
+		}
+
+		return mapGraphQLTransactionBlockToRpcTransactionBlock(
+			effects.transactionBlock,
+			input.options,
+			errors,
+		);
 	}
 
 	override async dryRunTransactionBlock(
 		input: DryRunTransactionBlockParams,
 	): Promise<DryRunTransactionBlockResponse> {
-		void input;
-		throw new Error('Method not implemented.');
+		const { transaction, error } = await this.#graphqlQuery(
+			{
+				query: DryRunTransactionBlockDocument,
+				variables: {
+					txBytes:
+						typeof input.transactionBlock === 'string'
+							? input.transactionBlock
+							: toB64(input.transactionBlock),
+					showBalanceChanges: true,
+					showEffects: true,
+					showEvents: true,
+					showObjectChanges: true,
+					showInput: true,
+				},
+			},
+			(data) => data.dryRunTransactionBlock,
+		);
+
+		if (error || !transaction) {
+			throw new Error(error ?? 'Unexpected error during dry run');
+		}
+
+		const result = mapGraphQLTransactionBlockToRpcTransactionBlock(transaction, {
+			showBalanceChanges: true,
+			showEffects: true,
+			showEvents: true,
+			showObjectChanges: true,
+			showInput: true,
+		});
+
+		return {
+			input: {} as any, // TODO
+			balanceChanges: result.balanceChanges!,
+			effects: result.effects!,
+			events: result.events!,
+			objectChanges: result.objectChanges!,
+		};
 	}
 
 	override async call<T = unknown>(method: string, params: unknown[]): Promise<T> {

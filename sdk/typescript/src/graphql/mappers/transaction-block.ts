@@ -16,6 +16,7 @@ import { toShortTypeString } from './util.js';
 export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 	transactionBlock: Rpc_Transaction_FieldsFragment,
 	options?: SuiTransactionBlockResponseOptions | null,
+	errors?: string[] | null,
 ): SuiTransactionBlockResponse {
 	const deletedChanges = transactionBlock.effects?.objectChanges?.nodes
 		?.filter((change) => change?.idDeleted === true)
@@ -100,7 +101,7 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 					// wrapped: [], // TODO
 			  }
 			: undefined,
-		// errors: [], // TODO
+		errors: errors ?? undefined,
 		events: options?.showEvents
 			? transactionBlock.effects?.events?.nodes.map((event) => ({
 					bcs: event.bcs,
