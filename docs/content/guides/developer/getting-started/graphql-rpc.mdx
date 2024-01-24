@@ -9,10 +9,10 @@ For an introduction to GraphQL, see [GitHub's Introduction to GraphQL](https://d
 
 ## Getting Started
 
-The quickest way to access the Sui GraphQL service is through the online IDE that provides a complete toolbox for fetching data and executing transactions on the network. The online IDE provides 
-features such as auto-completion (use Ctrl-Space or just start typing), built-in documentation (click on the top-left icon), multi-tabs, and more. 
+The quickest way to access the Sui GraphQL service is through the online IDE that provides a complete toolbox for fetching data and executing transactions on the network. The online IDE provides
+features such as auto-completion (use Ctrl-Space or just start typing), built-in documentation (click on the top-left icon), multi-tabs, and more.
 
-The online IDE is available for [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql). 
+The online IDE is available for [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql).
 Later in this document, you can find query [examples](#examples) that you can use directly in the IDE.
 
 :::info
@@ -149,9 +149,9 @@ where the variables are:
 
 ### Filter transaction blocks by a function
 
-Find the last transaction blocks that called the `public_transfer` function. 
+Find the last transaction blocks that called the `public_transfer` function.
 
-:::info 
+:::info
 
 This example makes usage of the filter `last`, which indicates that the user only wants the last 10 transaction blocks known to the service. It also uses cursors, which in this examples are used to aid for future pagination needs.
 
@@ -221,7 +221,7 @@ query ($address: SuiAddress!) {
 }
 ```
 
-where address is 
+where address is
 ```json
 {
   "address": "0xa9ad44383140a07cc9ea62d185c12c4d9ef9c6a8fd2f47e16316229815862d23"
@@ -236,10 +236,8 @@ This example uses aliases and [fragments](/concepts/graphql-rpc#fragments).
 
 ```graphql
 fragment C on Coin {
-  balance
-  asMoveObject {
-    contents { type { repr } }
-  }
+  coinBalance
+  contents { type { repr } }
 }
 
 {
@@ -278,7 +276,6 @@ fragment C on Coin {
     }
   }
 }
-
 ```
 
 ### Find the dynamic fields of an object
@@ -339,7 +336,7 @@ fragment DynamicFieldValueSelection on DynamicFieldValue {
 
 ## Limits
 
-The Sui GraphQL RPC service is rate-limited on all available instances to keep network throughput optimized and to protect against excessive or abusive calls to the service. 
+The Sui GraphQL RPC service is rate-limited on all available instances to keep network throughput optimized and to protect against excessive or abusive calls to the service.
 
 ### Rate limits
 Queries are rate-limited at the number of attempts per minute to ensure high availability of the service to all users.
@@ -361,5 +358,3 @@ These limits can be retrieved by querying the `serviceConfig` field. An example 
   }
 }
 ```
-
-
