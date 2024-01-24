@@ -3932,8 +3932,7 @@ impl AuthorityState {
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<Option<VerifiedSignedTransaction>> {
         let lock_info = self
-            // TODO(cache): we need to use the cache for locks
-            .database
+            .execution_cache
             .get_lock(*object_ref, epoch_store.epoch())
             .map_err(SuiError::from)?;
         let lock_info = match lock_info {
