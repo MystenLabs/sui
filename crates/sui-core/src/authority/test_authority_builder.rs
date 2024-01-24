@@ -307,6 +307,7 @@ impl<'a> TestAuthorityBuilder<'a> {
         // TODO: we should probably have a better way to do this.
         if let Some(starting_objects) = self.starting_objects {
             state
+                .database
                 .insert_objects_unsafe_for_testing_only(starting_objects)
                 .await
                 .unwrap();

@@ -1054,7 +1054,7 @@ impl AuthorityState {
     }
 
     async fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
-        self.database
+        self.execution_cache
             .check_owned_object_locks_exist(owned_object_refs)
     }
 
@@ -1825,7 +1825,7 @@ impl AuthorityState {
     }
 
     pub fn is_tx_already_executed(&self, digest: &TransactionDigest) -> SuiResult<bool> {
-        self.execution_cache.is_tx_already_executed(digest)
+        self.database.is_tx_already_executed(digest)
     }
 
     #[instrument(level = "debug", skip_all, err)]
@@ -2248,7 +2248,7 @@ impl AuthorityState {
         };
 
         let object = self
-            .execution_cache
+            .database
             .get_object_by_key(&request.object_id, requested_object_seq)?
             .ok_or_else(|| {
                 SuiError::from(UserInputError::ObjectNotFound {
@@ -2581,6 +2581,22 @@ impl AuthorityState {
 
     pub async fn execution_lock_for_reconfiguration(&self) -> ExecutionLockWriteGuard {
         self.execution_lock.write().await
+    }
+
+    /// Acquire the execution lock while setting transaction locks during signing.
+    pub async fn execution_lock_for_signing(
+        &self,
+        epoch_id: EpochId,
+    ) -> SuiResult<ExecutionLockReadGuard> {
+        let lock = self.execution_lock.read().await;
+        if *lock == epoch_id {
+            Ok(lock)
+        } else {
+            Err(SuiError::WrongEpoch {
+                expected_epoch: *lock,
+                actual_epoch: epoch_id,
+            })
+        }
     }
 
     #[instrument(level = "error", skip_all)]
@@ -3866,9 +3882,12 @@ impl AuthorityState {
     ) -> SuiResult {
         let tx_digest = *transaction.digest();
 
+        let epoch = epoch_store.epoch();
+        let execution_lock = self.execution_lock_for_signing(epoch).await?;
+
         // Acquire the lock on input objects
         self.execution_cache
-            .acquire_transaction_locks(epoch_store.epoch(), owned_input_objects, tx_digest)
+            .acquire_transaction_locks(&execution_lock, owned_input_objects, tx_digest)
             .await?;
 
         // Write transactions after because if we write before, there is a chance the lock can fail
@@ -4651,14 +4670,6 @@ impl AuthorityState {
         )
         .await;
         let _ = AuthorityStorePruner::compact(&self.database.perpetual_tables);
-    }
-
-    /// NOTE: this function is only to be used for fuzzing and testing. Never use in prod
-    pub async fn insert_objects_unsafe_for_testing_only(&self, objects: &[Object]) -> SuiResult {
-        self.database.bulk_insert_genesis_objects(objects).await?;
-        self.execution_cache
-            .force_reload_system_packages(&BuiltInFramework::all_package_ids());
-        Ok(())
     }
 }
 

@@ -40,6 +40,7 @@ use typed_store::{
 use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use mysten_common::sync::notify_read::NotifyRead;
+use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
 use typed_store::rocks::util::is_ref_count_value;
@@ -122,6 +123,8 @@ pub struct AuthorityStore {
     enable_epoch_sui_conservation_check: bool,
 
     metrics: AuthorityStoreMetrics,
+
+    package_cache: Arc<PackageObjectCache>,
 }
 
 pub type ExecutionLockReadGuard<'a> = RwLockReadGuard<'a, EpochId>;
@@ -221,6 +224,7 @@ impl AuthorityStore {
             indirect_objects_threshold,
             enable_epoch_sui_conservation_check,
             metrics: AuthorityStoreMetrics::new(registry),
+            package_cache: PackageObjectCache::new(),
         });
         // Only initialize an empty database.
         if store
@@ -496,13 +500,6 @@ impl AuthorityStore {
         self.perpetual_tables.database_is_empty()
     }
 
-    /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
-    async fn acquire_locks(&self, input_objects: &[ObjectRef]) -> Vec<MutexGuard> {
-        self.mutex_table
-            .acquire_locks(input_objects.iter().map(|(_, _, digest)| *digest))
-            .await
-    }
-
     pub fn object_exists_by_key(
         &self,
         object_id: &ObjectID,
@@ -651,8 +648,15 @@ impl AuthorityStore {
         Ok(())
     }
 
+    /// NOTE: this function is only to be used for fuzzing and testing. Never use in prod
+    pub async fn insert_objects_unsafe_for_testing_only(&self, objects: &[Object]) -> SuiResult {
+        self.bulk_insert_genesis_objects(objects).await?;
+        self.force_reload_system_packages_into_cache();
+        Ok(())
+    }
+
     /// This function should only be used for initializing genesis and should remain private.
-    pub(super) async fn bulk_insert_genesis_objects(&self, objects: &[Object]) -> SuiResult<()> {
+    async fn bulk_insert_genesis_objects(&self, objects: &[Object]) -> SuiResult<()> {
         let mut batch = self.perpetual_tables.objects.batch();
         let ref_and_objects: Vec<_> = objects
             .iter()
@@ -766,6 +770,12 @@ impl AuthorityStore {
 
     pub fn get_epoch_start_configuration(&self) -> SuiResult<Option<EpochStartConfiguration>> {
         Ok(self.perpetual_tables.epoch_start_configuration.get(&())?)
+    }
+
+    fn force_reload_system_packages_into_cache(&self) {
+        info!("Reload all system packages in the cache");
+        self.package_cache
+            .force_reload_system_packages(BuiltInFramework::all_package_ids(), self);
     }
 
     /// Acquires read locks for affected indirect objects
@@ -899,17 +909,6 @@ impl AuthorityStore {
 
         write_batch.insert_batch(&self.perpetual_tables.events, events)?;
 
-        // NOTE: We just check here that locks exist, not that they are locked to a specific TX. Why?
-        // 1. Lock existence prevents re-execution of old certs when objects have been upgraded
-        // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
-        //    (But the lock should exist which means previous transactions finished)
-        // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX its
-        //    fine
-        // 4. Locks may have existed when we started processing this tx, but could have since
-        //    been deleted by a concurrent tx that finished first. In that case, check if the
-        //    tx effects exist.
-        self.check_owned_object_locks_exist(locks_to_delete)?;
-
         self.initialize_locks_impl(&mut write_batch, new_locks_to_init, false)?;
 
         // Note: deletes locks for received objects as well (but not for objects that were in
@@ -932,6 +931,12 @@ impl AuthorityStore {
         // Commit.
         write_batch.write()?;
 
+        if transaction.transaction_data().is_end_of_epoch_tx() {
+            // At the end of epoch, since system packages may have been upgraded, force
+            // reload them in the cache.
+            self.force_reload_system_packages_into_cache();
+        }
+
         // test crashing before notifying
         fail_point_async!("crash");
 
@@ -940,8 +945,15 @@ impl AuthorityStore {
         Ok(())
     }
 
+    /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
+    async fn acquire_locks(&self, input_objects: &[ObjectRef]) -> Vec<MutexGuard> {
+        self.mutex_table
+            .acquire_locks(input_objects.iter().map(|(_, _, digest)| *digest))
+            .await
+    }
+
     /// Acquires a lock for a transaction on the given objects if they have all been initialized previously
-    pub(crate) async fn acquire_transaction_locks(
+    pub(crate) async fn deprecated_acquire_transaction_locks(
         &self,
         epoch: EpochId,
         owned_input_objects: &[ObjectRef],
@@ -992,8 +1004,8 @@ impl AuthorityStore {
                 if previous_epoch == &epoch && previous_tx_digest != &tx_digest {
                     // TODO: add metrics here
                     info!(prev_tx_digest = ?previous_tx_digest,
-                          cur_tx_digest = ?tx_digest,
-                          "Cannot acquire lock: conflicting transaction!");
+                            cur_tx_digest = ?tx_digest,
+                            "Cannot acquire lock: conflicting transaction!");
                     return Err(SuiError::ObjectLockConflict {
                         obj_ref: *obj_ref,
                         pending_transaction: *previous_tx_digest,
@@ -1023,6 +1035,39 @@ impl AuthorityStore {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn write_locks(
+        &self,
+        locks_to_write: &[(ObjectRef, Option<LockDetailsWrapper>)],
+    ) -> SuiResult {
+        trace!(?locks_to_write, "Writing locks");
+        let mut batch = self.perpetual_tables.owned_object_transaction_locks.batch();
+        batch.insert_batch(
+            &self.perpetual_tables.owned_object_transaction_locks,
+            locks_to_write
+                .iter()
+                .map(|(obj_ref, lock)| (*obj_ref, lock.clone())),
+        )?;
+        batch.write()?;
+        Ok(())
+    }
+
+    pub(crate) fn get_lock_entry(&self, obj_ref: ObjectRef) -> SuiResult<Option<LockDetails>> {
+        let lock = self
+            .perpetual_tables
+            .owned_object_transaction_locks
+            .get(&obj_ref)?;
+
+        match lock {
+            Some(lock_details) => Ok(lock_details.map(|l| l.migrate().into_inner())),
+            None => Err(SuiError::UserInputError {
+                error: UserInputError::ObjectNotFound {
+                    object_id: obj_ref.0,
+                    version: Some(obj_ref.1),
+                },
+            }),
+        }
     }
 
     /// Gets ObjectLockInfo that represents state of lock on an object.

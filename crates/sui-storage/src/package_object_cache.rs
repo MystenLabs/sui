@@ -36,8 +36,12 @@ impl PackageObjectCache {
             #[cfg(debug_assertions)]
             {
                 assert_eq!(
-                    store.get_object(package_id).unwrap().unwrap().digest(),
-                    p.object().digest(),
+                    store
+                        .get_object(package_id)
+                        .unwrap()
+                        .unwrap()
+                        .compute_object_reference(),
+                    p.object().compute_object_reference(),
                     "Package object cache is inconsistent for package {:?}",
                     package_id
                 )
