@@ -6,7 +6,6 @@ mod setup;
 
 use anyhow::Result;
 use clap::Parser;
-pub use init::adjust_pyproject;
 use init::ProjectType;
 use setup::ensure_gcloud;
 use setup::ensure_setup;

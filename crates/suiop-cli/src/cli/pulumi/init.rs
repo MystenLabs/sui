@@ -7,10 +7,7 @@ use colored::Colorize;
 use inquire::Text;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::Path;
 use std::path::PathBuf;
-use toml_edit::Document;
-use toml_edit::{value, ArrayOfTables, Item, Table};
 use tracing::{debug, error, info, warn};
 
 pub enum ProjectType {
@@ -166,33 +163,6 @@ fn run_pulumi_new_from_template(
         ],
         Some(CommandOptions::new(true, false)),
     )?;
-    Ok(())
-}
-
-pub fn adjust_pyproject(project_dir: &Path) -> Result<()> {
-    info!("setting up pyproject.toml");
-    let pyproject_toml_filepath = project_dir.join("pyproject.toml");
-    let pyproject_contents =
-        fs::read(&pyproject_toml_filepath).context("couldn't read config contents")?;
-    let mut pyproject_toml = std::str::from_utf8(&pyproject_contents)
-        .context("failed to parse pyproject contents")?
-        .parse::<Document>()
-        .expect("invalid toml");
-    debug!("before changes {:?}", pyproject_toml.to_string());
-    // remove the readme definition
-    pyproject_toml["tool"]["poetry"]
-        .as_table_mut()
-        .expect("tool.poetry was not a table")
-        .remove("readme");
-    // include all python files
-    let mut package_table = Table::new();
-    package_table.insert("include", value("**/*.py"));
-    let mut package_array = ArrayOfTables::new();
-    package_array.push(package_table);
-    pyproject_toml["tool"]["poetry"]["packages"] =
-        Item::Value(toml_edit::Value::Array(package_array.into_array()));
-    fs::write(&pyproject_toml_filepath, pyproject_toml.to_string())
-        .context("failed to write pyproject.toml back after update")?;
     Ok(())
 }
 
