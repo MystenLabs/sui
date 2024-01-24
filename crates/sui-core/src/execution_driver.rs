@@ -8,9 +8,6 @@ use std::{
 
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use sui_macros::fail_point_async;
-use sui_types::{
-    digests::TransactionEffectsDigest, executable_transaction::VerifiedExecutableTransaction,
-};
 use tokio::{
     sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
     time::sleep,
@@ -18,6 +15,7 @@ use tokio::{
 use tracing::{error, error_span, info, trace, Instrument};
 
 use crate::authority::AuthorityState;
+use crate::transaction_manager::PendingCertificate;
 
 #[cfg(test)]
 #[path = "unit_tests/execution_driver_tests.rs"]
@@ -32,10 +30,7 @@ const EXECUTION_FAILURE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 /// processing the transaction in a loop.
 pub async fn execution_process(
     authority_state: Weak<AuthorityState>,
-    mut rx_ready_certificates: UnboundedReceiver<(
-        VerifiedExecutableTransaction,
-        Option<TransactionEffectsDigest>,
-    )>,
+    mut rx_ready_certificates: UnboundedReceiver<PendingCertificate>,
     mut rx_execution_shutdown: oneshot::Receiver<()>,
 ) {
     info!("Starting pending certificates execution process.");
@@ -51,9 +46,9 @@ pub async fn execution_process(
         let expected_effects_digest;
         tokio::select! {
             result = rx_ready_certificates.recv() => {
-                if let Some((cert, fx_digest)) = result {
-                    certificate = cert;
-                    expected_effects_digest = fx_digest;
+                if let Some(pending_cert) = result {
+                    certificate = pending_cert.certificate;
+                    expected_effects_digest = pending_cert.expected_effects_digest;
                 } else {
                     // Should only happen after the AuthorityState has shut down and tx_ready_certificate
                     // has been dropped by TransactionManager.

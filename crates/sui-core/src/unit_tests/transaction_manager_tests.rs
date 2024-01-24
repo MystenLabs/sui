@@ -9,32 +9,26 @@ use sui_types::transaction::VerifiedTransaction;
 use sui_types::{
     base_types::ObjectID,
     crypto::deterministic_random_account_key,
-    digests::TransactionEffectsDigest,
     object::Object,
     storage::InputKey,
     transaction::{CallArg, ObjectArg},
     SUI_FRAMEWORK_PACKAGE_ID,
 };
+use tokio::time::Instant;
 use tokio::{
-    sync::mpsc::{unbounded_channel, UnboundedReceiver},
+    sync::mpsc::{error::TryRecvError, unbounded_channel, UnboundedReceiver},
     time::sleep,
 };
 
 use crate::{
     authority::{authority_tests::init_state_with_objects, AuthorityState},
-    transaction_manager::TransactionManager,
+    transaction_manager::{PendingCertificate, TransactionManager},
 };
 
 #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
 fn make_transaction_manager(
     state: &AuthorityState,
-) -> (
-    TransactionManager,
-    UnboundedReceiver<(
-        VerifiedExecutableTransaction,
-        Option<TransactionEffectsDigest>,
-    )>,
-) {
+) -> (TransactionManager, UnboundedReceiver<PendingCertificate>) {
     // Create a new transaction manager instead of reusing the authority's, to examine
     // transaction_manager output from rx_ready_certificates.
     let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
@@ -86,7 +80,9 @@ async fn transaction_manager_basics() {
     // transaction_manager output from rx_ready_certificates.
     let (transaction_manager, mut rx_ready_certificates) = make_transaction_manager(&state);
     // TM should output no transaction.
-    assert!(rx_ready_certificates.try_recv().is_err());
+    assert!(rx_ready_certificates
+        .try_recv()
+        .is_err_and(|err| err == TryRecvError::Empty));
     // TM should be empty at the beginning.
     transaction_manager.check_empty_for_testing();
 
@@ -95,15 +91,24 @@ async fn transaction_manager_basics() {
         .enqueue(vec![], &state.epoch_store_for_testing())
         .unwrap();
     // TM should output no transaction.
-    assert!(rx_ready_certificates.try_recv().is_err());
+    assert!(rx_ready_certificates
+        .try_recv()
+        .is_err_and(|err| err == TryRecvError::Empty));
 
     // Enqueue a transaction with existing gas object, empty input.
     let transaction = make_transaction(gas_objects[0].clone(), vec![]);
+    let tx_start_time = Instant::now();
     transaction_manager
         .enqueue(vec![transaction.clone()], &state.epoch_store_for_testing())
         .unwrap();
     // TM should output the transaction eventually.
-    rx_ready_certificates.recv().await.unwrap();
+    let pending_certificate = rx_ready_certificates.recv().await.unwrap();
+
+    // Tests that pending certificate stats are recorded properly.
+    assert!(pending_certificate.stats.enqueue_time >= tx_start_time);
+    assert!(
+        pending_certificate.stats.ready_time.unwrap() >= pending_certificate.stats.enqueue_time
+    );
 
     assert_eq!(transaction_manager.inflight_queue_len(), 1);
 
@@ -121,12 +126,15 @@ async fn transaction_manager_basics() {
     let gas_object_new =
         Object::with_id_owner_version_for_testing(ObjectID::random(), 0.into(), owner);
     let transaction = make_transaction(gas_object_new.clone(), vec![]);
+    let tx_start_time = Instant::now();
     transaction_manager
         .enqueue(vec![transaction.clone()], &state.epoch_store_for_testing())
         .unwrap();
     // TM should output no transaction yet.
     sleep(Duration::from_secs(1)).await;
-    assert!(rx_ready_certificates.try_recv().is_err());
+    assert!(rx_ready_certificates
+        .try_recv()
+        .is_err_and(|err| err == TryRecvError::Empty));
 
     assert_eq!(transaction_manager.inflight_queue_len(), 1);
 
@@ -135,7 +143,9 @@ async fn transaction_manager_basics() {
         .enqueue(vec![transaction.clone()], &state.epoch_store_for_testing())
         .unwrap();
     sleep(Duration::from_secs(1)).await;
-    assert!(rx_ready_certificates.try_recv().is_err());
+    assert!(rx_ready_certificates
+        .try_recv()
+        .is_err_and(|err| err == TryRecvError::Empty));
 
     assert_eq!(transaction_manager.inflight_queue_len(), 1);
 
@@ -145,14 +155,24 @@ async fn transaction_manager_basics() {
         &state.epoch_store_for_testing(),
     );
     // TM should output the transaction eventually.
-    rx_ready_certificates.recv().await.unwrap();
+    let pending_certificate = rx_ready_certificates.recv().await.unwrap();
+
+    // Tests that pending certificate stats are recorded properly. The ready time should be
+    // 2 seconds apart from the enqueue time.
+    assert!(pending_certificate.stats.enqueue_time >= tx_start_time);
+    assert!(
+        pending_certificate.stats.ready_time.unwrap() - pending_certificate.stats.enqueue_time
+            >= Duration::from_secs(2)
+    );
 
     // Re-enqueue the same transaction should not result in another output.
     transaction_manager
         .enqueue(vec![transaction.clone()], &state.epoch_store_for_testing())
         .unwrap();
     sleep(Duration::from_secs(1)).await;
-    assert!(rx_ready_certificates.try_recv().is_err());
+    assert!(rx_ready_certificates
+        .try_recv()
+        .is_err_and(|err| err == TryRecvError::Empty));
 
     // Notify TM about transaction commit
     transaction_manager.notify_commit(
@@ -302,9 +322,9 @@ async fn transaction_manager_object_dependency() {
     );
 
     // TM should output the 3 transactions that are only waiting for this object.
-    let tx_0 = rx_ready_certificates.recv().await.unwrap().0;
-    let tx_1 = rx_ready_certificates.recv().await.unwrap().0;
-    let tx_2 = rx_ready_certificates.recv().await.unwrap().0;
+    let tx_0 = rx_ready_certificates.recv().await.unwrap().certificate;
+    let tx_1 = rx_ready_certificates.recv().await.unwrap().certificate;
+    let tx_2 = rx_ready_certificates.recv().await.unwrap().certificate;
     {
         let mut want_digests = vec![
             transaction_read_0.digest(),
@@ -339,7 +359,7 @@ async fn transaction_manager_object_dependency() {
     );
 
     // Now, the transaction waiting for both shared objects can be executed.
-    let tx_3 = rx_ready_certificates.recv().await.unwrap().0;
+    let tx_3 = rx_ready_certificates.recv().await.unwrap().certificate;
     assert_eq!(transaction_read_2.digest(), tx_3.digest());
 
     sleep(Duration::from_secs(1)).await;
