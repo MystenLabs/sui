@@ -11,7 +11,7 @@ pub(crate) mod syntax;
 pub(crate) mod verification_attribute_filter;
 
 use crate::{
-    diagnostics::{Diagnostics, FilesSourceText},
+    diagnostics::FilesSourceText,
     parser::{self, ast::PackageDefinition, syntax::parse_file_string},
     shared::{CompilationEnv, IndexedPackagePath, NamedAddressMaps},
 };
@@ -166,11 +166,7 @@ fn parse_file(
         Ok(()) => &source_buffer,
     };
     let (defs, comments) = match parse_file_string(compilation_env, file_hash, buffer, package) {
-        Ok(defs_and_comments) => {
-            let parsing_error = compilation_env.take_parsing_error();
-            compilation_env.add_diags(Diagnostics::from(parsing_error));
-            defs_and_comments
-        }
+        Ok(defs_and_comments) => defs_and_comments,
         Err(ds) => {
             compilation_env.add_diags(ds);
             (vec![], MatchedFileCommentMap::new())

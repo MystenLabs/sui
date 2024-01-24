@@ -222,7 +222,6 @@ pub struct CompilationEnv {
     known_filter_names: BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
     prim_definers:
         BTreeMap<crate::naming::ast::BuiltinTypeName_, crate::expansion::ast::ModuleIdent>,
-    parsing_error: Option<Diagnostic>,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
 }
@@ -339,7 +338,6 @@ impl CompilationEnv {
             known_filters,
             known_filter_names,
             prim_definers: BTreeMap::new(),
-            parsing_error: None,
         }
     }
 
@@ -540,20 +538,6 @@ impl CompilationEnv {
 
     pub fn primitive_definer(&self, t: N::BuiltinTypeName_) -> Option<&E::ModuleIdent> {
         self.prim_definers.get(&t)
-    }
-
-    pub fn has_parsing_error(&self) -> bool {
-        self.parsing_error.is_some()
-    }
-
-    pub fn set_parsing_error(&mut self, diag: Diagnostic) {
-        // should be set only once
-        debug_assert!(!self.has_parsing_error());
-        self.parsing_error = Some(diag);
-    }
-
-    pub fn take_parsing_error(&mut self) -> Option<Diagnostic> {
-        self.parsing_error.take()
     }
 }
 
