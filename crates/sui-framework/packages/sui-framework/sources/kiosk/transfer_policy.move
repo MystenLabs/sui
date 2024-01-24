@@ -289,4 +289,18 @@ module sui::transfer_policy {
 
     /// Get the `from` field of the `TransferRequest`.
     public fun from<T>(self: &TransferRequest<T>): ID { self.from }
+
+    // === Tests ===
+
+    #[test_only]
+    /// Create a new TransferPolicy for testing purposes.
+    public fun new_for_testing<T>(ctx: &mut TxContext): (TransferPolicy<T>, TransferPolicyCap<T>) {
+        let id = object::new(ctx);
+        let policy_id = object::uid_to_inner(&id);
+
+        (
+            TransferPolicy { id, rules: vec_set::empty(), balance: balance::zero() },
+            TransferPolicyCap { id: object::new(ctx), policy_id }
+        )
+    }
 }
