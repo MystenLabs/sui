@@ -1,10 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs;
-use sui_replay::ReplayToolCommand;
-use tempfile::tempdir;
-
 /// This test exists to make sure that the feature gating for all the code under `gas-profiler`
 /// remains fully connected such that if and only if we enable the feature here, the `gas-profiler`
 /// feature gets enabled anywhere.
@@ -43,6 +39,10 @@ fn test_macro_shows_feature_enabled() {
 #[cfg(feature = "gas-profiler")]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_profiler() {
+    use std::fs;
+    use sui_replay::ReplayToolCommand;
+    use tempfile::tempdir;
+
     let output_dir = tempdir().unwrap();
     let profile_output = output_dir.path().join("profile.json");
 
