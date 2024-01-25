@@ -80,6 +80,12 @@ pub struct PTB {
     pick_gas_budget: Option<PTBGas>,
 }
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct PTBCommand {
+    pub name: String,
+    pub values: Vec<String>,
+}
+
 #[derive(clap::ValueEnum, Clone, Debug, Serialize, Default)]
 enum PTBGas {
     MIN,
@@ -88,29 +94,9 @@ enum PTBGas {
     SUM,
 }
 
-impl Display for PTBGas {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let r = match self {
-            PTBGas::MIN => "min",
-            PTBGas::MAX => "max",
-            PTBGas::SUM => "sum",
-        };
-        write!(f, "{}", r.to_string())
-    }
+pub struct PTBPreview {
+    cmds: Vec<PTBCommand>,
 }
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct PTBCommand {
-    pub name: String,
-    pub values: Vec<String>,
-}
-
-// #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-// pub enum Value {
-//     Bool(bool),
-//     String(String),
-//     Gas(PTBGas),
-// }
 
 impl PTB {
     /// Get the passed arguments for this PTB and construct
@@ -134,88 +120,18 @@ impl PTB {
                 continue;
             }
 
-            // handle PTBGas manually
-            // TODO can we do better? The issue is that we need the order (basically, indices_of)
-            // and the values can be either bool, String, or PTBGas
             if arg_name.as_str() == "pick_gas_budget" {
-                let values: ValuesRef<'_, PTBGas> = matches
-                    .get_many(arg_name.as_str())
-                    .ok_or_else(|| anyhow!("Cannot parse the args for the PTB"))?;
-
-                for (value, index) in values.zip(
-                    matches
-                        .indices_of(arg_name.as_str())
-                        .expect("id came from matches"),
-                ) {
-                    order.insert(
-                        index,
-                        PTBCommand {
-                            name: arg_name.to_string(),
-                            values: vec![value.to_string()],
-                        },
-                    );
-                }
+                insert_value::<PTBGas>(arg_name, &matches, &mut order)?;
                 continue;
             }
-            // handle bools manually
-            // TODO can we do better? The issue is that we need the order (basically, indices_of)
-            // and the values can be either bool, String, or PTBGas
             if arg_name.as_str() == "preview" || arg_name.as_str() == "warn_shadows" {
-                let values: ValuesRef<'_, bool> = matches
-                    .get_many(arg_name.as_str())
-                    .ok_or_else(|| anyhow!("Cannot parse the args for the PTB"))?;
-
-                for (value, index) in values.zip(
-                    matches
-                        .indices_of(arg_name.as_str())
-                        .expect("id came from matches"),
-                ) {
-                    order.insert(
-                        index,
-                        PTBCommand {
-                            name: arg_name.to_string(),
-                            values: vec![value.to_string()],
-                        },
-                    );
-                }
+                insert_value::<bool>(arg_name, &matches, &mut order)?;
             } else {
-                let values: ValuesRef<'_, String> = matches
-                    .get_many(arg_name.as_str())
-                    .ok_or_else(|| anyhow!("Cannot parse the args for the PTB"))?;
-
-                for (value, index) in values.zip(
-                    matches
-                        .indices_of(arg_name.as_str())
-                        .expect("id came from matches"),
-                ) {
-                    order.insert(
-                        index,
-                        PTBCommand {
-                            name: arg_name.to_string(),
-                            values: vec![value.to_string()],
-                        },
-                    );
-                }
+                insert_value::<String>(arg_name, &matches, &mut order)?;
             }
         }
         Ok(self.build_ptb_for_parsing(order, &parent_file, included_files)?)
     }
-
-    // fn insert_value<T>(&self, values: ValuesRef<'_, T>) {
-    //     for (value, index) in values.zip(
-    //         matches
-    //             .indices_of(arg_name.as_str())
-    //             .expect("id came from matches"),
-    //     ) {
-    //         order.insert(
-    //             index,
-    //             PTBCommand {
-    //                 name: arg_name.to_string(),
-    //                 values: vec![value],
-    //             },
-    //         );
-    //     }
-    // }
 
     /// Builds a sequential list of ptb commands that should be fed into the parser
     pub fn build_ptb_for_parsing(
@@ -524,10 +440,6 @@ impl PTB {
     }
 }
 
-pub struct PTBPreview {
-    cmds: Vec<PTBCommand>,
-}
-
 impl Display for PTBPreview {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut builder = TableBuilder::default();
@@ -561,13 +473,42 @@ impl Display for PTBPreview {
 
         write!(f, "{}", table)
     }
-    // fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    //     let cmd_name = &self.name;
-    //     let vals = &self.values.join(" ");
-    //     write!(
-    //         f,
-    //         " ┌──\n │ Command: {cmd_name}\n │ Value(s): {}\n └──\n",
-    //         vals
-    //     )
-    // }
+}
+
+impl Display for PTBGas {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let r = match self {
+            PTBGas::MIN => "min",
+            PTBGas::MAX => "max",
+            PTBGas::SUM => "sum",
+        };
+        write!(f, "{}", r.to_string())
+    }
+}
+
+fn insert_value<T>(
+    arg_name: &clap::Id,
+    matches: &ArgMatches,
+    order: &mut BTreeMap<usize, PTBCommand>,
+) -> Result<(), anyhow::Error>
+where
+    T: Clone + Display + Send + Sync + 'static,
+{
+    let values: ValuesRef<'_, T> = matches
+        .get_many(arg_name.as_str())
+        .ok_or_else(|| anyhow!("Cannot parse the args for the PTB"))?;
+    for (value, index) in values.zip(
+        matches
+            .indices_of(arg_name.as_str())
+            .expect("id came from matches"),
+    ) {
+        order.insert(
+            index,
+            PTBCommand {
+                name: arg_name.to_string(),
+                values: vec![value.to_string()],
+            },
+        );
+    }
+    Ok(())
 }
