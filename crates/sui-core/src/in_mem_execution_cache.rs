@@ -657,10 +657,10 @@ impl ExecutionCacheWrite for PassthroughCache {
             self.executed_effects_digests_notify_read
                 .notify(&tx_digest, &effects_digest);
 
-            self.metrics.as_ref().map(|m| {
+            if let Some(m) = self.metrics.as_ref() {
                 m.pending_notify_read
                     .set(self.executed_effects_digests_notify_read.num_pending() as i64)
-            });
+            }
 
             Ok(())
         }
