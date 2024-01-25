@@ -23,7 +23,7 @@ use moka::sync::Cache as MokaCache;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::digests::{
@@ -66,6 +66,14 @@ impl ExecutionCacheMetrics {
 }
 
 pub type ExecutionCache = PassthroughCache;
+
+pub trait ExecutionCacheCommit: Send + Sync {
+    fn commit_transaction_outputs(
+        &self,
+        epoch: EpochId,
+        digest: &TransactionDigest,
+    ) -> BoxFuture<'_, SuiResult>;
+}
 
 pub trait ExecutionCacheRead: Send + Sync {
     fn get_package_object(&self, id: &ObjectID) -> SuiResult<Option<PackageObject>>;
@@ -470,6 +478,7 @@ pub trait ExecutionCacheWrite: Send + Sync {
     ) -> BoxFuture<'a, SuiResult>;
 }
 
+#[derive(Clone)]
 enum ObjectEntry {
     Object(Object),
     Deleted,
@@ -515,7 +524,7 @@ struct UncommittedData {
     /// reads efficient. `object_cache` cannot contain a more recent version of an object than
     /// `objects`, and neither can have any gaps. Therefore if there is any object <= the version
     /// bound for a child read in objects, it is the correct object to return.
-    objects: DashMap<ObjectID, BTreeMap<SequenceNumber, ObjectEntry>>,
+    objects: DashMap<ObjectID, CachedVersionMap<ObjectEntry>>,
 
     // Mirrors the owned_object_transaction_locks table in the db.
     owned_object_transaction_locks: DashMap<ObjectRef, LockEntry>,
@@ -524,7 +533,7 @@ struct UncommittedData {
     // marker state, which is committed to the db at the same time as other transaction data.
     // After markers are committed to the db we remove them from this table and insert them into
     // marker_cache.
-    markers: DashMap<MarkerKey, BTreeMap<SequenceNumber, MarkerValue>>,
+    markers: DashMap<MarkerKey, CachedVersionMap<MarkerValue>>,
 
     transaction_effects: DashMap<TransactionEffectsDigest, TransactionEffects>,
 
@@ -558,7 +567,7 @@ struct CachedData {
     /// to evict all versions of the object at once), which ensures that the the cached sequence
     /// of objects has no gaps. See the comment above for more details.
     // TODO(cache): this is not populated yet, we will populate it when we implement flushing.
-    object_cache: MokaCache<ObjectID, Arc<Mutex<BTreeMap<SequenceNumber, ObjectEntry>>>>,
+    object_cache: MokaCache<ObjectID, Arc<Mutex<CachedVersionMap<ObjectEntry>>>>,
 
     // Packages are cached separately from objects because they are immutable and can be used by any
     // number of transactions. Additionally, many operations require loading large numbers of packages
@@ -574,7 +583,7 @@ struct CachedData {
 
     // Note that MokaCache can only return items by value, so we store the map as an Arc<Mutex>.
     // (There should be no contention on the inner mutex, it is used only for interior mutability.)
-    marker_cache: MokaCache<MarkerKey, Arc<Mutex<BTreeMap<SequenceNumber, MarkerValue>>>>,
+    marker_cache: MokaCache<MarkerKey, Arc<Mutex<CachedVersionMap<MarkerValue>>>>,
 
     // Objects that were read at transaction signing time - allows us to access them again at
     // execution time with a single lock / hash lookup
@@ -670,7 +679,7 @@ impl MemoryExecutionCache {
                     }
                 }
 
-                if get_last(&*$objects).0 < &version {
+                if $objects.get_last().0 < &version {
                     // If the version is greater than the last version in the cache, then we know
                     // that the object does not exist anywhere
                     return CacheResult::NegativeHit;
@@ -852,10 +861,174 @@ impl MemoryExecutionCache {
 
         ret
     }
+
+    async fn commit_transaction_outputs(
+        &self,
+        epoch: EpochId,
+        digest: TransactionDigest,
+    ) -> SuiResult {
+        let Some((_, outputs)) = self.dirty.pending_transaction_writes.remove(&digest) else {
+            return Err(SuiError::TransactionNotFound { digest });
+        };
+
+        // Flush writes to disk
+        self.store.write_transaction_outputs(epoch, outputs).await?;
+
+        static MAX_VERSIONS: usize = 3;
+
+        let TransactionOutputs {
+            transaction,
+            effects,
+            markers,
+            written,
+            deleted,
+            wrapped,
+            locks_to_delete,
+            new_locks_to_init,
+            events,
+            ..
+        } = &outputs;
+
+        // Move dirty markers to cache
+        for (object_key, marker_value) in markers.iter() {
+            let key = (epoch, object_key.0);
+
+            // first insert into cache
+            let marker_cache_entry = self.cached.marker_cache.entry(key).or_default();
+            let marker_map = &mut *marker_cache_entry.value().lock();
+            marker_map.insert(object_key.1, marker_value.clone());
+            marker_map.truncate(MAX_VERSIONS);
+
+            // remove from dirty collection
+            let DashMapEntry::Occupied(mut marker_entry) = self.dirty.markers.entry(key) else {
+                panic!("marker map must exist");
+            };
+
+            let removed = marker_entry
+                .get_mut()
+                .remove(&object_key.1)
+                .expect("marker version must exist");
+
+            debug_assert_eq!(removed, *marker_value);
+        }
+
+        // Move dirty objects to cache
+        for (object_id, object) in written.iter() {
+            if object.is_child_object() {
+                self.insert_object(object_id, object);
+            }
+        }
+        for (object_id, object) in written.iter() {
+            if !object.is_child_object() {
+                self.insert_object(object_id, object);
+                if object.is_package() {
+                    self.cached
+                        .packages
+                        .insert(*object_id, PackageObject::new(object.clone()));
+                }
+            }
+        }
+
+        for ObjectKey(id, version) in deleted.iter() {
+            self.insert_deleted_tombstone(id, *version);
+        }
+        for ObjectKey(id, version) in wrapped.iter() {
+            self.insert_wrapped_tombstone(id, *version);
+        }
+
+        // TODO(cache): remove dead objects from cache - this cannot actually be done
+        // until until objects are committed to the db, because
+        /*
+        for (id, version) in effects.modified_at_versions().iter() {
+            // delete the given id, version from self.objects. if no versions remain, remove the
+            // entry from self.objects
+            match self.objects.entry(*id) {
+                dashmap::mapref::entry::Entry::Occupied(mut entry) => {
+                    entry.get_mut().remove(version);
+                    if entry.get().is_empty() {
+                        entry.remove();
+                    }
+                }
+                dashmap::mapref::entry::Entry::Vacant(_) => panic!("object not found"),
+            }
+        }
+        */
+
+        // delete old locks
+        for obj_ref in locks_to_delete.iter() {
+            let mut entry = self
+                .get_owned_object_lock_entry(obj_ref)
+                .expect("lock must exist");
+            // NOTE: We just check here that locks exist, not that they are locked to a specific TX. Why?
+            // 1. Lock existence prevents re-execution of old certs when objects have been upgraded
+            // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
+            //    (But the lock should exist which means previous transactions finished)
+            // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX its
+            //    fine
+            assert!(
+                matches!(entry.get(), LockEntry::Lock(_)),
+                "lock must exist for {:?}",
+                obj_ref
+            );
+            *entry.get_mut() = LockEntry::Deleted;
+        }
+
+        // create new locks
+        for obj_ref in new_locks_to_init.iter() {
+            #[cfg(debug_assertions)]
+            {
+                assert!(
+                    // genesis objects are inserted *prior* to executing the genesis transaction
+                    // so we need a loophole for anything that might be a genesis object.
+                    self.store.get_lock_entry(*obj_ref).is_err() || obj_ref.1.value() == 1,
+                    "lock must not exist in store {:?}",
+                    obj_ref
+                );
+                assert!(
+                    self.dirty
+                        .owned_object_transaction_locks
+                        .get(obj_ref)
+                        .is_none(),
+                    "lock must not exist in cache {:?}",
+                    obj_ref
+                );
+            }
+
+            self.dirty
+                .owned_object_transaction_locks
+                .insert(*obj_ref, LockEntry::Lock(None));
+        }
+
+        let tx_digest = *transaction.digest();
+        let effects_digest = effects.digest();
+
+        self.dirty
+            .transaction_effects
+            .insert(effects_digest, effects.clone());
+
+        self.dirty
+            .transaction_events
+            .insert(events.digest(), events.clone());
+
+        self.dirty
+            .executed_effects_digests
+            .insert(tx_digest, effects_digest);
+
+        self.executed_effects_digests_notify_read
+            .notify(&tx_digest, &effects_digest);
+
+        Ok(())
+    }
 }
 
-fn get_last<K, V>(map: &BTreeMap<K, V>) -> (&K, &V) {
-    map.iter().next_back().expect("map cannot be empty")
+impl ExecutionCacheCommit for MemoryExecutionCache {
+    fn commit_transaction_outputs(
+        &self,
+        epoch: EpochId,
+        digest: &TransactionDigest,
+    ) -> BoxFuture<'_, SuiResult> {
+        MemoryExecutionCache::commit_transaction_outputs(&self, epoch, *digest).boxed()
+    }
 }
 
 impl ExecutionCacheRead for MemoryExecutionCache {
@@ -915,7 +1088,7 @@ impl ExecutionCacheRead for MemoryExecutionCache {
     fn get_object(&self, id: &ObjectID) -> SuiResult<Option<Object>> {
         if let Some(objects) = self.dirty.objects.get(id) {
             // If any version of the object is in the cache, it must be the most recent version.
-            return match get_last(&*objects).1 {
+            return match objects.get_last().1 {
                 ObjectEntry::Object(object) => Ok(Some(object.clone())),
                 _ => Ok(None),
             };
@@ -924,7 +1097,7 @@ impl ExecutionCacheRead for MemoryExecutionCache {
         if let Some(objects) = self.cached.object_cache.get(id) {
             let objects = objects.lock();
             // If any version of the object is in the cache, it must be the most recent version.
-            return match get_last(&*objects).1 {
+            return match objects.get_last().1 {
                 ObjectEntry::Object(object) => Ok(Some(object.clone())),
                 _ => Ok(None),
             };
@@ -1024,7 +1197,7 @@ impl ExecutionCacheRead for MemoryExecutionCache {
         object_id: ObjectID,
     ) -> SuiResult<Option<ObjectRef>> {
         if let Some(objects) = self.dirty.objects.get(&object_id) {
-            let (version, object) = get_last(&*objects);
+            let (version, object) = objects.get_last();
             let objref = match object {
                 ObjectEntry::Object(object) => object.compute_object_reference(),
                 ObjectEntry::Deleted => (object_id, *version, ObjectDigest::OBJECT_DIGEST_DELETED),
@@ -1061,9 +1234,9 @@ impl ExecutionCacheRead for MemoryExecutionCache {
         // Both self.objects and self.object_cache have no gaps, and self.object_cache
         // cannot have a more recent version than self.objects.
         // note that while binary searching would be more efficient for random keys, child
-        // reads will be disproportionately more likely to be for a very recent version.
+        // reads will be disproportionately more likely o be for a very recent version.
         if let Some(objects) = self.dirty.objects.get(&object_id) {
-            for (_, object) in objects.range(..=version).rev() {
+            for (_, object) in objects.all_lt_or_eq_rev(&version) {
                 if let ObjectEntry::Object(object) = object {
                     return Some(object.clone());
                 }
@@ -1072,7 +1245,7 @@ impl ExecutionCacheRead for MemoryExecutionCache {
 
         if let Some(objects) = self.cached.object_cache.get(&object_id) {
             let objects = objects.lock();
-            for (_, object) in objects.range(..=version).rev() {
+            for (_, object) in objects.all_lt_or_eq_rev(&version) {
                 if let ObjectEntry::Object(object) = object {
                     return Some(object.clone());
                 }
@@ -1301,13 +1474,13 @@ impl ExecutionCacheRead for MemoryExecutionCache {
         // an entry at all for a given object.
 
         if let Some(markers) = self.dirty.markers.get(&(epoch_id, *object_id)) {
-            let (k, v) = get_last(&*markers);
+            let (k, v) = markers.get_last();
             return Ok(Some((*k, *v)));
         }
 
         if let Some(markers) = self.cached.marker_cache.get(&(epoch_id, *object_id)) {
             let markers = markers.lock();
-            let (k, v) = get_last(&*markers);
+            let (k, v) = markers.get_last();
             return Ok(Some((*k, *v)));
         }
 
@@ -1527,6 +1700,17 @@ impl PassthroughCache {
 
     pub fn as_notify_read_wrapper(self: Arc<Self>) -> NotifyReadWrapper<Self> {
         NotifyReadWrapper(self)
+    }
+}
+
+impl ExecutionCacheCommit for PassthroughCache {
+    fn commit_transaction_outputs(
+        &self,
+        _: EpochId,
+        _: &TransactionDigest,
+    ) -> BoxFuture<'_, SuiResult> {
+        // PassthroughCache commits immediately.
+        std::future::ready(Ok(())).boxed()
     }
 }
 
@@ -1852,3 +2036,131 @@ macro_rules! implement_storage_traits {
 
 implement_storage_traits!(MemoryExecutionCache);
 implement_storage_traits!(PassthroughCache);
+
+/// CachedVersionMap is a map from version to value, with the additional contraints:
+/// - The key (SequenceNumber) must be monotonically increasing for each insert. If
+///   a key is inserted that is less than the previous key, it results in an assertion
+///   failure.
+/// - Similarly, only the item with the least key can be removed. If an item is removed
+///   from the middle of the map, it is marked for removal by setting its corresponding
+///   `should_remove` flag to true. If the item with the least key is removed, it is removed
+///   immediately, and any consecutive entries that are marked in `should_remove` are also
+///   removed.
+/// - The intent of these constraints is to ensure that there are never gaps in the collection,
+///   so that membership in the map can be tested by comparing to both the highest and lowest
+///   (first and last) entries.
+#[derive(Debug)]
+struct CachedVersionMap<V> {
+    values: VecDeque<(SequenceNumber, V)>,
+    should_remove: VecDeque<bool>,
+}
+
+impl<V> Default for CachedVersionMap<V> {
+    fn default() -> Self {
+        Self {
+            values: VecDeque::new(),
+            should_remove: VecDeque::new(),
+        }
+    }
+}
+
+impl<V> CachedVersionMap<V>
+where
+    V: Clone,
+{
+    fn insert(&mut self, version: SequenceNumber, value: V) {
+        assert!(
+            self.values.is_empty() || self.values.back().unwrap().0 < version,
+            "version must be monotonically increasing"
+        );
+        self.values.push_back((version, value));
+        self.should_remove.push_back(false);
+    }
+
+    // remove the value if it is the first element in values. otherwise mark it
+    // for removal.
+    fn remove(&mut self, version: &SequenceNumber) -> Option<V> {
+        if self.values.is_empty() {
+            return None;
+        }
+
+        if self.values.front().unwrap().0 == *version {
+            self.should_remove.pop_front();
+            let ret = self.values.pop_front().unwrap().1;
+
+            // process any deferred removals
+            while *self.should_remove.front().unwrap_or(&false) {
+                self.should_remove.pop_front();
+                self.values.pop_front();
+            }
+
+            Some(ret)
+        } else {
+            // Removals from the interior are deferred.
+            // Removals will generally be from the front, and the collection will usually
+            // be short, so linear search is preferred.
+            if let Some(index) = self.values.iter().position(|(v, _)| v == version) {
+                self.should_remove[index] = true;
+                Some(self.values[index].1.clone())
+            } else {
+                None
+            }
+        }
+    }
+
+    fn get_lt_or_eq(&self, version: &SequenceNumber) -> Option<&V> {
+        if self.values.is_empty() {
+            return None;
+        }
+
+        // search backwards from the end for the first element that is <= version
+        for (v, value) in self.values.iter().rev() {
+            if v <= version {
+                return Some(value);
+            }
+        }
+
+        None
+    }
+
+    fn all_lt_or_eq_rev<'a>(
+        &'a self,
+        version: &'a SequenceNumber,
+    ) -> impl Iterator<Item = &'a (SequenceNumber, V)> {
+        self.values
+            .iter()
+            .rev()
+            .take_while(move |(v, _)| v <= version)
+    }
+
+    fn get(&self, version: &SequenceNumber) -> Option<&V> {
+        if self.values.is_empty() {
+            return None;
+        }
+
+        for (v, value) in self.values.iter().rev() {
+            if v < version {
+                return None;
+            } else if v == version {
+                return Some(value);
+            }
+        }
+
+        None
+    }
+
+    fn get_last(&self) -> (&SequenceNumber, &V) {
+        self.values
+            .back()
+            .map(|(k, v)| (k, v))
+            .expect("CachedVersionMap is empty")
+    }
+
+    // pop items from the front of the map until the first item is >= version
+    fn truncate(&mut self, limit: usize) {
+        while self.values.len() > limit {
+            self.should_remove.pop_front();
+            self.values.pop_front();
+        }
+    }
+}
