@@ -82,17 +82,15 @@ impl Extension for LoggerExtension {
             .iter()
             .filter(|(_, operation)| operation.node.ty == OperationType::Query)
             .any(|(_, operation)| operation.node.selection_set.node.items.iter().any(|selection| matches!(&selection.node, Selection::Field(field) if field.node.name.node == "__schema")));
-        if !is_schema && self.config.log_request_query {
-            let query_id: &Uuid = ctx.data_unchecked();
-            let session_id: &SocketAddr = ctx.data_unchecked();
-            if !is_health_check_request(query_id) {
-                info!(
-                    %query_id,
-                    %session_id,
-                    "[Query] {}",
-                    ctx.stringify_execute_doc(&document, variables)
-                );
-            }
+        let query_id: &Uuid = ctx.data_unchecked();
+        let session_id: &SocketAddr = ctx.data_unchecked();
+        if !is_schema && self.config.log_request_query && !is_health_check_request(query_id) {
+            info!(
+                %query_id,
+                %session_id,
+                "[Query] {}",
+                ctx.stringify_execute_doc(&document, variables)
+            );
         }
         Ok(document)
     }
@@ -103,18 +101,16 @@ impl Extension for LoggerExtension {
         next: NextValidation<'_>,
     ) -> Result<ValidationResult, Vec<ServerError>> {
         let res = next.run(ctx).await?;
-        if self.config.log_complexity {
-            let query_id: &Uuid = ctx.data_unchecked();
-            let session_id: &SocketAddr = ctx.data_unchecked();
-            if !is_health_check_request(query_id) {
-                info!(
-                    %query_id,
-                    %session_id,
-                    complexity = res.complexity,
-                    depth = res.depth,
-                    "[Validation]",
-                );
-            }
+        let query_id: &Uuid = ctx.data_unchecked();
+        let session_id: &SocketAddr = ctx.data_unchecked();
+        if self.config.log_complexity && !is_health_check_request(query_id) {
+            info!(
+                %query_id,
+                %session_id,
+                complexity = res.complexity,
+                depth = res.depth,
+                "[Validation]",
+            );
         }
         Ok(res)
     }
@@ -191,7 +187,7 @@ impl Extension for LoggerExtension {
                     )
                 }
             }
-        } else if self.config.log_response {
+        } else if self.config.log_response && !is_health_check_request(query_id) {
             match operation_name {
                 Some("IntrospectionQuery") => {
                     debug!(
@@ -200,7 +196,6 @@ impl Extension for LoggerExtension {
                         "[Schema] {}", resp.data
                     );
                 }
-                _ if is_health_check_request(&query_id) => {}
                 _ => info!(
                         %query_id,
                         %session_id,
