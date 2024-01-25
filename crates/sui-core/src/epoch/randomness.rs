@@ -178,8 +178,7 @@ impl RandomnessManager {
                 tables
                     .dkg_processed_messages
                     .safe_iter()
-                    .map(|result| result.expect("typed_store should not fail"))
-                    .map(|(sender, msg)| (sender, msg)),
+                    .map(|result| result.expect("typed_store should not fail")),
             );
             if let Some(used_messages) = tables
                 .dkg_used_messages
@@ -195,8 +194,7 @@ impl RandomnessManager {
                 tables
                     .dkg_confirmations
                     .safe_iter()
-                    .map(|result| result.expect("typed_store should not fail"))
-                    .map(|(sender, conf)| (sender, conf)),
+                    .map(|result| result.expect("typed_store should not fail")),
             );
         }
 
