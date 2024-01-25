@@ -307,7 +307,7 @@ impl SuinsRegistration {
         let record_id = config.record_field_id(&domain.0);
 
         let Some(object) =
-            MoveObject::query(db, record_id.into(), ObjectVersionKey::LatestAt(None)).await?
+            MoveObject::query(db, record_id.into(), ObjectVersionKey::Latest).await?
         else {
             return Ok(None);
         };
