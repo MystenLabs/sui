@@ -208,7 +208,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             None => ExpensiveSafetyCheckConfig::default(),
             Some(config) => config,
         };
-        let cache = Arc::new(ExecutionCache::new(authority_store.clone()));
+        let cache = Arc::new(ExecutionCache::new(authority_store.clone(), &registry));
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
