@@ -137,7 +137,7 @@ Checkpoint created: 5
 task 27 'advance-epoch'. lines 99-101:
 Epoch advanced: 2
 
-task 28 'run-graphql'. lines 103-113:
+task 28 'run-graphql'. lines 103-118:
 Response: {
   "data": {
     "epoch": {
@@ -145,7 +145,10 @@ Response: {
         "activeValidators": [
           {
             "apy": 2,
-            "name": "validator-0"
+            "name": "validator-0",
+            "reportRecords": {
+              "nodes": []
+            }
           }
         ]
       }

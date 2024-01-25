@@ -107,6 +107,11 @@ module P0::m {
       activeValidators {
         apy
         name
+        reportRecords {
+          nodes {
+            address
+          }
+        }
       }
     }
   }
