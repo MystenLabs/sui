@@ -288,7 +288,9 @@ impl TransactionBlockEffects {
                 continue;
             };
 
-            let balance_change = BalanceChange::read(serialized).extend()?;
+            let balance_change =
+                BalanceChange::read(serialized, stored_tx.checkpoint_sequence_number as u64)
+                    .extend()?;
             connection
                 .edges
                 .push(Edge::new(c.encode_cursor(), balance_change));

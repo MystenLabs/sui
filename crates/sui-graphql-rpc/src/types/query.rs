@@ -176,7 +176,10 @@ impl Query {
     }
 
     async fn owner(&self, address: SuiAddress) -> Option<Owner> {
-        Some(Owner { address })
+        Some(Owner {
+            address,
+            checkpoint_sequence_number: None,
+        })
     }
 
     /// The object corresponding to the given address at the (optionally) given version.
@@ -203,7 +206,10 @@ impl Query {
 
     /// Look-up an Account by its SuiAddress.
     async fn address(&self, address: SuiAddress) -> Option<Address> {
-        Some(Address { address })
+        Some(Address {
+            address,
+            checkpoint_sequence_number: None,
+        })
     }
 
     /// Fetch a structured representation of a concrete type, including its layout information.
@@ -259,9 +265,15 @@ impl Query {
     ) -> Result<Connection<String, Coin>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let coin = type_.map_or_else(GAS::type_tag, |t| t.0);
-        Coin::paginate(ctx.data_unchecked(), page, coin, /* owner */ None)
-            .await
-            .extend()
+        Coin::paginate(
+            ctx.data_unchecked(),
+            page,
+            coin,
+            /* owner */ None,
+            /* checkpoint_sequence_number */ None,
+        )
+        .await
+        .extend()
     }
 
     /// The checkpoints that exist in the network.
@@ -322,7 +334,7 @@ impl Query {
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, Object>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        Object::paginate(ctx.data_unchecked(), page, filter.unwrap_or_default())
+        Object::paginate(ctx.data_unchecked(), page, filter.unwrap_or_default(), None)
             .await
             .extend()
     }
@@ -353,7 +365,10 @@ impl Query {
         .await
         .extend()?
         .and_then(|r| r.target_address)
-        .map(|a| Address { address: a.into() }))
+        .map(|a| Address {
+            address: a.into(),
+            checkpoint_sequence_number: None,
+        }))
     }
 
     /// The coin metadata associated with the given coin type.
