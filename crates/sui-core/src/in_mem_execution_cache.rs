@@ -23,6 +23,7 @@ use moka::sync::Cache as MokaCache;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
+use std::cmp::Ordering;
 use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 use sui_storage::package_object_cache::PackageObjectCache;
@@ -543,7 +544,7 @@ struct UncommittedData {
 
     // Transaction outputs that have not yet been written to the DB. Items are removed from this
     // table as they are flushed to the db.
-    pending_transaction_writes: DashMap<TransactionDigest, TransactionOutputs>,
+    pending_transaction_writes: DashMap<TransactionDigest, Arc<TransactionOutputs>>,
 }
 
 impl UncommittedData {
@@ -679,7 +680,7 @@ impl MemoryExecutionCache {
                     }
                 }
 
-                if $objects.get_last().0 < &version {
+                if $objects.get_last().0 < version {
                     // If the version is greater than the last version in the cache, then we know
                     // that the object does not exist anywhere
                     return CacheResult::NegativeHit;
@@ -872,7 +873,9 @@ impl MemoryExecutionCache {
         };
 
         // Flush writes to disk
-        self.store.write_transaction_outputs(epoch, outputs).await?;
+        self.store
+            .write_transaction_outputs(epoch, outputs.clone())
+            .await?;
 
         static MAX_VERSIONS: usize = 3;
 
@@ -887,7 +890,7 @@ impl MemoryExecutionCache {
             new_locks_to_init,
             events,
             ..
-        } = &outputs;
+        } = &*outputs;
 
         // Move dirty markers to cache
         for (object_key, marker_value) in markers.iter() {
@@ -896,7 +899,7 @@ impl MemoryExecutionCache {
             // first insert into cache
             let marker_cache_entry = self.cached.marker_cache.entry(key).or_default();
             let marker_map = &mut *marker_cache_entry.value().lock();
-            marker_map.insert(object_key.1, marker_value.clone());
+            marker_map.insert(object_key.1, *marker_value);
             marker_map.truncate(MAX_VERSIONS);
 
             // remove from dirty collection
@@ -1027,7 +1030,7 @@ impl ExecutionCacheCommit for MemoryExecutionCache {
         epoch: EpochId,
         digest: &TransactionDigest,
     ) -> BoxFuture<'_, SuiResult> {
-        MemoryExecutionCache::commit_transaction_outputs(&self, epoch, *digest).boxed()
+        MemoryExecutionCache::commit_transaction_outputs(self, epoch, *digest).boxed()
     }
 }
 
@@ -1088,7 +1091,7 @@ impl ExecutionCacheRead for MemoryExecutionCache {
     fn get_object(&self, id: &ObjectID) -> SuiResult<Option<Object>> {
         if let Some(objects) = self.dirty.objects.get(id) {
             // If any version of the object is in the cache, it must be the most recent version.
-            return match objects.get_last().1 {
+            return match &objects.get_last().1 {
                 ObjectEntry::Object(object) => Ok(Some(object.clone())),
                 _ => Ok(None),
             };
@@ -1097,7 +1100,7 @@ impl ExecutionCacheRead for MemoryExecutionCache {
         if let Some(objects) = self.cached.object_cache.get(id) {
             let objects = objects.lock();
             // If any version of the object is in the cache, it must be the most recent version.
-            return match objects.get_last().1 {
+            return match &objects.get_last().1 {
                 ObjectEntry::Object(object) => Ok(Some(object.clone())),
                 _ => Ok(None),
             };
@@ -1498,7 +1501,7 @@ impl ExecutionCacheWrite for MemoryExecutionCache {
     fn write_transaction_outputs(
         &self,
         epoch_id: EpochId,
-        tx_outputs: TransactionOutputs,
+        tx_outputs: Arc<TransactionOutputs>,
     ) -> BoxFuture<'_, SuiResult> {
         let TransactionOutputs {
             transaction,
@@ -1511,7 +1514,7 @@ impl ExecutionCacheWrite for MemoryExecutionCache {
             new_locks_to_init,
             events,
             ..
-        } = &tx_outputs;
+        } = &*tx_outputs;
 
         // Update all markers
         for (object_key, marker_value) in markers.iter() {
@@ -2127,21 +2130,18 @@ where
         }
 
         for (v, value) in self.values.iter().rev() {
-            if v < version {
-                return None;
-            } else if v == version {
-                return Some(value);
+            match v.cmp(version) {
+                Ordering::Less => return None,
+                Ordering::Equal => return Some(value),
+                Ordering::Greater => (),
             }
         }
 
         None
     }
 
-    fn get_last(&self) -> (&SequenceNumber, &V) {
-        self.values
-            .back()
-            .map(|(k, v)| (k, v))
-            .expect("CachedVersionMap is empty")
+    fn get_last(&self) -> &(SequenceNumber, V) {
+        self.values.back().expect("CachedVersionMap is empty")
     }
 
     // pop items from the front of the map until the first item is >= version
@@ -2153,7 +2153,7 @@ where
     }
 }
 
-fn do_fallback_lookup<K, V>(
+fn do_fallback_lookup<K: Copy, V>(
     keys: &[K],
     get_cached_key: impl Fn(&K) -> CacheResult<V>,
     multiget_fallback: impl Fn(&[K]) -> SuiResult<Vec<Option<V>>>,
