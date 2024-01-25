@@ -86,8 +86,8 @@ impl Extension for LoggerExtension {
             let query_id: &Uuid = ctx.data_unchecked();
             let session_id: &SocketAddr = ctx.data_unchecked();
             info!(
-                query_id = %query_id,
-                session_id = %session_id,
+                %query_id,
+                %session_id,
                 "[Query] {}",
                 ctx.stringify_execute_doc(&document, variables)
             );
@@ -105,8 +105,8 @@ impl Extension for LoggerExtension {
             let query_id: &Uuid = ctx.data_unchecked();
             let session_id: &SocketAddr = ctx.data_unchecked();
             info!(
-                query_id = %query_id,
-                session_id = %session_id,
+                %query_id,
+                %session_id,
                 complexity = res.complexity,
                 depth = res.depth,
                 "[Validation]",
@@ -146,8 +146,8 @@ impl Extension for LoggerExtension {
                     if let Some(async_graphql_value::ConstValue::String(error_code)) = error_code {
                         if error_code.as_str() == code::INTERNAL_SERVER_ERROR {
                             error!(
-                                query_id = %query_id,
-                                session_id = %session_id,
+                                %query_id,
+                                %session_id,
                                 error_code,
                                 "[Response] path={} message={}",
                                 path,
@@ -155,8 +155,8 @@ impl Extension for LoggerExtension {
                             );
                         } else {
                             info!(
-                                query_id = %query_id,
-                                session_id = %session_id,
+                                %query_id,
+                                %session_id,
                                 error_code,
                                 "[Response] path={} message={}",
                                 path,
@@ -165,8 +165,8 @@ impl Extension for LoggerExtension {
                         }
                     } else {
                         warn!(
-                            query_id = %query_id,
-                            session_id = %session_id,
+                            %query_id,
+                            %session_id,
                             error_code = code::UNKNOWN,
                             "[Response] path={} message={}",
                             path,
@@ -180,8 +180,8 @@ impl Extension for LoggerExtension {
                         code::UNKNOWN.to_string()
                     };
                     info!(
-                        query_id = %query_id,
-                        session_id = %session_id,
+                        %query_id,
+                        %session_id,
                         error_code,
                         "[Response] message={}", err.message
                     )
@@ -191,14 +191,14 @@ impl Extension for LoggerExtension {
             match operation_name {
                 Some("IntrospectionQuery") => {
                     debug!(
-                        query_id = %query_id,
-                        session_id = %session_id,
+                        %query_id,
+                        %session_id,
                         "[Schema] {}", resp.data
                     );
                 }
                 _ => info!(
-                        query_id = %query_id,
-                        session_id = %session_id,
+                        %query_id,
+                        %session_id,
                         "[Response] {}", resp.data
                 ),
             }
