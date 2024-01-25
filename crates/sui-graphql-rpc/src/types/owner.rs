@@ -323,9 +323,14 @@ impl OwnerImpl {
         type_: Option<ExactTypeFilter>,
     ) -> Result<Option<Balance>> {
         let coin = type_.map_or_else(GAS::type_tag, |t| t.0);
-        Balance::query(ctx.data_unchecked(), self.address, coin)
-            .await
-            .extend()
+        Balance::query(
+            ctx.data_unchecked(),
+            self.address,
+            coin,
+            self.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 
     pub(crate) async fn balances(
@@ -337,9 +342,14 @@ impl OwnerImpl {
         before: Option<balance::Cursor>,
     ) -> Result<Connection<String, Balance>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        Balance::paginate(ctx.data_unchecked(), page, self.address)
-            .await
-            .extend()
+        Balance::paginate(
+            ctx.data_unchecked(),
+            page,
+            self.address,
+            self.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 
     pub(crate) async fn coins(

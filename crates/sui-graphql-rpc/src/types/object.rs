@@ -7,7 +7,7 @@ use super::balance::{self, Balance};
 use super::big_int::BigInt;
 use super::coin::Coin;
 use super::coin_metadata::CoinMetadata;
-use super::cursor::{self, Page, Target};
+use super::cursor::{self, Page, Paginated, Target};
 use super::digest::Digest;
 use super::display::{Display, DisplayEntry};
 use super::dynamic_field::{DynamicField, DynamicFieldName};
@@ -1038,7 +1038,7 @@ impl ObjectFilter {
     }
 }
 
-impl Target<Cursor> for StoredObject {
+impl Paginated<Cursor> for StoredObject {
     type Source = objects::table;
 
     fn filter_ge<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
@@ -1057,7 +1057,9 @@ impl Target<Cursor> for StoredObject {
             query.order_by(dsl::object_id.desc())
         }
     }
+}
 
+impl Target<Cursor> for StoredObject {
     fn cursor(&self) -> Cursor {
         Cursor::new(self.object_id.clone())
     }
