@@ -80,7 +80,7 @@ impl PackagePublishTxGenerator {
             is_source_code,
             "Only support building root package from source code"
         );
-        let target_path = dir.join(&path);
+        let target_path = dir.join(path);
         dep_map.insert(name, ObjectID::ZERO);
         let compiled_package = BuildConfig::new_for_testing_replace_addresses(dep_map)
             .build(target_path)
@@ -119,12 +119,10 @@ struct Package {
 }
 
 fn load_manifest_json(file_path: &PathBuf) -> PackageDependencyManifest {
-    let data =
-        fs::read_to_string(file_path).expect(&format!("Unable to read file at: {:?}", file_path));
-    let parsed_data: PackageDependencyManifest = serde_json::from_str(&data).expect(&format!(
-        "Unable to parse json from file at: {:?}",
-        file_path
-    ));
+    let data = fs::read_to_string(file_path)
+        .unwrap_or_else(|_| panic!("Unable to read file at: {:?}", file_path));
+    let parsed_data: PackageDependencyManifest = serde_json::from_str(&data)
+        .unwrap_or_else(|_| panic!("Unable to parse json from file at: {:?}", file_path));
 
     parsed_data
 }
