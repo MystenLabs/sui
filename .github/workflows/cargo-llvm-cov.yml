@@ -27,7 +27,7 @@ jobs:
         run: rustup update stable
         
       - name: Generate code coverage
-        run: cargo llvm-cov nextest --open
+        run: cargo llvm-cov nextest
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
