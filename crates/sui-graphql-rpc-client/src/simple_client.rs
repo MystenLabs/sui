@@ -106,7 +106,10 @@ impl SimpleClient {
 
     /// Send a request to the GraphQL server to check if it is alive.
     pub async fn ping(&self) -> Result<(), ClientError> {
-        self.inner.get(format!("{}/health", self.url)).send().await?;
+        self.inner
+            .get(format!("{}/health", self.url))
+            .send()
+            .await?;
         Ok(())
     }
 }

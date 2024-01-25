@@ -116,7 +116,6 @@ pub async fn serve_executor(
 
     // Starts graphql server
     let graphql_server_handle = start_graphql_server(graphql_connection_config.clone()).await;
-    tokio::time::sleep(Duration::from_secs(2)).await;
 
     let server_url = format!(
         "http://{}:{}/",
@@ -186,7 +185,7 @@ async fn start_validator_with_fullnode(internal_data_source_rpc_port: Option<u16
 /// Repeatedly ping the GraphQL server for 10s, until it responds
 async fn wait_for_graphql_server(client: &SimpleClient) {
     tokio::time::timeout(Duration::from_secs(10), async {
-        while let Err(_) = client.ping().await {
+        while client.ping().await.is_err() {
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
     })
