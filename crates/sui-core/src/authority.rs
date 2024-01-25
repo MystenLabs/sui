@@ -108,9 +108,7 @@ use sui_types::messages_grpc::{
 };
 use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
 use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
-use sui_types::storage::{
-    GetSharedLocks, InputKey, ObjectKey, ObjectOrTombstone, ObjectStore, WriteKind,
-};
+use sui_types::storage::{ObjectKey, ObjectOrTombstone, ObjectStore, WriteKind};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
@@ -4661,48 +4659,6 @@ impl AuthorityState {
         self.execution_cache
             .force_reload_system_packages(&BuiltInFramework::all_package_ids());
         Ok(())
-    }
-}
-
-impl AuthorityState {
-    /// Gets the input object keys from input object kinds, by determining the versions of owned,
-    /// shared and package objects.
-    /// When making changes, please see if check_sequenced_input_objects() below needs
-    /// similar changes as well.
-    pub fn get_input_object_keys(
-        digest: &TransactionDigest,
-        objects: &[InputObjectKind],
-        epoch_store: &AuthorityPerEpochStore,
-    ) -> BTreeSet<InputKey> {
-        let mut shared_locks = HashMap::<ObjectID, SequenceNumber>::new();
-        objects
-            .iter()
-            .map(|kind| {
-                match kind {
-                    InputObjectKind::SharedMoveObject { id, .. } => {
-                        if shared_locks.is_empty() {
-                            shared_locks = epoch_store
-                                .get_shared_locks(digest)
-                                .expect("Read from storage should not fail!")
-                                .into_iter()
-                                .collect();
-                        }
-                        // If we can't find the locked version, it means
-                        // 1. either we have a bug that skips shared object version assignment
-                        // 2. or we have some DB corruption
-                        let Some(version) = shared_locks.get(id) else {
-                            panic!(
-                                "Shared object locks should have been set. tx_digset: {digest:?}, obj \
-                                id: {id:?}",
-                            )
-                        };
-                        InputKey::VersionedObject{ id: *id, version: *version}
-                    }
-                    InputObjectKind::MovePackage(id) => InputKey::Package { id: *id },
-                    InputObjectKind::ImmOrOwnedMoveObject(objref) => InputKey::VersionedObject {id: objref.0, version: objref.1},
-                }
-            })
-            .collect()
     }
 }
 

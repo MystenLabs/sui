@@ -28,7 +28,7 @@ use tracing::{error, info, instrument, trace, warn};
 
 use crate::authority::AuthorityMetrics;
 use crate::{
-    authority::authority_per_epoch_store::AuthorityPerEpochStore, authority::AuthorityState,
+    authority::authority_per_epoch_store::AuthorityPerEpochStore,
     in_mem_execution_cache::ExecutionCacheRead,
 };
 use sui_types::transaction::SenderSignedData;
@@ -443,11 +443,8 @@ impl TransactionManager {
                     .value
                     .input_objects()
                     .expect("input_objects() cannot fail");
-                let mut input_object_keys = AuthorityState::get_input_object_keys(
-                    &digest,
-                    &input_object_kinds,
-                    epoch_store,
-                );
+                let mut input_object_keys =
+                    epoch_store.get_input_object_keys(&digest, &input_object_kinds);
 
                 if input_object_kinds.len() != input_object_keys.len() {
                     error!("Duplicated input objects: {:?}", input_object_kinds);
