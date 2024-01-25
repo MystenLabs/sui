@@ -1,33 +1,64 @@
 name: Codecov
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+    types: [opened, reopened, synchronize]
 
 jobs:
-  cargo-llvm-cov:
-    name: Generate code coverage
-    runs-on: ubuntu-ghcloud
-    env:
-      CARGO_TERM_COLOR: always
+  diff:
+    runs-on: [ubuntu-latest]
+    outputs:
+      isRust: ${{ steps.diff.outputs.isRust }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: bmwill/rust-cache@v1
+      - uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
+      - name: Detect Changes
+        uses: './.github/actions/diffs'
+        id: diff
+
+  codecov-grcov:
+    name: Generate code coverage
+    needs: diff
+    if: github.event.pull_request.draft == false && needs.diff.outputs.isRust == 'true'
+    runs-on: [ubuntu-ghcloud]
+    strategy:
+      fail-fast: true
+    steps:
+      - uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
+      - run: rustup component add llvm-tools-preview
+      # Enable caching of the 'librocksdb-sys' crate by additionally caching the
+      # 'librocksdb-sys' src directory which is managed by cargo
+      - name: Install grcov, and cache the binary
+        uses: baptiste0928/cargo-install@30f432979e99f3ea66a8fa2eede53c07063995d8 # pin@v2
+        with:
+          crate: grcov
+          locked: true
 
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
         with:
-          swap-size-gb: 256      
+          swap-size-gb: 256
 
-      - name: Install Rust
-        run: rustup update stable
-
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-
-      - name: Generate code coverage
-        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+      - name: Build
+        uses: actions-rs/cargo@844f36862e911db73fe0815f00a4a2602c279505 # pin@v1
         with:
-          files: lcov.info
-          fail_ci_if_error: true
+          command: build
+        env:
+          RUSTFLAGS: '-Cinstrument-coverage'
+          RUSTDOCFLAGS: '-Cinstrument-coverage'
+
+      - name: Run tests
+        env:
+          RUSTFLAGS: '-Cinstrument-coverage'
+          RUSTDOCFLAGS: '-Cinstrument-coverage'
+          LLVM_PROFILE_FILE: 'codecov-instrumentation-%p-%m.profraw'
+        run: cargo test
+
+      - name: Run grcov
+        run: grcov . --binary-path target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore '../**' --ignore '/*' -o coverage.lcov
+
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@eaaf4bedf32dbdc6b720b63067d99c4d77d6047d # pin@v3
