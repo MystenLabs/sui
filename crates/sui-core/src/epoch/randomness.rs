@@ -40,7 +40,6 @@ const SINGLETON_KEY: u64 = 0;
 pub struct RandomnessManager {
     epoch_store: Weak<AuthorityPerEpochStore>,
     consensus_adapter: Arc<ConsensusAdapter>,
-    // TODO: metrics
 
     // State for DKG.
     party: dkg::Party<PkG, EncG>,
@@ -153,9 +152,10 @@ impl RandomnessManager {
                 "random beacon: loaded existing DKG output for epoch {}",
                 committee.epoch()
             );
-            // metrics
-            //     .state_handler_random_beacon_dkg_num_shares
-            //     .set(dkg_output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
+            epoch_store
+                .metrics
+                .epoch_random_beacon_dkg_num_shares
+                .set(dkg_output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
             manager
                 .dkg_output
                 .set(dkg_output)
@@ -167,9 +167,6 @@ impl RandomnessManager {
             );
         }
 
-        // metrics
-        //     .state_handler_current_randomness_round
-        //     .set(store.randomness_round().0 as i64);
         Some(manager)
     }
 
@@ -194,6 +191,8 @@ impl RandomnessManager {
     }
 
     pub fn advance_dkg(&self, batch: &mut DBBatch) -> SuiResult<()> {
+        let epoch_store = self.epoch_store()?;
+
         // Once we have enough ProcessedMessages, send a Confirmation.
         if !self
             .tables()?
@@ -219,7 +218,6 @@ impl RandomnessManager {
                         std::iter::once((SINGLETON_KEY, used_msgs)),
                     )?;
 
-                    let epoch_store = self.epoch_store()?;
                     let transaction = ConsensusTransaction::new_randomness_dkg_confirmation(
                         epoch_store.name,
                         &conf,
@@ -264,15 +262,13 @@ impl RandomnessManager {
                         &self.tables()?.dkg_output,
                         std::iter::once((SINGLETON_KEY, output.clone())),
                     )?;
+                    epoch_store
+                        .metrics
+                        .epoch_random_beacon_dkg_num_shares
+                        .set(output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
                     self.dkg_output
                         .set(output)
                         .expect("checked above that `dkg_output` is uninitialized");
-                    // self.metrics
-                    //     .state_handler_random_beacon_dkg_num_shares
-                    //     .set(output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
-                    // if let Err(e) = self.vss_key_output.set(output.vss_pk.clone()) {
-                    //     error!("random beacon: unable to write VSS key to output: {e:?}")
-                    // }
                 }
                 Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => (), // wait for more input
                 Err(e) => error!("random beacon: error while processing DKG Confirmations: {e:?}"),
