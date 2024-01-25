@@ -4,10 +4,9 @@ use aya::{include_bytes_aligned, Bpf};
 use aya_log::BpfLogger;
 use clap::Parser;
 use log::{debug, info, warn};
-use nodefw_common::Rule;
 use nodefw::fwmap::Firewall;
+use nodefw_common::Rule;
 use tokio::signal;
-
 
 #[derive(Debug, Parser)]
 struct Opt {
