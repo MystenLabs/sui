@@ -77,15 +77,7 @@ pub async fn start_cluster(
 
     // Starts graphql client
     let client = SimpleClient::new(server_url);
-
-    // Repeatedly ping the graphql server for 10s, until it responds
-    tokio::time::timeout(Duration::from_secs(10), async {
-        while let Err(_) = client.ping().await {
-            tokio::time::sleep(Duration::from_millis(500)).await;
-        }
-    })
-    .await
-    .expect("Timeout waiting for graphql server to start");
+    wait_for_graphql_server(&client).await;
 
     Cluster {
         validator_fullnode_handle: val_fn,
@@ -133,6 +125,7 @@ pub async fn serve_executor(
 
     // Starts graphql client
     let client = SimpleClient::new(server_url);
+    wait_for_graphql_server(&client).await;
 
     ExecutorCluster {
         executor_server_handle,
@@ -188,6 +181,17 @@ async fn start_validator_with_fullnode(internal_data_source_rpc_port: Option<u16
             test_cluster_builder.with_fullnode_rpc_port(internal_data_source_rpc_port);
     };
     test_cluster_builder.build().await
+}
+
+/// Repeatedly ping the GraphQL server for 10s, until it responds
+async fn wait_for_graphql_server(client: &SimpleClient) {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while let Err(_) = client.ping().await {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+    })
+    .await
+    .expect("Timeout waiting for graphql server to start");
 }
 
 impl ExecutorCluster {
