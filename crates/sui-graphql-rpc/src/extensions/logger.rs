@@ -83,9 +83,11 @@ impl Extension for LoggerExtension {
             .filter(|(_, operation)| operation.node.ty == OperationType::Query)
             .any(|(_, operation)| operation.node.selection_set.node.items.iter().any(|selection| matches!(&selection.node, Selection::Field(field) if field.node.name.node == "__schema")));
         if !is_schema && self.config.log_request_query {
+            let query_id: &Uuid = ctx.data_unchecked();
+            let session_id: &SocketAddr = ctx.data_unchecked();
             info!(
-                query_id = ctx.data_unchecked::<Uuid>().to_string(),
-                session_id = ctx.data_unchecked::<SocketAddr>().to_string(),
+                %query_id,
+                %session_id,
                 "[Query] {}",
                 ctx.stringify_execute_doc(&document, variables)
             );
@@ -100,9 +102,11 @@ impl Extension for LoggerExtension {
     ) -> Result<ValidationResult, Vec<ServerError>> {
         let res = next.run(ctx).await?;
         if self.config.log_complexity {
+            let query_id: &Uuid = ctx.data_unchecked();
+            let session_id: &SocketAddr = ctx.data_unchecked();
             info!(
-                query_id = ctx.data_unchecked::<Uuid>().to_string(),
-                session_id = ctx.data_unchecked::<SocketAddr>().to_string(),
+                %query_id,
+                %session_id,
                 complexity = res.complexity,
                 depth = res.depth,
                 "[Validation]",
@@ -118,8 +122,8 @@ impl Extension for LoggerExtension {
         next: NextExecute<'_>,
     ) -> Response {
         let resp = next.run(ctx, operation_name).await;
-        let session_id = ctx.data_unchecked::<SocketAddr>().to_string();
-        let query_id = ctx.data_unchecked::<Uuid>().to_string();
+        let query_id: &Uuid = ctx.data_unchecked();
+        let session_id: &SocketAddr = ctx.data_unchecked();
         if resp.is_err() {
             for err in &resp.errors {
                 let error_code = &err.extensions.as_ref().and_then(|x| x.get("code"));
@@ -142,8 +146,8 @@ impl Extension for LoggerExtension {
                     if let Some(async_graphql_value::ConstValue::String(error_code)) = error_code {
                         if error_code.as_str() == code::INTERNAL_SERVER_ERROR {
                             error!(
-                                query_id,
-                                session_id,
+                                %query_id,
+                                %session_id,
                                 error_code,
                                 "[Response] path={} message={}",
                                 path,
@@ -151,8 +155,8 @@ impl Extension for LoggerExtension {
                             );
                         } else {
                             info!(
-                                query_id,
-                                session_id,
+                                %query_id,
+                                %session_id,
                                 error_code,
                                 "[Response] path={} message={}",
                                 path,
@@ -161,8 +165,8 @@ impl Extension for LoggerExtension {
                         }
                     } else {
                         warn!(
-                            query_id,
-                            session_id,
+                            %query_id,
+                            %session_id,
                             error_code = code::UNKNOWN,
                             "[Response] path={} message={}",
                             path,
@@ -176,17 +180,27 @@ impl Extension for LoggerExtension {
                         code::UNKNOWN.to_string()
                     };
                     info!(
-                        query_id,
-                        session_id, error_code, "[Response] message={}", err.message
+                        %query_id,
+                        %session_id,
+                        error_code,
+                        "[Response] message={}", err.message
                     )
                 }
             }
         } else if self.config.log_response {
             match operation_name {
                 Some("IntrospectionQuery") => {
-                    debug!(query_id, session_id, "[Schema] {}", resp.data);
+                    debug!(
+                        %query_id,
+                        %session_id,
+                        "[Schema] {}", resp.data
+                    );
                 }
-                _ => info!(query_id, session_id, "[Response] {}", resp.data),
+                _ => info!(
+                        %query_id,
+                        %session_id,
+                        "[Response] {}", resp.data
+                ),
             }
         }
         resp
