@@ -120,9 +120,9 @@ impl Extension for QueryLimitsChecker {
         variables: &Variables,
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
-        let query_id = ctx.data_unchecked::<Uuid>().to_string();
-        let session_id = ctx.data_unchecked::<SocketAddr>().to_string();
-        let metrics = ctx.data_unchecked::<Metrics>();
+        let query_id: &Uuid = ctx.data_unchecked();
+        let session_id: &SocketAddr = ctx.data_unchecked();
+        let metrics: &Metrics = ctx.data_unchecked();
         let instant = Instant::now();
         let cfg = ctx
             .data::<ServiceConfig>()
@@ -133,8 +133,8 @@ impl Extension for QueryLimitsChecker {
                 .query_payload_too_large_size
                 .observe(query.len() as u64);
             info!(
-                query_id,
-                session_id,
+                query_id = %query_id,
+                session_id = %session_id,
                 error_code = code::BAD_USER_INPUT,
                 "Query payload is too large: {}",
                 query.len()
@@ -342,13 +342,15 @@ fn check_limits(
     pos: Option<Pos>,
     ctx: &ExtensionContext<'_>,
 ) -> ServerResult<()> {
-    let query_id = ctx.data_unchecked::<Uuid>().to_string();
-    let session_id = ctx.data_unchecked::<SocketAddr>().to_string();
+    let query_id: &Uuid = ctx.data_unchecked();
+    let session_id: &SocketAddr = ctx.data_unchecked();
     let error_code = code::BAD_USER_INPUT;
     if cost.input_nodes > limits.max_query_nodes {
         info!(
-            query_id,
-            session_id, error_code, "Query has too many nodes: {}", cost.input_nodes
+            query_id = %query_id,
+            session_id = %session_id,
+            error_code,
+            "Query has too many nodes: {}", cost.input_nodes
         );
         return Err(graphql_error_at_pos(
             error_code,
@@ -362,8 +364,10 @@ fn check_limits(
 
     if cost.depth > limits.max_query_depth {
         info!(
-            query_id,
-            session_id, error_code, "Query has too many levels of nesting: {}", cost.depth
+            query_id = %query_id,
+            session_id = %session_id,
+            error_code,
+            "Query has too many levels of nesting: {}", cost.depth
         );
         return Err(graphql_error_at_pos(
             error_code,
@@ -377,8 +381,8 @@ fn check_limits(
 
     if cost.output_nodes > limits.max_output_nodes {
         info!(
-            query_id,
-            session_id,
+            query_id = %query_id,
+            session_id = %session_id,
             error_code,
             "Query will result in too many output nodes: {}",
             cost.output_nodes
