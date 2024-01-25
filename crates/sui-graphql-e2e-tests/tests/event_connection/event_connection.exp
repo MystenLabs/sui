@@ -53,7 +53,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::EventA"
+              "repr": "0x7bb8e3ce9fdeded7ea1520cd10cd0f9b615a6d5fbf8e06796963ea94672ca613::M1::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -71,7 +71,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::EventB<0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::Object>"
+              "repr": "0x7bb8e3ce9fdeded7ea1520cd10cd0f9b615a6d5fbf8e06796963ea94672ca613::M1::EventB<0x7bb8e3ce9fdeded7ea1520cd10cd0f9b615a6d5fbf8e06796963ea94672ca613::M1::Object>"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -89,7 +89,7 @@ Response: {
               "name": "M2"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M2::EventA"
+              "repr": "0x7bb8e3ce9fdeded7ea1520cd10cd0f9b615a6d5fbf8e06796963ea94672ca613::M2::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -107,7 +107,7 @@ Response: {
               "name": "M2"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M2::EventB<0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M2::Object>"
+              "repr": "0x7bb8e3ce9fdeded7ea1520cd10cd0f9b615a6d5fbf8e06796963ea94672ca613::M2::EventB<0x7bb8e3ce9fdeded7ea1520cd10cd0f9b615a6d5fbf8e06796963ea94672ca613::M2::Object>"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -135,7 +135,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::EventA"
+              "repr": "0x7bb8e3ce9fdeded7ea1520cd10cd0f9b615a6d5fbf8e06796963ea94672ca613::M1::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -153,7 +153,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::EventB<0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::Object>"
+              "repr": "0x7bb8e3ce9fdeded7ea1520cd10cd0f9b615a6d5fbf8e06796963ea94672ca613::M1::EventB<0x7bb8e3ce9fdeded7ea1520cd10cd0f9b615a6d5fbf8e06796963ea94672ca613::M1::Object>"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -171,7 +171,7 @@ Response: {
               "name": "M2"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M2::EventA"
+              "repr": "0x7bb8e3ce9fdeded7ea1520cd10cd0f9b615a6d5fbf8e06796963ea94672ca613::M2::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -189,7 +189,7 @@ Response: {
               "name": "M2"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M2::EventB<0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M2::Object>"
+              "repr": "0x7bb8e3ce9fdeded7ea1520cd10cd0f9b615a6d5fbf8e06796963ea94672ca613::M2::EventB<0x7bb8e3ce9fdeded7ea1520cd10cd0f9b615a6d5fbf8e06796963ea94672ca613::M2::Object>"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -217,7 +217,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::EventA"
+              "repr": "0x7bb8e3ce9fdeded7ea1520cd10cd0f9b615a6d5fbf8e06796963ea94672ca613::M1::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -235,7 +235,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::EventB<0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::Object>"
+              "repr": "0x7bb8e3ce9fdeded7ea1520cd10cd0f9b615a6d5fbf8e06796963ea94672ca613::M1::EventB<0x7bb8e3ce9fdeded7ea1520cd10cd0f9b615a6d5fbf8e06796963ea94672ca613::M1::Object>"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -263,7 +263,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::EventA"
+              "repr": "0x7bb8e3ce9fdeded7ea1520cd10cd0f9b615a6d5fbf8e06796963ea94672ca613::M1::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -291,7 +291,7 @@ Response: {
               "name": "M1"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::EventB<0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::Object>"
+              "repr": "0x7bb8e3ce9fdeded7ea1520cd10cd0f9b615a6d5fbf8e06796963ea94672ca613::M1::EventB<0x7bb8e3ce9fdeded7ea1520cd10cd0f9b615a6d5fbf8e06796963ea94672ca613::M1::Object>"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"

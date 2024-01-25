@@ -4,7 +4,7 @@ init:
 A: object(0,0)
 
 task 1 'publish'. lines 6-134:
-events: Event { package_id: Test, transaction_module: Identifier("boars"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("DisplayCreated"), type_params: [Struct(StructTag { address: Test, module: Identifier("boars"), name: Identifier("Boar"), type_params: [] })] }, contents: [228, 154, 109, 48, 69, 48, 138, 205, 170, 251, 98, 170, 17, 88, 146, 249, 237, 141, 80, 193, 46, 144, 31, 187, 80, 68, 50, 87, 49, 57, 148, 72] }
+events: Event { package_id: Test, transaction_module: Identifier("boars"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("DisplayCreated"), type_params: [Struct(StructTag { address: Test, module: Identifier("boars"), name: Identifier("Boar"), type_params: [] })] }, contents: [134, 77, 170, 1, 233, 255, 151, 209, 97, 218, 134, 212, 169, 190, 142, 14, 99, 248, 79, 162, 21, 30, 234, 9, 245, 1, 181, 201, 89, 141, 78, 205] }
 created: object(1,0), object(1,1), object(1,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 21470000,  storage_rebate: 0, non_refundable_storage_fee: 0
@@ -13,7 +13,7 @@ task 2 'create-checkpoint'. lines 136-136:
 Checkpoint created: 1
 
 task 3 'view-checkpoint'. lines 138-138:
-CheckpointSummary { epoch: 0, seq: 1, content_digest: 8KMBivFQVCb8EE3gvs9aqKNVyjKmCZNgYtj8gm3YBfg8,
+CheckpointSummary { epoch: 0, seq: 1, content_digest: Bd6NEqbNxc4arBMx8L8BK6LwyDnSoxuGxVBCNofPMEZV,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 1000000, storage_cost: 21470000, storage_rebate: 0, non_refundable_storage_fee: 0 }}
 
 task 4 'run'. lines 140-140:
@@ -22,7 +22,7 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3556800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5 'run'. lines 142-142:
-events: Event { package_id: Test, transaction_module: Identifier("boars"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: Test, module: Identifier("boars"), name: Identifier("Boar"), type_params: [] })] }, contents: [228, 154, 109, 48, 69, 48, 138, 205, 170, 251, 98, 170, 17, 88, 146, 249, 237, 141, 80, 193, 46, 144, 31, 187, 80, 68, 50, 87, 49, 57, 148, 72, 1, 0, 3, 7, 118, 101, 99, 116, 111, 114, 115, 5, 123, 118, 101, 99, 125, 3, 105, 100, 100, 5, 123, 105, 100, 100, 125, 5, 110, 97, 109, 101, 101, 7, 123, 110, 97, 109, 101, 101, 125] }
+events: Event { package_id: Test, transaction_module: Identifier("boars"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: Test, module: Identifier("boars"), name: Identifier("Boar"), type_params: [] })] }, contents: [134, 77, 170, 1, 233, 255, 151, 209, 97, 218, 134, 212, 169, 190, 142, 14, 99, 248, 79, 162, 21, 30, 234, 9, 245, 1, 181, 201, 89, 141, 78, 205, 1, 0, 3, 7, 118, 101, 99, 116, 111, 114, 115, 5, 123, 118, 101, 99, 125, 3, 105, 100, 100, 5, 123, 105, 100, 100, 125, 5, 110, 97, 109, 101, 101, 7, 123, 110, 97, 109, 101, 101, 125] }
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 2941200,  storage_rebate: 2625876, non_refundable_storage_fee: 26524
 
@@ -30,7 +30,7 @@ task 6 'create-checkpoint'. lines 144-144:
 Checkpoint created: 2
 
 task 7 'view-checkpoint'. lines 146-146:
-CheckpointSummary { epoch: 0, seq: 2, content_digest: 9vk12tSFLr53EaNLf1JiC4gsLE98gUFTHWGFTnYLLxNN,
+CheckpointSummary { epoch: 0, seq: 2, content_digest: FTaZj2Skq8uqhrjCYawn1mUvGdJm3A2CsrRgNQscaZ7t,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 3000000, storage_cost: 27968000, storage_rebate: 3603996, non_refundable_storage_fee: 36404 }}
 
 task 8 'run-graphql'. lines 148-161:
@@ -65,7 +65,7 @@ Response: {
 }
 
 task 9 'run'. lines 163-163:
-events: Event { package_id: Test, transaction_module: Identifier("boars"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: Test, module: Identifier("boars"), name: Identifier("Boar"), type_params: [] })] }, contents: [228, 154, 109, 48, 69, 48, 138, 205, 170, 251, 98, 170, 17, 88, 146, 249, 237, 141, 80, 193, 46, 144, 31, 187, 80, 68, 50, 87, 49, 57, 148, 72, 2, 0, 4, 7, 118, 101, 99, 116, 111, 114, 115, 5, 123, 118, 101, 99, 125, 3, 105, 100, 100, 5, 123, 105, 100, 100, 125, 5, 110, 97, 109, 101, 101, 7, 123, 110, 97, 109, 101, 101, 125, 4, 110, 117, 109, 115, 6, 123, 110, 117, 109, 115, 125] }
+events: Event { package_id: Test, transaction_module: Identifier("boars"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: Test, module: Identifier("boars"), name: Identifier("Boar"), type_params: [] })] }, contents: [134, 77, 170, 1, 233, 255, 151, 209, 97, 218, 134, 212, 169, 190, 142, 14, 99, 248, 79, 162, 21, 30, 234, 9, 245, 1, 181, 201, 89, 141, 78, 205, 2, 0, 4, 7, 118, 101, 99, 116, 111, 114, 115, 5, 123, 118, 101, 99, 125, 3, 105, 100, 100, 5, 123, 105, 100, 100, 125, 5, 110, 97, 109, 101, 101, 7, 123, 110, 97, 109, 101, 101, 125, 4, 110, 117, 109, 115, 6, 123, 110, 117, 109, 115, 125] }
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 3032400,  storage_rebate: 2911788, non_refundable_storage_fee: 29412
 
@@ -73,7 +73,7 @@ task 10 'create-checkpoint'. lines 165-165:
 Checkpoint created: 3
 
 task 11 'view-checkpoint'. lines 167-167:
-CheckpointSummary { epoch: 0, seq: 3, content_digest: 88jUibBe75fv3yZL6tdD11svDipqaiatVRrdNT3m2a9B,
+CheckpointSummary { epoch: 0, seq: 3, content_digest: FM9xGoYRcjfK1XUzZD5J5YFsWLLFecYb2HLSaLxunUW3,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 4000000, storage_cost: 31000400, storage_rebate: 6515784, non_refundable_storage_fee: 65816 }}
 
 task 12 'run-graphql'. lines 169-182:
@@ -113,7 +113,7 @@ Response: {
 }
 
 task 13 'run'. lines 184-184:
-events: Event { package_id: Test, transaction_module: Identifier("boars"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: Test, module: Identifier("boars"), name: Identifier("Boar"), type_params: [] })] }, contents: [228, 154, 109, 48, 69, 48, 138, 205, 170, 251, 98, 170, 17, 88, 146, 249, 237, 141, 80, 193, 46, 144, 31, 187, 80, 68, 50, 87, 49, 57, 148, 72, 3, 0, 15, 7, 118, 101, 99, 116, 111, 114, 115, 5, 123, 118, 101, 99, 125, 3, 105, 100, 100, 5, 123, 105, 100, 100, 125, 5, 110, 97, 109, 101, 101, 7, 123, 110, 97, 109, 101, 101, 125, 4, 110, 117, 109, 115, 6, 123, 110, 117, 109, 115, 125, 5, 98, 111, 111, 108, 115, 7, 123, 98, 111, 111, 108, 115, 125, 5, 98, 117, 121, 101, 114, 7, 123, 98, 117, 121, 101, 114, 125, 4, 110, 97, 109, 101, 6, 123, 110, 97, 109, 101, 125, 7, 99, 114, 101, 97, 116, 111, 114, 9, 123, 99, 114, 101, 97, 116, 111, 114, 125, 5, 112, 114, 105, 99, 101, 7, 123, 112, 114, 105, 99, 101, 125, 11, 112, 114, 111, 106, 101, 99, 116, 95, 117, 114, 108, 58, 85, 110, 105, 113, 117, 101, 32, 66, 111, 97, 114, 32, 102, 114, 111, 109, 32, 116, 104, 101, 32, 66, 111, 97, 114, 115, 32, 99, 111, 108, 108, 101, 99, 116, 105, 111, 110, 32, 119, 105, 116, 104, 32, 123, 110, 97, 109, 101, 125, 32, 97, 110, 100, 32, 123, 105, 100, 125, 8, 98, 97, 115, 101, 95, 117, 114, 108, 32, 104, 116, 116, 112, 115, 58, 47, 47, 103, 101, 116, 45, 97, 45, 98, 111, 97, 114, 46, 99, 111, 109, 47, 123, 105, 109, 103, 95, 117, 114, 108, 125, 11, 110, 111, 95, 116, 101, 109, 112, 108, 97, 116, 101, 23, 104, 116, 116, 112, 115, 58, 47, 47, 103, 101, 116, 45, 97, 45, 98, 111, 97, 114, 46, 99, 111, 109, 47, 3, 97, 103, 101, 21, 123, 109, 101, 116, 97, 100, 97, 116, 97, 46, 110, 101, 115, 116, 101, 100, 46, 97, 103, 101, 125, 8, 102, 117, 108, 108, 95, 117, 114, 108, 10, 123, 102, 117, 108, 108, 95, 117, 114, 108, 125, 13, 101, 115, 99, 97, 112, 101, 95, 115, 121, 110, 116, 97, 120, 8, 92, 123, 110, 97, 109, 101, 92, 125] }
+events: Event { package_id: Test, transaction_module: Identifier("boars"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: Test, module: Identifier("boars"), name: Identifier("Boar"), type_params: [] })] }, contents: [134, 77, 170, 1, 233, 255, 151, 209, 97, 218, 134, 212, 169, 190, 142, 14, 99, 248, 79, 162, 21, 30, 234, 9, 245, 1, 181, 201, 89, 141, 78, 205, 3, 0, 15, 7, 118, 101, 99, 116, 111, 114, 115, 5, 123, 118, 101, 99, 125, 3, 105, 100, 100, 5, 123, 105, 100, 100, 125, 5, 110, 97, 109, 101, 101, 7, 123, 110, 97, 109, 101, 101, 125, 4, 110, 117, 109, 115, 6, 123, 110, 117, 109, 115, 125, 5, 98, 111, 111, 108, 115, 7, 123, 98, 111, 111, 108, 115, 125, 5, 98, 117, 121, 101, 114, 7, 123, 98, 117, 121, 101, 114, 125, 4, 110, 97, 109, 101, 6, 123, 110, 97, 109, 101, 125, 7, 99, 114, 101, 97, 116, 111, 114, 9, 123, 99, 114, 101, 97, 116, 111, 114, 125, 5, 112, 114, 105, 99, 101, 7, 123, 112, 114, 105, 99, 101, 125, 11, 112, 114, 111, 106, 101, 99, 116, 95, 117, 114, 108, 58, 85, 110, 105, 113, 117, 101, 32, 66, 111, 97, 114, 32, 102, 114, 111, 109, 32, 116, 104, 101, 32, 66, 111, 97, 114, 115, 32, 99, 111, 108, 108, 101, 99, 116, 105, 111, 110, 32, 119, 105, 116, 104, 32, 123, 110, 97, 109, 101, 125, 32, 97, 110, 100, 32, 123, 105, 100, 125, 8, 98, 97, 115, 101, 95, 117, 114, 108, 32, 104, 116, 116, 112, 115, 58, 47, 47, 103, 101, 116, 45, 97, 45, 98, 111, 97, 114, 46, 99, 111, 109, 47, 123, 105, 109, 103, 95, 117, 114, 108, 125, 11, 110, 111, 95, 116, 101, 109, 112, 108, 97, 116, 101, 23, 104, 116, 116, 112, 115, 58, 47, 47, 103, 101, 116, 45, 97, 45, 98, 111, 97, 114, 46, 99, 111, 109, 47, 3, 97, 103, 101, 21, 123, 109, 101, 116, 97, 100, 97, 116, 97, 46, 110, 101, 115, 116, 101, 100, 46, 97, 103, 101, 125, 8, 102, 117, 108, 108, 95, 117, 114, 108, 10, 123, 102, 117, 108, 108, 95, 117, 114, 108, 125, 13, 101, 115, 99, 97, 112, 101, 95, 115, 121, 110, 116, 97, 120, 8, 92, 123, 110, 97, 109, 101, 92, 125] }
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 5236400,  storage_rebate: 3002076, non_refundable_storage_fee: 30324
 
@@ -121,7 +121,7 @@ task 14 'create-checkpoint'. lines 186-186:
 Checkpoint created: 4
 
 task 15 'view-checkpoint'. lines 188-188:
-CheckpointSummary { epoch: 0, seq: 4, content_digest: A7GYqRr8omda3CNtGAo4ohRxwVc8g6VNCyhaULfxUyMh,
+CheckpointSummary { epoch: 0, seq: 4, content_digest: GrxNQWiinohAwf63YhLx7Z6w6VfsWC4Y7Ab8Hd9GrkVk,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 5000000, storage_cost: 36236800, storage_rebate: 9517860, non_refundable_storage_fee: 96140 }}
 
 task 16 'run-graphql'. lines 190-203:
@@ -179,7 +179,7 @@ Response: {
               },
               {
                 "key": "project_url",
-                "value": "Unique Boar from the Boars collection with First Boar and 0x131a9fb241f55a6da1c4937fd6ab0536a92c4b70ec6ddafee4f92a6d240c6a06",
+                "value": "Unique Boar from the Boars collection with First Boar and 0xdaf63be7299f450e14ab2d2038d401c6ae0db7874fb9fff0b5a285625c41fe97",
                 "error": null
               },
               {

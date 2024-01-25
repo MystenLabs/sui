@@ -36,31 +36,31 @@ Response: {
                 "edges": [
                   {
                     "node": {
-                      "amount": "5000"
+                      "amount": "2000"
                     },
                     "cursor": "MA"
                   },
                   {
                     "node": {
-                      "amount": "2000"
+                      "amount": "1000"
                     },
                     "cursor": "MQ"
                   },
                   {
                     "node": {
-                      "amount": "4000"
+                      "amount": "3000"
                     },
                     "cursor": "Mg"
                   },
                   {
                     "node": {
-                      "amount": "1000"
+                      "amount": "4000"
                     },
                     "cursor": "Mw"
                   },
                   {
                     "node": {
-                      "amount": "3000"
+                      "amount": "5000"
                     },
                     "cursor": "NA"
                   },
@@ -98,13 +98,13 @@ Response: {
                 "edges": [
                   {
                     "node": {
-                      "amount": "1000"
+                      "amount": "4000"
                     },
                     "cursor": "Mw"
                   },
                   {
                     "node": {
-                      "amount": "3000"
+                      "amount": "5000"
                     },
                     "cursor": "NA"
                   }
@@ -136,19 +136,19 @@ Response: {
                 "edges": [
                   {
                     "node": {
-                      "amount": "5000"
+                      "amount": "2000"
                     },
                     "cursor": "MA"
                   },
                   {
                     "node": {
-                      "amount": "2000"
+                      "amount": "1000"
                     },
                     "cursor": "MQ"
                   },
                   {
                     "node": {
-                      "amount": "4000"
+                      "amount": "3000"
                     },
                     "cursor": "Mg"
                   }
