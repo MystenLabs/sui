@@ -51,7 +51,11 @@ impl Epoch {
             .fetch_sui_system_state(Some(self.stored.epoch as u64))
             .await?;
 
-        let active_validators = convert_to_validators(system_state.active_validators, None);
+        let active_validators = convert_to_validators(
+            system_state.active_validators,
+            None,
+            self.stored.last_checkpoint_id.map(|c| c as u64),
+        );
         let validator_set = ValidatorSet {
             total_stake: Some(BigInt::from(self.stored.total_stake)),
             active_validators: Some(active_validators),
