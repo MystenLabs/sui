@@ -38,11 +38,40 @@ fragment RPC_Checkpoint_Fields on Checkpoint {
 	previousCheckpointDigest
 	sequenceNumber
 	timestamp
-	# might be truncated? should we set a higher limit or paginate?
-	transactionBlocks {
+	validatorSignatures
+	transactionBlocks(first: 50) {
 		nodes {
 			digest
 		}
 	}
-	validatorSignatures
+	endOfEpoch: transactionBlocks(last: 1, filter: { kind: SYSTEM_TX }) {
+		nodes {
+			kind {
+				__typename
+				... on EndOfEpochTransaction {
+					transactions(last: 1) {
+						nodes {
+							__typename
+							... on ChangeEpochTransaction {
+								epoch {
+									validatorSet {
+										activeValidators {
+											credentials {
+												protocolPubKey
+											}
+											votingPower
+										}
+									}
+									protocolConfigs {
+										protocolVersion
+									}
+									epochId
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }

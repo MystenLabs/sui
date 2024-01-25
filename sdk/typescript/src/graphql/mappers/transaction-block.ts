@@ -9,7 +9,7 @@ import type {
 	SuiTransactionBlockResponse,
 	SuiTransactionBlockResponseOptions,
 } from '../../client/index.js';
-import type { Rpc_Transaction_FieldsFragment } from '../generated.js';
+import type { Rpc_Transaction_FieldsFragment } from '../generated/queries.js';
 import { mapGraphQLOwnerToRpcOwner } from './owner.js';
 import { toShortTypeString } from './util.js';
 
@@ -48,8 +48,12 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 						AddressOwner: balanceChange.owner?.asAddress?.address!,
 				  },
 		})),
-		checkpoint: transactionBlock.effects?.checkpoint?.sequenceNumber.toString(),
-		timestampMs: new Date(transactionBlock.effects?.timestamp).getTime().toString(),
+		...(typeof transactionBlock.effects?.checkpoint?.sequenceNumber === 'number'
+			? { checkpoint: transactionBlock.effects.checkpoint.sequenceNumber.toString() }
+			: {}),
+		...(transactionBlock.effects?.timestamp
+			? { timestampMs: new Date(transactionBlock.effects?.timestamp).getTime().toString() }
+			: {}),
 		digest: transactionBlock.digest!,
 		effects: options?.showEffects
 			? {
@@ -101,7 +105,7 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 					// wrapped: [], // TODO
 			  }
 			: undefined,
-		errors: errors ?? undefined,
+		...(errors ? { errors: errors } : {}),
 		events: options?.showEvents
 			? transactionBlock.effects?.events?.nodes.map((event) => ({
 					bcs: event.bcs,
@@ -115,11 +119,14 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 			  })) ?? []
 			: undefined,
 		rawTransaction: options?.showRawInput ? transactionBlock.rawTransaction : undefined,
-		transaction: options?.showInput &&
-			transactionBlock.rawTransaction && {
-				data: bcs.SenderSignedData.parse(fromB64(transactionBlock.rawTransaction))[0].intentMessage
-					.value.V1,
-			},
+		...(options?.showInput
+			? {
+					transaction: transactionBlock.rawTransaction && {
+						data: bcs.SenderSignedData.parse(fromB64(transactionBlock.rawTransaction))[0]
+							.intentMessage.value.V1,
+					},
+			  }
+			: {}),
 		objectChanges: options?.showObjectChanges
 			? transactionBlock.effects?.objectChanges?.nodes
 					?.map((change) =>

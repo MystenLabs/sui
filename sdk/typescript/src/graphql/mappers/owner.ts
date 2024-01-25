@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { ObjectOwner } from '../../client/index.js';
-import type { Rpc_Object_FieldsFragment } from '../generated.js';
+import type { Rpc_Object_FieldsFragment } from '../generated/queries.js';
 
 export function mapGraphQLOwnerToRpcOwner(
 	owner: Rpc_Object_FieldsFragment['owner'],

@@ -53,6 +53,10 @@ query tryGetPastObject(
 	$showType: Boolean = false
 	$showStorageRebate: Boolean = false
 ) {
+	current: object(address: $id) {
+		address
+		version
+	}
 	object(address: $id, version: $version) {
 		...RPC_OBJECT_FIELDS
 	}
@@ -82,7 +86,6 @@ query multiGetObjects(
 }
 
 fragment RPC_OBJECT_FIELDS on Object {
-	# display not implemented
 	objectId: address
 	bcs @include(if: $showBcs)
 	version

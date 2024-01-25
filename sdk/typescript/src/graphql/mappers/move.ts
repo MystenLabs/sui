@@ -15,7 +15,7 @@ import type {
 	Rpc_Move_Function_FieldsFragment,
 	Rpc_Move_Module_FieldsFragment,
 	Rpc_Move_Struct_FieldsFragment,
-} from '../generated.js';
+} from '../generated/queries.js';
 import { toShortTypeString } from './util.js';
 
 export type OpenMoveTypeSignatureBody =

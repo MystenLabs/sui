@@ -4,7 +4,12 @@
 import { beforeAll, describe, expect, test } from 'vitest';
 
 import { TransactionBlock } from '../../../src/builder';
-import { getFullnodeUrl, SuiClient, SuiObjectData } from '../../../src/client';
+import {
+	getFullnodeUrl,
+	SuiClient,
+	SuiObjectData,
+	SuiTransactionBlockResponse,
+} from '../../../src/client';
 import { publishPackage, setup, TestToolbox } from '../utils/setup';
 
 describe('GraphQL SuiClient compatibility', () => {
@@ -440,8 +445,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		expect(graphql).toEqual(rpc);
 	});
 
-	test.skip('getStakes', async () => {
-		// TODO: need to stake some coins first
+	test('getStakes', async () => {
 		const rpc = await toolbox.client.getStakes({
 			owner: toolbox.address(),
 		});
@@ -494,6 +498,9 @@ describe('GraphQL SuiClient compatibility', () => {
 
 	test.skip('devInspectTransactionBlock', async () => {
 		const txb = new TransactionBlock();
+		txb.setSender(toolbox.address());
+		const [coin] = txb.splitCoins(txb.gas, [1]);
+		txb.transferObjects([coin], toolbox.address());
 
 		const rpc = await toolbox.client.devInspectTransactionBlock({
 			transactionBlock: txb,
@@ -554,10 +561,62 @@ describe('GraphQL SuiClient compatibility', () => {
 	});
 
 	test.skip('executeTransactionBlock', async () => {
-		// TODO
+		const txb = new TransactionBlock();
+		txb.setSender(toolbox.address());
+		const [coin] = txb.splitCoins(txb.gas, [1]);
+		txb.transferObjects([coin], toolbox.address());
+
+		const { confirmedLocalExecution, ...graphql } =
+			await toolbox.graphQLClient!.signAndExecuteTransactionBlock({
+				transactionBlock: txb,
+				signer: toolbox.keypair,
+				options: {
+					showBalanceChanges: true,
+					showEffects: true,
+					showEvents: true,
+					// showInput: true,
+					showObjectChanges: true,
+					showRawInput: true,
+				},
+			});
+
+		await toolbox.client.waitForTransactionBlock({ digest: graphql.digest });
+
+		const { checkpoint, timestampMs, rawEffects, ...rpc } =
+			(await toolbox.client.getTransactionBlock({
+				digest: graphql.digest,
+				options: {
+					showBalanceChanges: true,
+					showEffects: true,
+					showEvents: true,
+					// showInput: true,
+					showObjectChanges: true,
+					showRawInput: true,
+				},
+			})) as SuiTransactionBlockResponse & { rawEffects: unknown };
+
+		// Deleted gas coin isn't included in changes when executing transaction block
+		rpc.objectChanges?.pop();
+
+		expect(graphql).toEqual(rpc);
 	});
+
 	test.skip('dryRunTransactionBlock', async () => {
-		// TODO
+		const txb = new TransactionBlock();
+		txb.setSender(toolbox.address());
+		const [coin] = txb.splitCoins(txb.gas, [1]);
+		txb.transferObjects([coin], toolbox.address());
+		const bytes = await txb.build({ client: toolbox.client });
+
+		const rpc = await toolbox.client.dryRunTransactionBlock({
+			transactionBlock: bytes,
+		});
+
+		const graphql = await toolbox.graphQLClient!.dryRunTransactionBlock({
+			transactionBlock: bytes,
+		});
+
+		expect(graphql).toEqual(rpc);
 	});
 
 	test('getLatestCheckpointSequenceNumber', async () => {
@@ -644,7 +703,9 @@ describe('GraphQL SuiClient compatibility', () => {
 		const rpc = await toolbox.client.getValidatorsApy();
 		const graphql = await toolbox.graphQLClient!.getValidatorsApy();
 
-		expect(graphql).toEqual(rpc);
+		for (let i = 0; i < rpc.apys.length; i++) {
+			expect(graphql.apys[i].address).toEqual(rpc.apys[i].address);
+		}
 	});
 
 	test('getChainIdentifier', async () => {

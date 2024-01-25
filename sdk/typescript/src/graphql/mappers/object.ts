@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { MoveStruct, SuiObjectResponse } from '../../client/index.js';
-import type { Rpc_Move_Object_FieldsFragment, Rpc_Object_FieldsFragment } from '../generated.js';
+import type {
+	Rpc_Move_Object_FieldsFragment,
+	Rpc_Object_FieldsFragment,
+} from '../generated/queries.js';
 import { formatDisplay } from './display.js';
 import { moveDataToRpcContent } from './move.js';
 import { mapGraphQLOwnerToRpcOwner } from './owner.js';
@@ -18,7 +21,7 @@ export function mapGraphQLObjectToRpcObject(
 					dataType: 'moveObject' as const,
 					bcsBytes: object.asMoveObject?.contents?.bcs,
 					hasPublicTransfer: object.asMoveObject?.hasPublicTransfer!,
-					version: object.version as unknown as string, // RPC type is wrong here
+					version: object.version as unknown as string,
 					type: toShortTypeString(object.asMoveObject?.contents?.type.repr!),
 			  }
 			: undefined,
@@ -52,7 +55,7 @@ export function mapGraphQLMoveObjectToRpcObject(
 					dataType: 'moveObject' as const,
 					bcsBytes: object?.contents?.bcs,
 					hasPublicTransfer: object?.hasPublicTransfer!,
-					version: object.version as unknown as string, // RPC type is wrong here
+					version: object.version as unknown as string,
 					type: toShortTypeString(object?.contents?.type.repr!),
 			  }
 			: undefined,

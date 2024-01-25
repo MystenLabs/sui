@@ -88,11 +88,7 @@ import type {
 	TryGetPastObjectParams,
 } from '../client/types/params.js';
 import { normalizeStructTag, parseStructTag } from '../utils/sui-types.js';
-import type {
-	ObjectFilter,
-	QueryEventsQueryVariables,
-	TransactionBlockKindInput,
-} from './generated.js';
+import type { ObjectFilter, QueryEventsQueryVariables } from './generated/queries.js';
 import {
 	DevInspectTransactionBlockDocument,
 	DryRunTransactionBlockDocument,
@@ -104,6 +100,7 @@ import {
 	GetCheckpointsDocument,
 	GetCoinMetadataDocument,
 	GetCoinsDocument,
+	GetCommitteeInfoDocument,
 	GetCurrentEpochDocument,
 	GetDynamicFieldObjectDocument,
 	GetDynamicFieldsDocument,
@@ -130,9 +127,11 @@ import {
 	QueryTransactionBlocksDocument,
 	ResolveNameServiceAddressDocument,
 	ResolveNameServiceNamesDocument,
+	TransactionBlockKindInput,
 	TryGetPastObjectDocument,
 	TypedDocumentString,
-} from './generated.js';
+} from './generated/queries.js';
+import { mapGraphQLCheckpointToRpcCheckpoint } from './mappers/checkpint.js';
 import { formatDisplay } from './mappers/display.js';
 import {
 	mapNormalizedMoveFunction,
@@ -141,6 +140,7 @@ import {
 	moveDataToRpcContent,
 } from './mappers/move.js';
 import { mapGraphQLMoveObjectToRpcObject, mapGraphQLObjectToRpcObject } from './mappers/object.js';
+import { mapGraphQLStakeToRpcStake } from './mappers/stakes.js';
 import { mapGraphQLTransactionBlockToRpcTransactionBlock } from './mappers/transaction-block.js';
 import { isNumericString, toShortTypeString } from './mappers/util.js';
 import { mapGraphQlValidatorToRpcValidator } from './mappers/validator.js';
@@ -232,6 +232,14 @@ export class GraphQLSuiClient extends SuiClient {
 		}
 
 		return extractedData as NonNullable<Data>;
+	}
+
+	#unsupportedMethod(method: string): never {
+		throw new Error(`Method ${method} is not supported in the GraphQL API`);
+	}
+
+	#unsupportedParams(method: string, param: string): never {
+		throw new Error(`Parameter ${param} is not supported for ${method} in the GraphQL API`);
 	}
 
 	override async getRpcApiVersion(): Promise<string | undefined> {
@@ -499,7 +507,7 @@ export class GraphQLSuiClient extends SuiClient {
 		if (input.filter) {
 			for (const unsupportedFilter of unsupportedFilters) {
 				if (unsupportedFilter in input.filter) {
-					throw new Error(`Filter ${unsupportedFilter} is not supported in GraphQL API`);
+					this.#unsupportedParams('getOwnedObjects', unsupportedFilter);
 				}
 			}
 		}
@@ -555,28 +563,46 @@ export class GraphQLSuiClient extends SuiClient {
 	}
 
 	override async tryGetPastObject(input: TryGetPastObjectParams): Promise<ObjectRead> {
-		const object = await this.#graphqlQuery(
-			{
-				query: TryGetPastObjectDocument,
-				variables: {
-					id: input.id,
-					version: input.version,
-					showBcs: input.options?.showBcs,
-					showContent: input.options?.showContent,
-					showOwner: input.options?.showOwner,
-					showPreviousTransaction: input.options?.showPreviousTransaction,
-					showStorageRebate: input.options?.showStorageRebate,
-					showType: input.options?.showType,
-				},
+		const data = await this.#graphqlQuery({
+			query: TryGetPastObjectDocument,
+			variables: {
+				id: input.id,
+				version: input.version,
+				showBcs: input.options?.showBcs,
+				showContent: input.options?.showContent,
+				showOwner: input.options?.showOwner,
+				showPreviousTransaction: input.options?.showPreviousTransaction,
+				showStorageRebate: input.options?.showStorageRebate,
+				showType: input.options?.showType,
 			},
-			(data) => data.object,
-		);
+		});
 
-		// TODO: needs custom error handling
+		if (!data.current) {
+			return {
+				details: 'Could not find the referenced object',
+				status: 'ObjectNotExists',
+			};
+		}
+
+		if (!data.object) {
+			return data.current.version < Number(input.version)
+				? {
+						status: 'VersionTooHigh',
+						details: {
+							asked_version: String(input.version),
+							latest_version: String(data.current.version),
+							object_id: data.current.address,
+						},
+				  }
+				: {
+						status: 'VersionNotFound',
+						details: [data.current.address, String(input.version)],
+				  };
+		}
 
 		return {
 			status: 'VersionFound',
-			details: mapGraphQLObjectToRpcObject(object, input.options ?? {}),
+			details: mapGraphQLObjectToRpcObject(data.object, input.options ?? {}),
 		};
 	}
 
@@ -618,6 +644,16 @@ export class GraphQLSuiClient extends SuiClient {
 						after: input.cursor,
 				  };
 
+		const unsupportedFilters = ['FromOrToAddress', 'FromAndToAddress', 'TransactionKindIn'];
+
+		if (input.filter) {
+			for (const unsupportedFilter of unsupportedFilters) {
+				if (unsupportedFilter in input.filter) {
+					this.#unsupportedParams('queryTransactionBlocks', unsupportedFilter);
+				}
+			}
+		}
+
 		const { nodes: transactionBlocks, pageInfo } = await this.#graphqlQuery(
 			{
 				query: QueryTransactionBlocksDocument,
@@ -643,13 +679,12 @@ export class GraphQLSuiClient extends SuiClient {
 									'ChangedObject' in input.filter ? input.filter.ChangedObject : undefined,
 								signAddress: 'FromAddress' in input.filter ? input.filter.FromAddress : undefined,
 								recvAddress: 'ToAddress' in input.filter ? input.filter.ToAddress : undefined,
-								// FromOrToAddress
-								// FromAndToAddress
 								kind:
 									'TransactionKind' in input.filter
-										? (input.filter.TransactionKind as TransactionBlockKindInput) // TODO: ensure this is formatted correctly
+										? input.filter.TransactionKind === 'ProgrammableTransaction'
+											? TransactionBlockKindInput.ProgrammableTx
+											: TransactionBlockKindInput.SystemTx
 										: undefined,
-								// TransactionKindIn
 						  }
 						: {},
 				},
@@ -747,9 +782,7 @@ export class GraphQLSuiClient extends SuiClient {
 			(data) => data.address?.stakedSuis?.nodes,
 		);
 
-		// TODO: need to figure out mapping to groups
-		void stakes;
-		throw new Error('Method not implemented.');
+		return mapGraphQLStakeToRpcStake(stakes);
 	}
 
 	override async getStakesByIds(input: GetStakesByIdsParams): Promise<DelegatedStake[]> {
@@ -763,9 +796,7 @@ export class GraphQLSuiClient extends SuiClient {
 			(data) => data.objects?.nodes.map((node) => node?.asMoveObject?.asStakedSui!).filter(Boolean),
 		);
 
-		// TODO: need to extract some details from contents
-		void stakes;
-		throw new Error('Method not implemented.');
+		return mapGraphQLStakeToRpcStake(stakes);
 	}
 
 	override async getLatestSuiSystemState(): Promise<SuiSystemStateSummary> {
@@ -848,12 +879,23 @@ export class GraphQLSuiClient extends SuiClient {
 					: undefined,
 		};
 
-		if ('Package' in input.query) {
-			throw new Error('querying events by Package is not supported in the GraphQL API');
-		}
+		const unsupportedFilters = [
+			'Package',
+			'MoveEventModule',
+			'MoveEventField',
+			'Any',
+			'All',
+			'And',
+			'Or',
+			'TimeRange',
+		];
 
-		if ('MoveEventModule' in input.query) {
-			throw new Error('querying events by MoveEventModule is not supported in the GraphQL API');
+		if (input.query) {
+			for (const unsupportedFilter of unsupportedFilters) {
+				if (unsupportedFilter in input.query) {
+					this.#unsupportedParams('queryEvents', unsupportedFilter);
+				}
+			}
 		}
 
 		const { nodes: events, pageInfo } = await this.#graphqlQuery(
@@ -991,7 +1033,7 @@ export class GraphQLSuiClient extends SuiClient {
 				type: field.value?.__typename === 'MoveObject' ? 'DynamicObject' : 'DynamicField',
 				version: (field.value?.__typename === 'MoveObject'
 					? field.value.version
-					: undefined) as unknown as string, // RPC types are wrong here,
+					: undefined) as unknown as string,
 			})),
 			nextCursor: pageInfo.endCursor ?? null,
 			hasNextPage: pageInfo.hasNextPage,
@@ -1036,7 +1078,7 @@ export class GraphQLSuiClient extends SuiClient {
 				display: formatDisplay(field.value),
 				objectId: field.value.address,
 				type: toShortTypeString(field.value.contents?.type.repr),
-				version: field.value.version as unknown as string, // RPC types are wrong here
+				version: field.value.version as unknown as string,
 			},
 		};
 	}
@@ -1095,14 +1137,16 @@ export class GraphQLSuiClient extends SuiClient {
 	override async dryRunTransactionBlock(
 		input: DryRunTransactionBlockParams,
 	): Promise<DryRunTransactionBlockResponse> {
+		const txBytes =
+			typeof input.transactionBlock === 'string'
+				? input.transactionBlock
+				: toB64(input.transactionBlock);
+		const txb = TransactionBlock.from(fromB64(txBytes));
 		const { transaction, error } = await this.#graphqlQuery(
 			{
 				query: DryRunTransactionBlockDocument,
 				variables: {
-					txBytes:
-						typeof input.transactionBlock === 'string'
-							? input.transactionBlock
-							: toB64(input.transactionBlock),
+					txBytes,
 					showBalanceChanges: true,
 					showEffects: true,
 					showEvents: true,
@@ -1117,13 +1161,16 @@ export class GraphQLSuiClient extends SuiClient {
 			throw new Error(error ?? 'Unexpected error during dry run');
 		}
 
-		const result = mapGraphQLTransactionBlockToRpcTransactionBlock(transaction, {
-			showBalanceChanges: true,
-			showEffects: true,
-			showEvents: true,
-			showObjectChanges: true,
-			showInput: true,
-		});
+		const result = mapGraphQLTransactionBlockToRpcTransactionBlock(
+			{ ...transaction, digest: await txb.getDigest() },
+			{
+				showBalanceChanges: true,
+				showEffects: true,
+				showEvents: true,
+				showObjectChanges: true,
+				showInput: true,
+			},
+		);
 
 		return {
 			input: {} as any, // TODO
@@ -1134,10 +1181,8 @@ export class GraphQLSuiClient extends SuiClient {
 		};
 	}
 
-	override async call<T = unknown>(method: string, params: unknown[]): Promise<T> {
-		void method;
-		void params;
-		throw new Error('Method not implemented.');
+	override async call<T = unknown>(method: string, _params: unknown[]): Promise<T> {
+		return this.#unsupportedMethod(method);
 	}
 
 	override async getLatestCheckpointSequenceNumber(): Promise<string> {
@@ -1169,32 +1214,7 @@ export class GraphQLSuiClient extends SuiClient {
 			(data) => data.checkpoint,
 		);
 
-		return {
-			checkpointCommitments: [], // TODO
-			digest: checkpoint.digest,
-			// endOfEpochData: checkpoint.endOfEpoch && { // TODO
-			// 	epochCommitments: [], // TODO
-			// 	nextEpochCommittee: [], // TODO
-			// 	nextEpochProtocolVersion: String(checkpoint.endOfEpoch.nextProtocolVersion),
-			// },
-			epoch: String(checkpoint.epoch?.epochId),
-			epochRollingGasCostSummary: {
-				computationCost: checkpoint.rollingGasSummary?.computationCost,
-				nonRefundableStorageFee: checkpoint.rollingGasSummary?.nonRefundableStorageFee,
-				storageCost: checkpoint.rollingGasSummary?.storageCost,
-				storageRebate: checkpoint.rollingGasSummary?.storageRebate,
-			},
-			networkTotalTransactions: String(checkpoint.networkTotalTransactions),
-			...(checkpoint.previousCheckpointDigest
-				? { previousDigest: checkpoint.previousCheckpointDigest }
-				: {}),
-			sequenceNumber: String(checkpoint.sequenceNumber),
-			timestampMs: new Date(checkpoint.timestamp).getTime().toString(),
-			transactions:
-				checkpoint.transactionBlocks?.nodes.map((transactionBlock) => transactionBlock.digest!) ??
-				[],
-			validatorSignature: checkpoint.validatorSignatures,
-		};
+		return mapGraphQLCheckpointToRpcCheckpoint(checkpoint);
 	}
 	override async getCheckpoints(
 		input: PaginationArguments<string | null> & GetCheckpointsParams,
@@ -1220,68 +1240,56 @@ export class GraphQLSuiClient extends SuiClient {
 		return {
 			hasNextPage: pagination.last ? pageInfo.hasPreviousPage : pageInfo.hasNextPage,
 			nextCursor: (pagination.last ? pageInfo.startCursor : pageInfo.endCursor) as never,
-			data: checkpoints.map((checkpoint) => ({
-				checkpointCommitments: [], // TODO
-				digest: checkpoint.digest,
-				// endOfEpochData: checkpoint.endOfEpoch && { // TODO
-				// 	epochCommitments: [], // TODO
-				// 	nextEpochCommittee: [], // TODO
-				// 	nextEpochProtocolVersion: String(checkpoint.endOfEpoch.nextProtocolVersion),
-				// },
-				epoch: String(checkpoint.epoch?.epochId),
-				epochRollingGasCostSummary: {
-					computationCost: checkpoint.rollingGasSummary?.computationCost,
-					nonRefundableStorageFee: checkpoint.rollingGasSummary?.nonRefundableStorageFee,
-					storageCost: checkpoint.rollingGasSummary?.storageCost,
-					storageRebate: checkpoint.rollingGasSummary?.storageRebate,
-				},
-				networkTotalTransactions: String(checkpoint.networkTotalTransactions),
-				...(checkpoint.previousCheckpointDigest
-					? { previousDigest: checkpoint.previousCheckpointDigest }
-					: {}),
-				sequenceNumber: String(checkpoint.sequenceNumber),
-				timestampMs: new Date(checkpoint.timestamp).getTime().toString(),
-				transactions:
-					checkpoint.transactionBlocks?.nodes.map((transactionBlock) => transactionBlock.digest!) ??
-					[],
-				validatorSignature: checkpoint.validatorSignatures,
-			})),
+			data: checkpoints.map((checkpoint) => mapGraphQLCheckpointToRpcCheckpoint(checkpoint)),
 		};
 	}
 
 	override async getCommitteeInfo(
 		input?: GetCommitteeInfoParams | undefined,
 	): Promise<CommitteeInfo> {
-		void input;
-		throw new Error('Method not implemented.');
+		const { validatorSet, epochId } = await this.#graphqlQuery(
+			{
+				query: GetCommitteeInfoDocument,
+				variables: {
+					epochId: input?.epoch ? Number.parseInt(input.epoch) : undefined,
+				},
+			},
+			(data) => data.epoch,
+		);
+
+		return {
+			epoch: epochId.toString(),
+			validators: validatorSet?.activeValidators?.map((val) => [
+				val.credentials?.protocolPubKey!,
+				String(val.votingPower),
+			])!,
+		};
 	}
 
 	override async getNetworkMetrics(): Promise<NetworkMetrics> {
-		throw new Error('Method not implemented.');
+		return this.#unsupportedMethod('getNetworkMetrics');
 	}
 
 	override async getMoveCallMetrics(): Promise<MoveCallMetrics> {
-		throw new Error('Method not implemented.');
+		return this.#unsupportedMethod('getMoveCallMetrics');
 	}
 
 	override async getAddressMetrics(): Promise<AddressMetrics> {
-		throw new Error('Method not implemented.');
+		return this.#unsupportedMethod('getAddressMetrics');
 	}
 
 	override async getAllEpochAddressMetrics(
-		input?: { descendingOrder?: boolean | undefined } | undefined,
+		_input?: { descendingOrder?: boolean | undefined } | undefined,
 	): Promise<AllEpochsAddressMetrics> {
-		void input;
-		throw new Error('Method not implemented.');
+		return this.#unsupportedMethod('getAllEpochAddressMetrics');
 	}
 
 	override async getEpochs(
-		input?:
+		_input?:
 			| ({ descendingOrder?: boolean | undefined } & PaginationArguments<string | null>)
 			| undefined,
 	): Promise<EpochPage> {
-		void input;
-		throw new Error('Method not implemented.');
+		return this.#unsupportedMethod('getEpochs');
 	}
 
 	override async getCurrentEpoch(): Promise<EpochInfo> {
@@ -1295,7 +1303,7 @@ export class GraphQLSuiClient extends SuiClient {
 		return {
 			epoch: String(epoch.epochId),
 			validators: epoch.validatorSet?.activeValidators?.map(mapGraphQlValidatorToRpcValidator)!,
-			epochTotalTransactions: 'TODO',
+			epochTotalTransactions: '0', // TODO
 			firstCheckpointId: epoch.firstCheckpoint?.nodes[0]?.sequenceNumber.toString()!,
 			endOfEpochInfo: null,
 			referenceGasPrice: Number.parseInt(epoch.referenceGasPrice, 10),
@@ -1315,7 +1323,7 @@ export class GraphQLSuiClient extends SuiClient {
 			epoch: String(epoch.epochId),
 			apys: epoch.validatorSet?.activeValidators?.map((validator) => ({
 				address: validator.address.address!,
-				apy: (validator.apy ? validator.apy / 100 : null) as number,
+				apy: (typeof validator.apy === 'number' ? validator.apy / 100 : null) as number,
 			}))!,
 		};
 	}

@@ -37,17 +37,19 @@ fragment RPC_STAKE_FIELDS on StakedSui {
 		epochId
 		referenceGasPrice
 	}
+	stakeStatus
 	requestedEpoch {
 		epochId
 	}
-
+	activatedEpoch {
+		epochId
+	}
 	# staking pool can be read from contents
 	contents {
 		json
 	}
 
 	address
-
 	estimatedReward
 	# validatorAddress?
 }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SuiValidatorSummary } from '../../client/index.js';
-import type { Rpc_Validator_FieldsFragment } from '../generated.js';
+import type { Rpc_Validator_FieldsFragment } from '../generated/queries.js';
 
 export function mapGraphQlValidatorToRpcValidator(
 	validator: Rpc_Validator_FieldsFragment,
@@ -11,7 +11,7 @@ export function mapGraphQlValidatorToRpcValidator(
 		commissionRate: validator.commissionRate?.toString()!,
 		description: validator.description!,
 		exchangeRatesId: validator.exchangeRates?.address!,
-		exchangeRatesSize: 'TODO',
+		exchangeRatesSize: validator.exchangeRatesSize?.toString()!,
 		gasPrice: validator.gasPrice,
 		imageUrl: validator.imageUrl!,
 		name: validator.name!,
