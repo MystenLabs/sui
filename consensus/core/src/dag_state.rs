@@ -8,13 +8,14 @@ use std::{
     sync::Arc,
 };
 
+use consensus_config::AuthorityIndex;
+
 use crate::{
     block::{BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
     commit::Commit,
     context::Context,
     storage::Store,
 };
-use consensus_config::AuthorityIndex;
 
 /// Rounds of recently committed blocks cached in memory, per authority.
 #[allow(unused)]
@@ -422,12 +423,13 @@ mod test {
         let ancestors = dag_state.ancestors_at_uncommitted_round(&anchor, 11);
         let mut ancestors_refs: Vec<BlockRef> = ancestors.iter().map(|b| b.reference()).collect();
         ancestors_refs.sort();
-        let expected_refs = vec![
+        let mut expected_refs = vec![
             round_11[0].reference(),
             round_11[1].reference(),
             round_11[2].reference(),
             round_11[5].reference(),
         ];
+        expected_refs.sort(); // we need to sort as blocks with same author and round of round 11 (position 1 & 2) might not be in right lexicographical order.
         assert_eq!(
             ancestors_refs, expected_refs,
             "Expected round 11 ancestors: {:?}. Got: {:?}",
