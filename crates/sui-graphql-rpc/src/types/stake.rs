@@ -338,7 +338,7 @@ impl StakedSui {
     /// for `Object`, and is further filtered to a particular `owner`.
     ///
     /// The `checkpoint_viewed_at` parameter is an Option<u64> representing the
-    /// checkpoint_sequence_number at which this page was queried for, or None if the data was
+    /// checkpoint_sequence_number at which this page was queried for, or `None` if the data was
     /// requested at the latest checkpoint. Each entity returned in the connection will inherit this
     /// checkpoint, so that when viewing that entity's state, it will be from the reference of this
     /// checkpoint_viewed_at parameter.

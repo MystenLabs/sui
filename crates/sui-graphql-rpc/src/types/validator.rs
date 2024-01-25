@@ -17,8 +17,8 @@ pub(crate) struct Validator {
     pub validator_summary: NativeSuiValidatorSummary,
     pub at_risk: Option<u64>,
     pub report_records: Option<Vec<Address>>,
-    // The checkpoint_sequence_number at which this was viewed at, or None if the data was requested
-    // at the latest checkpoint.
+    // The checkpoint_sequence_number at which this was viewed at, or `None` if the data was
+    // requested at the latest checkpoint.
     pub checkpoint_viewed_at: Option<u64>,
 }
 
