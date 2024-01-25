@@ -1900,12 +1900,30 @@ module deepbook::clob_v2 {
         &tick_level.open_orders
     }
 
+    // Order Accessors
+
     public fun order_id(order: &Order): u64 {
         order.order_id
     }
 
     public fun tick_level(order: &Order): u64 {
         order.price
+    }
+
+    public fun original_quantity(order: &Order): u64 {
+        order.original_quantity
+    }  
+
+    public fun quantity(order: &Order): u64 {
+        order.quantity
+    }
+
+    public fun is_bid(order: &Order): bool {
+        order.is_bid
+    }
+
+    public fun owner(order: &Order): address {
+        order.owner
     }
 
     public fun expire_timestamp(order: &Order): u64 {

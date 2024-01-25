@@ -25,7 +25,7 @@ Response: {
       "asMoveObject": {
         "contents": {
           "json": {
-            "id": "0xcf27391f83c42a323595be23151f6ede95a083f451a388ff2e3e25fbbf31a7c3",
+            "id": "0x458d03358725c9b138de2c06fc42521273aa99460eac369dadd312e9680c75d5",
             "value": "0"
           }
         }
@@ -43,7 +43,7 @@ Response: {
       "asMoveObject": {
         "contents": {
           "json": {
-            "id": "0xcf27391f83c42a323595be23151f6ede95a083f451a388ff2e3e25fbbf31a7c3",
+            "id": "0x458d03358725c9b138de2c06fc42521273aa99460eac369dadd312e9680c75d5",
             "value": "0"
           }
         }
