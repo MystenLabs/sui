@@ -177,6 +177,7 @@ const concepts = [
 		},
 		items: [
 			'concepts/sui-architecture/high-level',
+			'concepts/sui-architecture/sui-security',
 			'concepts/transactions/transaction-lifecycle',
 			'concepts/sui-architecture/consensus',
 			'concepts/sui-architecture/indexer-functions',
