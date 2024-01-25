@@ -12,7 +12,7 @@ use sui_package_resolver::Resolver;
 use sui_types::dynamic_field::{derive_dynamic_field_id, DynamicFieldInfo, DynamicFieldType};
 
 use super::cursor::{Page, Target};
-use super::object::{self, deserialize_move_struct, ObjectVersionKey};
+use super::object::{self, deserialize_move_struct, ObjectLookupKey};
 use super::type_filter::ExactTypeFilter;
 use super::{
     base64::Base64, move_object::MoveObject, move_value::MoveValue, sui_address::SuiAddress,
@@ -109,7 +109,7 @@ impl DynamicField {
             let obj = MoveObject::query(
                 ctx.data_unchecked(),
                 self.df_object_id,
-                ObjectVersionKey::Latest,
+                ObjectLookupKey::Latest,
             )
             .await
             .extend()?;

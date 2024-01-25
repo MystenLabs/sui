@@ -107,8 +107,14 @@ impl Event {
             return Ok(None);
         }
 
+        let checkpoint_viewed_at = self
+            .stored
+            .as_ref()
+            .map(|e| e.checkpoint_sequence_number as u64);
+
         Ok(Some(Address {
             address: self.native.sender.into(),
+            checkpoint_viewed_at,
         }))
     }
 

@@ -5,7 +5,7 @@ use async_graphql::*;
 use sui_types::base_types::ObjectRef as NativeObjectRef;
 
 use super::{
-    object::{Object, ObjectVersionKey},
+    object::{Object, ObjectLookupKey},
     sui_address::SuiAddress,
 };
 
@@ -37,7 +37,10 @@ impl ObjectRead {
         Object::query(
             ctx.data_unchecked(),
             self.address_impl(),
-            ObjectVersionKey::Historical(self.version_impl()),
+            ObjectLookupKey::VersionAt {
+                version: self.version_impl(),
+                checkpoint_viewed_at: None,
+            },
         )
         .await
         .extend()

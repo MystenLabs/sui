@@ -9,7 +9,7 @@ use super::cursor::{JsonCursor, Page};
 use super::move_module::MoveModule;
 use super::move_object::MoveObject;
 use super::object::{
-    self, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus, ObjectVersionKey,
+    self, Object, ObjectFilter, ObjectImpl, ObjectLookupKey, ObjectOwner, ObjectStatus,
 };
 use super::owner::OwnerImpl;
 use super::stake::StakedSui;
@@ -70,7 +70,7 @@ pub(crate) type CModule = JsonCursor<String>;
 #[Object]
 impl MovePackage {
     pub(crate) async fn address(&self) -> SuiAddress {
-        OwnerImpl(self.super_.address).address().await
+        OwnerImpl::from(&self.super_).address().await
     }
 
     /// Objects owned by this package, optionally `filter`-ed.
@@ -86,7 +86,7 @@ impl MovePackage {
         before: Option<object::Cursor>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, MoveObject>> {
-        OwnerImpl(self.super_.address)
+        OwnerImpl::from(&self.super_)
             .objects(ctx, first, after, last, before, filter)
             .await
     }
@@ -101,7 +101,7 @@ impl MovePackage {
         ctx: &Context<'_>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Option<Balance>> {
-        OwnerImpl(self.super_.address).balance(ctx, type_).await
+        OwnerImpl::from(&self.super_).balance(ctx, type_).await
     }
 
     /// The balances of all coin types owned by this package.
@@ -116,7 +116,7 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Result<Connection<String, Balance>> {
-        OwnerImpl(self.super_.address)
+        OwnerImpl::from(&self.super_)
             .balances(ctx, first, after, last, before)
             .await
     }
@@ -136,7 +136,7 @@ impl MovePackage {
         before: Option<object::Cursor>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Connection<String, Coin>> {
-        OwnerImpl(self.super_.address)
+        OwnerImpl::from(&self.super_)
             .coins(ctx, first, after, last, before, type_)
             .await
     }
@@ -153,14 +153,14 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, StakedSui>> {
-        OwnerImpl(self.super_.address)
+        OwnerImpl::from(&self.super_)
             .staked_suis(ctx, first, after, last, before)
             .await
     }
 
     /// The domain explicitly configured as the default domain pointing to this object.
     pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        OwnerImpl(self.super_.address).default_suins_name(ctx).await
+        OwnerImpl::from(&self.super_).default_suins_name(ctx).await
     }
 
     /// The SuinsRegistration NFTs owned by this package. These grant the owner the capability to
@@ -176,7 +176,7 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, SuinsRegistration>> {
-        OwnerImpl(self.super_.address)
+        OwnerImpl::from(&self.super_)
             .suins_registrations(ctx, first, after, last, before)
             .await
     }
@@ -405,7 +405,7 @@ impl MovePackage {
     pub(crate) async fn query(
         db: &Db,
         address: SuiAddress,
-        key: ObjectVersionKey,
+        key: ObjectLookupKey,
     ) -> Result<Option<Self>, Error> {
         let Some(object) = Object::query(db, address, key).await? else {
             return Ok(None);

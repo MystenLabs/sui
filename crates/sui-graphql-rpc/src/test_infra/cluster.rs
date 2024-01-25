@@ -259,4 +259,11 @@ impl ExecutorCluster {
         let db_url = self.graphql_connection_config.db_url.clone();
         force_delete_database(db_url).await;
     }
+
+    pub async fn force_objects_snapshot_catchup(&self, start_cp: u64, end_cp: u64) {
+        self.indexer_store
+            .persist_object_snapshot(start_cp, end_cp)
+            .await
+            .unwrap();
+    }
 }

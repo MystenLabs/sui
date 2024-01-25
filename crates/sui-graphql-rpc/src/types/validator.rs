@@ -7,7 +7,7 @@ use async_graphql::connection::{Connection, CursorType, Edge};
 
 use super::big_int::BigInt;
 use super::move_object::MoveObject;
-use super::object::ObjectVersionKey;
+use super::object::ObjectLookupKey;
 use super::sui_address::SuiAddress;
 use super::validator_credentials::ValidatorCredentials;
 use super::{address::Address, base64::Base64};
@@ -19,6 +19,9 @@ pub(crate) struct Validator {
     pub validator_summary: NativeSuiValidatorSummary,
     pub at_risk: Option<u64>,
     pub report_records: Option<Vec<Address>>,
+    /// The checkpoint sequence number at which this was viewed at, or None if the data was
+    /// requested at the latest checkpoint.
+    pub checkpoint_viewed_at: Option<u64>,
 }
 
 type CAddr = JsonCursor<usize>;
@@ -29,6 +32,7 @@ impl Validator {
     async fn address(&self) -> Address {
         Address {
             address: SuiAddress::from(self.validator_summary.sui_address),
+            checkpoint_viewed_at: self.checkpoint_viewed_at,
         }
     }
 
@@ -94,7 +98,10 @@ impl Validator {
         MoveObject::query(
             ctx.data_unchecked(),
             self.operation_cap_id(),
-            ObjectVersionKey::Latest,
+            match self.checkpoint_viewed_at {
+                Some(checkpoint_viewed_at) => ObjectLookupKey::LatestAt(checkpoint_viewed_at),
+                None => ObjectLookupKey::Latest,
+            },
         )
         .await
         .extend()
@@ -106,7 +113,10 @@ impl Validator {
         MoveObject::query(
             ctx.data_unchecked(),
             self.staking_pool_id(),
-            ObjectVersionKey::Latest,
+            match self.checkpoint_viewed_at {
+                Some(checkpoint_viewed_at) => ObjectLookupKey::LatestAt(checkpoint_viewed_at),
+                None => ObjectLookupKey::Latest,
+            },
         )
         .await
         .extend()
@@ -118,7 +128,10 @@ impl Validator {
         MoveObject::query(
             ctx.data_unchecked(),
             self.exchange_rates_id(),
-            ObjectVersionKey::Latest,
+            match self.checkpoint_viewed_at {
+                Some(checkpoint_viewed_at) => ObjectLookupKey::LatestAt(checkpoint_viewed_at),
+                None => ObjectLookupKey::Latest,
+            },
         )
         .await
         .extend()
