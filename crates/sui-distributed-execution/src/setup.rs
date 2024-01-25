@@ -18,7 +18,9 @@ use sui_types::{
 //     num_dynamic_fields: 0,
 //     computation: 25,
 // };
-pub const WORKLOAD: WorkloadKind = WorkloadKind::Counter { txs_per_counter: 2 };
+pub const WORKLOAD: WorkloadKind = WorkloadKind::Counter {
+    txs_per_counter: 100,
+};
 pub const COMPONENT: Component = Component::PipeTxsToChannel;
 
 pub fn export_to_files(
