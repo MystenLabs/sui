@@ -3,16 +3,21 @@
 
 use crate::data::{Db, QueryExecutor};
 use crate::error::Error;
+use crate::raw_query::RawQuery;
+use crate::{filter, query};
 
 use super::balance::{self, Balance};
 use super::base64::Base64;
 use super::big_int::BigInt;
+use super::checkpoint::Checkpoint;
 use super::cursor::{Page, Target};
 use super::display::DisplayEntry;
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::{MoveObject, MoveObjectImpl};
 use super::move_value::MoveValue;
-use super::object::{self, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus};
+use super::object::{
+    self, validate_cursor_consistency, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus,
+};
 use super::owner::OwnerImpl;
 use super::stake::StakedSui;
 use super::sui_address::SuiAddress;
@@ -22,9 +27,7 @@ use super::type_filter::ExactTypeFilter;
 use async_graphql::*;
 
 use async_graphql::connection::{Connection, CursorType, Edge};
-use diesel::{ExpressionMethods, QueryDsl};
-use sui_indexer::models_v2::objects::StoredObject;
-use sui_indexer::schema_v2::objects;
+use sui_indexer::models_v2::objects::StoredHistoryObject;
 use sui_indexer::types_v2::OwnerType;
 use sui_types::coin::Coin as NativeCoin;
 use sui_types::TypeTag;
@@ -290,34 +293,51 @@ impl Coin {
         page: Page<object::Cursor>,
         coin_type: TypeTag,
         owner: Option<SuiAddress>,
-        checkpoint_sequence_number: Option<u64>,
+        checkpoint_viewed_at: Option<u64>,
     ) -> Result<Connection<String, Coin>, Error> {
-        let (prev, next, results) = db
-            .execute(move |conn| {
-                page.paginate_query::<StoredObject, _, _, _>(conn, move || {
-                    use objects::dsl;
-                    let mut query = dsl::objects.into_boxed();
+        // If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
+        // consistent. Otherwise, use the value from the parameter, or set to None. This is so that
+        // paginated queries are consistent with the previous query that created the cursor.
+        let cursor_viewed_at = validate_cursor_consistency(page.after(), page.before())?;
+        let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
 
-                    query = query.filter(
-                        dsl::coin_type.eq(coin_type.to_canonical_string(/* with_prefix */ true)),
-                    );
+        let response = db
+            .execute_repeatable(move |conn| {
+                let (lhs, mut rhs) = Checkpoint::available_range(conn)?;
 
-                    if let Some(owner) = &owner {
-                        // Leverage index on objects table
-                        query = query.filter(dsl::owner_type.eq(OwnerType::Address as i16));
-                        query = query.filter(dsl::owner_id.eq(owner.into_vec()));
+                if let Some(checkpoint_viewed_at) = checkpoint_viewed_at {
+                    if checkpoint_viewed_at < lhs || rhs < checkpoint_viewed_at {
+                        return Ok::<_, diesel::result::Error>(None);
                     }
+                    rhs = checkpoint_viewed_at;
+                }
 
-                    query
-                })
+                let result = page.paginate_raw_query::<StoredHistoryObject>(
+                    conn,
+                    Some(rhs),
+                    coins_query(coin_type, owner, lhs as i64, rhs as i64),
+                )?;
+
+                Ok(Some((result, rhs)))
             })
             .await?;
 
-        let mut conn = Connection::new(prev, next);
+        let Some(((prev, next, results), checkpoint_viewed_at)) = response else {
+            return Err(Error::Client(
+                "Requested data is outside the available range".to_string(),
+            ));
+        };
+
+        let mut conn: Connection<String, Coin> = Connection::new(prev, next);
 
         for stored in results {
-            let cursor = stored.cursor().encode_cursor();
-            let object = Object::try_from_stored_object(stored, checkpoint_sequence_number)?;
+            // To maintain consistency, the returned cursor should have the same upper-bound as the
+            // checkpoint found on the cursor.
+            let cursor = stored
+                .consistent_cursor(checkpoint_viewed_at)
+                .encode_cursor();
+            let object =
+                Object::try_from_stored_history_object(stored, Some(checkpoint_viewed_at))?;
 
             let move_ = MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(
@@ -351,4 +371,72 @@ impl TryFrom<&MoveObject> for Coin {
                 .map_err(CoinDowncastError::Bcs)?,
         })
     }
+}
+
+fn coins_query(coin_type: TypeTag, owner: Option<SuiAddress>, lhs: i64, rhs: i64) -> RawQuery {
+    // Construct the filtered inner query - apply the same filtering criteria to both
+    // objects_snapshot and objects_history tables.
+    let mut snapshot_objs = query!(r#"SELECT * FROM objects_snapshot"#);
+    snapshot_objs = apply_filter(snapshot_objs, &coin_type, owner);
+
+    // Additionally filter objects_history table for results between the available range, or
+    // checkpoint_viewed_at, if provided.
+    let mut history_objs = query!(r#"SELECT * FROM objects_history"#);
+    history_objs = apply_filter(history_objs, &coin_type, owner);
+    history_objs = filter!(
+        history_objs,
+        format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
+    );
+
+    // Combine the two queries, and select the most recent version of each object.
+    let candidates = query!(
+        r#"SELECT DISTINCT ON (object_id) * FROM (({}) UNION ({})) o"#,
+        snapshot_objs,
+        history_objs
+    )
+    .order_by("object_id")
+    .order_by("object_version DESC");
+
+    // Objects that fulfill the filtering criteria may not be the most recent version available.
+    // Left join the candidates table on newer to filter out any objects that have a newer
+    // version.
+    let mut newer = query!("SELECT object_id, object_version FROM objects_history");
+    newer = filter!(
+        newer,
+        format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
+    );
+    let query = query!(
+        r#"
+        SELECT candidates.*
+        FROM ({}) candidates
+        LEFT JOIN ({}) newer
+        ON (
+            candidates.object_id = newer.object_id
+            AND candidates.object_version < newer.object_version
+        )"#,
+        candidates,
+        newer
+    );
+    filter!(query, "newer.object_version IS NULL")
+}
+
+fn apply_filter(mut query: RawQuery, coin_type: &TypeTag, owner: Option<SuiAddress>) -> RawQuery {
+    if let Some(owner) = owner {
+        query = filter!(
+            query,
+            format!(
+                "owner_id = '\\x{}'::bytea AND owner_type = {}",
+                hex::encode(owner.into_vec()),
+                OwnerType::Address as i16
+            )
+        );
+    }
+
+    query = filter!(
+        query,
+        "coin_type IS NOT NULL AND coin_type = {}",
+        coin_type.to_canonical_display(/* with_prefix */ true)
+    );
+
+    query
 }
