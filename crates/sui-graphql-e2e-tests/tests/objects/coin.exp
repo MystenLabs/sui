@@ -28,7 +28,7 @@ Response: {
           }
         },
         {
-          "cursor": "ILyzHKcc29xOYtaOLcUZ9woz5N8kNsVRffj1Gz5O4yRlAAAAAAAAAAA=",
+          "cursor": "ILyzHKcc29xOYtaOLcUZ9woz5N8kNsVRffj1Gz5O4yRlAQAAAAAAAAA=",
           "node": {
             "coinBalance": "30000000000000000",
             "contents": {
@@ -39,7 +39,7 @@ Response: {
           }
         },
         {
-          "cursor": "IOsoTu6Ftm7PLUqS0JKQBgvgpPd0Qdyx4P4zRO2kJCq1AAAAAAAAAAA=",
+          "cursor": "IOsoTu6Ftm7PLUqS0JKQBgvgpPd0Qdyx4P4zRO2kJCq1AQAAAAAAAAA=",
           "node": {
             "coinBalance": "300000000000000",
             "contents": {
