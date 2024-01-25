@@ -7,7 +7,7 @@ use super::cursor::Page;
 use super::dynamic_field::DynamicField;
 use super::dynamic_field::DynamicFieldName;
 use super::move_package::MovePackage;
-use super::object::ObjectVersionKey;
+use super::object::ObjectLookupKey;
 use super::stake::StakedSui;
 use super::suins_registration::NameService;
 use super::suins_registration::SuinsRegistration;
@@ -28,10 +28,18 @@ use sui_types::gas_coin::GAS;
 #[derive(Clone, Debug)]
 pub(crate) struct Owner {
     pub address: SuiAddress,
+    /// The checkpoint sequence number at which this was viewed at, or None if the data was
+    /// requested at the latest checkpoint.
+    pub checkpoint_viewed_at: Option<u64>,
 }
 
 /// Type to implement GraphQL fields that are shared by all Owners.
-pub(crate) struct OwnerImpl(pub SuiAddress);
+pub(crate) struct OwnerImpl {
+    pub address: SuiAddress,
+    /// The checkpoint sequence number at which this was viewed at, or None if the data was
+    /// requested at the latest checkpoint.
+    pub checkpoint_viewed_at: Option<u64>,
+}
 
 /// Interface implemented by GraphQL types representing entities that can own objects. Object owners
 /// are identified by an address which can represent either the public key of an account or another
@@ -122,7 +130,7 @@ pub(crate) enum IOwner {
 #[Object]
 impl Owner {
     pub(crate) async fn address(&self) -> SuiAddress {
-        OwnerImpl(self.address).address().await
+        OwnerImpl::from(self).address().await
     }
 
     /// Objects owned by this object or address, optionally `filter`-ed.
@@ -135,7 +143,7 @@ impl Owner {
         before: Option<object::Cursor>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, MoveObject>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .objects(ctx, first, after, last, before, filter)
             .await
     }
@@ -147,7 +155,7 @@ impl Owner {
         ctx: &Context<'_>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Option<Balance>> {
-        OwnerImpl(self.address).balance(ctx, type_).await
+        OwnerImpl::from(self).balance(ctx, type_).await
     }
 
     /// The balances of all coin types owned by this object or address.
@@ -159,7 +167,7 @@ impl Owner {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Result<Connection<String, Balance>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .balances(ctx, first, after, last, before)
             .await
     }
@@ -176,7 +184,7 @@ impl Owner {
         before: Option<object::Cursor>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Connection<String, Coin>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .coins(ctx, first, after, last, before, type_)
             .await
     }
@@ -190,14 +198,14 @@ impl Owner {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, StakedSui>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .staked_suis(ctx, first, after, last, before)
             .await
     }
 
     /// The domain explicitly configured as the default domain pointing to this object or address.
     pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        OwnerImpl(self.address).default_suins_name(ctx).await
+        OwnerImpl::from(self).default_suins_name(ctx).await
     }
 
     /// The SuinsRegistration NFTs owned by this object or address. These grant the owner the
@@ -210,7 +218,7 @@ impl Owner {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, SuinsRegistration>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .suins_registrations(ctx, first, after, last, before)
             .await
     }
@@ -219,14 +227,21 @@ impl Owner {
         // For now only addresses can be owners
         Some(Address {
             address: self.address,
+            checkpoint_viewed_at: self.checkpoint_viewed_at,
         })
     }
 
     async fn as_object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
-        // TODO: Make consistent
-        Object::query(ctx.data_unchecked(), self.address, ObjectVersionKey::Latest)
-            .await
-            .extend()
+        Object::query(
+            ctx.data_unchecked(),
+            self.address,
+            match self.checkpoint_viewed_at {
+                Some(checkpoint_viewed_at) => ObjectLookupKey::LatestAt(checkpoint_viewed_at),
+                None => ObjectLookupKey::Latest,
+            },
+        )
+        .await
+        .extend()
     }
 
     /// Access a dynamic field on an object using its name. Names are arbitrary Move values whose
@@ -239,7 +254,7 @@ impl Owner {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.address).dynamic_field(ctx, name).await
+        OwnerImpl::from(self).dynamic_field(ctx, name).await
     }
 
     /// Access a dynamic object field on an object using its name. Names are arbitrary Move values
@@ -253,9 +268,7 @@ impl Owner {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.address)
-            .dynamic_object_field(ctx, name)
-            .await
+        OwnerImpl::from(self).dynamic_object_field(ctx, name).await
     }
 
     /// The dynamic fields and dynamic object fields on an object.
@@ -269,7 +282,7 @@ impl Owner {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .dynamic_fields(ctx, first, after, last, before)
             .await
     }
@@ -277,7 +290,7 @@ impl Owner {
 
 impl OwnerImpl {
     pub(crate) async fn address(&self) -> SuiAddress {
-        self.0
+        self.address
     }
 
     pub(crate) async fn objects(
@@ -292,15 +305,20 @@ impl OwnerImpl {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let Some(filter) = filter.unwrap_or_default().intersect(ObjectFilter {
-            owner: Some(self.0),
+            owner: Some(self.address),
             ..Default::default()
         }) else {
             return Ok(Connection::new(false, false));
         };
 
-        MoveObject::paginate(ctx.data_unchecked(), page, filter)
-            .await
-            .extend()
+        MoveObject::paginate(
+            ctx.data_unchecked(),
+            page,
+            filter,
+            self.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 
     pub(crate) async fn balance(
@@ -309,7 +327,7 @@ impl OwnerImpl {
         type_: Option<ExactTypeFilter>,
     ) -> Result<Option<Balance>> {
         let coin = type_.map_or_else(GAS::type_tag, |t| t.0);
-        Balance::query(ctx.data_unchecked(), self.0, coin)
+        Balance::query(ctx.data_unchecked(), self.address, coin)
             .await
             .extend()
     }
@@ -323,7 +341,7 @@ impl OwnerImpl {
         before: Option<balance::Cursor>,
     ) -> Result<Connection<String, Balance>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        Balance::paginate(ctx.data_unchecked(), page, self.0)
+        Balance::paginate(ctx.data_unchecked(), page, self.address)
             .await
             .extend()
     }
@@ -339,9 +357,15 @@ impl OwnerImpl {
     ) -> Result<Connection<String, Coin>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let coin = type_.map_or_else(GAS::type_tag, |t| t.0);
-        Coin::paginate(ctx.data_unchecked(), page, coin, Some(self.0))
-            .await
-            .extend()
+        Coin::paginate(
+            ctx.data_unchecked(),
+            page,
+            coin,
+            Some(self.address),
+            self.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 
     pub(crate) async fn staked_suis(
@@ -353,16 +377,21 @@ impl OwnerImpl {
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, StakedSui>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        StakedSui::paginate(ctx.data_unchecked(), page, self.0)
-            .await
-            .extend()
+        StakedSui::paginate(
+            ctx.data_unchecked(),
+            page,
+            self.address,
+            self.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 
     pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
         Ok(NameService::reverse_resolve_to_name(
             ctx.data_unchecked::<Db>(),
             ctx.data_unchecked::<NameServiceConfig>(),
-            self.0,
+            self.address,
         )
         .await
         .extend()?
@@ -382,7 +411,8 @@ impl OwnerImpl {
             ctx.data_unchecked::<Db>(),
             ctx.data_unchecked::<NameServiceConfig>(),
             page,
-            self.0,
+            self.address,
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()
@@ -397,7 +427,7 @@ impl OwnerImpl {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         use DynamicFieldType as T;
-        DynamicField::query(ctx.data_unchecked(), self.0, name, T::DynamicField)
+        DynamicField::query(ctx.data_unchecked(), self.address, name, T::DynamicField)
             .await
             .extend()
     }
@@ -408,7 +438,7 @@ impl OwnerImpl {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         use DynamicFieldType as T;
-        DynamicField::query(ctx.data_unchecked(), self.0, name, T::DynamicObject)
+        DynamicField::query(ctx.data_unchecked(), self.address, name, T::DynamicObject)
             .await
             .extend()
     }
@@ -422,8 +452,17 @@ impl OwnerImpl {
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        DynamicField::paginate(ctx.data_unchecked(), page, self.0)
+        DynamicField::paginate(ctx.data_unchecked(), page, self.address)
             .await
             .extend()
+    }
+}
+
+impl From<&Owner> for OwnerImpl {
+    fn from(owner: &Owner) -> Self {
+        OwnerImpl {
+            address: owner.address,
+            checkpoint_viewed_at: owner.checkpoint_viewed_at,
+        }
     }
 }

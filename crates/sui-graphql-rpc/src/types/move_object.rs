@@ -11,7 +11,7 @@ use super::display::DisplayEntry;
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_type::MoveType;
 use super::move_value::MoveValue;
-use super::object::{self, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus, ObjectVersionKey};
+use super::object::{self, ObjectFilter, ObjectImpl, ObjectLookupKey, ObjectOwner, ObjectStatus};
 use super::owner::OwnerImpl;
 use super::stake::StakedSuiDowncastError;
 use super::sui_address::SuiAddress;
@@ -116,7 +116,7 @@ pub(crate) enum IMoveObject {
 #[Object]
 impl MoveObject {
     pub(crate) async fn address(&self) -> SuiAddress {
-        OwnerImpl(self.super_.address).address().await
+        OwnerImpl::from(&self.super_).address().await
     }
 
     /// Objects owned by this object, optionally `filter`-ed.
@@ -129,7 +129,7 @@ impl MoveObject {
         before: Option<object::Cursor>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, MoveObject>> {
-        OwnerImpl(self.super_.address)
+        OwnerImpl::from(&self.super_)
             .objects(ctx, first, after, last, before, filter)
             .await
     }
@@ -141,7 +141,7 @@ impl MoveObject {
         ctx: &Context<'_>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Option<Balance>> {
-        OwnerImpl(self.super_.address).balance(ctx, type_).await
+        OwnerImpl::from(&self.super_).balance(ctx, type_).await
     }
 
     /// The balances of all coin types owned by this object.
@@ -153,7 +153,7 @@ impl MoveObject {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Result<Connection<String, Balance>> {
-        OwnerImpl(self.super_.address)
+        OwnerImpl::from(&self.super_)
             .balances(ctx, first, after, last, before)
             .await
     }
@@ -170,7 +170,7 @@ impl MoveObject {
         before: Option<object::Cursor>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Connection<String, Coin>> {
-        OwnerImpl(self.super_.address)
+        OwnerImpl::from(&self.super_)
             .coins(ctx, first, after, last, before, type_)
             .await
     }
@@ -184,14 +184,14 @@ impl MoveObject {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, StakedSui>> {
-        OwnerImpl(self.super_.address)
+        OwnerImpl::from(&self.super_)
             .staked_suis(ctx, first, after, last, before)
             .await
     }
 
     /// The domain explicitly configured as the default domain pointing to this object.
     pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        OwnerImpl(self.super_.address).default_suins_name(ctx).await
+        OwnerImpl::from(&self.super_).default_suins_name(ctx).await
     }
 
     /// The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
@@ -204,7 +204,7 @@ impl MoveObject {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, SuinsRegistration>> {
-        OwnerImpl(self.super_.address)
+        OwnerImpl::from(&self.super_)
             .suins_registrations(ctx, first, after, last, before)
             .await
     }
@@ -302,9 +302,7 @@ impl MoveObject {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.super_.address)
-            .dynamic_field(ctx, name)
-            .await
+        OwnerImpl::from(&self.super_).dynamic_field(ctx, name).await
     }
 
     /// Access a dynamic object field on an object using its name. Names are arbitrary Move values
@@ -319,7 +317,7 @@ impl MoveObject {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.super_.address)
+        OwnerImpl::from(&self.super_)
             .dynamic_object_field(ctx, name)
             .await
     }
@@ -336,7 +334,7 @@ impl MoveObject {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
-        OwnerImpl(self.super_.address)
+        OwnerImpl::from(&self.super_)
             .dynamic_fields(ctx, first, after, last, before)
             .await
     }
@@ -409,7 +407,7 @@ impl MoveObject {
     pub(crate) async fn query(
         db: &Db,
         address: SuiAddress,
-        key: ObjectVersionKey,
+        key: ObjectLookupKey,
     ) -> Result<Option<Self>, Error> {
         let Some(object) = Object::query(db, address, key).await? else {
             return Ok(None);
@@ -420,12 +418,19 @@ impl MoveObject {
         })?))
     }
 
+    /// Query the database for a `page` of Move objects, optionally `filter`-ed.
+    ///
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this page was
+    /// queried for, or `None` if the data was requested at the latest checkpoint. Each entity
+    /// returned in the connection will inherit this checkpoint, so that when viewing that entity's
+    /// state, it will be as if it was read at the same checkpoint.
     pub(crate) async fn paginate(
         db: &Db,
         page: Page<object::Cursor>,
         filter: ObjectFilter,
+        checkpoint_viewed_at: Option<u64>,
     ) -> Result<Connection<String, MoveObject>, Error> {
-        Object::paginate_subtype(db, page, filter, |object| {
+        Object::paginate_subtype(db, page, filter, checkpoint_viewed_at, |object| {
             let address = object.address;
             MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(

@@ -11,16 +11,19 @@ use super::{
     transaction_block::{self, TransactionBlock, TransactionBlockFilter},
 };
 use crate::{
-    data::{self, Db, DbConnection, QueryExecutor},
+    data::{self, Conn, Db, DbConnection, QueryExecutor},
     error::Error,
 };
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
     *,
 };
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
+use diesel::{CombineDsl, ExpressionMethods, OptionalExtension, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
-use sui_indexer::{models_v2::checkpoints::StoredCheckpoint, schema_v2::checkpoints};
+use sui_indexer::{
+    models_v2::checkpoints::StoredCheckpoint,
+    schema_v2::{checkpoints, objects_snapshot},
+};
 use sui_types::messages_checkpoint::{CheckpointCommitment, CheckpointDigest};
 
 /// Filter either by the digest, or the sequence number, or neither, to get the latest checkpoint.
@@ -228,6 +231,37 @@ impl Checkpoint {
         }
 
         Ok(conn)
+    }
+
+    /// Queries the database for the available range supported by the graphql server. This method
+    /// takes a connection, so that it can be used in an execute_repeatable transaction.
+    pub(crate) fn available_range(conn: &mut Conn) -> Result<(u64, u64), diesel::result::Error> {
+        use checkpoints::dsl as checkpoints;
+        use objects_snapshot::dsl as snapshots;
+
+        let checkpoint_range: Vec<i64> = conn.results(move || {
+            let rhs = checkpoints::checkpoints
+                .select(checkpoints::sequence_number)
+                .order(checkpoints::sequence_number.desc())
+                .limit(1);
+
+            let lhs = snapshots::objects_snapshot
+                .select(snapshots::checkpoint_sequence_number)
+                .order(snapshots::checkpoint_sequence_number.desc())
+                .limit(1);
+
+            lhs.union(rhs)
+        })?;
+
+        Ok(match checkpoint_range.as_slice() {
+            [] => (0, 0),
+            [single_value] => (0, *single_value as u64),
+            values => {
+                let min_value = *values.iter().min().unwrap();
+                let max_value = *values.iter().max().unwrap();
+                (min_value as u64, max_value as u64)
+            }
+        })
     }
 }
 

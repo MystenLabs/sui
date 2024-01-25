@@ -24,6 +24,7 @@ use crate::context_data::package_cache::PackageCache;
 use crate::data::{self, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
 use crate::types::base64::Base64;
+use crate::types::checkpoint::Checkpoint;
 use crate::types::intersect;
 use async_graphql::connection::{CursorType, Edge};
 use async_graphql::{connection::Connection, *};
@@ -36,7 +37,7 @@ use move_core_types::language_storage::StructTag;
 use sui_indexer::models_v2::objects::{
     StoredDeletedHistoryObject, StoredHistoryObject, StoredObject,
 };
-use sui_indexer::schema_v2::{checkpoints, objects, objects_history, objects_snapshot};
+use sui_indexer::schema_v2::{objects, objects_history, objects_snapshot};
 use sui_indexer::types_v2::ObjectStatus as NativeObjectStatus;
 use sui_indexer::types_v2::OwnerType;
 use sui_package_resolver::Resolver;
@@ -49,6 +50,9 @@ use sui_types::TypeTag;
 pub(crate) struct Object {
     pub address: SuiAddress,
     pub kind: ObjectKind,
+    /// The checkpoint sequence number at which this was viewed at, or None if the data was
+    /// requested at the latest checkpoint.
+    pub checkpoint_viewed_at: Option<u64>,
 }
 
 /// Type to implement GraphQL fields that are shared by all Objects.
@@ -167,10 +171,15 @@ pub struct AddressOwner {
 }
 
 #[allow(dead_code)]
-pub(crate) enum ObjectVersionKey {
+pub(crate) enum ObjectLookupKey {
     Latest,
-    LatestAt(u64),   // checkpoint_sequence_number
-    Historical(u64), // version
+    LatestAt(u64),
+    VersionAt {
+        version: u64,
+        /// The checkpoint sequence number at which this was viewed at, or None if the data was
+        /// requested at the latest checkpoint.
+        checkpoint_viewed_at: Option<u64>,
+    },
 }
 
 pub(crate) type Cursor = cursor::BcsCursor<Vec<u8>>;
@@ -244,7 +253,7 @@ pub(crate) enum IObject {
 #[Object]
 impl Object {
     pub(crate) async fn address(&self) -> SuiAddress {
-        OwnerImpl(self.address).address().await
+        OwnerImpl::from(self).address().await
     }
 
     /// Objects owned by this object, optionally `filter`-ed.
@@ -257,7 +266,7 @@ impl Object {
         before: Option<Cursor>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, MoveObject>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .objects(ctx, first, after, last, before, filter)
             .await
     }
@@ -269,7 +278,7 @@ impl Object {
         ctx: &Context<'_>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Option<Balance>> {
-        OwnerImpl(self.address).balance(ctx, type_).await
+        OwnerImpl::from(self).balance(ctx, type_).await
     }
 
     /// The balances of all coin types owned by this object.
@@ -281,7 +290,7 @@ impl Object {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Result<Connection<String, Balance>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .balances(ctx, first, after, last, before)
             .await
     }
@@ -298,7 +307,7 @@ impl Object {
         before: Option<Cursor>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Connection<String, Coin>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .coins(ctx, first, after, last, before, type_)
             .await
     }
@@ -312,14 +321,14 @@ impl Object {
         last: Option<u64>,
         before: Option<Cursor>,
     ) -> Result<Connection<String, StakedSui>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .staked_suis(ctx, first, after, last, before)
             .await
     }
 
     /// The domain explicitly configured as the default domain pointing to this object.
     pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        OwnerImpl(self.address).default_suins_name(ctx).await
+        OwnerImpl::from(self).default_suins_name(ctx).await
     }
 
     /// The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
@@ -332,7 +341,7 @@ impl Object {
         last: Option<u64>,
         before: Option<Cursor>,
     ) -> Result<Connection<String, SuinsRegistration>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .suins_registrations(ctx, first, after, last, before)
             .await
     }
@@ -415,7 +424,7 @@ impl Object {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.address).dynamic_field(ctx, name).await
+        OwnerImpl::from(self).dynamic_field(ctx, name).await
     }
 
     /// Access a dynamic object field on an object using its name. Names are arbitrary Move values
@@ -430,9 +439,7 @@ impl Object {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.address)
-            .dynamic_object_field(ctx, name)
-            .await
+        OwnerImpl::from(self).dynamic_object_field(ctx, name).await
     }
 
     /// The dynamic fields and dynamic object fields on an object.
@@ -447,7 +454,7 @@ impl Object {
         last: Option<u64>,
         before: Option<Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .dynamic_fields(ctx, first, after, last, before)
             .await
     }
@@ -489,7 +496,10 @@ impl ObjectImpl<'_> {
             O::AddressOwner(address) => {
                 let address = SuiAddress::from(address);
                 Some(ObjectOwner::Address(AddressOwner {
-                    owner: Some(Owner { address }),
+                    owner: Some(Owner {
+                        address,
+                        checkpoint_viewed_at: self.0.checkpoint_viewed_at,
+                    }),
                 }))
             }
             O::Immutable => Some(ObjectOwner::Immutable(Immutable { dummy: None })),
@@ -497,7 +507,7 @@ impl ObjectImpl<'_> {
                 let parent = Object::query(
                     ctx.data_unchecked(),
                     address.into(),
-                    ObjectVersionKey::Latest,
+                    ObjectLookupKey::Latest,
                 )
                 .await
                 .ok()
@@ -614,10 +624,20 @@ impl ObjectImpl<'_> {
 
 impl Object {
     /// Construct a GraphQL object from a native object, without its stored (indexed) counterpart.
-    pub(crate) fn from_native(address: SuiAddress, native: NativeObject) -> Object {
+    ///
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `Object` was
+    /// constructed in, or `None` if the data was requested at the latest checkpoint. This is
+    /// stored on `Object` so that when viewing that entity's state, it will be as if it was
+    /// read at the same checkpoint.
+    pub(crate) fn from_native(
+        address: SuiAddress,
+        native: NativeObject,
+        checkpoint_viewed_at: Option<u64>,
+    ) -> Object {
         Object {
             address,
             kind: ObjectKind::NotIndexed(native),
+            checkpoint_viewed_at,
         }
     }
 
@@ -642,21 +662,33 @@ impl Object {
     }
 
     /// Query the database for a `page` of objects, optionally `filter`-ed.
+    ///
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this page was
+    /// queried for, or `None` if the data was requested at the latest checkpoint. Each entity
+    /// returned in the connection will inherit this checkpoint, so that when viewing that entity's
+    /// state, it will be as if it was read at the same checkpoint.
     pub(crate) async fn paginate(
         db: &Db,
         page: Page<Cursor>,
         filter: ObjectFilter,
+        checkpoint_viewed_at: Option<u64>,
     ) -> Result<Connection<String, Object>, Error> {
-        Self::paginate_subtype(db, page, filter, Ok).await
+        Self::paginate_subtype(db, page, filter, checkpoint_viewed_at, Ok).await
     }
 
     /// Query the database for a `page` of some sub-type of Object. The page uses the bytes of an
     /// Object ID as the cursor, and can optionally be further `filter`-ed. The subtype is created
     /// using the `downcast` function, which is allowed to fail, if the downcast has failed.
+    ///
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this page was
+    /// queried for, or `None` if the data was requested at the latest checkpoint. Each entity
+    /// returned in the connection will inherit this checkpoint, so that when viewing that entity's
+    /// state, it will be as if it was read at the same checkpoint.
     pub(crate) async fn paginate_subtype<T: OutputType>(
         db: &Db,
         page: Page<Cursor>,
         filter: ObjectFilter,
+        checkpoint_viewed_at: Option<u64>,
         downcast: impl Fn(Object) -> Result<T, Error>,
     ) -> Result<Connection<String, T>, Error> {
         let (prev, next, results) = db
@@ -703,43 +735,42 @@ impl Object {
 
         for stored in results {
             let cursor = stored.cursor().encode_cursor();
-            let object = Object::try_from(stored)?;
+            let object = Self::try_from_stored_object(stored, checkpoint_viewed_at)?;
             conn.edges.push(Edge::new(cursor, downcast(object)?));
         }
 
         Ok(conn)
     }
 
-    async fn query_live(db: &Db, address: SuiAddress) -> Result<Option<Self>, Error> {
-        use objects::dsl as objects;
-        let vec_address = address.into_vec();
-
-        let stored_obj: Option<StoredObject> = db
-            .execute(move |conn| {
-                conn.first(move || {
-                    objects::objects.filter(objects::object_id.eq(vec_address.clone()))
-                })
-                .optional()
-            })
-            .await
-            .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))?;
-
-        stored_obj.map(Self::try_from).transpose()
-    }
-
+    /// Query for the object at a specific version, at the checkpoint_viewed_at if given, else
+    /// against the latest checkpoint.
+    ///
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `Object` was
+    /// queried in, or `None` if the data was requested at the latest checkpoint. This is stored on
+    /// `Object` so that when viewing that entity's state, it will be as if it was read at the same
+    /// checkpoint.
     async fn query_at_version(
         db: &Db,
         address: SuiAddress,
         version: u64,
+        checkpoint_viewed_at: Option<u64>,
     ) -> Result<Option<Self>, Error> {
-        use checkpoints::dsl as checkpoints;
         use objects_history::dsl as history;
         use objects_snapshot::dsl as snapshot;
 
         let version = version as i64;
 
-        let results: Option<Vec<StoredHistoryObject>> = db
-            .execute(move |conn| {
+        let stored_objs: Option<Vec<StoredHistoryObject>> = db
+            .execute_repeatable(move |conn| {
+                let (lhs, mut rhs) = Checkpoint::available_range(conn)?;
+
+                if let Some(checkpoint_viewed_at) = checkpoint_viewed_at {
+                    if checkpoint_viewed_at < lhs || rhs < checkpoint_viewed_at {
+                        return Ok(None);
+                    }
+                    rhs = checkpoint_viewed_at;
+                }
+
                 conn.results(move || {
                     // If an object was created or mutated in a checkpoint outside the current
                     // available range, and never touched again, it will not show up in the
@@ -747,48 +778,22 @@ impl Object {
                     // table as well.
                     let snapshot_query = snapshot::objects_snapshot
                         .filter(snapshot::object_id.eq(address.into_vec()))
-                        .filter(snapshot::object_version.eq(version))
-                        .into_boxed();
-                    let mut historical_query = history::objects_history
+                        .filter(snapshot::object_version.eq(version));
+
+                    let historical_query = history::objects_history
                         .filter(history::object_id.eq(address.into_vec()))
                         .filter(history::object_version.eq(version))
+                        .filter(history::checkpoint_sequence_number.between(lhs as i64, rhs as i64))
                         .order_by(history::object_version.desc())
-                        .limit(1)
-                        .into_boxed();
-
-                    let left = snapshot::objects_snapshot
-                        .select(snapshot::checkpoint_sequence_number)
-                        .order(snapshot::checkpoint_sequence_number.desc())
                         .limit(1);
-
-                    let right = checkpoints::checkpoints
-                        .select(checkpoints::sequence_number)
-                        .order(checkpoints::sequence_number.desc())
-                        .limit(1);
-
-                    historical_query = historical_query
-                        .filter(
-                            left.single_value()
-                                .is_null()
-                                .or(history::checkpoint_sequence_number
-                                    .nullable()
-                                    .ge(left.single_value())),
-                        )
-                        .filter(
-                            history::checkpoint_sequence_number
-                                .nullable()
-                                .le(right.single_value()),
-                        );
 
                     snapshot_query.union(historical_query)
                 })
-                .optional()
+                .optional() // Return optional to match the state when checkpoint_viewed_at is out of range
             })
             .await?;
 
-        // For the moment, if the object existed at some point, it will have eventually be written
-        // to objects_snapshot. Therefore, if both results are None, the object has never existed.
-        let Some(stored_objs) = results else {
+        let Some(stored_objs) = stored_objs else {
             return Ok(None);
         };
 
@@ -796,66 +801,52 @@ impl Object {
         stored_objs
             .into_iter()
             .max_by_key(|o| o.object_version)
-            .map(Self::try_from)
+            .map(|obj| Self::try_from_stored_history_object(obj, checkpoint_viewed_at))
             .transpose()
     }
 
+    /// Query for the object at the latest version at the checkpoint sequence number if given, else
+    /// the latest version of the object against the latest checkpoint.
     async fn query_latest_at_checkpoint(
         db: &Db,
         address: SuiAddress,
-        checkpoint_sequence_number: u64,
+        checkpoint_viewed_at: Option<u64>,
     ) -> Result<Option<Self>, Error> {
         use objects_history::dsl as history;
         use objects_snapshot::dsl as snapshot;
 
-        let checkpoint_sequence_number = checkpoint_sequence_number as i64;
+        let stored_objs: Option<Vec<StoredHistoryObject>> = db
+            .execute_repeatable(move |conn| {
+                let (lhs, mut rhs) = Checkpoint::available_range(conn)?;
 
-        let results: Option<Vec<StoredHistoryObject>> = db
-            .execute(move |conn| {
+                if let Some(checkpoint_viewed_at) = checkpoint_viewed_at {
+                    if checkpoint_viewed_at < lhs || rhs < checkpoint_viewed_at {
+                        return Ok(None);
+                    }
+                    rhs = checkpoint_viewed_at;
+                }
+
                 conn.results(move || {
                     // If an object was created or mutated in a checkpoint outside the current
                     // available range, and never touched again, it will not show up in the
                     // objects_history table. Thus, we always need to check the objects_snapshot
                     // table as well.
-                    let mut snapshot_query = snapshot::objects_snapshot
-                        .filter(snapshot::object_id.eq(address.into_vec()))
-                        .into_boxed();
+                    let snapshot_query = snapshot::objects_snapshot
+                        .filter(snapshot::object_id.eq(address.into_vec()));
 
-                    let mut historical_query = history::objects_history
+                    let historical_query = history::objects_history
                         .filter(history::object_id.eq(address.into_vec()))
+                        .filter(history::checkpoint_sequence_number.between(lhs as i64, rhs as i64))
                         .order_by(history::object_version.desc())
-                        .limit(1)
-                        .into_boxed();
-
-                    let left = snapshot::objects_snapshot
-                        .select(snapshot::checkpoint_sequence_number)
-                        .order(snapshot::checkpoint_sequence_number.desc())
                         .limit(1);
-
-                    historical_query = historical_query.filter(
-                        left.single_value()
-                            .is_null()
-                            .or(history::checkpoint_sequence_number
-                                .nullable()
-                                .ge(left.single_value())),
-                    );
-
-                    historical_query = historical_query
-                        .filter(history::checkpoint_sequence_number.le(checkpoint_sequence_number));
-
-                    snapshot_query = snapshot_query.filter(
-                        snapshot::checkpoint_sequence_number.le(checkpoint_sequence_number),
-                    );
 
                     snapshot_query.union(historical_query)
                 })
-                .optional()
+                .optional() // Return optional to match the state when checkpoint_viewed_at is out of range
             })
             .await?;
 
-        // For the moment, if the object existed at some point, it will have eventually be written
-        // to objects_snapshot. Therefore, if both results are None, the object has never existed.
-        let Some(stored_objs) = results else {
+        let Some(stored_objs) = stored_objs else {
             return Ok(None);
         };
 
@@ -863,23 +854,25 @@ impl Object {
         stored_objs
             .into_iter()
             .max_by_key(|o| o.object_version)
-            .map(Self::try_from)
+            .map(|obj| Self::try_from_stored_history_object(obj, checkpoint_viewed_at))
             .transpose()
     }
 
     pub(crate) async fn query(
         db: &Db,
         address: SuiAddress,
-        key: ObjectVersionKey,
+        key: ObjectLookupKey,
     ) -> Result<Option<Self>, Error> {
         match key {
-            ObjectVersionKey::Latest => Self::query_live(db, address).await,
-            ObjectVersionKey::LatestAt(checkpoint_sequence_number) => {
-                Self::query_latest_at_checkpoint(db, address, checkpoint_sequence_number).await
+            ObjectLookupKey::Latest => Self::query_latest_at_checkpoint(db, address, None).await,
+            ObjectLookupKey::LatestAt(checkpoint_sequence_number) => {
+                Self::query_latest_at_checkpoint(db, address, Some(checkpoint_sequence_number))
+                    .await
             }
-            ObjectVersionKey::Historical(version) => {
-                Self::query_at_version(db, address, version).await
-            }
+            ObjectLookupKey::VersionAt {
+                version,
+                checkpoint_viewed_at,
+            } => Self::query_at_version(db, address, version, checkpoint_viewed_at).await,
         }
         .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))
     }
@@ -902,7 +895,78 @@ impl Object {
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch singleton: {e}")))?;
 
-        stored_obj.map(Self::try_from).transpose()
+        stored_obj
+            .map(|obj| Object::try_from_stored_object(obj, None))
+            .transpose()
+    }
+
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `Object` was
+    /// constructed in, or `None` if the data was requested at the latest checkpoint. This is
+    /// stored on `Object` so that when viewing that entity's state, it will be as if it was read at
+    /// the same checkpoint.
+    pub(crate) fn try_from_stored_object(
+        stored_object: StoredObject,
+        checkpoint_viewed_at: Option<u64>,
+    ) -> Result<Self, Error> {
+        let address = addr(&stored_object.object_id)?;
+        let native_object = bcs::from_bytes(&stored_object.serialized_object)
+            .map_err(|_| Error::Internal(format!("Failed to deserialize object {address}")))?;
+
+        Ok(Self {
+            address,
+            kind: ObjectKind::Live(native_object, stored_object),
+            checkpoint_viewed_at,
+        })
+    }
+
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `Object` was
+    /// constructed in, or `None` if the data was requested at the latest checkpoint. This is
+    /// stored on `Object` so that when viewing that entity's state, it will be as if it was read at
+    /// the same checkpoint.
+    pub(crate) fn try_from_stored_history_object(
+        history_object: StoredHistoryObject,
+        checkpoint_viewed_at: Option<u64>,
+    ) -> Result<Self, Error> {
+        let address = addr(&history_object.object_id)?;
+
+        let object_status =
+            NativeObjectStatus::try_from(history_object.object_status).map_err(|_| {
+                Error::Internal(format!(
+                    "Unknown object status {} for object {} at version {}",
+                    history_object.object_status, address, history_object.object_version
+                ))
+            })?;
+
+        match object_status {
+            NativeObjectStatus::Active => {
+                let Some(serialized_object) = &history_object.serialized_object else {
+                    return Err(Error::Internal(format!(
+                        "Live object {} at version {} cannot have missing serialized_object field",
+                        address, history_object.object_version
+                    )));
+                };
+
+                let native_object = bcs::from_bytes(serialized_object).map_err(|_| {
+                    Error::Internal(format!("Failed to deserialize object {address}"))
+                })?;
+
+                Ok(Self {
+                    address,
+                    kind: ObjectKind::Historical(native_object, history_object),
+                    checkpoint_viewed_at,
+                })
+            }
+            NativeObjectStatus::WrappedOrDeleted => Ok(Self {
+                address,
+                kind: ObjectKind::WrappedOrDeleted(StoredDeletedHistoryObject {
+                    object_id: history_object.object_id,
+                    object_version: history_object.object_version,
+                    object_status: history_object.object_status,
+                    checkpoint_sequence_number: history_object.checkpoint_sequence_number,
+                }),
+                checkpoint_viewed_at,
+            }),
+        }
     }
 }
 
@@ -1017,66 +1081,6 @@ impl Target<Cursor> for StoredObject {
     }
 }
 
-impl TryFrom<StoredObject> for Object {
-    type Error = Error;
-
-    fn try_from(stored_object: StoredObject) -> Result<Self, Error> {
-        let address = addr(&stored_object.object_id)?;
-        let native_object = bcs::from_bytes(&stored_object.serialized_object)
-            .map_err(|_| Error::Internal(format!("Failed to deserialize object {address}")))?;
-
-        Ok(Self {
-            address,
-            kind: ObjectKind::Live(native_object, stored_object),
-        })
-    }
-}
-
-impl TryFrom<StoredHistoryObject> for Object {
-    type Error = Error;
-
-    fn try_from(history_object: StoredHistoryObject) -> Result<Self, Error> {
-        let address = addr(&history_object.object_id)?;
-
-        let object_status =
-            NativeObjectStatus::try_from(history_object.object_status).map_err(|_| {
-                Error::Internal(format!(
-                    "Unknown object status {} for object {} at version {}",
-                    history_object.object_status, address, history_object.object_version
-                ))
-            })?;
-
-        match object_status {
-            NativeObjectStatus::Active => {
-                let Some(serialized_object) = &history_object.serialized_object else {
-                    return Err(Error::Internal(format!(
-                        "Live object {} at version {} cannot have missing serialized_object field",
-                        address, history_object.object_version
-                    )));
-                };
-
-                let native_object = bcs::from_bytes(serialized_object).map_err(|_| {
-                    Error::Internal(format!("Failed to deserialize object {address}"))
-                })?;
-
-                Ok(Self {
-                    address,
-                    kind: ObjectKind::Historical(native_object, history_object),
-                })
-            }
-            NativeObjectStatus::WrappedOrDeleted => Ok(Self {
-                address,
-                kind: ObjectKind::WrappedOrDeleted(StoredDeletedHistoryObject {
-                    object_id: history_object.object_id,
-                    object_version: history_object.object_version,
-                    object_status: history_object.object_status,
-                    checkpoint_sequence_number: history_object.checkpoint_sequence_number,
-                }),
-            }),
-        }
-    }
-}
-
 impl From<&ObjectKind> for ObjectStatus {
     fn from(kind: &ObjectKind) -> Self {
         match kind {
@@ -1084,6 +1088,15 @@ impl From<&ObjectKind> for ObjectStatus {
             ObjectKind::Live(_, _) => ObjectStatus::Live,
             ObjectKind::Historical(_, _) => ObjectStatus::Historical,
             ObjectKind::WrappedOrDeleted(_) => ObjectStatus::WrappedOrDeleted,
+        }
+    }
+}
+
+impl From<&Object> for OwnerImpl {
+    fn from(object: &Object) -> Self {
+        OwnerImpl {
+            address: object.address,
+            checkpoint_viewed_at: object.checkpoint_viewed_at,
         }
     }
 }
