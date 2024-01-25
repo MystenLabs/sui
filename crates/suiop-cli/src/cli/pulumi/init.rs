@@ -6,12 +6,8 @@ use anyhow::{anyhow, Context, Result};
 use colored::Colorize;
 use inquire::Text;
 use serde::{Deserialize, Serialize};
-use std::env;
 use std::fs;
-use std::path::Path;
 use std::path::PathBuf;
-use toml_edit::Document;
-use toml_edit::{value, ArrayOfTables, Item, Table};
 use tracing::{debug, error, info, warn};
 
 pub enum ProjectType {
@@ -124,7 +120,7 @@ fn run_pulumi_new(
             "bash",
             "-c",
             &format!(
-                r#"pulumi new python --dir {0} -d "pulumi project for {1}" --name "{1}"  --stack dev --yes {2}"#,
+                r#"pulumi new go --dir {0} -d "pulumi project for {1}" --name "{1}"  --stack mysten/dev --yes {2}"#,
                 project_dir_str, project_name, opts
             ),
         ],
@@ -144,9 +140,9 @@ fn run_pulumi_new_from_template(
         project_dir_str.bright_purple()
     );
     let template_dir = match project_type {
-        ProjectType::App => "container_app",
-        ProjectType::CronJob => "cronjob",
-        _ => "container_app",
+        ProjectType::App => "app-go",
+        ProjectType::CronJob => "cronjob-go",
+        _ => "app-go",
     };
     let opts = project_opts.join(" ");
     info!("extra pulumi options added: {}", &opts.bright_purple());
@@ -155,7 +151,7 @@ fn run_pulumi_new_from_template(
             "bash",
             "-c",
             &format!(
-                r#"pulumi new {3}/templates/{2} --dir {0} -d "pulumi project for {1}" --name "{1}"  --stack dev {4}"#,
+                r#"pulumi new {3}/templates/{2} --dir {0} -d "pulumi project for {1}" --name "{1}"  --stack mysten/dev {4}"#,
                 project_dir_str,
                 project_name,
                 template_dir,
@@ -167,123 +163,6 @@ fn run_pulumi_new_from_template(
         ],
         Some(CommandOptions::new(true, false)),
     )?;
-    Ok(())
-}
-
-fn run_poetry_init(project_name: &str, project_dir_str: &str) -> Result<()> {
-    info!("initializing poetry in {}", project_dir_str.bright_purple());
-    run_cmd(
-        vec![
-            "bash",
-            "-c",
-            &format!(
-                r#"poetry init -C {0} --python "^3.11" --name {1} --description "pulumi project for {1}" --author "mysten labs <info@mystenlabs.com>" -n"#,
-                project_dir_str, project_name,
-            ),
-        ],
-        None,
-    ).context("failed running poetry init command")?;
-    Ok(())
-}
-
-fn move_venv_to_poetry_dir(project_dir: &Path) -> Result<()> {
-    let venv_path = project_dir.join("venv");
-    let updated = venv_path.with_file_name(".venv");
-    fs::rename(&venv_path, &updated).context(format!(
-        "couldn't rename {:?} to {:?}",
-        &venv_path, &updated
-    ))?;
-    Ok(())
-}
-
-fn make_poetry_in_project() -> Result<()> {
-    let home = env::var("HOME").context("HOME env var didn't exist")?;
-    let poetry_config_dir =
-        PathBuf::from(home).join(PathBuf::from("Library/Application Support/pypoetry"));
-    let poetry_config_filepath = poetry_config_dir.join("config.toml");
-    if !poetry_config_dir.exists() {
-        fs::create_dir(poetry_config_dir).context("couldn't create poetry config dir")?;
-    }
-    if !poetry_config_filepath.exists() {
-        fs::write(&poetry_config_filepath, "").context("couldn't create poetry config file")?;
-    }
-    let config_contents =
-        fs::read(&poetry_config_filepath).context("couldn't read config contents")?;
-    let mut config_toml = std::str::from_utf8(&config_contents)
-        .context("failed to parse config contents")?
-        .parse::<Document>()
-        .expect("invalid toml");
-    debug!("before changes {:?}", config_toml.to_string());
-    config_toml["virtualenvs"]["in-project"] = value(true);
-    fs::write(&poetry_config_filepath, config_toml.to_string())
-        .context("failed to write poetry config back after update")?;
-    Ok(())
-}
-
-fn clean_up_pre_poetry_artifacts(project_dir: &Path) -> Result<()> {
-    let requirements_txt = project_dir.join("requirements.txt");
-    fs::remove_file(requirements_txt)?;
-    let pulumi_yaml_path = project_dir.join("Pulumi.yaml");
-    let pulumi_yaml_contents = fs::read_to_string(&pulumi_yaml_path)?;
-    let mut pulumi_yaml: serde_yaml::Value = serde_yaml::from_str(&pulumi_yaml_contents)?;
-    pulumi_yaml["runtime"]["options"]["virtualenv"] = serde_yaml::to_value(".venv")?;
-    fs::write(pulumi_yaml_path, serde_yaml::to_string(&pulumi_yaml)?)?;
-    Ok(())
-}
-
-fn add_standard_dependencies(project_dir_str: &str) -> Result<()> {
-    info!("running poetry add");
-    run_cmd(
-        vec![
-            "bash",
-            "-c",
-            &format!(
-                "poetry add ../../common pulumi pulumi-kubernetes -C {}",
-                project_dir_str,
-            ),
-        ],
-        None,
-    )?;
-    Ok(())
-}
-
-fn run_poetry_install(project_dir_str: &str) -> Result<()> {
-    info!("running poetry install");
-    run_cmd(
-        vec![
-            "bash",
-            "-c",
-            &format!("poetry install -C {}", project_dir_str,),
-        ],
-        None,
-    )?;
-    Ok(())
-}
-
-pub fn adjust_pyproject(project_dir: &Path) -> Result<()> {
-    info!("setting up pyproject.toml");
-    let pyproject_toml_filepath = project_dir.join("pyproject.toml");
-    let pyproject_contents =
-        fs::read(&pyproject_toml_filepath).context("couldn't read config contents")?;
-    let mut pyproject_toml = std::str::from_utf8(&pyproject_contents)
-        .context("failed to parse pyproject contents")?
-        .parse::<Document>()
-        .expect("invalid toml");
-    debug!("before changes {:?}", pyproject_toml.to_string());
-    // remove the readme definition
-    pyproject_toml["tool"]["poetry"]
-        .as_table_mut()
-        .expect("tool.poetry was not a table")
-        .remove("readme");
-    // include all python files
-    let mut package_table = Table::new();
-    package_table.insert("include", value("**/*.py"));
-    let mut package_array = ArrayOfTables::new();
-    package_array.push(package_table);
-    pyproject_toml["tool"]["poetry"]["packages"] =
-        Item::Value(toml_edit::Value::Array(package_array.into_array()));
-    fs::write(&pyproject_toml_filepath, pyproject_toml.to_string())
-        .context("failed to write pyproject.toml back after update")?;
     Ok(())
 }
 
@@ -361,29 +240,9 @@ fn create_basic_project(
     run_pulumi_new(project_name, project_dir_str, project_opts).map_err(|e| {
         remove_project_dir(project_dir).unwrap();
         let backend = get_current_backend().unwrap();
-        remove_stack(&backend, project_name, "dev").unwrap();
+        remove_stack(&backend, project_name, "mysten/dev").unwrap();
         e
     })?;
-    // initialize poetry in project dir
-    run_poetry_init(project_name, project_dir_str).map_err(|e| {
-        remove_project_dir(project_dir).unwrap();
-        let backend = get_current_backend().unwrap();
-        remove_stack(&backend, project_name, "dev").unwrap();
-        e
-    })?;
-    // update venv to .venv (standard Poetry location)
-    move_venv_to_poetry_dir(project_dir)?;
-    // add `in-project = true` to config
-    // (allows using `pulumi {command}` instead of `poetry run pulumi {command}`)
-    make_poetry_in_project()?;
-    // clean up pre-poetry project (rm requirements.txt and update Pulumi.yaml)
-    clean_up_pre_poetry_artifacts(project_dir)?;
-    // add mysten common lib and standard deps
-    add_standard_dependencies(project_dir_str)?;
-    // fix pyproject.toml file to work for our project layout
-    adjust_pyproject(project_dir)?;
-    // install poetry dependencies that might have been missed
-    run_poetry_install(project_dir_str)?;
     // try a pulumi preview to make sure it's good
     run_pulumi_preview(project_dir_str)
 }
@@ -401,15 +260,14 @@ fn create_mysten_k8s_project(
     );
     fs::create_dir_all(project_dir).context("failed to create project directory")?;
     // initialize pulumi project
-    run_pulumi_new_from_template(project_name, project_dir_str, project_type, project_opts)
-        .map_err(|e| {
+    run_pulumi_new_from_template(project_name, project_dir_str, project_type, project_opts).map_err(
+        |e| {
             remove_project_dir(project_dir).unwrap();
             let backend = get_current_backend().unwrap();
-            remove_stack(&backend, project_name, "dev").unwrap();
+            remove_stack(&backend, project_name, "mysten/dev").unwrap();
             e
-        })?;
-    // install poetry dependencies that might have been missed
-    run_poetry_install(project_dir_str)
+        },
+    )
     // we don't run preview for templated apps because the user
     // has to give the repo dir (improvements to this coming soon)
 }
