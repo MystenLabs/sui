@@ -8,13 +8,13 @@ use std::{
     sync::Arc,
 };
 
-use consensus_config::AuthorityIndex;
 use crate::{
     block::{Block, BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
     commit::Commit,
     context::Context,
     storage::Store,
 };
+use consensus_config::AuthorityIndex;
 
 /// Rounds of recently committed blocks cached in memory, per authority.
 #[allow(unused)]
@@ -142,7 +142,8 @@ impl DagState {
 
     /// Gets all ancestors in the history of a block at a certain round.
     /// The round must be higher than the last committed round.
-    pub(crate) fn ancestors_at_uncommitted_round(&self,
+    pub(crate) fn ancestors_at_uncommitted_round(
+        &self,
         later_block: &VerifiedBlock,
         earlier_round: Round,
     ) -> Vec<VerifiedBlock> {

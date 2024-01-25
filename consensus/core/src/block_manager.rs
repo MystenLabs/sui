@@ -11,7 +11,7 @@ use std::collections::HashSet;
 /// situations.
 #[allow(dead_code)]
 pub(crate) struct BlockManager {
-    // TODO: dummy implementation, just
+    // TODO: dummy implementation, just keep all the block references
     accepted_blocks: HashSet<BlockRef>,
 }
 

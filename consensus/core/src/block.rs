@@ -102,7 +102,7 @@ pub struct BlockV1 {
     // TODO: during verification ensure that timestamp_ms >= ancestors.timestamp
     timestamp_ms: BlockTimestampMs,
     ancestors: Vec<BlockRef>,
-    transactions: Vec<Transaction>
+    transactions: Vec<Transaction>,
 }
 
 impl BlockV1 {
@@ -322,7 +322,10 @@ pub(crate) struct VerifiedBlock {
 
 impl VerifiedBlock {
     /// Creates VerifiedBlock from verified SignedBlock and its serialized bytes.
-    pub fn new_verified(signed_block: SignedBlock, serialized: Bytes) -> Result<Self, bcs::Error> {
+    pub(crate) fn new_verified(
+        signed_block: SignedBlock,
+        serialized: Bytes,
+    ) -> Result<Self, bcs::Error> {
         let digest = Self::compute_digest(&signed_block.inner)?;
         Ok(VerifiedBlock {
             block: Arc::new(signed_block),
@@ -333,7 +336,7 @@ impl VerifiedBlock {
 
     /// Creates a new VerifiedBlock from a SignedBlock and the serialized bytes aren't available. Primarily this should be
     /// used when proposing a new block and the bytes aren't available.
-    pub fn new_verified_unserialized(signed_block: SignedBlock) -> Result<Self, bcs::Error> {
+    pub(crate) fn new_verified_unserialized(signed_block: SignedBlock) -> Result<Self, bcs::Error> {
         let serialized = signed_block.serialize()?;
         Self::new_verified(signed_block, serialized)
     }
@@ -357,7 +360,7 @@ impl VerifiedBlock {
     }
 
     /// Returns reference to the block.
-    pub fn reference(&self) -> BlockRef {
+    pub(crate) fn reference(&self) -> BlockRef {
         BlockRef {
             round: self.round(),
             author: self.author(),
@@ -365,16 +368,16 @@ impl VerifiedBlock {
         }
     }
 
-    pub fn digest(&self) -> BlockDigest {
+    pub(crate) fn digest(&self) -> BlockDigest {
         self.digest
     }
 
     /// Returns the serialized block with signature.
-    pub fn serialized(&self) -> &Bytes {
+    pub(crate) fn serialized(&self) -> &Bytes {
         &self.serialized
     }
 
-    fn compute_digest(block: &Block) -> Result<BlockDigest, bcs::Error> {
+    pub(crate) fn compute_digest(block: &Block) -> Result<BlockDigest, bcs::Error> {
         let mut hasher = DefaultHashFunction::new();
         hasher.update(bcs::to_bytes(block)?);
         Ok(BlockDigest(hasher.finalize().into()))
@@ -406,10 +409,11 @@ impl fmt::Debug for VerifiedBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "{:?}({};{:?};v)",
+            "{:?}({};{:?};{}v)",
             self.reference(),
             self.timestamp_ms(),
-            self.ancestors()
+            self.ancestors(),
+            self.transactions().len()
         )
     }
 }
@@ -455,6 +459,7 @@ impl TestBlock {
 
     pub(crate) fn set_transactions(mut self, transactions: Vec<Transaction>) -> Self {
         self.block.transactions = transactions;
+        self
     }
 
     pub(crate) fn set_epoch(mut self, epoch: Epoch) -> Self {

@@ -1,11 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{HashSet, VecDeque},
-    mem,
-    sync::Arc,
-};
+use std::collections::BTreeMap;
+use std::{collections::HashSet, mem, sync::Arc};
 
 use crate::{
     block::{
@@ -21,11 +18,10 @@ use crate::{
 use consensus_config::AuthorityIndex;
 use mysten_metrics::monitored_scope;
 use tokio::sync::watch;
-use crate::dag_state::DagState;
 
 /// The maximum transaction payload defined in bytes.
 /// TODO: move to protocol config
-const MAX_BLOCK_TRANSACTIONS_SIZE_BYTES: usize = 1_000_000; // 1 MB
+const MAX_BLOCK_TRANSACTIONS_SIZE_BYTES: usize = 5 * 1024 * 1024; // 5 MB
 
 #[derive(Clone)]
 pub(crate) struct CoreOptions {
@@ -46,14 +42,13 @@ pub(crate) struct Core {
     /// The threshold clock that is used to keep track of the current round
     threshold_clock: ThresholdClock,
     /// The last produced block
-    last_own_block: VerifiedBlock,
+    last_proposed_block: VerifiedBlock,
     /// The consumer to use in order to pull transactions to be included for the next proposals
     transactions_consumer: TransactionsConsumer,
     /// The transactions that haven't been proposed yet and are to be included in the next proposal
     pending_transactions: Vec<Transaction>,
-    /// The last ancestor proposed for each author. Each author is represented by the corresponding vec slot by its
-    /// AuthorityIndex value.
-    last_ancestor_proposed: Vec<BlockRef>,
+    /// The pending ancestors to be included in proposals organised by round.
+    pending_ancestors: BTreeMap<Round, Vec<PendingAncestorEntry>>,
     /// The block manager which is responsible for keeping track of the DAG dependencies when processing new blocks
     /// and accept them or suspend if we are missing their causal history
     block_manager: BlockManager,
@@ -61,8 +56,6 @@ pub(crate) struct Core {
     signals: CoreSignals,
     /// The options for the component
     options: CoreOptions,
-    /// The DagState object
-    dag_state: Arc<parking_lot::RwLock<DagState>>
 }
 
 #[allow(dead_code)]
@@ -73,24 +66,23 @@ impl Core {
         block_manager: BlockManager,
         mut signals: CoreSignals,
         options: CoreOptions,
-        dag_state: Arc<parking_lot::RwLock<DagState>>
     ) -> Self {
         // TODO: restore the threshold clock round based on the last quorum data in storage when crash/recover
         let mut threshold_clock = ThresholdClock::new(0, context.clone());
 
         // TODO: restore based on DagState, for now we just init via the genesis
-        let (genesis_my, genesis_others) = Block::genesis(context.clone());
+        let (genesis_my, mut genesis_others) = Block::genesis(context.clone());
+        genesis_others.push(genesis_my.clone());
 
-        let mut pending_ancestors = VecDeque::new();
-        for block in genesis_others {
-            pending_ancestors.push_back((block.reference(), block.timestamp_ms()));
+        // populate the threshold clock to properly advance the round & also the pending ancestors
+        let mut pending_ancestors: BTreeMap<Round, Vec<PendingAncestorEntry>> = BTreeMap::new();
+        for ancestor in genesis_others {
+            threshold_clock.add_block(ancestor.reference());
+            pending_ancestors
+                .entry(ancestor.round())
+                .or_default()
+                .push(ancestor.into())
         }
-
-        // populate the threshold clock to properly advance the round
-        for (ancestor, _) in &pending_ancestors {
-            threshold_clock.add_block(*ancestor);
-        }
-        threshold_clock.add_block(genesis_my.reference());
 
         // emit a signal for the last threshold clock round, even if that's unnecessary it will ensure that the timeout
         // logic will trigger to attempt a block creation.
@@ -99,14 +91,13 @@ impl Core {
         Self {
             context,
             threshold_clock,
-            last_own_block: genesis_my,
+            last_proposed_block: genesis_my,
             transactions_consumer,
             pending_transactions: Vec::new(),
-            last_ancestor_proposed: Vec::new(),
+            pending_ancestors,
             block_manager,
             signals,
             options,
-            dag_state
         }
     }
 
@@ -134,6 +125,18 @@ impl Core {
             .threshold_clock_round
             .set(self.threshold_clock.get_round() as i64);
 
+        // TODO: we might need to consider the following:
+        // 1. Add some sort of protection from bulk catch ups - or intentional validator attack - that is flooding us with
+        // many blocks, so we don't spam the pending_ancestors list and OOM
+        // 2. Probably it doesn't make much sense to keep blocks around from too many rounds ago to reference as the data
+        // might not be relevant any more.
+        for accepted_block in accepted_blocks {
+            self.pending_ancestors
+                .entry(accepted_block.round())
+                .or_default()
+                .push(accepted_block.into());
+        }
+
         // Attempt to create a new block
         let _ = self.try_new_block(false);
 
@@ -142,7 +145,7 @@ impl Core {
     }
 
     /// Force creating a new block for the dictated round. This is used when a leader timeout occurs.
-    pub(crate) fn try_new_block_leader_timeout(&mut self, round: Round) -> Option<VerifiedBlock> {
+    pub(crate) fn force_new_block(&mut self, round: Round) -> Option<VerifiedBlock> {
         if self.last_proposed_round() < round {
             self.context.metrics.node_metrics.leader_timeout_total.inc();
             self.try_new_block(true)
@@ -174,12 +177,14 @@ impl Core {
             // or just the latest one. From earlier experiments I saw only benefit on proposing for the penultimate round
             // only when the validator was supposed to be the leader of the round - so we bring down the missed leaders.
             // Probably proposing for all the intermediate rounds might not make much sense.
+
+            // 1. Consume the ancestors to be included in proposal
             let now = timestamp_utc_ms();
             let ancestors = self.ancestors_to_propose(clock_round, now);
 
             //2. consume the next transactions to be included. Split the vec and swap because we want to hold on the
             // `payload` variable the front of the queue (the older transactions).
-            let payload = self.payload_to_propose();
+            let payload = self.transactions_to_propose();
 
             //3. create the block and insert to storage.
             // TODO: take a decision on whether we want to flush to disk at this point the DagState.
@@ -201,11 +206,17 @@ impl Core {
             //4. Add to the threshold clock
             self.threshold_clock.add_block(verified_block.reference());
 
+            // Add to the pending ancestors
+            self.pending_ancestors
+                .entry(verified_block.round())
+                .or_default()
+                .push((&verified_block).into());
+
             // TODO: use the DagState instead to accept the block directly. Will address on follow up PR when I'll inject
             // the DagState. Now that's necessary to ensure that blocks aren't double processed.
             self.block_manager.add_blocks(vec![verified_block.clone()]);
 
-            self.last_own_block = verified_block.clone();
+            self.last_proposed_block = verified_block.clone();
 
             tracing::debug!("New block created {}", verified_block);
 
@@ -225,48 +236,43 @@ impl Core {
         clock_round: Round,
         block_timestamp: BlockTimestampMs,
     ) -> Vec<BlockRef> {
-        // Now take all the ancestors up to the clock_round (excluded) and then filter only the ones with acceptable timestamp.
-        let first_include_index = self
-            .last_ancestor_proposed
-            .iter()
-            .position(|(block_ref, timestamp)| {
-                // We assume that our system's clock can't go backwards when we perform the check here (ex due to ntp corrections)
-                assert!(*timestamp <= block_timestamp, "Violation, ancestor block timestamp {timestamp} greater than our timestamp {block_timestamp}");
+        // Now take all the ancestors up to the clock_round (excluded) and then remove them from the map.
+        let ancestors = self
+            .pending_ancestors
+            .range(0..clock_round)
+            .flat_map(|(_, blocks)| blocks)
+            .collect::<Vec<_>>();
 
-                block_ref.round >= clock_round
-            })
-            .unwrap_or(self.last_ancestor_proposed.len());
-
-        let mut taken = self.last_ancestor_proposed.split_off(first_include_index);
-        mem::swap(&mut taken, &mut self.last_ancestor_proposed);
+        // Ensure that timestamps are correct
+        ancestors.iter().for_each(|block|{
+            // We assume that our system's clock can't go backwards when we perform the check here (ex due to ntp corrections)
+            assert!(block.timestamp <= block_timestamp, "Violation, ancestor block timestamp {} greater than our timestamp {block_timestamp}", block.timestamp);
+        });
 
         // Compress the references in the block. We don't want to include an ancestors that already referenced by other blocks
         // we are about to include.
-        let mut references_in_block: HashSet<BlockRef> = HashSet::new();
-        let ancestors = taken
+        let all_ancestors_parents: HashSet<&BlockRef> = ancestors
             .iter()
-            .map(|(block_ref, _timestamp)| *block_ref)
-            .collect::<Vec<_>>();
+            .flat_map(|block| &block.ancestors)
+            .collect();
 
-        for block in self.get_blocks(&ancestors).into_iter().flatten() {
-            references_in_block.extend(block.ancestors());
-        }
-
-        // explicitly add our last produced block to end result
-        let mut to_propose = vec![self.last_own_block.reference()];
-        for block_ref in ancestors.into_iter() {
-            if !references_in_block.contains(&block_ref) {
-                to_propose.push(block_ref);
+        let mut to_propose = HashSet::new();
+        for block in ancestors.into_iter() {
+            if !all_ancestors_parents.contains(&block.reference) {
+                to_propose.insert(block.reference);
             }
         }
 
+        // always include our last block to ensure that is not somehow excluded by the DAG compression
+        to_propose.insert(self.last_proposed_block.reference());
+
         assert!(!to_propose.is_empty());
 
-        to_propose
-    }
+        // Now clean up the pending ancestors
+        self.pending_ancestors
+            .retain(|round, _blocks| *round >= clock_round);
 
-    fn get_blocks(&self, _block_refs: &[BlockRef]) -> Vec<Option<VerifiedBlock>> {
-        vec![]
+        to_propose.into_iter().collect()
     }
 
     /// Checks whether all the leaders of the previous quorum exist.
@@ -278,36 +284,17 @@ impl Core {
         let quorum_round = self.threshold_clock.get_round().saturating_sub(1);
 
         let leaders = self.leaders(quorum_round);
-        let leaders_blocks = self.blocks_at_round(quorum_round, &leaders);
-
-        // Search for all the leaders
-        leaders.iter().all(|leader| {
-            leaders_blocks
-                .iter()
-                .any(|block_ref| block_ref.author == *leader)
-        })
-    }
-
-    /// Returns the blocks at the specified round for the given authorities. The method might return more than one block
-    /// per authority in case of equivocation.
-    fn blocks_at_round(&self, round: Round, authorities: &[AuthorityIndex]) -> Vec<BlockRef> {
-        // TODO: this is super dummy for now to make it work - it will be replaced by the corresponding DagState method
-        let mut ancestors = self.last_ancestor_proposed.clone();
-        ancestors.push_back((
-            self.last_own_block.reference(),
-            self.last_own_block.timestamp_ms(),
-        ));
-
-        ancestors
-            .into_iter()
-            .filter_map(|(b, _)| {
-                if b.round == round && authorities.contains(&b.author) {
-                    Some(b)
-                } else {
-                    None
-                }
-            })
-            .collect()
+        if let Some(ancestors) = self.pending_ancestors.get(&quorum_round) {
+            // Search for all the leaders. If at least one is not found, then return false.
+            // A linear search should be fine here as the set of elements is not expected to be small enough and more sophisticated
+            // data structures might not give us much here.
+            return leaders.iter().all(|leader| {
+                ancestors
+                    .iter()
+                    .any(|entry| entry.reference.author == *leader)
+            });
+        }
+        false
     }
 
     /// Returns the leaders of the provided round.
@@ -320,14 +307,14 @@ impl Core {
     }
 
     fn last_proposed_round(&self) -> Round {
-        self.last_own_block.round()
+        self.last_proposed_block.round()
     }
 
     fn last_proposed_block(&self) -> &VerifiedBlock {
-        &self.last_own_block
+        &self.last_proposed_block
     }
 
-    fn payload_to_propose(&mut self) -> Vec<Transaction> {
+    fn transactions_to_propose(&mut self) -> Vec<Transaction> {
         let mut total_payload_size = 0;
         let transactions_index = self
             .pending_transactions
@@ -342,6 +329,34 @@ impl Core {
         mem::swap(&mut payload, &mut self.pending_transactions);
 
         payload
+    }
+}
+
+/// A helper struct to keep a much reduced info set for a block that is pending to potentially be included
+/// in a next block proposal.
+struct PendingAncestorEntry {
+    reference: BlockRef,
+    timestamp: BlockTimestampMs,
+    ancestors: Vec<BlockRef>,
+}
+
+impl From<&VerifiedBlock> for PendingAncestorEntry {
+    fn from(value: &VerifiedBlock) -> Self {
+        Self {
+            reference: value.reference(),
+            timestamp: value.timestamp_ms(),
+            ancestors: value.ancestors().to_vec(),
+        }
+    }
+}
+
+impl From<VerifiedBlock> for PendingAncestorEntry {
+    fn from(value: VerifiedBlock) -> Self {
+        Self {
+            reference: value.reference(),
+            timestamp: value.timestamp_ms(),
+            ancestors: value.ancestors().to_vec(),
+        }
     }
 }
 
@@ -407,6 +422,7 @@ mod test {
     use crate::metrics::test_metrics;
     use crate::transactions_client::TransactionsClient;
     use consensus_config::{Committee, Parameters, Stake};
+    use std::collections::BTreeSet;
     use std::time::Duration;
     use sui_protocol_config::ProtocolConfig;
 
@@ -495,16 +511,21 @@ mod test {
             CoreOptions::default(),
         );
 
+        let mut expected_ancestors = BTreeSet::new();
+
         // Adding one block now will trigger the creation of new block for round 1
         let block_1 = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
+        expected_ancestors.insert(block_1.reference());
         _ = core.add_blocks(vec![block_1]);
 
         assert_eq!(core.last_proposed_round(), 1);
+        expected_ancestors.insert(core.last_proposed_block().reference());
         // attempt to create a block - none will be produced.
         assert!(core.try_new_block(false).is_none());
 
         // Adding another block now forms a quorum for round 1, so block at round 2 will proposed
         let block_3 = VerifiedBlock::new_for_test(TestBlock::new(1, 2).build());
+        expected_ancestors.insert(block_3.reference());
         _ = core.add_blocks(vec![block_3]);
 
         assert_eq!(core.last_proposed_round(), 2);
@@ -512,6 +533,10 @@ mod test {
         let proposed_block = core.last_proposed_block();
         assert_eq!(proposed_block.round(), 2);
         assert_eq!(proposed_block.author(), context.own_index);
+        assert_eq!(proposed_block.ancestors().len(), 3);
+        let ancestors = proposed_block.ancestors();
+        let ancestors = ancestors.iter().cloned().collect::<BTreeSet<_>>();
+        assert_eq!(ancestors, expected_ancestors);
     }
 
     #[tokio::test]
@@ -535,7 +560,7 @@ mod test {
 
                 assert_eq!(core.last_proposed_round(), round);
 
-                this_round_blocks.push(core.last_own_block.clone());
+                this_round_blocks.push(core.last_proposed_block.clone());
             }
 
             last_round_blocks = this_round_blocks;
@@ -550,7 +575,7 @@ mod test {
 
         // Now try to create the blocks for round 4 via the leader timeout method which should ignore any leader checks
         for (core, _) in &mut cores {
-            assert!(core.try_new_block_leader_timeout(4).is_some());
+            assert!(core.force_new_block(4).is_some());
             assert_eq!(core.last_proposed_round(), 4);
         }
     }
@@ -612,9 +637,6 @@ mod test {
         }
     }
 
-    /// This test can't pass yet as we are missing the DagState to fetch the blocks ancestors when proposing. But added
-    /// as test case to showcase the intention of compression.
-    #[ignore]
     #[tokio::test]
     async fn test_core_compress_proposal_references() {
         // create the cores and their signals for all the authorities
@@ -636,7 +658,7 @@ mod test {
 
                 // try to propose to ensure that we are covering the case where we miss the leader authority 3
                 core.add_blocks(last_round_blocks.clone());
-                core.try_new_block_leader_timeout(round);
+                core.force_new_block(round);
 
                 let block = core.last_proposed_block();
                 assert_eq!(block.round(), round);
@@ -655,12 +677,17 @@ mod test {
         let (core, _) = &mut cores[excluded_authority];
         core.add_blocks(all_blocks);
 
-        // Assert that a block has been created for round 11 and it references to blocks of round 9
+        // Assert that a block has been created for round 11 and it references to blocks of round 10 for the other peers, and
+        // to round 0 for its own block.
         let block = core.last_proposed_block();
         assert_eq!(block.round(), 11);
-        assert_eq!(block.ancestors().len(), 3);
+        assert_eq!(block.ancestors().len(), 4);
         for block_ref in block.ancestors() {
-            assert_eq!(block_ref.round, 10); // We expect to reference only to blocks of the previous round
+            if block_ref.author == excluded_authority {
+                assert_eq!(block_ref.round, 0);
+            } else {
+                assert_eq!(block_ref.round, 10);
+            }
         }
     }
 
