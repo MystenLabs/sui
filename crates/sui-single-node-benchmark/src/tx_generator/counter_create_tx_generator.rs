@@ -4,28 +4,31 @@
 use crate::mock_account::Account;
 use crate::tx_generator::TxGenerator;
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::base_types::ObjectID;
 use sui_types::transaction::{Transaction, DEFAULT_VALIDATOR_GAS_PRICE};
 
-pub struct NonMoveTxGenerator {}
+pub struct CounterCreateTxGenerator {
+    move_package: ObjectID,
+}
 
-impl NonMoveTxGenerator {
-    pub fn new() -> Self {
-        Self {}
+impl CounterCreateTxGenerator {
+    pub fn new(move_package: ObjectID) -> Self {
+        Self { move_package }
     }
 }
 
-impl TxGenerator for NonMoveTxGenerator {
+impl TxGenerator for CounterCreateTxGenerator {
     fn generate_txs(&self, account: Account) -> Vec<Transaction> {
         vec![TestTransactionBuilder::new(
             account.sender,
             account.gas_objects[0],
             DEFAULT_VALIDATOR_GAS_PRICE,
         )
-        .transfer_sui(None, account.sender)
+        .move_call(self.move_package, "benchmark", "create_counter", vec![])
         .build_and_sign(account.keypair.as_ref())]
     }
 
     fn name(&self) -> &'static str {
-        "Simple Transfer Transaction Generator"
+        "Counter Creation Transaction Generator"
     }
 }

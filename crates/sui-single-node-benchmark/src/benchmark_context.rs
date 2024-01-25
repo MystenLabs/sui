@@ -4,7 +4,7 @@
 use crate::command::Component;
 use crate::mock_account::{batch_parallel_create_account_and_gas, Account};
 use crate::single_node::SingleValidator;
-use crate::tx_generator::{RootObjectCreateTxGenerator, TxGenerator};
+use crate::tx_generator::{CounterCreateTxGenerator, RootObjectCreateTxGenerator, TxGenerator};
 use crate::workload::Workload;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
@@ -167,11 +167,11 @@ impl BenchmarkContext {
             .map(|account| {
                 let account = account.clone();
                 let tx_generator = tx_generator.clone();
-                tokio::spawn(async move { tx_generator.generate_tx(account) })
+                tokio::spawn(async move { tx_generator.generate_txs(account) })
             })
             .collect();
         let results: Vec<_> = tasks.collect().await;
-        results.into_iter().map(|r| r.unwrap()).collect()
+        results.into_iter().map(|r| r.unwrap()).flatten().collect()
     }
 
     pub(crate) async fn certify_transactions(
@@ -232,8 +232,8 @@ impl BenchmarkContext {
         &self,
         mut transactions: Vec<Transaction>,
     ) {
-        self.execute_sample_transaction(transactions.pop().unwrap())
-            .await;
+        // self.execute_sample_transaction(transactions.pop().unwrap())
+        //     .await;
 
         let tx_count = transactions.len();
         let in_memory_store = self.validator.create_in_memory_store();
@@ -308,64 +308,6 @@ impl BenchmarkContext {
         );
     }
 
-    // pub(crate) async fn benchmark_checkpoint_executor(
-    //     &self,
-    //     mut transactions: Vec<Transaction>,
-    //     checkpoint_size: usize,
-    // ) {
-    //     self.execute_sample_transaction(transactions.pop().unwrap())
-    //         .await;
-
-    //     info!("Executing all transactions to generate effects");
-    //     let tx_count = transactions.len();
-    //     let in_memory_store = self.validator.create_in_memory_store();
-    //     let effects: BTreeMap<_, _> = self
-    //         .execute_transactions_in_memory(in_memory_store.clone(), transactions.clone())
-    //         .await
-    //         .into_iter()
-    //         .map(|e| (*e.transaction_digest(), e))
-    //         .collect();
-
-    //     info!("Building checkpoints");
-    //     let validator = self.validator();
-    //     let checkpoints = validator
-    //         .build_checkpoints(in_memory_store, transactions, effects, checkpoint_size)
-    //         .await;
-    //     info!("Built {} checkpoints", checkpoints.len());
-    //     let (mut checkpoint_executor, checkpoint_sender) = validator.create_checkpoint_executor();
-    //     for (checkpoint, contents) in checkpoints {
-    //         let state = validator.get_validator();
-    //         state
-    //             .get_checkpoint_store()
-    //             .insert_verified_checkpoint(&checkpoint)
-    //             .unwrap();
-    //         state
-    //             .database
-    //             .multi_insert_transaction_and_effects(contents.iter())
-    //             .unwrap();
-    //         state
-    //             .get_checkpoint_store()
-    //             .insert_verified_checkpoint_contents(&checkpoint, contents)
-    //             .unwrap();
-    //         state
-    //             .get_checkpoint_store()
-    //             .update_highest_synced_checkpoint(&checkpoint)
-    //             .unwrap();
-    //         checkpoint_sender.send(checkpoint).unwrap();
-    //     }
-    //     let start_time = std::time::Instant::now();
-    //     info!("Starting checkpoint execution. You can now attach a profiler");
-    //     checkpoint_executor
-    //         .run_epoch(validator.get_epoch_store().clone())
-    //         .await;
-    //     let elapsed = start_time.elapsed().as_millis() as f64 / 1000f64;
-    //     info!(
-    //         "Checkpoint execution finished in {}s, TPS={}.",
-    //         elapsed,
-    //         tx_count as f64 / elapsed,
-    //     );
-    // }
-
     async fn execute_raw_transactions(
         &self,
         transactions: Vec<Transaction>,
@@ -434,5 +376,82 @@ impl BenchmarkContext {
             .collect();
         let results: Vec<_> = tasks.collect().await;
         results.into_iter().map(|r| r.unwrap()).collect()
+    }
+
+    pub(crate) async fn _publish_basics_package(&mut self) -> ObjectRef {
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.extend(["..", "..", "sui_programmability", "examples", "basics"]);
+
+        let mut gas_objects = self.admin_account.gas_objects.deref().clone();
+
+        let (package, updated_gas) = self
+            .validator
+            .publish_package(
+                path,
+                self.admin_account.sender,
+                &self.admin_account.keypair,
+                gas_objects[0],
+            )
+            .await;
+        gas_objects[0] = updated_gas;
+        self.admin_account.gas_objects = Arc::new(gas_objects);
+        package
+    }
+
+    pub(crate) async fn preparing_counter_objects(
+        &mut self,
+        move_package: ObjectID,
+    ) -> HashMap<SuiAddress, ObjectRef> {
+        let mut counter_objects = HashMap::new();
+        info!("Preparing counters");
+        let counters_create_transactions = self
+            .generate_transactions(Arc::new(CounterCreateTxGenerator::new(move_package)))
+            .await;
+        let results = self
+            .execute_raw_transactions(counters_create_transactions)
+            .await;
+        let mut new_gas_objects = HashMap::new();
+        for effects in results {
+            let (owner, counter_object) = effects
+                .created()
+                .into_iter()
+                .filter_map(|(oref, owner)| {
+                    owner
+                        .get_address_owner_address()
+                        .ok()
+                        .map(|owner| (owner, oref))
+                })
+                .next()
+                .unwrap();
+            counter_objects.insert(owner, counter_object);
+            let gas_object = effects.gas_object().0;
+            new_gas_objects.insert(gas_object.0, gas_object);
+        }
+        self.refresh_gas_objects(new_gas_objects);
+        info!("Finished preparing counters");
+        counter_objects
+
+        // let mut counter_refs = Vec::new();
+        // for _ in 0..num_counters {
+        //     let mut gas_objects = self.admin_account.gas_objects.deref().clone();
+
+        //     let transaction = TestTransactionBuilder::new(
+        //         self.admin_account.sender,
+        //         gas_objects[0],
+        //         DEFAULT_VALIDATOR_GAS_PRICE,
+        //     )
+        //     .move_call(move_package, "benchmark", "create_counter", vec![])
+        //     .build_and_sign(self.admin_account.keypair.as_ref());
+        //     let effects = self.validator.execute_raw_transaction(transaction).await;
+        //     let (counter_ref, _) = effects
+        //         .created()
+        //         .into_iter()
+        //         .find(|(_, owner)| matches!(owner, Owner::AddressOwner(_)))
+        //         .unwrap();
+        //     let updated_gas = effects.gas_object().0;
+        //     gas_objects[0] = updated_gas;
+        //     counter_refs.push(counter_ref);
+        // }
+        // counter_refs
     }
 }

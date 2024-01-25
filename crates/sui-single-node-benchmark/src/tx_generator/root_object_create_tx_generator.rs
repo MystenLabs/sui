@@ -22,8 +22,8 @@ impl RootObjectCreateTxGenerator {
 }
 
 impl TxGenerator for RootObjectCreateTxGenerator {
-    fn generate_tx(&self, account: Account) -> Transaction {
-        TestTransactionBuilder::new(
+    fn generate_txs(&self, account: Account) -> Vec<Transaction> {
+        vec![TestTransactionBuilder::new(
             account.sender,
             account.gas_objects[0],
             DEFAULT_VALIDATOR_GAS_PRICE,
@@ -34,7 +34,7 @@ impl TxGenerator for RootObjectCreateTxGenerator {
             "generate_dynamic_fields",
             vec![CallArg::Pure(bcs::to_bytes(&self.child_per_root).unwrap())],
         )
-        .build_and_sign(account.keypair.as_ref())
+        .build_and_sign(account.keypair.as_ref())]
     }
 
     fn name(&self) -> &'static str {

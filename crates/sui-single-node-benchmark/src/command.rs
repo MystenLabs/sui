@@ -88,4 +88,12 @@ pub enum WorkloadKind {
         )]
         computation: u8,
     },
+    Counter {
+        #[arg(
+            long,
+            default_value_t = 1,
+            help = "Number of times each counter is incremented (a measure of contention)."
+        )]
+        txs_per_counter: u64,
+    },
 }
