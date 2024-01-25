@@ -11,7 +11,7 @@
 #[derive(Copy, Clone)]
 pub struct Rule {
     pub ttl: u64,
-    pub port: u32,
+    pub port: u16,
 }
 
 // the feature gate is needed to make it work for no_std and std

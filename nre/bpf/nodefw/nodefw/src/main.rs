@@ -52,8 +52,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut fw = Firewall::new("BLOCKLIST", &mut bpf);
     fw.add("192.168.1.1", Rule { ttl: 0, port: 2046 })?;
     fw.add("192.168.2.1", Rule { ttl: 0, port: 2046 })?;
-    fw.add("::2", Rule { ttl: 0, port: 2046 })?;
-    fw.add("::3", Rule { ttl: 0, port: 2046 })?;
+    fw.add("::1", Rule { ttl: 0, port: 2046 })?;
 
     let program: &mut Xdp = bpf.program_mut("nodefw").unwrap().try_into()?;
     program.load()?;
