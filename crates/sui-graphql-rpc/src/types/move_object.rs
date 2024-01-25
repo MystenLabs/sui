@@ -424,7 +424,7 @@ impl MoveObject {
         filter: ObjectFilter,
         checkpoint_sequence_number: Option<u64>,
     ) -> Result<Connection<String, MoveObject>, Error> {
-        Object::paginate_subtype_historical(
+        Object::paginate_subtype(
             db,
             page,
             filter,
