@@ -10,7 +10,10 @@ use sui_types::{
     transaction::GasData,
 };
 
-use super::{address::Address, big_int::BigInt, object::ObjectVersionKey, sui_address::SuiAddress};
+use super::{
+    address::Address, big_int::BigInt, move_object::MoveObject, object::ObjectVersionKey,
+    sui_address::SuiAddress,
+};
 use super::{
     cursor::Page,
     object::{self, ObjectFilter, ObjectKey},
@@ -59,7 +62,7 @@ impl GasInput {
         after: Option<object::Cursor>,
         last: Option<u64>,
         before: Option<object::Cursor>,
-    ) -> Result<Connection<String, Object>> {
+    ) -> Result<Connection<String, MoveObject>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let filter = ObjectFilter {
@@ -67,7 +70,7 @@ impl GasInput {
             ..Default::default()
         };
 
-        Object::paginate(
+        MoveObject::paginate(
             ctx.data_unchecked(),
             page,
             filter,

@@ -92,9 +92,11 @@ impl Balance {
                     rhs = checkpoint_sequence_number;
                 }
 
-                let result = page.paginate_raw_query::<StoredBalance>(conn, move || {
-                    Balance::base_query(address, None, lhs as i64, rhs as i64)
-                })?;
+                let result = page.paginate_raw_query::<StoredBalance, _>(
+                    conn,
+                    move |balance| balance.map(|b| b.cursor()),
+                    move || Balance::base_query(address, None, lhs as i64, rhs as i64),
+                )?;
 
                 Ok::<_, diesel::result::Error>(Some(result))
             })

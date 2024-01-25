@@ -13822,6 +13822,7 @@ dependencies = [
  "rand 0.8.5",
  "regex",
  "rocksdb",
+ "serde",
  "serde_json",
  "simulacrum",
  "sui-config",

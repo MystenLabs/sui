@@ -1,0 +1,173 @@
+processed 13 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1 'publish'. lines 10-31:
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 5456800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 33-33:
+created: object(2,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'run'. lines 35-35:
+created: object(3,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4 'run'. lines 37-37:
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 1301652, non_refundable_storage_fee: 13148
+
+task 5 'create-checkpoint'. lines 39-39:
+Checkpoint created: 1
+
+task 6 'run-graphql'. lines 41-69:
+Response: {
+  "data": {
+    "after_obj_3_0": {
+      "objects": {
+        "nodes": [
+          {
+            "version": 4,
+            "contents": {
+              "type": {
+                "repr": "0x3f0c6e4f85d1e65c8898b1ff76eb610c9cef63aae0522bfea31545f5bd227e61::M1::Object"
+              },
+              "json": {
+                "id": "0xfa6606bf7cb04f836e8563c9d0c7bf4f84809cfb9947137ac14ab9ca588a4686",
+                "value": "100"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "before_obj_3_0": {
+      "objects": {
+        "nodes": []
+      }
+    }
+  }
+}
+
+task 7 'run'. lines 71-71:
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 8 'create-checkpoint'. lines 73-73:
+Checkpoint created: 2
+
+task 9 'run-graphql'. lines 75-129:
+Response: {
+  "data": {
+    "after_obj_3_0_chkpt_2": {
+      "objects": {
+        "nodes": [
+          {
+            "version": 5,
+            "contents": {
+              "type": {
+                "repr": "0x3f0c6e4f85d1e65c8898b1ff76eb610c9cef63aae0522bfea31545f5bd227e61::M1::Object"
+              },
+              "json": {
+                "id": "0xfa6606bf7cb04f836e8563c9d0c7bf4f84809cfb9947137ac14ab9ca588a4686",
+                "value": "200"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "before_obj_3_0_chkpt_2": {
+      "objects": {
+        "nodes": []
+      }
+    },
+    "after_obj_3_0_chkpt_1": {
+      "objects": {
+        "nodes": [
+          {
+            "version": 4,
+            "contents": {
+              "type": {
+                "repr": "0x3f0c6e4f85d1e65c8898b1ff76eb610c9cef63aae0522bfea31545f5bd227e61::M1::Object"
+              },
+              "json": {
+                "id": "0xfa6606bf7cb04f836e8563c9d0c7bf4f84809cfb9947137ac14ab9ca588a4686",
+                "value": "100"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "before_obj_3_0_chkpt_1": {
+      "objects": {
+        "nodes": []
+      }
+    }
+  }
+}
+
+task 10 'run'. lines 131-131:
+mutated: object(0,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 11 'create-checkpoint'. lines 133-133:
+Checkpoint created: 3
+
+task 12 'run-graphql'. lines 135-189:
+Response: {
+  "data": {
+    "after_obj_3_0_chkpt_3": {
+      "objects": {
+        "nodes": [
+          {
+            "version": 5,
+            "contents": {
+              "type": {
+                "repr": "0x3f0c6e4f85d1e65c8898b1ff76eb610c9cef63aae0522bfea31545f5bd227e61::M1::Object"
+              },
+              "json": {
+                "id": "0xfa6606bf7cb04f836e8563c9d0c7bf4f84809cfb9947137ac14ab9ca588a4686",
+                "value": "200"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "before_obj_3_0_chkpt_3": {
+      "objects": {
+        "nodes": []
+      }
+    },
+    "after_obj_3_0_chkpt_2": {
+      "objects": {
+        "nodes": [
+          {
+            "version": 5,
+            "contents": {
+              "type": {
+                "repr": "0x3f0c6e4f85d1e65c8898b1ff76eb610c9cef63aae0522bfea31545f5bd227e61::M1::Object"
+              },
+              "json": {
+                "id": "0xfa6606bf7cb04f836e8563c9d0c7bf4f84809cfb9947137ac14ab9ca588a4686",
+                "value": "200"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "before_obj_3_0_chkpt_2": {
+      "objects": {
+        "nodes": []
+      }
+    }
+  }
+}

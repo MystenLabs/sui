@@ -246,13 +246,15 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         ))
     }
 
-    pub(crate) fn paginate_raw_query<T>(
+    pub(crate) fn paginate_raw_query<T, F>(
         &self,
         conn: &mut Conn<'_>,
+        cursor_fn: F,
         query_fn: impl Fn() -> RawQuery,
     ) -> QueryResult<(bool, bool, impl Iterator<Item = T>)>
     where
         T: Send + RawPaginated<C> + FromSqlRow<Untyped, DieselBackend> + 'static,
+        F: Fn(Option<&T>) -> Option<C>,
     {
         let new_query = move || {
             let mut query = query_fn();
@@ -282,8 +284,8 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         };
 
         Ok(self.paginate_results(
-            results.first().map(|f| f.cursor()),
-            results.last().map(|l| l.cursor()),
+            cursor_fn(results.first()),
+            cursor_fn(results.last()),
             results,
         ))
     }
@@ -298,55 +300,60 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         T: Send + 'static,
     {
         // Detect whether the results imply the existence of a previous or next page.
-        let (prev, next, prefix, suffix) =
-            match (self.after(), f_cursor, l_cursor, self.before(), self.end) {
-                // Results came back empty, despite supposedly including the `after` and `before`
-                // cursors, so the bounds must have been invalid, no matter which end the page was
-                // drawn from.
-                (_, None, _, _, _) | (_, _, None, _, _) => {
-                    return (false, false, vec![].into_iter());
-                }
+        let (prev, next, prefix, suffix) = match (
+            self.after(),
+            f_cursor.clone(),
+            l_cursor.clone(),
+            self.before(),
+            self.end,
+        ) {
+            // Results came back empty, despite supposedly including the `after` and `before`
+            // cursors, so the bounds must have been invalid, no matter which end the page was
+            // drawn from.
+            (_, None, _, _, _) | (_, _, None, _, _) => {
+                return (false, false, vec![].into_iter());
+            }
 
-                // Page drawn from the front, and the cursor for the first element does not match
-                // `after`. This implies the bound was invalid, so we return an empty result.
-                (Some(a), Some(f), _, _, End::Front) if f != *a => {
-                    return (false, false, vec![].into_iter());
-                }
+            // Page drawn from the front, and the cursor for the first element does not match
+            // `after`. This implies the bound was invalid, so we return an empty result.
+            (Some(a), Some(f), _, _, End::Front) if f != *a => {
+                return (false, false, vec![].into_iter());
+            }
 
-                // Similar to above case, but for back of results.
-                (_, _, Some(l), Some(b), End::Back) if l != *b => {
-                    return (false, false, vec![].into_iter());
-                }
+            // Similar to above case, but for back of results.
+            (_, _, Some(l), Some(b), End::Back) if l != *b => {
+                return (false, false, vec![].into_iter());
+            }
 
-                // From here onwards, we know that the results are non-empty and if a cursor was
-                // supplied on the end the page is being drawn from, it was found in the results
-                // (implying a page follows in that direction).
-                (after, _, Some(l), before, End::Front) => {
-                    let has_previous_page = after.is_some();
-                    let prefix = has_previous_page as usize;
+            // From here onwards, we know that the results are non-empty and if a cursor was
+            // supplied on the end the page is being drawn from, it was found in the results
+            // (implying a page follows in that direction).
+            (after, _, Some(l), before, End::Front) => {
+                let has_previous_page = after.is_some();
+                let prefix = has_previous_page as usize;
 
-                    // If results end with the before cursor, we will at least need to trim one element
-                    // from the suffix and we trim more off the end if there is more after applying the
-                    // limit.
-                    let mut suffix = before.is_some_and(|b| *b == l) as usize;
-                    suffix += results.len().saturating_sub(self.limit() + prefix + suffix);
-                    let has_next_page = suffix > 0;
+                // If results end with the before cursor, we will at least need to trim one element
+                // from the suffix and we trim more off the end if there is more after applying the
+                // limit.
+                let mut suffix = before.is_some_and(|b| *b == l) as usize;
+                suffix += results.len().saturating_sub(self.limit() + prefix + suffix);
+                let has_next_page = suffix > 0;
 
-                    (has_previous_page, has_next_page, prefix, suffix)
-                }
+                (has_previous_page, has_next_page, prefix, suffix)
+            }
 
-                // Symmetric to the previous case, but drawing from the back.
-                (after, Some(f), _, before, End::Back) => {
-                    let has_next_page = before.is_some();
-                    let suffix = has_next_page as usize;
+            // Symmetric to the previous case, but drawing from the back.
+            (after, Some(f), _, before, End::Back) => {
+                let has_next_page = before.is_some();
+                let suffix = has_next_page as usize;
 
-                    let mut prefix = after.is_some_and(|a| *a == f) as usize;
-                    prefix += results.len().saturating_sub(self.limit() + prefix + suffix);
-                    let has_previous_page = prefix > 0;
+                let mut prefix = after.is_some_and(|a| *a == f) as usize;
+                prefix += results.len().saturating_sub(self.limit() + prefix + suffix);
+                let has_previous_page = prefix > 0;
 
-                    (has_previous_page, has_next_page, prefix, suffix)
-                }
-            };
+                (has_previous_page, has_next_page, prefix, suffix)
+            }
+        };
 
         // If after trimming, we're going to return no elements, then forget whether there's a
         // previous or next page, because there will be no start or end cursor for this page to

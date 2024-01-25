@@ -1,0 +1,370 @@
+processed 23 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1 'publish'. lines 15-32:
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 5175600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 34-34:
+created: object(2,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'run'. lines 36-36:
+created: object(3,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4 'create-checkpoint'. lines 38-38:
+Checkpoint created: 1
+
+task 5 'run-graphql'. lines 40-68:
+Response: {
+  "data": {
+    "one_of_these_will_yield_an_object": {
+      "objects": {
+        "nodes": []
+      }
+    },
+    "if_the_other_does_not": {
+      "nodes": [
+        {
+          "version": 3,
+          "asMoveObject": {
+            "contents": {
+              "type": {
+                "repr": "0x646d0c542528600527e1e61ab81bdd885e0f03d2895e935ebff96b5adb0ad84c::M1::Object"
+              },
+              "json": {
+                "id": "0xdcd5c1378ee6550b4655f97ad9d43dc96072e55ee15b17737b1b06ad61b222c6",
+                "value": "0"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 6 'run'. lines 70-70:
+created: object(6,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7 'run'. lines 72-72:
+created: object(7,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8 'create-checkpoint'. lines 74-74:
+Checkpoint created: 2
+
+task 9 'run-graphql'. lines 76-104:
+Response: {
+  "data": {
+    "paginating_on_checkpoint_1": {
+      "objects": {
+        "nodes": []
+      }
+    },
+    "should_not_have_more_than_one_result": {
+      "nodes": [
+        {
+          "version": 3,
+          "asMoveObject": {
+            "contents": {
+              "type": {
+                "repr": "0x646d0c542528600527e1e61ab81bdd885e0f03d2895e935ebff96b5adb0ad84c::M1::Object"
+              },
+              "json": {
+                "id": "0xdcd5c1378ee6550b4655f97ad9d43dc96072e55ee15b17737b1b06ad61b222c6",
+                "value": "0"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 10 'run-graphql'. lines 106-121:
+Response: {
+  "data": {
+    "four_objects": {
+      "objects": {
+        "nodes": [
+          {
+            "version": 4,
+            "contents": {
+              "type": {
+                "repr": "0x646d0c542528600527e1e61ab81bdd885e0f03d2895e935ebff96b5adb0ad84c::M1::Object"
+              },
+              "json": {
+                "id": "0x50cf8ec636181af2ae7b9871c475ad554d8babd9520a2701e48cb800ddca315f",
+                "value": "1"
+              }
+            }
+          },
+          {
+            "version": 6,
+            "contents": {
+              "type": {
+                "repr": "0x646d0c542528600527e1e61ab81bdd885e0f03d2895e935ebff96b5adb0ad84c::M1::Object"
+              },
+              "json": {
+                "id": "0x67ae81c5818ecc2435d197cf37a8a879e170530d90ee1a83f6cb7ff44bc56703",
+                "value": "3"
+              }
+            }
+          },
+          {
+            "version": 5,
+            "contents": {
+              "type": {
+                "repr": "0x646d0c542528600527e1e61ab81bdd885e0f03d2895e935ebff96b5adb0ad84c::M1::Object"
+              },
+              "json": {
+                "id": "0x7c1d908c30b3a16d5ce8458da3b4e4067ed843784b177940c85b4cad8dc3912b",
+                "value": "2"
+              }
+            }
+          },
+          {
+            "version": 3,
+            "contents": {
+              "type": {
+                "repr": "0x646d0c542528600527e1e61ab81bdd885e0f03d2895e935ebff96b5adb0ad84c::M1::Object"
+              },
+              "json": {
+                "id": "0xdcd5c1378ee6550b4655f97ad9d43dc96072e55ee15b17737b1b06ad61b222c6",
+                "value": "0"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 11 'run-graphql'. lines 123-148:
+Response: {
+  "data": {
+    "objects_at_version": {
+      "objects": {
+        "nodes": [
+          {
+            "version": 4,
+            "contents": {
+              "type": {
+                "repr": "0x646d0c542528600527e1e61ab81bdd885e0f03d2895e935ebff96b5adb0ad84c::M1::Object"
+              },
+              "json": {
+                "id": "0x50cf8ec636181af2ae7b9871c475ad554d8babd9520a2701e48cb800ddca315f",
+                "value": "1"
+              }
+            }
+          },
+          {
+            "version": 6,
+            "contents": {
+              "type": {
+                "repr": "0x646d0c542528600527e1e61ab81bdd885e0f03d2895e935ebff96b5adb0ad84c::M1::Object"
+              },
+              "json": {
+                "id": "0x67ae81c5818ecc2435d197cf37a8a879e170530d90ee1a83f6cb7ff44bc56703",
+                "value": "3"
+              }
+            }
+          },
+          {
+            "version": 5,
+            "contents": {
+              "type": {
+                "repr": "0x646d0c542528600527e1e61ab81bdd885e0f03d2895e935ebff96b5adb0ad84c::M1::Object"
+              },
+              "json": {
+                "id": "0x7c1d908c30b3a16d5ce8458da3b4e4067ed843784b177940c85b4cad8dc3912b",
+                "value": "2"
+              }
+            }
+          },
+          {
+            "version": 3,
+            "contents": {
+              "type": {
+                "repr": "0x646d0c542528600527e1e61ab81bdd885e0f03d2895e935ebff96b5adb0ad84c::M1::Object"
+              },
+              "json": {
+                "id": "0xdcd5c1378ee6550b4655f97ad9d43dc96072e55ee15b17737b1b06ad61b222c6",
+                "value": "0"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 12 'programmable'. lines 150-151:
+mutated: object(0,0), object(2,0), object(3,0), object(6,0), object(7,0)
+gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 5206608, non_refundable_storage_fee: 52592
+
+task 13 'create-checkpoint'. lines 153-153:
+Checkpoint created: 3
+
+task 14 'run-graphql'. lines 155-183:
+Response: {
+  "data": {
+    "after_obj_6_0_at_checkpoint_2": {
+      "objects": {
+        "nodes": [
+          {
+            "version": 3,
+            "contents": {
+              "type": {
+                "repr": "0x646d0c542528600527e1e61ab81bdd885e0f03d2895e935ebff96b5adb0ad84c::M1::Object"
+              },
+              "json": {
+                "id": "0xdcd5c1378ee6550b4655f97ad9d43dc96072e55ee15b17737b1b06ad61b222c6",
+                "value": "0"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "before_obj_6_0_at_checkpoint_2": {
+      "nodes": [
+        {
+          "version": 4,
+          "asMoveObject": {
+            "contents": {
+              "type": {
+                "repr": "0x646d0c542528600527e1e61ab81bdd885e0f03d2895e935ebff96b5adb0ad84c::M1::Object"
+              },
+              "json": {
+                "id": "0x50cf8ec636181af2ae7b9871c475ad554d8babd9520a2701e48cb800ddca315f",
+                "value": "1"
+              }
+            }
+          }
+        },
+        {
+          "version": 6,
+          "asMoveObject": {
+            "contents": {
+              "type": {
+                "repr": "0x646d0c542528600527e1e61ab81bdd885e0f03d2895e935ebff96b5adb0ad84c::M1::Object"
+              },
+              "json": {
+                "id": "0x67ae81c5818ecc2435d197cf37a8a879e170530d90ee1a83f6cb7ff44bc56703",
+                "value": "3"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 16 'create-checkpoint'. lines 187-187:
+Checkpoint created: 4
+
+task 18 'create-checkpoint'. lines 191-191:
+Checkpoint created: 5
+
+task 19 'force-object-snapshot-catchup'. lines 193-193:
+Objects snapshot updated to [0 to 4)
+
+task 20 'run-graphql'. lines 195-223:
+Response: {
+  "data": {
+    "after_obj_6_0_at_checkpoint_2_now_before_available_range": {
+      "objects": {
+        "nodes": []
+      }
+    },
+    "before_obj_6_0_at_checkpoint_2": {
+      "nodes": []
+    }
+  }
+}
+
+task 21 'run-graphql'. lines 225-241:
+Response: {
+  "data": {
+    "owned_by_address_b_latest": {
+      "objects": {
+        "nodes": [
+          {
+            "version": 7,
+            "contents": {
+              "type": {
+                "repr": "0x646d0c542528600527e1e61ab81bdd885e0f03d2895e935ebff96b5adb0ad84c::M1::Object"
+              },
+              "json": {
+                "id": "0x50cf8ec636181af2ae7b9871c475ad554d8babd9520a2701e48cb800ddca315f",
+                "value": "1"
+              }
+            }
+          },
+          {
+            "version": 7,
+            "contents": {
+              "type": {
+                "repr": "0x646d0c542528600527e1e61ab81bdd885e0f03d2895e935ebff96b5adb0ad84c::M1::Object"
+              },
+              "json": {
+                "id": "0x67ae81c5818ecc2435d197cf37a8a879e170530d90ee1a83f6cb7ff44bc56703",
+                "value": "3"
+              }
+            }
+          },
+          {
+            "version": 7,
+            "contents": {
+              "type": {
+                "repr": "0x646d0c542528600527e1e61ab81bdd885e0f03d2895e935ebff96b5adb0ad84c::M1::Object"
+              },
+              "json": {
+                "id": "0x7c1d908c30b3a16d5ce8458da3b4e4067ed843784b177940c85b4cad8dc3912b",
+                "value": "2"
+              }
+            }
+          },
+          {
+            "version": 7,
+            "contents": {
+              "type": {
+                "repr": "0x646d0c542528600527e1e61ab81bdd885e0f03d2895e935ebff96b5adb0ad84c::M1::Object"
+              },
+              "json": {
+                "id": "0xdcd5c1378ee6550b4655f97ad9d43dc96072e55ee15b17737b1b06ad61b222c6",
+                "value": "0"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 22 'run-graphql'. lines 243-269:
+Response: {
+  "data": {
+    "objects_at_version": {
+      "objects": {
+        "nodes": []
+      }
+    }
+  }
+}

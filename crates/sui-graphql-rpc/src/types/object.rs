@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::ops::Deref;
 
 use super::balance::{self, Balance};
 use super::big_int::BigInt;
 use super::coin::Coin;
 use super::coin_metadata::CoinMetadata;
-use super::cursor::{self, Page, Paginated, Target};
+use super::cursor::{self, Page, Paginated, RawPaginated, Target};
 use super::digest::Digest;
 use super::display::{Display, DisplayEntry};
 use super::dynamic_field::{DynamicField, DynamicFieldName};
@@ -21,11 +22,12 @@ use super::transaction_block::TransactionBlockFilter;
 use super::type_filter::{ExactTypeFilter, TypeFilter};
 use super::{owner::Owner, sui_address::SuiAddress, transaction_block::TransactionBlock};
 use crate::context_data::package_cache::PackageCache;
-use crate::data::{self, Db, DbConnection, QueryExecutor};
+use crate::data::{self, Db, DbConnection, QueryExecutor, RawQuery};
 use crate::error::Error;
 use crate::types::base64::Base64;
 use crate::types::checkpoint::Checkpoint;
 use crate::types::intersect;
+use crate::{filter, or_filter, query};
 use async_graphql::connection::{CursorType, Edge};
 use async_graphql::{connection::Connection, *};
 use diesel::{
@@ -34,6 +36,7 @@ use diesel::{
 };
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
+use serde::{Deserialize, Serialize};
 use sui_indexer::models_v2::objects::{
     StoredDeletedHistoryObject, StoredHistoryObject, StoredObject,
 };
@@ -177,8 +180,14 @@ pub(crate) enum ObjectVersionKey {
     Historical(u64), // version
 }
 
-pub(crate) type Cursor = cursor::BcsCursor<Vec<u8>>;
+pub(crate) type Cursor = cursor::BcsCursor<HistoricalObjectCursor>;
 type Query<ST, GB> = data::Query<ST, objects::table, GB>;
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub(crate) struct HistoricalObjectCursor {
+    object_id: Vec<u8>,
+    checkpoint_sequence_number: u64,
+}
 
 /// Interface implemented by on-chain values that are addressable by an ID (also referred to as its
 /// address). This includes Move objects and packages.
@@ -651,14 +660,13 @@ impl Object {
         }
     }
 
-    /// Query the database for a `page` of objects, optionally `filter`-ed.
-    pub(crate) async fn paginate(
+    pub(crate) async fn paginate_historical(
         db: &Db,
         page: Page<Cursor>,
         filter: ObjectFilter,
         checkpoint_sequence_number: Option<u64>,
     ) -> Result<Connection<String, Object>, Error> {
-        Self::paginate_subtype(db, page, filter, Ok, checkpoint_sequence_number).await
+        Self::paginate_subtype_historical(db, page, filter, Ok, checkpoint_sequence_number).await
     }
 
     /// Query the database for a `page` of some sub-type of Object. The page uses the bytes of an
@@ -720,6 +728,169 @@ impl Object {
         }
 
         Ok(conn)
+    }
+
+    pub(crate) async fn paginate_subtype_historical<T: OutputType>(
+        db: &Db,
+        page: Page<Cursor>,
+        filter: ObjectFilter,
+        downcast: impl Fn(Object) -> Result<T, Error>,
+        checkpoint_sequence_number: Option<u64>,
+    ) -> Result<Connection<String, T>, Error> {
+        let mut conn: Connection<String, T> = Connection::new(false, false);
+
+        // Regardless of whether the cursor is the upper or lower bound, the cursor's
+        // checkpoint_sequence_number identifies the consistent upper bound when it was calculated
+        let checkpoint_sequence_number = match validate_cursor_consistency(
+            checkpoint_sequence_number,
+            page.after(),
+            page.before(),
+        ) {
+            Ok(checkpoint_sequence_number) => checkpoint_sequence_number,
+            Err(e) => return Err(e),
+        };
+
+        let response = db
+            .execute_repeatable(move |conn| {
+                let (lhs, mut rhs) = Checkpoint::available_range(conn)?;
+
+                if let Some(checkpoint_sequence_number) = checkpoint_sequence_number {
+                    if checkpoint_sequence_number > rhs || checkpoint_sequence_number < lhs {
+                        return Ok::<_, diesel::result::Error>(None);
+                    }
+                    rhs = checkpoint_sequence_number;
+                }
+
+                let result = page.paginate_raw_query::<StoredHistoryObject, _>(
+                    conn,
+                    move |element| {
+                        element.map(|obj| {
+                            let cursor = Cursor::new(HistoricalObjectCursor::new(
+                                obj.object_id.clone(),
+                                rhs as u64,
+                            ));
+                            cursor
+                        })
+                    },
+                    move || {
+                        let mut snapshot_objs = query!(r#"SELECT * FROM objects_snapshot"#);
+                        snapshot_objs = Self::filter(snapshot_objs, &filter);
+
+                        let mut history_objs = query!(r#"SELECT * FROM objects_history"#);
+                        history_objs = Self::filter(history_objs, &filter);
+                        history_objs = filter!(
+                            history_objs,
+                            format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
+                        );
+
+                        let candidates = build_candidates(snapshot_objs, history_objs);
+                        let newer = build_newer(lhs as i64, rhs as i64);
+
+                        // this entire bit needs to be a query string, unfortunately
+                        let mut final_ = query!(
+                            r#"
+                        SELECT candidates.*
+                        FROM ({}) candidates
+                        LEFT JOIN ({}) newer
+                        ON (
+                            candidates.object_id = newer.object_id
+                            AND candidates.object_version < newer.object_version
+                        )"#,
+                            candidates,
+                            newer
+                        );
+
+                        // The object keys filter may specify a version of an object that is not the
+                        // latest at the historical checkpoint. In this scenario, we should drop the
+                        // WHERE requirement. Otherwise, a user will never be able to see data like
+                        // the gas payment made for a transaction.
+                        if filter.object_keys.is_none() {
+                            final_ = filter!(final_, "newer.object_version IS NULL");
+                        }
+
+                        final_
+                    },
+                )?;
+
+                Ok(Some((result.0, result.1, result.2, rhs)))
+            })
+            .await?;
+
+        let Some((prev, next, results, rhs)) = response else {
+            return Ok(conn);
+        };
+
+        conn.has_previous_page = prev;
+        conn.has_next_page = next;
+
+        for stored in results {
+            let cursor = Cursor::new(HistoricalObjectCursor::new(
+                stored.object_id.clone(),
+                rhs as u64,
+            ))
+            .encode_cursor();
+            let object = Object::try_from_stored_history_object(stored, Some(rhs as u64))?;
+            conn.edges.push(Edge::new(cursor, downcast(object)?));
+        }
+
+        Ok(conn)
+    }
+
+    pub(crate) fn filter(mut query: RawQuery, filter: &ObjectFilter) -> RawQuery {
+        if let Some(object_ids) = &filter.object_ids {
+            // Maximally strict - match a vec of 0 elements
+            if object_ids.is_empty() {
+                query = or_filter!(query, "1==0");
+            } else {
+                let mut inner = "object_id IN (".to_string();
+                inner += &object_ids
+                    .iter()
+                    .map(|id| format!("'\\x{}'::bytea", hex::encode(id.into_vec())))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                inner += ")";
+                query = or_filter!(query, inner);
+            }
+        }
+
+        if let Some(object_keys) = &filter.object_keys {
+            // Maximally strict - match a vec of 0 elements
+            if object_keys.is_empty() {
+                query = or_filter!(query, "1==0");
+            } else {
+                let mut inner = "(".to_string();
+                inner += &object_keys
+                    .iter()
+                    .map(|ObjectKey { object_id, version }| {
+                        format!(
+                            "(object_id = '\\x{}'::bytea AND object_version = {})",
+                            hex::encode(object_id.into_vec()),
+                            version
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" OR ");
+                inner += ")";
+                query = or_filter!(query, inner);
+            }
+        }
+
+        if let Some(owner) = &filter.owner {
+            query = filter!(
+                query,
+                format!(
+                    "owner_id = '\\x{}'::bytea AND owner_type = {}",
+                    hex::encode(owner.into_vec()),
+                    OwnerType::Address as i16
+                )
+            );
+        }
+
+        if let Some(type_) = &filter.type_ {
+            return type_.apply_raw(query, "object_type");
+        }
+
+        query
     }
 
     /// Query for the object at a specific version.
@@ -1032,15 +1203,24 @@ impl ObjectFilter {
     }
 }
 
+impl HistoricalObjectCursor {
+    pub(crate) fn new(object_id: Vec<u8>, checkpoint_sequence_number: u64) -> Self {
+        Self {
+            object_id,
+            checkpoint_sequence_number,
+        }
+    }
+}
+
 impl Paginated<Cursor> for StoredObject {
     type Source = objects::table;
 
     fn filter_ge<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
-        query.filter(objects::dsl::object_id.ge((**cursor).clone()))
+        query.filter(objects::dsl::object_id.ge(cursor.object_id.clone()))
     }
 
     fn filter_le<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
-        query.filter(objects::dsl::object_id.le((**cursor).clone()))
+        query.filter(objects::dsl::object_id.le(cursor.object_id.clone()))
     }
 
     fn order<ST, GB>(asc: bool, query: Query<ST, GB>) -> Query<ST, GB> {
@@ -1055,7 +1235,48 @@ impl Paginated<Cursor> for StoredObject {
 
 impl Target<Cursor> for StoredObject {
     fn cursor(&self) -> Cursor {
-        Cursor::new(self.object_id.clone())
+        Cursor::new(HistoricalObjectCursor {
+            object_id: self.object_id.clone(),
+            checkpoint_sequence_number: self.checkpoint_sequence_number as u64,
+        })
+    }
+}
+
+impl RawPaginated<Cursor> for StoredHistoryObject {
+    fn filter_ge(cursor: &Cursor, query: RawQuery) -> RawQuery {
+        filter!(
+            query,
+            format!(
+                "candidates.object_id >= '\\x{}'::bytea",
+                hex::encode(cursor.object_id.clone())
+            )
+        )
+    }
+
+    fn filter_le(cursor: &Cursor, query: RawQuery) -> RawQuery {
+        filter!(
+            query,
+            format!(
+                "candidates.object_id <= '\\x{}'::bytea",
+                hex::encode(cursor.object_id.clone())
+            )
+        )
+    }
+
+    fn order(asc: bool, query: RawQuery) -> RawQuery {
+        match asc {
+            true => query.order_by("candidates.object_id ASC"),
+            false => query.order_by("candidates.object_id DESC"),
+        }
+    }
+}
+
+impl Target<Cursor> for StoredHistoryObject {
+    fn cursor(&self) -> Cursor {
+        Cursor::new(HistoricalObjectCursor {
+            object_id: self.object_id.clone(),
+            checkpoint_sequence_number: self.checkpoint_sequence_number as u64,
+        })
     }
 }
 
@@ -1107,6 +1328,57 @@ pub(crate) async fn deserialize_move_struct(
     })?;
 
     Ok((struct_tag, move_struct))
+}
+
+/// Check that the cursors, if provided, have the same checkpoint_sequence_number.
+pub(crate) fn validate_cursor_consistency(
+    checkpoint_sequence_number: Option<u64>,
+    after: Option<&Cursor>,
+    before: Option<&Cursor>,
+) -> Result<Option<u64>, Error> {
+    let options = [
+        after.map(|after| after.deref().checkpoint_sequence_number),
+        before.map(|before| before.deref().checkpoint_sequence_number),
+        checkpoint_sequence_number,
+    ];
+
+    let mut values = options.iter().flatten();
+
+    let checkpoint_sequence_number = if let Some(first_val) = values.next() {
+        if values.all(|val| val == first_val) {
+            Ok(Some(*first_val))
+        } else {
+            Err(Error::Client("Inconsistent cursor".to_string()))
+        }
+    } else {
+        Ok(None)
+    }?;
+
+    Ok(checkpoint_sequence_number)
+}
+
+pub(crate) fn build_candidates(snapshot_objs: RawQuery, history_objs: RawQuery) -> RawQuery {
+    let candidates = query!(
+        r#"SELECT DISTINCT ON (object_id) * FROM (
+        ({})
+        UNION
+        ({})
+    ) o"#,
+        snapshot_objs,
+        history_objs
+    );
+
+    candidates
+        .order_by("object_id")
+        .order_by("object_version DESC")
+}
+
+pub(crate) fn build_newer(lhs: i64, rhs: i64) -> RawQuery {
+    let newer = query!(r#"SELECT object_id, object_version FROM objects_history"#);
+    filter!(
+        newer,
+        format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
+    )
 }
 
 #[cfg(test)]
@@ -1228,5 +1500,89 @@ mod tests {
 
         // No overlap between these two.
         assert_eq!(f2.clone().intersect(f3.clone()), None);
+    }
+
+    #[test]
+    fn test_validate_cursor_consistency_all_none() {
+        let result = validate_cursor_consistency(None, None, None);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[test]
+    fn test_validate_cursor_consistency_all_same() {
+        let obj1 = SuiAddress::from_str("0x1").unwrap();
+        let obj2 = SuiAddress::from_str("0x2").unwrap();
+
+        let result = validate_cursor_consistency(
+            Some(1),
+            Some(&Cursor::new(HistoricalObjectCursor::new(
+                obj1.into_vec(),
+                1,
+            ))),
+            Some(&Cursor::new(HistoricalObjectCursor::new(
+                obj2.into_vec(),
+                1,
+            ))),
+        );
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Some(1));
+    }
+
+    #[test]
+    fn test_validate_cursor_consistency_only_after() {
+        let obj1 = SuiAddress::from_str("0x1").unwrap();
+
+        let result = validate_cursor_consistency(
+            None,
+            Some(&Cursor::new(HistoricalObjectCursor::new(
+                obj1.into_vec(),
+                1,
+            ))),
+            None,
+        );
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Some(1));
+    }
+
+    #[test]
+    fn test_validate_cursor_consistency_only_input() {
+        let result = validate_cursor_consistency(Some(1), None, None);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Some(1));
+    }
+
+    #[test]
+    fn test_validate_cursor_consistency_cursor_ne_input() {
+        let obj1 = SuiAddress::from_str("0x1").unwrap();
+
+        let result = validate_cursor_consistency(
+            Some(2),
+            Some(&Cursor::new(HistoricalObjectCursor::new(
+                obj1.into_vec(),
+                1,
+            ))),
+            None,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_cursor_consistency_after_ne_before() {
+        let obj1 = SuiAddress::from_str("0x1").unwrap();
+        let obj2 = SuiAddress::from_str("0x2").unwrap();
+
+        let result = validate_cursor_consistency(
+            None,
+            Some(&Cursor::new(HistoricalObjectCursor::new(
+                obj1.into_vec(),
+                1,
+            ))),
+            Some(&Cursor::new(HistoricalObjectCursor::new(
+                obj2.into_vec(),
+                2,
+            ))),
+        );
+        assert!(result.is_err());
     }
 }
