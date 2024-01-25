@@ -445,7 +445,7 @@ pub trait ExecutionCacheWrite: Send + Sync {
     fn write_transaction_outputs(
         &self,
         epoch_id: EpochId,
-        tx_outputs: TransactionOutputs,
+        tx_outputs: Arc<TransactionOutputs>,
     ) -> BoxFuture<'_, SuiResult>;
 
     /// Attempt to acquire object locks for all of the owned input locks.
@@ -642,11 +642,11 @@ impl ExecutionCacheRead for PassthroughCache {
 
 impl ExecutionCacheWrite for PassthroughCache {
     #[instrument(level = "debug", skip_all)]
-    fn write_transaction_outputs<'a>(
-        &'a self,
+    fn write_transaction_outputs(
+        &self,
         epoch_id: EpochId,
-        tx_outputs: TransactionOutputs,
-    ) -> BoxFuture<'a, SuiResult> {
+        tx_outputs: Arc<TransactionOutputs>,
+    ) -> BoxFuture<'_, SuiResult> {
         async move {
             let tx_digest = *tx_outputs.transaction.digest();
             let effects_digest = tx_outputs.effects.digest();
