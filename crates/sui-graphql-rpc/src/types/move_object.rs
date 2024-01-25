@@ -424,7 +424,7 @@ impl MoveObject {
         filter: ObjectFilter,
         checkpoint_viewed_at: Option<u64>,
     ) -> Result<Connection<String, MoveObject>, Error> {
-        Object::paginate_subtype_historical(db, page, filter, checkpoint_viewed_at, |object| {
+        Object::paginate_subtype(db, page, filter, checkpoint_viewed_at, |object| {
             let address = object.address;
             MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(
