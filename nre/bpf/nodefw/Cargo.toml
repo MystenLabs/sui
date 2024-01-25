@@ -1,0 +1,2 @@
+[workspace]
+members = ["xtask", "nodefw", "nodefw-common"]
