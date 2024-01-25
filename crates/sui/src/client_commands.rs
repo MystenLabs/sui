@@ -1,13 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    fmt::{Debug, Display, Formatter, Write},
-    path::PathBuf,
-    sync::Arc,
-};
-
 use anyhow::{anyhow, bail, ensure};
 use bip32::DerivationPath;
 use clap::*;
