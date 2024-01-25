@@ -65,6 +65,12 @@ impl GasInput {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, Object>> {
+        // A possible user error during dry run or execution would be to supply a gas payment that
+        // is not a Move object (i.e a package). Even though the transaction would fail to run, this
+        // service will still attempt to present execution results. If the return type of this field
+        // is a `MoveObject`, then GraphQL will fail on the top-level with an internal error.
+        // Instead, we return an `Object` here, so that the rest of the `TransactionBlock` will
+        // still be viewable.
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let filter = ObjectFilter {
