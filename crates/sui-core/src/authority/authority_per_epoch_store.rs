@@ -3,6 +3,9 @@
 
 use arc_swap::ArcSwapOption;
 use enum_dispatch::enum_dispatch;
+use fastcrypto::groups::bls12381;
+use fastcrypto_tbls::dkg;
+use fastcrypto_tbls::nodes::PartyId;
 use fastcrypto_zkp::bn254::zk_login::{JwkId, OIDCProvider, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::{join_all, select, Either};
@@ -35,6 +38,7 @@ use sui_types::transaction::{
     VerifiedSignedTransaction, VerifiedTransaction,
 };
 use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
+use tokio::sync::OnceCell;
 use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::{
     rocks::{default_db_options, DBBatch, DBMap, DBOptions, MetricConf},
@@ -49,11 +53,13 @@ use crate::checkpoints::{
     BuilderCheckpointSummary, CheckpointCommitHeight, CheckpointServiceNotify, EpochStats,
     PendingCheckpoint, PendingCheckpointInfo,
 };
+
 use crate::consensus_handler::{
     SequencedConsensusTransaction, SequencedConsensusTransactionKey,
     SequencedConsensusTransactionKind, VerifiedSequencedConsensusTransaction,
 };
 use crate::epoch::epoch_metrics::EpochMetrics;
+use crate::epoch::randomness::RandomnessManager;
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::post_consensus_tx_reorder::PostConsensusTxReorder;
@@ -101,6 +107,10 @@ const RECONFIG_STATE_INDEX: u64 = 0;
 const OVERRIDE_PROTOCOL_UPGRADE_BUFFER_STAKE_INDEX: u64 = 0;
 pub const EPOCH_DB_PREFIX: &str = "epoch_";
 
+// Types for randomness DKG.
+pub(crate) type PkG = bls12381::G2Element;
+pub(crate) type EncG = bls12381::G2Element;
+
 // CertLockGuard and CertTxGuard are functionally identical right now, but we retain a distinction
 // anyway. If we need to support distributed object storage, having this distinction will be
 // useful, as we will most likely have to re-implement a retry / write-ahead-log at that point.
@@ -121,6 +131,8 @@ pub enum ConsensusCertificateResult {
     SuiTransaction(VerifiedExecutableTransaction),
     /// The transaction should be re-processed at a future commit, specified by the DeferralKey
     Deferred(DeferralKey),
+    /// A message was processed which updates randomness state.
+    RandomnessConsensusMessage,
     /// Everything else, e.g. AuthorityCapabilities, CheckpointSignatures, etc.
     ConsensusMessage,
     /// A system message in consensus was ignored (e.g. because of end of epoch).
@@ -213,6 +225,9 @@ pub struct ExecutionComponents {
 }
 
 pub struct AuthorityPerEpochStore {
+    /// The name of this authority.
+    pub(crate) name: AuthorityName,
+
     /// Committee of validators for the current epoch.
     committee: Arc<Committee>,
 
@@ -281,6 +296,9 @@ pub struct AuthorityPerEpochStore {
 
     /// aggregator for JWK votes
     jwk_aggregator: Mutex<JwkAggregator>,
+
+    /// State machine managing randomness DKG and generation.
+    randomness_manager: OnceCell<Arc<RandomnessManager>>,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -430,6 +448,12 @@ pub struct AuthorityEpochTables {
 
     /// Records the round numbers for which we have written randomness.
     randomness_rounds_written: DBMap<RandomnessRound, ()>,
+
+    /// Tables for recording DKG state for RandomnessManager.
+    pub(crate) dkg_processed_messages: DBMap<PartyId, dkg::ProcessedMessage<PkG, EncG>>,
+    pub(crate) dkg_used_messages: DBMap<u64, dkg::UsedProcessedMessages<PkG, EncG>>,
+    pub(crate) dkg_confirmations: DBMap<PartyId, dkg::Confirmation<EncG>>,
+    pub(crate) dkg_output: DBMap<u64, dkg::Output<PkG, EncG>>,
 }
 
 // DeferralKey requires both the round to which the tx should be deferred (so that we can
@@ -763,6 +787,7 @@ impl AuthorityPerEpochStore {
         let jwk_aggregator = Mutex::new(jwk_aggregator);
 
         let s = Arc::new(Self {
+            name,
             committee,
             protocol_config,
             tables: ArcSwapOption::new(Some(Arc::new(tables))),
@@ -785,6 +810,7 @@ impl AuthorityPerEpochStore {
             execution_component,
             chain_identifier,
             jwk_aggregator,
+            randomness_manager: OnceCell::new(),
         });
         s.update_buffer_stake_metric();
         s
@@ -825,6 +851,20 @@ impl AuthorityPerEpochStore {
         self.epoch_start_configuration
             .randomness_obj_initial_shared_version()
             .is_some()
+    }
+
+    pub fn set_randomness_manager(
+        &self,
+        randomness_manager: Arc<RandomnessManager>,
+    ) -> SuiResult<()> {
+        if self
+            .randomness_manager
+            .set(randomness_manager.clone())
+            .is_err()
+        {
+            error!("`set_randomness_manager` called more than once; this should never happen");
+        }
+        randomness_manager.start_dkg()
     }
 
     pub fn coin_deny_list_state_exists(&self) -> bool {
@@ -2103,6 +2143,32 @@ impl AuthorityPerEpochStore {
                 kind: ConsensusTransactionKind::RandomnessStateUpdate(_round, _bytes),
                 ..
             }) => {}
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::RandomnessDkgMessage(authority, _bytes),
+                ..
+            }) => {
+                if transaction.sender_authority() != *authority {
+                    warn!(
+                        "RandomnessDkgMessage authority {} does not match narwhal certificate source {}",
+                        authority,
+                        transaction.certificate_author_index
+                    );
+                    return None;
+                }
+            }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::RandomnessDkgConfirmation(authority, _bytes),
+                ..
+            }) => {
+                if transaction.sender_authority() != *authority {
+                    warn!(
+                        "RandomnessDkgConfirmation authority {} does not match narwhal certificate source {}",
+                        authority,
+                        transaction.certificate_author_index
+                    );
+                    return None;
+                }
+            }
             SequencedConsensusTransactionKind::System(_) => {}
         }
         Some(VerifiedSequencedConsensusTransaction(transaction))
@@ -2371,6 +2437,7 @@ impl AuthorityPerEpochStore {
         let mut deferred_txns: BTreeMap<DeferralKey, Vec<VerifiedSequencedConsensusTransaction>> =
             BTreeMap::new();
 
+        let mut randomness_state_updated = false;
         for tx in transactions {
             let key = tx.0.transaction.key();
             let mut ignored = false;
@@ -2398,6 +2465,10 @@ impl AuthorityPerEpochStore {
                         .or_default()
                         .push(tx.clone());
                 }
+                ConsensusCertificateResult::RandomnessConsensusMessage => {
+                    randomness_state_updated = true;
+                    notifications.push(key.clone());
+                }
                 ConsensusCertificateResult::ConsensusMessage => notifications.push(key.clone()),
                 ConsensusCertificateResult::IgnoredSystem => (),
                 // Note: ignored external transactions must not be recorded as processed. Otherwise
@@ -2412,6 +2483,12 @@ impl AuthorityPerEpochStore {
         let commit_has_deferred_txns = !deferred_txns.is_empty();
         for (key, txns) in deferred_txns.into_iter() {
             self.defer_transactions(batch, key, txns)?;
+        }
+
+        if randomness_state_updated {
+            if let Some(randomness_manager) = self.randomness_manager.get() {
+                randomness_manager.advance_dkg(batch)?;
+            }
         }
 
         batch.insert_batch(
@@ -2686,6 +2763,80 @@ impl AuthorityPerEpochStore {
             }) => {
                 // These are always generated as System transactions (handled below).
                 panic!("process_consensus_transaction called with external RandomnessStateUpdate");
+            }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::RandomnessDkgMessage(authority, bytes),
+                ..
+            }) => {
+                if self
+                    .get_reconfig_state_read_lock_guard()
+                    .should_accept_consensus_certs()
+                {
+                    if let Some(randomness_manager) = self.randomness_manager.get() {
+                        debug!(
+                            "Received RandomnessDkgMessage from {:?}",
+                            authority.concise()
+                        );
+                        match bcs::from_bytes(bytes) {
+                            Ok(message) => randomness_manager.add_message(batch, message)?,
+                            Err(e) => {
+                                warn!(
+                                    "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
+                                    authority.concise(),
+                                );
+                            }
+                        }
+                    } else {
+                        debug!(
+                            "Ignoring RandomnessDkgMessage from {:?} because randomness is not enabled",
+                            authority.concise()
+                        );
+                    }
+                } else {
+                    debug!(
+                        "Ignoring RandomnessDkgMessage from {:?} because of end of epoch",
+                        authority.concise()
+                    );
+                }
+                Ok(ConsensusCertificateResult::RandomnessConsensusMessage)
+            }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::RandomnessDkgConfirmation(authority, bytes),
+                ..
+            }) => {
+                if self
+                    .get_reconfig_state_read_lock_guard()
+                    .should_accept_consensus_certs()
+                {
+                    if let Some(randomness_manager) = self.randomness_manager.get() {
+                        debug!(
+                            "Received RandomnessDkgConfirmation from {:?}",
+                            authority.concise()
+                        );
+                        match bcs::from_bytes(bytes) {
+                            Ok(confirmation) => {
+                                randomness_manager.add_confirmation(batch, confirmation)?
+                            }
+                            Err(e) => {
+                                warn!(
+                                    "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
+                                    authority.concise(),
+                                );
+                            }
+                        }
+                    } else {
+                        debug!(
+                            "Ignoring RandomnessDkgMessage from {:?} because randomness is not enabled",
+                            authority.concise()
+                        );
+                    }
+                } else {
+                    debug!(
+                        "Ignoring RandomnessDkgMessage from {:?} because of end of epoch",
+                        authority.concise()
+                    );
+                }
+                Ok(ConsensusCertificateResult::RandomnessConsensusMessage)
             }
             SequencedConsensusTransactionKind::System(system_transaction) => {
                 if !self.get_reconfig_state_read_lock_guard().should_accept_tx() {
