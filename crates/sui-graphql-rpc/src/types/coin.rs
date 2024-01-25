@@ -1,18 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::data::{Db, QueryExecutor};
+use crate::data::{Db, QueryExecutor, RawQuery};
 use crate::error::Error;
+use crate::filter;
 
 use super::balance::{self, Balance};
 use super::base64::Base64;
 use super::big_int::BigInt;
+use super::checkpoint::Checkpoint;
 use super::cursor::{Page, Target};
 use super::display::DisplayEntry;
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::{MoveObject, MoveObjectImpl};
 use super::move_value::MoveValue;
-use super::object::{self, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus};
+use super::object::{
+    self, validate_cursor_consistency, Cursor, HistoricalObjectCursor, Object, ObjectFilter,
+    ObjectImpl, ObjectOwner, ObjectStatus,
+};
 use super::owner::OwnerImpl;
 use super::stake::StakedSui;
 use super::sui_address::SuiAddress;
@@ -22,9 +27,7 @@ use super::type_filter::ExactTypeFilter;
 use async_graphql::*;
 
 use async_graphql::connection::{Connection, CursorType, Edge};
-use diesel::{ExpressionMethods, QueryDsl};
-use sui_indexer::models_v2::objects::StoredObject;
-use sui_indexer::schema_v2::objects;
+use sui_indexer::models_v2::objects::StoredHistoryObject;
 use sui_indexer::types_v2::OwnerType;
 use sui_types::coin::Coin as NativeCoin;
 use sui_types::TypeTag;
@@ -292,32 +295,64 @@ impl Coin {
         owner: Option<SuiAddress>,
         checkpoint_sequence_number: Option<u64>,
     ) -> Result<Connection<String, Coin>, Error> {
-        let (prev, next, results) = db
-            .execute(move |conn| {
-                page.paginate_query::<StoredObject, _, _, _>(conn, move || {
-                    use objects::dsl;
-                    let mut query = dsl::objects.into_boxed();
+        let mut conn: Connection<String, Coin> = Connection::new(false, false);
 
-                    query = query.filter(
-                        dsl::coin_type.eq(coin_type.to_canonical_string(/* with_prefix */ true)),
-                    );
+        let checkpoint_sequence_number = match validate_cursor_consistency(
+            checkpoint_sequence_number,
+            page.after(),
+            page.before(),
+        ) {
+            Ok(checkpoint_sequence_number) => checkpoint_sequence_number,
+            Err(e) => return Err(e),
+        };
 
-                    if let Some(owner) = &owner {
-                        // Leverage index on objects table
-                        query = query.filter(dsl::owner_type.eq(OwnerType::Address as i16));
-                        query = query.filter(dsl::owner_id.eq(owner.into_vec()));
+        let response = db
+            .execute_repeatable(move |conn| {
+                let (lhs, mut rhs) = Checkpoint::available_range(conn)?;
+
+                if let Some(checkpoint_sequence_number) = checkpoint_sequence_number {
+                    if checkpoint_sequence_number > rhs || checkpoint_sequence_number < lhs {
+                        return Ok::<_, diesel::result::Error>(None);
                     }
+                    rhs = checkpoint_sequence_number;
+                }
 
-                    query
-                })
+                let result = page.paginate_raw_query::<StoredHistoryObject, _>(
+                    conn,
+                    move |element| {
+                        element.map(|obj| {
+                            let cursor = Cursor::new(HistoricalObjectCursor::new(
+                                obj.object_id.clone(),
+                                rhs as u64,
+                            ));
+                            cursor
+                        })
+                    },
+                    move || {
+                        let final_ = Object::build_raw_consistent_query(
+                            |query| Self::filter(query, coin_type.clone(), owner),
+                            lhs as i64,
+                            rhs as i64,
+                        );
+
+                        filter!(final_, "newer.object_version IS NULL")
+                    },
+                )?;
+
+                Ok(Some((result.0, result.1, result.2, rhs)))
             })
             .await?;
 
-        let mut conn = Connection::new(prev, next);
+        let Some((prev, next, results, rhs)) = response else {
+            return Ok(conn);
+        };
+
+        conn.has_previous_page = prev;
+        conn.has_next_page = next;
 
         for stored in results {
             let cursor = stored.cursor().encode_cursor();
-            let object = Object::try_from_stored_object(stored, checkpoint_sequence_number)?;
+            let object = Object::try_from_stored_history_object(stored, Some(rhs as u64))?;
 
             let move_ = MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(
@@ -334,6 +369,31 @@ impl Coin {
         }
 
         Ok(conn)
+    }
+
+    pub(crate) fn filter(
+        mut query: RawQuery,
+        coin_type: TypeTag,
+        owner: Option<SuiAddress>,
+    ) -> RawQuery {
+        if let Some(owner) = owner {
+            query = filter!(
+                query,
+                format!(
+                    "owner_id = '\\x{}'::bytea AND owner_type = {}",
+                    hex::encode(owner.into_vec()),
+                    OwnerType::Address as i16
+                )
+            );
+        }
+
+        query = filter!(
+            query,
+            "coin_type IS NOT NULL AND coin_type = {}",
+            coin_type.to_canonical_display(/* with_prefix */ true)
+        );
+
+        query
     }
 }
 

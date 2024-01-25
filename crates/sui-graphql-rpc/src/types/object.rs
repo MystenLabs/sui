@@ -715,31 +715,10 @@ impl Object {
                         })
                     },
                     move || {
-                        let mut snapshot_objs = query!(r#"SELECT * FROM objects_snapshot"#);
-                        snapshot_objs = Self::filter(snapshot_objs, &filter);
-
-                        let mut history_objs = query!(r#"SELECT * FROM objects_history"#);
-                        history_objs = Self::filter(history_objs, &filter);
-                        history_objs = filter!(
-                            history_objs,
-                            format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
-                        );
-
-                        let candidates = build_candidates(snapshot_objs, history_objs);
-                        let newer = build_newer(lhs as i64, rhs as i64);
-
-                        // this entire bit needs to be a query string, unfortunately
-                        let mut final_ = query!(
-                            r#"
-                        SELECT candidates.*
-                        FROM ({}) candidates
-                        LEFT JOIN ({}) newer
-                        ON (
-                            candidates.object_id = newer.object_id
-                            AND candidates.object_version < newer.object_version
-                        )"#,
-                            candidates,
-                            newer
+                        let mut final_ = Self::build_raw_consistent_query(
+                            |query| Self::filter(query, &filter),
+                            lhs as i64,
+                            rhs as i64,
                         );
 
                         // The object keys filter may specify a version of an object that is not the
@@ -776,6 +755,38 @@ impl Object {
         }
 
         Ok(conn)
+    }
+
+    pub(crate) fn build_raw_consistent_query<F>(filter_fn: F, lhs: i64, rhs: i64) -> RawQuery
+    where
+        F: Fn(RawQuery) -> RawQuery,
+    {
+        let mut snapshot_objs = query!(r#"SELECT * FROM objects_snapshot"#);
+        snapshot_objs = filter_fn(snapshot_objs);
+
+        let mut history_objs = query!(r#"SELECT * FROM objects_history"#);
+        history_objs = filter_fn(history_objs);
+        history_objs = filter!(
+            history_objs,
+            format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
+        );
+
+        let candidates = build_candidates(snapshot_objs, history_objs);
+        let newer = build_newer(lhs as i64, rhs as i64);
+
+        // this entire bit needs to be a query string, unfortunately
+        query!(
+            r#"
+        SELECT candidates.*
+        FROM ({}) candidates
+        LEFT JOIN ({}) newer
+        ON (
+            candidates.object_id = newer.object_id
+            AND candidates.object_version < newer.object_version
+        )"#,
+            candidates,
+            newer
+        )
     }
 
     pub(crate) fn filter(mut query: RawQuery, filter: &ObjectFilter) -> RawQuery {
