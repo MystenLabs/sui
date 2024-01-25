@@ -12030,6 +12030,7 @@ dependencies = [
  "indexmap 2.1.0",
  "itertools 0.10.5",
  "lru 0.10.0",
+ "mockall",
  "more-asserts",
  "move-binary-format",
  "move-bytecode-utils",
