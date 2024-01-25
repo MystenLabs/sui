@@ -3,7 +3,7 @@
 
 use super::{
     base64::Base64,
-    cursor::{self, Page, Target},
+    cursor::{self, Page, Paginated, Target},
     date_time::DateTime,
     digest::Digest,
     epoch::Epoch,
@@ -267,7 +267,7 @@ impl Checkpoint {
     }
 }
 
-impl Target<Cursor> for StoredCheckpoint {
+impl Paginated<Cursor> for StoredCheckpoint {
     type Source = checkpoints::table;
 
     fn filter_ge<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
@@ -286,7 +286,9 @@ impl Target<Cursor> for StoredCheckpoint {
             query.order(dsl::sequence_number.desc())
         }
     }
+}
 
+impl Target<Cursor> for StoredCheckpoint {
     fn cursor(&self) -> Cursor {
         Cursor::new(self.sequence_number as u64)
     }

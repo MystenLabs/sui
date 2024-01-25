@@ -3,7 +3,7 @@
 
 use std::str::FromStr;
 
-use super::cursor::{self, Page, Target};
+use super::cursor::{self, Page, Paginated, Target};
 use super::digest::Digest;
 use super::type_filter::{ModuleFilter, TypeFilter};
 use super::{
@@ -283,7 +283,7 @@ impl TryFrom<StoredEvent> for Event {
     }
 }
 
-impl Target<Cursor> for StoredEvent {
+impl Paginated<Cursor> for StoredEvent {
     type Source = events::table;
 
     fn filter_ge<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
@@ -314,7 +314,9 @@ impl Target<Cursor> for StoredEvent {
                 .then_order_by(dsl::event_sequence_number.desc())
         }
     }
+}
 
+impl Target<Cursor> for StoredEvent {
     fn cursor(&self) -> Cursor {
         Cursor::new(EventKey {
             tx: self.tx_sequence_number as u64,
