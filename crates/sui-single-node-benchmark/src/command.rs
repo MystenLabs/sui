@@ -33,7 +33,10 @@ pub struct Command {
             This represents the amount of DB reads per transaction prior to execution."
     )]
     pub num_input_objects: u8,
-    #[arg(long, help = "Whether to print out sample transaction and effects")]
+    #[arg(
+        long,
+        help = "Whether to print out a sample transaction and effects that is going to be benchmarked on"
+    )]
     pub print_sample_tx: bool,
     #[arg(
         long,
@@ -92,7 +95,12 @@ pub enum WorkloadKind {
     Publish {
         #[arg(
             long,
-            help = "Path to the manifest file that describe the package dependencies."
+            help = "Path to the manifest file that describe the package dependencies.\
+            Follow examples in the tests directory to see how to set up the manifest file.\
+            The manifest file is a json file that contains a list of dependent packages that need to\
+            be published first, as well as the root package that will be benchmarked on. Each package\
+            can be either in source code or bytecode form. If it is in source code form, the benchmark\
+            will compile the package first before publishing it."
         )]
         manifest_file: PathBuf,
     },
