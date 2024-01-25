@@ -30,7 +30,7 @@ module a::m {
     }
 
     entry fun main() {
-        let v = new!(10, |i| i);
+        let _v = new!(10, |i| i);
         // assert!(sum!(&v) == 45, 0);
     }
 

@@ -40,7 +40,7 @@ pub(crate) fn call(
     // If none, there is no body to expand, likely because of an error in the macro definition
     let macro_body = context.macro_body(&m, &f)?;
     let macro_info = context.function_info(&m, &f);
-    let (macro_type_params, macro_params, mut macro_body, return_label) =
+    let (macro_type_params, macro_params, mut macro_body, return_label, max_color) =
         match recolor_macro(call_loc, &m, &f, macro_info, macro_body, next_color) {
             Ok(res) => res,
             Err(None) => {
@@ -52,6 +52,7 @@ pub(crate) fn call(
                 return None;
             }
         };
+    context.set_max_variable_color(max_color);
     let return_type = macro_info.signature.return_type.clone();
 
     if macro_type_params.len() != type_args.len() || macro_params.len() != args.len() {
@@ -132,6 +133,7 @@ fn recolor_macro(
         Vec<(Option<Loc>, Var, N::Type)>,
         N::Block,
         BlockLabel,
+        Color,
     ),
     Option<Box<Diagnostic>>,
 > {
@@ -176,7 +178,9 @@ fn recolor_macro(
             seq: body,
         }
     };
-    Ok((tparam_ids, parameters, body, return_label))
+    let max_color = recolor.max_color();
+    debug_assert_eq!(color, max_color, "ICE should only have one color in macros");
+    Ok((tparam_ids, parameters, body, return_label, max_color))
 }
 
 fn bind_lambda(
@@ -212,61 +216,113 @@ fn bind_lambda(
 // recolor
 //**************************************************************************************************
 
-// The mask is here to make sure we do not recolor captured variables/labels. So we don't need to
-// generally care about scoping in the normal way, since that should already be handled by the
-// unique-ing of variables done by naming
-struct Recolor {
-    color: Color,
-    recolor_use_funs: bool,
-    return_label: Option<BlockLabel>,
-    vars: BTreeSet<Var>,
-    block_labels: BTreeSet<BlockLabel>,
-}
+use recolor_struct::*;
 
-impl Recolor {
-    pub fn new(color: u16, return_label: Option<BlockLabel>, recolor_use_funs: bool) -> Self {
-        Self {
-            color,
-            recolor_use_funs,
-            return_label,
-            vars: BTreeSet::new(),
-            block_labels: BTreeSet::new(),
-        }
+mod recolor_struct {
+    use crate::naming::ast::{self as N, BlockLabel, Color, Var};
+    use move_ir_types::location::Loc;
+    use std::collections::{BTreeMap, BTreeSet};
+    // handles all of the recoloring of variables, labels, and use funs.
+    // The mask of known vars and labels is here to handle the case where a variable was captured
+    // by a lambda
+    pub(super) struct Recolor {
+        next_color: Color,
+        remapping: BTreeMap<Color, Color>,
+        recolor_use_funs: bool,
+        return_label: Option<BlockLabel>,
+        vars: BTreeSet<Var>,
+        block_labels: BTreeSet<BlockLabel>,
     }
 
-    pub fn add_params(&mut self, params: &[(Option<Loc>, Var, N::Type)]) {
-        for (_, v, _) in params {
-            self.vars.insert(*v);
-        }
-    }
-
-    pub fn add_lvalues(&mut self, lvalues: &N::LValueList) {
-        for lvalue in &lvalues.value {
-            self.add_lvalue(lvalue)
-        }
-    }
-
-    pub fn add_lvalue(&mut self, sp!(_, lvalue_): &N::LValue) {
-        match lvalue_ {
-            N::LValue_::Ignore => (),
-            N::LValue_::Var { var, .. } => {
-                self.vars.insert(*var);
+    impl Recolor {
+        pub fn new(color: u16, return_label: Option<BlockLabel>, recolor_use_funs: bool) -> Self {
+            Self {
+                next_color: color,
+                remapping: BTreeMap::new(),
+                recolor_use_funs,
+                return_label,
+                vars: BTreeSet::new(),
+                block_labels: BTreeSet::new(),
             }
-            N::LValue_::Unpack(_, _, _, lvalues) => {
-                for (_, _, (_, lvalue)) in lvalues {
-                    self.add_lvalue(lvalue)
+        }
+
+        pub fn add_params(&mut self, params: &[(Option<Loc>, Var, N::Type)]) {
+            for (_, v, _) in params {
+                self.vars.insert(*v);
+            }
+        }
+
+        pub fn add_lvalues(&mut self, lvalues: &N::LValueList) {
+            for lvalue in &lvalues.value {
+                self.add_lvalue(lvalue)
+            }
+        }
+
+        pub fn add_lvalue(&mut self, sp!(_, lvalue_): &N::LValue) {
+            match lvalue_ {
+                N::LValue_::Ignore => (),
+                N::LValue_::Var { var, .. } => {
+                    self.vars.insert(*var);
+                }
+                N::LValue_::Unpack(_, _, _, lvalues) => {
+                    for (_, _, (_, lvalue)) in lvalues {
+                        self.add_lvalue(lvalue)
+                    }
                 }
             }
         }
-    }
 
-    pub fn add_block_label(&mut self, label: BlockLabel) {
-        self.block_labels.insert(label);
+        pub fn add_block_label(&mut self, label: BlockLabel) {
+            self.block_labels.insert(label);
+        }
+
+        // We need to fully remap colors, and not simply set everything to the specified color,
+        // to handle the case where a lambda captures another expanded lambda, for example
+        // `|i| v.push_back(f(i))`
+        // where f is
+        // `|i| i``
+        // In this case we have
+        // two different colored `i`s when applying the outer lambda, e.g.
+        // `let i#_#c = arg; v.push_back({ let i#_#d = i#_#c; i#_#d })`
+        // we need to make sure `i#_#c` and `i#_#d` remain separated
+        //
+        // This has similar feeling to lifting  De Bruijn indices, though it is not exactly the same
+        // (... I think)
+        pub fn remap_color(&mut self, color: Color) -> Color {
+            *self.remapping.entry(color).or_insert_with(|| {
+                let cur = self.next_color;
+                self.next_color += 1;
+                cur
+            })
+        }
+
+        pub fn recolor_use_funs(&self) -> bool {
+            self.recolor_use_funs
+        }
+
+        pub fn max_color(&self) -> Color {
+            // subtract one to skip the "next" color
+            let max = self.next_color - 1;
+            debug_assert!(self.remapping.values().all(|&c| c <= max));
+            max
+        }
+
+        pub fn return_label(&self) -> Option<BlockLabel> {
+            self.return_label
+        }
+
+        pub fn contains_var(&self, v: &Var) -> bool {
+            self.vars.contains(v)
+        }
+
+        pub fn contains_block_label(&self, label: &BlockLabel) -> bool {
+            self.block_labels.contains(label)
+        }
     }
 }
 
 fn recolor_var_owned(ctx: &mut Recolor, mut v: Var) -> Var {
-    assert!(ctx.vars.contains(&v));
+    assert!(ctx.contains_var(&v));
     recolor_var(ctx, &mut v);
     v
 }
@@ -274,14 +330,14 @@ fn recolor_var_owned(ctx: &mut Recolor, mut v: Var) -> Var {
 fn recolor_var(ctx: &mut Recolor, v: &mut Var) {
     // do not recolor if not in the ctx
     // this is to handle captured variables in lambda bodies
-    if !ctx.vars.contains(v) {
+    if !ctx.contains_var(v) {
         return;
     }
-    v.value.color = ctx.color;
+    v.value.color = ctx.remap_color(v.value.color);
 }
 
 fn recolor_block_label_owned(ctx: &mut Recolor, mut label: BlockLabel) -> BlockLabel {
-    assert!(ctx.block_labels.contains(&label));
+    assert!(ctx.contains_block_label(&label));
     recolor_block_label(ctx, &mut label);
     label
 }
@@ -289,10 +345,10 @@ fn recolor_block_label_owned(ctx: &mut Recolor, mut label: BlockLabel) -> BlockL
 fn recolor_block_label(ctx: &mut Recolor, label: &mut BlockLabel) {
     // do not recolor if not in the ctx
     // this is to handle captured labels in lambda bodies
-    if !ctx.block_labels.contains(label) {
+    if !ctx.contains_block_label(label) {
         return;
     }
-    label.label.value.color = ctx.color;
+    label.label.value.color = ctx.remap_color(label.label.value.color);
 }
 
 fn recolor_use_funs(ctx: &mut Recolor, use_funs: &mut UseFuns) {
@@ -300,8 +356,12 @@ fn recolor_use_funs(ctx: &mut Recolor, use_funs: &mut UseFuns) {
 }
 
 fn recolor_use_funs_(ctx: &mut Recolor, use_fun_color: &mut Color) {
-    if ctx.recolor_use_funs {
-        *use_fun_color = ctx.color
+    if ctx.recolor_use_funs() {
+        assert_eq!(
+            *use_fun_color, 0,
+            "ICE only expected to recolor use funs in fresh macro bodies"
+        );
+        *use_fun_color = ctx.remap_color(*use_fun_color);
     }
 }
 
@@ -353,7 +413,7 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
         N::Exp_::Var(var) => recolor_var(ctx, var),
         N::Exp_::Return(e) => {
             recolor_exp(ctx, e);
-            if let Some(label) = ctx.return_label {
+            if let Some(label) = ctx.return_label() {
                 let N::Exp_::Return(e) =
                     std::mem::replace(e_, /* dummy */ N::Exp_::UnresolvedError)
                 else {
@@ -611,6 +671,8 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             let return_label = recolor_block_label_owned(recolor, return_label);
             recolor_lvalues(recolor, &mut lambda_params);
             recolor_exp(recolor, &mut lambda_body);
+            // set max color when coloring is finished
+            context.core.set_max_variable_color(recolor.max_color());
             let param_loc = lambda_params.loc;
             let N::Exp_::VarCall(_, sp!(args_loc, arg_list)) =
                 std::mem::replace(e_, /* dummy */ N::Exp_::UnresolvedError)

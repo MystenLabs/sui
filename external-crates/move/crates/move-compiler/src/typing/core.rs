@@ -20,7 +20,10 @@ use crate::{
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet, HashMap},
+};
 
 //**************************************************************************************************
 // Context
@@ -77,7 +80,7 @@ pub struct Context<'env> {
     pub current_module: Option<ModuleIdent>,
     pub current_function: Option<FunctionName>,
     pub in_macro_function: bool,
-    max_variable_color: u16,
+    max_variable_color: RefCell<u16>,
     pub return_type: Option<Type>,
     locals: UniqueMap<Var, Local>,
 
@@ -161,7 +164,7 @@ impl<'env> Context<'env> {
             current_module: None,
             current_function: None,
             in_macro_function: false,
-            max_variable_color: 0,
+            max_variable_color: RefCell::new(0),
             return_type: None,
             constraints: vec![],
             locals: UniqueMap::new(),
@@ -370,7 +373,7 @@ impl<'env> Context<'env> {
         self.constraints = Constraints::new();
         self.current_function = None;
         self.in_macro_function = false;
-        self.max_variable_color = 0;
+        self.max_variable_color = RefCell::new(0);
         self.macro_expansion = vec![];
         self.lambda_expansion = vec![];
     }
@@ -578,8 +581,21 @@ impl<'env> Context<'env> {
     }
 
     pub fn next_variable_color(&mut self) -> u16 {
-        self.max_variable_color += 1;
-        self.max_variable_color
+        let max_variable_color: &mut u16 = &mut *self.max_variable_color.borrow_mut();
+        *max_variable_color += 1;
+        *max_variable_color
+    }
+
+    pub fn set_max_variable_color(&self, color: u16) {
+        let max_variable_color: &mut u16 = &mut *self.max_variable_color.borrow_mut();
+        assert!(
+            *max_variable_color <= color,
+            "ICE a new, lower color means reusing variables \
+            {} <= {}",
+            *max_variable_color,
+            color,
+        );
+        *max_variable_color = color;
     }
 }
 
