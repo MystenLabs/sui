@@ -9,7 +9,7 @@ use std::{
 };
 
 use crate::{
-    block::{Block, BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
+    block::{BlockAPI, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
     commit::Commit,
     context::Context,
     storage::Store,
@@ -58,7 +58,7 @@ impl DagState {
         };
 
         let mut state = Self {
-            context: context.clone(),
+            context,
             recent_blocks: BTreeMap::new(),
             cached_refs: vec![BTreeSet::new(); num_authorities],
             last_commit,
@@ -72,22 +72,6 @@ impl DagState {
                 .scan_blocks_by_author(authority_index, round.saturating_sub(CACHED_ROUNDS))
                 .unwrap();
             for block in blocks {
-                state.accept_block(block);
-            }
-        }
-
-        // If nothing exists in state yet, then we know that this is a fresh start system. Populate the genesis blocks both
-        // in store and the state. We can probably find a better place for this (ex when the storage gets initiliased etc) but
-        // maybe for now is ok.
-        if state.cached_refs.is_empty() {
-            let (genesis_my, mut genesis_others) = Block::genesis(context);
-            genesis_others.push(genesis_my);
-
-            state
-                .store
-                .write(genesis_others.clone(), vec![])
-                .expect("Failed to write genesis blocks in storage.");
-            for block in genesis_others {
                 state.accept_block(block);
             }
         }
@@ -186,27 +170,6 @@ impl DagState {
                     .get(r)
                     .unwrap_or_else(|| panic!("Block {:?} should be available in memory!", r))
                     .clone()
-            })
-            .collect()
-    }
-
-    /// It will return the latest proposed block refs for every author whose round is < before_round the provided round.
-    /// The method is guaranteed to return a block per author even if that is its genesis block.
-    /// Note: if equivocating blocks have been received per round for an authority then the last accepted is returned.
-    pub(crate) fn get_latest_authors_block_refs(&self, before_round: Round) -> Vec<&BlockRef> {
-        assert!(
-            before_round > 0,
-            "The method should never be called with a before_round = 0"
-        );
-
-        self.cached_refs
-            .iter()
-            .map(|blocks| {
-                blocks
-                    .iter()
-                    .rev()
-                    .find(|block_ref| block_ref.round < before_round)
-                    .expect("At least one block should be found")
             })
             .collect()
     }
