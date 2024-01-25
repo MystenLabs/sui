@@ -90,9 +90,13 @@ async fn test_end_to_end() -> anyhow::Result<()> {
     // Start watching for upgrades.
     let mut sources = NetworkLookup::new();
     sources.insert(Network::Localnet, AddressLookup::new());
+
+    let mut sources_list = NetworkLookup::new();
+    sources_list.insert(Network::Localnet, AddressLookup::new());
     let app_state = Arc::new(RwLock::new(AppState {
         sources,
         metrics: None,
+        sources_list,
     }));
     let app_state_ref = app_state.clone();
     let (tx, rx) = oneshot::channel();
@@ -291,9 +295,12 @@ async fn test_api_route() -> anyhow::Result<()> {
     address_lookup.insert(account_address, source_lookup);
     let mut sources = NetworkLookup::new();
     sources.insert(Network::Localnet, address_lookup);
+    let mut sources_list = NetworkLookup::new();
+    sources_list.insert(Network::Localnet, AddressLookup::new());
     let app_state = Arc::new(RwLock::new(AppState {
         sources,
         metrics: None,
+        sources_list,
     }));
     tokio::spawn(serve(app_state).expect("Cannot start service."));
 
@@ -313,6 +320,17 @@ async fn test_api_route() -> anyhow::Result<()> {
 
     let expected = expect!["module address {...}"];
     expected.assert_eq(&json.source);
+
+    // check /list route
+    let response = client
+        .get(format!("http://{}/api/list", host_port()))
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let expected = expect![[r#"{"localnet":{}}"#]];
+    expected.assert_eq(response.as_str());
 
     // check server rejects bad version header
     let json = client
