@@ -12,6 +12,7 @@ pub mod extensions;
 pub(crate) mod functional_group;
 mod metrics;
 mod mutation;
+pub(crate) mod raw_query;
 pub mod server;
 pub mod test_infra;
 mod types;
