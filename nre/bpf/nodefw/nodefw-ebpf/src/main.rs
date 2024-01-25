@@ -9,6 +9,7 @@ use aya_bpf::{
 };
 use aya_log_ebpf::info;
 use core::mem;
+// TODO see if this is preferred over ptr_at
 // use memoffset::offset_of;
 use network_types::{
     eth::{EthHdr, EtherType},
@@ -20,17 +21,17 @@ use nodefw_common::Rule;
 
 const MAX_BLOCKLIST_SIZE: u32 = 1024;
 
-// the key is an ipv4 or ipv6 byte value expressed as an array.
+// the key is an ipv4 or ipv6 octet value expressed as an array.
 #[map]
 static BLOCKLIST: HashMap<[u8; 16usize], Rule> = HashMap::with_max_entries(MAX_BLOCKLIST_SIZE, 0);
 
 fn block_ip(ctx: &XdpContext, address: [u8; 16usize]) -> bool {
     unsafe {
+        // TODO find a way to check map len, if possible
         // if BLOCKLIST.len() == MAX_BLOCKLIST_SIZE {
         //     return true;
         // }
         if let Some(v) = BLOCKLIST.get(&address) {
-            // info!(ctx, "ttl: {} port: {}", v[0], v[1]);
             info!(ctx, "ttl: {} port: {}", v.ttl, v.port);
         }
         BLOCKLIST.get(&address).is_some()
@@ -81,15 +82,11 @@ fn eval_ip(ctx: XdpContext) -> Result<u32, ()> {
 
         if block_ip(&ctx, source_addr) {
             info!(&ctx, "drop source_addr: {:i} dest port: {}", src_addr, dest_port);
+            // FAIL OPEN WHILE TESTING; should be XDP_DROP
             return Ok(xdp_action::XDP_PASS);
         }
     }
-
-    // if block_ip(source_addr) {
-    //     info!(&ctx, "drop source_addr: {:i}", src_addr);
-    //     return Ok(xdp_action::XDP_PASS);
-    // }
-    // info!(&ctx, "permit source_addr: {:i}", src_addr);
+    // FAIL OPEN WHILE TESTING
     Ok(xdp_action::XDP_PASS)
 }
 fn eval_ipv6(ctx: XdpContext) -> Result<u32, ()> {

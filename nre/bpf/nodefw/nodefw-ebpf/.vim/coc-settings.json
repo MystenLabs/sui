@@ -1,4 +1,0 @@
-{
-    "rust-analyzer.cargo.target": "bpfel-unknown-none",
-    "rust-analyzer.checkOnSave.allTargets": false
-}
