@@ -98,6 +98,11 @@ pub(crate) trait RawPaginated<C: CursorType>: Target<C> {
 pub(crate) trait Target<C: CursorType> {
     /// The cursor pointing at this target value.
     fn cursor(&self) -> C;
+
+    /// The cursor pointing at this target value, assuming it was read at `checkpoint_viewed_at`.
+    fn consistent_cursor(&self, _checkpoint_viewed_at: u64) -> C {
+        self.cursor()
+    }
 }
 
 impl<C> JsonCursor<C> {
@@ -265,6 +270,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
     pub(crate) fn paginate_raw_query<T>(
         &self,
         conn: &mut Conn<'_>,
+        checkpoint_viewed_at: u64,
         query: RawQuery,
     ) -> QueryResult<(bool, bool, impl Iterator<Item = T>)>
     where
@@ -298,8 +304,12 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         };
 
         Ok(self.paginate_results(
-            results.first().map(|f| f.cursor()),
-            results.last().map(|l| l.cursor()),
+            results
+                .first()
+                .map(|f| f.consistent_cursor(checkpoint_viewed_at)),
+            results
+                .last()
+                .map(|l| l.consistent_cursor(checkpoint_viewed_at)),
             results,
         ))
     }

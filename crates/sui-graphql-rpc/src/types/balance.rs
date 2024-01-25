@@ -95,6 +95,7 @@ impl Balance {
 
                 page.paginate_raw_query::<StoredBalance>(
                     conn,
+                    rhs,
                     balance_query(address, None, lhs as i64, rhs as i64),
                 )
                 .map(Some)
