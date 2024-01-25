@@ -17,6 +17,8 @@
 // 4 3   6 |  4 -  5
 // 4     3 |  0 -  2
 //   6 4   |  9 - 12
+//       4 |  0 -  3
+//   4     |  5 - 12
 //     4 6 |  2 -  5
 //   3 4 6 |  4 -  5
 //   9 4   | 10 - 12
@@ -101,6 +103,34 @@
 //# run-graphql --cursors 6
 {
   checkpoints(last: 4, after: "@{cursor_0}") {
+    pageInfo {
+      hasPreviousPage
+      hasNextPage
+    }
+    edges {
+      cursor
+      node { sequenceNumber }
+    }
+  }
+}
+
+//# run-graphql --cursors 4
+{
+  checkpoints(before: "@{cursor_0}") {
+    pageInfo {
+      hasPreviousPage
+      hasNextPage
+    }
+    edges {
+      cursor
+      node { sequenceNumber }
+    }
+  }
+}
+
+//# run-graphql --cursors 4
+{
+  checkpoints(after: "@{cursor_0}") {
     pageInfo {
       hasPreviousPage
       hasNextPage
