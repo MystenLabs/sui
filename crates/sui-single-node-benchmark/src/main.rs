@@ -18,6 +18,7 @@ async fn main() {
         Workload::new(args.tx_count, args.workload, args.num_input_objects),
         args.component,
         args.checkpoint_size,
+        args.print_sample_tx,
     )
     .await;
 

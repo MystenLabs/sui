@@ -59,7 +59,7 @@ use sui_verifier::{default_verifier_config, verifier as sui_bytecode_verifier};
 mod build_tests;
 
 /// Wrapper around the core Move `CompiledPackage` with some Sui-specific traits and info
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CompiledPackage {
     pub package: MoveCompiledPackage,
     /// Address the package is recorded as being published at.
@@ -89,6 +89,21 @@ impl BuildConfig {
         build_config.config.install_dir = Some(install_dir);
         build_config.config.lock_file = Some(lock_file);
         build_config.config.no_lint = true;
+        build_config
+    }
+
+    pub fn new_for_testing_replace_addresses<I, S>(dep_original_addresses: I) -> Self
+    where
+        I: IntoIterator<Item = (S, ObjectID)>,
+        S: Into<String>,
+    {
+        let mut build_config = Self::new_for_testing();
+        for (addr_name, obj_id) in dep_original_addresses {
+            build_config
+                .config
+                .additional_named_addresses
+                .insert(addr_name.into(), AccountAddress::from(obj_id));
+        }
         build_config
     }
 
@@ -614,7 +629,7 @@ impl PackageHooks for SuiPackageHooks {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PackageDependencies {
     /// Set of published dependencies (name and address).
     pub published: BTreeMap<Symbol, ObjectID>,
@@ -624,7 +639,7 @@ pub struct PackageDependencies {
     pub invalid: BTreeMap<Symbol, String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PublishedAtError {
     Invalid(String),
     NotPresent,

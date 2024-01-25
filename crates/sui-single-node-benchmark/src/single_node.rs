@@ -5,7 +5,6 @@ use crate::command::Component;
 use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::mock_storage::InMemoryObjectStore;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::path::PathBuf;
 use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::authority_store_tables::LiveObject;
@@ -17,7 +16,7 @@ use sui_core::consensus_adapter::{
     ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
 };
 use sui_core::state_accumulator::StateAccumulator;
-use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
 use sui_types::base_types::{AuthorityName, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::committee::Committee;
 use sui_types::crypto::{AccountKeyPair, AuthoritySignature, Signer};
@@ -94,14 +93,14 @@ impl SingleValidator {
     /// Publish a package, returns the package object and the updated gas object.
     pub async fn publish_package(
         &self,
-        path: PathBuf,
+        publish_data: PublishData,
         sender: SuiAddress,
         keypair: &AccountKeyPair,
         gas: ObjectRef,
     ) -> (ObjectRef, ObjectRef) {
-        let transaction = TestTransactionBuilder::new(sender, gas, DEFAULT_VALIDATOR_GAS_PRICE)
-            .publish(path)
-            .build_and_sign(keypair);
+        let tx_builder = TestTransactionBuilder::new(sender, gas, DEFAULT_VALIDATOR_GAS_PRICE)
+            .publish_with_data(publish_data);
+        let transaction = tx_builder.build_and_sign(keypair);
         let effects = self.execute_raw_transaction(transaction).await;
         let package = effects
             .all_changed_objects()
