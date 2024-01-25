@@ -113,8 +113,17 @@ impl TransactionBlock {
     /// transactions do not have senders.
     async fn sender(&self) -> Option<Address> {
         let sender = self.native().sender();
+
+        let checkpoint_sequence_number = match self {
+            TransactionBlock::Stored { stored_tx, .. } => {
+                Some(stored_tx.checkpoint_sequence_number as u64)
+            }
+            _ => None,
+        };
+
         (sender != NativeSuiAddress::ZERO).then(|| Address {
             address: SuiAddress::from(sender),
+            checkpoint_sequence_number,
         })
     }
 
@@ -124,7 +133,17 @@ impl TransactionBlock {
     /// If the owner of the gas object(s) is not the same as the sender, the transaction block is a
     /// sponsored transaction block.
     async fn gas_input(&self) -> Option<GasInput> {
-        Some(GasInput::from(self.native().gas_data()))
+        let checkpoint_sequence_number = match self {
+            TransactionBlock::Stored { stored_tx, .. } => {
+                Some(stored_tx.checkpoint_sequence_number as u64)
+            }
+            _ => None,
+        };
+
+        Some(GasInput::from(
+            self.native().gas_data(),
+            checkpoint_sequence_number,
+        ))
     }
 
     /// The type of this transaction as well as the commands and/or parameters comprising the

@@ -186,7 +186,7 @@ impl ChangeEpochTransaction {
             );
 
             let runtime_id = native.id();
-            let object = Object::from_native(SuiAddress::from(runtime_id), native);
+            let object = Object::from_native(SuiAddress::from(runtime_id), native, None);
             let package = MovePackage::try_from(&object)
                 .map_err(|_| Error::Internal("Failed to create system package".to_string()))
                 .extend()?;
