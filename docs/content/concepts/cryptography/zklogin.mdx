@@ -408,8 +408,6 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 
 ### Run the proving service in your backend
 
-1. Download two images from from Docker Hub [repository](https://hub.docker.com/repository/docker/mysten/zklogin/general) that are tagged as `prover` and `prover-fe`.
-
 1. Download the [Groth16 proving key zkey file](https://docs.circom.io/getting-started/proving-circuits/) that will be later used as an argument to run the prover. There are zkeys available for Mainnet and Testnet, as well as a test zkey for Devnet. See [the Ceremony section](#ceremony) for more details on how the main proving key is generated. Please install [git lfs](https://git-lfs.com/) which is needed before downloading the zkey.
 
 	- Main zkey (for Mainnet and Testnet)
@@ -428,31 +426,39 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 		| Mainnet, Testnet |  `zkLogin-main.zkey` | `060beb961802568ac9ac7f14de0fbcd55e373e8f5ec7cc32189e26fb65700aa4e36f5604f868022c765e634d14ea1cd58bd4d79cef8f3cf9693510696bcbcbce` |
 		| Devnet | `zkLogin-test.zkey` | `686e2f5fd969897b1c034d7654799ee2c3952489814e4eaaf3d7e1bb539841047ae8ee5fdcdaca5f4ddd76abb5a8e8eb77b44b693a2ba9d4be57e94292b26ce2` |
 
-1. Run `prover` at `PORT1` with the downloaded zkey. This needs to be run on Linux-based machines (amd64). Further, we recommended using at least 16 vcpu, preferably an AMD cpu and at least 16gb ram for production use. Whereas 8 vcpu, 8gb ram works for testing (but its not fast).
+1. For the next step, you need two Docker images from the [mysten/zklogin repository](https://hub.docker.com/repository/docker/mysten/zklogin/general) (tagged as `prover` and `prover-fe`). To simplify, a docker compose file is available that automates this process. Run `docker compose` with the downloaded `zkey` from the same directory as the YAML file.
 
-	```bash
-	docker run \
-	-e ZKEY=/app/binaries/zkLogin.zkey \
-	-e WITNESS_BINARIES=/app/binaries \
-	-v <path_to_zkLogin.zkey>:/app/binaries/zkLogin.zkey \
-	-p PORT1:8080 \
-	<prover-image>
-	```
+```yaml
+services:
+  backend:
+    image: mysten/zklogin:prover-stable
+    volumes:
+      # The ZKEY environment variable must be set to the path of the zkey file.
+      - ${ZKEY}:/app/binaries/zkLogin.zkey
+    environment:
+      - ZKEY=/app/binaries/zkLogin.zkey
+      - WITNESS_BINARIES=/app/binaries
 
-1. Run `prover-fe` at `PORT2`:
+  frontend:
+    image: mysten/zklogin:prover-fe-stable
+    command: "8080"
+    ports:
+      # The PROVER_PORT environment variable must be set to the desired port.
+      - "${PROVER_PORT}:8080"
+    environment:
+      - PROVER_URI=http://backend:8080/input
+      - NODE_ENV=production
+      - DEBUG=zkLogin:info,jwks
+      # The default timeout is 15 seconds. Uncomment the following line to change it.
+      # - PROVER_TIMEOUT=30
+```
 
-	```bash
-	docker run \
-		-e PROVER_URI='http://localhost:PORT1/input' \
-		-e NODE_ENV=production \
-		-e DEBUG=zkLogin:info,jwks \
-		-p PORT2:8080 \
-		<prover-fe-image> 8080
-	```
+```
+ZKEY=<path_to_zkLogin.zkey> PROVER_PORT=<PROVER_PORT> docker compose up
+```
 
-1. Expose the `prover-fe` service appropriately and keep the prover service internal.
-1. To call the proving service, the following two endpoints are supported:
-   - `/ping`: To test if the service is up. Running `curl http://localhost:PORT2/ping` should return `pong`.
+1. To call the service, the following two endpoints are supported:
+   - `/ping`: To test if the service is up. Running `curl http://localhost:PROVER_PORT/ping` should return `pong`.
    - `/v1`: The request and response are the same as the Mysten Labs maintained service.
 
 A few things to note:
