@@ -9,7 +9,11 @@ Response: {
     "objects": {
       "edges": [
         {
+<<<<<<< HEAD
           "cursor": "IHzGD0rHsr7s2TnCZtw4XopARGmiwhFw/GFX3hwYsuBX",
+=======
+          "cursor": "IGIUg8rFWqWwFn/Sv3WtoBagCn0xIsmfBiP0J7fl2CdMAAAAAAAAAAA=",
+>>>>>>> 4469c8403b (consistent paginated object query)
           "node": {
             "asMoveObject": {
               "asStakedSui": {
@@ -52,7 +56,21 @@ Response: {
     "objects": {
       "edges": [
         {
+<<<<<<< HEAD
           "cursor": "IHzGD0rHsr7s2TnCZtw4XopARGmiwhFw/GFX3hwYsuBX",
+=======
+          "cursor": "ICWp4ehjW4WR6h2xCIHZMmodpaSn8u/5R1UICUd7ZCOuAQAAAAAAAAA=",
+          "node": {
+            "asMoveObject": {
+              "asStakedSui": {
+                "principal": "10000000000"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "IGIUg8rFWqWwFn/Sv3WtoBagCn0xIsmfBiP0J7fl2CdMAAAAAAAAAAA=",
+>>>>>>> 4469c8403b (consistent paginated object query)
           "node": {
             "asMoveObject": {
               "asStakedSui": {
@@ -62,7 +80,7 @@ Response: {
           }
         },
         {
-          "cursor": "IIHMnvkeALMPjTeJ/OOC5YxcRUCNj2lhNJxXlLo4Bhnu",
+          "cursor": "IIHMnvkeALMPjTeJ/OOC5YxcRUCNj2lhNJxXlLo4BhnuAgAAAAAAAAA=",
           "node": {
             "asMoveObject": {
               "asStakedSui": {
@@ -87,7 +105,11 @@ Response: {
       "stakedSuis": {
         "edges": [
           {
+<<<<<<< HEAD
             "cursor": "IKWvyP6Q/TMZqbCP3Cifyxq7zXZ7vbcmAKuOpxLegnum",
+=======
+            "cursor": "ICWp4ehjW4WR6h2xCIHZMmodpaSn8u/5R1UICUd7ZCOuAQAAAAAAAAA=",
+>>>>>>> 4469c8403b (consistent paginated object query)
             "node": {
               "principal": "10000000000"
             }

@@ -72,7 +72,11 @@ module Test::M1 {
   }
 }
 
+<<<<<<< HEAD
 //# run-graphql --cursors @{obj_4_0}
+=======
+//# run-graphql --cursors @{obj_4_0,1}
+>>>>>>> 6667271423 (Consistent reads what the last PR should look like)
 {
   address(address: "@{A}") {
     # select 4th and last object
@@ -84,7 +88,11 @@ module Test::M1 {
   }
 }
 
+<<<<<<< HEAD
 //# run-graphql --cursors @{obj_3_0}
+=======
+//# run-graphql --cursors @{obj_3_0,1}
+>>>>>>> 6667271423 (Consistent reads what the last PR should look like)
 {
   address(address: "@{A}") {
     # select 3rd and 4th object

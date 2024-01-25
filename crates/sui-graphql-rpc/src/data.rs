@@ -276,3 +276,57 @@ macro_rules! query {
         RawQuery::new(select, binds)
     }};
 }
+
+pub(crate) fn build_candidates(
+    snapshot_objs: RawQueryBuilder,
+    history_objs: RawQueryBuilder,
+) -> RawQueryBuilder {
+    let mut candidates = query!(
+        r#"SELECT DISTINCT ON (object_id) * FROM (
+        ({})
+        UNION
+        ({})
+    ) o"#,
+        snapshot_objs,
+        history_objs
+    );
+
+    candidates
+        .order_by("object_id")
+        .order_by("object_version DESC")
+}
+
+pub(crate) fn build_newer(lhs: i64, rhs: i64) -> RawQueryBuilder {
+    let mut newer = query!(r#"SELECT object_id, object_version FROM objects_history"#);
+    filter!(
+        newer,
+        format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
+    )
+}
+
+pub(crate) fn build_join(candidates: RawQueryBuilder, newer: RawQueryBuilder) -> RawQueryBuilder {
+    let mut final_ = query!(
+        r#"
+    SELECT CAST(SUM(candidates.coin_balance) AS TEXT) as balance, COUNT(*) as count, candidates.coin_type as coin_type
+        FROM ({}) candidates
+        LEFT JOIN ({}) newer
+        ON (
+            candidates.object_id = newer.object_id
+            AND candidates.object_version < newer.object_version
+        )"#,
+        candidates,
+        newer
+    );
+    filter!(final_, "newer.object_version IS NULL")
+}
+
+pub(crate) fn consistent_object_read(
+    snapshot_objs: RawQueryBuilder,
+    history_objs: RawQueryBuilder,
+    lhs: i64,
+    rhs: i64,
+) -> RawQueryBuilder {
+    let candidates = build_candidates(snapshot_objs, history_objs);
+    let newer = build_newer(lhs, rhs);
+    build_join(candidates, newer)
+}

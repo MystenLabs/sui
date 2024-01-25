@@ -40,6 +40,7 @@ Response: {
       "objects": {
         "edges": [
           {
+<<<<<<< HEAD
             "cursor": "IBuhnN1m7Mf4aSqiFE9YHaTqXm06hWPLzf66Yz7aDN+B"
           },
           {
@@ -53,6 +54,21 @@ Response: {
           },
           {
             "cursor": "INjjPJ3tlzCtRRiX2IAe6RJ1G22AhYQ7bhMHkLfW8pWL"
+=======
+            "cursor": "IBLJSG5F5wW4Wryd7g7OQBueP2ngKHGFyS5EIhDRpfDfAQAAAAAAAAA="
+          },
+          {
+            "cursor": "IFLKaoJAbzvBuEA2h1L4MRzPuADN27DTTbrQAwMaETl7AQAAAAAAAAA="
+          },
+          {
+            "cursor": "IIlO2taSaWWLoaz0YB53RB7q7oSiM+/WIAakoaV1htgOAQAAAAAAAAA="
+          },
+          {
+            "cursor": "IOkuMCPNA1s5Y79FNHS17aQLjJlkwB6atsBFIu/bDV+gAQAAAAAAAAA="
+          },
+          {
+            "cursor": "IPpaa9bSp0Chgp82cV8TpoBQkLrn9afyrGbXC2MQXnxaAQAAAAAAAAA="
+>>>>>>> 4469c8403b (consistent paginated object query)
           }
         ]
       }
@@ -67,10 +83,17 @@ Response: {
       "objects": {
         "edges": [
           {
+<<<<<<< HEAD
             "cursor": "IBuhnN1m7Mf4aSqiFE9YHaTqXm06hWPLzf66Yz7aDN+B"
           },
           {
             "cursor": "IH9LnEWueBvpi0fPbNI9o35ULhV+XeuLI4zxxI57zqkt"
+=======
+            "cursor": "IBLJSG5F5wW4Wryd7g7OQBueP2ngKHGFyS5EIhDRpfDfAQAAAAAAAAA="
+          },
+          {
+            "cursor": "IFLKaoJAbzvBuEA2h1L4MRzPuADN27DTTbrQAwMaETl7AQAAAAAAAAA="
+>>>>>>> 4469c8403b (consistent paginated object query)
           }
         ]
       }
@@ -83,14 +106,22 @@ Response: {
   "data": {
     "address": {
       "objects": {
+<<<<<<< HEAD
         "edges": [
           {
+<<<<<<< HEAD
             "cursor": "IKmcPzAQymZ1dAi1LumON1viDhTpIKUoJ9O5QxzkBHDP"
           },
           {
             "cursor": "IMrdU+teF18sCx888Cv6pUJK5WxoWs5m1z7C9xg96Taw"
+=======
+            "cursor": "IPpaa9bSp0Chgp82cV8TpoBQkLrn9afyrGbXC2MQXnxaAQAAAAAAAAA="
+>>>>>>> 4469c8403b (consistent paginated object query)
           }
         ]
+=======
+        "edges": []
+>>>>>>> 40d9471283 (we will validate correctness later)
       }
     }
   }
@@ -101,14 +132,25 @@ Response: {
   "data": {
     "address": {
       "objects": {
+<<<<<<< HEAD
         "edges": [
           {
+<<<<<<< HEAD
             "cursor": "IMrdU+teF18sCx888Cv6pUJK5WxoWs5m1z7C9xg96Taw"
           },
           {
             "cursor": "INjjPJ3tlzCtRRiX2IAe6RJ1G22AhYQ7bhMHkLfW8pWL"
+=======
+            "cursor": "IIlO2taSaWWLoaz0YB53RB7q7oSiM+/WIAakoaV1htgOAQAAAAAAAAA="
+          },
+          {
+            "cursor": "IOkuMCPNA1s5Y79FNHS17aQLjJlkwB6atsBFIu/bDV+gAQAAAAAAAAA="
+>>>>>>> 4469c8403b (consistent paginated object query)
           }
         ]
+=======
+        "edges": []
+>>>>>>> 40d9471283 (we will validate correctness later)
       }
     }
   }
@@ -121,10 +163,14 @@ Response: {
       "objects": {
         "edges": [
           {
+<<<<<<< HEAD
             "cursor": "IKmcPzAQymZ1dAi1LumON1viDhTpIKUoJ9O5QxzkBHDP"
           },
           {
             "cursor": "IMrdU+teF18sCx888Cv6pUJK5WxoWs5m1z7C9xg96Taw"
+=======
+            "cursor": "IFLKaoJAbzvBuEA2h1L4MRzPuADN27DTTbrQAwMaETl7AQAAAAAAAAA="
+>>>>>>> 40d9471283 (we will validate correctness later)
           }
         ]
       }
@@ -139,10 +185,24 @@ Response: {
       "objects": {
         "edges": [
           {
+<<<<<<< HEAD
+<<<<<<< HEAD
             "cursor": "IMrdU+teF18sCx888Cv6pUJK5WxoWs5m1z7C9xg96Taw"
           },
           {
             "cursor": "INjjPJ3tlzCtRRiX2IAe6RJ1G22AhYQ7bhMHkLfW8pWL"
+=======
+            "cursor": "IOkuMCPNA1s5Y79FNHS17aQLjJlkwB6atsBFIu/bDV+gAQAAAAAAAAA="
+          },
+          {
+            "cursor": "IPpaa9bSp0Chgp82cV8TpoBQkLrn9afyrGbXC2MQXnxaAQAAAAAAAAA="
+>>>>>>> 4469c8403b (consistent paginated object query)
+=======
+            "cursor": "IFLKaoJAbzvBuEA2h1L4MRzPuADN27DTTbrQAwMaETl7AQAAAAAAAAA="
+          },
+          {
+            "cursor": "IBLJSG5F5wW4Wryd7g7OQBueP2ngKHGFyS5EIhDRpfDfAQAAAAAAAAA="
+>>>>>>> 40d9471283 (we will validate correctness later)
           }
         ]
       }

@@ -1,13 +1,27 @@
+<<<<<<< HEAD
 processed 25 tasks
+=======
+processed 26 tasks
+>>>>>>> 12927087aa (Add historical context to consistent reads)
 
 init:
 A: object(0,0), B: object(0,1)
 
+<<<<<<< HEAD
+<<<<<<< HEAD
 task 1 'publish'. lines 19-49:
+=======
+task 1 'publish'. lines 12-42:
+>>>>>>> 12927087aa (Add historical context to consistent reads)
+=======
+task 1 'publish'. lines 13-43:
+>>>>>>> bbeefb6720 (we will validate correctness later)
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 15663600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
+<<<<<<< HEAD
+<<<<<<< HEAD
 task 2 'create-checkpoint'. lines 51-51:
 Checkpoint created: 1
 
@@ -42,14 +56,72 @@ task 15 'create-checkpoint'. lines 79-79:
 Checkpoint created: 7
 
 task 16 'run-graphql'. lines 81-101:
+=======
+task 2 'create-checkpoint'. lines 44-44:
+=======
+task 2 'create-checkpoint'. lines 45-45:
+>>>>>>> bbeefb6720 (we will validate correctness later)
+Checkpoint created: 1
+
+task 3 'programmable'. lines 47-49:
+mutated: object(0,0), object(1,1), object(1,5)
+gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 3972672, non_refundable_storage_fee: 40128
+
+task 4 'create-checkpoint'. lines 51-51:
+Checkpoint created: 2
+
+task 5 'transfer-object'. lines 53-53:
+mutated: object(0,0), object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
+
+task 6 'create-checkpoint'. lines 55-55:
+Checkpoint created: 3
+
+task 7 'transfer-object'. lines 57-57:
+mutated: object(0,0), object(1,3)
+gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
+
+task 9 'create-checkpoint'. lines 61-61:
+Checkpoint created: 4
+
+task 11 'create-checkpoint'. lines 65-65:
+Checkpoint created: 5
+
+task 13 'create-checkpoint'. lines 69-69:
+Checkpoint created: 6
+
+task 15 'create-checkpoint'. lines 73-73:
+Checkpoint created: 7
+
+<<<<<<< HEAD
+task 16 'run-graphql'. lines 74-106:
+>>>>>>> 12927087aa (Add historical context to consistent reads)
+=======
+task 16 'run-graphql'. lines 75-107:
+>>>>>>> bbeefb6720 (we will validate correctness later)
 Response: {
   "data": {
     "transactionBlocks": {
       "nodes": [
         {
           "sender": {
+<<<<<<< HEAD
             "fakeCoinBalance": {
               "totalBalance": "600"
+=======
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "300"
+                },
+                {
+                  "coinBalance": "100"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             },
             "allBalances": {
               "nodes": [
@@ -62,19 +134,55 @@ Response: {
                 },
                 {
                   "coinType": {
+<<<<<<< HEAD
                     "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+=======
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+>>>>>>> 12927087aa (Add historical context to consistent reads)
                   },
                   "coinObjectCount": 3,
                   "totalBalance": "600"
                 }
               ]
+<<<<<<< HEAD
+=======
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             }
           }
         },
         {
           "sender": {
+<<<<<<< HEAD
             "fakeCoinBalance": {
               "totalBalance": "700"
+=======
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                },
+                {
+                  "coinBalance": "100"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             },
             "allBalances": {
               "nodes": [
@@ -87,19 +195,52 @@ Response: {
                 },
                 {
                   "coinType": {
+<<<<<<< HEAD
                     "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+=======
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+>>>>>>> 12927087aa (Add historical context to consistent reads)
                   },
                   "coinObjectCount": 3,
                   "totalBalance": "700"
                 }
               ]
+<<<<<<< HEAD
+=======
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             }
           }
         },
         {
           "sender": {
+<<<<<<< HEAD
             "fakeCoinBalance": {
               "totalBalance": "500"
+=======
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             },
             "allBalances": {
               "nodes": [
@@ -112,10 +253,31 @@ Response: {
                 },
                 {
                   "coinType": {
+<<<<<<< HEAD
                     "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
                   },
                   "coinObjectCount": 2,
                   "totalBalance": "500"
+=======
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "600"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+>>>>>>> 12927087aa (Add historical context to consistent reads)
                 }
               ]
             }
@@ -123,8 +285,17 @@ Response: {
         },
         {
           "sender": {
+<<<<<<< HEAD
             "fakeCoinBalance": {
               "totalBalance": "400"
+=======
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             },
             "allBalances": {
               "nodes": [
@@ -137,12 +308,33 @@ Response: {
                 },
                 {
                   "coinType": {
+<<<<<<< HEAD
                     "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+=======
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+>>>>>>> 12927087aa (Add historical context to consistent reads)
                   },
                   "coinObjectCount": 1,
                   "totalBalance": "400"
                 }
               ]
+<<<<<<< HEAD
+=======
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             }
           }
         }
@@ -151,18 +343,41 @@ Response: {
   }
 }
 
+<<<<<<< HEAD
+<<<<<<< HEAD
 task 17 'force-object-snapshot-catchup'. lines 104-104:
 Objects snapshot updated to [0 to 2)
 
 task 18 'run-graphql'. lines 106-126:
+=======
+task 18 'run-graphql'. lines 111-143:
+>>>>>>> 12927087aa (Add historical context to consistent reads)
+=======
+task 18 'run-graphql'. lines 112-144:
+>>>>>>> bbeefb6720 (we will validate correctness later)
 Response: {
   "data": {
     "transactionBlocks": {
       "nodes": [
         {
           "sender": {
+<<<<<<< HEAD
             "fakeCoinBalance": {
               "totalBalance": "600"
+=======
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "300"
+                },
+                {
+                  "coinBalance": "100"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             },
             "allBalances": {
               "nodes": [
@@ -175,19 +390,55 @@ Response: {
                 },
                 {
                   "coinType": {
+<<<<<<< HEAD
                     "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+=======
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+>>>>>>> 12927087aa (Add historical context to consistent reads)
                   },
                   "coinObjectCount": 3,
                   "totalBalance": "600"
                 }
               ]
+<<<<<<< HEAD
+=======
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             }
           }
         },
         {
           "sender": {
+<<<<<<< HEAD
             "fakeCoinBalance": {
               "totalBalance": "700"
+=======
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                },
+                {
+                  "coinBalance": "100"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             },
             "allBalances": {
               "nodes": [
@@ -200,19 +451,52 @@ Response: {
                 },
                 {
                   "coinType": {
+<<<<<<< HEAD
                     "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+=======
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+>>>>>>> 12927087aa (Add historical context to consistent reads)
                   },
                   "coinObjectCount": 3,
                   "totalBalance": "700"
                 }
               ]
+<<<<<<< HEAD
+=======
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             }
           }
         },
         {
           "sender": {
+<<<<<<< HEAD
             "fakeCoinBalance": {
               "totalBalance": "500"
+=======
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             },
             "allBalances": {
               "nodes": [
@@ -225,10 +509,31 @@ Response: {
                 },
                 {
                   "coinType": {
+<<<<<<< HEAD
                     "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
                   },
                   "coinObjectCount": 2,
                   "totalBalance": "500"
+=======
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "600"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+>>>>>>> 12927087aa (Add historical context to consistent reads)
                 }
               ]
             }
@@ -236,8 +541,17 @@ Response: {
         },
         {
           "sender": {
+<<<<<<< HEAD
             "fakeCoinBalance": {
               "totalBalance": "400"
+=======
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             },
             "allBalances": {
               "nodes": [
@@ -250,12 +564,33 @@ Response: {
                 },
                 {
                   "coinType": {
+<<<<<<< HEAD
                     "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+=======
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+>>>>>>> 12927087aa (Add historical context to consistent reads)
                   },
                   "coinObjectCount": 1,
                   "totalBalance": "400"
                 }
               ]
+<<<<<<< HEAD
+=======
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             }
           }
         }
@@ -264,26 +599,41 @@ Response: {
   }
 }
 
+<<<<<<< HEAD
+<<<<<<< HEAD
 task 19 'force-object-snapshot-catchup'. lines 129-129:
 Objects snapshot updated to [0 to 3)
 
 task 20 'run-graphql'. lines 131-151:
+=======
+task 20 'run-graphql'. lines 147-179:
+>>>>>>> 12927087aa (Add historical context to consistent reads)
+=======
+task 20 'run-graphql'. lines 148-180:
+>>>>>>> bbeefb6720 (we will validate correctness later)
 Response: {
   "data": {
     "transactionBlocks": {
       "nodes": [
         {
           "sender": {
+<<<<<<< HEAD
             "fakeCoinBalance": null,
             "allBalances": {
               "nodes": []
-            }
-          }
-        },
-        {
-          "sender": {
-            "fakeCoinBalance": {
-              "totalBalance": "700"
+=======
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                },
+                {
+                  "coinBalance": "100"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
             },
             "allBalances": {
               "nodes": [
@@ -296,19 +646,107 @@ Response: {
                 },
                 {
                   "coinType": {
-                    "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
                   },
                   "coinObjectCount": 3,
                   "totalBalance": "700"
                 }
               ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             }
           }
         },
         {
           "sender": {
+<<<<<<< HEAD
+            "fakeCoinBalance": {
+              "totalBalance": "700"
+=======
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                },
+                {
+                  "coinBalance": "100"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999982296272"
+                },
+                {
+                  "coinType": {
+<<<<<<< HEAD
+                    "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+=======
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+>>>>>>> 12927087aa (Add historical context to consistent reads)
+                  },
+                  "coinObjectCount": 3,
+                  "totalBalance": "700"
+                }
+              ]
+<<<<<<< HEAD
+=======
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
+            }
+          }
+        },
+        {
+          "sender": {
+<<<<<<< HEAD
             "fakeCoinBalance": {
               "totalBalance": "500"
+=======
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             },
             "allBalances": {
               "nodes": [
@@ -321,10 +759,31 @@ Response: {
                 },
                 {
                   "coinType": {
+<<<<<<< HEAD
                     "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
                   },
                   "coinObjectCount": 2,
                   "totalBalance": "500"
+=======
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "600"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+>>>>>>> 12927087aa (Add historical context to consistent reads)
                 }
               ]
             }
@@ -332,8 +791,17 @@ Response: {
         },
         {
           "sender": {
+<<<<<<< HEAD
             "fakeCoinBalance": {
               "totalBalance": "400"
+=======
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             },
             "allBalances": {
               "nodes": [
@@ -346,12 +814,33 @@ Response: {
                 },
                 {
                   "coinType": {
+<<<<<<< HEAD
                     "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+=======
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+>>>>>>> 12927087aa (Add historical context to consistent reads)
                   },
                   "coinObjectCount": 1,
                   "totalBalance": "400"
                 }
               ]
+<<<<<<< HEAD
+=======
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             }
           }
         }
@@ -360,34 +849,38 @@ Response: {
   }
 }
 
+<<<<<<< HEAD
+<<<<<<< HEAD
 task 21 'force-object-snapshot-catchup'. lines 154-154:
 Objects snapshot updated to [0 to 4)
 
 task 22 'run-graphql'. lines 156-176:
+=======
+task 22 'run-graphql'. lines 183-215:
+>>>>>>> 12927087aa (Add historical context to consistent reads)
+=======
+task 22 'run-graphql'. lines 184-216:
+>>>>>>> bbeefb6720 (we will validate correctness later)
 Response: {
   "data": {
     "transactionBlocks": {
       "nodes": [
         {
           "sender": {
+<<<<<<< HEAD
             "fakeCoinBalance": null,
             "allBalances": {
               "nodes": []
-            }
-          }
-        },
-        {
-          "sender": {
-            "fakeCoinBalance": null,
-            "allBalances": {
-              "nodes": []
-            }
-          }
-        },
-        {
-          "sender": {
-            "fakeCoinBalance": {
-              "totalBalance": "500"
+=======
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
             },
             "allBalances": {
               "nodes": [
@@ -400,10 +893,135 @@ Response: {
                 },
                 {
                   "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "600"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
+            }
+          }
+        },
+        {
+          "sender": {
+<<<<<<< HEAD
+            "fakeCoinBalance": null,
+            "allBalances": {
+              "nodes": []
+=======
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999981273168"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "600"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
+            }
+          }
+        },
+        {
+          "sender": {
+<<<<<<< HEAD
+            "fakeCoinBalance": {
+              "totalBalance": "500"
+=======
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                },
+                {
+                  "coinBalance": "200"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999981273168"
+                },
+                {
+                  "coinType": {
+<<<<<<< HEAD
                     "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
                   },
                   "coinObjectCount": 2,
                   "totalBalance": "500"
+=======
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 2,
+                  "totalBalance": "600"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+>>>>>>> 12927087aa (Add historical context to consistent reads)
                 }
               ]
             }
@@ -411,8 +1029,17 @@ Response: {
         },
         {
           "sender": {
+<<<<<<< HEAD
             "fakeCoinBalance": {
               "totalBalance": "400"
+=======
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             },
             "allBalances": {
               "nodes": [
@@ -425,12 +1052,33 @@ Response: {
                 },
                 {
                   "coinType": {
+<<<<<<< HEAD
                     "repr": "0x5576855a47423a78766f2bdb5e3e9e87018f6585d7b74a0b41b8a6fd289d7504::fake::FAKE"
+=======
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+>>>>>>> 12927087aa (Add historical context to consistent reads)
                   },
                   "coinObjectCount": 1,
                   "totalBalance": "400"
                 }
               ]
+<<<<<<< HEAD
+=======
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             }
           }
         }
@@ -439,43 +1087,234 @@ Response: {
   }
 }
 
+<<<<<<< HEAD
+<<<<<<< HEAD
 task 23 'force-object-snapshot-catchup'. lines 179-179:
 Objects snapshot updated to [0 to 6)
 
 task 24 'run-graphql'. lines 181-201:
+=======
+task 24 'run-graphql'. lines 220-253:
+>>>>>>> 12927087aa (Add historical context to consistent reads)
+=======
+task 24 'run-graphql'. lines 221-254:
+>>>>>>> bbeefb6720 (we will validate correctness later)
 Response: {
   "data": {
     "transactionBlocks": {
       "nodes": [
         {
           "sender": {
+<<<<<<< HEAD
             "fakeCoinBalance": null,
             "allBalances": {
               "nodes": []
+=======
+            "coins": {
+<<<<<<< HEAD
+              "nodes": []
+            },
+            "allBalances": {
+              "nodes": []
+            },
+            "firstBalance": {
+              "edges": []
+            },
+            "lastBalance": {
+              "edges": []
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             }
           }
         },
         {
           "sender": {
+<<<<<<< HEAD
             "fakeCoinBalance": null,
             "allBalances": {
               "nodes": []
+=======
+            "coins": {
+=======
+>>>>>>> bbeefb6720 (we will validate correctness later)
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999980250064"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "400"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             }
           }
         },
         {
           "sender": {
+<<<<<<< HEAD
             "fakeCoinBalance": null,
             "allBalances": {
               "nodes": []
+=======
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999980250064"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "400"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
             }
           }
         },
         {
           "sender": {
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999980250064"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "400"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
+            }
+          }
+        },
+        {
+          "sender": {
+<<<<<<< HEAD
             "fakeCoinBalance": null,
             "allBalances": {
               "nodes": []
+=======
+            "coins": {
+              "nodes": [
+                {
+                  "coinBalance": "400"
+                }
+              ]
+            },
+            "allBalances": {
+              "nodes": [
+                {
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "299999980250064"
+                },
+                {
+                  "coinType": {
+                    "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+                  },
+                  "coinObjectCount": 1,
+                  "totalBalance": "400"
+                }
+              ]
+            },
+            "firstBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+                }
+              ]
+            },
+            "lastBalance": {
+              "edges": [
+                {
+                  "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+                }
+              ]
+>>>>>>> 12927087aa (Add historical context to consistent reads)
             }
           }
         }
@@ -483,3 +1322,56 @@ Response: {
     }
   }
 }
+<<<<<<< HEAD
+=======
+
+task 25 'run-graphql'. lines 256-284:
+Response: {
+  "data": {
+    "address": {
+      "coins": {
+        "nodes": [
+          {
+            "coinBalance": "100"
+          },
+          {
+            "coinBalance": "200"
+          }
+        ]
+      },
+      "allBalances": {
+        "nodes": [
+          {
+            "coinType": {
+              "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+            },
+            "coinObjectCount": 1,
+            "totalBalance": "300000000000000"
+          },
+          {
+            "coinType": {
+              "repr": "0x3f7ced265e17fe806f71e83d5f33c8baa58ccb482cb7f71e655d924226a3660d::fake::FAKE"
+            },
+            "coinObjectCount": 2,
+            "totalBalance": "300"
+          }
+        ]
+      },
+      "firstBalance": {
+        "edges": [
+          {
+            "cursor": "IjB4MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMjo6c3VpOjpTVUki"
+          }
+        ]
+      },
+      "lastBalance": {
+        "edges": [
+          {
+            "cursor": "IjB4M2Y3Y2VkMjY1ZTE3ZmU4MDZmNzFlODNkNWYzM2M4YmFhNThjY2I0ODJjYjdmNzFlNjU1ZDkyNDIyNmEzNjYwZDo6ZmFrZTo6RkFLRSI"
+          }
+        ]
+      }
+    }
+  }
+}
+>>>>>>> 12927087aa (Add historical context to consistent reads)

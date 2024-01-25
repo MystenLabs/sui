@@ -153,6 +153,24 @@ Response: {
         "edges": [
           {
             "node": {
+              "address": "0x3d0bae92b4a225cad2580b9e23f27ddae8e1990f82f47fab62f05c9927699b73",
+              "digest": "833ydMhC3jXfrH7mZjBuTGbFNFqfvDm19j9vCBSWh5xG",
+              "owner": {
+                "__typename": "AddressOwner"
+              }
+            }
+          },
+          {
+            "node": {
+              "address": "0xfeaa81cf669e0de385b8a1baa4f1b47b9abfefe04d972b60bb51b4d852f199e1",
+              "digest": "5uD5qjqHyoJEb2GvTwrndYuPBQJvihVa1P8fNHMo6MJm",
+              "owner": {
+                "__typename": "AddressOwner"
+              }
+            }
+          },
+          {
+            "node": {
               "address": "0x1e1139f952d75bf56e0a0a826e37dba541c8153c73ff74365123ff540381808f",
               "digest": "DNKsC3MG5vATHbq2NW6Hzoz5Xwe79Q9euitYEZ8nEnGo",
               "owner": {
@@ -171,6 +189,7 @@ Response: {
           },
           {
             "node": {
+<<<<<<< HEAD
               "address": "0x562dba230554d614e88c285296a65a1d9dbda69313a54e419bd4cf67ec6d5b9a",
               "digest": "GvhVTu37FFgJyqkE1uJYtBWDahKm4AG3eHPDi9iXb7Mv",
               "owner": {
@@ -182,6 +201,10 @@ Response: {
             "node": {
               "address": "0x6a2f7cfc6f292d569a7079c7352fa57789a872778b575cce2518a3698607f389",
               "digest": "4HCvGsgW3nwWrbctmKvPVxiLunFKei4N7XcsZFE83Q4s",
+=======
+              "address": "0x649aa4df7bcd7420ee73c34aff56b01e9fe07f1f6975c5d6d90b36afe271e7fa",
+              "digest": "HPNaS95Tnynhw9d3AZpjyafaBMH6J7NRnzYx6tQ7iiz3",
+>>>>>>> 40d9471283 (we will validate correctness later)
               "owner": {
                 "__typename": "AddressOwner"
               }
@@ -195,6 +218,7 @@ Response: {
                 "__typename": "AddressOwner"
               }
             }
+<<<<<<< HEAD
           },
           {
             "node": {
@@ -204,6 +228,8 @@ Response: {
                 "__typename": "AddressOwner"
               }
             }
+=======
+>>>>>>> 40d9471283 (we will validate correctness later)
           }
         ]
       }

@@ -301,7 +301,7 @@ impl TransactionBlock {
                         let tx_ = alias!(tx as tx_after);
                         let sub_query = tx_
                             .select(tx_.field(tx::dsl::tx_sequence_number))
-                            .filter(tx_.field(tx::dsl::checkpoint_sequence_number).eq(*c as i64))
+                            .filter(tx_.field(tx::dsl::checkpoint_sequence_number).ge(*c as i64))
                             .order(tx_.field(tx::dsl::tx_sequence_number).desc())
                             .limit(1);
 
@@ -321,7 +321,7 @@ impl TransactionBlock {
                         let tx_ = alias!(tx as tx_before);
                         let sub_query = tx_
                             .select(tx_.field(tx::dsl::tx_sequence_number))
-                            .filter(tx_.field(tx::dsl::checkpoint_sequence_number).eq(*c as i64))
+                            .filter(tx_.field(tx::dsl::checkpoint_sequence_number).le(*c as i64))
                             .order(tx_.field(tx::dsl::tx_sequence_number).asc())
                             .limit(1);
 

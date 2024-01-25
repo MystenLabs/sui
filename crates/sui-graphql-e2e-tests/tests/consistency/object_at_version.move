@@ -1,6 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+<<<<<<< HEAD
+<<<<<<< HEAD:crates/sui-graphql-e2e-tests/tests/consistency/object_at_version.move
+=======
+>>>>>>> 65b294b579 (consolidate the historical and snapshot test into one, more comprehensive test)
 // Create an object and modify it at checkpoints as follows:
 // cp | version
 // ------------
@@ -13,6 +17,15 @@
 // objects_snapshot to [0, 5). This coalesces objects in objects_snapshot to its verson at
 // checkpoint 4. The object would only be visible at version 6 from objects_snapshot, and at version
 // 7 from objects_history.
+<<<<<<< HEAD
+=======
+
+// Verify that an object can be retrieved at previous versions and when WrappedOrDeleted. Increment
+// objects_snapshot and verify that objects at versions beyond the available range return a null
+// result.
+>>>>>>> e12b483390 (make historical.move more useful):crates/sui-graphql-e2e-tests/tests/objects/historical.move
+=======
+>>>>>>> 65b294b579 (consolidate the historical and snapshot test into one, more comprehensive test)
 
 //# init --addresses Test=0x0 --accounts A --simulator
 
@@ -142,7 +155,15 @@ module Test::M1 {
   }
 }
 
+<<<<<<< HEAD
+<<<<<<< HEAD:crates/sui-graphql-e2e-tests/tests/consistency/object_at_version.move
 //# run Test::M1::unwrap --sender A --args object(8,0)
+=======
+//# run Test::M1::unwrap --sender A --args object(2,0)
+>>>>>>> e12b483390 (make historical.move more useful):crates/sui-graphql-e2e-tests/tests/objects/historical.move
+=======
+//# run Test::M1::unwrap --sender A --args object(8,0)
+>>>>>>> 65b294b579 (consolidate the historical and snapshot test into one, more comprehensive test)
 
 //# create-checkpoint
 

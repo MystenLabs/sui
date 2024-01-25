@@ -427,7 +427,7 @@ impl MoveObject {
         Object::paginate_subtype(
             db,
             page,
-            filter,
+            move |query| Object::filter(query, &filter),
             |object| {
                 let address = object.address;
                 MoveObject::try_from(&object).map_err(|_| {

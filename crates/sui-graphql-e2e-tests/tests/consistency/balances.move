@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+<<<<<<< HEAD
 // cp | coins
 // ------------
 // 1  | (300, 100, 200) = 600
@@ -13,6 +14,14 @@
 // snapshot@[0, 3), first transaction block is out of available range.
 // snapshot@[0, 4), first two transaction blocks are out of available range.
 // snapshot@[0, 6), all transaction blocks are out of available range.
+=======
+// Create three coins of a fake currency. Merge the first one with another coin, and hold on to that
+// coin. Transfer the rest out to another address B. Validate that we get the expected balances
+// across each of 4 transaction blocks. Increment objects_snapshot, verifying that less and less
+// data is returned once the data lies beyond the available range. The coin with value 400 should
+// continue to show up, even as we move beyond checkpoint 4. Finally, verify that the data is not
+// actually gone - the transferred coins should show up under address B.
+>>>>>>> 12927087aa (Add historical context to consistent reads)
 
 //# init --addresses P0=0x0 --accounts A B --simulator
 
@@ -83,8 +92,15 @@ module P0::fake {
   transactionBlocks(filter: {signAddress: "@{A}"}) {
     nodes {
       sender {
+<<<<<<< HEAD
         fakeCoinBalance: balance(type: "@{P0}::fake::FAKE") {
           totalBalance
+=======
+        coins(type:"@{P0}::fake::FAKE") {
+          nodes {
+            coinBalance
+          }
+>>>>>>> 12927087aa (Add historical context to consistent reads)
         }
         allBalances: balances {
           nodes {
@@ -95,6 +111,19 @@ module P0::fake {
             totalBalance
           }
         }
+<<<<<<< HEAD
+=======
+        firstBalance: balances(first: 1) {
+          edges {
+            cursor
+          }
+        }
+        lastBalance: balances(last: 1) {
+          edges {
+            cursor
+          }
+        }
+>>>>>>> 12927087aa (Add historical context to consistent reads)
       }
     }
   }
@@ -108,8 +137,15 @@ module P0::fake {
   transactionBlocks(filter: {signAddress: "@{A}"}) {
     nodes {
       sender {
+<<<<<<< HEAD
         fakeCoinBalance: balance(type: "@{P0}::fake::FAKE") {
           totalBalance
+=======
+        coins(type:"@{P0}::fake::FAKE") {
+          nodes {
+            coinBalance
+          }
+>>>>>>> 12927087aa (Add historical context to consistent reads)
         }
         allBalances: balances {
           nodes {
@@ -120,12 +156,28 @@ module P0::fake {
             totalBalance
           }
         }
+<<<<<<< HEAD
+=======
+        firstBalance: balances(first: 1) {
+          edges {
+            cursor
+          }
+        }
+        lastBalance: balances(last: 1) {
+          edges {
+            cursor
+          }
+        }
+>>>>>>> 12927087aa (Add historical context to consistent reads)
       }
     }
   }
 }
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 12927087aa (Add historical context to consistent reads)
 //# force-object-snapshot-catchup --start-cp 0 --end-cp 3
 
 //# run-graphql
@@ -133,8 +185,15 @@ module P0::fake {
   transactionBlocks(filter: {signAddress: "@{A}"}) {
     nodes {
       sender {
+<<<<<<< HEAD
         fakeCoinBalance: balance(type: "@{P0}::fake::FAKE") {
           totalBalance
+=======
+        coins(type:"@{P0}::fake::FAKE") {
+          nodes {
+            coinBalance
+          }
+>>>>>>> 12927087aa (Add historical context to consistent reads)
         }
         allBalances: balances {
           nodes {
@@ -145,12 +204,28 @@ module P0::fake {
             totalBalance
           }
         }
+<<<<<<< HEAD
+=======
+        firstBalance: balances(first: 1) {
+          edges {
+            cursor
+          }
+        }
+        lastBalance: balances(last: 1) {
+          edges {
+            cursor
+          }
+        }
+>>>>>>> 12927087aa (Add historical context to consistent reads)
       }
     }
   }
 }
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 12927087aa (Add historical context to consistent reads)
 //# force-object-snapshot-catchup --start-cp 0 --end-cp 4
 
 //# run-graphql
@@ -158,8 +233,15 @@ module P0::fake {
   transactionBlocks(filter: {signAddress: "@{A}"}) {
     nodes {
       sender {
+<<<<<<< HEAD
         fakeCoinBalance: balance(type: "@{P0}::fake::FAKE") {
           totalBalance
+=======
+        coins(type:"@{P0}::fake::FAKE") {
+          nodes {
+            coinBalance
+          }
+>>>>>>> 12927087aa (Add historical context to consistent reads)
         }
         allBalances: balances {
           nodes {
@@ -170,6 +252,19 @@ module P0::fake {
             totalBalance
           }
         }
+<<<<<<< HEAD
+=======
+        firstBalance: balances(first: 1) {
+          edges {
+            cursor
+          }
+        }
+        lastBalance: balances(last: 1) {
+          edges {
+            cursor
+          }
+        }
+>>>>>>> 12927087aa (Add historical context to consistent reads)
       }
     }
   }
@@ -179,12 +274,23 @@ module P0::fake {
 //# force-object-snapshot-catchup --start-cp 0 --end-cp 6
 
 //# run-graphql
+<<<<<<< HEAD
+=======
+# We should still see the fake coin with value 400.
+>>>>>>> 12927087aa (Add historical context to consistent reads)
 {
   transactionBlocks(filter: {signAddress: "@{A}"}) {
     nodes {
       sender {
+<<<<<<< HEAD
         fakeCoinBalance: balance(type: "@{P0}::fake::FAKE") {
           totalBalance
+=======
+        coins(type:"@{P0}::fake::FAKE") {
+          nodes {
+            coinBalance
+          }
+>>>>>>> 12927087aa (Add historical context to consistent reads)
         }
         allBalances: balances {
           nodes {
@@ -195,6 +301,49 @@ module P0::fake {
             totalBalance
           }
         }
+<<<<<<< HEAD
+=======
+        firstBalance: balances(first: 1) {
+          edges {
+            cursor
+          }
+        }
+        lastBalance: balances(last: 1) {
+          edges {
+            cursor
+          }
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{
+  address(address: "@{B}") {
+    coins(type: "@{P0}::fake::FAKE") {
+      nodes {
+        coinBalance
+      }
+    }
+    allBalances: balances {
+      nodes {
+        coinType {
+          repr
+        }
+        coinObjectCount
+        totalBalance
+      }
+    }
+    firstBalance: balances(first: 1) {
+      edges {
+        cursor
+      }
+    }
+    lastBalance: balances(last: 1) {
+      edges {
+        cursor
+>>>>>>> 12927087aa (Add historical context to consistent reads)
       }
     }
   }

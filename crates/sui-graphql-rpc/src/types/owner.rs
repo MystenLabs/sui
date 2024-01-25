@@ -457,9 +457,14 @@ impl OwnerImpl {
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        DynamicField::paginate(ctx.data_unchecked(), page, self.address)
-            .await
-            .extend()
+        DynamicField::paginate(
+            ctx.data_unchecked(),
+            page,
+            self.0.address,
+            self.0.checkpoint_sequence_number,
+        )
+        .await
+        .extend()
     }
 }
 

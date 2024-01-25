@@ -1,0 +1,100 @@
+processed 17 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 11-37:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6171200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 39-39:
+created: object(2,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'create-checkpoint'. lines 41-41:
+Checkpoint created: 1
+
+task 4 'run-graphql'. lines 43-56:
+Response: {
+  "data": {
+    "object": {
+      "status": "HISTORICAL",
+      "version": 3,
+      "asMoveObject": {
+        "contents": {
+          "json": {
+            "id": "0xcf27391f83c42a323595be23151f6ede95a083f451a388ff2e3e25fbbf31a7c3",
+            "value": "0"
+          }
+        }
+      }
+    }
+  }
+}
+
+task 5 'run-graphql'. lines 59-73:
+Response: {
+  "data": {
+    "object": {
+      "status": "HISTORICAL",
+      "version": 3,
+      "asMoveObject": {
+        "contents": {
+          "json": {
+            "id": "0xcf27391f83c42a323595be23151f6ede95a083f451a388ff2e3e25fbbf31a7c3",
+            "value": "0"
+          }
+        }
+      }
+    }
+  }
+}
+
+task 6 'run'. lines 75-75:
+created: object(6,0)
+mutated: object(0,0)
+wrapped: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2553600,  storage_rebate: 1301652, non_refundable_storage_fee: 13148
+
+task 7 'create-checkpoint'. lines 77-77:
+Checkpoint created: 2
+
+task 9 'create-checkpoint'. lines 81-81:
+Checkpoint created: 3
+
+task 11 'create-checkpoint'. lines 85-85:
+Checkpoint created: 4
+
+task 13 'create-checkpoint'. lines 89-89:
+Checkpoint created: 5
+
+task 14 'run-graphql'. lines 91-104:
+Response: {
+  "data": {
+    "object": {
+      "status": "WRAPPED_OR_DELETED",
+      "version": 4,
+      "asMoveObject": null
+    }
+  }
+}
+
+task 15 'run-graphql'. lines 107-122:
+Response: {
+  "data": {
+    "object": {
+      "status": "WRAPPED_OR_DELETED",
+      "version": 4,
+      "asMoveObject": null
+    }
+  }
+}
+
+task 16 'run-graphql'. lines 124-139:
+Response: {
+  "data": {
+    "object": null
+  }
+}

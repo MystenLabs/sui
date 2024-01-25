@@ -368,7 +368,13 @@ impl Coin {
             conn.edges.push(Edge::new(cursor, coin));
         }
 
-        Ok(conn)
+        query = filter!(
+            query,
+            "coin_type IS NOT NULL AND coin_type = {}",
+            coin_type.to_canonical_display(/* with_prefix */ true)
+        );
+
+        query
     }
 
     pub(crate) fn filter(

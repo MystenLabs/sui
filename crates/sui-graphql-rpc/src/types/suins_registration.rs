@@ -307,7 +307,7 @@ impl SuinsRegistration {
         let record_id = config.record_field_id(&domain.0);
 
         let Some(object) =
-            MoveObject::query(db, record_id.into(), ObjectVersionKey::Latest).await?
+            MoveObject::query(db, record_id.into(), ObjectVersionKey::LatestAt(None)).await?
         else {
             return Ok(None);
         };
@@ -329,8 +329,12 @@ impl SuinsRegistration {
     ) -> Result<Option<NativeDomain>, Error> {
         let reverse_record_id = config.reverse_record_field_id(address.as_slice());
 
-        let Some(object) =
-            MoveObject::query(db, reverse_record_id.into(), ObjectVersionKey::Latest).await?
+        let Some(object) = MoveObject::query(
+            db,
+            reverse_record_id.into(),
+            ObjectVersionKey::LatestAt(None),
+        )
+        .await?
         else {
             return Ok(None);
         };
@@ -365,6 +369,7 @@ impl SuinsRegistration {
             db,
             page,
             filter,
+            move |query| Object::filter(query, &filter),
             |object| {
                 let address = object.address;
                 let move_object = MoveObject::try_from(&object).map_err(|_| {

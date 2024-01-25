@@ -3,30 +3,30 @@ processed 13 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 13-54:
+task 1 'publish'. lines 12-53:
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 8329600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 56-56:
+task 2 'run'. lines 55-55:
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'run'. lines 58-58:
+task 3 'run'. lines 57-57:
 created: object(3,0), object(3,1), object(3,2)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 6536000,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
 
-task 4 'run'. lines 60-60:
+task 4 'run'. lines 59-59:
 created: object(4,0), object(4,1)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 5928000,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
 
-task 5 'create-checkpoint'. lines 62-62:
+task 5 'create-checkpoint'. lines 61-61:
 Checkpoint created: 1
 
-task 6 'run-graphql'. lines 64-87:
+task 6 'run-graphql'. lines 63-86:
 Response: {
   "data": {
     "object": {
@@ -94,16 +94,16 @@ Response: {
   }
 }
 
-task 7 'run'. lines 89-89:
+task 7 'run'. lines 88-88:
 created: object(7,0)
 mutated: object(0,0)
 wrapped: object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2485200,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
 
-task 8 'create-checkpoint'. lines 91-91:
+task 8 'create-checkpoint'. lines 90-90:
 Checkpoint created: 2
 
-task 9 'run-graphql'. lines 93-116:
+task 9 'run-graphql'. lines 92-118:
 Response: {
   "data": {
     "object": {
@@ -112,20 +112,8 @@ Response: {
           {
             "name": {
               "type": {
-                "repr": "bool"
-              },
-              "data": {
-                "Bool": false
-              },
-              "bcs": "AA=="
-            },
-            "value": {
-              "__typename": "MoveValue"
-            }
-          },
-          {
-            "name": {
-              "type": {
+<<<<<<< HEAD
+=======
                 "repr": "u64"
               },
               "data": {
@@ -140,14 +128,19 @@ Response: {
           {
             "name": {
               "type": {
-                "repr": "vector<u8>"
+>>>>>>> 9601a98f3a (consistent paginated object query)
+                "repr": "bool"
               },
               "data": {
-                "Vector": []
+                "Bool": false
               },
               "bcs": "AA=="
             },
             "value": {
+              "bcs": "AgAAAAAAAAA=",
+              "data": {
+                "Number": "2"
+              },
               "__typename": "MoveValue"
             }
           },
@@ -162,8 +155,54 @@ Response: {
               "bcs": "AAAAAAAAAAA="
             },
             "value": {
+<<<<<<< HEAD
+<<<<<<< HEAD
+              "__typename": "MoveObject"
+=======
+=======
+              "bcs": "AAAAAAAAAAA=",
+              "data": {
+                "Number": "0"
+              },
+>>>>>>> a0c28521be (Add historical context to consistent reads)
+              "__typename": "MoveValue"
+>>>>>>> 9601a98f3a (consistent paginated object query)
+            }
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "vector<u8>"
+              },
+              "data": {
+                "Vector": []
+              },
+              "bcs": "AA=="
+            },
+            "value": {
+              "bcs": "AQAAAAAAAAA=",
+              "data": {
+                "Number": "1"
+              },
               "__typename": "MoveValue"
             }
+<<<<<<< HEAD
+          },
+          {
+            "name": {
+              "type": {
+                "repr": "u64"
+              },
+              "data": {
+                "Number": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            },
+            "value": {
+              "__typename": "MoveValue"
+            }
+=======
+>>>>>>> 9601a98f3a (consistent paginated object query)
           }
         ]
       }
@@ -171,7 +210,7 @@ Response: {
   }
 }
 
-task 10 'run-graphql'. lines 118-143:
+task 10 'run-graphql'. lines 120-145:
 Response: {
   "data": {
     "owner": {
@@ -251,7 +290,7 @@ Response: {
   }
 }
 
-task 11 'run-graphql'. lines 145-165:
+task 11 'run-graphql'. lines 147-167:
 Response: {
   "data": {
     "owner": {
@@ -277,7 +316,7 @@ Response: {
   }
 }
 
-task 12 'run-graphql'. lines 167-178:
+task 12 'run-graphql'. lines 169-180:
 Response: {
   "data": {
     "owner": {

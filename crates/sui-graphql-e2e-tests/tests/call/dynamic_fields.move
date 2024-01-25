@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Create some dynamic fields on an object, and then try to query them.
-// There should be 1 dynamic object field (MoveObject) and 3 dynamic fields.
-// When the object is wrapped, we expect that making the query through Object will return null.
-// But it should still be visible through the Owner type.
-// This test also demonstrates why we need separate dynamicField and dynamicObjectField APIs.
+// Create some dynamic fields on an object, and then try to query them. There should be 1 dynamic
+// object field (MoveObject) and 3 dynamic fields. When the object is wrapped, we can still view
+// some information such as its dynamic fields. But it should still be visible through the Owner
+// type. This test also demonstrates why we need separate dynamicField and dynamicObjectField APIs.
 // It is possible for a dynamic field and a dynamic object field to share the same name lookup.
 
 //# init --addresses Test=0x0 --accounts A --simulator
@@ -91,6 +90,7 @@ module Test::m {
 //# create-checkpoint
 
 //# run-graphql
+# Wrapped objects can now be viewed!
 {
   object(address: "@{obj_2_0}") {
     dynamicFields {
@@ -107,6 +107,8 @@ module Test::m {
             __typename
           }
           ... on MoveValue {
+            bcs
+            data
             __typename
           }
         }

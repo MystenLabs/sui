@@ -3,20 +3,99 @@ processed 19 tasks
 init:
 A: object(0,0)
 
+<<<<<<< HEAD
+<<<<<<< HEAD:crates/sui-graphql-e2e-tests/tests/consistency/object_at_version.exp
 task 1 'publish'. lines 19-60:
+=======
+task 1 'publish'. lines 11-52:
+>>>>>>> e12b483390 (make historical.move more useful):crates/sui-graphql-e2e-tests/tests/objects/historical.exp
+=======
+task 1 'publish'. lines 19-60:
+>>>>>>> 65b294b579 (consolidate the historical and snapshot test into one, more comprehensive test)
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 7014800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
+<<<<<<< HEAD
+<<<<<<< HEAD:crates/sui-graphql-e2e-tests/tests/consistency/object_at_version.exp
 task 2 'run'. lines 62-62:
+=======
+task 2 'run'. lines 54-54:
+>>>>>>> e12b483390 (make historical.move more useful):crates/sui-graphql-e2e-tests/tests/objects/historical.exp
+=======
+task 2 'run'. lines 62-62:
+>>>>>>> 65b294b579 (consolidate the historical and snapshot test into one, more comprehensive test)
 created: object(2,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
+<<<<<<< HEAD
+<<<<<<< HEAD:crates/sui-graphql-e2e-tests/tests/consistency/object_at_version.exp
+task 3 'create-checkpoint'. lines 64-64:
+Checkpoint created: 1
+
+<<<<<<< HEAD:crates/sui-graphql-e2e-tests/tests/consistency/object_at_version.exp
+task 4 'run-graphql'. lines 66-79:
+=======
+<<<<<<< HEAD
+task 3 'create-checkpoint'. lines 56-56:
+Checkpoint created: 1
+
+task 4 'run-graphql'. lines 58-71:
+>>>>>>> e12b483390 (make historical.move more useful):crates/sui-graphql-e2e-tests/tests/objects/historical.exp
+=======
 task 3 'create-checkpoint'. lines 64-64:
 Checkpoint created: 1
 
 task 4 'run-graphql'. lines 66-79:
+>>>>>>> 65b294b579 (consolidate the historical and snapshot test into one, more comprehensive test)
+=======
+task 4 'run-graphql'. lines 60-73:
+Response: {
+  "data": {
+    "object": {
+      "status": "HISTORICAL",
+      "version": 3,
+      "asMoveObject": {
+        "contents": {
+          "json": {
+            "id": "0x525878f17a6177aa29f6a385600344daf90c45b1c2d3f1c6e7e9dc5b07e9cab0",
+            "value": "0"
+          }
+        }
+      }
+    }
+  }
+}
+
+task 5 'run'. lines 75-75:
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 1301652, non_refundable_storage_fee: 13148
+
+task 6 'create-checkpoint'. lines 77-77:
+Checkpoint created: 2
+
+task 7 'run-graphql'. lines 79-92:
+Response: {
+  "data": {
+    "object": {
+      "status": "HISTORICAL",
+      "version": 4,
+      "asMoveObject": {
+        "contents": {
+          "json": {
+            "id": "0x525878f17a6177aa29f6a385600344daf90c45b1c2d3f1c6e7e9dc5b07e9cab0",
+            "value": "1"
+          }
+        }
+      }
+    }
+  }
+}
+
+task 8 'run-graphql'. lines 94-108:
+>>>>>>> 4469c8403b (consistent paginated object query):crates/sui-graphql-e2e-tests/tests/objects/historical.exp
+>>>>>>> 9601a98f3a (consistent paginated object query)
 Response: {
   "data": {
     "object": {
@@ -34,6 +113,8 @@ Response: {
   }
 }
 
+<<<<<<< HEAD
+<<<<<<< HEAD:crates/sui-graphql-e2e-tests/tests/consistency/object_at_version.exp
 task 5 'run'. lines 81-81:
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 1301652, non_refundable_storage_fee: 13148
@@ -42,6 +123,23 @@ task 6 'create-checkpoint'. lines 83-83:
 Checkpoint created: 2
 
 task 7 'run-graphql'. lines 85-111:
+=======
+task 5 'run'. lines 73-73:
+=======
+task 5 'run'. lines 81-81:
+>>>>>>> 65b294b579 (consolidate the historical and snapshot test into one, more comprehensive test)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 1301652, non_refundable_storage_fee: 13148
+
+task 6 'create-checkpoint'. lines 83-83:
+Checkpoint created: 2
+
+<<<<<<< HEAD
+task 7 'run-graphql'. lines 77-103:
+>>>>>>> e12b483390 (make historical.move more useful):crates/sui-graphql-e2e-tests/tests/objects/historical.exp
+=======
+task 7 'run-graphql'. lines 85-111:
+>>>>>>> 65b294b579 (consolidate the historical and snapshot test into one, more comprehensive test)
 Response: {
   "data": {
     "latest_version": {
@@ -71,24 +169,61 @@ Response: {
   }
 }
 
+<<<<<<< HEAD
+<<<<<<< HEAD:crates/sui-graphql-e2e-tests/tests/consistency/object_at_version.exp
 task 8 'run'. lines 113-113:
+=======
+task 8 'run'. lines 105-105:
+>>>>>>> e12b483390 (make historical.move more useful):crates/sui-graphql-e2e-tests/tests/objects/historical.exp
+=======
+task 8 'run'. lines 113-113:
+>>>>>>> 65b294b579 (consolidate the historical and snapshot test into one, more comprehensive test)
 created: object(8,0)
 mutated: object(0,0)
 wrapped: object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2553600,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
+<<<<<<< HEAD
+<<<<<<< HEAD:crates/sui-graphql-e2e-tests/tests/consistency/object_at_version.exp
 task 9 'create-checkpoint'. lines 115-115:
 Checkpoint created: 3
 
 task 10 'run-graphql'. lines 117-143:
+=======
+task 9 'create-checkpoint'. lines 107-107:
+Checkpoint created: 3
+
+task 10 'run-graphql'. lines 109-135:
+>>>>>>> e12b483390 (make historical.move more useful):crates/sui-graphql-e2e-tests/tests/objects/historical.exp
+=======
+task 9 'create-checkpoint'. lines 115-115:
+Checkpoint created: 3
+
+task 10 'run-graphql'. lines 117-143:
+>>>>>>> 65b294b579 (consolidate the historical and snapshot test into one, more comprehensive test)
 Response: {
   "data": {
+<<<<<<< HEAD:crates/sui-graphql-e2e-tests/tests/consistency/object_at_version.exp
     "latest_wrapped": {
       "status": "WRAPPED_OR_DELETED",
       "version": 5,
       "asMoveObject": null
     },
     "previous_version": {
+=======
+    "object": {
+      "status": "WRAPPED_OR_DELETED",
+      "version": 5,
+      "asMoveObject": null
+    }
+  }
+}
+
+task 12 'run-graphql'. lines 130-144:
+Response: {
+  "data": {
+    "object": {
+>>>>>>> 4469c8403b (consistent paginated object query):crates/sui-graphql-e2e-tests/tests/objects/historical.exp
       "status": "HISTORICAL",
       "version": 4,
       "asMoveObject": {
@@ -103,19 +238,44 @@ Response: {
   }
 }
 
+<<<<<<< HEAD
+<<<<<<< HEAD:crates/sui-graphql-e2e-tests/tests/consistency/object_at_version.exp
+=======
+>>>>>>> 65b294b579 (consolidate the historical and snapshot test into one, more comprehensive test)
 task 11 'run'. lines 145-145:
 mutated: object(0,0)
 unwrapped: object(2,0)
 deleted: object(8,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2528064, non_refundable_storage_fee: 25536
+<<<<<<< HEAD
 
 task 12 'create-checkpoint'. lines 147-147:
 Checkpoint created: 4
 
 task 13 'run-graphql'. lines 149-187:
+=======
+task 11 'run'. lines 137-137:
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(0) } }
+=======
+>>>>>>> 65b294b579 (consolidate the historical and snapshot test into one, more comprehensive test)
+
+task 12 'create-checkpoint'. lines 147-147:
+Checkpoint created: 4
+
+<<<<<<< HEAD
+task 13 'run-graphql'. lines 141-179:
+>>>>>>> e12b483390 (make historical.move more useful):crates/sui-graphql-e2e-tests/tests/objects/historical.exp
+=======
+task 13 'run-graphql'. lines 149-187:
+>>>>>>> 65b294b579 (consolidate the historical and snapshot test into one, more comprehensive test)
 Response: {
   "data": {
+<<<<<<< HEAD:crates/sui-graphql-e2e-tests/tests/consistency/object_at_version.exp
     "latest_unwrapped": {
+=======
+    "object": {
+>>>>>>> 4469c8403b (consistent paginated object query):crates/sui-graphql-e2e-tests/tests/objects/historical.exp
       "status": "HISTORICAL",
       "version": 6,
       "asMoveObject": {
@@ -147,23 +307,48 @@ Response: {
   }
 }
 
+<<<<<<< HEAD
+<<<<<<< HEAD:crates/sui-graphql-e2e-tests/tests/consistency/object_at_version.exp
 task 14 'run'. lines 189-189:
+=======
+task 14 'run'. lines 181-181:
+>>>>>>> e12b483390 (make historical.move more useful):crates/sui-graphql-e2e-tests/tests/objects/historical.exp
+=======
+task 14 'run'. lines 189-189:
+>>>>>>> 65b294b579 (consolidate the historical and snapshot test into one, more comprehensive test)
 mutated: object(0,0)
 deleted: object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
+<<<<<<< HEAD
+<<<<<<< HEAD:crates/sui-graphql-e2e-tests/tests/consistency/object_at_version.exp
 task 15 'create-checkpoint'. lines 191-191:
 Checkpoint created: 5
 
 task 16 'run-graphql'. lines 193-219:
+=======
+task 15 'create-checkpoint'. lines 183-183:
+Checkpoint created: 5
+
+task 16 'run-graphql'. lines 185-211:
+>>>>>>> e12b483390 (make historical.move more useful):crates/sui-graphql-e2e-tests/tests/objects/historical.exp
+=======
+task 15 'create-checkpoint'. lines 191-191:
+Checkpoint created: 5
+
+task 16 'run-graphql'. lines 193-219:
+>>>>>>> 65b294b579 (consolidate the historical and snapshot test into one, more comprehensive test)
 Response: {
   "data": {
+<<<<<<< HEAD:crates/sui-graphql-e2e-tests/tests/consistency/object_at_version.exp
     "latest_deleted": {
       "status": "WRAPPED_OR_DELETED",
       "version": 7,
       "asMoveObject": null
     },
     "version_specified": {
+=======
+    "object": {
       "status": "WRAPPED_OR_DELETED",
       "version": 7,
       "asMoveObject": null
@@ -171,10 +356,36 @@ Response: {
   }
 }
 
+task 23 'run-graphql'. lines 248-262:
+Response: {
+  "data": {
+    "object": {
+>>>>>>> 4469c8403b (consistent paginated object query):crates/sui-graphql-e2e-tests/tests/objects/historical.exp
+      "status": "WRAPPED_OR_DELETED",
+      "version": 7,
+      "asMoveObject": null
+    }
+  }
+}
+
+<<<<<<< HEAD
+<<<<<<< HEAD:crates/sui-graphql-e2e-tests/tests/consistency/object_at_version.exp
 task 17 'force-object-snapshot-catchup'. lines 221-221:
 Objects snapshot updated to [0 to 5)
 
 task 18 'run-graphql'. lines 223-261:
+=======
+task 17 'force-object-snapshot-catchup'. lines 213-213:
+Objects snapshot updated to [0 to 5)
+
+task 18 'run-graphql'. lines 215-241:
+>>>>>>> e12b483390 (make historical.move more useful):crates/sui-graphql-e2e-tests/tests/objects/historical.exp
+=======
+task 17 'force-object-snapshot-catchup'. lines 221-221:
+Objects snapshot updated to [0 to 5)
+
+task 18 'run-graphql'. lines 223-261:
+>>>>>>> 65b294b579 (consolidate the historical and snapshot test into one, more comprehensive test)
 Response: {
   "data": {
     "object_within_available_range": {
@@ -189,7 +400,16 @@ Response: {
         }
       }
     },
+<<<<<<< HEAD
+<<<<<<< HEAD:crates/sui-graphql-e2e-tests/tests/consistency/object_at_version.exp
     "object_outside_available_range": null,
     "object_not_in_snapshot": null
+=======
+    "object_outside_available_range": null
+>>>>>>> e12b483390 (make historical.move more useful):crates/sui-graphql-e2e-tests/tests/objects/historical.exp
+=======
+    "object_outside_available_range": null,
+    "object_not_in_snapshot": null
+>>>>>>> 65b294b579 (consolidate the historical and snapshot test into one, more comprehensive test)
   }
 }

@@ -38,7 +38,7 @@ impl MoveModule {
         MovePackage::query(
             ctx.data_unchecked(),
             self.storage_id,
-            ObjectVersionKey::Latest,
+            ObjectVersionKey::LatestAt(None),
         )
         .await
         .extend()?
@@ -87,7 +87,7 @@ impl MoveModule {
         let Some(package) = MovePackage::query(
             ctx.data_unchecked(),
             self.storage_id,
-            ObjectVersionKey::Latest,
+            ObjectVersionKey::LatestAt(None),
         )
         .await
         .extend()?
@@ -301,7 +301,9 @@ impl MoveModule {
         address: SuiAddress,
         name: &str,
     ) -> Result<Option<Self>, Error> {
-        let Some(package) = MovePackage::query(db, address, ObjectVersionKey::Latest).await? else {
+        let Some(package) =
+            MovePackage::query(db, address, ObjectVersionKey::LatestAt(None)).await?
+        else {
             return Ok(None);
         };
 

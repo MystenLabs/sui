@@ -1,31 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::connection::{Connection, CursorType, Edge};
-use async_graphql::*;
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
-use move_core_types::annotated_value::{self as A, MoveStruct};
-use sui_indexer::models_v2::objects::StoredObject;
-use sui_indexer::schema_v2::objects;
-use sui_indexer::types_v2::OwnerType;
-use sui_package_resolver::Resolver;
-use sui_types::dynamic_field::{derive_dynamic_field_id, DynamicFieldInfo, DynamicFieldType};
-
-use super::cursor::{Page, Target};
-use super::object::{self, deserialize_move_struct, ObjectVersionKey};
+use super::cursor::Page;
+use super::object::{self, deserialize_move_struct, Object, ObjectVersionKey};
 use super::type_filter::ExactTypeFilter;
 use super::{
     base64::Base64, move_object::MoveObject, move_value::MoveValue, sui_address::SuiAddress,
 };
 use crate::context_data::package_cache::PackageCache;
-use crate::data::{Db, DbConnection, QueryExecutor};
+use crate::data::{Db, RawQueryBuilder};
 use crate::error::Error;
-use sui_types::object::Object as NativeObject;
+use crate::filter;
+use async_graphql::connection::Connection;
+use async_graphql::*;
+use move_core_types::annotated_value::{self as A, MoveStruct};
+use sui_indexer::types_v2::OwnerType;
+use sui_package_resolver::Resolver;
+use sui_types::dynamic_field::{derive_dynamic_field_id, DynamicFieldInfo, DynamicFieldType};
 
 pub(crate) struct DynamicField {
-    pub stored: StoredObject,
+    pub super_: MoveObject,
     pub df_object_id: SuiAddress,
     pub df_kind: DynamicFieldType,
+    pub checkpoint_sequence_number: Option<u64>,
 }
 
 #[derive(Union)]
@@ -62,15 +59,8 @@ impl DynamicField {
             .data()
             .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
             .extend()?;
-        let native_object: NativeObject = bcs::from_bytes(&self.stored.serialized_object)
-            .map_err(|e| Error::Internal(format!("Failed to deserialize object: {e}")))?;
-        let move_object = native_object
-            .data
-            .try_as_move()
-            .ok_or_else(|| Error::Internal("Failed to convert object into MoveObject".to_string()))
-            .extend()?;
 
-        let (struct_tag, move_struct) = deserialize_move_struct(move_object, resolver)
+        let (struct_tag, move_struct) = deserialize_move_struct(&self.super_.native, resolver)
             .await
             .extend()?;
 
@@ -109,7 +99,7 @@ impl DynamicField {
             let obj = MoveObject::query(
                 ctx.data_unchecked(),
                 self.df_object_id,
-                ObjectVersionKey::Latest,
+                ObjectVersionKey::LatestAt(self.checkpoint_sequence_number),
             )
             .await
             .extend()?;
@@ -119,17 +109,8 @@ impl DynamicField {
                 .data()
                 .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
                 .extend()?;
-            let native_object: NativeObject = bcs::from_bytes(&self.stored.serialized_object)
-                .map_err(|e| Error::Internal(format!("Failed to deserialize object: {e}")))?;
-            let move_object = native_object
-                .data
-                .try_as_move()
-                .ok_or_else(|| {
-                    Error::Internal("Failed to convert object into MoveObject".to_string())
-                })
-                .extend()?;
 
-            let (struct_tag, move_struct) = deserialize_move_struct(move_object, resolver)
+            let (struct_tag, move_struct) = deserialize_move_struct(&self.super_.native, resolver)
                 .await
                 .extend()?;
 
@@ -159,11 +140,10 @@ impl DynamicField {
     pub(crate) async fn query(
         db: &Db,
         parent: SuiAddress,
+        checkpoint_sequence_number: Option<u64>,
         name: DynamicFieldName,
         kind: DynamicFieldType,
     ) -> Result<Option<DynamicField>, Error> {
-        use objects::dsl;
-
         let type_ = match kind {
             DynamicFieldType::DynamicField => name.type_.0,
             DynamicFieldType::DynamicObject => {
@@ -172,18 +152,28 @@ impl DynamicField {
         };
 
         let field_id = derive_dynamic_field_id(parent, &type_, &name.bcs.0)
-            .map_err(|e| Error::Internal(format!("Failed to derive dynamic field id: {e}")))?
-            .to_vec();
+            .map_err(|e| Error::Internal(format!("Failed to derive dynamic field id: {e}")))?;
 
-        let stored: Option<StoredObject> = db
-            .execute(move |conn| {
-                conn.first(move || dsl::objects.filter(dsl::object_id.eq(field_id.clone())))
-                    .optional()
-            })
-            .await
-            .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))?;
+        let Some(super_) = MoveObject::query(
+            db,
+            SuiAddress::from(field_id),
+            ObjectVersionKey::LatestAt(checkpoint_sequence_number),
+        )
+        .await?
+        else {
+            return Ok(None);
+        };
 
-        stored.map(Self::try_from).transpose()
+        let Some((df_object_id, df_kind)) = super_.super_.dynamic_field_info()? else {
+            return Ok(None);
+        };
+
+        Ok(Some(DynamicField {
+            super_,
+            df_object_id,
+            df_kind,
+            checkpoint_sequence_number,
+        }))
     }
 
     /// Query the `db` for a `page` of dynamic fields attached to object with ID `parent`.
@@ -191,62 +181,45 @@ impl DynamicField {
         db: &Db,
         page: Page<object::Cursor>,
         parent: SuiAddress,
+        checkpoint_sequence_number: Option<u64>,
     ) -> Result<Connection<String, DynamicField>, Error> {
-        let (prev, next, results) = db
-            .execute(move |conn| {
-                page.paginate_query::<StoredObject, _, _, _>(conn, move || {
-                    use objects::dsl;
-                    dsl::objects
-                        .filter(dsl::owner_id.eq(parent.into_vec()))
-                        .filter(dsl::owner_type.eq(OwnerType::Object as i16))
-                        .filter(dsl::df_kind.is_not_null())
-                        .into_boxed()
+        Object::paginate_subtype(
+            db,
+            page,
+            checkpoint_sequence_number,
+            move |query| Self::filter(query, parent),
+            |object| {
+                let Some((df_object_id, df_kind)) = object.dynamic_field_info()? else {
+                    return Err(Error::Internal("Missing dynamic field info".to_string()));
+                };
+
+                let address = object.address;
+                let super_ = MoveObject::try_from(&object).map_err(|_| {
+                    Error::Internal(format!(
+                        "Expected {address} to be a Dynamic Field, but it's not a Move Object.",
+                    ))
+                })?;
+
+                Ok(DynamicField {
+                    super_,
+                    df_object_id,
+                    df_kind,
+                    checkpoint_sequence_number,
                 })
-            })
-            .await?;
-
-        let mut conn = Connection::new(prev, next);
-
-        for stored in results {
-            let cursor = stored.cursor().encode_cursor();
-            let field = DynamicField::try_from(stored)?;
-            conn.edges.push(Edge::new(cursor, field));
-        }
-
-        Ok(conn)
+            },
+        )
+        .await
     }
-}
 
-impl TryFrom<StoredObject> for DynamicField {
-    type Error = Error;
-
-    fn try_from(stored: StoredObject) -> Result<Self, Error> {
-        let Some(df_object_id) = stored.df_object_id.as_ref() else {
-            return Err(Error::Internal(
-                "Object is not a dynamic field.".to_string(),
-            ));
-        };
-
-        let df_object_id = SuiAddress::from_bytes(df_object_id).map_err(|e| {
-            Error::Internal(format!("Failed to deserialize dynamic field ID: {e}."))
-        })?;
-
-        let df_kind = match stored.df_kind {
-            Some(0) => DynamicFieldType::DynamicField,
-            Some(1) => DynamicFieldType::DynamicObject,
-            Some(k) => {
-                return Err(Error::Internal(format!(
-                    "Unrecognized dynamic field kind: {k}."
-                )))
-            }
-            None => return Err(Error::Internal("No dynamic field kind.".to_string())),
-        };
-
-        Ok(DynamicField {
-            stored,
-            df_object_id,
-            df_kind,
-        })
+    pub(crate) fn filter(mut query: RawQueryBuilder, owner: SuiAddress) -> RawQueryBuilder {
+        filter!(
+            query,
+            format!(
+                "owner_id = '\\x{}'::bytea AND owner_type = {} AND df_kind IS NOT NULL",
+                hex::encode(owner.into_vec()),
+                OwnerType::Object as i16
+            )
+        )
     }
 }
 

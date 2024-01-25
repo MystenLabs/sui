@@ -3,32 +3,55 @@ processed 15 tasks
 init:
 A: object(0,0), B: object(0,1)
 
+<<<<<<< HEAD
 task 1 'publish'. lines 17-38:
+=======
+task 1 'publish'. lines 11-32:
+>>>>>>> 6667271423 (Consistent reads what the last PR should look like)
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 5479600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
+<<<<<<< HEAD
 task 2 'programmable'. lines 40-41:
+=======
+task 2 'programmable'. lines 34-35:
+>>>>>>> 6667271423 (Consistent reads what the last PR should look like)
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
+<<<<<<< HEAD
 task 3 'create-checkpoint'. lines 43-43:
 Checkpoint created: 1
 
 task 4 'programmable'. lines 45-48:
+=======
+task 3 'create-checkpoint'. lines 37-37:
+Checkpoint created: 1
+
+task 4 'programmable'. lines 39-42:
+>>>>>>> 6667271423 (Consistent reads what the last PR should look like)
 created: object(4,0), object(4,1)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 4932400,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
+<<<<<<< HEAD
 task 5 'create-checkpoint'. lines 50-50:
 Checkpoint created: 2
 
 task 6 'programmable'. lines 52-56:
+=======
+task 5 'create-checkpoint'. lines 44-44:
+Checkpoint created: 2
+
+task 6 'programmable'. lines 46-50:
+>>>>>>> 6667271423 (Consistent reads what the last PR should look like)
 created: object(6,0), object(6,1), object(6,2)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
+<<<<<<< HEAD
 task 7 'create-checkpoint'. lines 58-58:
 Checkpoint created: 3
 
@@ -111,6 +134,15 @@ Response: {
       }
     },
     "latest_tx_at_checkpoint_3": {
+=======
+task 7 'create-checkpoint'. lines 52-52:
+Checkpoint created: 3
+
+task 8 'run-graphql'. lines 54-73:
+Response: {
+  "data": {
+    "transactionBlocks": {
+>>>>>>> 6667271423 (Consistent reads what the last PR should look like)
       "nodes": [
         {
           "sender": {
@@ -119,6 +151,7 @@ Response: {
                 {
                   "contents": {
                     "json": {
+<<<<<<< HEAD
                       "id": "0x0194a75e9cabf4694c92860b640c8c4c6a264f9f199e9a37f19d0aad863e4ed7",
                       "value": "6"
                     },
@@ -157,23 +190,39 @@ Response: {
                     },
                     "type": {
                       "repr": "0x1c555fea7b9ba9d30f5a84ec16152e240422ac72dc4dd44d242acd7793f1e077::M1::Object"
+=======
+                      "id": "0x03d1d56149b2b8ccd67f3d04170778b8a5981c0a3e0b30d40f090d3e5c5706ee",
+                      "value": "3"
+                    },
+                    "type": {
+                      "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+>>>>>>> 6667271423 (Consistent reads what the last PR should look like)
                     }
                   }
                 },
                 {
                   "contents": {
                     "json": {
+<<<<<<< HEAD
                       "id": "0x5ea4c93816a711296163d1fa69ed20c094a7c581191b9849d009b0d7904ab0b9",
                       "value": "5"
                     },
                     "type": {
                       "repr": "0x1c555fea7b9ba9d30f5a84ec16152e240422ac72dc4dd44d242acd7793f1e077::M1::Object"
+=======
+                      "id": "0x5ae5812f2881a335781f339960172d9f87c915cd53d4e662c251d0a0466b5d0d",
+                      "value": "200"
+                    },
+                    "type": {
+                      "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+>>>>>>> 6667271423 (Consistent reads what the last PR should look like)
                     }
                   }
                 },
                 {
                   "contents": {
                     "json": {
+<<<<<<< HEAD
                       "id": "0xb1b7dc9a1f1f1e8c3b9fd3fdabbfe351d8a76e6143f84da861b5e4294a334c2e",
                       "value": "2"
                     },
@@ -270,6 +319,46 @@ Response: {
                       "balance": {
                         "value": "299999993044572"
                       }
+=======
+                      "id": "0x6ddd2e700f62d8bbf0f99cc4ba01333506f52e15709c9f3c5b8b0f5219d9cd85",
+                      "value": "2"
+                    },
+                    "type": {
+                      "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x89222b50150f07213db64abfe033dadae32d64498e5e11919eee60181ffc0abe",
+                      "value": "4"
+                    },
+                    "type": {
+                      "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0xa00c48eb3867ff637b140ceecee465d0e87d92c1ed927cfd329451236b624c7a",
+                      "value": "5"
+                    },
+                    "type": {
+                      "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0xf083d223f2de9cfc9108829164005c788228bc8527d25c14fd48d9f092c9fcd6",
+                      "value": "6"
+                    },
+                    "type": {
+                      "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+>>>>>>> 6667271423 (Consistent reads what the last PR should look like)
                     }
                   }
                 }
@@ -278,8 +367,97 @@ Response: {
           }
         }
       ]
+<<<<<<< HEAD
     },
     "object_at_checkpoint_2": {
+=======
+    }
+  }
+}
+
+task 9 'run-graphql'. lines 75-90:
+Response: {
+  "data": {
+    "address": {
+      "objects": {
+        "nodes": [
+          {
+            "contents": {
+              "json": {
+                "id": "0x03d1d56149b2b8ccd67f3d04170778b8a5981c0a3e0b30d40f090d3e5c5706ee",
+                "value": "3"
+              },
+              "type": {
+                "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+              }
+            }
+          },
+          {
+            "contents": {
+              "json": {
+                "id": "0x5ae5812f2881a335781f339960172d9f87c915cd53d4e662c251d0a0466b5d0d",
+                "value": "200"
+              },
+              "type": {
+                "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+              }
+            }
+          },
+          {
+            "contents": {
+              "json": {
+                "id": "0x6ddd2e700f62d8bbf0f99cc4ba01333506f52e15709c9f3c5b8b0f5219d9cd85",
+                "value": "2"
+              },
+              "type": {
+                "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+              }
+            }
+          },
+          {
+            "contents": {
+              "json": {
+                "id": "0x89222b50150f07213db64abfe033dadae32d64498e5e11919eee60181ffc0abe",
+                "value": "4"
+              },
+              "type": {
+                "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+              }
+            }
+          },
+          {
+            "contents": {
+              "json": {
+                "id": "0xa00c48eb3867ff637b140ceecee465d0e87d92c1ed927cfd329451236b624c7a",
+                "value": "5"
+              },
+              "type": {
+                "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+              }
+            }
+          },
+          {
+            "contents": {
+              "json": {
+                "id": "0xf083d223f2de9cfc9108829164005c788228bc8527d25c14fd48d9f092c9fcd6",
+                "value": "6"
+              },
+              "type": {
+                "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 10 'run-graphql'. lines 92-113:
+Response: {
+  "data": {
+    "object": {
+>>>>>>> 6667271423 (Consistent reads what the last PR should look like)
       "owner": {
         "owner": {
           "objects": {
@@ -287,6 +465,7 @@ Response: {
               {
                 "contents": {
                   "json": {
+<<<<<<< HEAD
                     "id": "0x153c7707f234f57d35ecb75fcbff3cc022f3015cf0c56d90167c6938e4d5e217",
                     "value": "100"
                   },
@@ -303,17 +482,76 @@ Response: {
                   },
                   "type": {
                     "repr": "0x1c555fea7b9ba9d30f5a84ec16152e240422ac72dc4dd44d242acd7793f1e077::M1::Object"
+=======
+                    "id": "0x03d1d56149b2b8ccd67f3d04170778b8a5981c0a3e0b30d40f090d3e5c5706ee",
+                    "value": "3"
+                  },
+                  "type": {
+                    "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+>>>>>>> 6667271423 (Consistent reads what the last PR should look like)
                   }
                 }
               },
               {
                 "contents": {
                   "json": {
+<<<<<<< HEAD
                     "id": "0xb1b7dc9a1f1f1e8c3b9fd3fdabbfe351d8a76e6143f84da861b5e4294a334c2e",
                     "value": "2"
                   },
                   "type": {
                     "repr": "0x1c555fea7b9ba9d30f5a84ec16152e240422ac72dc4dd44d242acd7793f1e077::M1::Object"
+=======
+                    "id": "0x5ae5812f2881a335781f339960172d9f87c915cd53d4e662c251d0a0466b5d0d",
+                    "value": "200"
+                  },
+                  "type": {
+                    "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+                  }
+                }
+              },
+              {
+                "contents": {
+                  "json": {
+                    "id": "0x6ddd2e700f62d8bbf0f99cc4ba01333506f52e15709c9f3c5b8b0f5219d9cd85",
+                    "value": "2"
+                  },
+                  "type": {
+                    "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+                  }
+                }
+              },
+              {
+                "contents": {
+                  "json": {
+                    "id": "0x89222b50150f07213db64abfe033dadae32d64498e5e11919eee60181ffc0abe",
+                    "value": "4"
+                  },
+                  "type": {
+                    "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+                  }
+                }
+              },
+              {
+                "contents": {
+                  "json": {
+                    "id": "0xa00c48eb3867ff637b140ceecee465d0e87d92c1ed927cfd329451236b624c7a",
+                    "value": "5"
+                  },
+                  "type": {
+                    "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+                  }
+                }
+              },
+              {
+                "contents": {
+                  "json": {
+                    "id": "0xf083d223f2de9cfc9108829164005c788228bc8527d25c14fd48d9f092c9fcd6",
+                    "value": "6"
+                  },
+                  "type": {
+                    "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+>>>>>>> 6667271423 (Consistent reads what the last PR should look like)
                   }
                 }
               }
@@ -325,10 +563,17 @@ Response: {
   }
 }
 
+<<<<<<< HEAD
 task 11 'run-graphql'. lines 138-180:
 Response: {
   "data": {
     "all_transactions": {
+=======
+task 11 'run-graphql'. lines 115-134:
+Response: {
+  "data": {
+    "transactionBlocks": {
+>>>>>>> 6667271423 (Consistent reads what the last PR should look like)
       "nodes": [
         {
           "sender": {
@@ -337,6 +582,7 @@ Response: {
                 {
                   "contents": {
                     "json": {
+<<<<<<< HEAD
                       "id": "0x153c7707f234f57d35ecb75fcbff3cc022f3015cf0c56d90167c6938e4d5e217",
                       "value": "0"
                     },
@@ -642,6 +888,34 @@ Response: {
                       "balance": {
                         "value": "299999993044572"
                       }
+=======
+                      "id": "0x03d1d56149b2b8ccd67f3d04170778b8a5981c0a3e0b30d40f090d3e5c5706ee",
+                      "value": "3"
+                    },
+                    "type": {
+                      "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x5ae5812f2881a335781f339960172d9f87c915cd53d4e662c251d0a0466b5d0d",
+                      "value": "100"
+                    },
+                    "type": {
+                      "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+                    }
+                  }
+                },
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x6ddd2e700f62d8bbf0f99cc4ba01333506f52e15709c9f3c5b8b0f5219d9cd85",
+                      "value": "2"
+                    },
+                    "type": {
+                      "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
                     }
                   }
                 }
@@ -654,6 +928,86 @@ Response: {
   }
 }
 
+task 12 'run-graphql'. lines 136-157:
+Response: {
+  "data": {
+    "object": {
+      "owner": {
+        "owner": {
+          "objects": {
+            "nodes": [
+              {
+                "contents": {
+                  "json": {
+                    "id": "0x03d1d56149b2b8ccd67f3d04170778b8a5981c0a3e0b30d40f090d3e5c5706ee",
+                    "value": "3"
+                  },
+                  "type": {
+                    "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+                  }
+                }
+              },
+              {
+                "contents": {
+                  "json": {
+                    "id": "0x5ae5812f2881a335781f339960172d9f87c915cd53d4e662c251d0a0466b5d0d",
+                    "value": "100"
+                  },
+                  "type": {
+                    "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+                  }
+                }
+              },
+              {
+                "contents": {
+                  "json": {
+                    "id": "0x6ddd2e700f62d8bbf0f99cc4ba01333506f52e15709c9f3c5b8b0f5219d9cd85",
+                    "value": "2"
+                  },
+                  "type": {
+                    "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
+
+task 13 'run-graphql'. lines 159-178:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": {
+            "objects": {
+              "nodes": [
+                {
+                  "contents": {
+                    "json": {
+                      "id": "0x5ae5812f2881a335781f339960172d9f87c915cd53d4e662c251d0a0466b5d0d",
+                      "value": "0"
+                    },
+                    "type": {
+                      "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+>>>>>>> 6667271423 (Consistent reads what the last PR should look like)
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+<<<<<<< HEAD
 task 12 'force-object-snapshot-catchup'. lines 182-182:
 Objects snapshot updated to [0 to 3)
 
@@ -902,6 +1256,12 @@ Response: {
       ]
     },
     "object_at_checkpoint_2": {
+=======
+task 14 'run-graphql'. lines 180-201:
+Response: {
+  "data": {
+    "object": {
+>>>>>>> 6667271423 (Consistent reads what the last PR should look like)
       "owner": {
         "owner": {
           "objects": {
@@ -909,6 +1269,7 @@ Response: {
               {
                 "contents": {
                   "json": {
+<<<<<<< HEAD
                     "id": "0x153c7707f234f57d35ecb75fcbff3cc022f3015cf0c56d90167c6938e4d5e217",
                     "value": "100"
                   },
@@ -936,6 +1297,13 @@ Response: {
                   },
                   "type": {
                     "repr": "0x1c555fea7b9ba9d30f5a84ec16152e240422ac72dc4dd44d242acd7793f1e077::M1::Object"
+=======
+                    "id": "0x5ae5812f2881a335781f339960172d9f87c915cd53d4e662c251d0a0466b5d0d",
+                    "value": "0"
+                  },
+                  "type": {
+                    "repr": "0xd0eed746299c20e74e40e3aca3431f31eebfb8775e422eece0be4eeade2d98ee::M1::Object"
+>>>>>>> 6667271423 (Consistent reads what the last PR should look like)
                   }
                 }
               }
@@ -946,6 +1314,7 @@ Response: {
     }
   }
 }
+<<<<<<< HEAD
 
 task 14 'run-graphql'. lines 258-303:
 Response: {
@@ -1223,3 +1592,5 @@ Response: {
     }
   }
 }
+=======
+>>>>>>> 6667271423 (Consistent reads what the last PR should look like)
