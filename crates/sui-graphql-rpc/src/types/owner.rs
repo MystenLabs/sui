@@ -228,10 +228,16 @@ impl Owner {
     }
 
     async fn as_object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
-        // TODO: Make consistent
-        Object::query(ctx.data_unchecked(), self.address, ObjectVersionKey::Latest)
-            .await
-            .extend()
+        Object::query(
+            ctx.data_unchecked(),
+            self.address,
+            match self.checkpoint_sequence_number {
+                Some(chkpt) => ObjectVersionKey::LatestAt(chkpt),
+                None => ObjectVersionKey::Latest,
+            },
+        )
+        .await
+        .extend()
     }
 
     /// Access a dynamic field on an object using its name. Names are arbitrary Move values whose
