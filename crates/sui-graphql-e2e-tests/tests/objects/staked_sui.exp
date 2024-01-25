@@ -87,7 +87,7 @@ Response: {
       "stakedSuis": {
         "edges": [
           {
-            "cursor": "IKWvyP6Q/TMZqbCP3Cifyxq7zXZ7vbcmAKuOpxLegnumAQAAAAAAAAA=",
+            "cursor": "IKWvyP6Q/TMZqbCP3Cifyxq7zXZ7vbcmAKuOpxLegnumAgAAAAAAAAA=",
             "node": {
               "principal": "10000000000"
             }
