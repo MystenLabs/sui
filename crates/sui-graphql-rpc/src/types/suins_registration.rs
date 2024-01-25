@@ -31,6 +31,10 @@ use sui_types::{base_types::SuiAddress as NativeSuiAddress, dynamic_field::Field
 const MOD_REGISTRATION: &IdentStr = ident_str!("suins_registration");
 const TYP_REGISTRATION: &IdentStr = ident_str!("SuinsRegistration");
 
+/// Represents the "core" of the name service (e.g. the on-chain registry and reverse registry). It
+/// doesn't contain any fields because we look them up based on the `NameServiceConfig`.
+pub(crate) struct NameService;
+
 /// Wrap SuiNS Domain type to expose as a string scalar in GraphQL.
 #[derive(Debug)]
 pub(crate) struct Domain(NativeDomain);
@@ -296,7 +300,7 @@ impl SuinsRegistration {
     }
 }
 
-impl SuinsRegistration {
+impl NameService {
     /// Lookup the SuiNS NameRecord for the given `domain` name. `config` specifies where to find
     /// the domain name registry, and its type.
     pub(crate) async fn resolve_to_record(
@@ -342,7 +346,9 @@ impl SuinsRegistration {
 
         Ok(Some(field.value))
     }
+}
 
+impl SuinsRegistration {
     /// Query the database for a `page` of SuiNS registrations. The page uses the same cursor type
     /// as is used for `Object`, and is further filtered to a particular `owner`. `config` specifies
     /// where to find the domain name registry and its type.
