@@ -13,6 +13,7 @@ use futures::{
     FutureExt,
 };
 use mysten_common::sync::notify_read::NotifyRead;
+use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::collections::HashSet;
 use std::sync::Arc;
 use sui_storage::package_object_cache::PackageObjectCache;
@@ -35,6 +36,23 @@ use sui_types::{
 };
 use tracing::instrument;
 use typed_store::Map;
+
+struct ExecutionCacheMetrics {
+    pending_notify_read: IntGauge,
+}
+
+impl ExecutionCacheMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            pending_notify_read: register_int_gauge_with_registry!(
+                "pending_notify_read",
+                "Pending notify read requests",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+}
 
 pub type ExecutionCache = PassthroughCache;
 
@@ -441,14 +459,25 @@ pub trait ExecutionCacheWrite: Send + Sync {
 
 pub struct PassthroughCache {
     store: Arc<AuthorityStore>,
+    metrics: Option<ExecutionCacheMetrics>,
     package_cache: Arc<PackageObjectCache>,
     executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
 }
 
 impl PassthroughCache {
-    pub fn new(store: Arc<AuthorityStore>) -> Self {
+    pub fn new(store: Arc<AuthorityStore>, registry: &Registry) -> Self {
         Self {
             store,
+            metrics: Some(ExecutionCacheMetrics::new(registry)),
+            package_cache: PackageObjectCache::new(),
+            executed_effects_digests_notify_read: NotifyRead::new(),
+        }
+    }
+
+    pub fn new_with_no_metrics(store: Arc<AuthorityStore>) -> Self {
+        Self {
+            store,
+            metrics: None,
             package_cache: PackageObjectCache::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
         }
@@ -627,6 +656,13 @@ impl ExecutionCacheWrite for PassthroughCache {
 
             self.executed_effects_digests_notify_read
                 .notify(&tx_digest, &effects_digest);
+
+            if let Some(metrics) = &self.metrics {
+                metrics
+                    .pending_notify_read
+                    .set(self.executed_effects_digests_notify_read.num_pending() as i64);
+            }
+
             Ok(())
         }
         .boxed()

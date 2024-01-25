@@ -441,7 +441,7 @@ impl SuiNode {
             &prometheus_registry,
         )
         .await?;
-        let execution_cache = Arc::new(ExecutionCache::new(store.clone()));
+        let execution_cache = Arc::new(ExecutionCache::new(store.clone(), &prometheus_registry));
 
         let cur_epoch = store.get_recovery_epoch_at_restart()?;
         let committee = committee_store

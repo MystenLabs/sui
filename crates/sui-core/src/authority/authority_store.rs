@@ -47,8 +47,6 @@ use typed_store::rocks::util::is_ref_count_value;
 const NUM_SHARDS: usize = 4096;
 
 struct AuthorityStoreMetrics {
-    pending_notify_read: IntGauge,
-
     sui_conservation_check_latency: IntGauge,
     sui_conservation_live_object_count: IntGauge,
     sui_conservation_live_object_size: IntGauge,
@@ -61,12 +59,6 @@ struct AuthorityStoreMetrics {
 impl AuthorityStoreMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
-            pending_notify_read: register_int_gauge_with_registry!(
-                "pending_notify_read",
-                "Pending notify read requests",
-                registry,
-            )
-                .unwrap(),
             sui_conservation_check_latency: register_int_gauge_with_registry!(
                 "sui_conservation_check_latency",
                 "Number of seconds took to scan all live objects in the store for SUI conservation check",
@@ -118,11 +110,6 @@ pub struct AuthorityStore {
     mutex_table: MutexTable<ObjectDigest>,
 
     pub(crate) perpetual_tables: Arc<AuthorityPerpetualTables>,
-
-    // Implementation detail to support notify_read_effects().
-    pub(crate) executed_effects_notify_read: NotifyRead<TransactionDigest, TransactionEffects>,
-    pub(crate) executed_effects_digests_notify_read:
-        NotifyRead<TransactionDigest, TransactionEffectsDigest>,
 
     pub(crate) root_state_notify_read: NotifyRead<EpochId, (CheckpointSequenceNumber, Accumulator)>,
 
@@ -228,8 +215,6 @@ impl AuthorityStore {
         let store = Arc::new(Self {
             mutex_table: MutexTable::new(NUM_SHARDS),
             perpetual_tables,
-            executed_effects_notify_read: NotifyRead::new(),
-            executed_effects_digests_notify_read: NotifyRead::new(),
             root_state_notify_read:
                 NotifyRead::<EpochId, (CheckpointSequenceNumber, Accumulator)>::new(),
             objects_lock_table: Arc::new(RwLockTable::new(NUM_SHARDS)),
@@ -950,15 +935,6 @@ impl AuthorityStore {
         // test crashing before notifying
         fail_point_async!("crash");
 
-        self.executed_effects_digests_notify_read
-            .notify(transaction_digest, &effects_digest);
-        self.executed_effects_notify_read
-            .notify(transaction_digest, &effects);
-
-        self.metrics
-            .pending_notify_read
-            .set(self.executed_effects_notify_read.num_pending() as i64);
-
         debug!(effects_digest = ?effects.digest(), "commit_certificate finished");
 
         Ok(())
@@ -1493,7 +1469,7 @@ impl AuthorityStore {
         // Note that this can only be called at reconfiguration time, at which time the
         // db is fully consistent. Therefore the system cache (in AuthorityState) has no
         // dirty data and is not needed.
-        let cache = Arc::new(ExecutionCache::new(self.clone()));
+        let cache = Arc::new(ExecutionCache::new_with_no_metrics(self.clone()));
 
         let executor = old_epoch_store.executor();
         info!("Starting SUI conservation check. This may take a while..");
