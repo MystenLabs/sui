@@ -28,7 +28,7 @@ jobs:
         run: rustup update stable
         
       - name: Generate code coverage for nextest
-        run: SUI_SKIP_SIMTESTS=1 cargo llvm-cov nextest run --cargo-profile simulator
+        run: SUI_SKIP_SIMTESTS=1 cargo llvm-cov --lcov nextest run --cargo-profile simulator 
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
