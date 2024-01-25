@@ -25,7 +25,7 @@ pub struct LoggerConfig {
 impl Default for LoggerConfig {
     fn default() -> Self {
         Self {
-            log_request_query: true,
+            log_request_query: false,
             log_response: true,
             log_complexity: true,
         }
