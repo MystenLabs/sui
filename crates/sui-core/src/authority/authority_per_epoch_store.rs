@@ -29,9 +29,10 @@ use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::digests::ChainIdentifier;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::signature::GenericSignature;
+use sui_types::storage::InputKey;
 use sui_types::transaction::{
-    AuthenticatorStateUpdate, CertifiedTransaction, SenderSignedData, SharedInputObject,
-    Transaction, TransactionDataAPI, TransactionKind, VerifiedCertificate,
+    AuthenticatorStateUpdate, CertifiedTransaction, InputObjectKind, SenderSignedData,
+    SharedInputObject, Transaction, TransactionDataAPI, TransactionKind, VerifiedCertificate,
     VerifiedSignedTransaction, VerifiedTransaction,
 };
 use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
@@ -1040,6 +1041,44 @@ impl AuthorityPerEpochStore {
         ids: impl Iterator<Item = &'a ObjectID>,
     ) -> SuiResult<Vec<Option<SequenceNumber>>> {
         Ok(self.tables()?.next_shared_object_versions.multi_get(ids)?)
+    }
+
+    /// Resolves InputObjectKinds into InputKeys, by consulting the shared object version
+    /// assignment table.
+    pub(crate) fn get_input_object_keys(
+        &self,
+        digest: &TransactionDigest,
+        objects: &[InputObjectKind],
+    ) -> BTreeSet<InputKey> {
+        let mut shared_locks = HashMap::<ObjectID, SequenceNumber>::new();
+        objects
+            .iter()
+            .map(|kind| {
+                match kind {
+                    InputObjectKind::SharedMoveObject { id, .. } => {
+                        if shared_locks.is_empty() {
+                            shared_locks = self
+                                .get_shared_locks(digest)
+                                .expect("Read from storage should not fail!")
+                                .into_iter()
+                                .collect();
+                        }
+                        // If we can't find the locked version, it means
+                        // 1. either we have a bug that skips shared object version assignment
+                        // 2. or we have some DB corruption
+                        let Some(version) = shared_locks.get(id) else {
+                            panic!(
+                                "Shared object locks should have been set. tx_digset: {digest:?}, obj \
+                                id: {id:?}",
+                            )
+                        };
+                        InputKey::VersionedObject{ id: *id, version: *version}
+                    }
+                    InputObjectKind::MovePackage(id) => InputKey::Package { id: *id },
+                    InputObjectKind::ImmOrOwnedMoveObject(objref) => InputKey::VersionedObject {id: objref.0, version: objref.1},
+                }
+            })
+            .collect()
     }
 
     pub fn get_last_consensus_index(&self) -> SuiResult<ExecutionIndicesWithHash> {
