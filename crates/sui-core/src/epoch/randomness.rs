@@ -456,8 +456,8 @@ mod tests {
 
         // Generate and distribute Messages.
         let mut dkg_messages = Vec::new();
-        for i in 0..randomness_managers.len() {
-            randomness_managers[i].start_dkg().unwrap();
+        for randomness_manager in &randomness_managers {
+            randomness_manager.start_dkg().unwrap();
 
             let dkg_message = rx_consensus.recv().await.unwrap();
             match dkg_message.kind {
@@ -509,8 +509,8 @@ mod tests {
         }
 
         // Verify DKG completed.
-        for i in 0..randomness_managers.len() {
-            assert!(randomness_managers[i].dkg_output.initialized());
+        for randomness_manager in &randomness_managers {
+            assert!(randomness_manager.dkg_output.initialized());
         }
     }
 }
