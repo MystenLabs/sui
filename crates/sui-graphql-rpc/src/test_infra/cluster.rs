@@ -69,7 +69,6 @@ pub async fn start_cluster(
     let fn_rpc_url = val_fn.rpc_url().to_string();
     let graphql_server_handle =
         start_graphql_server_with_fn_rpc(graphql_connection_config.clone(), Some(fn_rpc_url)).await;
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     let server_url = format!(
         "http://{}:{}/",
@@ -78,6 +77,15 @@ pub async fn start_cluster(
 
     // Starts graphql client
     let client = SimpleClient::new(server_url);
+
+    // Repeatedly ping the graphql server for 10s, until it responds
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while let Err(_) = client.ping().await {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+    })
+    .await
+    .expect("Timeout waiting for graphql server to start");
 
     Cluster {
         validator_fullnode_handle: val_fn,
@@ -116,7 +124,7 @@ pub async fn serve_executor(
 
     // Starts graphql server
     let graphql_server_handle = start_graphql_server(graphql_connection_config.clone()).await;
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    tokio::time::sleep(Duration::from_secs(2)).await;
 
     let server_url = format!(
         "http://{}:{}/",
@@ -203,7 +211,7 @@ impl ExecutorCluster {
                 .unwrap()
                 < checkpoint
             {
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                tokio::time::sleep(Duration::from_secs(1)).await;
             }
         })
         .await
@@ -225,10 +233,7 @@ impl ExecutorCluster {
 
         tokio::time::timeout(base_timeout, async {
             while latest_cp > latest_snapshot_cp + self.snapshot_config.snapshot_max_lag as u64 {
-                tokio::time::sleep(std::time::Duration::from_secs(
-                    self.snapshot_config.sleep_duration,
-                ))
-                .await;
+                tokio::time::sleep(Duration::from_secs(self.snapshot_config.sleep_duration)).await;
                 latest_snapshot_cp = self
                     .indexer_store
                     .get_latest_object_snapshot_checkpoint_sequence_number()
