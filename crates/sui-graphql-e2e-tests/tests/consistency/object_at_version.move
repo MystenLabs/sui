@@ -1,10 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-
-// Verify that an object can be retrieved at previous versions and when WrappedOrDeleted. Increment
-// objects_snapshot and verify that objects at versions beyond the available range return a null
-// result.
+// Create an object and modify it at checkpoints as follows:
+// cp | version
+// ------------
+// 1  | 3
+// 2  | 4
+// 3  | 5
+// 4  | 6
+// 5  | 7
+// Verify that the object is returned in its WrappedOrDeleted or Historical state. Increment
+// objects_snapshot to [0, 5). This coalesces objects in objects_snapshot to its verson at
+// checkpoint 4. The object would only be visible at version 6 from objects_snapshot, and at version
+// 7 from objects_history.
 
 //# init --addresses Test=0x0 --accounts A --simulator
 
@@ -134,7 +142,7 @@ module Test::M1 {
   }
 }
 
-//# run Test::M1::unwrap --sender A --args object(2,0)
+//# run Test::M1::unwrap --sender A --args object(8,0)
 
 //# create-checkpoint
 
@@ -229,6 +237,18 @@ module Test::M1 {
   object_outside_available_range: object(
     address: "@{obj_2_0}"
     version: 5
+  ) {
+    status
+    version
+    asMoveObject {
+      contents {
+        json
+      }
+    }
+  }
+  object_not_in_snapshot: object(
+    address: "@{obj_2_0}"
+    version: 3
   ) {
     status
     version
