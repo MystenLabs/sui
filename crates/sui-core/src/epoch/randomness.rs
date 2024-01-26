@@ -310,7 +310,6 @@ impl Inner {
                     );
                     self.consensus_adapter
                         .submit(transaction, None, &epoch_store)?;
-                    self.add_confirmation(batch, conf)?;
                 }
                 Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => (), // wait for more input
                 Err(e) => debug!("random beacon: error while merging DKG Messages: {e:?}"),
