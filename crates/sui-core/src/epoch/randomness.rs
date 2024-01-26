@@ -216,7 +216,7 @@ impl RandomnessManager {
             );
 
         let epoch_store = self.epoch_store()?;
-        let transaction = ConsensusTransaction::new_randomness_dkg_message(epoch_store.name, &msg);
+        let transaction = ConsensusTransaction::new_randomness_dkg_message(epoch_store.name, msg);
         self.consensus_adapter
             .submit(transaction, None, &epoch_store)?;
         Ok(())
@@ -251,11 +251,10 @@ impl RandomnessManager {
 
                     let transaction = ConsensusTransaction::new_randomness_dkg_confirmation(
                         epoch_store.name,
-                        &conf,
+                        conf.clone(),
                     );
                     self.consensus_adapter
                         .submit(transaction, None, &epoch_store)?;
-                    self.add_confirmation(batch, conf)?;
                 }
                 Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => (), // wait for more input
                 Err(e) => debug!("random beacon: error while merging DKG Messages: {e:?}"),
@@ -457,9 +456,7 @@ mod tests {
 
             let dkg_message = rx_consensus.recv().await.unwrap();
             match dkg_message.kind {
-                ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
-                    let msg: fastcrypto_tbls::dkg::Message<PkG, EncG> = bcs::from_bytes(&bytes)
-                        .expect("DKG message deserialization should not fail");
+                ConsensusTransactionKind::RandomnessDkgMessage(_, msg) => {
                     dkg_messages.push(msg);
                 }
                 _ => panic!("wrong type of message sent"),
@@ -485,10 +482,8 @@ mod tests {
         for _ in 0..randomness_managers.len() {
             let dkg_confirmation = rx_consensus.recv().await.unwrap();
             match dkg_confirmation.kind {
-                ConsensusTransactionKind::RandomnessDkgConfirmation(_, bytes) => {
-                    let msg: fastcrypto_tbls::dkg::Confirmation<EncG> = bcs::from_bytes(&bytes)
-                        .expect("DKG confirmation deserialization should not fail");
-                    dkg_confirmations.push(msg);
+                ConsensusTransactionKind::RandomnessDkgConfirmation(_, conf) => {
+                    dkg_confirmations.push(conf);
                 }
                 _ => panic!("wrong type of message sent"),
             }

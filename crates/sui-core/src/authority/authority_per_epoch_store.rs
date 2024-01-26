@@ -2774,7 +2774,7 @@ impl AuthorityPerEpochStore {
                 panic!("process_consensus_transaction called with external RandomnessStateUpdate");
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::RandomnessDkgMessage(authority, bytes),
+                kind: ConsensusTransactionKind::RandomnessDkgMessage(authority, message),
                 ..
             }) => {
                 if self
@@ -2786,15 +2786,7 @@ impl AuthorityPerEpochStore {
                             "Received RandomnessDkgMessage from {:?}",
                             authority.concise()
                         );
-                        match bcs::from_bytes(bytes) {
-                            Ok(message) => randomness_manager.add_message(batch, message)?,
-                            Err(e) => {
-                                warn!(
-                                    "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
-                                    authority.concise(),
-                                );
-                            }
-                        }
+                        randomness_manager.add_message(batch, message.clone())?
                     } else {
                         debug!(
                             "Ignoring RandomnessDkgMessage from {:?} because randomness is not enabled",
@@ -2810,7 +2802,7 @@ impl AuthorityPerEpochStore {
                 Ok(ConsensusCertificateResult::RandomnessConsensusMessage)
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::RandomnessDkgConfirmation(authority, bytes),
+                kind: ConsensusTransactionKind::RandomnessDkgConfirmation(authority, confirmation),
                 ..
             }) => {
                 if self
@@ -2822,17 +2814,7 @@ impl AuthorityPerEpochStore {
                             "Received RandomnessDkgConfirmation from {:?}",
                             authority.concise()
                         );
-                        match bcs::from_bytes(bytes) {
-                            Ok(confirmation) => {
-                                randomness_manager.add_confirmation(batch, confirmation)?
-                            }
-                            Err(e) => {
-                                warn!(
-                                    "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
-                                    authority.concise(),
-                                );
-                            }
-                        }
+                        randomness_manager.add_confirmation(batch, confirmation.clone())?
                     } else {
                         debug!(
                             "Ignoring RandomnessDkgMessage from {:?} because randomness is not enabled",

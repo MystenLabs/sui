@@ -174,11 +174,14 @@ pub enum ConsensusTransactionKind {
     // DKG is used to generate keys for use in the random beacon protocol.
     // `RandomnessDkgMessage` is sent out at start-of-epoch to initiate the process.
     // Contents are a serialized `fastcrypto_tbls::dkg::Message`.
-    RandomnessDkgMessage(AuthorityName, Vec<u8>),
+    RandomnessDkgMessage(
+        AuthorityName,
+        dkg::Message<bls12381::G2Element, bls12381::G2Element>,
+    ),
     // `RandomnessDkgConfirmation` is the second DKG message, sent as soon as a threshold amount of
     // `RandomnessDkgMessages` have been received locally, to complete the key generation process.
     // Contents are a serialized `fastcrypto_tbls::dkg::Confirmation`.
-    RandomnessDkgConfirmation(AuthorityName, Vec<u8>),
+    RandomnessDkgConfirmation(AuthorityName, dkg::Confirmation<bls12381::G2Element>),
 }
 
 impl ConsensusTransaction {
@@ -256,11 +259,11 @@ impl ConsensusTransaction {
 
     pub fn new_randomness_dkg_message(
         authority: AuthorityName,
-        message: &dkg::Message<bls12381::G2Element, bls12381::G2Element>,
+        message: dkg::Message<bls12381::G2Element, bls12381::G2Element>,
     ) -> Self {
-        let message = bcs::to_bytes(message).expect("message serialization should not fail");
+        let bytes = bcs::to_bytes(&message).expect("message serialization should not fail");
         let mut hasher = DefaultHasher::new();
-        message.hash(&mut hasher);
+        bytes.hash(&mut hasher);
         let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
@@ -270,12 +273,11 @@ impl ConsensusTransaction {
 
     pub fn new_randomness_dkg_confirmation(
         authority: AuthorityName,
-        confirmation: &dkg::Confirmation<bls12381::G2Element>,
+        confirmation: dkg::Confirmation<bls12381::G2Element>,
     ) -> Self {
-        let confirmation =
-            bcs::to_bytes(confirmation).expect("message serialization should not fail");
+        let bytes = bcs::to_bytes(&confirmation).expect("message serialization should not fail");
         let mut hasher = DefaultHasher::new();
-        confirmation.hash(&mut hasher);
+        bytes.hash(&mut hasher);
         let tracking_id = hasher.finish().to_le_bytes();
         Self {
             tracking_id,
