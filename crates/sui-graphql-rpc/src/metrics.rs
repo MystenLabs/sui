@@ -4,13 +4,40 @@
 use std::sync::Arc;
 
 use async_graphql::{PathSegment, ServerError};
-use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::{
-    register_gauge_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, Gauge, IntCounter, IntCounterVec, Registry,
+    register_gauge_with_registry, register_histogram_vec_with_registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, Gauge, Histogram, HistogramVec, IntCounter, IntCounterVec,
+    Registry,
 };
 
 use crate::error::code;
+
+// TODO: finetune buckets as we learn more about the distribution of queries
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+];
+const DB_LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 2.0, 3.0,
+    5.0, 10.0, 20.0, 40.0, 60.0, 80.0, 100.0, 200.0,
+];
+const INPUT_NODES_BUCKETS: &[f64] = &[
+    1., 2., 4., 8., 12., 16., 24., 32., 48., 64., 96., 128., 256., 512., 1024.,
+];
+const OUTPUT_NODES_BUCKETS: &[f64] = &[
+    100., 200., 400., 800., 1200., 1600., 2400., 3200., 4800., 6400., 9600., 12800., 25600.,
+    51200., 102400.,
+];
+const QUERY_DEPTH_BUCKETS: &[f64] = &[
+    1., 2., 4., 8., 12., 16., 24., 32., 48., 64., 96., 128., 256., 512., 1024.,
+];
+const QUERY_PAYLOAD_SIZE_BUCKETS: &[f64] = &[
+    10., 20., 50., 100., 200., 400., 800., 1200., 1600., 2400., 3200., 4800., 6400., 9600., 12800.,
+    25600., 51200., 102400.,
+];
+const DB_QUERY_COST_BUCKETS: &[f64] = &[
+    1., 2., 4., 8., 12., 16., 24., 32., 48., 64., 96., 128., 256., 512., 1024.,
+];
 
 #[derive(Clone)]
 pub(crate) struct Metrics {
@@ -74,17 +101,19 @@ impl Metrics {
         self.db_metrics
             .db_fetch_latency
             .with_label_values(&[label])
-            .report(time);
+            .observe(time as f64);
     }
 
     /// The total time needed for handling the query
     pub(crate) fn query_latency(&self, time: u64) {
-        self.request_metrics.query_latency.observe(time);
+        self.request_metrics.query_latency.observe(time as f64);
     }
 
     /// The time needed for validating the query
     pub(crate) fn query_validation_latency(&self, time: u64) {
-        self.request_metrics.query_validation_latency.observe(time);
+        self.request_metrics
+            .query_validation_latency
+            .observe(time as f64);
     }
 
     /// Increment the total number of queries by one
@@ -123,23 +152,28 @@ impl DBMetrics {
                 registry
             )
             .unwrap(),
-            db_fetch_latency: HistogramVec::new_in_registry(
+            db_fetch_latency: register_histogram_vec_with_registry!(
                 "db_fetch_latency",
                 "The fetch latency grouped by result (success or error)",
                 &["type"],
+                DB_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            ),
-            _db_query_cost: Histogram::new_in_registry(
+            )
+            .unwrap(),
+            _db_query_cost: register_histogram_with_registry!(
                 "db_query_cost",
                 "Cost of a DB query",
+                DB_QUERY_COST_BUCKETS.to_vec(),
                 registry,
-            ),
-            _db_fetch_batch_size: HistogramVec::new_in_registry(
+            )
+            .unwrap(),
+            _db_fetch_batch_size: register_histogram_vec_with_registry!(
                 "db_fetch_batch_size",
                 "Number of ids fetched per batch",
                 &["type"],
                 registry,
-            ),
+            )
+            .unwrap(),
         }
     }
 }
@@ -147,37 +181,55 @@ impl DBMetrics {
 impl RequestMetrics {
     pub(crate) fn new(registry: &Registry) -> Self {
         Self {
-            input_nodes: Histogram::new_in_registry(
+            input_nodes: register_histogram_with_registry!(
                 "input_nodes",
                 "Number of input nodes in the query",
+                INPUT_NODES_BUCKETS.to_vec(),
                 registry,
-            ),
-            output_nodes: Histogram::new_in_registry(
+            )
+            .unwrap(),
+            output_nodes: register_histogram_with_registry!(
                 "output_nodes",
                 "Number of output nodes in the response",
+                OUTPUT_NODES_BUCKETS.to_vec(),
                 registry,
-            ),
-            query_depth: Histogram::new_in_registry("query_depth", "Depth of the query", registry),
-            query_payload_too_large_size: Histogram::new_in_registry(
+            )
+            .unwrap(),
+            query_depth: register_histogram_with_registry!(
+                "query_depth",
+                "Depth of the query",
+                QUERY_DEPTH_BUCKETS.to_vec(),
+                registry
+            )
+            .unwrap(),
+            query_payload_too_large_size: register_histogram_with_registry!(
                 "query_payload_too_large_size",
                 "Query payload size (bytes), that was rejected due to being larger than maximum",
+                QUERY_PAYLOAD_SIZE_BUCKETS.to_vec(),
                 registry,
-            ),
-            query_payload_size: Histogram::new_in_registry(
+            )
+            .unwrap(),
+            query_payload_size: register_histogram_with_registry!(
                 "query_payload_size",
                 "Size of the query payload string",
+                QUERY_PAYLOAD_SIZE_BUCKETS.to_vec(),
                 registry,
-            ),
-            query_validation_latency: Histogram::new_in_registry(
+            )
+            .unwrap(),
+            query_validation_latency: register_histogram_with_registry!(
                 "query_validation_latency",
                 "The time to validate the query",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            ),
-            query_latency: Histogram::new_in_registry(
+            )
+            .unwrap(),
+            query_latency: register_histogram_with_registry!(
                 "query_latency",
                 "The time needed to resolve and get the result for the request",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
             num_errors: register_int_counter_vec_with_registry!(
                 "num_errors",
                 "Number of errors by path and error type",
