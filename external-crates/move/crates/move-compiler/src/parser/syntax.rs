@@ -2997,10 +2997,7 @@ fn is_start_of_member_or_module(tok: Tok, content: &str) -> bool {
 }
 
 fn is_start_of_module_or_spec(tok: Tok, _: &str) -> bool {
-    match tok {
-        Tok::Spec | Tok::Module => true,
-        _ => false,
-    }
+    matches!(tok, Tok::Spec | Tok::Module)
 }
 
 /// Parse a single module member. Due to parsing error recovery, when attempting to parse the next

@@ -339,20 +339,15 @@ impl<'input> Lexer<'input> {
     fn trim_until_whitespace(&self, offset: usize) -> &'input str {
         let mut text = &self.text[offset..];
         let mut iter = text.chars();
-        loop {
-            match iter.next() {
-                Some(c) => {
-                    if c == ' '
-                        || c == '\t'
-                        || c == '\n'
-                        || (c == '\r' && matches!(iter.next(), Some('\n')))
-                    {
-                        break;
-                    }
-                    text = &text[c.len_utf8()..];
-                }
-                None => break,
+        while let Some(c) = iter.next() {
+            if c == ' '
+                || c == '\t'
+                || c == '\n'
+                || (c == '\r' && matches!(iter.next(), Some('\n')))
+            {
+                break;
             }
+            text = &text[c.len_utf8()..];
         }
         text
     }
