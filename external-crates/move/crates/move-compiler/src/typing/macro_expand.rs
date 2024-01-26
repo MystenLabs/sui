@@ -14,7 +14,7 @@ use crate::{
 use move_ir_types::location::*;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-type LambdaMap = BTreeMap<Var_, (N::Lambda, Type, Type)>;
+type LambdaMap = BTreeMap<Var_, (N::Lambda, Vec<Type>, Type)>;
 
 struct Context<'a, 'b> {
     core: &'a mut core::Context<'b>,
@@ -40,7 +40,7 @@ pub(crate) fn call(
     // If none, there is no body to expand, likely because of an error in the macro definition
     let macro_body = context.macro_body(&m, &f)?;
     let macro_info = context.function_info(&m, &f);
-    let (macro_type_params, macro_params, mut macro_body, return_label, max_color) =
+    let (macro_type_params, mut macro_params, mut macro_body, return_label, max_color) =
         match recolor_macro(call_loc, &m, &f, macro_info, macro_body, next_color) {
             Ok(res) => res,
             Err(None) => {
@@ -59,26 +59,28 @@ pub(crate) fn call(
         assert!(context.env.has_errors());
         return None;
     }
-    // make tparam subst
+    // tparam subst
+    assert_eq!(
+        macro_type_params.len(),
+        type_args.len(),
+        "ICE should be fixed/caught by the module/method call"
+    );
     let tparam_subst = macro_type_params.into_iter().zip(type_args).collect();
+    tsubst_parameters(&tparam_subst, &mut macro_params);
+    tsubst_block(&tparam_subst, &mut macro_body);
     // make lambda map and bind non-lambda args to local vars
     let mut lambdas = BTreeMap::new();
     let mut argument_bindings = Vec::new();
     for ((mut_, param, param_ty), arg) in macro_params.into_iter().zip(args) {
-        let param_ty = core::subst_tparams(&tparam_subst, param_ty);
-        if let sp!(loc, Type_::Fun(param_tys, result_ty)) = param_ty {
+        if let sp!(_, Type_::Fun(param_tys, result_ty)) = param_ty {
             // declare the local here so that if the lambda is used outside
             // of the VarCall, we still know its type. This will also lead to
             // an error if it is used since a lambda type will appear during expansion
-            context.declare_local(
-                mut_,
-                param,
-                sp(
-                    arg.exp.loc,
-                    Type_::Fun(param_tys.clone(), result_ty.clone()),
-                ),
+            let fun_ty = sp(
+                arg.exp.loc,
+                Type_::Fun(param_tys.clone(), result_ty.clone()),
             );
-            let param_tys = Type_::multiple(loc, param_tys);
+            context.declare_local(mut_, param, fun_ty);
             bind_lambda(
                 context,
                 &mut lambdas,
@@ -188,7 +190,7 @@ fn bind_lambda(
     lambdas: &mut LambdaMap,
     param: Var_,
     arg: T::Exp,
-    param_ty: Type,
+    param_ty: Vec<Type>,
     result_ty: Type,
 ) -> Option<()> {
     match arg.exp.value {
@@ -209,6 +211,172 @@ fn bind_lambda(
                 .add_diag(diag!(TypeSafety::CannotExpandMacro, (arg.exp.loc, msg)));
             None
         }
+    }
+}
+
+//**************************************************************************************************
+// subst tparams
+//**************************************************************************************************
+
+fn tsubst_type(subst: &TParamSubst, ty: &mut N::Type) {
+    *ty = core::subst_tparams(subst, ty.clone())
+}
+
+fn tsubst_type_opt(subst: &TParamSubst, ty_opt: &mut Option<N::Type>) {
+    if let Some(ty) = ty_opt {
+        tsubst_type(subst, ty)
+    }
+}
+
+fn tsubst_types(subst: &TParamSubst, tys: &mut [N::Type]) {
+    for ty in tys {
+        tsubst_type(subst, ty)
+    }
+}
+
+fn tsubst_types_opt(subst: &TParamSubst, tys_opt: &mut Option<Vec<N::Type>>) {
+    if let Some(tys) = tys_opt {
+        tsubst_types(subst, tys)
+    }
+}
+
+fn tsubst_parameters(subst: &TParamSubst, params: &mut [(Option<Loc>, Var, N::Type)]) {
+    for (_mut, _v, t) in params {
+        tsubst_type(subst, t);
+    }
+}
+
+fn tsubst_block(subst: &TParamSubst, b: &mut N::Block) {
+    let N::Block {
+        name: _,
+        from_lambda_expansion: _,
+        seq,
+    } = b;
+    tsubst_seq(subst, seq)
+}
+
+fn tsubst_seq(subst: &TParamSubst, (_use_funs, seq): &mut N::Sequence) {
+    for sp!(_, item_) in seq {
+        match item_ {
+            N::SequenceItem_::Seq(e) => tsubst_exp(subst, e),
+            N::SequenceItem_::Declare(lvs, ty_opt) => {
+                tsubst_lvalues(subst, lvs);
+                tsubst_type_opt(subst, ty_opt)
+            }
+            N::SequenceItem_::Bind(lvs, e) => {
+                tsubst_lvalues(subst, lvs);
+                tsubst_exp(subst, e)
+            }
+        }
+    }
+}
+
+fn tsubst_lvalues(subst: &TParamSubst, sp!(_, lvs_): &mut N::LValueList) {
+    for lv in lvs_ {
+        tsubst_lvalue(subst, lv)
+    }
+}
+
+fn tsubst_lvalue(subst: &TParamSubst, sp!(_, lv_): &mut N::LValue) {
+    match lv_ {
+        N::LValue_::Ignore
+        | N::LValue_::Var {
+            mut_: _,
+            var: _,
+            unused_binding: _,
+        } => (),
+        N::LValue_::Unpack(_m, _s, tys_opt, lvalues) => {
+            tsubst_types_opt(subst, tys_opt);
+            for (_loc, _f, (_i, lv)) in lvalues {
+                tsubst_lvalue(subst, lv)
+            }
+        }
+    }
+}
+
+fn tsubst_exp(subst: &TParamSubst, sp!(_, e_): &mut N::Exp) {
+    match e_ {
+        N::Exp_::Value(_)
+        | N::Exp_::Var(_)
+        | N::Exp_::Constant(_, _)
+        | N::Exp_::Unit { trailing: _ }
+        | N::Exp_::Continue(_) => (),
+        N::Exp_::Return(e)
+        | N::Exp_::Abort(e)
+        | N::Exp_::Give(_, _, e)
+        | N::Exp_::Dereference(e)
+        | N::Exp_::UnaryExp(_, e)
+        | N::Exp_::Loop(_, e) => tsubst_exp(subst, e),
+        N::Exp_::Block(b) => tsubst_block(subst, b),
+        N::Exp_::BinopExp(e1, _, e2) | N::Exp_::Mutate(e1, e2) => {
+            tsubst_exp(subst, e1);
+            tsubst_exp(subst, e2)
+        }
+        N::Exp_::Cast(e, ty) | N::Exp_::Annotate(e, ty) => {
+            tsubst_exp(subst, e);
+            tsubst_type(subst, ty)
+        }
+        N::Exp_::Assign(lvs, e) => {
+            tsubst_lvalues(subst, lvs);
+            tsubst_exp(subst, e)
+        }
+        N::Exp_::IfElse(econd, et, ef) => {
+            tsubst_exp(subst, econd);
+            tsubst_exp(subst, et);
+            tsubst_exp(subst, ef);
+        }
+        N::Exp_::While(_name, econd, ebody) => {
+            tsubst_exp(subst, econd);
+            tsubst_exp(subst, ebody)
+        }
+        N::Exp_::FieldMutate(ed, e) => {
+            tsubst_exp_dotted(subst, ed);
+            tsubst_exp(subst, e)
+        }
+        N::Exp_::Pack(_m, _s, tys_opt, fields) => {
+            tsubst_types_opt(subst, tys_opt);
+            for (_loc, _f, (_i, e)) in fields {
+                tsubst_exp(subst, e)
+            }
+        }
+        N::Exp_::Builtin(_, sp!(_, es)) | N::Exp_::VarCall(_, sp!(_, es)) => {
+            es.iter_mut().for_each(|e| tsubst_exp(subst, e))
+        }
+        N::Exp_::Vector(_m, ty_opt, sp!(_, es)) => {
+            tsubst_type_opt(subst, ty_opt);
+            es.iter_mut().for_each(|e| tsubst_exp(subst, e))
+        }
+        N::Exp_::ModuleCall(_m, _f, _is_macro, tys_opt, sp!(_, es)) => {
+            tsubst_types_opt(subst, tys_opt);
+            es.iter_mut().for_each(|e| tsubst_exp(subst, e))
+        }
+        N::Exp_::MethodCall(ed, _m, _is_macro, tys_opt, sp!(_, es)) => {
+            tsubst_exp_dotted(subst, ed);
+            tsubst_types_opt(subst, tys_opt);
+            es.iter_mut().for_each(|e| tsubst_exp(subst, e))
+        }
+        N::Exp_::ExpList(es) => es.iter_mut().for_each(|e| tsubst_exp(subst, e)),
+        N::Exp_::ExpDotted(_usage, ed) => tsubst_exp_dotted(subst, ed),
+        N::Exp_::Lambda(N::Lambda {
+            parameters: sp!(_, parameters),
+            return_label: _,
+            use_fun_color: _,
+            body,
+        }) => {
+            for (lvs, ty_opt) in &mut *parameters {
+                tsubst_lvalues(subst, lvs);
+                tsubst_type_opt(subst, ty_opt)
+            }
+            tsubst_exp(subst, body);
+        }
+        N::Exp_::UnresolvedError => (),
+    }
+}
+
+fn tsubst_exp_dotted(subst: &TParamSubst, sp!(_, ed_): &mut N::ExpDotted) {
+    match ed_ {
+        N::ExpDotted_::Exp(e) => tsubst_exp(subst, e),
+        N::ExpDotted_::Dot(ed, _) => tsubst_exp_dotted(subst, ed),
     }
 }
 
@@ -488,15 +656,19 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
         }
 
         N::Exp_::Lambda(N::Lambda {
-            parameters,
+            parameters: sp!(_, parameters),
             return_label,
             use_fun_color,
             body,
         }) => {
             ctx.add_block_label(*return_label);
-            ctx.add_lvalues(parameters);
+            for (lvs, _) in &*parameters {
+                ctx.add_lvalues(lvs);
+            }
             recolor_use_funs_(ctx, use_fun_color);
-            recolor_lvalues(ctx, parameters);
+            for (lvs, _) in parameters {
+                recolor_lvalues(ctx, lvs);
+            }
             recolor_block_label(ctx, return_label);
             recolor_exp(ctx, body)
         }
@@ -632,11 +804,13 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
         }
         N::Exp_::ExpList(es) => exps(context, es),
         N::Exp_::Lambda(N::Lambda {
-            parameters: lvs,
+            parameters: sp!(_, parameters),
             body: e,
             ..
         }) => {
-            lvalues(context, lvs);
+            for (lvs, _) in parameters {
+                lvalues(context, lvs);
+            }
             exp(context, e)
         }
         N::Exp_::ExpDotted(_usage, ed) => exp_dotted(context, ed),
@@ -650,12 +824,12 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             // param_ty and result_ty have already been substituted
             let (
                 N::Lambda {
-                    parameters: mut lambda_params,
+                    parameters: sp!(_, mut lambda_params),
                     return_label,
                     use_fun_color,
                     body: mut lambda_body,
                 },
-                param_ty,
+                param_tys,
                 result_ty,
             ) = context.lambdas.get(&v.value).unwrap().clone();
             // recolor in case the lambda is used more than once
@@ -667,20 +841,21 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 recolor_use_funs,
             );
             recolor.add_block_label(return_label);
-            recolor.add_lvalues(&lambda_params);
+            for (lvs, _) in &lambda_params {
+                recolor.add_lvalues(lvs);
+            }
             let return_label = recolor_block_label_owned(recolor, return_label);
-            recolor_lvalues(recolor, &mut lambda_params);
+            for (lvs, _) in &mut lambda_params {
+                recolor_lvalues(recolor, lvs);
+            }
             recolor_exp(recolor, &mut lambda_body);
             // set max color when coloring is finished
             context.core.set_max_variable_color(recolor.max_color());
-            let param_loc = lambda_params.loc;
-            let N::Exp_::VarCall(_, sp!(args_loc, arg_list)) =
+            let N::Exp_::VarCall(_, sp!(_, args)) =
                 std::mem::replace(e_, /* dummy */ N::Exp_::UnresolvedError)
             else {
                 unreachable!()
             };
-            let args = N::explist(args_loc, arg_list);
-            let annot_args = Box::new(sp(args_loc, N::Exp_::Annotate(Box::new(args), param_ty)));
             let body_loc = lambda_body.loc;
             let annot_body = Box::new(sp(body_loc, N::Exp_::Annotate(lambda_body, result_ty)));
             let labeled_seq = VecDeque::from([sp(body_loc, N::SequenceItem_::Seq(annot_body))]);
@@ -691,10 +866,25 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 seq: (N::UseFuns::new(use_fun_color), labeled_seq),
             });
             let labeled_body = Box::new(sp(body_loc, labeled_body_));
-            let result = VecDeque::from([
-                sp(param_loc, N::SequenceItem_::Bind(lambda_params, annot_args)),
-                sp(body_loc, N::SequenceItem_::Seq(labeled_body)),
-            ]);
+            // we will get a type error on length mismatch here, so fine to zip
+            let mut result: VecDeque<_> = lambda_params
+                .into_iter()
+                .zip(args)
+                .zip(param_tys)
+                .map(|(((lvs, lv_ty_opt), arg), param_ty)| {
+                    let param_loc = param_ty.loc;
+                    let arg = Box::new(arg);
+                    let lambda_annot_arg = if let Some(lv_ty) = lv_ty_opt {
+                        Box::new(sp(lv_ty.loc, N::Exp_::Annotate(arg, lv_ty)))
+                    } else {
+                        arg
+                    };
+                    let macro_annot_arg =
+                        Box::new(sp(param_loc, N::Exp_::Annotate(lambda_annot_arg, param_ty)));
+                    sp(param_loc, N::SequenceItem_::Bind(lvs, macro_annot_arg))
+                })
+                .collect();
+            result.push_back(sp(body_loc, N::SequenceItem_::Seq(labeled_body)));
             *e_ = N::Exp_::Block(N::Block {
                 name: None,
                 from_lambda_expansion: None,

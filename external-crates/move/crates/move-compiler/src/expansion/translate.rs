@@ -2683,10 +2683,10 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
         PE::While(pb, ploop) => EE::While(None, exp(context, pb), exp(context, ploop)),
         PE::Loop(ploop) => EE::Loop(None, exp(context, ploop)),
         PE::Block(seq) => EE::Block(None, sequence(context, loc, seq)),
-        PE::Lambda(pbs, pe) => {
-            let bs_opt = bind_list(context, pbs);
-            match bs_opt {
-                Some(bs) => EE::Lambda(bs, exp(context, pe)),
+        PE::Lambda(plambda, pe) => {
+            let elambda_opt = lambda_bind_list(context, plambda);
+            match elambda_opt {
+                Some(elambda) => EE::Lambda(elambda, exp(context, pe)),
                 None => {
                     assert!(context.env().has_errors());
                     EE::UnresolvedError
@@ -3091,6 +3091,21 @@ fn bind(context: &mut Context, sp!(loc, pb_): P::Bind) -> Option<E::LValue> {
         }
     };
     Some(sp(loc, b_))
+}
+
+fn lambda_bind_list(
+    context: &mut Context,
+    sp!(loc, plambda): P::LambdaBindings,
+) -> Option<E::LambdaLValues> {
+    let elambda = plambda
+        .into_iter()
+        .map(|(pbs, ty_opt)| {
+            let bs = bind_list(context, pbs)?;
+            let ety = ty_opt.map(|t| type_(context, t));
+            Some((bs, ety))
+        })
+        .collect::<Option<_>>()?;
+    Some(sp(loc, elambda))
 }
 
 enum LValue {

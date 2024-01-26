@@ -273,6 +273,9 @@ pub type LValue = Spanned<LValue_>;
 pub type LValueList_ = Vec<LValue>;
 pub type LValueList = Spanned<LValueList_>;
 
+pub type LambdaLValues_ = Vec<(LValueList, Option<Type>)>;
+pub type LambdaLValues = Spanned<LambdaLValues_>;
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum ExpDotted_ {
     Exp(Box<Exp>),
@@ -297,7 +300,7 @@ pub enum NominalBlockUsage {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Lambda {
-    pub parameters: LValueList,
+    pub parameters: LambdaLValues,
     pub return_label: BlockLabel,
     pub use_fun_color: Color,
     pub body: Box<Exp>,
@@ -1450,9 +1453,7 @@ impl AstDebug for Lambda {
         } = self;
         return_label.ast_debug(w);
         w.write(": ");
-        w.write("|");
         bs.ast_debug(w);
-        w.write("|");
         w.write(&format!("use_funs#{}", use_fun_color));
         e.ast_debug(w);
     }
@@ -1552,5 +1553,19 @@ impl AstDebug for LValue_ {
                 w.write("}");
             }
         }
+    }
+}
+
+impl AstDebug for LambdaLValues_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write("|");
+        w.comma(self, |w, (lv, ty_opt)| {
+            lv.ast_debug(w);
+            if let Some(ty) = ty_opt {
+                w.write(": ");
+                ty.ast_debug(w);
+            }
+        });
+        w.write("| ");
     }
 }

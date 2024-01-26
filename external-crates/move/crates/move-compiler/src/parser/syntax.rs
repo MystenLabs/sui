@@ -879,14 +879,22 @@ fn parse_bind_list(context: &mut Context) -> Result<BindList, Box<Diagnostic>> {
 // Parse a list of bindings for lambda.
 //      LambdaBindList =
 //          "|" Comma<Bind> "|"
-fn parse_lambda_bind_list(context: &mut Context) -> Result<BindList, Box<Diagnostic>> {
+fn parse_lambda_bind_list(context: &mut Context) -> Result<LambdaBindings, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     let b = parse_comma_list(
         context,
         Tok::Pipe,
         Tok::Pipe,
-        parse_bind,
-        "a variable or structure binding",
+        |context| {
+            let b = parse_bind_list(context)?;
+            let ty_opt = if match_token(context.tokens, Tok::Colon)? {
+                Some(parse_type(context)?)
+            } else {
+                None
+            };
+            Ok((b, ty_opt))
+        },
+        "a binding",
     )?;
     let end_loc = context.tokens.previous_end_loc();
     Ok(spanned(context.tokens.file_hash(), start_loc, end_loc, b))

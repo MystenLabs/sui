@@ -280,6 +280,9 @@ pub type LValueWithRange = Spanned<LValueWithRange_>;
 pub type LValueWithRangeList_ = Vec<LValueWithRange>;
 pub type LValueWithRangeList = Spanned<LValueWithRangeList_>;
 
+pub type LambdaLValues_ = Vec<(LValueList, Option<Type>)>;
+pub type LambdaLValues = Spanned<LambdaLValues_>;
+
 #[derive(Debug, Clone, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum ExpDotted_ {
@@ -348,7 +351,7 @@ pub enum Exp_ {
     While(Option<BlockLabel>, Box<Exp>, Box<Exp>),
     Loop(Option<BlockLabel>, Box<Exp>),
     Block(Option<BlockLabel>, Sequence),
-    Lambda(LValueList, Box<Exp>),
+    Lambda(LambdaLValues, Box<Exp>),
     Quant(
         QuantKind,
         LValueWithRangeList,
@@ -1395,9 +1398,7 @@ impl AstDebug for Exp_ {
                 seq.ast_debug(w);
             }
             E::Lambda(sp!(_, bs), e) => {
-                w.write("|");
                 bs.ast_debug(w);
-                w.write("| ");
                 e.ast_debug(w);
             }
             E::Quant(kind, sp!(_, rs), trs, c_opt, e) => {
@@ -1578,6 +1579,20 @@ impl AstDebug for (LValue, Exp) {
         self.0.ast_debug(w);
         w.write(" in ");
         self.1.ast_debug(w);
+    }
+}
+
+impl AstDebug for LambdaLValues_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write("|");
+        w.comma(self, |w, (lv, ty_opt)| {
+            lv.ast_debug(w);
+            if let Some(ty) = ty_opt {
+                w.write(": ");
+                ty.ast_debug(w);
+            }
+        });
+        w.write("| ");
     }
 }
 

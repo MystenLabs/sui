@@ -28,7 +28,7 @@ use crate::{
     sui_mode,
     typing::{
         ast as T,
-        core::{public_testing_visibility, PublicForTesting, ResolvedFunctionType},
+        core::{make_tvar, public_testing_visibility, PublicForTesting, ResolvedFunctionType},
         dependency_ordering, macro_expand,
     },
     FullyCompiledProgram,
@@ -1303,7 +1303,23 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             res
         }
 
-        NE::Lambda(lambda) => (core::make_tvar(context, eloc), TE::Lambda(lambda)),
+        NE::Lambda(lambda) => {
+            let param_tys = lambda
+                .parameters
+                .value
+                .iter()
+                .map(|(p, ty_opt)| {
+                    if let Some(ty) = ty_opt {
+                        core::instantiate(context, ty.clone())
+                    } else {
+                        core::make_tvar(context, p.loc)
+                    }
+                })
+                .collect();
+            let ret_ty = make_tvar(context, lambda.body.loc);
+            let tfun = sp(eloc, Type_::Fun(param_tys, Box::new(ret_ty)));
+            (tfun, TE::Lambda(lambda))
+        }
 
         NE::Assign(na, nr) => {
             let er = exp(context, nr);

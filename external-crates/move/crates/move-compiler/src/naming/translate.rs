@@ -1474,14 +1474,14 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             from_lambda_expansion: None,
             seq: sequence(context, eseq),
         }),
-        EE::Lambda(args, body) => {
+        EE::Lambda(elambda_binds, body) => {
             context.new_local_scope();
-            let bind_opt = bind_list(context, args);
+            let nlambda_binds_opt = lambda_bind_list(context, elambda_binds);
             context.enter_nominal_block(eloc, None, NominalBlockType::Lambda);
             let body = exp(context, body);
             context.close_local_scope();
             let return_label = context.exit_lambda(eloc);
-            match bind_opt {
+            match nlambda_binds_opt {
                 None => {
                     assert!(context.env.has_errors());
                     N::Exp_::UnresolvedError
@@ -1935,6 +1935,21 @@ fn bind_list(context: &mut Context, ls: E::LValueList) -> Option<N::LValueList> 
     lvalue_list(context, &mut UniqueMap::new(), LValueCase::Bind, ls)
 }
 
+fn lambda_bind_list(
+    context: &mut Context,
+    sp!(loc, elambda): E::LambdaLValues,
+) -> Option<N::LambdaLValues> {
+    let nlambda = elambda
+        .into_iter()
+        .map(|(pbs, ty_opt)| {
+            let bs = bind_list(context, pbs)?;
+            let ety = ty_opt.map(|t| type_(context, t));
+            Some((bs, ety))
+        })
+        .collect::<Option<_>>()?;
+    Some(sp(loc, nlambda))
+}
+
 fn assign_list(context: &mut Context, ls: E::LValueList) -> Option<N::LValueList> {
     lvalue_list(context, &mut UniqueMap::new(), LValueCase::Assign, ls)
 }
@@ -2220,14 +2235,14 @@ fn remove_unused_bindings_exp(
             seq,
         }) => remove_unused_bindings_seq(context, used, seq),
         N::Exp_::Lambda(N::Lambda {
-            parameters,
+            parameters: sp!(_, parameters),
             return_label: _,
             use_fun_color: _,
             body,
         }) => {
-            remove_unused_bindings_lvalues(
-                context, used, parameters, /* report unused */ true,
-            );
+            for (lvs, _) in parameters {
+                remove_unused_bindings_lvalues(context, used, lvs, /* report unused */ true)
+            }
             remove_unused_bindings_exp(context, used, body)
         }
         N::Exp_::FieldMutate(ed, e) => {

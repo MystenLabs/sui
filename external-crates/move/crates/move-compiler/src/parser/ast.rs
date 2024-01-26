@@ -497,6 +497,9 @@ pub type BindList = Spanned<Vec<Bind>>;
 pub type BindWithRange = Spanned<(Bind, Exp)>;
 pub type BindWithRangeList = Spanned<Vec<BindWithRange>>;
 
+pub type LambdaBindings_ = Vec<(BindList, Option<Type>)>;
+pub type LambdaBindings = Spanned<LambdaBindings_>;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Value_ {
     // @<num>
@@ -620,7 +623,7 @@ pub enum Exp_ {
     // { seq }
     Block(Sequence),
     // fun (x1, ..., xn) e
-    Lambda(BindList, Box<Exp>), // spec only
+    Lambda(LambdaBindings, Box<Exp>), // spec only
     // forall/exists x1 : e1, ..., xn [{ t1, .., tk } *] [where cond]: en.
     Quant(
         QuantKind,
@@ -1818,9 +1821,7 @@ impl AstDebug for Exp_ {
             }
             E::Block(seq) => w.block(|w| seq.ast_debug(w)),
             E::Lambda(sp!(_, bs), e) => {
-                w.write("fun ");
                 bs.ast_debug(w);
-                w.write(" ");
                 e.ast_debug(w);
             }
             E::Quant(kind, sp!(_, rs), trs, c_opt, e) => {
@@ -2041,6 +2042,20 @@ impl AstDebug for Bind_ {
                 fields.ast_debug(w);
             }
         }
+    }
+}
+
+impl AstDebug for LambdaBindings_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write("|");
+        w.comma(self, |w, (b, ty_opt)| {
+            b.ast_debug(w);
+            if let Some(ty) = ty_opt {
+                w.write(": ");
+                ty.ast_debug(w);
+            }
+        });
+        w.write("| ");
     }
 }
 
