@@ -120,7 +120,10 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
         default_syntax: SyntaxChoice,
         option: Option<&'a FullyCompiledProgram>,
         init_data: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
+        path: &Path,
     ) -> (Self, Option<String>);
+
+    async fn cleanup_resources(&mut self) -> Result<()>;
     async fn publish_modules(
         &mut self,
         modules: Vec<MaybeNamedCompiledModule>,
@@ -725,13 +728,14 @@ where
         }
     };
     let (mut adapter, result_opt) =
-        Adapter::init(default_syntax, fully_compiled_program_opt, init_opt).await;
+        Adapter::init(default_syntax, fully_compiled_program_opt, init_opt, path).await;
     if let Some(result) = result_opt {
         writeln!(output, "\ninit:\n{}", result)?;
     }
     for task in tasks {
         handle_known_task(&mut output, &mut adapter, task).await;
     }
+    adapter.cleanup_resources().await?;
     Ok((output, adapter))
 }
 
