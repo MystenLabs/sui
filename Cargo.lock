@@ -12167,6 +12167,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "shared-crypto",
  "sui",
  "sui-config",
  "sui-core",

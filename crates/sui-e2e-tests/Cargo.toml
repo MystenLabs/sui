@@ -59,3 +59,4 @@ sui.workspace = true
 sui-sdk.workspace = true
 sui-keys.workspace = true
 workspace-hack.workspace = true
+shared-crypto.workspace = true

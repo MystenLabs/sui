@@ -107,6 +107,7 @@ fn zklogin_authenticator_jwk() {
 
 #[test]
 fn test_serde_zk_login_signature() {
+    // used as consistency test with typescript: see /sdk/typescript/test/unit/cryptography/multisig.test.ts
     use fastcrypto::encoding::Encoding;
     let (user_address, _tx, authenticator) = make_zklogin_tx(get_zklogin_user_address(), false);
     let serialized = authenticator.as_ref();
@@ -180,6 +181,7 @@ fn zklogin_sign_personal_message() {
     let aux_verify_data = VerifyParams::new(parsed, vec![], ZkLoginEnv::Test, true, true);
     let res =
         authenticator.verify_authenticator(&intent_msg, user_address, Some(0), &aux_verify_data);
+
     // Verify passes.
     assert!(res.is_ok());
 }
