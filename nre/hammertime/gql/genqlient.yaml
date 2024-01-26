@@ -1,0 +1,16 @@
+# Default genqlient config; for full documentation see:
+# https://github.com/Khan/genqlient/blob/main/docs/genqlient.yaml
+schema: /Users/joehrbek/gh/git/sui/crates/sui-graphql-rpc/schema/current_progress_schema.graphql
+operations:
+- rpctwopointoh.graphql
+generated: ../cmd/generated.go
+bindings:
+  SuiAddress:
+    type: string
+  BigInt:
+    type: string
+  DateTime:
+    type: time.Time
+  Base64:
+    type: string
+package: main
