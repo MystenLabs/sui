@@ -158,9 +158,10 @@ impl StressTestRunner {
         let state = self.state();
 
         let epoch_store = state.load_epoch_store_one_call_per_task();
+        let backing_package_store = state.get_backing_package_store();
         let mut layout_resolver = epoch_store
             .executor()
-            .type_layout_resolver(Box::new(state.get_cache_reader().as_ref()));
+            .type_layout_resolver(Box::new(backing_package_store.as_ref()));
         for (obj_ref, _) in effects.created() {
             let object_opt = state
                 .database
@@ -323,7 +324,7 @@ mod add_stake {
                 .await
                 .unwrap();
             let state = runner.state();
-            let cache = state.get_cache_reader();
+            let cache = state.get_backing_package_store();
             let epoch_store = state.load_epoch_store_one_call_per_task();
             let mut layout_resolver = epoch_store
                 .executor()

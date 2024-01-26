@@ -106,7 +106,7 @@ impl CheckpointExecutor {
             mailbox,
             state: state.clone(),
             checkpoint_store,
-            cache_reader: state.get_cache_reader().clone(),
+            cache_reader: state.get_cache_reader(),
             tx_manager: state.transaction_manager().clone(),
             accumulator,
             config,

@@ -6,7 +6,6 @@ use crate::authority::AuthorityState;
 use crate::authority_aggregator::authority_aggregator_tests::{
     create_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
 };
-use crate::in_mem_execution_cache::ExecutionCacheRead;
 use crate::safe_client::SafeClient;
 use crate::test_authority_clients::LocalAuthorityClient;
 use crate::test_utils::{

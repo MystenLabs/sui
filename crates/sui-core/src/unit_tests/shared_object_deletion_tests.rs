@@ -25,7 +25,6 @@ use crate::{
         test_authority_builder::TestAuthorityBuilder,
         AuthorityState,
     },
-    in_mem_execution_cache::ExecutionCacheRead,
     move_call,
 };
 use move_core_types::ident_str;

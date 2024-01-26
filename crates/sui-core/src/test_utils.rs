@@ -48,7 +48,6 @@ use tracing::{info, warn};
 use crate::authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState};
 use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
 use crate::epoch::committee_store::CommitteeStore;
-use crate::in_mem_execution_cache::ExecutionCacheRead;
 use crate::state_accumulator::StateAccumulator;
 use crate::test_authority_clients::LocalAuthorityClient;
 

@@ -656,7 +656,7 @@ impl AuthorityPerEpochStore {
         db_options: Option<Options>,
         metrics: Arc<EpochMetrics>,
         epoch_start_configuration: EpochStartConfiguration,
-        cache_reader: Arc<ExecutionCache>,
+        execution_cache: Arc<ExecutionCache>,
         cache_metrics: Arc<ResolverMetrics>,
         signature_verifier_metrics: Arc<SignatureVerifierMetrics>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
@@ -701,7 +701,7 @@ impl AuthorityPerEpochStore {
 
         let execution_component = ExecutionComponents::new(
             &protocol_config,
-            cache_reader.clone(),
+            execution_cache.clone(),
             cache_metrics,
             expensive_safety_check_config,
         );
@@ -735,7 +735,7 @@ impl AuthorityPerEpochStore {
 
         if authenticator_state_enabled {
             info!("authenticator_state enabled");
-            let authenticator_state = get_authenticator_state(cache_reader.as_ref())
+            let authenticator_state = get_authenticator_state(execution_cache.as_ref())
                 .expect("Read cannot fail")
                 .expect("Authenticator state must exist");
 

@@ -108,7 +108,9 @@ use sui_types::messages_grpc::{
 };
 use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
 use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
-use sui_types::storage::{ObjectKey, ObjectOrTombstone, ObjectStore, WriteKind};
+use sui_types::storage::{
+    BackingPackageStore, BackingStore, ObjectKey, ObjectOrTombstone, ObjectStore, WriteKind,
+};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
@@ -742,7 +744,7 @@ impl AuthorityState {
             &input_object_kinds,
             &receiving_objects_refs,
             &self.transaction_deny_config,
-            self.get_cache_reader().as_ref(),
+            self.get_backing_package_store().as_ref(),
         )?;
 
         let (input_objects, receiving_objects) = self
@@ -1404,7 +1406,7 @@ impl AuthorityState {
         #[allow(unused_mut)]
         let (inner_temp_store, _, mut effects, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
-                self.get_cache_reader().as_ref(),
+                self.get_backing_store().as_ref(),
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
@@ -1469,7 +1471,7 @@ impl AuthorityState {
             &input_object_kinds,
             &receiving_object_refs,
             &self.transaction_deny_config,
-            self.get_cache_reader().as_ref(),
+            self.get_backing_package_store().as_ref(),
         )?;
 
         let (input_objects, receiving_objects) = self
@@ -1534,7 +1536,7 @@ impl AuthorityState {
         let expensive_checks = false;
         let (inner_temp_store, _, effects, _execution_error) = executor
             .execute_transaction_to_effects(
-                self.get_cache_reader().as_ref(),
+                self.get_backing_store().as_ref(),
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
                 expensive_checks,
@@ -1561,7 +1563,7 @@ impl AuthorityState {
                 .executor()
                 .type_layout_resolver(Box::new(TemporaryPackageStore::new(
                     &inner_temp_store,
-                    self.get_cache_reader().clone(),
+                    self.execution_cache.clone(),
                 )));
         // Returning empty vector here because we recalculate changes in the rpc layer.
         let object_changes = Vec::new();
@@ -1688,7 +1690,7 @@ impl AuthorityState {
             &input_object_kinds,
             &receiving_object_refs,
             &self.transaction_deny_config,
-            self.get_cache_reader().as_ref(),
+            self.get_backing_package_store().as_ref(),
         )?;
 
         let (mut input_objects, receiving_objects) = self
@@ -1774,7 +1776,7 @@ impl AuthorityState {
         );
         let transaction_digest = TransactionDigest::new(default_hash(&intent_msg.value));
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
-            self.get_cache_reader().as_ref(),
+            self.get_backing_store().as_ref(),
             protocol_config,
             self.metrics.limits_metrics.clone(),
             /* expensive checks */ false,
@@ -1802,7 +1804,7 @@ impl AuthorityState {
         };
 
         let package_store =
-            TemporaryPackageStore::new(&inner_temp_store, self.get_cache_reader().clone());
+            TemporaryPackageStore::new(&inner_temp_store, self.execution_cache.clone());
 
         let mut layout_resolver = epoch_store
             .executor()
@@ -1920,7 +1922,7 @@ impl AuthorityState {
                 .executor()
                 .type_layout_resolver(Box::new(TemporaryPackageStore::new(
                     inner_temporary_store,
-                    self.get_cache_reader().clone(),
+                    self.execution_cache.clone(),
                 )));
         let modified_at_version = effects
             .modified_at_versions()
@@ -2192,7 +2194,7 @@ impl AuthorityState {
                 .executor()
                 .type_layout_resolver(Box::new(TemporaryPackageStore::new(
                     inner_temporary_store,
-                    self.get_cache_reader().clone(),
+                    self.execution_cache.clone(),
                 )));
         SuiTransactionBlockEvents::try_from(
             transaction_events,
@@ -2263,7 +2265,7 @@ impl AuthorityState {
             Some(
                 self.load_epoch_store_one_call_per_task()
                     .executor()
-                    .type_layout_resolver(Box::new(self.get_cache_reader().as_ref()))
+                    .type_layout_resolver(Box::new(self.get_backing_package_store().as_ref()))
                     .get_annotated_layout(&move_obj.type_().clone().into())?,
             )
         } else {
@@ -2459,8 +2461,31 @@ impl AuthorityState {
         state
     }
 
-    pub fn get_cache_reader(&self) -> &Arc<ExecutionCache> {
-        &self.execution_cache
+    // This method only exists for sui-replay. Normally you should get one of the specific
+    // traits (below) instead.
+    pub fn get_execution_cache(&self) -> Arc<ExecutionCache> {
+        self.execution_cache.clone()
+    }
+
+    // TODO: Consolidate our traits to reduce the number of methods here.
+    pub fn get_cache_reader(&self) -> Arc<dyn ExecutionCacheRead> {
+        self.execution_cache.clone()
+    }
+
+    pub fn get_backing_store(&self) -> Arc<dyn BackingStore> {
+        self.execution_cache.clone()
+    }
+
+    pub fn get_backing_package_store(&self) -> Arc<dyn BackingPackageStore> {
+        self.execution_cache.clone()
+    }
+
+    pub fn get_effects_notify_read(&self) -> Arc<dyn EffectsNotifyRead> {
+        Arc::new(self.execution_cache.clone().as_notify_read_wrapper())
+    }
+
+    pub fn get_object_store(&self) -> Arc<dyn ObjectStore> {
+        self.execution_cache.clone()
     }
 
     pub async fn prune_checkpoints_for_eligible_epochs(
@@ -2530,7 +2555,7 @@ impl AuthorityState {
         let mut new_dynamic_fields = vec![];
         let mut layout_resolver = epoch_store
             .executor()
-            .type_layout_resolver(Box::new(self.get_cache_reader().as_ref()));
+            .type_layout_resolver(Box::new(self.execution_cache.as_ref()));
         for o in genesis_objects.iter() {
             match o.owner {
                 Owner::AddressOwner(addr) => new_owners.push((
@@ -3125,7 +3150,7 @@ impl AuthorityState {
                 self.load_epoch_store_one_call_per_task()
                     .executor()
                     // TODO(cache) - must read through cache
-                    .type_layout_resolver(Box::new(self.get_cache_reader().as_ref()))
+                    .type_layout_resolver(Box::new(self.execution_cache.as_ref()))
                     .get_annotated_layout(&object.type_().clone().into())
             })
             .transpose()?;
@@ -3691,10 +3716,10 @@ impl AuthorityState {
             .collect::<Result<Vec<_>, _>>()?;
 
         let epoch_store = self.load_epoch_store_one_call_per_task();
-        let backing_store = self.get_cache_reader();
+        let backing_store = self.execution_cache.as_ref();
         let mut layout_resolver = epoch_store
             .executor()
-            .type_layout_resolver(Box::new(&backing_store));
+            .type_layout_resolver(Box::new(backing_store));
         let mut events = vec![];
         for (e, tx_digest, event_seq, timestamp) in stored_events.into_iter() {
             events.push(SuiEvent::try_from(
@@ -4606,7 +4631,7 @@ impl AuthorityState {
             self.name,
             new_committee,
             epoch_start_configuration,
-            self.get_cache_reader().clone(),
+            self.execution_cache.clone(),
             expensive_safety_check_config,
             cur_epoch_store.get_chain_identifier(),
         );

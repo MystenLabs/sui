@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::AuthorityState;
-use sui_core::in_mem_execution_cache::{ExecutionCache, ExecutionCacheRead};
+use sui_core::in_mem_execution_cache::ExecutionCacheRead;
 use sui_core::subscription_handler::SubscriptionHandler;
 use sui_json_rpc_types::{
     Coin as SuiCoin, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
@@ -36,7 +36,7 @@ use sui_types::messages_checkpoint::{
     VerifiedCheckpoint,
 };
 use sui_types::object::{Object, ObjectRead, PastObjectRead};
-use sui_types::storage::WriteKind;
+use sui_types::storage::{BackingPackageStore, ObjectStore, WriteKind};
 use sui_types::sui_serde::BigInt;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::{Transaction, TransactionData, TransactionKind};
@@ -88,7 +88,11 @@ pub trait StateRead: Send + Sync {
         limit: usize,
     ) -> StateReadResult<Vec<(ObjectID, DynamicFieldInfo)>>;
 
-    fn get_cache_reader(&self) -> Arc<ExecutionCache>;
+    fn get_cache_reader(&self) -> Arc<dyn ExecutionCacheRead>;
+
+    fn get_object_store(&self) -> Arc<dyn ObjectStore>;
+
+    fn get_backing_package_store(&self) -> Arc<dyn BackingPackageStore>;
 
     fn get_owner_objects(
         &self,
@@ -303,8 +307,16 @@ impl StateRead for AuthorityState {
         Ok(self.get_dynamic_fields(owner, cursor, limit)?)
     }
 
-    fn get_cache_reader(&self) -> Arc<ExecutionCache> {
-        self.get_cache_reader().clone()
+    fn get_cache_reader(&self) -> Arc<dyn ExecutionCacheRead> {
+        self.get_cache_reader()
+    }
+
+    fn get_object_store(&self) -> Arc<dyn ObjectStore> {
+        self.get_object_store()
+    }
+
+    fn get_backing_package_store(&self) -> Arc<dyn BackingPackageStore> {
+        self.get_backing_package_store()
     }
 
     fn get_owner_objects(

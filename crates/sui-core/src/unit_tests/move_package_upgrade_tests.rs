@@ -10,7 +10,7 @@ use sui_types::{
     move_package::UpgradePolicy,
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    storage::{BackingPackageStore, ObjectStore},
+    storage::ObjectStore,
     transaction::{Argument, ObjectArg, ProgrammableTransaction, TEST_ONLY_GAS_UNIT_FOR_PUBLISH},
     MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID,
 };
