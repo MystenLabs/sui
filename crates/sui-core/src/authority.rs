@@ -232,7 +232,7 @@ pub struct AuthorityMetrics {
 
     pub(crate) execution_driver_executed_transactions: IntCounter,
     pub(crate) execution_driver_dispatch_queue: IntGauge,
-    pub(crate) execution_queueing_delay_ms: IntGauge,
+    pub(crate) execution_queueing_delay_s: Histogram,
 
     pub(crate) skipped_consensus_txns: IntCounter,
     pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
@@ -508,9 +508,10 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            execution_queueing_delay_ms: register_int_gauge_with_registry!(
+            execution_queueing_delay_s: register_histogram_with_registry!(
                 "execution_queueing_delay_ms",
-                "Average queueing delay between a transaction is ready for execution until it starts executing.",
+                "Queueing delay between a transaction is ready for execution until it starts executing.",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             )
             .unwrap(),

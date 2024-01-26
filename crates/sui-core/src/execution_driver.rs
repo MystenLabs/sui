@@ -99,8 +99,8 @@ pub async fn execution_process(
             if let Some(latency) = authority.metrics.execution_queueing_latency.latency() {
                 authority
                     .metrics
-                    .execution_queueing_delay_ms
-                    .set(latency.as_millis() as i64);
+                    .execution_queueing_delay_s
+                    .observe(latency.as_secs_f64());
             }
         }
 

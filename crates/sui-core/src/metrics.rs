@@ -6,7 +6,6 @@ use std::collections::VecDeque;
 use std::default::Default;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::time::Duration;
 use tokio::time::Duration;
 use tokio::time::Instant;
 
