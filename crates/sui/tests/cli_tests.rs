@@ -2555,6 +2555,19 @@ async fn test_with_sui_binary(args: &[&str]) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+/// Use this fn if you expect the CLI command to fail
+async fn test_with_sui_binary_failure(args: &[&str]) -> Result<(), anyhow::Error> {
+    let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
+    let args = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    // test cluster will not response if this call is in the same thread
+    let out = thread::spawn(move || cmd.args(args).assert());
+    while !out.is_finished() {
+        sleep(Duration::from_millis(100)).await;
+    }
+    out.join().unwrap().failure();
+    Ok(())
+}
+
 #[sim_test]
 async fn test_get_owned_objects_owned_by_address_and_check_pagination() -> Result<(), anyhow::Error>
 {
@@ -2673,4 +2686,153 @@ async fn key_identity_test() {
         context.active_address().unwrap(),
         get_identity_address(None, context).unwrap()
     );
+}
+
+#[tokio::test]
+async fn test_ptb_assign() -> Result<(), anyhow::Error> {
+    test_with_sui_binary(&[
+        "client",
+        "ptb",
+        "--assign",
+        "a",
+        "none",
+        "--gas-budget",
+        "1000000000",
+    ])
+    .await?;
+    test_with_sui_binary(&[
+        "client",
+        "ptb",
+        "--assign",
+        "a",
+        "none",
+        "--move-call",
+        "0x1::option::is_none",
+        "<u64>",
+        "none",
+        "--gas-budget",
+        "1000000000",
+    ])
+    .await?;
+    test_with_sui_binary(&[
+        "client",
+        "ptb",
+        "--assign",
+        "a",
+        "none",
+        "--move-call",
+        "0x1::option::is_none",
+        "<u64>",
+        "a",
+        "--gas-budget",
+        "1000000000",
+    ])
+    .await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ptb_split_coins() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let client = context.get_client().await?;
+    let coins = client
+        .coin_read_api()
+        .get_coins(address, None, None, None)
+        .await?
+        .data;
+
+    let coin_id = coins.first().unwrap().coin_object_id.to_string();
+    // this will fail because it will try to find the coin which does not exist for the
+    // client config (uses the default network) instead of the one we just spun up
+    // TODO we need to find a way to specify the context in which this test needs to run
+    test_with_sui_binary_failure(&[
+        "client",
+        "ptb",
+        "--split-coins",
+        format!("@{}", coin_id).as_str(),
+        "[]",
+        "--gas-budget",
+        "1000000000",
+    ])
+    .await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ptb_gas_budget() -> Result<(), anyhow::Error> {
+    test_with_sui_binary(&["client", "ptb", "--gas-budget", "1000000000"]).await?;
+    // fail as no value is provided for the gas budget
+    test_with_sui_binary_failure(&["client", "ptb", "--gas-budget"]).await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ptb_make_move_vec() -> Result<(), anyhow::Error> {
+    test_with_sui_binary(&[
+        "client",
+        "ptb",
+        "--gas-budget",
+        "1000000000",
+        "--make-move-vec",
+        "<u64>",
+        "[1,2,3,4]",
+    ])
+    .await?;
+    // we're passing a function, so this would fail
+    test_with_sui_binary_failure(&[
+        "client",
+        "ptb",
+        "--gas-budget",
+        "1000000000",
+        "--make-move-vec",
+        "<0x1::a::b>",
+        "[@0x1,@0x2]",
+    ])
+    .await?;
+    // we're passing a function, so this would fail
+    test_with_sui_binary_failure(&[
+        "client",
+        "ptb",
+        "--gas-budget",
+        "1000000000",
+        "--make-move-vec",
+        "<0x1::a::b>",
+        "[@0x1,@0x2]",
+    ])
+    .await?;
+    // This should be an error -- array inside an array
+    test_with_sui_binary_failure(&[
+        "client",
+        "ptb",
+        "--gas-budget",
+        "1000000000",
+        "--make-move-vec",
+        "<vector<address>>",
+        "[[@0x1],[@0x2]]",
+    ])
+    .await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_ptb_transfer_objects() -> Result<(), anyhow::Error> {
+    test_with_sui_binary_failure(&[
+        "client",
+        "ptb",
+        "--assign",
+        "A",
+        "@0x1",
+        "--transfer-objects",
+        "A",
+        "[@0x1,@0x2,@0x3]",
+        "--gas-budget",
+        "1000000000",
+    ])
+    .await?;
+    Ok(())
 }
