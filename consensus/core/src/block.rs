@@ -6,23 +6,36 @@ use std::{
     hash::{Hash, Hasher},
     ops::Deref,
     sync::Arc,
+    time::SystemTime,
 };
 
 use bytes::Bytes;
-use consensus_config::{AuthorityIndex, DefaultHashFunction, DIGEST_LENGTH};
+use consensus_config::{AuthorityIndex, DefaultHashFunction, Epoch, DIGEST_LENGTH};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, HashFunction};
 use serde::{Deserialize, Serialize};
 
-/// Block proposal timestamp in milliseconds.
-pub type BlockTimestampMs = u64;
+use crate::context::Context;
+
+const GENESIS_ROUND: Round = 0;
 
 /// Round number of a block.
 pub type Round = u32;
 
+/// Block proposal timestamp in milliseconds.
+pub type BlockTimestampMs = u64;
+
+// Returns the current time expressed as UNIX timestamp in milliseconds.
+pub fn timestamp_utc_ms() -> BlockTimestampMs {
+    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(n) => n.as_millis() as BlockTimestampMs,
+        Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+    }
+}
+
 /// The transaction serialised bytes
 #[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Default, Debug)]
-pub(crate) struct Transaction {
+pub struct Transaction {
     data: Bytes,
 }
 
@@ -51,20 +64,42 @@ pub enum Block {
     V1(BlockV1),
 }
 
+impl Block {
+    /// Generate the genesis blocks for the latest Block version. The tuple contains (my_genesis_block, others_genesis_blocks).
+    /// The blocks are returned in authority index order.
+    pub(crate) fn genesis(context: Arc<Context>) -> (VerifiedBlock, Vec<VerifiedBlock>) {
+        let (my_block, others_block): (Vec<_>, Vec<_>) = context
+            .committee
+            .authorities()
+            .map(|(authority_index, _)| {
+                let signed = SignedBlock::new(Block::V1(BlockV1::genesis(
+                    authority_index,
+                    context.committee.epoch(),
+                )));
+                VerifiedBlock::new_verified_unserialized(signed)
+                    .expect("Shouldn't fail when creating verified block for genesis")
+            })
+            .partition(|block| block.author() == context.own_index);
+        (my_block[0].clone(), others_block)
+    }
+}
+
 #[enum_dispatch]
 pub trait BlockAPI {
+    fn epoch(&self) -> Epoch;
     fn round(&self) -> Round;
     fn author(&self) -> AuthorityIndex;
     fn timestamp_ms(&self) -> BlockTimestampMs;
     fn ancestors(&self) -> &[BlockRef];
     fn transactions(&self) -> &[Transaction];
-    // TODO: add accessor for transactions.
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub struct BlockV1 {
+    epoch: Epoch,
     round: Round,
     author: AuthorityIndex,
+    // TODO: during verification ensure that timestamp_ms >= ancestors.timestamp
     timestamp_ms: BlockTimestampMs,
     ancestors: Vec<BlockRef>,
     transactions: Vec<Transaction>,
@@ -73,6 +108,7 @@ pub struct BlockV1 {
 impl BlockV1 {
     #[allow(dead_code)]
     pub(crate) fn new(
+        epoch: Epoch,
         round: Round,
         author: AuthorityIndex,
         timestamp_ms: BlockTimestampMs,
@@ -85,6 +121,19 @@ impl BlockV1 {
             timestamp_ms,
             ancestors,
             transactions,
+            epoch,
+        }
+    }
+
+    /// Generate the block that is meant to be used for genesis
+    pub(crate) fn genesis(author: AuthorityIndex, epoch: Epoch) -> BlockV1 {
+        Self {
+            round: GENESIS_ROUND,
+            author,
+            timestamp_ms: 0,
+            ancestors: vec![],
+            transactions: vec![],
+            epoch,
         }
     }
 }
@@ -108,6 +157,10 @@ impl BlockAPI for BlockV1 {
 
     fn transactions(&self) -> &[Transaction] {
         &self.transactions
+    }
+
+    fn epoch(&self) -> Epoch {
+        self.epoch
     }
 }
 
@@ -192,6 +245,12 @@ impl fmt::Debug for BlockDigest {
     }
 }
 
+impl AsRef<[u8]> for BlockDigest {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
 /// Slot is the position of blocks in the DAG. It can contain 0, 1 or multiple blocks
 /// from the same authority at the same round.
 #[derive(Clone, Copy, PartialEq, PartialOrd, Default, Hash)]
@@ -229,11 +288,25 @@ impl fmt::Debug for Slot {
 #[derive(Deserialize, Serialize)]
 pub(crate) struct SignedBlock {
     inner: Block,
-    signature: bytes::Bytes,
+    signature: Bytes,
 }
 
 impl SignedBlock {
     // TODO: add verification.
+
+    // TODO: will refactor once the signing approach has been introduced.
+    pub(crate) fn new(block: Block) -> Self {
+        Self {
+            inner: block,
+            signature: Bytes::default(),
+        }
+    }
+
+    /// Serialises the block using the bcs serializer
+    pub(crate) fn serialize(&self) -> Result<Bytes, bcs::Error> {
+        let bytes = bcs::to_bytes(self)?;
+        Ok(bytes.into())
+    }
 }
 
 /// VerifiedBlock allows full access to its content.
@@ -244,14 +317,14 @@ pub(crate) struct VerifiedBlock {
 
     // Cached Block digest and serialized SignedBlock, to avoid re-computing these values.
     digest: BlockDigest,
-    serialized: bytes::Bytes,
+    serialized: Bytes,
 }
 
 impl VerifiedBlock {
     /// Creates VerifiedBlock from verified SignedBlock and its serialized bytes.
-    pub fn new_verified(
+    pub(crate) fn new_verified(
         signed_block: SignedBlock,
-        serialized: bytes::Bytes,
+        serialized: Bytes,
     ) -> Result<Self, bcs::Error> {
         let digest = Self::compute_digest(&signed_block.inner)?;
         Ok(VerifiedBlock {
@@ -259,6 +332,13 @@ impl VerifiedBlock {
             digest,
             serialized,
         })
+    }
+
+    /// Creates a new VerifiedBlock from a SignedBlock and the serialized bytes aren't available. Primarily this should be
+    /// used when proposing a new block and the bytes aren't available.
+    pub(crate) fn new_verified_unserialized(signed_block: SignedBlock) -> Result<Self, bcs::Error> {
+        let serialized = signed_block.serialize()?;
+        Self::new_verified(signed_block, serialized)
     }
 
     #[cfg(test)]
@@ -269,7 +349,7 @@ impl VerifiedBlock {
             inner: block,
             signature: Default::default(),
         };
-        let serialized: bytes::Bytes = bcs::to_bytes(&signed_block)
+        let serialized: Bytes = bcs::to_bytes(&signed_block)
             .expect("Serialization should not fail")
             .into();
         VerifiedBlock {
@@ -280,7 +360,7 @@ impl VerifiedBlock {
     }
 
     /// Returns reference to the block.
-    pub fn reference(&self) -> BlockRef {
+    pub(crate) fn reference(&self) -> BlockRef {
         BlockRef {
             round: self.round(),
             author: self.author(),
@@ -288,16 +368,16 @@ impl VerifiedBlock {
         }
     }
 
-    pub fn digest(&self) -> BlockDigest {
+    pub(crate) fn digest(&self) -> BlockDigest {
         self.digest
     }
 
     /// Returns the serialized block with signature.
-    pub fn serialized(&self) -> &bytes::Bytes {
+    pub(crate) fn serialized(&self) -> &Bytes {
         &self.serialized
     }
 
-    fn compute_digest(block: &Block) -> Result<BlockDigest, bcs::Error> {
+    pub(crate) fn compute_digest(block: &Block) -> Result<BlockDigest, bcs::Error> {
         let mut hasher = DefaultHashFunction::new();
         hasher.update(bcs::to_bytes(block)?);
         Ok(BlockDigest(hasher.finalize().into()))
@@ -329,10 +409,11 @@ impl fmt::Debug for VerifiedBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "{:?}({};{:?};v)",
+            "{:?}({};{:?};{}v)",
             self.reference(),
             self.timestamp_ms(),
-            self.ancestors()
+            self.ancestors(),
+            self.transactions().len()
         )
     }
 }
@@ -378,6 +459,11 @@ impl TestBlock {
 
     pub(crate) fn set_transactions(mut self, transactions: Vec<Transaction>) -> Self {
         self.block.transactions = transactions;
+        self
+    }
+
+    pub(crate) fn set_epoch(mut self, epoch: Epoch) -> Self {
+        self.block.epoch = epoch;
         self
     }
 

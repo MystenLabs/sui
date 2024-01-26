@@ -154,7 +154,7 @@ mod test {
     use super::*;
     use crate::block_manager::BlockManager;
     use crate::context::Context;
-    use crate::core::CoreSignals;
+    use crate::core::{CoreOptions, CoreSignals};
     use crate::transactions_client::{TransactionsClient, TransactionsConsumer};
 
     #[tokio::test]
@@ -169,6 +169,7 @@ mod test {
             transactions_consumer,
             block_manager,
             signals,
+            CoreOptions::default(),
         );
 
         let (core_dispatcher, handle) = CoreThreadDispatcher::start(core, context);
