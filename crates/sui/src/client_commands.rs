@@ -42,8 +42,11 @@ use sui_move_build::{
 };
 use sui_replay::ReplayToolCommand;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
-use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
+use sui_sdk::{
+    wallet_context::WalletContext, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_GAS_URL,
+    SUI_LOCAL_NETWORK_URL, SUI_TESTNET_URL,
+};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     crypto::{EmptySignInfo, SignatureScheme},
@@ -215,6 +218,19 @@ pub enum SuiClientCommands {
         #[clap(long)]
         signed_tx_bytes: String,
     },
+
+    /// Request gas coin from faucet. By default, it will use the active address and the active network.
+    #[clap[name = "faucet"]]
+    Faucet {
+        /// Address (or its alias)
+        #[clap(long)]
+        #[arg(value_parser)]
+        address: Option<KeyIdentity>,
+        /// The url to the faucet
+        #[clap(long)]
+        url: Option<String>,
+    },
+
     /// Obtain all gas objects owned by the address.
     /// An address' alias can be used instead of the address.
     #[clap(name = "gas")]
@@ -708,6 +724,12 @@ pub enum SuiClientCommands {
         #[arg(long, short)]
         terminate_early: bool,
     },
+}
+
+#[derive(serde::Deserialize)]
+struct FaucetResponse {
+    task: String,
+    error: Option<String>,
 }
 
 impl SuiClientCommands {
@@ -1279,6 +1301,28 @@ impl SuiClientCommands {
                     .map(|(_val, object)| GasCoin::try_from(object).unwrap())
                     .collect();
                 SuiClientCommandResult::Gas(coins)
+            }
+            SuiClientCommands::Faucet { address, url } => {
+                let address = get_identity_address(address, context)?;
+                let url = if let Some(url) = url {
+                    url
+                } else {
+                    let active_env = context.config.get_active_env();
+
+                    if let Ok(env) = active_env {
+                        let network = match env.rpc.as_str() {
+                            SUI_DEVNET_URL => format!("https://faucet.devnet.sui.io/v1/gas"),
+                            SUI_TESTNET_URL => format!("https://faucet.testnet.sui.io/v1/gas"),
+                            SUI_LOCAL_NETWORK_URL => SUI_LOCAL_NETWORK_GAS_URL.to_string(), 
+                            _ => bail!("Cannot recognize the active network. Please provide the gas faucet full URL.")
+                        };
+                        network
+                    } else {
+                        bail!("No URL for faucet was provided and there is no active network.")
+                    }
+                };
+                request_tokens_from_faucet(address, url).await?;
+                SuiClientCommandResult::NoOutput
             }
             SuiClientCommands::ChainIdentifier => {
                 let ci = context
@@ -1862,6 +1906,7 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::ReplayTransaction => {}
             SuiClientCommandResult::ReplayBatch => {}
             SuiClientCommandResult::ReplayCheckpoints => {}
+            SuiClientCommandResult::NoOutput => {}
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
     }
@@ -2118,6 +2163,7 @@ pub enum SuiClientCommandResult {
     MergeCoin(SuiTransactionBlockResponse),
     NewAddress(NewAddressOutput),
     NewEnv(SuiEnv),
+    NoOutput,
     Object(SuiObjectResponse),
     Objects(Vec<SuiObjectResponse>),
     Pay(SuiTransactionBlockResponse),
@@ -2166,4 +2212,46 @@ impl Display for SwitchResponse {
         }
         write!(f, "{}", writer)
     }
+}
+
+/// Request tokens from the Faucet for the given address
+pub async fn request_tokens_from_faucet(
+    address: SuiAddress,
+    url: String,
+) -> Result<(), anyhow::Error> {
+    let address_str = address.to_string();
+    let json_body = json![{
+        "FixedAmountRequest": {
+            "recipient": &address_str
+        }
+    }];
+
+    // make the request to the faucet JSON RPC API for coin
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .json(&json_body)
+        .send()
+        .await?;
+    println!("Requested gas from faucet: {url}");
+    println!(
+        "Faucet request for address {address_str} has status: {}",
+        resp.status()
+    );
+    if resp.status() == 429 {
+        bail!("Faucet received too many requests from this ip address. Please try again after 60 minutes.");
+    }
+    println!("Waiting for the faucet to complete the gas request...");
+    
+    let faucet_resp: FaucetResponse = resp.json().await?;
+
+    let task_id = if let Some(err) = faucet_resp.error {
+        bail!("Faucet request was unsuccessful. Error is {err:?}")
+    } else {
+        faucet_resp.task
+    };
+    println!("Faucet task id: {task_id}");
+    println!("The coin should be available in the next couple of minutes. Run sui client gas to find your coins.");
+    Ok(())
 }
