@@ -80,7 +80,8 @@ impl PTBParser {
 
         match name {
             CommandToken::FileEnd => {
-                if let Err(e) = self.context.pop_file_scope(cmd.name.clone()) {
+                let name = cmd.values.pop().unwrap();
+                if let Err(e) = self.context.pop_file_scope(name) {
                     self.errors.push(e);
                 }
                 return;
