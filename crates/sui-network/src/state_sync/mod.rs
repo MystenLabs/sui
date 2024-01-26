@@ -1033,7 +1033,13 @@ where
         .buffered(checkpoint_header_download_concurrency);
 
     while let Some((maybe_checkpoint, next, maybe_peer_id)) = request_stream.next().await {
-        debug_assert!(current.sequence_number().saturating_add(1) == next);
+        assert_eq!(
+            current
+                .sequence_number()
+                .checked_add(1)
+                .expect("exhausted u64"),
+            next
+        );
 
         // Verify the checkpoint
         let checkpoint = 'cp: {
