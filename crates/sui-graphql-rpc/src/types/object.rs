@@ -507,6 +507,7 @@ impl ObjectImpl<'_> {
                 Some(ObjectOwner::Address(AddressOwner {
                     owner: Some(Owner {
                         address,
+                        version: None,
                         checkpoint_viewed_at: self.0.checkpoint_viewed_at,
                     }),
                 }))
@@ -1236,6 +1237,7 @@ impl From<&Object> for OwnerImpl {
     fn from(object: &Object) -> Self {
         OwnerImpl {
             address: object.address,
+            version: Some(object.version_impl()),
             checkpoint_viewed_at: object.checkpoint_viewed_at,
         }
     }
