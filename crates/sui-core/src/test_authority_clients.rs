@@ -175,11 +175,7 @@ impl LocalAuthorityClient {
                 //let certificate = certificate.verify(epoch_store.committee())?;
                 state
                     .enqueue_certificates_for_execution(vec![certificate.clone()], &epoch_store)?;
-                let effects = state
-                    .notify_read_effects(&[*certificate.digest()])
-                    .await?
-                    .pop()
-                    .unwrap();
+                let effects = state.notify_read_effects(&certificate).await?;
                 state.sign_effects(effects, &epoch_store)?
             }
         }

@@ -956,12 +956,7 @@ impl AuthorityState {
             self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store)?;
         }
 
-        let effects = self
-            .execution_cache
-            .notify_read_executed_effects(&[*certificate.digest()])
-            .await?
-            .pop()
-            .expect("must return correct number of effects");
+        let effects = self.notify_read_effects(certificate).await?;
         self.sign_effects(effects, epoch_store)
     }
 
@@ -1048,11 +1043,12 @@ impl AuthorityState {
 
     pub async fn notify_read_effects(
         &self,
-        digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<TransactionEffects>> {
+        certificate: &VerifiedCertificate,
+    ) -> SuiResult<TransactionEffects> {
         self.execution_cache
-            .notify_read_executed_effects(digests)
+            .notify_read_executed_effects(&[*certificate.digest()])
             .await
+            .map(|mut r| r.pop().expect("must return correct number of effects"))
     }
 
     async fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {

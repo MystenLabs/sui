@@ -146,7 +146,8 @@ async fn test_net_determinism() {
     handle
         .sui_node
         .state()
-        .notify_read_effects(&[digest])
+        .get_effects_notify_read()
+        .notify_read_executed_effects(vec![digest])
         .await
         .unwrap();
 }
