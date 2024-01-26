@@ -121,7 +121,7 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 					parsedJson: event.json ? JSON.parse(event.json) : undefined,
 					sender: event.sender?.address,
 					timestampMs: new Date(event.timestamp).getTime().toString(),
-					transactionModule: '', // TODO,
+					transactionModule: `${event.sendingModule?.package.address}::${event.sendingModule?.name}`,
 					type: toShortTypeString(event.type?.repr)!,
 			  })) ?? []
 			: undefined,

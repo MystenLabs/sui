@@ -479,32 +479,35 @@ export class GraphQLSuiClient extends SuiClient {
 	}
 
 	override async getOwnedObjects(input: GetOwnedObjectsParams): Promise<PaginatedObjectsResponse> {
-		const filter: ObjectFilter | null | undefined = input.filter && {
-			objectIds:
-				'ObjectIds' in input.filter
-					? input.filter.ObjectIds
-					: 'ObjectId' in input.filter
-					? [input.filter.ObjectId]
-					: undefined,
-			type: 'StructType' in input.filter ? input.filter.StructType : undefined,
-			owner:
-				'ObjectOwner' in input.filter
-					? input.filter.ObjectOwner
-					: 'AddressOwner' in input.filter
-					? input.filter.AddressOwner
-					: undefined,
-		};
-
-		const unsupportedFilters = [
-			'MatchAll',
-			'MatchAny',
-			'MatchNone',
-			'Package',
-			'MoveModule',
-			'Version',
-		];
+		let filter: ObjectFilter | undefined;
+		let typeFilter: string | undefined;
 
 		if (input.filter) {
+			if ('Package' in input.filter) {
+				typeFilter = input.filter.Package;
+			} else if ('MoveModule' in input.filter) {
+				typeFilter = `${input.filter.MoveModule.package}::${input.filter.MoveModule.module}`;
+			} else if ('StructType' in input.filter) {
+				typeFilter = input.filter.StructType;
+			}
+
+			filter = {
+				objectIds:
+					'ObjectIds' in input.filter
+						? input.filter.ObjectIds
+						: 'ObjectId' in input.filter
+						? [input.filter.ObjectId]
+						: undefined,
+				type: typeFilter,
+				owner:
+					'ObjectOwner' in input.filter
+						? input.filter.ObjectOwner
+						: 'AddressOwner' in input.filter
+						? input.filter.AddressOwner
+						: undefined,
+			};
+			const unsupportedFilters = ['MatchAll', 'MatchAny', 'MatchNone', 'Version'];
+
 			for (const unsupportedFilter of unsupportedFilters) {
 				if (unsupportedFilter in input.filter) {
 					this.#unsupportedParams('getOwnedObjects', unsupportedFilter);
@@ -879,9 +882,14 @@ export class GraphQLSuiClient extends SuiClient {
 					: undefined,
 		};
 
+		if ('MoveEventType' in input.query) {
+			filter.eventType = input.query.MoveEventType;
+		} else if ('MoveEventModule' in input.query) {
+			filter.eventType = `${input.query.MoveEventModule.package}::${input.query.MoveEventModule.module}`;
+		}
+
 		const unsupportedFilters = [
 			'Package',
-			'MoveEventModule',
 			'MoveEventField',
 			'Any',
 			'All',
@@ -926,7 +934,7 @@ export class GraphQLSuiClient extends SuiClient {
 				parsedJson: event.json ? JSON.parse(event.json) : undefined,
 				sender: event.sender?.address,
 				timestampMs: new Date(event.timestamp).getTime().toString(),
-				transactionModule: 'TODO',
+				transactionModule: `${event.sendingModule?.package.address}::${event.sendingModule?.name}`,
 				type: toShortTypeString(event.type?.repr)!,
 			})),
 		};
@@ -935,7 +943,6 @@ export class GraphQLSuiClient extends SuiClient {
 	override async devInspectTransactionBlock(
 		input: DevInspectTransactionBlockParams,
 	): Promise<DevInspectResults> {
-		// TODO handle epoch
 		let devInspectTxBytes;
 		if (typeof input.transactionBlock === 'string') {
 			devInspectTxBytes = input.transactionBlock;
