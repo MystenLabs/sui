@@ -29,9 +29,8 @@ $ psql "postgres://postgres:postgrespw@localhost:5432/postgres" \
 
 # Running Locally
 
-When running the tests locally, they need to be run serially (one at a time),
-and with the `pg_integration` feature enabled:
+When running the tests locally, they must be run with the `pg_integration` feature enabled:
 
 ```sh
-$ cargo nextest run -j 1 --features pg_integration
+$ cargo nextest run --features pg_integration
 ```
