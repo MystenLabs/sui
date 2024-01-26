@@ -227,7 +227,7 @@ impl PTB {
             .collect::<Vec<_>>();
         if ignore_comments.iter().any(|x| x.contains("#")) {
             return Err(anyhow!(
-                "Found inlined comments in file {filename}, which are not allowed."
+                "Found inlined comments in file {filename}, which are not allowed. Only line comments are supported."
             ));
         }
 
