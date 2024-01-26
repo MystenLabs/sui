@@ -201,7 +201,9 @@ impl ExecutorCluster {
             .await
             .unwrap();
 
-        let diff = checkpoint.saturating_sub(current_checkpoint.unwrap_or(0)).max(1);
+        let diff = checkpoint
+            .saturating_sub(current_checkpoint.unwrap_or(0))
+            .max(1);
         let timeout = base_timeout.mul_f64(diff as f64);
 
         tokio::time::timeout(timeout, async {
