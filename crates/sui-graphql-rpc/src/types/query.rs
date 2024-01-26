@@ -12,6 +12,7 @@ use sui_sdk::SuiClient;
 use sui_types::transaction::{TransactionData, TransactionKind};
 use sui_types::{gas_coin::GAS, transaction::TransactionDataAPI, TypeTag};
 
+use super::suins_registration::NameService;
 use super::{
     address::Address,
     available_range::AvailableRange,
@@ -29,7 +30,7 @@ use super::{
     owner::Owner,
     protocol_config::ProtocolConfigs,
     sui_address::SuiAddress,
-    suins_registration::{Domain, SuinsRegistration},
+    suins_registration::Domain,
     transaction_block::{self, TransactionBlock, TransactionBlockFilter},
     transaction_metadata::TransactionMetadata,
     type_filter::ExactTypeFilter,
@@ -420,7 +421,7 @@ impl Query {
     ) -> Result<Option<Address>> {
         let CheckpointViewedAt(checkpoint_viewed_at) = *ctx.data()?;
         Ok(
-            SuinsRegistration::resolve_to_record(ctx, &domain, Some(checkpoint_viewed_at))
+            NameService::resolve_to_record(ctx, &domain, Some(checkpoint_viewed_at))
                 .await
                 .extend()?
                 .and_then(|r| r.target_address)
