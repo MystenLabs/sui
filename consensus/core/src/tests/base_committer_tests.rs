@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
@@ -10,7 +10,7 @@ use tracing::info;
 use crate::{
     base_committer::base_committer_builder::BaseCommitterBuilder,
     block::{BlockAPI, TestBlock, Transaction, VerifiedBlock},
-    commit::{LeaderStatus, DEFAULT_WAVE_LENGTH},
+    commit::LeaderStatus,
     context::Context,
     dag_state::DagState,
     storage::mem_store::MemStore,
@@ -22,7 +22,7 @@ use crate::{
 fn try_direct_commit() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(Some(4)));
+    let context = Arc::new(Context::new_for_test(4));
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
@@ -33,18 +33,20 @@ fn try_direct_commit() {
     // so that we have 2 completed waves and one incomplete wave.
     // note: rounds & waves are zero indexed.
     let num_rounds_in_dag = 8;
-    let voting_round_wave_2 = num_rounds_in_dag - 1;
-    let wave_length = DEFAULT_WAVE_LENGTH;
+    let voting_round_wave_2 = committer.leader_round(2) + 1;
     let incomplete_wave_leader_round = 6;
     build_dag(context, dag_state, None, voting_round_wave_2);
 
     // Leader rounds are the first rounds of each wave. In this case rounds 0, 3 & 6.
-    let leader_rounds = (0..num_rounds_in_dag)
-        .step_by(wave_length as usize)
-        .collect::<Vec<u32>>();
+    let mut leader_rounds: Vec<u32> = (0..num_rounds_in_dag)
+        .map(|r| committer.leader_round(r))
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
 
     // Iterate from highest leader round first
-    for round in leader_rounds.into_iter().rev() {
+    leader_rounds.sort_by(|a, b| b.cmp(a));
+    for round in leader_rounds.into_iter() {
         let leader = committer
             .elect_leader(round)
             .expect("should have elected leader");
@@ -76,7 +78,7 @@ fn try_direct_commit() {
 fn idempotence() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(Some(4)));
+    let context = Arc::new(Context::new_for_test(4));
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
@@ -85,11 +87,11 @@ fn idempotence() {
 
     // Build fully connected dag with empty blocks. Adding 5 rounds to the dag
     // aka thte decision round of wave 1.
-    let decision_round_wave_1 = 5;
+    let decision_round_wave_1 = committer.decision_round(1);
     build_dag(context, dag_state, None, decision_round_wave_1);
 
     // Commit one leader.
-    let leader_round_wave_1 = 3;
+    let leader_round_wave_1 = committer.leader_round(1);
     let leader = committer
         .elect_leader(leader_round_wave_1)
         .expect("should have elected leader");
@@ -120,19 +122,17 @@ fn idempotence() {
 fn multiple_direct_commit() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(Some(4)));
+    let context = Arc::new(Context::new_for_test(4));
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
     )));
     let committer = BaseCommitterBuilder::new(context.clone(), dag_state.clone()).build();
 
-    let wave_length = DEFAULT_WAVE_LENGTH;
     let mut ancestors = None;
-
     for n in 1..=10 {
         // note: rounds are zero indexed.
-        let decision_round = (wave_length * n) - 1;
+        let decision_round = committer.decision_round(n);
         ancestors = Some(build_dag(
             context.clone(),
             dag_state.clone(),
@@ -142,7 +142,7 @@ fn multiple_direct_commit() {
 
         // Leader round is the first round of each wave.
         // note: rounds are zero indexed.
-        let leader_round = wave_length * (n - 1);
+        let leader_round = committer.leader_round(n);
         let leader = committer
             .elect_leader(leader_round)
             .expect("should have elected leader");
@@ -163,7 +163,7 @@ fn multiple_direct_commit() {
 fn direct_skip() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(Some(4)));
+    let context = Arc::new(Context::new_for_test(4));
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
@@ -171,7 +171,7 @@ fn direct_skip() {
     let committer = BaseCommitterBuilder::new(context.clone(), dag_state.clone()).build();
 
     // Add enough blocks to reach the leader round of wave 1.
-    let leader_round_wave_1 = 3;
+    let leader_round_wave_1 = committer.leader_round(1);
     let references_leader_round_wave_1 = build_dag(
         context.clone(),
         dag_state.clone(),
@@ -190,7 +190,7 @@ fn direct_skip() {
         .collect();
 
     // Add enough blocks to reach the decision round of wave 1.
-    let decision_round_wave_1 = 5;
+    let decision_round_wave_1 = committer.decision_round(1);
     build_dag(
         context.clone(),
         dag_state.clone(),
@@ -215,17 +215,15 @@ fn direct_skip() {
 fn indirect_commit() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(Some(4)));
+    let context = Arc::new(Context::new_for_test(4));
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
     )));
     let committer = BaseCommitterBuilder::new(context.clone(), dag_state.clone()).build();
 
-    let wave_length = DEFAULT_WAVE_LENGTH;
-
     // Add enough blocks to reach the leader round of wave 1.
-    let leader_round_wave_1 = 3;
+    let leader_round_wave_1 = committer.leader_round(1);
     let references_leader_round_wave_1 = build_dag(
         context.clone(),
         dag_state.clone(),
@@ -298,7 +296,7 @@ fn indirect_commit() {
 
     // Add enough blocks to decide the leader of wave 2 connecting to the references
     // manually constructed of the decision round of wave 1.
-    let decision_round_wave_2 = (3 * wave_length) - 1;
+    let decision_round_wave_2 = committer.decision_round(2);
     build_dag(
         context.clone(),
         dag_state.clone(),
@@ -308,7 +306,7 @@ fn indirect_commit() {
 
     // Try direct commit leader from wave 2 which should result in Commit
     let leader_wave_2 = committer
-        .elect_leader(2 * wave_length)
+        .elect_leader(committer.leader_round(2))
         .expect("should have elected leader");
     info!("Try direct commit for leader {leader_wave_2}");
     let leader_status = committer.try_direct_decide(leader_wave_2);
@@ -359,17 +357,15 @@ fn indirect_commit() {
 fn indirect_skip() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(Some(4)));
+    let context = Arc::new(Context::new_for_test(4));
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
     )));
     let committer = BaseCommitterBuilder::new(context.clone(), dag_state.clone()).build();
 
-    let wave_length = DEFAULT_WAVE_LENGTH;
-
     // Add enough blocks to reach the leader round of wave 2.
-    let leader_round_wave_2 = 2 * wave_length;
+    let leader_round_wave_2 = committer.leader_round(2);
     let references_leader_round_wave_2 = build_dag(
         context.clone(),
         dag_state.clone(),
@@ -415,7 +411,7 @@ fn indirect_skip() {
     ));
 
     // Add enough blocks to reach the decison round of wave 3.
-    let decision_round_wave_3 = (4 * wave_length) - 1;
+    let decision_round_wave_3 = committer.decision_round(3);
     build_dag(
         context.clone(),
         dag_state.clone(),
@@ -426,7 +422,7 @@ fn indirect_skip() {
     // Ensure we commit the leaders of wave 1 and 3 and skip the leader of wave 2
 
     // 1. Ensure we commit the leader of wave 3.
-    let leader_round_wave_3 = 3 * wave_length;
+    let leader_round_wave_3 = committer.leader_round(3);
     let leader_wave_3 = committer
         .elect_leader(leader_round_wave_3)
         .expect("should have elected leader");
@@ -471,7 +467,7 @@ fn indirect_skip() {
     };
 
     // Ensure we directly commit the leader of wave 1.
-    let leader_round_wave_1 = wave_length;
+    let leader_round_wave_1 = committer.leader_round(1);
     let leader_wave_1 = committer
         .elect_leader(leader_round_wave_1)
         .expect("should have elected leader");
@@ -491,17 +487,15 @@ fn indirect_skip() {
 fn undecided() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(Some(4)));
+    let context = Arc::new(Context::new_for_test(4));
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
     )));
     let committer = BaseCommitterBuilder::new(context.clone(), dag_state.clone()).build();
 
-    let wave_length = DEFAULT_WAVE_LENGTH;
-
     // Add enough blocks to reach the leader round of wave 1.
-    let leader_round_wave_1 = wave_length;
+    let leader_round_wave_1 = committer.leader_round(1);
     let references_leader_round_wave_1 = build_dag(
         context.clone(),
         dag_state.clone(),
@@ -525,6 +519,9 @@ fn undecided() {
         authorities.next().unwrap().0,
         references_leader_round_wave_1,
     )];
+
+    // Also to ensure we have < 2f+1 blames, we take less then that for connections (votes)
+    // without the leader of wave 1.
     let connections_without_leader_wave_1: Vec<_> = authorities
         .take((context.committee.quorum_threshold() - 1) as usize)
         .map(|authority| (authority.0, references_without_leader_wave_1.clone()))
@@ -538,7 +535,7 @@ fn undecided() {
         build_dag_layer(connections_voting_round_wave_1, dag_state.clone());
 
     // Add enough blocks to reach the decision round of wave 1.
-    let decision_round_wave_1 = (2 * wave_length) - 1;
+    let decision_round_wave_1 = committer.decision_round(1);
     build_dag(
         context.clone(),
         dag_state.clone(),
@@ -571,20 +568,22 @@ fn undecided() {
     };
 }
 
+// This test scenario has one authority that is acting in a byzantine manner. It
+// will be sending multiple different blocks to different validators for a round.
+// The commit rule should handle this and correctly commit the expected blocks.
 #[test]
-fn test_byzantine_validator() {
+fn test_byzantine_direct_commit() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(Some(4)));
+    let context = Arc::new(Context::new_for_test(4));
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
     )));
     let committer = BaseCommitterBuilder::new(context.clone(), dag_state.clone()).build();
-    let wave_length = DEFAULT_WAVE_LENGTH;
 
     // Add enough blocks to reach leader round of wave 4
-    let leader_round_wave_4 = 4 * wave_length;
+    let leader_round_wave_4 = committer.leader_round(4);
     let references_leader_round_wave_4 = build_dag(
         context.clone(),
         dag_state.clone(),
@@ -593,7 +592,7 @@ fn test_byzantine_validator() {
     );
 
     // Add blocks to reach voting round of wave 4
-    let voting_round_wave_4 = (4 * wave_length) + 1;
+    let voting_round_wave_4 = leader_round_wave_4 + 1;
     // This includes a "good vote" from validator C which is acting as a byzantine validator
     let good_references_voting_round_wave_4 = build_dag(
         context.clone(),

@@ -32,6 +32,7 @@ pub fn build_dag(
             start
         }
         None => {
+            // TODO: use dedicated method for creating genesis block
             let (references, genesis): (Vec<_>, Vec<_>) = context
                 .committee
                 .authorities()
@@ -71,6 +72,7 @@ pub fn build_dag(
     ancestors
 }
 
+// TODO: Add layer_round as input parameter so ancestors can be from any round.
 pub fn build_dag_layer(
     // A list of (authority, parents) pairs. For each authority, we add a block
     // linking to the specified parents.

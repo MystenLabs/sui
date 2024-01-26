@@ -182,6 +182,7 @@ impl AuthorityIndex {
     }
 }
 
+// TODO: re-evaluate formats for production debugging.
 impl Display for AuthorityIndex {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if self.value() < 26 {

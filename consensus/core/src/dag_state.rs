@@ -83,16 +83,16 @@ impl DagState {
     /// Accepts a block into DagState and keeps it in memory.
     pub(crate) fn accept_block(&mut self, block: VerifiedBlock) {
         let block_ref = block.reference();
-        // Ensure we don't write multiple unique blocks per slot for our own index
+
+        // TODO: Move this check to core
+        // Ensure we don't write multiple blocks per slot for our own index
         if block_ref.author == self.context.own_index {
             let existing_blocks = self.get_uncommitted_blocks_at_slot(block_ref.into());
-            if let Some(existing_block) = existing_blocks.first() {
-                assert!(
-                    existing_block.reference() == block.reference(),
-                    "Block Rejected! Attempted to add block {block} to own slot where \
-                block(s) {existing_block} already exists."
-                );
-            }
+            assert!(
+                existing_blocks.is_empty(),
+                "Block Rejected! Attempted to add block {block} to own slot where \
+                block(s) {existing_blocks:#?} already exists."
+            );
         }
         self.recent_blocks.insert(block_ref, block);
         self.cached_refs[block_ref.author].insert(block_ref);
@@ -115,6 +115,7 @@ impl DagState {
     /// Gets all uncommitted blocks in a slot.
     /// Uncommitted blocks must exist in memory, so only in-memory blocks are checked.
     pub(crate) fn get_uncommitted_blocks_at_slot(&self, slot: Slot) -> Vec<VerifiedBlock> {
+        // TODO: evauluate if we should panic `if slot.round <= last_commit_round`
         let mut blocks = vec![];
         for (block_ref, block) in self.recent_blocks.range((
             Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
@@ -215,7 +216,7 @@ mod test {
 
     #[test]
     fn get_unncommitted_blocks() {
-        let context = Arc::new(Context::new_for_test(None));
+        let context = Arc::new(Context::new_for_test(4));
         let store = Arc::new(MemStore::new());
         let mut dag_state = DagState::new(context.clone(), store.clone());
         let own_index = AuthorityIndex::new_for_test(0);
@@ -321,7 +322,7 @@ mod test {
     #[test]
     fn ancestors_at_uncommitted_round() {
         // Initialize DagState.
-        let context = Arc::new(Context::new_for_test(None));
+        let context = Arc::new(Context::new_for_test(4));
         let store = Arc::new(MemStore::new());
         let mut dag_state = DagState::new(context.clone(), store.clone());
 

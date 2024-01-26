@@ -183,6 +183,7 @@ impl BlockRef {
     }
 }
 
+// TODO: re-evaluate formats for production debugging.
 impl fmt::Display for BlockRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "{}{}({})", self.author, self.round, self.digest)
@@ -271,6 +272,7 @@ impl From<BlockRef> for Slot {
     }
 }
 
+// TODO: re-evaluate formats for production debugging.
 impl fmt::Display for Slot {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}{}", self.authority, self.round,)
@@ -405,6 +407,7 @@ impl fmt::Display for VerifiedBlock {
     }
 }
 
+// TODO: re-evaluate formats for production debugging.
 impl fmt::Debug for VerifiedBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
