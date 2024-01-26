@@ -266,6 +266,8 @@ pub struct AuthorityMetrics {
     /// Count of multisig signatures
     pub multisig_sig_count: IntCounter,
 
+    // Tracks recent average txn queueing delay between when it is ready for execution
+    // until it starts executing.
     pub execution_queueing_latency: LatencyObserver,
 }
 

@@ -29,7 +29,7 @@ mod execution_driver_tests;
 // to be retried.
 pub const EXECUTION_MAX_ATTEMPTS: u32 = 10;
 const EXECUTION_FAILURE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
-const QUEUEING_DELAY_SAMPLING_RATIO: f64 = 0.1;
+const QUEUEING_DELAY_SAMPLING_RATIO: f64 = 0.05;
 
 /// When a notification that a new pending transaction is received we activate
 /// processing the transaction in a loop.
