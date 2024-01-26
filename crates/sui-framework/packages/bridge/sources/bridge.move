@@ -4,11 +4,10 @@
 module bridge::bridge {
     use std::option;
     use std::option::{none, Option, some};
-    use std::type_name;
-    use std::type_name::TypeName;
 
     use sui::address;
     use sui::balance;
+    use sui::clock::Clock;
     use sui::coin::{Self, Coin};
     use sui::event::emit;
     use sui::linked_table::{Self, LinkedTable};
@@ -17,7 +16,8 @@ module bridge::bridge {
     use sui::tx_context::{Self, TxContext};
     use sui::vec_map::{Self, VecMap};
     use sui::versioned::{Self, Versioned};
-    use bridge::chain_ids::BridgeRoute;
+    use bridge::limiter;
+    use bridge::limiter::TransferLimiter;
 
     use bridge::chain_ids;
     use bridge::committee::{Self, BridgeCommittee};
@@ -40,9 +40,7 @@ module bridge::bridge {
         // Bridge treasury for mint/burn bridged tokens
         treasury: BridgeTreasury,
         bridge_records: LinkedTable<BridgeMessageKey, BridgeRecord>,
-        transfer_limits: VecMap<TypeName, VecMap<BridgeRoute, u64>>,
-        // Per epoch transfer audit
-        transfer_audit: LinkedTable<u64, VecMap<TypeName, VecMap<BridgeRoute, u64>>>,
+        limiter: TransferLimiter,
         frozen: bool,
     }
 
@@ -79,7 +77,6 @@ module bridge::bridge {
     const ERecordAlreadyExists: u64 = 9;
     const EBridgeUnavailable: u64 = 10;
     const EUnexpectedOperation: u64 = 11;
-    const ETransferAmountExceedLimit: u64 = 12;
 
     const EInvariantSuiInitializedTokenTransferShouldNotBeClaimed: u64 = 13;
     const EMessageNotFoundInRecords: u64 = 14;
@@ -102,9 +99,6 @@ module bridge::bridge {
         message_key: BridgeMessageKey,
     }
 
-    // TODO: Make this configurable
-    const DEFAULT_TRANSFER_LIMIT: u64 = 18_446_744_073_709_551_615;
-
     // this method is called once in end of epoch tx to create the bridge
     #[allow(unused_function)]
     fun create(id: UID, chain_id: u8, ctx: &mut TxContext) {
@@ -116,8 +110,8 @@ module bridge::bridge {
             committee: committee::create(ctx),
             treasury: treasury::create(ctx),
             bridge_records: linked_table::new(ctx),
-            transfer_limits: vec_map::empty(),
-            transfer_audit: linked_table::new(ctx),
+            // TODO: set transfer limit
+            limiter: limiter::new(vec_map::empty()),
             frozen: false,
         };
         let bridge = Bridge {
@@ -154,6 +148,7 @@ module bridge::bridge {
 
     // Create bridge request to send token to other chain, the request will be in pending state until approved
     public fun send_token<T>(
+        clock: &Clock,
         self: &mut Bridge,
         target_chain: u8,
         target_address: vector<u8>,
@@ -165,7 +160,7 @@ module bridge::bridge {
         assert!(!inner.frozen, EBridgeUnavailable);
         let amount = balance::value(coin::balance(&token));
         // Make sure transfer is within limit.
-        check_and_record_transfer<T>(inner, route, amount, ctx);
+        limiter::check_and_record_transfer<T>(clock, &mut inner.limiter, route, amount);
         let bridge_seq_num = next_seq_num(inner, message_types::token());
         let token_id = treasury::token_id<T>();
         let token_amount = balance::value(coin::balance(&token));
@@ -253,6 +248,7 @@ module bridge::bridge {
     // Claim token from approved bridge message
     // Returns Some(Coin) if coin can be claimed. If already claimed, return None
     fun claim_token_internal<T>(
+        clock: &Clock,
         self: &mut Bridge,
         source_chain: u8,
         bridge_seq_num: u64,
@@ -295,7 +291,7 @@ module bridge::bridge {
         assert!(treasury::token_id<T>() == message::token_type(&token_payload), EUnexpectedTokenType);
         let amount = message::token_amount(&token_payload);
         // Make sure transfer is within limit.
-        check_and_record_transfer<T>(inner, route, amount, ctx);
+        limiter::check_and_record_transfer<T>(clock, &mut inner.limiter, route, amount);
         // claim from treasury
         let token = treasury::mint<T>(&mut inner.treasury, amount, ctx);
         // Record changes
@@ -304,51 +300,17 @@ module bridge::bridge {
         (option::some(token), owner)
     }
 
-    fun check_and_record_transfer<T>(self: &mut BridgeInner, route: BridgeRoute, amount: u64, ctx: &TxContext) {
-        let coin_type = type_name::get<T>();
-
-        // Get current transferred amount
-        if (linked_table::contains(&self.transfer_audit, tx_context::epoch(ctx))) {
-            // Create audit entry for new epoch
-            linked_table::push_back(&mut self.transfer_audit, tx_context::epoch(ctx), vec_map::empty())
-        };
-        let audits = linked_table::borrow_mut(&mut self.transfer_audit, tx_context::epoch(ctx));
-
-        if (!vec_map::contains(audits, &coin_type)) {
-            vec_map::insert(audits, coin_type, vec_map::empty())
-        };
-
-        let audit = vec_map::get_mut(audits, &coin_type);
-
-        let transferred_amount = if (vec_map::contains(audit, &route)) {
-            let (_, amount) = vec_map::remove(audit, &route);
-            amount
-        }else {
-            0
-        };
-
-        // Check transfer amount is within limit
-        let transfer_limit = if (vec_map::contains(&self.transfer_limits, &coin_type)) {
-            let per_token_limit = vec_map::get(&self.transfer_limits, &coin_type);
-            if (vec_map::contains(per_token_limit, &route)) {
-                *vec_map::get(per_token_limit, &route)
-            } else {
-                DEFAULT_TRANSFER_LIMIT
-            }
-        } else {
-            DEFAULT_TRANSFER_LIMIT
-        };
-
-        assert!((transfer_limit - transferred_amount) >= amount, ETransferAmountExceedLimit);
-
-        // Record transfer amount
-        vec_map::insert(audit, route, transferred_amount + amount)
-    }
 
     // This function can only be called by the token recipient
     // Returns None if the token has already been claimed.
-    public fun claim_token<T>(self: &mut Bridge, source_chain: u8, bridge_seq_num: u64, ctx: &mut TxContext): Option<Coin<T>> {
-        let (token, owner) = claim_token_internal<T>(self, source_chain, bridge_seq_num, ctx);
+    public fun claim_token<T>(
+        clock: &Clock,
+        self: &mut Bridge,
+        source_chain: u8,
+        bridge_seq_num: u64,
+        ctx: &mut TxContext
+    ): Option<Coin<T>> {
+        let (token, owner) = claim_token_internal<T>(clock, self, source_chain, bridge_seq_num, ctx);
         // Only token owner can claim the token
         assert!(tx_context::sender(ctx) == owner, EUnauthorisedClaim);
         token
@@ -357,12 +319,13 @@ module bridge::bridge {
     // This function can be called by anyone to claim and transfer the token to the recipient
     // If the token has already been claimed, it will return instead of aborting.
     public fun claim_and_transfer_token<T>(
+        clock: &Clock,
         self: &mut Bridge,
         source_chain: u8,
         bridge_seq_num: u64,
         ctx: &mut TxContext
     ) {
-        let (token, owner) = claim_token_internal<T>(self, source_chain, bridge_seq_num, ctx);
+        let (token, owner) = claim_token_internal<T>(clock, self, source_chain, bridge_seq_num, ctx);
         if (option::is_none(&token)) {
             option::destroy_none(token);
             return
