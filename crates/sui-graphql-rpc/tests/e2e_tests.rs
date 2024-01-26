@@ -32,8 +32,6 @@ mod tests {
         let cluster =
             sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
 
-        // Wait for servers to start and catchup
-
         let query = r#"
             {
                 chainIdentifier

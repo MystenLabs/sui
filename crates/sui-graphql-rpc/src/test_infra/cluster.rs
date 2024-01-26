@@ -69,7 +69,6 @@ pub async fn start_cluster(
     let fn_rpc_url = val_fn.rpc_url().to_string();
     let graphql_server_handle =
         start_graphql_server_with_fn_rpc(graphql_connection_config.clone(), Some(fn_rpc_url)).await;
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     let server_url = format!(
         "http://{}:{}/",
@@ -78,6 +77,7 @@ pub async fn start_cluster(
 
     // Starts graphql client
     let client = SimpleClient::new(server_url);
+    wait_for_graphql_server(&client).await;
 
     Cluster {
         validator_fullnode_handle: val_fn,
@@ -116,7 +116,6 @@ pub async fn serve_executor(
 
     // Starts graphql server
     let graphql_server_handle = start_graphql_server(graphql_connection_config.clone()).await;
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     let server_url = format!(
         "http://{}:{}/",
@@ -125,6 +124,7 @@ pub async fn serve_executor(
 
     // Starts graphql client
     let client = SimpleClient::new(server_url);
+    wait_for_graphql_server(&client).await;
 
     ExecutorCluster {
         executor_server_handle,
@@ -182,17 +182,29 @@ async fn start_validator_with_fullnode(internal_data_source_rpc_port: Option<u16
     test_cluster_builder.build().await
 }
 
+/// Repeatedly ping the GraphQL server for 10s, until it responds
+async fn wait_for_graphql_server(client: &SimpleClient) {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while client.ping().await.is_err() {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+    })
+    .await
+    .expect("Timeout waiting for graphql server to start");
+}
+
 impl ExecutorCluster {
     pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
         let current_checkpoint = self
             .indexer_store
             .get_latest_tx_checkpoint_sequence_number()
             .await
-            .unwrap()
             .unwrap();
 
-        let checkpoint_diff = std::cmp::max(1, checkpoint.saturating_sub(current_checkpoint));
-        let timeout = base_timeout.mul_f64(checkpoint_diff as f64);
+        let diff = checkpoint
+            .saturating_sub(current_checkpoint.unwrap_or(0))
+            .max(1);
+        let timeout = base_timeout.mul_f64(diff as f64);
 
         tokio::time::timeout(timeout, async {
             while self
@@ -200,10 +212,9 @@ impl ExecutorCluster {
                 .get_latest_tx_checkpoint_sequence_number()
                 .await
                 .unwrap()
-                .unwrap()
-                < checkpoint
+                < Some(checkpoint)
             {
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                tokio::time::sleep(Duration::from_secs(1)).await;
             }
         })
         .await
@@ -225,10 +236,7 @@ impl ExecutorCluster {
 
         tokio::time::timeout(base_timeout, async {
             while latest_cp > latest_snapshot_cp + self.snapshot_config.snapshot_max_lag as u64 {
-                tokio::time::sleep(std::time::Duration::from_secs(
-                    self.snapshot_config.sleep_duration,
-                ))
-                .await;
+                tokio::time::sleep(Duration::from_secs(self.snapshot_config.sleep_duration)).await;
                 latest_snapshot_cp = self
                     .indexer_store
                     .get_latest_object_snapshot_checkpoint_sequence_number()

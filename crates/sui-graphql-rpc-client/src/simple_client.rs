@@ -103,6 +103,15 @@ impl SimpleClient {
         GraphqlResponse::from_resp(self.execute_impl(mutation, variables, vec![], true).await?)
             .await
     }
+
+    /// Send a request to the GraphQL server to check if it is alive.
+    pub async fn ping(&self) -> Result<(), ClientError> {
+        self.inner
+            .get(format!("{}/health", self.url))
+            .send()
+            .await?;
+        Ok(())
+    }
 }
 
 #[allow(clippy::type_complexity)]
