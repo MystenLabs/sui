@@ -408,6 +408,7 @@ jobs:
    services:
      postgres:
        image: postgres
+       command: -c 'max_connections=500'
        env:
          POSTGRES_PASSWORD: postgrespw
        options: >-
