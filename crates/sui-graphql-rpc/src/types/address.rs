@@ -170,6 +170,7 @@ impl From<&Address> for OwnerImpl {
     fn from(address: &Address) -> Self {
         OwnerImpl {
             address: address.address,
+            version: None,
             checkpoint_viewed_at: address.checkpoint_viewed_at,
         }
     }

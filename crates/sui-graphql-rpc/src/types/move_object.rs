@@ -41,7 +41,10 @@ pub(crate) struct MoveObject {
 /// Type to implement GraphQL fields that are shared by all MoveObjects.
 pub(crate) struct MoveObjectImpl<'o>(pub &'o MoveObject);
 
-pub(crate) struct MoveObjectDowncastError;
+pub(crate) enum MoveObjectDowncastError {
+    WrappedOrDeleted,
+    NotAMoveObject,
+}
 
 /// This interface is implemented by types that represent a Move object on-chain (A Move value whose
 /// type has `key`).
@@ -413,9 +416,13 @@ impl MoveObject {
             return Ok(None);
         };
 
-        Ok(Some(MoveObject::try_from(&object).map_err(|_| {
-            Error::Internal(format!("{address} is not an object"))
-        })?))
+        match MoveObject::try_from(&object) {
+            Ok(object) => Ok(Some(object)),
+            Err(MoveObjectDowncastError::WrappedOrDeleted) => Ok(None),
+            Err(MoveObjectDowncastError::NotAMoveObject) => {
+                Err(Error::Internal(format!("{address} is not a Move object")))?
+            }
+        }
     }
 
     /// Query the database for a `page` of Move objects, optionally `filter`-ed.
@@ -447,7 +454,7 @@ impl TryFrom<&Object> for MoveObject {
 
     fn try_from(object: &Object) -> Result<Self, Self::Error> {
         let Some(native) = object.native_impl() else {
-            return Err(MoveObjectDowncastError);
+            return Err(MoveObjectDowncastError::WrappedOrDeleted);
         };
 
         if let Data::Move(move_object) = &native.data {
@@ -456,7 +463,7 @@ impl TryFrom<&Object> for MoveObject {
                 native: move_object.clone(),
             })
         } else {
-            Err(MoveObjectDowncastError)
+            Err(MoveObjectDowncastError::NotAMoveObject)
         }
     }
 }
