@@ -942,6 +942,7 @@ impl CheckpointBuilder {
             .collect();
         let transactions_and_sizes = self
             .state
+            .get_cache_reader()
             .get_transactions_and_serialized_sizes(&all_digests)?;
         let mut all_effects_and_transaction_sizes = Vec::with_capacity(all_effects.len());
         let mut transaction_keys = Vec::new();
