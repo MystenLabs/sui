@@ -7,7 +7,7 @@ use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 
 use crate::{
-    block::{BlockRef, Round, TestBlock, VerifiedBlock},
+    block::{Block, BlockRef, Round, TestBlock, VerifiedBlock},
     context::Context,
     dag_state::DagState,
 };
@@ -32,17 +32,9 @@ pub fn build_dag(
             start
         }
         None => {
-            // TODO: use dedicated method for creating genesis block
-            let (references, genesis): (Vec<_>, Vec<_>) = context
-                .committee
-                .authorities()
-                .map(|index| {
-                    let author_idx = index.0.value() as u32;
-                    let block = TestBlock::new(0, author_idx).build();
-                    VerifiedBlock::new_for_test(block)
-                })
-                .map(|block| (block.reference(), block))
-                .unzip();
+            let (my_genesis_block, mut genesis) = Block::genesis(context.clone());
+            genesis.insert(0, my_genesis_block);
+            let references = genesis.iter().map(|x| x.reference()).collect::<Vec<_>>();
             dag_state.write().accept_blocks(genesis);
 
             references
