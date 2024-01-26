@@ -38,6 +38,8 @@ pub struct SuiPublishArgs {
     pub upgradeable: bool,
     #[clap(long = "dependencies", num_args(1..))]
     pub dependencies: Vec<String>,
+    #[clap(long = "gas-price")]
+    pub gas_price: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -52,6 +54,16 @@ pub struct SuiInitArgs {
     pub shared_object_deletion: Option<bool>,
     #[clap(long = "simulator")]
     pub simulator: bool,
+    #[clap(long = "custom-validator-account")]
+    pub custom_validator_account: bool,
+    #[clap(long = "reference-gas-price")]
+    pub reference_gas_price: Option<u64>,
+    #[clap(long = "default-gas-price")]
+    pub default_gas_price: Option<u64>,
+    #[clap(long = "object-snapshot-min-checkpoint-lag")]
+    pub object_snapshot_min_checkpoint_lag: Option<usize>,
+    #[clap(long = "object-snapshot-max-checkpoint-lag")]
+    pub object_snapshot_max_checkpoint_lag: Option<usize>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -70,6 +82,8 @@ pub struct TransferObjectCommand {
     pub sender: Option<String>,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
+    #[clap(long = "gas-price")]
+    pub gas_price: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -113,6 +127,8 @@ pub struct UpgradePackageCommand {
     pub syntax: Option<SyntaxChoice>,
     #[clap(long = "policy", default_value="compatible", value_parser = parse_policy)]
     pub policy: u8,
+    #[clap(long = "gas-price")]
+    pub gas_price: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -144,8 +160,8 @@ pub struct RunGraphqlCommand {
     pub show_headers: bool,
     #[clap(long = "show-service-version")]
     pub show_service_version: bool,
-    #[clap(long = "variables", num_args(1..))]
-    pub variables: Vec<String>,
+    #[clap(long, num_args(1..))]
+    pub cursors: Vec<String>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -198,8 +214,6 @@ pub enum SuiSubcommand {
     ViewCheckpoint,
     #[clap(name = "run-graphql")]
     RunGraphql(RunGraphqlCommand),
-    #[clap(name = "view-graphql-variables")]
-    ViewGraphqlVariables,
 }
 
 #[derive(Clone, Debug)]
@@ -207,6 +221,7 @@ pub enum SuiExtraValueArgs {
     Object(FakeID, Option<SequenceNumber>),
     Digest(String),
     Receiving(FakeID, Option<SequenceNumber>),
+    ImmShared(FakeID, Option<SequenceNumber>),
 }
 
 pub enum SuiValue {
@@ -215,6 +230,7 @@ pub enum SuiValue {
     ObjVec(Vec<(FakeID, Option<SequenceNumber>)>),
     Digest(String),
     Receiving(FakeID, Option<SequenceNumber>),
+    ImmShared(FakeID, Option<SequenceNumber>),
 }
 
 impl SuiExtraValueArgs {
@@ -230,6 +246,13 @@ impl SuiExtraValueArgs {
     ) -> anyhow::Result<Self> {
         let (fake_id, version) = Self::parse_receiving_or_object_value(parser, "receiving")?;
         Ok(SuiExtraValueArgs::Receiving(fake_id, version))
+    }
+
+    fn parse_read_shared_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
+        parser: &mut MoveCLParser<'a, ValueToken, I>,
+    ) -> anyhow::Result<Self> {
+        let (fake_id, version) = Self::parse_receiving_or_object_value(parser, "immshared")?;
+        Ok(SuiExtraValueArgs::ImmShared(fake_id, version))
     }
 
     fn parse_digest_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
@@ -287,6 +310,7 @@ impl SuiValue {
             SuiValue::ObjVec(_) => panic!("unexpected nested Sui object vector in args"),
             SuiValue::Digest(_) => panic!("unexpected nested Sui package digest in args"),
             SuiValue::Receiving(_, _) => panic!("unexpected nested Sui receiving object in args"),
+            SuiValue::ImmShared(_, _) => panic!("unexpected nested Sui shared object in args"),
         }
     }
 
@@ -297,6 +321,7 @@ impl SuiValue {
             SuiValue::ObjVec(_) => panic!("unexpected nested Sui object vector in args"),
             SuiValue::Digest(_) => panic!("unexpected nested Sui package digest in args"),
             SuiValue::Receiving(_, _) => panic!("unexpected nested Sui receiving object in args"),
+            SuiValue::ImmShared(_, _) => panic!("unexpected nested Sui shared object in args"),
         }
     }
 
@@ -330,6 +355,27 @@ impl SuiValue {
         Ok(ObjectArg::Receiving(obj.compute_object_reference()))
     }
 
+    fn read_shared_arg(
+        fake_id: FakeID,
+        version: Option<SequenceNumber>,
+        test_adapter: &SuiTestAdapter,
+    ) -> anyhow::Result<ObjectArg> {
+        let obj = Self::resolve_object(fake_id, version, test_adapter)?;
+        let id = obj.id();
+        if let Owner::Shared {
+            initial_shared_version,
+        } = obj.owner
+        {
+            Ok(ObjectArg::SharedObject {
+                id,
+                initial_shared_version,
+                mutable: false,
+            })
+        } else {
+            bail!("{fake_id} is not a shared object.")
+        }
+    }
+
     fn object_arg(
         fake_id: FakeID,
         version: Option<SequenceNumber>,
@@ -360,6 +406,9 @@ impl SuiValue {
             SuiValue::MoveValue(v) => CallArg::Pure(v.simple_serialize().unwrap()),
             SuiValue::Receiving(fake_id, version) => {
                 CallArg::Object(Self::receiving_arg(fake_id, version, test_adapter)?)
+            }
+            SuiValue::ImmShared(fake_id, version) => {
+                CallArg::Object(Self::read_shared_arg(fake_id, version, test_adapter)?)
             }
             SuiValue::ObjVec(_) => bail!("obj vec is not supported as an input"),
             SuiValue::Digest(pkg) => {
@@ -401,6 +450,7 @@ impl ParsableValue for SuiExtraValueArgs {
             (ValueToken::Ident, "object") => Some(Self::parse_object_value(parser)),
             (ValueToken::Ident, "digest") => Some(Self::parse_digest_value(parser)),
             (ValueToken::Ident, "receiving") => Some(Self::parse_receiving_value(parser)),
+            (ValueToken::Ident, "immshared") => Some(Self::parse_read_shared_value(parser)),
             _ => None,
         }
     }
@@ -435,6 +485,7 @@ impl ParsableValue for SuiExtraValueArgs {
             SuiExtraValueArgs::Object(id, version) => Ok(SuiValue::Object(id, version)),
             SuiExtraValueArgs::Digest(pkg) => Ok(SuiValue::Digest(pkg)),
             SuiExtraValueArgs::Receiving(id, version) => Ok(SuiValue::Receiving(id, version)),
+            SuiExtraValueArgs::ImmShared(id, version) => Ok(SuiValue::ImmShared(id, version)),
         }
     }
 }

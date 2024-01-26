@@ -156,8 +156,12 @@ impl StoredTransaction {
                 .collect::<Result<Vec<Event>, IndexerError>>()?;
             let timestamp = self.timestamp_ms as u64;
             let tx_events = TransactionEvents { data: events };
-            let tx_events =
-                SuiTransactionBlockEvents::try_from(tx_events, tx_digest, Some(timestamp), module)?;
+            let tx_events = SuiTransactionBlockEvents::try_from_using_module_resolver(
+                tx_events,
+                tx_digest,
+                Some(timestamp),
+                module,
+            )?;
             Some(tx_events)
         } else {
             None
@@ -213,6 +217,7 @@ impl StoredTransaction {
             checkpoint: Some(self.checkpoint_sequence_number as u64),
             confirmed_local_execution: None,
             errors: vec![],
+            raw_effects: self.raw_effects,
         })
     }
 

@@ -2,6 +2,7 @@ ResolvedGraph {
     graph: DependencyGraph {
         root_path: "tests/test_sources/one_dep_assigned_address",
         root_package: "Root",
+        root_package_orig_name: "Root",
         package_graph: {
             "Root": [
                 (
@@ -21,7 +22,6 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/other_dep",
                 ),
-                version: None,
                 resolver: None,
             },
         },
@@ -29,7 +29,7 @@ ResolvedGraph {
             "OtherDep",
             "Root",
         },
-        manifest_digest: "4E7F1AB3DAE2E52F6D5C1C326BB270B2097D47C8964275046E002AB005B38E2B",
+        manifest_digest: "D1ED8F4323C1E149A29AEDE1E73EC97B117A39132914F088144621C5CD2E6059",
         deps_digest: "F8BBB0CCB2491CA29A3DF03D6F92277A4F3574266507ACD77214D37ECA3F3082",
     },
     build_options: BuildConfig {
@@ -58,11 +58,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "OtherDep",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -92,11 +87,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "Root",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -119,7 +109,6 @@ ResolvedGraph {
                                     ),
                                 },
                             ),
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },

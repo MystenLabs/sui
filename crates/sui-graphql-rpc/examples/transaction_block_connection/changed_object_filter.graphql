@@ -1,6 +1,6 @@
 # Filter on changedObject
 {
-  transactionBlockConnection(
+  transactionBlocks(
     filter: {
       changedObject: "0x0000000000000000000000000000000000000000000000000000000000000006"
     }

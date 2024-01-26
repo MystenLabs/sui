@@ -20,6 +20,6 @@
 	"references": [
 		{ "path": "./tsconfig.node.json" },
 		{ "path": "../../sdk/typescript" },
-		{ "path": "../../sdk/wallet-kit/react" }
+		{ "path": "../../sdk/dapp-kit" }
 	]
 }

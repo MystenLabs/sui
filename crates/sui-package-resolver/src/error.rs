@@ -43,8 +43,17 @@ pub enum Error {
     #[error("Struct not found: {0}::{1}::{2}")]
     StructNotFound(AccountAddress, String, String),
 
+    #[error("More than {0} struct definitions required to resolve type")]
+    TooManyTypeNodes(usize, usize),
+
+    #[error("Expected at most {0} type parameters, got {1}")]
+    TooManyTypeParams(usize, usize),
+
     #[error("Expected {0} type parameters, but got {1}")]
     TypeArityMismatch(usize, usize),
+
+    #[error("Type parameter nesting exceeded limit of {0}")]
+    TypeParamNesting(usize, usize),
 
     #[error("Type Parameter {0} out of bounds ({1})")]
     TypeParamOOB(u16, usize),
@@ -54,4 +63,10 @@ pub enum Error {
 
     #[error("Unexpected type: 'signer'.")]
     UnexpectedSigner,
+
+    #[error("Unexpected error: {0}")]
+    UnexpectedError(Box<dyn std::error::Error + Send + Sync + 'static>),
+
+    #[error("Type layout nesting exceeded limit of {0}")]
+    ValueNesting(usize),
 }

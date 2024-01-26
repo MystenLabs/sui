@@ -1,8 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import React from "react";
+import React, { useEffect } from "react";
 import Link from "@docusaurus/Link";
+
+import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
+import * as amplitude from "@amplitude/analytics-browser";
+
 export default function FooterLayout({ style, links, logo, copyright }) {
+  const { siteConfig } = useDocusaurusContext();
+
+  useEffect(() => {
+    amplitude.init(siteConfig.customFields.amplitudeKey, {
+      defaultTracking: true,
+    });
+  }, [siteConfig.customFields.amplitudeKey]);
+
+
   return (
     <footer className="px-2 pb-2 bg-sui-black">
       <div className="bg-sui-card-dark text-white rounded-sui flex flex-row flex-wrap-reverse">
@@ -82,7 +95,7 @@ export default function FooterLayout({ style, links, logo, copyright }) {
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
               >
-                <g clip-path="url(#clip0_1_2801)">
+                <g clipPath="url(#clip0_1_2801)">
                   <rect
                     x="0.432373"
                     width="35.48"
@@ -92,8 +105,8 @@ export default function FooterLayout({ style, links, logo, copyright }) {
                   />
                   <circle cx="18.1724" cy="17.74" r="17.74" fill="#4CA2FF" />
                   <path
-                    fill-rule="evenodd"
-                    clip-rule="evenodd"
+                    fillRule="evenodd"
+                    clipRule="evenodd"
                     d="M10.8632 25.0004H14.1599V14.3498H10.8632V25.0004ZM10.5464 10.9898C10.5464 12.0751 11.4192 12.955 12.4959 12.955C13.5725 12.955 14.4453 12.0751 14.4452 10.9898C14.4452 9.90441 13.5724 9.02454 12.4959 9.02454C11.4193 9.02454 10.5464 9.90441 10.5464 10.9898ZM23.2335 25.0004H26.5141L26.5142 18.2566C26.5142 15.4039 24.8975 14.0249 22.6391 14.0249C20.3807 14.0249 19.4296 15.7843 19.4296 15.7843V14.3498H16.2677V25.0004H19.4296V19.4097C19.4296 17.9119 20.119 17.0204 21.4386 17.0204C22.651 17.0204 23.2335 17.8763 23.2335 19.4097V25.0004Z"
                     fill="white"
                   />

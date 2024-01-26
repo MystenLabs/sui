@@ -5,6 +5,7 @@ const lightCodeTheme = require("prism-react-renderer/themes/github");
 const darkCodeTheme = require("prism-react-renderer/themes/nightOwl");
 const math = require("remark-math");
 const katex = require("rehype-katex");
+require("dotenv").config();
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
@@ -14,6 +15,9 @@ const config = {
   favicon: "img/favicon.ico",
   url: "https://docs.sui.io",
   baseUrl: "/",
+  customFields: {
+    amplitudeKey: process.env.AMPLITUDE_KEY,
+  },
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "throw",
   /*  i18n: {
@@ -34,6 +38,18 @@ const config = {
   },
   plugins: [
     // ....
+    [
+      "@graphql-markdown/docusaurus",
+      {
+        schema:
+          "../../crates/sui-graphql-rpc/schema/current_progress_schema.graphql",
+        rootPath: "../content", // docs will be generated under rootPath/baseURL
+        baseURL: "references/sui-api/graphql/reference",
+        loaders: {
+          GraphQLFileLoader: "@graphql-tools/graphql-file-loader",
+        },
+      },
+    ],
     [
       "docusaurus-plugin-includes",
       {

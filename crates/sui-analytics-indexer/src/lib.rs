@@ -4,12 +4,16 @@
 use std::ops::Range;
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use arrow_array::{Array, Int32Array};
 use clap::*;
+use gcp_bigquery_client::model::query_request::QueryRequest;
+use gcp_bigquery_client::Client;
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
 use object_store::path::Path;
 use serde::{Deserialize, Serialize};
+use snowflake_api::{QueryResult, SnowflakeApi};
 use strum_macros::EnumIter;
 use tracing::info;
 
@@ -79,6 +83,9 @@ pub struct AnalyticsIndexerConfig {
     /// Number of checkpoints to process before uploading to the datastore.
     #[clap(long, default_value = "10000", global = true)]
     pub checkpoint_interval: u64,
+    /// Maximum file size in mb before uploading to the datastore.
+    #[clap(long, default_value = "100", global = true)]
+    pub max_file_size_mb: u64,
     /// Checkpoint sequence number to start the download from
     #[clap(long, default_value = None, global = true)]
     pub starting_checkpoint_seq_num: Option<u64>,
@@ -106,6 +113,151 @@ pub struct AnalyticsIndexerConfig {
         default_value = "/opt/sui/db/package_cache"
     )]
     pub package_cache_path: PathBuf,
+    #[clap(long, default_value = None, global = true)]
+    pub bq_service_account_key_file: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub bq_project_id: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub bq_dataset_id: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub bq_table_id: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub bq_checkpoint_col_id: Option<String>,
+    #[clap(long, global = true)]
+    pub report_bq_max_table_checkpoint: bool,
+    #[clap(long, default_value = None, global = true)]
+    pub sf_account_identifier: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub sf_warehouse: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub sf_database: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub sf_schema: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub sf_username: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub sf_role: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub sf_password: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub sf_table_id: Option<String>,
+    #[clap(long, default_value = None, global = true)]
+    pub sf_checkpoint_col_id: Option<String>,
+    #[clap(long, global = true)]
+    pub report_sf_max_table_checkpoint: bool,
+}
+
+#[async_trait::async_trait]
+pub trait MaxCheckpointReader: Send + Sync + 'static {
+    async fn max_checkpoint(&self) -> Result<i64>;
+}
+
+struct SnowflakeMaxCheckpointReader {
+    query: String,
+    api: SnowflakeApi,
+}
+
+impl SnowflakeMaxCheckpointReader {
+    pub async fn new(
+        account_identifier: &str,
+        warehouse: &str,
+        database: &str,
+        schema: &str,
+        user: &str,
+        role: &str,
+        passwd: &str,
+        table_id: &str,
+        col_id: &str,
+    ) -> anyhow::Result<Self> {
+        let api = SnowflakeApi::with_password_auth(
+            account_identifier,
+            Some(warehouse),
+            Some(database),
+            Some(schema),
+            user,
+            Some(role),
+            passwd,
+        )
+        .expect("Failed to build sf api client");
+        Ok(SnowflakeMaxCheckpointReader {
+            query: format!("SELECT max({}) from {}", col_id, table_id),
+            api,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl MaxCheckpointReader for SnowflakeMaxCheckpointReader {
+    async fn max_checkpoint(&self) -> Result<i64> {
+        let res = self.api.exec(&self.query).await?;
+        match res {
+            QueryResult::Arrow(a) => {
+                if let Some(record_batch) = a.first() {
+                    let col = record_batch.column(0);
+                    let col_array = col
+                        .as_any()
+                        .downcast_ref::<Int32Array>()
+                        .expect("Failed to downcast arrow column");
+                    Ok(col_array.value(0) as i64)
+                } else {
+                    Ok(-1)
+                }
+            }
+            QueryResult::Json(_j) => Err(anyhow!("Unexpected query result")),
+            QueryResult::Empty => Err(anyhow!("Unexpected query result")),
+        }
+    }
+}
+
+struct BQMaxCheckpointReader {
+    query: String,
+    project_id: String,
+    client: Client,
+}
+
+impl BQMaxCheckpointReader {
+    pub async fn new(
+        key_path: &str,
+        project_id: &str,
+        dataset_id: &str,
+        table_id: &str,
+        col_id: &str,
+    ) -> anyhow::Result<Self> {
+        Ok(BQMaxCheckpointReader {
+            query: format!(
+                "SELECT max({}) from `{}.{}.{}`",
+                col_id, project_id, dataset_id, table_id
+            ),
+            client: Client::from_service_account_key_file(key_path).await?,
+            project_id: project_id.to_string(),
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl MaxCheckpointReader for BQMaxCheckpointReader {
+    async fn max_checkpoint(&self) -> Result<i64> {
+        let mut result = self
+            .client
+            .job()
+            .query(&self.project_id, QueryRequest::new(&self.query))
+            .await?;
+        if result.next_row() {
+            let max_checkpoint = result.get_i64(0)?.ok_or(anyhow!("No rows returned"))?;
+            Ok(max_checkpoint)
+        } else {
+            Ok(-1)
+        }
+    }
+}
+
+struct NoOpCheckpointReader;
+
+#[async_trait::async_trait]
+impl MaxCheckpointReader for NoOpCheckpointReader {
+    async fn max_checkpoint(&self) -> Result<i64> {
+        Ok(-1)
+    }
 }
 
 #[derive(
@@ -321,6 +473,7 @@ impl Processor {
     pub async fn new<S: Serialize + ParquetSchema + 'static>(
         handler: Box<dyn AnalyticsHandler<S>>,
         writer: Box<dyn AnalyticsWriter<S>>,
+        max_checkpoint_reader: Box<dyn MaxCheckpointReader>,
         starting_checkpoint_seq_num: CheckpointSequenceNumber,
         metrics: AnalyticsMetrics,
         config: AnalyticsIndexerConfig,
@@ -329,6 +482,7 @@ impl Processor {
             AnalyticsProcessor::new(
                 handler,
                 writer,
+                max_checkpoint_reader,
                 starting_checkpoint_seq_num,
                 metrics,
                 config,
@@ -373,6 +527,80 @@ pub async fn read_store_for_checkpoint(
     Ok(next_checkpoint_seq_num)
 }
 
+pub async fn make_max_checkpoint_reader(
+    config: &AnalyticsIndexerConfig,
+) -> Result<Box<dyn MaxCheckpointReader>> {
+    let res: Box<dyn MaxCheckpointReader> = if config.report_bq_max_table_checkpoint {
+        Box::new(
+            BQMaxCheckpointReader::new(
+                config
+                    .bq_service_account_key_file
+                    .as_ref()
+                    .ok_or(anyhow!("Missing gcp key file"))?,
+                config
+                    .bq_project_id
+                    .as_ref()
+                    .ok_or(anyhow!("Missing big query project id"))?,
+                config
+                    .bq_dataset_id
+                    .as_ref()
+                    .ok_or(anyhow!("Missing big query dataset id"))?,
+                config
+                    .bq_table_id
+                    .as_ref()
+                    .ok_or(anyhow!("Missing big query table id"))?,
+                config
+                    .bq_checkpoint_col_id
+                    .as_ref()
+                    .ok_or(anyhow!("Missing big query checkpoint col id"))?,
+            )
+            .await?,
+        )
+    } else if config.report_sf_max_table_checkpoint {
+        Box::new(
+            SnowflakeMaxCheckpointReader::new(
+                config
+                    .sf_account_identifier
+                    .as_ref()
+                    .ok_or(anyhow!("Missing sf account identifier"))?,
+                config
+                    .sf_warehouse
+                    .as_ref()
+                    .ok_or(anyhow!("Missing sf warehouse"))?,
+                config
+                    .sf_database
+                    .as_ref()
+                    .ok_or(anyhow!("Missing sf database"))?,
+                config
+                    .sf_schema
+                    .as_ref()
+                    .ok_or(anyhow!("Missing sf schema"))?,
+                config
+                    .sf_username
+                    .as_ref()
+                    .ok_or(anyhow!("Missing sf username"))?,
+                config.sf_role.as_ref().ok_or(anyhow!("Missing sf role"))?,
+                config
+                    .sf_password
+                    .as_ref()
+                    .ok_or(anyhow!("Missing sf password"))?,
+                config
+                    .sf_table_id
+                    .as_ref()
+                    .ok_or(anyhow!("Missing sf table id"))?,
+                config
+                    .sf_checkpoint_col_id
+                    .as_ref()
+                    .ok_or(anyhow!("Missing sf checkpoint col id"))?,
+            )
+            .await?,
+        )
+    } else {
+        Box::new(NoOpCheckpointReader {})
+    };
+    Ok(res)
+}
+
 pub async fn make_checkpoint_processor(
     config: AnalyticsIndexerConfig,
     metrics: AnalyticsMetrics,
@@ -385,9 +613,11 @@ pub async fn make_checkpoint_processor(
         FileType::Checkpoint,
         starting_checkpoint_seq_num,
     )?;
+    let max_checkpoint_reader = make_max_checkpoint_reader(&config).await?;
     Processor::new::<CheckpointEntry>(
         handler,
         writer,
+        max_checkpoint_reader,
         starting_checkpoint_seq_num,
         metrics,
         config,
@@ -407,9 +637,11 @@ pub async fn make_transaction_processor(
         FileType::Transaction,
         starting_checkpoint_seq_num,
     )?;
+    let max_checkpoint_reader = make_max_checkpoint_reader(&config).await?;
     Processor::new::<TransactionEntry>(
         handler,
         writer,
+        max_checkpoint_reader,
         starting_checkpoint_seq_num,
         metrics,
         config,
@@ -432,9 +664,11 @@ pub async fn make_object_processor(
         FileType::Object,
         starting_checkpoint_seq_num,
     )?;
+    let max_checkpoint_reader = make_max_checkpoint_reader(&config).await?;
     Processor::new::<ObjectEntry>(
         handler,
         writer,
+        max_checkpoint_reader,
         starting_checkpoint_seq_num,
         metrics,
         config,
@@ -454,9 +688,11 @@ pub async fn make_event_processor(
         get_starting_checkpoint_seq_num(config.clone(), FileType::Event).await?;
     let writer =
         make_writer::<EventEntry>(config.clone(), FileType::Event, starting_checkpoint_seq_num)?;
+    let max_checkpoint_reader = make_max_checkpoint_reader(&config).await?;
     Processor::new::<EventEntry>(
         handler,
         writer,
+        max_checkpoint_reader,
         starting_checkpoint_seq_num,
         metrics,
         config,
@@ -476,9 +712,11 @@ pub async fn make_transaction_objects_processor(
         FileType::TransactionObjects,
         starting_checkpoint_seq_num,
     )?;
+    let max_checkpoint_reader = make_max_checkpoint_reader(&config).await?;
     Processor::new::<TransactionObjectEntry>(
         handler,
         writer,
+        max_checkpoint_reader,
         starting_checkpoint_seq_num,
         metrics,
         config,
@@ -498,9 +736,11 @@ pub async fn make_move_package_processor(
         FileType::MovePackage,
         starting_checkpoint_seq_num,
     )?;
+    let max_checkpoint_reader = make_max_checkpoint_reader(&config).await?;
     Processor::new::<MovePackageEntry>(
         handler,
         writer,
+        max_checkpoint_reader,
         starting_checkpoint_seq_num,
         metrics,
         config,
@@ -520,9 +760,11 @@ pub async fn make_move_call_processor(
         FileType::MoveCall,
         starting_checkpoint_seq_num,
     )?;
+    let max_checkpoint_reader = make_max_checkpoint_reader(&config).await?;
     Processor::new::<MoveCallEntry>(
         handler,
         writer,
+        max_checkpoint_reader,
         starting_checkpoint_seq_num,
         metrics,
         config,

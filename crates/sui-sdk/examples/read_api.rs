@@ -51,7 +51,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let object = owned_objects
         .data
-        .get(0)
+        .first()
         .unwrap_or_else(|| panic!("No object data for this address {}", active_address));
     let object_data = object
         .data
@@ -125,6 +125,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 show_events: true,
                 show_object_changes: true,
                 show_balance_changes: true,
+                show_raw_effects: true,
             },
         )
         .await?;

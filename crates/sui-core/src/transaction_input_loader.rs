@@ -10,7 +10,6 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber, TransactionDigest},
     error::{SuiError, SuiResult, UserInputError},
-    fp_ensure,
     storage::{BackingPackageStore, GetSharedLocks, ObjectKey, ObjectStore},
     transaction::{
         InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
@@ -41,19 +40,9 @@ impl TransactionInputLoader {
         _tx_digest: &TransactionDigest,
         input_object_kinds: &[InputObjectKind],
         receiving_objects: &[ObjectRef],
-        protocol_config: &ProtocolConfig,
         epoch_id: EpochId,
     ) -> SuiResult<(InputObjects, ReceivingObjects)> {
-        fp_ensure!(
-            receiving_objects.len() + input_object_kinds.len()
-                <= protocol_config.max_input_objects() as usize,
-            UserInputError::SizeLimitExceeded {
-                limit: "maximum input and receiving objects in a transaction".to_string(),
-                value: protocol_config.max_input_objects().to_string()
-            }
-            .into()
-        );
-
+        // Length of input_object_kinds have beeen checked via validity_check() for ProgrammableTransaction.
         let mut input_results = vec![None; input_object_kinds.len()];
         let mut object_refs = Vec::with_capacity(input_object_kinds.len());
         let mut fetch_indices = Vec::with_capacity(input_object_kinds.len());
@@ -290,19 +279,10 @@ impl TransactionInputLoader {
         _tx_digest: Option<&TransactionDigest>,
         input_object_kinds: &[InputObjectKind],
         receiving_objects: &[ObjectRef],
-        protocol_config: &ProtocolConfig,
+        _protocol_config: &ProtocolConfig,
     ) -> SuiResult<(InputObjects, ReceivingObjects)> {
-        fp_ensure!(
-            receiving_objects.len() + input_object_kinds.len()
-                <= protocol_config.max_input_objects() as usize,
-            UserInputError::SizeLimitExceeded {
-                limit: "maximum input and receiving objects in a transaction".to_string(),
-                value: protocol_config.max_input_objects().to_string()
-            }
-            .into()
-        );
-
         let mut results = Vec::with_capacity(input_object_kinds.len());
+        // Length of input_object_kinds have beeen checked via validity_check() for ProgrammableTransaction.
         for kind in input_object_kinds {
             let obj = match kind {
                 InputObjectKind::MovePackage(id) => self

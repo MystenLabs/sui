@@ -38,9 +38,6 @@ module sui_system::sui_system_state_inner {
 
     const SYSTEM_STATE_VERSION_V1: u64 = 1;
 
-    // TODO: To suppress a false positive prover failure, which we should look into.
-    spec module { pragma verify = false; }
-
     /// A list of system config parameters.
     struct SystemParameters has store {
         /// The duration of an epoch, in milliseconds.
@@ -1053,6 +1050,7 @@ module sui_system::sui_system_state_inner {
         validator_set::active_validator_addresses(validator_set)
     }
 
+    #[lint_allow(self_transfer)]
     /// Extract required Balance from vector of Coin<SUI>, transfer the remainder back to sender.
     fun extract_coin_balance(coins: vector<Coin<SUI>>, amount: option::Option<u64>, ctx: &mut TxContext): Balance<SUI> {
         let merged_coin = vector::pop_back(&mut coins);

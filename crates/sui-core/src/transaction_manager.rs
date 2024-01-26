@@ -5,14 +5,13 @@ use std::{
     cmp::max,
     collections::{BTreeSet, HashMap, HashSet},
     sync::Arc,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use indexmap::IndexMap;
 use lru::LruCache;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::{base_types::TransactionDigest, error::SuiResult, fp_ensure};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
@@ -22,8 +21,10 @@ use sui_types::{
     storage::InputKey,
     transaction::{TransactionDataAPI, VerifiedCertificate},
 };
+use sui_types::{executable_transaction::VerifiedExecutableTransaction, fp_bail};
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{error, instrument, trace, warn};
+use tokio::time::Instant;
+use tracing::{error, info, instrument, trace, warn};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::{AuthorityMetrics, AuthorityStore};
@@ -54,23 +55,30 @@ pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 200;
 /// storage, committed objects and certificates are notified back to TransactionManager.
 pub struct TransactionManager {
     authority_store: Arc<AuthorityStore>,
-    tx_ready_certificates: UnboundedSender<(
-        VerifiedExecutableTransaction,
-        Option<TransactionEffectsDigest>,
-    )>,
+    tx_ready_certificates: UnboundedSender<PendingCertificate>,
     metrics: Arc<AuthorityMetrics>,
     inner: RwLock<Inner>,
 }
 
 #[derive(Clone, Debug)]
-struct PendingCertificate {
+pub struct PendingCertificateStats {
+    // The time this certificate enters transaction manager.
+    pub enqueue_time: Instant,
+    // The time this certificate becomes ready for execution.
+    pub ready_time: Option<Instant>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PendingCertificate {
     // Certified transaction to be executed.
-    certificate: VerifiedExecutableTransaction,
+    pub certificate: VerifiedExecutableTransaction,
     // When executing from checkpoint, the certified effects digest is provided, so that forks can
     // be detected prior to committing the transaction.
-    expected_effects_digest: Option<TransactionEffectsDigest>,
+    pub expected_effects_digest: Option<TransactionEffectsDigest>,
     // The input object this certifiate is waiting for to become available in order to be executed.
-    waiting_input_objects: BTreeSet<InputKey>,
+    pub waiting_input_objects: BTreeSet<InputKey>,
+    // Stores stats about this transaction.
+    pub stats: PendingCertificateStats,
 }
 
 struct CacheInner {
@@ -332,10 +340,7 @@ impl TransactionManager {
     pub(crate) fn new(
         authority_store: Arc<AuthorityStore>,
         epoch_store: &AuthorityPerEpochStore,
-        tx_ready_certificates: UnboundedSender<(
-            VerifiedExecutableTransaction,
-            Option<TransactionEffectsDigest>,
-        )>,
+        tx_ready_certificates: UnboundedSender<PendingCertificate>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
         let transaction_manager = TransactionManager {
@@ -530,12 +535,17 @@ impl TransactionManager {
         inner.available_objects_cache.disable_unbounded_cache();
 
         let mut pending = Vec::new();
+        let pending_cert_enqueue_time = Instant::now();
 
         for (cert, expected_effects_digest, input_object_keys) in certs {
             pending.push(PendingCertificate {
                 certificate: cert,
                 expected_effects_digest,
                 waiting_input_objects: input_object_keys,
+                stats: PendingCertificateStats {
+                    enqueue_time: pending_cert_enqueue_time,
+                    ready_time: None,
+                },
             });
         }
 
@@ -601,7 +611,7 @@ impl TransactionManager {
                         key
                     );
                     let input_txns = inner.input_objects.entry(key.id()).or_default();
-                    input_txns.insert(digest, Instant::now());
+                    input_txns.insert(digest, pending_cert_enqueue_time);
                 }
             }
 
@@ -611,6 +621,7 @@ impl TransactionManager {
                     .transaction_manager_num_enqueued_certificates
                     .with_label_values(&["ready"])
                     .inc();
+                pending_cert.stats.ready_time = Some(Instant::now());
                 // Send to execution driver for execution.
                 self.certificate_ready(&mut inner, pending_cert);
                 continue;
@@ -651,16 +662,18 @@ impl TransactionManager {
     ) {
         let mut inner = self.inner.write();
         let _scope = monitored_scope("TransactionManager::objects_available::wlock");
-        self.objects_available_locked(&mut inner, epoch_store, input_keys, true);
+        self.objects_available_locked(&mut inner, epoch_store, input_keys, true, Instant::now());
         inner.maybe_shrink_capacity();
     }
 
+    #[instrument(level = "trace", skip_all)]
     fn objects_available_locked(
         &self,
         inner: &mut Inner,
         epoch_store: &AuthorityPerEpochStore,
         input_keys: Vec<InputKey>,
         update_cache: bool,
+        available_time: Instant,
     ) {
         if inner.epoch != epoch_store.epoch() {
             warn!(
@@ -675,8 +688,10 @@ impl TransactionManager {
 
         for input_key in input_keys {
             trace!(?input_key, "object available");
-            for ready_cert in inner.find_ready_transactions(input_key, update_cache, &self.metrics)
+            for mut ready_cert in
+                inner.find_ready_transactions(input_key, update_cache, &self.metrics)
             {
+                ready_cert.stats.ready_time = Some(available_time);
                 self.certificate_ready(inner, ready_cert);
             }
         }
@@ -701,6 +716,7 @@ impl TransactionManager {
         epoch_store: &AuthorityPerEpochStore,
     ) {
         {
+            let commit_time = Instant::now();
             let mut inner = self.inner.write();
             let _scope = monitored_scope("TransactionManager::notify_commit::wlock");
 
@@ -709,7 +725,13 @@ impl TransactionManager {
                 return;
             }
 
-            self.objects_available_locked(&mut inner, epoch_store, output_object_keys, true);
+            self.objects_available_locked(
+                &mut inner,
+                epoch_store,
+                output_object_keys,
+                true,
+                commit_time,
+            );
 
             if !inner.executing_certificates.remove(digest) {
                 trace!("{:?} not found in executing certificates, likely because it is a system transaction", digest);
@@ -728,15 +750,13 @@ impl TransactionManager {
 
     /// Sends the ready certificate for execution.
     fn certificate_ready(&self, inner: &mut Inner, pending_certificate: PendingCertificate) {
-        let cert = pending_certificate.certificate;
-        let expected_effects_digest = pending_certificate.expected_effects_digest;
-        trace!(tx_digest = ?cert.digest(), "certificate ready");
+        trace!(tx_digest = ?pending_certificate.certificate.digest(), "certificate ready");
         assert_eq!(pending_certificate.waiting_input_objects.len(), 0);
         // Record as an executing certificate.
-        assert!(inner.executing_certificates.insert(*cert.digest()));
-        let _ = self
-            .tx_ready_certificates
-            .send((cert, expected_effects_digest));
+        assert!(inner
+            .executing_certificates
+            .insert(*pending_certificate.certificate.digest()));
+        let _ = self.tx_ready_certificates.send(pending_certificate);
         self.metrics.transaction_manager_num_ready.inc();
         self.metrics.execution_driver_dispatch_queue.inc();
     }
@@ -806,24 +826,27 @@ impl TransactionManager {
                 .collect(),
         ) {
             // When this occurs, most likely transactions piled up on a shared object.
-            fp_ensure!(
-                queue_len < MAX_PER_OBJECT_QUEUE_LENGTH,
-                SuiError::TooManyTransactionsPendingOnObject {
+            if queue_len >= MAX_PER_OBJECT_QUEUE_LENGTH {
+                info!(
+                    "Overload detected on object {:?} with {} pending transactions",
+                    object_id, queue_len
+                );
+                fp_bail!(SuiError::TooManyTransactionsPendingOnObject {
                     object_id,
                     queue_len,
                     threshold: MAX_PER_OBJECT_QUEUE_LENGTH,
-                }
-            );
+                });
+            }
             if let Some(age) = txn_age {
                 // Check that we don't have a txn that has been waiting for a long time in the queue.
-                fp_ensure!(
-                    age < txn_age_threshold,
-                    SuiError::TooOldTransactionPendingOnObject {
+                if age >= txn_age_threshold {
+                    info!("Overload detected on object {:?} with oldest transaction pending for {} secs", object_id, age.as_secs());
+                    fp_bail!(SuiError::TooOldTransactionPendingOnObject {
                         object_id,
                         txn_age_sec: age.as_secs(),
                         threshold: txn_age_threshold.as_secs(),
-                    }
-                );
+                    });
+                }
             }
         }
         Ok(())

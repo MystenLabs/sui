@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::progress_store::ExecutorProgress;
+use crate::reader::ENV_VAR_LOCAL_READ_TIMEOUT_MS;
 use crate::workers::Worker;
 use crate::{DataIngestionMetrics, FileProgressStore, IndexerExecutor, WorkerPool};
 use anyhow::Result;
@@ -28,7 +29,7 @@ async fn add_worker_pool<W: Worker + 'static>(
     worker: W,
     concurrency: usize,
 ) -> Result<()> {
-    let worker_pool = WorkerPool::new(worker, concurrency);
+    let worker_pool = WorkerPool::new(worker, "test".to_string(), concurrency);
     indexer.register(worker_pool).await?;
     Ok(())
 }
@@ -38,18 +39,27 @@ async fn run(
     path: Option<PathBuf>,
     duration: Option<Duration>,
 ) -> Result<ExecutorProgress> {
+    std::env::set_var(ENV_VAR_LOCAL_READ_TIMEOUT_MS, "10");
     let (sender, recv) = oneshot::channel();
-    match duration {
-        None => indexer.run(path.unwrap_or_else(temp_dir), recv).await,
+    let result = match duration {
+        None => {
+            indexer
+                .run(path.unwrap_or_else(temp_dir), None, vec![], 1, recv)
+                .await
+        }
         Some(duration) => {
             let handle = tokio::task::spawn(async move {
-                indexer.run(path.unwrap_or_else(temp_dir), recv).await
+                indexer
+                    .run(path.unwrap_or_else(temp_dir), None, vec![], 1, recv)
+                    .await
             });
             tokio::time::sleep(duration).await;
             drop(sender);
             handle.await?
         }
-    }
+    };
+    std::env::remove_var(ENV_VAR_LOCAL_READ_TIMEOUT_MS);
+    result
 }
 
 struct ExecutorBundle {
@@ -64,9 +74,6 @@ struct TestWorker;
 impl Worker for TestWorker {
     async fn process_checkpoint(&self, _checkpoint: CheckpointData) -> Result<()> {
         Ok(())
-    }
-    fn name(&self) -> &'static str {
-        "test"
     }
 }
 
@@ -93,7 +100,7 @@ async fn basic_flow() {
     }
     let result = run(bundle.executor, Some(path), Some(Duration::from_secs(1))).await;
     assert!(result.is_ok());
-    assert_eq!(result.unwrap().get(TestWorker.name()), Some(&20));
+    assert_eq!(result.unwrap().get("test"), Some(&20));
 }
 
 fn temp_dir() -> std::path::PathBuf {
@@ -107,8 +114,11 @@ fn create_executor_bundle() -> ExecutorBundle {
     let path = progress_file.path().to_path_buf();
     std::fs::write(path.clone(), "{}").unwrap();
     let progress_store = FileProgressStore::new(path);
-    let executor =
-        IndexerExecutor::new(progress_store, DataIngestionMetrics::new(&Registry::new()));
+    let executor = IndexerExecutor::new(
+        progress_store,
+        1,
+        DataIngestionMetrics::new(&Registry::new()),
+    );
     ExecutorBundle {
         executor,
         _progress_file: progress_file,

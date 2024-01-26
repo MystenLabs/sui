@@ -29,8 +29,8 @@ pub(crate) enum FunctionalGroup {
     /// Transaction and Event subscriptions.
     Subscriptions,
 
-    /// Information about the system that changes from epoch to epoch (protocol config, committee,
-    /// reference gas price).
+    /// Aspects that affect the running of the system that are managed by the
+    /// validators either directly, or through system transactions.
     SystemState,
 }
 
@@ -66,50 +66,42 @@ fn functional_groups() -> &'static BTreeMap<(&'static str, &'static str), Functi
     static GROUPS: Lazy<BTreeMap<(&str, &str), FunctionalGroup>> = Lazy::new(|| {
         BTreeMap::from_iter([
             (("Address", "balance"), G::Coins),
-            (("Address", "balanceConnection"), G::Coins),
-            (("Address", "coinConnection"), G::Coins),
-            (("Address", "defaultNameServiceName"), G::NameService),
-            // (("Address", "nameServiceConnection"), G::NameService),
+            (("Address", "balances"), G::Coins),
+            (("Address", "coins"), G::Coins),
+            (("Address", "defaultSuinsName"), G::NameService),
+            (("Address", "suinsRegistrations"), G::NameService),
             (("Checkpoint", "addressMetrics"), G::Analytics),
             (("Checkpoint", "networkTotalTransactions"), G::Analytics),
             (("Epoch", "protocolConfigs"), G::SystemState),
             (("Epoch", "referenceGasPrice"), G::SystemState),
             (("Epoch", "validatorSet"), G::SystemState),
-            (("SuiSystemStateSummary", "protocolConfigs"), G::SystemState),
-            (
-                ("SuiSystemStateSummary", "referenceGasPrice"),
-                G::SystemState,
-            ),
-            (("SuiSystemStateSummary", "safeMode"), G::SystemState),
-            (("SuiSystemStateSummary", "storageFund"), G::SystemState),
-            (
-                ("SuiSystemStateSummary", "systemParameters"),
-                G::SystemState,
-            ),
-            (
-                ("SuiSystemStateSummary", "systemStateVersion"),
-                G::SystemState,
-            ),
-            (("SuiSystemStateSummary", "validatorSet"), G::SystemState),
             (("Object", "balance"), G::Coins),
-            (("Object", "balanceConnection"), G::Coins),
-            (("Object", "coinConnection"), G::Coins),
-            (("Object", "defaultNameServiceName"), G::NameService),
+            (("Object", "balances"), G::Coins),
+            (("Object", "coins"), G::Coins),
+            (("Object", "defaultSuinsName"), G::NameService),
             (("Object", "dynamicField"), G::DynamicFields),
-            (("Object", "dynamicFieldConnection"), G::DynamicFields),
-            // (("Object", "nameServiceConnection"), G::NameService),
+            (("Object", "dynamicObjectField"), G::DynamicFields),
+            (("Object", "dynamicFields"), G::DynamicFields),
+            (("Object", "suinsRegistrations"), G::NameService),
             (("Owner", "balance"), G::Coins),
-            (("Owner", "balanceConnection"), G::Coins),
-            (("Owner", "coinConnection"), G::Coins),
-            (("Owner", "defaultNameServiceName"), G::NameService),
-            // (("Owner", "nameServiceConnection"), G::NameService),
+            (("Owner", "balances"), G::Coins),
+            (("Owner", "coins"), G::Coins),
+            (("Owner", "defaultSuinsName"), G::NameService),
+            (("Owner", "dynamicField"), G::DynamicFields),
+            (("Owner", "dynamicObjectField"), G::DynamicFields),
+            (("Owner", "dynamicFields"), G::DynamicFields),
+            (("Owner", "suinsRegistrations"), G::NameService),
             (("Query", "coinMetadata"), G::Coins),
             (("Query", "moveCallMetrics"), G::Analytics),
             (("Query", "networkMetrics"), G::Analytics),
             (("Query", "protocolConfig"), G::SystemState),
-            (("Query", "resolveNameServiceAddress"), G::NameService),
+            (("Query", "resolveSuinsAddress"), G::NameService),
             (("Subscription", "events"), G::Subscriptions),
             (("Subscription", "transactions"), G::Subscriptions),
+            (("SystemStateSummary", "safeMode"), G::SystemState),
+            (("SystemStateSummary", "storageFund"), G::SystemState),
+            (("SystemStateSummary", "systemParameters"), G::SystemState),
+            (("SystemStateSummary", "systemStateVersion"), G::SystemState),
         ])
     });
 

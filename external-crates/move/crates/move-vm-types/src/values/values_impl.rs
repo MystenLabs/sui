@@ -3608,7 +3608,7 @@ pub mod prop {
             L::Struct(struct_layout) => struct_layout
                 .fields()
                 .iter()
-                .map(|layout| value_strategy_with_layout(layout))
+                .map(value_strategy_with_layout)
                 .collect::<Vec<_>>()
                 .prop_map(move |vals| Value::struct_(Struct::pack(vals)))
                 .boxed(),

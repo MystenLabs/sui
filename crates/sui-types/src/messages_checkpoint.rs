@@ -30,7 +30,7 @@ use once_cell::sync::OnceCell;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use shared_crypto::intent::{Intent, IntentScope};
+use shared_crypto::intent::IntentScope;
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -55,10 +55,46 @@ pub struct CheckpointRequest {
     pub request_content: bool,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CheckpointRequestV2 {
+    /// if a sequence number is specified, return the checkpoint with that sequence number;
+    /// otherwise if None returns the latest checkpoint stored (authenticated or pending,
+    /// depending on the value of `certified` flag)
+    pub sequence_number: Option<CheckpointSequenceNumber>,
+    // A flag, if true also return the contents of the
+    // checkpoint besides the meta-data.
+    pub request_content: bool,
+    // If true, returns certified checkpoint, otherwise returns pending checkpoint
+    pub certified: bool,
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum CheckpointSummaryResponse {
+    Certified(CertifiedCheckpointSummary),
+    Pending(CheckpointSummary),
+}
+
+impl CheckpointSummaryResponse {
+    pub fn content_digest(&self) -> CheckpointContentsDigest {
+        match self {
+            Self::Certified(s) => s.content_digest,
+            Self::Pending(s) => s.content_digest,
+        }
+    }
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointResponse {
     pub checkpoint: Option<CertifiedCheckpointSummary>,
+    pub contents: Option<CheckpointContents>,
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CheckpointResponseV2 {
+    pub checkpoint: Option<CheckpointSummaryResponse>,
     pub contents: Option<CheckpointContents>,
 }
 
@@ -571,7 +607,6 @@ impl FullCheckpointContents {
                 100000000000,
                 100,
             ),
-            Intent::sui_transaction(),
             vec![&key],
         );
         let effects = TransactionEffects::new_with_tx(&transaction);
@@ -801,8 +836,8 @@ mod tests {
 
     // Tests that ConsensusCommitPrologue with different consensus commit digest will result in different checkpoint content.
     #[test]
-    fn test_checkpoing_summary_with_different_consensus_digest() {
-        // First, tests that same consensus commit digest will procude the same checkpoint content.
+    fn test_checkpoint_summary_with_different_consensus_digest() {
+        // First, tests that same consensus commit digest will produce the same checkpoint content.
         {
             let t1 = VerifiedTransaction::new_consensus_commit_prologue_v2(
                 1,
@@ -821,7 +856,7 @@ mod tests {
             assert_eq!(c1.digest(), c2.digest());
         }
 
-        // Next, tests that different consensus commit digests will procude the different checkpoint contents.
+        // Next, tests that different consensus commit digests will produce the different checkpoint contents.
         {
             let t1 = VerifiedTransaction::new_consensus_commit_prologue_v2(
                 1,

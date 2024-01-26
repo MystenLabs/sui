@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
+use crate::rocks::iter::{Iter, RevIter};
+use crate::rocks::safe_iter::{SafeIter, SafeRevIter};
 use crate::rocks::util::{is_ref_count_value, reference_count_merge_operator};
 use crate::{reopen, retry_transaction, retry_transaction_forever};
 use rstest::rstest;
@@ -10,6 +12,115 @@ fn temp_dir() -> std::path::PathBuf {
     tempfile::tempdir()
         .expect("Failed to open temporary directory")
         .into_path()
+}
+
+// A wrapper that holds different type of iterators for testing purpose. We use it to get same
+// typed key value paris from the database in parameterized tests, while varying different types
+// of underlying Iterator.
+enum TestIteratorWrapper<'a, K, V> {
+    Iter(Iter<'a, K, V>),
+    RevIter(RevIter<'a, K, V>),
+    SafeIter(SafeIter<'a, K, V>),
+    SafeRevIter(SafeRevIter<'a, K, V>),
+}
+
+// Implement Iterator for TestIteratorWrapper that returns the same type result for different types of Iterator.
+// For non-safe Iterator, it returns the key value pair. For SafeIterator, it consumes the result (assuming no error),
+// and return they key value pairs.
+impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for TestIteratorWrapper<'a, K, V> {
+    type Item = (K, V);
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            TestIteratorWrapper::Iter(iter) => iter.next(),
+            TestIteratorWrapper::RevIter(iter) => iter.next(),
+            TestIteratorWrapper::SafeIter(iter) => iter.next().map(|result| result.unwrap()),
+            TestIteratorWrapper::SafeRevIter(iter) => iter.next().map(|result| result.unwrap()),
+        }
+    }
+}
+
+// Creates an Iterator based on `use_safe_iter` on `db`.
+fn get_iter<K, V>(db: &DBMap<K, V>, use_safe_iter: bool) -> TestIteratorWrapper<'_, K, V>
+where
+    K: Serialize + DeserializeOwned,
+    V: Serialize + DeserializeOwned,
+{
+    match use_safe_iter {
+        true => TestIteratorWrapper::SafeIter(db.safe_iter()),
+        false => TestIteratorWrapper::Iter(db.unbounded_iter()),
+    }
+}
+
+// Creates an range bounded Iterator based on `use_safe_iter` on `db`.
+fn get_iter_with_bounds<K, V>(
+    db: &DBMap<K, V>,
+    lower_bound: Option<K>,
+    upper_bound: Option<K>,
+    use_safe_iter: bool,
+) -> TestIteratorWrapper<'_, K, V>
+where
+    K: Serialize + DeserializeOwned,
+    V: Serialize + DeserializeOwned,
+{
+    match use_safe_iter {
+        true => TestIteratorWrapper::SafeIter(db.safe_iter_with_bounds(lower_bound, upper_bound)),
+        false => TestIteratorWrapper::Iter(db.iter_with_bounds(lower_bound, upper_bound)),
+    }
+}
+
+// Creates an range Iterator based on `use_safe_iter` on `db`.
+fn get_range_iter<K, V>(
+    db: &DBMap<K, V>,
+    range: impl RangeBounds<K>,
+    use_safe_iter: bool,
+) -> TestIteratorWrapper<'_, K, V>
+where
+    K: Serialize + DeserializeOwned,
+    V: Serialize + DeserializeOwned,
+{
+    match use_safe_iter {
+        true => TestIteratorWrapper::SafeIter(db.safe_range_iter(range)),
+        false => TestIteratorWrapper::Iter(db.range_iter(range)),
+    }
+}
+
+impl<'a, K: Serialize, V> TestIteratorWrapper<'a, K, V> {
+    pub fn skip_to(self, key: &K) -> Result<Self, TypedStoreError> {
+        match self {
+            TestIteratorWrapper::Iter(iter) => Ok(TestIteratorWrapper::Iter(iter.skip_to(key)?)),
+            TestIteratorWrapper::SafeIter(iter) => {
+                Ok(TestIteratorWrapper::SafeIter(iter.skip_to(key)?))
+            }
+            _ => panic!("Not supported!"),
+        }
+    }
+    pub fn skip_prior_to(self, key: &K) -> Result<Self, TypedStoreError> {
+        match self {
+            TestIteratorWrapper::Iter(iter) => {
+                Ok(TestIteratorWrapper::Iter(iter.skip_prior_to(key)?))
+            }
+            TestIteratorWrapper::SafeIter(iter) => {
+                Ok(TestIteratorWrapper::SafeIter(iter.skip_prior_to(key)?))
+            }
+            _ => panic!("Not supported!"),
+        }
+    }
+    pub fn skip_to_last(self) -> Self {
+        match self {
+            TestIteratorWrapper::Iter(iter) => TestIteratorWrapper::Iter(iter.skip_to_last()),
+            TestIteratorWrapper::SafeIter(iter) => {
+                TestIteratorWrapper::SafeIter(iter.skip_to_last())
+            }
+            _ => panic!("Not supported!"),
+        }
+    }
+    pub fn reverse(self) -> Self {
+        match self {
+            TestIteratorWrapper::Iter(iter) => TestIteratorWrapper::RevIter(iter.reverse()),
+            TestIteratorWrapper::SafeIter(iter) => TestIteratorWrapper::SafeRevIter(iter.reverse()),
+            _ => panic!("Not supported!"),
+        }
+    }
 }
 
 #[rstest]
@@ -187,7 +298,10 @@ async fn test_chunked_multi_get(#[values(true, false)] is_transactional: bool) {
 
 #[rstest]
 #[tokio::test]
-async fn test_skip(#[values(true, false)] is_transactional: bool) {
+async fn test_skip(
+    #[values(true, false)] is_transactional: bool,
+    #[values(true, false)] use_safe_iter: bool,
+) {
     let db = open_map(temp_dir(), None, is_transactional);
 
     db.insert(&123, &"123".to_string())
@@ -198,10 +312,13 @@ async fn test_skip(#[values(true, false)] is_transactional: bool) {
         .expect("Failed to insert");
 
     // Skip all smaller
-    let key_vals: Vec<_> = db.safe_iter().skip_to(&456).expect("Seek failed").collect();
+    let key_vals: Vec<_> = get_iter(&db, use_safe_iter)
+        .skip_to(&456)
+        .expect("Seek failed")
+        .collect();
     assert_eq!(key_vals.len(), 2);
-    assert_eq!(key_vals[0], Ok((456, "456".to_string())));
-    assert_eq!(key_vals[1], Ok((789, "789".to_string())));
+    assert_eq!(key_vals[0], (456, "456".to_string()));
+    assert_eq!(key_vals[1], (789, "789".to_string()));
 
     // Skip all smaller: same for the keys iterator
     let keys: Vec<_> = db.keys().skip_to(&456).expect("Seek failed").collect();
@@ -211,7 +328,10 @@ async fn test_skip(#[values(true, false)] is_transactional: bool) {
 
     // Skip to the end
     assert_eq!(
-        db.safe_iter().skip_to(&999).expect("Seek failed").count(),
+        get_iter(&db, use_safe_iter)
+            .skip_to(&999)
+            .expect("Seek failed")
+            .count(),
         0
     );
     // same for the keys
@@ -219,15 +339,18 @@ async fn test_skip(#[values(true, false)] is_transactional: bool) {
 
     // Skip to last
     assert_eq!(
-        db.safe_iter().skip_to_last().next(),
-        Some(Ok((789, "789".to_string())))
+        get_iter(&db, use_safe_iter).skip_to_last().next(),
+        Some((789, "789".to_string()))
     );
     // same for the keys
     assert_eq!(db.keys().skip_to_last().next(), Some(Ok(789)));
 
     // Skip to successor of first value
     assert_eq!(
-        db.safe_iter().skip_to(&000).expect("Skip failed").count(),
+        get_iter(&db, use_safe_iter)
+            .skip_to(&000)
+            .expect("Skip failed")
+            .count(),
         3
     );
     assert_eq!(db.keys().skip_to(&000).expect("Skip failed").count(), 3);
@@ -235,7 +358,10 @@ async fn test_skip(#[values(true, false)] is_transactional: bool) {
 
 #[rstest]
 #[tokio::test]
-async fn test_skip_to_previous_simple(#[values(true, false)] is_transactional: bool) {
+async fn test_skip_to_previous_simple(
+    #[values(true, false)] is_transactional: bool,
+    #[values(true, false)] use_safe_iter: bool,
+) {
     let db = open_map(temp_dir(), None, is_transactional);
 
     db.insert(&123, &"123".to_string())
@@ -246,13 +372,12 @@ async fn test_skip_to_previous_simple(#[values(true, false)] is_transactional: b
         .expect("Failed to insert");
 
     // Skip to the one before the end
-    let key_vals: Vec<_> = db
-        .safe_iter()
+    let key_vals: Vec<_> = get_iter(&db, use_safe_iter)
         .skip_prior_to(&999)
         .expect("Seek failed")
         .collect();
     assert_eq!(key_vals.len(), 1);
-    assert_eq!(key_vals[0], Ok((789, "789".to_string())));
+    assert_eq!(key_vals[0], (789, "789".to_string()));
     // Same for the keys iterator
     let keys: Vec<_> = db
         .keys()
@@ -265,7 +390,7 @@ async fn test_skip_to_previous_simple(#[values(true, false)] is_transactional: b
     // Skip to prior of first value
     // Note: returns an empty iterator!
     assert_eq!(
-        db.safe_iter()
+        get_iter(&db, use_safe_iter)
             .skip_prior_to(&000)
             .expect("Seek failed")
             .count(),
@@ -280,7 +405,10 @@ async fn test_skip_to_previous_simple(#[values(true, false)] is_transactional: b
 
 #[rstest]
 #[tokio::test]
-async fn test_iter_skip_to_previous_gap(#[values(true, false)] is_transactional: bool) {
+async fn test_iter_skip_to_previous_gap(
+    #[values(true, false)] is_transactional: bool,
+    #[values(true, false)] use_safe_iter: bool,
+) {
     let db = open_map(temp_dir(), None, is_transactional);
 
     for i in 1..100 {
@@ -290,12 +418,12 @@ async fn test_iter_skip_to_previous_gap(#[values(true, false)] is_transactional:
     }
 
     // Skip prior to will return an iterator starting with an "unexpected" key if the sought one is not in the table
-    let db_iter = db.safe_iter().skip_prior_to(&50).unwrap();
+    let db_iter = get_iter(&db, use_safe_iter).skip_prior_to(&50).unwrap();
 
     assert_eq!(
         (49..50)
             .chain(51..100)
-            .map(|i| Ok((i, i.to_string())))
+            .map(|i| (i, i.to_string()))
             .collect::<Vec<_>>(),
         db_iter.collect::<Vec<_>>()
     );
@@ -323,34 +451,44 @@ async fn test_remove(#[values(true, false)] is_transactional: bool) {
 
 #[rstest]
 #[tokio::test]
-async fn test_iter(#[values(true, false)] is_transactional: bool) {
+async fn test_iter(
+    #[values(true, false)] is_transactional: bool,
+    #[values(true, false)] use_safe_iter: bool,
+) {
     let db = open_map(temp_dir(), None, is_transactional);
     db.insert(&123456789, &"123456789".to_string())
         .expect("Failed to insert");
+    db.insert(&987654321, &"987654321".to_string())
+        .expect("Failed to insert");
 
-    let mut iter = db.safe_iter();
-    assert_eq!(Some(Ok((123456789, "123456789".to_string()))), iter.next());
+    let mut iter = get_iter(&db, use_safe_iter);
+
+    assert_eq!(Some((123456789, "123456789".to_string())), iter.next());
+    assert_eq!(Some((987654321, "987654321".to_string())), iter.next());
     assert_eq!(None, iter.next());
 }
 
 #[rstest]
 #[tokio::test]
-async fn test_iter_reverse(#[values(true, false)] is_transactional: bool) {
+async fn test_iter_reverse(
+    #[values(true, false)] is_transactional: bool,
+    #[values(true, false)] use_safe_iter: bool,
+) {
     let db = open_map(temp_dir(), None, is_transactional);
 
     db.insert(&1, &"1".to_string()).expect("Failed to insert");
     db.insert(&2, &"2".to_string()).expect("Failed to insert");
     db.insert(&3, &"3".to_string()).expect("Failed to insert");
 
-    let mut iter = db.safe_iter().skip_to_last().reverse();
-    assert_eq!(Some(Ok((3, "3".to_string()))), iter.next());
-    assert_eq!(Some(Ok((2, "2".to_string()))), iter.next());
-    assert_eq!(Some(Ok((1, "1".to_string()))), iter.next());
+    let mut iter = get_iter(&db, use_safe_iter).skip_to_last().reverse();
+    assert_eq!(Some((3, "3".to_string())), iter.next());
+    assert_eq!(Some((2, "2".to_string())), iter.next());
+    assert_eq!(Some((1, "1".to_string())), iter.next());
     assert_eq!(None, iter.next());
 
-    let mut iter = db.safe_iter().skip_to(&2).unwrap().reverse();
-    assert_eq!(Some(Ok((2, "2".to_string()))), iter.next());
-    assert_eq!(Some(Ok((1, "1".to_string()))), iter.next());
+    let mut iter = get_iter(&db, use_safe_iter).skip_to(&2).unwrap().reverse();
+    assert_eq!(Some((2, "2".to_string())), iter.next());
+    assert_eq!(Some((1, "1".to_string())), iter.next());
     assert_eq!(None, iter.next());
 }
 
@@ -582,7 +720,10 @@ async fn test_clear() {
 
 #[rstest]
 #[tokio::test]
-async fn test_iter_with_bounds(#[values(true, false)] is_transactional: bool) {
+async fn test_iter_with_bounds(
+    #[values(true, false)] is_transactional: bool,
+    #[values(true, false)] use_safe_iter: bool,
+) {
     let db = open_map(temp_dir(), None, is_transactional);
 
     // Add [1, 50) and (50, 100) in the db
@@ -592,9 +733,53 @@ async fn test_iter_with_bounds(#[values(true, false)] is_transactional: bool) {
         }
     }
 
+    // Tests basic bounded scan.
+    let db_iter = get_iter_with_bounds(&db, Some(20), Some(90), use_safe_iter);
+    assert_eq!(
+        (20..50)
+            .chain(51..90)
+            .map(|i| (i, i.to_string()))
+            .collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    // Don't specify upper bound.
+    let db_iter = get_iter_with_bounds(&db, Some(20), None, use_safe_iter);
+    assert_eq!(
+        (20..50)
+            .chain(51..100)
+            .map(|i| (i, i.to_string()))
+            .collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    // Don't specify lower bound.
+    let db_iter = get_iter_with_bounds(&db, None, Some(90), use_safe_iter);
+    assert_eq!(
+        (1..50)
+            .chain(51..90)
+            .map(|i| (i, i.to_string()))
+            .collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    // Don't specify any bounds.
+    let db_iter = get_iter_with_bounds(&db, None, None, use_safe_iter);
+    assert_eq!(
+        (1..50)
+            .chain(51..100)
+            .map(|i| (i, i.to_string()))
+            .collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    // Specify a bound outside of dataset.
+    let db_iter = db.iter_with_bounds(Some(200), Some(300));
+    assert!(db_iter.collect::<Vec<_>>().is_empty());
+
+    // Tests bounded scan with skip operation.
     // Skip prior to will return an iterator starting with an "unexpected" key if the sought one is not in the table
-    let db_iter = db
-        .iter_with_bounds(Some(1), Some(100))
+    let db_iter = get_iter_with_bounds(&db, Some(1), Some(100), use_safe_iter)
         .skip_prior_to(&50)
         .unwrap();
 
@@ -615,19 +800,22 @@ async fn test_iter_with_bounds(#[values(true, false)] is_transactional: bool) {
     );
 
     // Skip to a key which is not within the bounds (bound is [1, 50))
-    let db_iter = db.iter_with_bounds(Some(1), Some(50)).skip_to(&50).unwrap();
+    let db_iter = get_iter_with_bounds(&db, Some(1), Some(50), use_safe_iter)
+        .skip_to(&50)
+        .unwrap();
     assert_eq!(Vec::<(i32, String)>::new(), db_iter.collect::<Vec<_>>());
 
     // Skip to first key in the bound (bound is [1, 50))
-    let db_iter = db.iter_with_bounds(Some(1), Some(50)).skip_to(&1).unwrap();
+    let db_iter = get_iter_with_bounds(&db, Some(1), Some(50), use_safe_iter)
+        .skip_to(&1)
+        .unwrap();
     assert_eq!(
         (1..50).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
         db_iter.collect::<Vec<_>>()
     );
 
     // Skip to a key which is not within the bounds (bound is [1, 50))
-    let db_iter = db
-        .iter_with_bounds(Some(1), Some(50))
+    let db_iter = get_iter_with_bounds(&db, Some(1), Some(50), use_safe_iter)
         .skip_prior_to(&50)
         .unwrap();
     assert_eq!(vec![(49, "49".to_string())], db_iter.collect::<Vec<_>>());
@@ -635,7 +823,10 @@ async fn test_iter_with_bounds(#[values(true, false)] is_transactional: bool) {
 
 #[rstest]
 #[tokio::test]
-async fn test_range_iter(#[values(true, false)] is_transactional: bool) {
+async fn test_range_iter(
+    #[values(true, false)] is_transactional: bool,
+    #[values(true, false)] use_safe_iter: bool,
+) {
     let db = open_map(temp_dir(), None, is_transactional);
     let min = u64::MAX - 100;
     let max = u64::MAX;
@@ -644,7 +835,9 @@ async fn test_range_iter(#[values(true, false)] is_transactional: bool) {
             db.insert(&i, &i.to_string()).unwrap();
         }
     }
-    let db_iter = db.range_iter(min..=max).skip_prior_to(&(min + 50)).unwrap();
+    let db_iter = get_range_iter(&db, min..=max, use_safe_iter)
+        .skip_prior_to(&(min + 50))
+        .unwrap();
 
     assert_eq!(
         (min + 49..min + 50)
@@ -663,9 +856,32 @@ async fn test_range_iter(#[values(true, false)] is_transactional: bool) {
         }
     }
 
-    // Skip prior to will return an iterator starting with an "unexpected" key if the sought one is not in the table
-    let db_iter = db.range_iter(1..=99).skip_prior_to(&50).unwrap();
+    // Tests basic range iterating with inclusive end.
+    let db_iter = get_range_iter(&db, 10..=20, use_safe_iter);
+    assert_eq!(
+        (10..21).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
 
+    // Tests range with min start and exclusive end.
+    let db_iter = get_range_iter(&db, ..20, use_safe_iter);
+    assert_eq!(
+        (1..20).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    // Tests range with max end.
+    let db_iter = get_range_iter(&db, 60.., use_safe_iter);
+    assert_eq!(
+        (60..100).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
+
+    // Tests range with seek to the middle of the range.
+    // Skip prior to will return an iterator starting with an "unexpected" key if the sought one is not in the table
+    let db_iter = get_range_iter(&db, 1..=99, use_safe_iter)
+        .skip_prior_to(&50)
+        .unwrap();
     assert_eq!(
         (49..50)
             .chain(51..100)
@@ -674,8 +890,10 @@ async fn test_range_iter(#[values(true, false)] is_transactional: bool) {
         db_iter.collect::<Vec<_>>()
     );
 
-    let db_iter = db.range_iter(1..=99).skip_prior_to(&1).unwrap();
-
+    // Tests seeking to the beginning of the range.
+    let db_iter = get_range_iter(&db, 1..=99, use_safe_iter)
+        .skip_prior_to(&1)
+        .unwrap();
     assert_eq!(
         (1..50)
             .chain(51..100)
@@ -684,8 +902,9 @@ async fn test_range_iter(#[values(true, false)] is_transactional: bool) {
         db_iter.collect::<Vec<_>>()
     );
 
-    let db_iter = db.range_iter(2..=99).skip_prior_to(&2).unwrap();
-
+    let db_iter = get_range_iter(&db, 2..=99, use_safe_iter)
+        .skip_prior_to(&2)
+        .unwrap();
     assert_eq!(
         (2..50)
             .chain(51..100)
@@ -694,8 +913,18 @@ async fn test_range_iter(#[values(true, false)] is_transactional: bool) {
         db_iter.collect::<Vec<_>>()
     );
 
-    let db_iter = db.range_iter(2..99).skip_prior_to(&2).unwrap();
+    // Tests seeking to the end of the range.
+    let db_iter = get_range_iter(&db, 60..70, use_safe_iter)
+        .skip_prior_to(&200)
+        .unwrap();
+    assert_eq!(
+        (69..70).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
+        db_iter.collect::<Vec<_>>()
+    );
 
+    let db_iter = get_range_iter(&db, 2..99, use_safe_iter)
+        .skip_prior_to(&2)
+        .unwrap();
     assert_eq!(
         (2..50)
             .chain(51..99)
@@ -712,19 +941,25 @@ async fn test_range_iter(#[values(true, false)] is_transactional: bool) {
         db_iter.collect::<Vec<_>>()
     );
 
-    // Skip to a key which is not within the bounds (bound is [1, 50))
-    let db_iter = db.range_iter(1..=50).skip_to(&50).unwrap();
+    // Skip to a key which is not within the bounds (bound is [1, 50], but 50 doesn't exist in DB)
+    let db_iter = get_range_iter(&db, 1..=50, use_safe_iter)
+        .skip_to(&50)
+        .unwrap();
     assert_eq!(Vec::<(i32, String)>::new(), db_iter.collect::<Vec<_>>());
 
     // Skip to first key in the bound (bound is [1, 49))
-    let db_iter = db.range_iter(1..49).skip_to(&1).unwrap();
+    let db_iter = get_range_iter(&db, 1..49, use_safe_iter)
+        .skip_to(&1)
+        .unwrap();
     assert_eq!(
         (1..49).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
         db_iter.collect::<Vec<_>>()
     );
 
     // Skip to a key which is not within the bounds (bound is [1, 50))
-    let db_iter = db.range_iter(1..=50).skip_prior_to(&50).unwrap();
+    let db_iter = get_range_iter(&db, 1..=50, use_safe_iter)
+        .skip_prior_to(&50)
+        .unwrap();
     assert_eq!(vec![(49, "49".to_string())], db_iter.collect::<Vec<_>>());
 }
 

@@ -24,10 +24,10 @@ mod checked {
         account_address::AccountAddress,
         language_storage::{ModuleId, StructTag, TypeTag},
     };
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "gas-profiler")]
     use move_vm_profiler::GasProfiler;
     use move_vm_runtime::{move_vm::MoveVM, session::Session};
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "gas-profiler")]
     use move_vm_types::gas::GasMeter;
     use move_vm_types::loaded_data::runtime_types::Type;
     use sui_move_natives::object_runtime::{
@@ -202,9 +202,9 @@ mod checked {
                 metrics.clone(),
             );
 
-            // Set the profiler if in debug mode
-            #[cfg(debug_assertions)]
-            {
+            // Set the profiler if in CLI
+            #[skip_checked_arithmetic]
+            move_vm_profiler::gas_profiler_feature_enabled! {
                 let tx_digest = tx_context.digest();
                 let remaining_gas: u64 =
                     move_vm_types::gas::GasMeter::remaining_gas(gas_charger.move_gas_status())

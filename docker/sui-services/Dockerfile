@@ -1,4 +1,4 @@
-FROM rust:1.73-bullseye  AS chef
+FROM rust:1.75-bullseye  AS chef
 WORKDIR sui
 ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
@@ -35,6 +35,7 @@ FROM chef AS builder
 # and build the application. At this point no dependencies should need to be
 # built as they were built and cached by the previous layer.
 COPY Cargo.toml Cargo.lock ./
+COPY consensus consensus
 COPY crates crates
 COPY sui-execution sui-execution
 COPY narwhal narwhal

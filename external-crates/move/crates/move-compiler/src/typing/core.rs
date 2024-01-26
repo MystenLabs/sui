@@ -5,7 +5,7 @@
 use crate::{
     debug_display, diag,
     diagnostics::{codes::NameResolution, Diagnostic},
-    expansion::ast::{AbilitySet, AttributeName_, ModuleIdent, ModuleIdent_, Visibility},
+    expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Visibility},
     naming::ast::{
         self as N, BlockLabel, BuiltinTypeName_, ResolvedUseFuns, StructDefinition,
         StructTypeParameter, TParam, TParamID, TVar, Type, TypeName, TypeName_, Type_, UseFunKind,
@@ -14,12 +14,7 @@ use crate::{
     parser::ast::{
         Ability_, ConstantName, Field, FunctionName, Mutability, StructName, ENTRY_MODIFIER,
     },
-    shared::{
-        known_attributes::{KnownAttribute, TestingAttribute},
-        program_info::*,
-        unique_map::UniqueMap,
-        *,
-    },
+    shared::{known_attributes::TestingAttribute, program_info::*, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
@@ -32,7 +27,6 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 struct UseFunsScope {
     count: usize,
-    unused: BTreeMap<(TypeName, Name), (Loc, UseFunKind, /* depth */ usize)>,
     use_funs: ResolvedUseFuns,
 }
 
@@ -87,7 +81,6 @@ pub struct Context<'env> {
 impl UseFunsScope {
     pub fn global(info: &NamingProgramInfo) -> Self {
         let count = 1;
-        let unused = BTreeMap::new();
         let mut use_funs = BTreeMap::new();
         for (_, _, minfo) in &info.modules {
             for (tn, methods) in &minfo.use_funs {
@@ -114,11 +107,7 @@ impl UseFunsScope {
                 use_funs.insert(tn.clone(), public_methods);
             }
         }
-        UseFunsScope {
-            count,
-            unused,
-            use_funs,
-        }
+        UseFunsScope { count, use_funs }
     }
 }
 
@@ -155,34 +144,14 @@ impl<'env> Context<'env> {
             implicit_candidates.is_empty(),
             "ICE use fun candidates should have been resolved"
         );
-        let depth = self.use_funs.len();
         let cur = self.use_funs.last_mut().unwrap();
         if new_scope.is_empty() {
             cur.count += 1;
             return;
         }
-        let mut unused = cur.unused.clone();
-        let mut use_funs = cur.use_funs.clone();
-        for (tn, additional_methods) in new_scope {
-            for (method, nuf) in additional_methods {
-                match nuf.kind {
-                    UseFunKind::Explicit if nuf.is_public.is_none() => {
-                        unused.insert((tn.clone(), method), (nuf.loc, nuf.kind, depth));
-                    }
-                    UseFunKind::UseAlias { used: false } => {
-                        unused.insert((tn.clone(), method), (nuf.loc, nuf.kind, depth));
-                    }
-                    _ => (),
-                }
-                let cur_methods = use_funs.entry(tn.clone()).or_default();
-                cur_methods.remove(&method);
-                cur_methods.add(method, nuf).unwrap();
-            }
-        }
         self.use_funs.push(UseFunsScope {
             count: 1,
-            unused,
-            use_funs,
+            use_funs: new_scope,
         })
     }
 
@@ -192,31 +161,44 @@ impl<'env> Context<'env> {
             cur.count -= 1;
             return;
         }
-        let UseFunsScope { unused, .. } = self.use_funs.pop().unwrap();
-        let cur_depth = self.use_funs.len();
-        let mut new_unused = BTreeMap::new();
-        for ((tn, method), (loc, kind, depth)) in unused {
-            if depth != cur_depth {
-                // the unused was added in a scope above
-                assert!(depth < cur_depth);
-                new_unused.insert((tn, method), (loc, kind, depth));
-                continue;
+        let UseFunsScope { use_funs, .. } = self.use_funs.pop().unwrap();
+        for (tn, methods) in use_funs {
+            let unused = methods.iter().filter(|(_, _, uf)| !uf.used);
+            for (_, method, use_fun) in unused {
+                let N::UseFun {
+                    loc,
+                    kind,
+                    attributes: _,
+                    is_public: _,
+                    target_function: _,
+                    used: _,
+                } = use_fun;
+                let msg = match kind {
+                    UseFunKind::Explicit => {
+                        format!("Unused 'use fun' of '{tn}.{method}'. Consider removing it")
+                    }
+                    UseFunKind::UseAlias => {
+                        format!("Unused 'use' of alias '{method}'. Consider removing it")
+                    }
+                    UseFunKind::FunctionDeclaration => {
+                        panic!("ICE function declaration use funs should never be added to use fun")
+                    }
+                };
+                self.env.add_diag(diag!(UnusedItem::Alias, (*loc, msg)))
             }
-            let msg = match kind {
-                UseFunKind::Explicit => {
-                    format!("Unused 'use fun' of '{tn}.{method}'. Consider removing it")
-                }
-                UseFunKind::UseAlias { used } => {
-                    assert!(!used);
-                    format!("Unused 'use' of alias '{method}'. Consider removing it")
-                }
-                UseFunKind::FunctionDeclaration => {
-                    panic!("ICE function declaration use funs should never be added to use fun")
-                }
-            };
-            self.env.add_diag(diag!(UnusedItem::Alias, (loc, msg)))
         }
-        self.use_funs.last_mut().unwrap().unused = new_unused;
+    }
+
+    pub fn find_method_and_mark_used(
+        &mut self,
+        tn: &TypeName,
+        method: Name,
+    ) -> Option<(ModuleIdent, FunctionName)> {
+        self.use_funs.iter_mut().rev().find_map(|scope| {
+            let use_fun = scope.use_funs.get_mut(tn)?.get_mut(&method)?;
+            use_fun.used = true;
+            Some(use_fun.target_function)
+        })
     }
 
     pub fn reset_for_module_item(&mut self) {
@@ -356,18 +338,13 @@ impl<'env> Context<'env> {
 
     /// current_module.is_test_only || current_function.is_test_only || current_function.is_test
     fn is_testing_context(&self) -> bool {
-        // TODO should we store this in the context?
-        let test_only = AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::TestOnly));
-        let test = AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::Test));
-
         self.current_module.as_ref().is_some_and(|m| {
             let minfo = self.module_info(m);
-            let is_test_only = minfo.attributes.contains_key_(&test_only);
+            let is_test_only = minfo.attributes.is_test_or_test_only();
             is_test_only
                 || self.current_function.as_ref().is_some_and(|f| {
                     let finfo = minfo.functions.get(f).unwrap();
-                    finfo.attributes.contains_key_(&test_only)
-                        || finfo.attributes.contains_key_(&test)
+                    finfo.attributes.is_test_or_test_only()
                 })
         })
     }
@@ -814,13 +791,7 @@ pub fn make_method_call_type(
     Vec<(Var, Type)>,
     Type,
 )> {
-    let target_function_opt = context
-        .use_funs
-        .last()
-        .unwrap()
-        .use_funs
-        .get(tn)
-        .and_then(|methods| Some(methods.get(&method)?.target_function));
+    let target_function_opt = context.find_method_and_mark_used(tn, method);
     // try to find a function in the defining module for errors
     let Some((target_m, target_f)) = target_function_opt else {
         let lhs_ty_str = error_format_nested(lhs_ty, &Subst::empty());
@@ -886,13 +857,6 @@ pub fn make_method_call_type(
         }
         return None;
     };
-    // mark the method as used
-    context
-        .use_funs
-        .last_mut()
-        .unwrap()
-        .unused
-        .remove(&(tn.clone(), method));
 
     let (defined_loc, ty_args, params, return_ty) =
         make_function_type(context, loc, &target_m, &target_f, ty_args_opt);

@@ -1,15 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeSet, HashMap, HashSet};
-use std::fmt;
-use std::path::PathBuf;
-use std::str::FromStr;
-#[cfg(msim)]
-use std::sync::atomic::Ordering;
-use std::sync::Arc;
-use std::time::Duration;
-
 use anemo::Network;
 use anemo_tower::callback::CallbackLayer;
 use anemo_tower::trace::DefaultMakeSpan;
@@ -21,26 +12,32 @@ use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::TryFutureExt;
+use narwhal_worker::LazyNarwhalClient;
 use prometheus::Registry;
+use std::collections::{BTreeSet, HashMap, HashSet};
+use std::fmt;
+use std::path::PathBuf;
+use std::str::FromStr;
+#[cfg(msim)]
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::time::Duration;
 use sui_core::authority::CHAIN_IDENTIFIER;
-use sui_core::consensus_adapter::{LazyNarwhalClient, SubmitToConsensus};
-use sui_json_rpc::api::JsonRpcMetrics;
-use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
+use sui_core::consensus_adapter::SubmitToConsensus;
+use sui_json_rpc_api::JsonRpcMetrics;
+use sui_types::base_types::ConciseableName;
 use sui_types::digests::ChainIdentifier;
 use sui_types::message_envelope::get_google_jwk_bytes;
-use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
 use tokio::runtime::Handle;
 use tokio::sync::broadcast;
-use tokio::sync::oneshot;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tracing::{debug, error, warn};
 use tracing::{error_span, info, Instrument};
 
-use checkpoint_executor::CheckpointExecutor;
 use fastcrypto_zkp::bn254::zk_login::JWK;
 pub use handle::SuiNodeHandle;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
@@ -49,7 +46,7 @@ use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_archival::writer::ArchiveWriter;
-use sui_config::node::{ConsensusProtocol, DBCheckpointConfig};
+use sui_config::node::{ConsensusProtocol, DBCheckpointConfig, RunWithRange};
 use sui_config::node_config_metrics::NodeConfigMetrics;
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -58,7 +55,7 @@ use sui_core::authority::epoch_start_configuration::EpochStartConfigTrait;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_server::{ValidatorService, ValidatorServiceMetrics};
-use sui_core::checkpoints::checkpoint_executor;
+use sui_core::checkpoints::checkpoint_executor::{CheckpointExecutor, StopReason};
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
     SubmitCheckpointToConsensus,
@@ -93,8 +90,7 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
 use sui_json_rpc::JsonRpcServerBuilder;
-use sui_kvstore::writer::setup_key_value_store_uploader;
-use sui_macros::fail_point_async;
+use sui_macros::{fail_point_async, replay_log};
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::discovery::TrustedPeerChangeEvent;
@@ -229,8 +225,9 @@ pub struct SuiNode {
 
     _state_archive_handle: Option<broadcast::Sender<()>>,
 
-    _state_snapshot_uploader_handle: Option<oneshot::Sender<()>>,
-    _kv_store_uploader_handle: Option<oneshot::Sender<()>>,
+    _state_snapshot_uploader_handle: Option<broadcast::Sender<()>>,
+    // Channel to allow signaling upstream to shutdown sui-node
+    shutdown_channel_tx: broadcast::Sender<Option<RunWithRange>>,
 }
 
 impl fmt::Debug for SuiNode {
@@ -402,6 +399,7 @@ impl SuiNode {
             config.supported_protocol_versions = Some(SupportedProtocolVersions::SYSTEM_DEFAULT);
         }
 
+        let run_with_range = config.run_with_range;
         let is_validator = config.consensus_config().is_some();
         let is_full_node = !is_validator;
         let prometheus_registry = registry_service.default_registry();
@@ -435,7 +433,6 @@ impl SuiNode {
         let store = AuthorityStore::open(
             perpetual_tables,
             genesis,
-            &committee_store,
             config.indirect_objects_threshold,
             config
                 .expensive_safety_check_config
@@ -466,6 +463,12 @@ impl SuiNode {
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
             ChainIdentifier::from(*genesis.checkpoint().digest()),
+        );
+
+        replay_log!(
+            "Beginning replay run. Epoch: {:?}, Protocol config: {:?}",
+            epoch_store.epoch(),
+            epoch_store.protocol_config()
         );
 
         // the database is empty at genesis time
@@ -541,14 +544,6 @@ impl SuiNode {
             epoch_store.epoch_start_state(),
         )
         .expect("Initial trusted peers must be set");
-
-        // Start uploading transactions/events to remote key value store
-        let kv_store_uploader_handle = setup_key_value_store_uploader(
-            state_sync_store.clone(),
-            &config.transaction_kv_store_write_config,
-            &prometheus_registry,
-        )
-        .await?;
 
         // Start archiving local state to remote store
         let state_archive_handle =
@@ -626,7 +621,7 @@ impl SuiNode {
         let (end_of_epoch_channel, end_of_epoch_receiver) =
             broadcast::channel(config.end_of_epoch_broadcast_channel_capacity);
 
-        let transaction_orchestrator = if is_full_node {
+        let transaction_orchestrator = if is_full_node && run_with_range.is_none() {
             Some(Arc::new(
                 TransactiondOrchestrator::new_with_network_clients(
                     state.clone(),
@@ -696,6 +691,9 @@ impl SuiNode {
             None
         };
 
+        // setup shutdown channel
+        let (shutdown_channel, _) = broadcast::channel::<Option<RunWithRange>>(1);
+
         let node = Self {
             config,
             validator_components: Mutex::new(validator_components),
@@ -720,7 +718,7 @@ impl SuiNode {
 
             _state_archive_handle: state_archive_handle,
             _state_snapshot_uploader_handle: state_snapshot_handle,
-            _kv_store_uploader_handle: kv_store_uploader_handle,
+            shutdown_channel_tx: shutdown_channel,
         };
 
         info!("SuiNode started!");
@@ -733,6 +731,10 @@ impl SuiNode {
 
     pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<SuiSystemState> {
         self.end_of_epoch_channel.subscribe()
+    }
+
+    pub fn subscribe_to_shutdown_channel(&self) -> broadcast::Receiver<Option<RunWithRange>> {
+        self.shutdown_channel_tx.subscribe()
     }
 
     pub fn current_epoch_for_testing(&self) -> EpochId {
@@ -807,7 +809,7 @@ impl SuiNode {
     fn start_state_snapshot(
         config: &NodeConfig,
         prometheus_registry: &Registry,
-    ) -> Result<Option<oneshot::Sender<()>>> {
+    ) -> Result<Option<tokio::sync::broadcast::Sender<()>>> {
         if let Some(remote_store_config) = &config.state_snapshot_write_config.object_store_config {
             let snapshot_uploader = StateSnapshotUploader::new(
                 &config.db_checkpoint_path(),
@@ -1347,6 +1349,7 @@ impl SuiNode {
             &self.registry_service.default_registry(),
         );
 
+        let run_with_range = self.config.run_with_range;
         loop {
             let cur_epoch_store = self.state.load_epoch_store_one_call_per_task();
 
@@ -1377,10 +1380,22 @@ impl SuiNode {
                     .submit(transaction, None, &cur_epoch_store)?;
             }
 
-            checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
+            let stop_condition = checkpoint_executor
+                .run_epoch(cur_epoch_store.clone(), run_with_range)
+                .await;
+
+            if stop_condition == StopReason::RunWithRangeCondition {
+                self.shutdown_channel_tx
+                    .send(run_with_range)
+                    .expect("RunWithRangeCondition met but failed to send shutdown message");
+                return Ok(());
+            }
+
+            // Safe to call because we are in the middle of reconfiguration.
             let latest_system_state = self
                 .state
-                .get_sui_system_state_object_during_reconfig()
+                .database
+                .get_sui_system_state_object_unsafe()
                 .expect("Read Sui System State object cannot fail");
 
             #[cfg(msim)]
@@ -1526,6 +1541,10 @@ impl SuiNode {
             };
             *self.validator_components.lock().await = new_validator_components;
 
+            // Force releasing current epoch store DB handle, because the
+            // Arc<AuthorityPerEpochStore> may linger.
+            cur_epoch_store.release_db_handles();
+
             #[cfg(msim)]
             if !matches!(
                 self.config
@@ -1561,19 +1580,12 @@ impl SuiNode {
             .expect("Error loading last checkpoint for current epoch")
             .expect("Could not load last checkpoint for current epoch");
 
-        let authenticator_state_obj_initial_shared_version =
-            get_authenticator_state_obj_initial_shared_version(&state.database)
-                .expect("read cannot fail");
-        let randomness_state_obj_initial_shared_version =
-            get_randomness_state_obj_initial_shared_version(&state.database)
-                .expect("read cannot fail");
-
         let epoch_start_configuration = EpochStartConfiguration::new(
             next_epoch_start_system_state,
             *last_checkpoint.digest(),
-            authenticator_state_obj_initial_shared_version,
-            randomness_state_obj_initial_shared_version,
-        );
+            &state.database,
+        )
+        .expect("EpochStartConfiguration construction cannot fail");
 
         let new_epoch_store = self
             .state
@@ -1729,7 +1741,12 @@ pub fn build_http_server(
             kv_store.clone(),
             metrics.clone(),
         ))?;
-        server.register_module(TransactionBuilderApi::new(state.clone()))?;
+
+        // if run_with_range is enabled we want to prevent any transactions
+        // run_with_range = None is normal operating conditions
+        if config.run_with_range.is_none() {
+            server.register_module(TransactionBuilderApi::new(state.clone()))?;
+        }
         server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;
 
         if let Some(transaction_orchestrator) = transaction_orchestrator {

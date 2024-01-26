@@ -1,6 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::crypto::PublicKey;
 use crate::{
     base_types::{EpochId, SuiAddress},
     crypto::{DefaultHash, Signature, SignatureScheme, SuiSignature},
@@ -17,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentMessage;
 use std::hash::Hash;
 use std::hash::Hasher;
+
 //#[cfg(any(test, feature = "test-utils"))]
 #[cfg(test)]
 #[path = "unit_tests/zk_login_authenticator_test.rs"]
@@ -51,18 +53,19 @@ impl ZkLoginAuthenticator {
         }
     }
 
-    pub fn get_max_epoch(&self) -> EpochId {
-        self.max_epoch
-    }
-
-    pub fn get_address_seed(&self) -> &str {
-        self.inputs.get_address_seed()
+    pub fn get_pk(&self) -> SuiResult<PublicKey> {
+        PublicKey::from_zklogin_inputs(&self.inputs)
     }
 
     pub fn get_iss(&self) -> &str {
         self.inputs.get_iss()
     }
 
+    pub fn get_max_epoch(&self) -> EpochId {
+        self.max_epoch
+    }
+
+    #[cfg(feature = "test-utils")]
     pub fn user_signature_mut_for_testing(&mut self) -> &mut Signature {
         &mut self.user_signature
     }
@@ -86,9 +89,6 @@ impl Hash for ZkLoginAuthenticator {
 }
 
 impl AuthenticatorTrait for ZkLoginAuthenticator {
-    fn check_author(&self) -> bool {
-        true
-    }
     fn verify_user_authenticator_epoch(&self, epoch: EpochId) -> SuiResult {
         // Verify the max epoch in aux inputs is <= the current epoch of authority.
         if epoch > self.get_max_epoch() {
@@ -106,20 +106,22 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         intent_msg: &IntentMessage<T>,
         author: SuiAddress,
         aux_verify_data: &VerifyParams,
-        check_author: bool,
     ) -> SuiResult
     where
         T: Serialize,
     {
-        // if check_author is true, author must be consistent with the zklogin address derived.
-        if check_author && aux_verify_data.verify_legacy_zklogin_address {
-            if author != self.try_into()? && author != SuiAddress::legacy_try_from(self)? {
+        // Always evaluate the unpadded address derivation.
+        if author != SuiAddress::try_from_unpadded(&self.inputs)? {
+            // If the verify_legacy_zklogin_address flag is set, also evaluate the padded address derivation.
+            if !aux_verify_data.verify_legacy_zklogin_address
+                || author != SuiAddress::try_from_padded(&self.inputs)?
+            {
                 return Err(SuiError::InvalidAddress);
             }
-        } else if check_author && author != self.try_into()? {
-            return Err(SuiError::InvalidAddress);
         }
 
+        // Only when supported_providers list is not empty, we check if the provider is supported. Otherwise,
+        // we just use the JWK map to check if its supported.
         if !aux_verify_data.supported_providers.is_empty()
             && !aux_verify_data.supported_providers.contains(
                 &OIDCProvider::from_iss(self.inputs.get_iss()).map_err(|_| {
@@ -135,16 +137,8 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         }
 
         // Verify the ephemeral signature over the intent message of the transaction data.
-        if self
-            .user_signature
+        self.user_signature
             .verify_secure(intent_msg, author, SignatureScheme::ZkLoginAuthenticator)
-            .is_err()
-        {
-            return Err(SuiError::InvalidSignature {
-                error: "Ephemermal signature verify failed".to_string(),
-            });
-        }
-        Ok(())
     }
 
     /// Verify an intent message of a transaction with an zk login authenticator.
@@ -153,12 +147,11 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         intent_msg: &IntentMessage<T>,
         author: SuiAddress,
         aux_verify_data: &VerifyParams,
-        check_author: bool,
     ) -> SuiResult
     where
         T: Serialize,
     {
-        self.verify_uncached_checks(intent_msg, author, aux_verify_data, check_author)?;
+        self.verify_uncached_checks(intent_msg, author, aux_verify_data)?;
 
         // Use flag || pk_bytes.
         let mut extended_pk_bytes = vec![self.user_signature.scheme().flag()];

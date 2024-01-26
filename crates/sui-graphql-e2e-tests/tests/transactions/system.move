@@ -8,7 +8,7 @@
 //# run-graphql
 # Query for the genesis transaction
 {
-    transactionBlockConnection(first: 1) {
+    transactionBlocks(first: 1) {
         nodes {
             digest
             sender { address }
@@ -24,20 +24,26 @@
             kind {
                 __typename
                 ... on GenesisTransaction {
-                    objectConnection {
-                        nodes {
-                            address
+                    objects {
+                        edges {
+                            cursor
+                            node {
+                                address
 
-                            asMoveObject {
-                                contents {
-                                    type { repr }
-                                    json
+                                asMoveObject {
+                                    contents {
+                                        type { repr }
+                                        json
+                                    }
                                 }
-                            }
 
-                            asMovePackage {
-                                moduleConnection {
-                                    nodes { name }
+                                asMovePackage {
+                                    modules {
+                                        edges {
+                                            cursor
+                                            node { name }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -49,21 +55,27 @@
                 status
                 errors
                 lamportVersion
-                dependencies { digest }
+                dependencies {
+                    nodes { digest }
+                }
 
                 balanceChanges {
-                    owner { address }
-                    amount
-                    coinType { repr }
+                    nodes {
+                        owner { address }
+                        amount
+                        coinType { repr }
+                    }
                 }
 
                 objectChanges {
-                    location
+                    nodes {
+                        address
 
-                    idCreated
-                    idDeleted
+                        idCreated
+                        idDeleted
 
-                    outputState { address digest }
+                        outputState { address digest }
+                    }
                 }
 
                 gasEffects {
@@ -97,7 +109,7 @@
 # Query for the system transaction that corresponds to a checkpoint (note that
 # its timestamp is advanced, because the clock has advanced).
 {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
         nodes {
             digest
             sender { address }
@@ -124,21 +136,27 @@
                 status
                 errors
                 lamportVersion
-                dependencies { digest }
+                dependencies {
+                    nodes { digest }
+                }
 
                 balanceChanges {
-                    owner { address }
-                    amount
-                    coinType { repr }
+                    nodes {
+                        owner { address }
+                        amount
+                        coinType { repr }
+                    }
                 }
 
                 objectChanges {
-                    location
+                    nodes {
+                        address
 
-                    idCreated
-                    idDeleted
+                        idCreated
+                        idDeleted
 
-                    outputState { address digest }
+                        outputState { address digest }
+                    }
                 }
 
                 gasEffects {
@@ -171,7 +189,7 @@
 //# run-graphql
 # Look for the change epoch transaction, and again, note the timestamp change.
 {
-    transactionBlockConnection(last: 1) {
+    transactionBlocks(last: 1) {
         nodes {
             digest
             sender { address }
@@ -187,17 +205,20 @@
             kind {
                 __typename
                 ... on EndOfEpochTransaction {
-                    transactionConnection {
-                        nodes {
-                            __typename
-                            ... on ChangeEpochTransaction {
-                                epoch { epochId }
-                                protocolVersion
-                                storageCharge
-                                computationCharge
-                                storageRebate
-                                nonRefundableStorageFee
-                                startTimestamp
+                    transactions {
+                        edges {
+                            cursor
+                            node {
+                                __typename
+                                ... on ChangeEpochTransaction {
+                                    epoch { epochId }
+                                    protocolVersion
+                                    storageCharge
+                                    computationCharge
+                                    storageRebate
+                                    nonRefundableStorageFee
+                                    startTimestamp
+                                }
                             }
                         }
                     }
@@ -208,21 +229,27 @@
                 status
                 errors
                 lamportVersion
-                dependencies { digest }
+                dependencies {
+                    nodes { digest }
+                }
 
                 balanceChanges {
-                    owner { address }
-                    amount
-                    coinType { repr }
+                    nodes {
+                        owner { address }
+                        amount
+                        coinType { repr }
+                    }
                 }
 
                 objectChanges {
-                    location
+                    nodes {
+                        address
 
-                    idCreated
-                    idDeleted
+                        idCreated
+                        idDeleted
 
-                    outputState { address digest }
+                        outputState { address digest }
+                    }
                 }
 
                 gasEffects {

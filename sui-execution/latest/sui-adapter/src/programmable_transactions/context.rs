@@ -29,7 +29,7 @@ mod checked {
         identifier::IdentStr,
         language_storage::{ModuleId, StructTag, TypeTag},
     };
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "gas-profiler")]
     use move_vm_profiler::GasProfiler;
     use move_vm_runtime::native_extensions::NativeContextExtensions;
     use move_vm_runtime::{
@@ -37,7 +37,7 @@ mod checked {
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
     };
     use move_vm_types::data_store::DataStore;
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "gas-profiler")]
     use move_vm_types::gas::GasMeter;
     use move_vm_types::loaded_data::runtime_types::Type;
     use move_vm_types::values::GlobalValue;
@@ -132,7 +132,10 @@ mod checked {
             tx_context: &'a mut TxContext,
             gas_charger: &'a mut GasCharger,
             inputs: Vec<CallArg>,
-        ) -> Result<Self, ExecutionError> {
+        ) -> Result<Self, ExecutionError>
+        where
+            'a: 'state,
+        {
             let mut linkage_view = LinkageView::new(Box::new(state_view.as_sui_resolver()));
             let mut input_object_map = BTreeMap::new();
             let inputs = inputs
@@ -197,10 +200,11 @@ mod checked {
                 tx_context.epoch(),
             );
 
-            // Set the profiler if in debug mode
-            #[cfg(debug_assertions)]
-            {
+            // Set the profiler if in CLI
+            #[skip_checked_arithmetic]
+            move_vm_profiler::gas_profiler_feature_enabled! {
                 let tx_digest = tx_context.digest();
+
                 let remaining_gas: u64 =
                     move_vm_types::gas::GasMeter::remaining_gas(gas_charger.move_gas_status())
                         .into();
@@ -723,7 +727,7 @@ mod checked {
             for package in new_packages {
                 let package_obj = Object::new_from_package(package, tx_digest);
                 let id = package_obj.id();
-                created_object_ids.insert(id, ());
+                created_object_ids.insert(id);
                 written_objects.insert(id, package_obj);
             }
             for (id, additional_write) in additional_writes {
@@ -807,7 +811,7 @@ mod checked {
                 } else {
                     // If it's not in the written objects, the object must have been deleted. Otherwise
                     // it's an error.
-                    if !deleted_object_ids.contains_key(id) {
+                    if !deleted_object_ids.contains(id) {
                         return Err(ExecutionError::new(
                             ExecutionErrorKind::SharedObjectOperationNotAllowed,
                             Some(
@@ -838,8 +842,8 @@ mod checked {
                     .into_iter()
                     .filter_map(|(id, loaded)| loaded.is_modified.then_some(id))
                     .collect(),
-                created_object_ids: created_object_ids.into_iter().map(|(id, _)| id).collect(),
-                deleted_object_ids: deleted_object_ids.into_iter().map(|(id, _)| id).collect(),
+                created_object_ids: created_object_ids.into_iter().collect(),
+                deleted_object_ids: deleted_object_ids.into_iter().collect(),
                 user_events,
             }))
         }

@@ -7,5 +7,5 @@
 		"isolatedModules": true,
 		"rootDir": "src"
 	},
-	"references": [{ "path": "../wallet-standard" }]
+	"references": [{ "path": "../wallet-standard" }, { "path": "../typescript" }]
 }

@@ -225,17 +225,19 @@ where
     let mut entries = Vec::new();
     match termination {
         SearchRange::ExclusiveLastKey(exclusive_last_key) => {
-            let iter = db_map.iter_with_bounds(Some(start), Some(exclusive_last_key));
+            let iter = db_map.safe_iter_with_bounds(Some(start), Some(exclusive_last_key));
 
-            for (key, value) in iter {
+            for result in iter {
+                let (key, value) = result?;
                 entries.push((key.clone(), value.clone()));
             }
         }
         SearchRange::Count(mut count) => {
-            let mut iter = db_map.iter_with_bounds(Some(start), None);
+            let mut iter = db_map.safe_iter_with_bounds(Some(start), None);
 
             while count > 0 {
-                if let Some((key, value)) = iter.next() {
+                if let Some(result) = iter.next() {
+                    let (key, value) = result?;
                     entries.push((key.clone(), value.clone()));
                 } else {
                     break;

@@ -306,7 +306,7 @@ async fn test_execution_with_dependencies() {
         .map(|a| aggregator.authority_clients[&a.name].clone())
         .collect();
     let rgp = authorities
-        .get(0)
+        .first()
         .unwrap()
         .reference_gas_price_for_testing()
         .unwrap();
@@ -467,7 +467,7 @@ async fn test_per_object_overload() {
     let (aggregator, authorities, _genesis, package) =
         init_local_authorities(4, gas_objects.clone()).await;
     let rgp = authorities
-        .get(0)
+        .first()
         .unwrap()
         .reference_gas_price_for_testing()
         .unwrap();
@@ -592,7 +592,7 @@ async fn test_txn_age_overload() {
         )
         .await;
     let rgp = authorities
-        .get(0)
+        .first()
         .unwrap()
         .reference_gas_price_for_testing()
         .unwrap();

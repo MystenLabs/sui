@@ -1,14 +1,12 @@
 {
-  objectConnection {
+  objects {
     nodes {
       version
       digest
       storageRebate
       previousTransactionBlock {
         digest
-        sender {
-          defaultNameServiceName
-        }
+        sender { defaultSuinsName }
         gasInput {
           gasPrice
           gasBudget

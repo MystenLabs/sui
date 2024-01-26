@@ -1,8 +1,8 @@
 # `WalletProvider`
 
 The `WalletProvider` is used to setup the necessary context for you React application. It should be
-at the root of your application, so that you can use any of the Sui Wallet Kit components underneath
-it.
+at the root of your application, so that you can use any of the Dapp Kit wallet components
+underneath it.
 
 ```tsx
 import { WalletProvider } from '@mysten/dapp-kit';
@@ -31,7 +31,9 @@ All props are optional.
   testing.
 - `autoConnect` - Enables automatically reconnecting to the most recently used wallet account upon
   mounting
-- `storage` - Configures how the most recently connected to wallet account is stored. Defaults to
-  using localStorage.
+- `zkSend` - Enables and configures the zkSend wallet.
+  [Read more about how to use this integration.](./zksend.mdx)
+- `storage` - Configures how the most recently connected to wallet account is stored. Set to `null`
+  to disable persisting state entirely. Defaults to using localStorage if it is available.
 - `storageKey` - The key to use to store the most recently connected wallet account.
 - `theme` - The theme to use for styling UI components. Defaults to using the light theme.

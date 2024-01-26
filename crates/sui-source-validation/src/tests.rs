@@ -21,29 +21,29 @@ use sui_types::{
 };
 use test_cluster::TestClusterBuilder;
 
-use crate::{BytecodeSourceVerifier, SourceMode};
+use crate::{BytecodeSourceVerifier, SourceMode, CURRENT_COMPILER_VERSION};
 
 #[tokio::test]
 async fn successful_verification() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
+    let b_ref_fixtures = tempfile::tempdir()?;
     let b_ref = {
-        let fixtures = tempfile::tempdir()?;
-        let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&b_ref_fixtures, "b", SuiAddress::ZERO).await?;
         publish_package(context, b_src).await.0
     };
 
+    let b_pkg_fixtures = tempfile::tempdir()?;
     let b_pkg = {
-        let fixtures = tempfile::tempdir()?;
-        let b_src = copy_published_package(&fixtures, "b", b_ref.0.into()).await?;
+        let b_src = copy_published_package(&b_pkg_fixtures, "b", b_ref.0.into()).await?;
         compile_package(b_src)
     };
 
+    let a_fixtures = tempfile::tempdir()?;
     let (a_pkg, a_ref) = {
-        let fixtures = tempfile::tempdir()?;
-        copy_published_package(&fixtures, "b", b_ref.0.into()).await?;
-        let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
+        copy_published_package(&a_fixtures, "b", b_ref.0.into()).await?;
+        let a_src = copy_published_package(&a_fixtures, "a", SuiAddress::ZERO).await?;
         (
             compile_package(a_src.clone()),
             publish_package(context, a_src).await.0,
@@ -122,15 +122,15 @@ async fn successful_verification_module_ordering() -> anyhow::Result<()> {
     // where the on-chain package (which is compiled with self-address = 0x0, and later substituted)
     // orders module handles (references to other modules) differently to the package compiled as a
     // dependency with its self-address already set as its published address.
+    let z_ref_fixtures = tempfile::tempdir()?;
     let z_ref = {
-        let fixtures = tempfile::tempdir()?;
-        let z_src = copy_published_package(&fixtures, "z", SuiAddress::ZERO).await?;
+        let z_src = copy_published_package(&z_ref_fixtures, "z", SuiAddress::ZERO).await?;
         publish_package(context, z_src).await.0
     };
 
+    let z_pkg_fixtures = tempfile::tempdir()?;
     let z_pkg = {
-        let fixtures = tempfile::tempdir()?;
-        let z_src = copy_published_package(&fixtures, "z", z_ref.0.into()).await?;
+        let z_src = copy_published_package(&z_pkg_fixtures, "z", z_ref.0.into()).await?;
         compile_package(z_src)
     };
 
@@ -151,22 +151,23 @@ async fn successful_verification_upgrades() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
+    let b_v1_fixtures = tempfile::tempdir()?;
     let (b_v1, b_cap) = {
-        let fixtures = tempfile::tempdir()?;
-        let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&b_v1_fixtures, "b", SuiAddress::ZERO).await?;
         publish_package(context, b_src).await
     };
 
+    let b_v2_fixtures = tempfile::tempdir()?;
     let b_v2 = {
-        let fixtures = tempfile::tempdir()?;
-        let b_src = copy_published_package(&fixtures, "b-v2", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&b_v2_fixtures, "b-v2", SuiAddress::ZERO).await?;
         upgrade_package(context, b_v1.0, b_cap.0, b_src).await
     };
 
+    let b_fixtures = tempfile::tempdir()?;
     let (b_pkg, e_pkg) = {
-        let fixtures = tempfile::tempdir()?;
-        let b_src = copy_upgraded_package(&fixtures, "b-v2", b_v2.0.into(), b_v1.0.into()).await?;
-        let e_src = copy_published_package(&fixtures, "e", SuiAddress::ZERO).await?;
+        let b_src =
+            copy_upgraded_package(&b_fixtures, "b-v2", b_v2.0.into(), b_v1.0.into()).await?;
+        let e_src = copy_published_package(&b_fixtures, "e", SuiAddress::ZERO).await?;
         (compile_package(b_src), compile_package(e_src))
     };
 
@@ -191,16 +192,16 @@ async fn fail_verification_bad_address() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
+    let b_ref_fixtures = tempfile::tempdir()?;
     let b_ref = {
-        let fixtures = tempfile::tempdir()?;
-        let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&b_ref_fixtures, "b", SuiAddress::ZERO).await?;
         publish_package(context, b_src).await.0
     };
 
+    let a_pkg_fixtures = tempfile::tempdir()?;
     let a_pkg = {
-        let fixtures = tempfile::tempdir()?;
-        copy_published_package(&fixtures, "b", b_ref.0.into()).await?;
-        let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
+        copy_published_package(&a_pkg_fixtures, "b", b_ref.0.into()).await?;
+        let a_src = copy_published_package(&a_pkg_fixtures, "a", SuiAddress::ZERO).await?;
         publish_package(context, a_src.clone()).await;
         compile_package(a_src)
     };
@@ -225,9 +226,9 @@ async fn fail_to_verify_unpublished_root() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
+    let b_pkg_fixtures = tempfile::tempdir()?;
     let b_pkg = {
-        let fixtures = tempfile::tempdir()?;
-        let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&b_pkg_fixtures, "b", SuiAddress::ZERO).await?;
         compile_package(b_src)
     };
 
@@ -253,16 +254,16 @@ async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
+    let b_ref_fixtures = tempfile::tempdir()?;
     let b_ref = {
-        let fixtures = tempfile::tempdir()?;
-        let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&b_ref_fixtures, "b", SuiAddress::ZERO).await?;
         publish_package(context, b_src).await.0
     };
 
+    let a_ref_fixtures = tempfile::tempdir()?;
     let a_ref = {
-        let fixtures = tempfile::tempdir()?;
-        copy_published_package(&fixtures, "b", b_ref.0.into()).await?;
-        let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
+        copy_published_package(&a_ref_fixtures, "b", b_ref.0.into()).await?;
+        let a_src = copy_published_package(&a_ref_fixtures, "a", SuiAddress::ZERO).await?;
         publish_package(context, a_src).await.0
     };
     let _a_addr: SuiAddress = a_ref.0.into();
@@ -306,12 +307,12 @@ async fn package_not_found() -> anyhow::Result<()> {
     let context = &mut cluster.wallet;
     let mut stable_addrs = HashMap::new();
 
+    let a_pkg_fixtures = tempfile::tempdir()?;
     let a_pkg = {
-        let fixtures = tempfile::tempdir()?;
         let b_id = SuiAddress::random_for_testing_only();
         stable_addrs.insert(b_id, "<id>");
-        copy_published_package(&fixtures, "b", b_id).await?;
-        let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
+        copy_published_package(&a_pkg_fixtures, "b", b_id).await?;
+        let a_src = copy_published_package(&a_pkg_fixtures, "a", SuiAddress::ZERO).await?;
         compile_package(a_src)
     };
 
@@ -359,11 +360,11 @@ async fn dependency_is_an_object() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
+    let a_pkg_fixtures = tempfile::tempdir()?;
     let a_pkg = {
-        let fixtures = tempfile::tempdir()?;
         let b_id = SUI_SYSTEM_STATE_OBJECT_ID.into();
-        copy_published_package(&fixtures, "b", b_id).await?;
-        let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
+        copy_published_package(&a_pkg_fixtures, "b", b_id).await?;
+        let a_src = copy_published_package(&a_pkg_fixtures, "a", SuiAddress::ZERO).await?;
         compile_package(a_src)
     };
     let client = context.get_client().await?;
@@ -386,17 +387,17 @@ async fn module_not_found_on_chain() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
 
+    let b_ref_fixtures = tempfile::tempdir()?;
     let b_ref = {
-        let fixtures = tempfile::tempdir()?;
-        let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&b_ref_fixtures, "b", SuiAddress::ZERO).await?;
         tokio::fs::remove_file(b_src.join("sources").join("c.move")).await?;
         publish_package(context, b_src).await.0
     };
 
+    let a_pkg_fixtures = tempfile::tempdir()?;
     let a_pkg = {
-        let fixtures = tempfile::tempdir()?;
-        copy_published_package(&fixtures, "b", b_ref.0.into()).await?;
-        let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
+        copy_published_package(&a_pkg_fixtures, "b", b_ref.0.into()).await?;
+        let a_src = copy_published_package(&a_pkg_fixtures, "a", SuiAddress::ZERO).await?;
         compile_package(a_src)
     };
     let client = context.get_client().await?;
@@ -418,18 +419,18 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
     let context = &mut cluster.wallet;
     let mut stable_addrs = HashMap::new();
 
+    let b_ref_fixtures = tempfile::tempdir()?;
     let b_ref = {
-        let fixtures = tempfile::tempdir()?;
-        let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&b_ref_fixtures, "b", SuiAddress::ZERO).await?;
         publish_package(context, b_src).await.0
     };
 
+    let a_pkg_fixtures = tempfile::tempdir()?;
     let a_pkg = {
-        let fixtures = tempfile::tempdir()?;
         let b_id = b_ref.0.into();
         stable_addrs.insert(b_id, "b_id");
-        let b_src = copy_published_package(&fixtures, "b", b_id).await?;
-        let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&a_pkg_fixtures, "b", b_id).await?;
+        let a_src = copy_published_package(&a_pkg_fixtures, "a", SuiAddress::ZERO).await?;
         tokio::fs::remove_file(b_src.join("sources").join("d.move")).await?;
         compile_package(a_src)
     };
@@ -453,9 +454,9 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
     let context = &mut cluster.wallet;
     let mut stable_addrs = HashMap::new();
 
+    let b_ref_fixtures = tempfile::tempdir()?;
     let b_ref = {
-        let fixtures = tempfile::tempdir()?;
-        let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&b_ref_fixtures, "b", SuiAddress::ZERO).await?;
 
         // Modify a module before publishing
         let c_path = b_src.join("sources").join("c.move");
@@ -467,12 +468,12 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
         publish_package(context, b_src).await.0
     };
 
+    let a_fixtures = tempfile::tempdir()?;
     let (a_pkg, a_ref) = {
-        let fixtures = tempfile::tempdir()?;
         let b_id = b_ref.0.into();
         stable_addrs.insert(b_id, "<b_id>");
-        copy_published_package(&fixtures, "b", b_id).await?;
-        let a_src = copy_published_package(&fixtures, "a", SuiAddress::ZERO).await?;
+        copy_published_package(&a_fixtures, "b", b_id).await?;
+        let a_src = copy_published_package(&a_fixtures, "a", SuiAddress::ZERO).await?;
 
         let compiled = compile_package(a_src.clone());
         // Modify a module before publishing
@@ -514,32 +515,32 @@ async fn multiple_failures() -> anyhow::Result<()> {
     let mut stable_addrs = HashMap::new();
 
     // Publish package `b::b` on-chain without c.move.
+    let b_ref_fixtures = tempfile::tempdir()?;
     let b_ref = {
-        let fixtures = tempfile::tempdir()?;
-        let b_src = copy_published_package(&fixtures, "b", SuiAddress::ZERO).await?;
+        let b_src = copy_published_package(&b_ref_fixtures, "b", SuiAddress::ZERO).await?;
         tokio::fs::remove_file(b_src.join("sources").join("c.move")).await?;
         publish_package(context, b_src).await.0
     };
 
     // Publish package `c::c` on-chain, unmodified.
+    let c_ref_fixtures = tempfile::tempdir()?;
     let c_ref = {
-        let fixtures = tempfile::tempdir()?;
-        let c_src = copy_published_package(&fixtures, "c", SuiAddress::ZERO).await?;
+        let c_src = copy_published_package(&c_ref_fixtures, "c", SuiAddress::ZERO).await?;
         publish_package(context, c_src).await.0
     };
 
     // Compile local package `d` that references:
     // - `b::b` (c.move exists locally but not on chain => error)
     // - `c::c` (d.move exists on-chain but we delete it locally before compiling => error)
+    let d_pkg_fixtures = tempfile::tempdir()?;
     let d_pkg = {
-        let fixtures = tempfile::tempdir()?;
         let b_id = b_ref.0.into();
         let c_id = c_ref.0.into();
         stable_addrs.insert(b_id, "<b_id>");
         stable_addrs.insert(c_id, "<c_id>");
-        copy_published_package(&fixtures, "b", b_id).await?;
-        let c_src = copy_published_package(&fixtures, "c", c_id).await?;
-        let d_src = copy_published_package(&fixtures, "d", SuiAddress::ZERO).await?;
+        copy_published_package(&d_pkg_fixtures, "b", b_id).await?;
+        let c_src = copy_published_package(&d_pkg_fixtures, "c", c_id).await?;
+        let d_src = copy_published_package(&d_pkg_fixtures, "d", SuiAddress::ZERO).await?;
         tokio::fs::remove_file(c_src.join("sources").join("d.move")).await?; // delete local module in `c`
         compile_package(d_src)
     };
@@ -557,6 +558,36 @@ async fn multiple_failures() -> anyhow::Result<()> {
         - On-chain version of dependency b::c was not found.
         - Local version of dependency <c_id>::d was not found."#]];
     expected.assert_eq(&sanitize_id(err.to_string(), &stable_addrs));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn successful_versioned_dependency_verification() -> anyhow::Result<()> {
+    let mut cluster = TestClusterBuilder::new().build().await;
+    let context = &mut cluster.wallet;
+
+    let b_ref_fixtures = tempfile::tempdir()?;
+    let b_ref = {
+        let b_src =
+            copy_published_package(&b_ref_fixtures, "versioned-b", SuiAddress::ZERO).await?;
+        publish_package(context, b_src).await.0
+    };
+
+    let a_fixtures = tempfile::tempdir()?;
+    let a_pkg = {
+        copy_published_package(&a_fixtures, "versioned-b", b_ref.0.into()).await?;
+        let a_src =
+            copy_published_package(&a_fixtures, "versioned-a-depends-on-b", SuiAddress::ZERO)
+                .await?;
+        compile_package(a_src.clone())
+    };
+
+    let client = context.get_client().await?;
+    let verifier = BytecodeSourceVerifier::new(client.read_api());
+
+    // Verify versioned dependency
+    verifier.verify_package_deps(&a_pkg).await.unwrap();
 
     Ok(())
 }
@@ -658,6 +689,14 @@ async fn copy_upgraded_package<'s>(
     toml = toml.replace("$STORAGE_ID", &storage_id.to_string());
     toml = toml.replace("$RUNTIME_ID", &runtime_id.to_string());
     tokio::fs::write(dst.join("Move.toml"), toml).await?;
+
+    // Copy Move.lock file if it exists, performing replacements
+    let lock_file = src.join("Move.lock");
+    if lock_file.exists() {
+        let mut toml = tokio::fs::read_to_string(lock_file).await?;
+        toml = toml.replace("$COMPILER_VERSION", CURRENT_COMPILER_VERSION);
+        tokio::fs::write(dst.join("Move.lock"), toml).await?;
+    }
 
     // Make destination source directory
     tokio::fs::create_dir(dst.join("sources")).await?;

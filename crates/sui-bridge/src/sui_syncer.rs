@@ -8,13 +8,12 @@ use crate::{
     error::BridgeResult,
     retry_with_max_delay,
     sui_client::{SuiClient, SuiClientInner},
+    sui_transaction_builder::get_bridge_package_id,
 };
 use mysten_metrics::spawn_logged_monitored_task;
 use std::{collections::HashMap, sync::Arc};
 use sui_json_rpc_types::SuiEvent;
-use sui_types::{
-    base_types::ObjectID, digests::TransactionDigest, Identifier, SUI_SYSTEM_PACKAGE_ID,
-};
+use sui_types::{digests::TransactionDigest, Identifier};
 use tokio::{
     task::JoinHandle,
     time::{self, Duration},
@@ -23,7 +22,7 @@ use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tokio_retry::Retry;
 
 // TODO: use the right package id
-const PACKAGE_ID: ObjectID = SUI_SYSTEM_PACKAGE_ID;
+// const PACKAGE_ID: ObjectID = SUI_SYSTEM_PACKAGE_ID;
 const SUI_EVENTS_CHANNEL_SIZE: usize = 1000;
 
 /// Map from contract address to their start block.
@@ -52,7 +51,7 @@ where
         query_interval: Duration,
     ) -> BridgeResult<(
         Vec<JoinHandle<()>>,
-        mysten_metrics::metered_channel::Receiver<Vec<SuiEvent>>,
+        mysten_metrics::metered_channel::Receiver<(Identifier, Vec<SuiEvent>)>,
     )> {
         let (events_tx, events_rx) = mysten_metrics::metered_channel::channel(
             SUI_EVENTS_CHANNEL_SIZE,
@@ -84,7 +83,7 @@ where
         // Moudle is always of bridge package 0x9.
         module: Identifier,
         mut next_cursor: TransactionDigest,
-        events_sender: mysten_metrics::metered_channel::Sender<Vec<SuiEvent>>,
+        events_sender: mysten_metrics::metered_channel::Sender<(Identifier, Vec<SuiEvent>)>,
         sui_client: Arc<SuiClient<C>>,
         query_interval: Duration,
     ) {
@@ -97,17 +96,26 @@ where
         interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
-            // TODO reconsider panic, should we just log an error and continue the loop?
-            let events = retry_with_max_delay!(
-                sui_client.query_events_by_module(PACKAGE_ID, module.clone(), next_cursor),
+            let Ok(events) = retry_with_max_delay!(
+                sui_client.query_events_by_module(
+                    *get_bridge_package_id(),
+                    module.clone(),
+                    next_cursor
+                ),
                 Duration::from_secs(600)
-            )
-            .expect("Failed to query events from sui client after retry");
+            ) else {
+                tracing::error!("Failed to query events from sui client after retry");
+                continue;
+            };
 
             let len = events.data.len();
             if len != 0 {
+                // Note: it's extremely critical to make sure the SuiEvents we send via this channel
+                // are complete per transaction level. Namely, we should never send a partial list
+                // of events for a transaction. Otherwise, we may end up missing events.
+                // See `sui_client.query_events_by_module` for how this is implemented.
                 events_sender
-                    .send(events.data)
+                    .send((module.clone(), events.data))
                     .await
                     .expect("All Sui event channel receivers are closed");
                 // Unwrap: `query_events_by_module` always returns Some `next_cursor`
@@ -158,7 +166,10 @@ mod tests {
         assert_no_more_events(interval, &mut events_rx).await;
 
         // Module Foo has new events
-        let event_1: SuiEvent = SuiEvent::random_for_testing();
+        let mut event_1: SuiEvent = SuiEvent::random_for_testing();
+        let package_id = *get_bridge_package_id();
+        event_1.type_.address = package_id.into();
+        event_1.type_.module = module_foo.clone();
         let module_foo_events_1: sui_json_rpc_types::Page<SuiEvent, EventID> = EventPage {
             data: vec![event_1.clone(), event_1.clone()],
             next_cursor: None,
@@ -177,7 +188,8 @@ mod tests {
             module_foo_events_1.clone(),
         );
 
-        let received_events = events_rx.recv().await.unwrap();
+        let (identifier, received_events) = events_rx.recv().await.unwrap();
+        assert_eq!(identifier, module_foo);
         assert_eq!(received_events.len(), 2);
         assert_eq!(received_events[0].id, event_1.id);
         assert_eq!(received_events[1].id, event_1.id);
@@ -185,7 +197,9 @@ mod tests {
         assert_no_more_events(interval, &mut events_rx).await;
 
         // Module Bar has new events
-        let event_2: SuiEvent = SuiEvent::random_for_testing();
+        let mut event_2: SuiEvent = SuiEvent::random_for_testing();
+        event_2.type_.address = package_id.into();
+        event_2.type_.module = module_bar.clone();
         let module_bar_events_1 = EventPage {
             data: vec![event_2.clone()],
             next_cursor: None,
@@ -200,7 +214,8 @@ mod tests {
 
         add_event_response(&mock, module_bar.clone(), cursor, module_bar_events_1);
 
-        let received_events = events_rx.recv().await.unwrap();
+        let (identifier, received_events) = events_rx.recv().await.unwrap();
+        assert_eq!(identifier, module_bar);
         assert_eq!(received_events.len(), 1);
         assert_eq!(received_events[0].id, event_2.id);
         // No more
@@ -211,7 +226,7 @@ mod tests {
 
     async fn assert_no_more_events(
         interval: Duration,
-        events_rx: &mut mysten_metrics::metered_channel::Receiver<Vec<SuiEvent>>,
+        events_rx: &mut mysten_metrics::metered_channel::Receiver<(Identifier, Vec<SuiEvent>)>,
     ) {
         match timeout(interval * 2, events_rx.recv()).await {
             Err(_e) => (),
@@ -226,7 +241,7 @@ mod tests {
         events: EventPage,
     ) {
         mock.add_event_response(
-            PACKAGE_ID,
+            *get_bridge_package_id(),
             module.clone(),
             EventID {
                 tx_digest: cursor,

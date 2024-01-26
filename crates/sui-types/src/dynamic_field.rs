@@ -213,11 +213,11 @@ pub fn extract_field_from_move_struct<'a>(
 
 fn extract_object_id(value: &MoveStruct) -> Option<ObjectID> {
     // id:UID is the first value in an object
-    let uid_value = &value.fields.get(0)?.1;
+    let uid_value = &value.fields.first()?.1;
 
     // id is the first value in UID
     let id_value = match uid_value {
-        MoveValue::Struct(MoveStruct { fields, .. }) => &fields.get(0)?.1,
+        MoveValue::Struct(MoveStruct { fields, .. }) => &fields.first()?.1,
         _ => return None,
     };
     extract_id_value(id_value)
@@ -226,7 +226,7 @@ fn extract_object_id(value: &MoveStruct) -> Option<ObjectID> {
 fn extract_id_value(id_value: &MoveValue) -> Option<ObjectID> {
     // the id struct has a single bytes field
     let id_bytes_value = match id_value {
-        MoveValue::Struct(MoveStruct { fields, .. }) => &fields.get(0)?.1,
+        MoveValue::Struct(MoveStruct { fields, .. }) => &fields.first()?.1,
         _ => return None,
     };
     // the bytes field should be an address
@@ -251,12 +251,19 @@ pub fn derive_dynamic_field_id<T>(
 where
     T: Into<SuiAddress>,
 {
+    let parent: SuiAddress = parent.into();
     let k_tag_bytes = bcs::to_bytes(key_type_tag)?;
+    tracing::trace!(
+        "Deriving dynamic field ID for parent={:?}, key={:?}, key_type_tag={:?}",
+        parent,
+        key_bytes,
+        key_type_tag,
+    );
 
     // hash(parent || len(key) || key || key_type_tag)
     let mut hasher = DefaultHash::default();
     hasher.update([HashingIntentScope::ChildObjectId as u8]);
-    hasher.update(parent.into());
+    hasher.update(parent);
     hasher.update(key_bytes.len().to_le_bytes());
     hasher.update(key_bytes);
     hasher.update(k_tag_bytes);
@@ -264,7 +271,9 @@ where
 
     // truncate into an ObjectID and return
     // OK to access slice because digest should never be shorter than ObjectID::LENGTH.
-    Ok(ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap())
+    let id = ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap();
+    tracing::trace!("derive_dynamic_field_id result: {:?}", id);
+    Ok(id)
 }
 
 /// Given a parent object ID (e.g. a table), and a `key`, retrieve the corresponding dynamic field object

@@ -63,7 +63,7 @@ There are few details to take note of in this code:
 
 1. The fourth line declares the module name as `recaptcha` within the package `recaptcha`.
 1. The next eight lines use the use keyword to import types and functions from other modules, such as `sui::clock::Clock`, `sui::dynamic_field as df`, `sui::ed25519::ed25519_verify`, `sui::event::emit,sui::math`, `sui::object::{Self, UID}`, `sui::transfer`, and `sui::tx_context::{sender, TxContext}`. These modules are needed for the implementation of the reCAPTCHA verification and the interaction logic.
-1. The following three lines declare the error codes, namely: `EVerificationExpired`, `EInvalidSignature`, and `ENotYetVerified`, that are used to check the validity of the reCAPTCHA test result and the eligibility of the user. The error codes are also used in the unit tests to verify the correctness of the program. 
+1. The following three lines declare the error codes, namely: `EVerificationExpired`, `EInvalidSignature`, and `ENotYetVerified`, that are used to check the validity of the reCAPTCHA test result and the eligibility of the user. The error codes are also used in the unit tests to verify the correctness of the program.
 1. The last line declares the constant `TIME_WINDOW`, which specifies the duration of the time window in milliseconds. The time window is the period of time that the user is eligible to interact with the smart contract after passing the reCAPTCHA test.
 
 Next, add some more code to this module:
@@ -75,7 +75,7 @@ struct Interaction has copy, drop {
 }
 
 // Define a struct for the registry object that has a key field
-struct Registry has key { 
+struct Registry has key {
     id: UID, // The unique identifier of the registry object
     window: u64, // The length of the time window in milliseconds
 }
@@ -168,16 +168,16 @@ public fun interact(
     ctx: &mut TxContext  // A mutable reference to the transaction context
 ) {
     // Check if there is an existing interaction history for the sender address with the registry object
-    if (df::exists_with_type<address, u64>(&registry.id, sender(ctx))) {    
+    if (df::exists_with_type<address, u64>(&registry.id, sender(ctx))) {
         // Borrow a mutable reference to the interaction history object
         let timestamp_ms = df::borrow_mut<address, u64>(&mut registry.id, sender(ctx));
         // Get the current timestamp in milliseconds from the clock object
         let current_timestamp = sui::clock::timestamp_ms(clock);
-        
+
         if (current_timestamp - *timestamp_ms <= registry.window) {
             emit(
                 Interaction{
-                    sender: sender(ctx), 
+                    sender: sender(ctx),
                     timestamp_ms: sui::clock::timestamp_ms(clock)
                 }
             );
@@ -205,45 +205,13 @@ The function performs the following steps:
 - If the current timestamp is outside the time window of the eligibility, it aborts the execution with the error code `EVerificationExpired`. This means that the user has to pass the reCAPTCHA test again to interact with the smart contract.
 - If there is no existing interaction history, it aborts the execution with the error code `ENotYetVerified`. This means that the user has not passed the reCAPTCHA test yet and cannot interact with the smart contract.
 
-And with that, your `recaptcha.move` code is complete. 
+And with that, your `recaptcha.move` code is complete.
 
 ## Deployment
 
-:::info 
+{@include: ../../../snippets/initialize-sui-client-cli.mdx}
 
-See [Publish a Package](guides/developer/first-app/publish) for a more detailed guide on publishing packages or [Sui Client CLI](/references/cli/client.mdx) for a complete reference of `client` commands in the Sui CLI.
-
-:::
-
-Before [publishing your code](guides/developer/first-app/publish), you must first initialize the Sui Client CLI. To do so, in a terminal or console at the root directory of the project enter `sui client`. You receive the following response:
-
-```
-Config file ["[LINK_TO_PATH/.sui/sui_config/client.yaml"] doesn't exist, do you want to connect to a Sui Full node server [y/N]?
-```
-
-Enter `y` to proceed. You receive the following response:
-
-```
-Sui Full node server URL (Defaults to Sui Devnet if not specified) :
-```
-
-Leave this blank (press Enter). You receive the following response:
-
-```
-Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2: for secp256r1):
-```
-
-Select `0`. Now you should have a Sui address set up.
-
-Before you can publish your package to Devnet, however, you need Devnet SUI tokens. To get some, join the [Sui Discord](https://discord.gg/Sui), complete the verification steps, enter the `#devnet-faucet` channel and type `!faucet <WALLET ADDRESS>`. For other ways to get SUI in your Devnet account, see [Get SUI Tokens](/guides/developer/getting-started/get-coins).
-
-Now that you have an account with some Devnet SUI, you can deploy your contracts. To publish your package, use the following command in the same terminal or console:
-
-```
-sui client publish --gas-budget <GAS-BUDGET>
-```
-
-For the gas budget, use a standard value such as `20000000`.
+{@include: ../../../snippets/publish-to-devnet-with-coins.mdx}
 
 The package should successfully deploy. Next, set up a backend server that verifies whether the user has successfully completed the reCAPTCHA challenge and then signs a message that should be passed to the `verify` function.
 
@@ -390,12 +358,12 @@ That's it! You have implemented the backend for the reCAPTCHA. To run the app, y
 
 ## Frontend
 
-To implement the frontend for the reCAPTCHA, you need to create a react app that can render a user interface and interact with the backend and the smart contract. You also need to install some dependencies, such as `@mysten/wallet-kit`, `@mysten/sui.js`, `axios`, and `react-google-recaptcha`. These packages help you with wallet integration, transaction execution, HTTP requests, and reCAPTCHA rendering.
+To implement the frontend for the reCAPTCHA, you need to create a react app that can render a user interface and interact with the backend and the smart contract. You also need to install some dependencies, such as `@mysten/dapp-kit`, `@mysten/sui.js`, `axios`, and `react-google-recaptcha`. These packages help you with wallet integration, transaction execution, HTTP requests, and reCAPTCHA rendering.
 
 Here are the steps to create the frontend:
 
 1. Initialize a new project with `pnpm create vite recaptcha-app --template react-ts`.
-2. Install the dependencies with `pnpm install --save @mysten/wallet-kit @mysten/sui.js axios react-google-recaptcha`.
+2. Install the dependencies with `pnpm install --save @mysten/dapp-kit @mysten/sui.js axios react-google-recaptcha`.
 3. Create a file named `.env` and add the following environment variables:
     - `VITE_reCAPTCHA_SITE_KEY`: the site key that you get from Google when you register your site for reCAPTCHA
     - `VITE_reCAPTCHA_SECRET_KEY`: the secret key that you get from Google when you register your site for reCAPTCHA
@@ -406,7 +374,7 @@ Here are the steps to create the frontend:
 ```typescript title='App.tsx'
 import "./App.css";
 import Axios from "axios";
-import { ConnectButton, useWalletKit } from "@mysten/wallet-kit";
+import { ConnectButton, useCurrentWallet, useSignAndExecuteTransactionBlock, useCurrentAccount } from "@mysten/dapp-kit";
 import { TransactionBlock } from "@mysten/sui.js/transactions";
 import { useEffect, useState } from "react";
 import ReCAPTCHA from "react-google-recaptcha";
@@ -423,8 +391,9 @@ interface RecaptchaApiResponse {
 }
 
 function App() {
-  const { currentWallet, currentAccount, signAndExecuteTransactionBlock } =
-    useWalletKit();
+  const { currentWallet } = useCurrentWallet();
+  const { mutateAsync: signAndExecuteTransactionBlock } = useSignAndExecuteTransactionBlock();
+  const currentAccount = useCurrentAccount();
 
   const SITE_KEY = import.meta.env.VITE_reCAPTCHA_SITE_KEY!;
   const SECRET_KEY = import.meta.env.VITE_reCAPTCHA_SECRET_KEY!;
@@ -552,7 +521,7 @@ export default App;
 5. Examine the code to see what it does.
 
 - First, import the modules that you need for your app.
-- Next, use the `useWalletKit` hook from `@mysten/wallet-kit` to get access to the current wallet, the current account, and the `signAndExecuteTransactionBlock` function. These help you connect to the wallet and execute transactions on the blockchain.
+- Next, use hooks from `@mysten/dapp-kit` to get access to the current wallet, the current account, and the `signAndExecuteTransactionBlock` function. These help you connect to the wallet and execute transactions on the blockchain.
 - Then, define some constants for the site key, the secret key, the package ID, the registry ID, and the module ID. These are the values that you use to interact with the reCAPTCHA API and the smart contract.
 - After that, define some state variables to store the status of the reCAPTCHA validation, the verification result, and the message, the public key, and the signature that you get from the backend. Use the `useState` hook from React to manage these state variables.
 - Next, define a function named `onChange` that takes a token as an input and handles the change of the reCAPTCHA component. This function is triggered when the user completes the reCAPTCHA challenge. Here are the steps that you follow in this function:
@@ -568,9 +537,9 @@ export default App;
   - Return an empty object as the default reCAPTCHA API response.
 - Next, use the `useEffect` hook from React to run some code when the `currentWallet` state changes. In this case, you don't do anything, but you could add some logic here if you want to.
 - Finally, return a JSX element that renders the app. The app consists of the following components:
-  - A `ConnectButton` component from `@mysten/wallet-kit` that allows the user to connect to their wallet.
-  - A button that allows the user to interact with the smart contract. This button is disabled unless the user passes the verification at least once. When the user clicks this button, create a new `TransactionBlock` object from `@mysten/sui.js` and add a `moveCall` action that calls the `interact` function of the smart contract with the registry ID and the clock object ID as arguments. Then, use the `signAndExecuteTransactionBlock` function from `@mysten/wallet-kit` to sign and execute the transaction block on the blockchain. You also log the result to the console.
-  - A button that allows the user to verify their identity to the smart contract. This button is disabled unless the user passes the reCAPTCHA challenge. When the user clicks this button, create a new `TransactionBlock` object from `@mysten/sui.js` and add a `moveCall` action that calls the verify function of the smart contract with the registry ID, the signature, the public key, and the message as arguments. Then, use the `signAndExecuteTransactionBlock` function from `@mysten/wallet-kit` to sign and execute the transaction block on the blockchain. You also log the result to the console.
+  - A `ConnectButton` component from `@mysten/dapp-kit` that allows the user to connect to their wallet.
+  - A button that allows the user to interact with the smart contract. This button is disabled unless the user passes the verification at least once. When the user clicks this button, create a new `TransactionBlock` object from `@mysten/sui.js` and add a `moveCall` action that calls the `interact` function of the smart contract with the registry ID and the clock object ID as arguments. Then, use the `signAndExecuteTransactionBlock` function from `@mysten/dapp-kit` to sign and execute the transaction block on the blockchain. You also log the result to the console.
+  - A button that allows the user to verify their identity to the smart contract. This button is disabled unless the user passes the reCAPTCHA challenge. When the user clicks this button, create a new `TransactionBlock` object from `@mysten/sui.js` and add a `moveCall` action that calls the verify function of the smart contract with the registry ID, the signature, the public key, and the message as arguments. Then, use the `signAndExecuteTransactionBlock` function from `@mysten/dapp-kit` to sign and execute the transaction block on the blockchain. You also log the result to the console.
   - A `ReCAPTCHA` component from `react-google-recaptcha` that renders the reCAPTCHA widget. You pass the site key and the `onChange` function as props to this component.
 
 That's it! You have implemented the frontend for the reCAPTCHA. To run the app, you can use `pnpm run dev`. To test the app, you can open the browser and go to the `localhost:5173` URL. You should see the app and can interact with the reCAPTCHA and the smart contract.

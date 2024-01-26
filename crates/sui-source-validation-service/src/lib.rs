@@ -100,14 +100,15 @@ pub struct Package {
     pub watch: Option<ObjectID>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Serialize, Debug)]
 pub struct SourceInfo {
     pub path: PathBuf,
+    #[serde(skip_serializing_if = "Option::is_none")]
     // Is Some when content is hydrated from disk.
     pub source: Option<String>,
 }
 
-#[derive(Eq, PartialEq, Clone, Default, Deserialize, Debug, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, Clone, Default, Serialize, Deserialize, Debug, Ord, PartialOrd)]
 #[serde(rename_all = "lowercase")]
 pub enum Network {
     #[default]
@@ -148,10 +149,12 @@ pub async fn verify_package(
     package_path: impl AsRef<Path>,
 ) -> anyhow::Result<(Network, AddressLookup)> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-    let config = resolve_lock_file_path(
+    let mut config = resolve_lock_file_path(
         MoveBuildConfig::default(),
         Some(package_path.as_ref().to_path_buf()),
     )?;
+    config.no_lint = true;
+    config.silence_warnings = true;
     let build_config = BuildConfig {
         config,
         run_bytecode_verifier: false, /* no need to run verifier if code is on-chain */
@@ -172,7 +175,8 @@ pub async fn verify_package(
             /* verify_deps */ false,
             SourceMode::Verify,
         )
-        .await?;
+        .await
+        .map_err(|e| anyhow!("Network {network}: {e}"))?;
 
     let mut address_map = AddressLookup::new();
     let address = compiled_package
@@ -311,7 +315,10 @@ pub async fn clone_repositories(repos: Vec<&RepositorySource>, dir: &Path) -> an
     Ok(())
 }
 
-pub async fn initialize(config: &Config, dir: &Path) -> anyhow::Result<NetworkLookup> {
+pub async fn initialize(
+    config: &Config,
+    dir: &Path,
+) -> anyhow::Result<(NetworkLookup, NetworkLookup)> {
     let mut repos = vec![];
     for s in &config.packages {
         match s {
@@ -320,7 +327,31 @@ pub async fn initialize(config: &Config, dir: &Path) -> anyhow::Result<NetworkLo
         }
     }
     clone_repositories(repos, dir).await?;
-    verify_packages(config, dir).await
+    let sources = verify_packages(config, dir).await?;
+    let sources_list = sources_list(&sources).await;
+    Ok((sources, sources_list))
+}
+
+pub async fn sources_list(sources: &NetworkLookup) -> NetworkLookup {
+    let mut sources_list = NetworkLookup::new();
+    for (network, addresses) in sources {
+        let mut address_map = AddressLookup::new();
+        for (address, symbols) in addresses {
+            let mut symbol_map = SourceLookup::new();
+            for (symbol, source_info) in symbols {
+                symbol_map.insert(
+                    *symbol,
+                    SourceInfo {
+                        path: source_info.path.file_name().unwrap().into(),
+                        source: None,
+                    },
+                );
+            }
+            address_map.insert(*address, symbol_map);
+        }
+        sources_list.insert(network.clone(), address_map);
+    }
+    sources_list
 }
 
 pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<NetworkLookup> {
@@ -432,10 +463,13 @@ pub async fn watch_for_upgrades(
                 info!("Saw upgrade txn: {:?}", result);
                 let mut app_state = app_state.write().unwrap();
                 app_state.sources = NetworkLookup::new(); // Clear all sources.
+                app_state.sources_list = NetworkLookup::new(); // Clear all listed sources.
                 if let Some(channel) = channel {
                     channel.send(result).unwrap();
                     break Ok(());
                 }
+                info!("Shutting down server (resync performed on restart)");
+                std::process::exit(1)
             }
             Some(_) => {
                 info!("Saw failed transaction when listening to upgrades.")
@@ -451,6 +485,7 @@ pub async fn watch_for_upgrades(
 pub struct AppState {
     pub sources: NetworkLookup,
     pub metrics: Option<SourceServiceMetrics>,
+    pub sources_list: NetworkLookup,
 }
 
 pub fn serve(
@@ -582,8 +617,12 @@ async fn check_version_header<B>(
     response
 }
 
-async fn list_route(State(_app_state): State<Arc<RwLock<AppState>>>) -> impl IntoResponse {
-    (StatusCode::OK, "").into_response()
+async fn list_route(State(app_state): State<Arc<RwLock<AppState>>>) -> impl IntoResponse {
+    let app_state = app_state.read().unwrap();
+    (
+        StatusCode::OK,
+        Json(app_state.sources_list.clone()).into_response(),
+    )
 }
 
 pub struct SourceServiceMetrics {

@@ -1,29 +1,32 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
+use std::time::Duration;
+use std::{num::NonZeroUsize, path::Path, sync::Arc};
+
+use rand::rngs::OsRng;
+use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
+use sui_config::node::OverloadThresholdConfig;
+use sui_macros::nondeterministic;
+use sui_protocol_config::SupportedProtocolVersions;
+use sui_types::base_types::{AuthorityName, SuiAddress};
+use sui_types::committee::{Committee, ProtocolVersion};
+use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, KeypairTraits, PublicKey};
+use sui_types::object::Object;
+
 use crate::genesis_config::{AccountConfig, ValidatorGenesisConfigBuilder, DEFAULT_GAS_AMOUNT};
 use crate::genesis_config::{GenesisConfig, ValidatorGenesisConfig};
 use crate::network_config::NetworkConfig;
 use crate::node_config_builder::ValidatorConfigBuilder;
-use rand::rngs::OsRng;
-use std::path::PathBuf;
-use std::time::Duration;
-use std::{num::NonZeroUsize, path::Path, sync::Arc};
-use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
-use sui_config::node::OverloadThresholdConfig;
-use sui_protocol_config::SupportedProtocolVersions;
-use sui_types::base_types::{AuthorityName, SuiAddress};
-use sui_types::committee::{Committee, ProtocolVersion};
-use sui_types::crypto::{AccountKeyPair, KeypairTraits, PublicKey};
-use sui_types::object::Object;
 
 pub enum CommitteeConfig {
     Size(NonZeroUsize),
     Validators(Vec<ValidatorGenesisConfig>),
     AccountKeys(Vec<AccountKeyPair>),
-    /// Indicates that a committee should be deterministically generated, useing the provided rng
+    /// Indicates that a committee should be deterministically generated, using the provided rng
     /// as a source of randomness as well as generating deterministic network port information.
-    Deterministic(NonZeroUsize),
+    Deterministic((NonZeroUsize, Option<Vec<AccountKeyPair>>)),
 }
 
 pub type SupportedProtocolVersionsCallback = Arc<
@@ -79,7 +82,7 @@ impl ConfigBuilder {
     }
 
     pub fn new_with_temp_dir() -> Self {
-        Self::new(tempfile::tempdir().unwrap().into_path())
+        Self::new(nondeterministic!(tempfile::tempdir().unwrap()).into_path())
     }
 }
 
@@ -95,7 +98,15 @@ impl<R> ConfigBuilder<R> {
     }
 
     pub fn deterministic_committee_size(mut self, committee_size: NonZeroUsize) -> Self {
-        self.committee = CommitteeConfig::Deterministic(committee_size);
+        self.committee = CommitteeConfig::Deterministic((committee_size, None));
+        self
+    }
+
+    pub fn deterministic_committee_validators(mut self, keys: Vec<AccountKeyPair>) -> Self {
+        self.committee = CommitteeConfig::Deterministic((
+            NonZeroUsize::new(keys.len()).expect("Validator keys should be non empty"),
+            Some(keys),
+        ));
         self
     }
 
@@ -257,12 +268,20 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     })
                     .collect::<Vec<_>>()
             }
-            CommitteeConfig::Deterministic(size) => {
+            CommitteeConfig::Deterministic((size, keys)) => {
+                // If no keys are provided, generate them.
+                let keys = keys.unwrap_or(
+                    (0..size.get())
+                        .map(|_| get_key_pair_from_rng(&mut rng).1)
+                        .collect(),
+                );
+
                 let mut configs = vec![];
-                for i in 0..size.into() {
+                for (i, key) in keys.into_iter().enumerate() {
                     let port_offset = 8000 + i * 10;
                     let mut builder = ValidatorGenesisConfigBuilder::new()
                         .with_ip("127.0.0.1".to_owned())
+                        .with_account_key_pair(key)
                         .with_deterministic_ports(port_offset as u16);
                     if let Some(rgp) = self.reference_gas_price {
                         builder = builder.with_gas_price(rgp);
@@ -311,7 +330,10 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 .add_objects(self.additional_objects);
 
             for (i, validator) in validators.iter().enumerate() {
-                let name = format!("validator-{i}");
+                let name = validator
+                    .name
+                    .clone()
+                    .unwrap_or(format!("validator-{i}").to_string());
                 let validator_info = validator.to_validator_info(name);
                 builder =
                     builder.add_validator(validator_info.info, validator_info.proof_of_possession);
@@ -461,8 +483,7 @@ mod test {
         let genesis_digest = *genesis_transaction.digest();
 
         let silent = true;
-        let paranoid_checks = false;
-        let executor = sui_execution::executor(&protocol_config, paranoid_checks, silent)
+        let executor = sui_execution::executor(&protocol_config, silent, None)
             .expect("Creating an executor should not fail here");
 
         // Use a throwaway metrics registry for genesis transaction execution.
@@ -475,7 +496,7 @@ mod test {
         let (kind, signer, _) = transaction_data.execution_parts();
         let input_objects = CheckedInputObjects::new_for_genesis(vec![]);
 
-        let (_inner_temp_store, effects, _execution_error) = executor
+        let (_inner_temp_store, _, effects, _execution_error) = executor
             .execute_transaction_to_effects(
                 &InMemoryStorage::new(Vec::new()),
                 &protocol_config,

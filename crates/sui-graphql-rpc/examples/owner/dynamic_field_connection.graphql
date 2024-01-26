@@ -33,11 +33,11 @@ fragment DynamicFieldSelect on DynamicField {
   }
 }
 
-query DynamicFieldConnection {
+query DynamicFields {
   object(
     address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
   ) {
-    dynamicFieldConnection {
+    dynamicFields {
       pageInfo {
         hasNextPage
         endCursor

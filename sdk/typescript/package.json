@@ -2,8 +2,8 @@
 	"name": "@mysten/sui.js",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "Sui TypeScript API(Work in Progress)",
-	"homepage": "https://sui-typescript-docs.vercel.app",
-	"version": "0.48.0",
+	"homepage": "https://sdk.mystenlabs.com",
+	"version": "0.49.1",
 	"license": "Apache-2.0",
 	"sideEffects": false,
 	"files": [
@@ -117,7 +117,6 @@
 		"msw": "^1.2.2",
 		"tmp": "^0.2.1",
 		"ts-retry-promise": "^0.7.0",
-		"tsx": "^3.12.7",
 		"typedoc": "^0.24.8",
 		"typescript": "^5.1.6",
 		"vite": "^4.4.4",

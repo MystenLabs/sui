@@ -29,11 +29,11 @@ Response: {
                   "signature": {
                     "ref": null,
                     "body": {
-                      "struct": {
+                      "datatype": {
                         "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
                         "module": "object",
                         "type": "UID",
-                        "type_parameters": []
+                        "typeParameters": []
                       }
                     }
                   }
@@ -46,11 +46,11 @@ Response: {
                   "signature": {
                     "ref": null,
                     "body": {
-                      "struct": {
+                      "datatype": {
                         "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
                         "module": "balance",
                         "type": "Balance",
-                        "type_parameters": [
+                        "typeParameters": [
                           {
                             "typeParameter": 0
                           }
@@ -139,56 +139,58 @@ gas summary: computation_cost: 1000000, storage_cost: 5213600,  storage_rebate: 
 task 3 'create-checkpoint'. lines 58-58:
 Checkpoint created: 1
 
-task 4 'run-graphql'. lines 60-100:
+task 4 'run-graphql'. lines 60-102:
 Response: {
   "data": {
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "nodes": [
         {
           "effects": {
-            "objectChanges": [
-              {
-                "outputState": {
-                  "address": "0x00947c61559161baebff14abf3a953508186311498625e6d340ac24a82d7f36e",
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "address": "0x02150ebfe3d017c2726bd482f6d3c8a63516a398d7d98e2ee69396764e04bc76",
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "address": "0xd6cf3abc67cfdaede67b761651dfa593cf1152e63104cb3d25b96cf45b2f73ad",
-                  "asMovePackage": {
-                    "module": {
-                      "struct": {
-                        "name": "S",
-                        "abilities": [
-                          "COPY",
-                          "DROP"
-                        ],
-                        "typeParameters": [],
-                        "fields": [
-                          {
-                            "name": "x",
-                            "type": {
-                              "repr": "u64",
-                              "signature": {
-                                "ref": null,
-                                "body": "u64"
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "address": "0x06b223848f9d78b21b19dad4165a312cf85575a5276c04a96636646aa0847f1f",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0x8396cf8674f7821491d607d5c88ab17317c8e6f4425f973549ca5aa35cd52147",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0xaaca5c70f0f0b31694048ff8b7635e6e79fd2561951683894f32143bc5df3151",
+                    "asMovePackage": {
+                      "module": {
+                        "struct": {
+                          "name": "S",
+                          "abilities": [
+                            "COPY",
+                            "DROP"
+                          ],
+                          "typeParameters": [],
+                          "fields": [
+                            {
+                              "name": "x",
+                              "type": {
+                                "repr": "u64",
+                                "signature": {
+                                  "ref": null,
+                                  "body": "u64"
+                                }
                               }
                             }
-                          }
-                        ]
+                          ]
+                        }
                       }
                     }
                   }
                 }
-              }
-            ]
+              ]
+            }
           }
         }
       ]
@@ -196,142 +198,140 @@ Response: {
   }
 }
 
-task 5 'upgrade'. lines 102-108:
+task 5 'upgrade'. lines 104-110:
 created: object(5,0)
 mutated: object(0,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 6049600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 6 'create-checkpoint'. lines 110-110:
+task 6 'create-checkpoint'. lines 112-112:
 Checkpoint created: 2
 
-task 7 'run-graphql'. lines 112-167:
+task 7 'run-graphql'. lines 114-171:
 Response: {
   "data": {
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "nodes": [
         {
           "effects": {
-            "objectChanges": [
-              {
-                "outputState": {
-                  "address": "0x00947c61559161baebff14abf3a953508186311498625e6d340ac24a82d7f36e",
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "address": "0x02150ebfe3d017c2726bd482f6d3c8a63516a398d7d98e2ee69396764e04bc76",
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "address": "0x210a264edd9a4f7627a8abdef3d7d158bbd9e117ef9089a73369bb528ac52e3f",
-                  "asMovePackage": {
-                    "module": {
-                      "s": {
-                        "module": {
-                          "package": {
-                            "asObject": {
-                              "address": "0xd6cf3abc67cfdaede67b761651dfa593cf1152e63104cb3d25b96cf45b2f73ad"
-                            }
-                          }
-                        },
-                        "name": "S",
-                        "abilities": [
-                          "COPY",
-                          "DROP"
-                        ],
-                        "typeParameters": [],
-                        "fields": [
-                          {
-                            "name": "x",
-                            "type": {
-                              "repr": "u64",
-                              "signature": {
-                                "ref": null,
-                                "body": "u64"
-                              }
-                            }
-                          }
-                        ]
-                      },
-                      "t": {
-                        "module": {
-                          "package": {
-                            "asObject": {
-                              "address": "0x210a264edd9a4f7627a8abdef3d7d158bbd9e117ef9089a73369bb528ac52e3f"
-                            }
-                          }
-                        },
-                        "name": "T",
-                        "abilities": [],
-                        "typeParameters": [
-                          {
-                            "constraints": [
-                              "DROP"
-                            ],
-                            "isPhantom": false
-                          }
-                        ],
-                        "fields": [
-                          {
-                            "name": "y",
-                            "type": {
-                              "repr": "u64",
-                              "signature": {
-                                "ref": null,
-                                "body": "u64"
-                              }
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "address": "0x06b223848f9d78b21b19dad4165a312cf85575a5276c04a96636646aa0847f1f",
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "address": "0x3cb826f2beb283fd133a02f7743229dbd953816c39c5a01c13d0118bf7412ae4",
+                    "asMovePackage": {
+                      "module": {
+                        "s": {
+                          "module": {
+                            "package": {
+                              "address": "0xaaca5c70f0f0b31694048ff8b7635e6e79fd2561951683894f32143bc5df3151"
                             }
                           },
-                          {
-                            "name": "s",
-                            "type": {
-                              "repr": "0xd6cf3abc67cfdaede67b761651dfa593cf1152e63104cb3d25b96cf45b2f73ad::m::S",
-                              "signature": {
-                                "ref": null,
-                                "body": {
-                                  "struct": {
-                                    "package": "0xd6cf3abc67cfdaede67b761651dfa593cf1152e63104cb3d25b96cf45b2f73ad",
-                                    "module": "m",
-                                    "type": "S",
-                                    "type_parameters": []
+                          "name": "S",
+                          "abilities": [
+                            "COPY",
+                            "DROP"
+                          ],
+                          "typeParameters": [],
+                          "fields": [
+                            {
+                              "name": "x",
+                              "type": {
+                                "repr": "u64",
+                                "signature": {
+                                  "ref": null,
+                                  "body": "u64"
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        "t": {
+                          "module": {
+                            "package": {
+                              "address": "0x3cb826f2beb283fd133a02f7743229dbd953816c39c5a01c13d0118bf7412ae4"
+                            }
+                          },
+                          "name": "T",
+                          "abilities": [],
+                          "typeParameters": [
+                            {
+                              "constraints": [
+                                "DROP"
+                              ],
+                              "isPhantom": false
+                            }
+                          ],
+                          "fields": [
+                            {
+                              "name": "y",
+                              "type": {
+                                "repr": "u64",
+                                "signature": {
+                                  "ref": null,
+                                  "body": "u64"
+                                }
+                              }
+                            },
+                            {
+                              "name": "s",
+                              "type": {
+                                "repr": "0xaaca5c70f0f0b31694048ff8b7635e6e79fd2561951683894f32143bc5df3151::m::S",
+                                "signature": {
+                                  "ref": null,
+                                  "body": {
+                                    "datatype": {
+                                      "package": "0xaaca5c70f0f0b31694048ff8b7635e6e79fd2561951683894f32143bc5df3151",
+                                      "module": "m",
+                                      "type": "S",
+                                      "typeParameters": []
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "name": "u",
+                              "type": {
+                                "repr": "$0",
+                                "signature": {
+                                  "ref": null,
+                                  "body": {
+                                    "typeParameter": 0
                                   }
                                 }
                               }
                             }
-                          },
-                          {
-                            "name": "u",
-                            "type": {
-                              "repr": "$0",
-                              "signature": {
-                                "ref": null,
-                                "body": {
-                                  "typeParameter": 0
-                                }
+                          ]
+                        },
+                        "v": {
+                          "name": "V",
+                          "fields": [
+                            {
+                              "name": "t",
+                              "type": {
+                                "repr": "0xaaca5c70f0f0b31694048ff8b7635e6e79fd2561951683894f32143bc5df3151::m::T<0xaaca5c70f0f0b31694048ff8b7635e6e79fd2561951683894f32143bc5df3151::m::S>"
                               }
                             }
-                          }
-                        ]
-                      },
-                      "v": {
-                        "name": "V",
-                        "fields": [
-                          {
-                            "name": "t",
-                            "type": {
-                              "repr": "0xd6cf3abc67cfdaede67b761651dfa593cf1152e63104cb3d25b96cf45b2f73ad::m::T<0xd6cf3abc67cfdaede67b761651dfa593cf1152e63104cb3d25b96cf45b2f73ad::m::S>"
-                            }
-                          }
-                        ]
+                          ]
+                        }
                       }
                     }
                   }
+                },
+                {
+                  "outputState": {
+                    "address": "0x8396cf8674f7821491d607d5c88ab17317c8e6f4425f973549ca5aa35cd52147",
+                    "asMovePackage": null
+                  }
                 }
-              }
-            ]
+              ]
+            }
           }
         }
       ]
@@ -339,45 +339,47 @@ Response: {
   }
 }
 
-task 8 'run-graphql'. lines 169-202:
+task 8 'run-graphql'. lines 173-208:
 Response: {
   "data": {
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "nodes": [
         {
           "effects": {
-            "objectChanges": [
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
-                  "asMovePackage": {
-                    "module": {
-                      "s": {
-                        "module": {
-                          "struct": null
-                        }
-                      },
-                      "t": {
-                        "module": {
-                          "struct": {
-                            "name": "T"
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "outputState": {
+                    "asMovePackage": {
+                      "module": {
+                        "s": {
+                          "module": {
+                            "struct": null
+                          }
+                        },
+                        "t": {
+                          "module": {
+                            "struct": {
+                              "name": "T"
+                            }
                           }
                         }
                       }
                     }
                   }
+                },
+                {
+                  "outputState": {
+                    "asMovePackage": null
+                  }
                 }
-              }
-            ]
+              ]
+            }
           }
         }
       ]
@@ -385,7 +387,7 @@ Response: {
   }
 }
 
-task 9 'run-graphql'. lines 205-239:
+task 9 'run-graphql'. lines 211-251:
 Response: {
   "data": {
     "object": {
@@ -463,6 +465,40 @@ Response: {
                 ]
               },
               {
+                "name": "DenyCap",
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "RegulatedCoinMetadata",
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                    }
+                  },
+                  {
+                    "name": "coin_metadata_object",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::ID"
+                    }
+                  },
+                  {
+                    "name": "deny_cap_object",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::ID"
+                    }
+                  }
+                ]
+              },
+              {
                 "name": "TreasuryCap",
                 "fields": [
                   {
@@ -486,15 +522,36 @@ Response: {
             }
           },
           "after": {
-            "nodes": [
+            "edges": [
               {
-                "name": "CoinMetadata"
+                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "CoinMetadata"
+                }
               },
               {
-                "name": "CurrencyCreated"
+                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
               },
               {
-                "name": "TreasuryCap"
+                "cursor": "IkRlbnlDYXAi",
+                "node": {
+                  "name": "DenyCap"
+                }
+              },
+              {
+                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "RegulatedCoinMetadata"
+                }
+              },
+              {
+                "cursor": "IlRyZWFzdXJ5Q2FwIg",
+                "node": {
+                  "name": "TreasuryCap"
+                }
               }
             ],
             "pageInfo": {
@@ -503,15 +560,36 @@ Response: {
             }
           },
           "before": {
-            "nodes": [
+            "edges": [
               {
-                "name": "Coin"
+                "cursor": "IkNvaW4i",
+                "node": {
+                  "name": "Coin"
+                }
               },
               {
-                "name": "CoinMetadata"
+                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "CoinMetadata"
+                }
               },
               {
-                "name": "CurrencyCreated"
+                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
+              },
+              {
+                "cursor": "IkRlbnlDYXAi",
+                "node": {
+                  "name": "DenyCap"
+                }
+              },
+              {
+                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "RegulatedCoinMetadata"
+                }
               }
             ],
             "pageInfo": {
@@ -525,19 +603,25 @@ Response: {
   }
 }
 
-task 10 'run-graphql'. lines 241-285:
+task 10 'run-graphql'. lines 253-300:
 Response: {
   "data": {
     "object": {
       "asMovePackage": {
         "module": {
           "prefix": {
-            "nodes": [
+            "edges": [
               {
-                "name": "CoinMetadata"
+                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "CoinMetadata"
+                }
               },
               {
-                "name": "CurrencyCreated"
+                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
               }
             ],
             "pageInfo": {
@@ -546,32 +630,62 @@ Response: {
             }
           },
           "prefixAll": {
-            "nodes": [
+            "edges": [
               {
-                "name": "CoinMetadata"
+                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "CoinMetadata"
+                }
               },
               {
-                "name": "CurrencyCreated"
+                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
               },
               {
-                "name": "TreasuryCap"
+                "cursor": "IkRlbnlDYXAi",
+                "node": {
+                  "name": "DenyCap"
+                }
               }
             ],
             "pageInfo": {
-              "hasNextPage": false,
+              "hasNextPage": true,
               "hasPreviousPage": true
             }
           },
           "prefixExcess": {
-            "nodes": [
+            "edges": [
               {
-                "name": "CoinMetadata"
+                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "CoinMetadata"
+                }
               },
               {
-                "name": "CurrencyCreated"
+                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
               },
               {
-                "name": "TreasuryCap"
+                "cursor": "IkRlbnlDYXAi",
+                "node": {
+                  "name": "DenyCap"
+                }
+              },
+              {
+                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "RegulatedCoinMetadata"
+                }
+              },
+              {
+                "cursor": "IlRyZWFzdXJ5Q2FwIg",
+                "node": {
+                  "name": "TreasuryCap"
+                }
               }
             ],
             "pageInfo": {
@@ -580,12 +694,18 @@ Response: {
             }
           },
           "suffix": {
-            "nodes": [
+            "edges": [
               {
-                "name": "CoinMetadata"
+                "cursor": "IkRlbnlDYXAi",
+                "node": {
+                  "name": "DenyCap"
+                }
               },
               {
-                "name": "CurrencyCreated"
+                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "RegulatedCoinMetadata"
+                }
               }
             ],
             "pageInfo": {
@@ -594,32 +714,62 @@ Response: {
             }
           },
           "suffixAll": {
-            "nodes": [
+            "edges": [
               {
-                "name": "Coin"
+                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
               },
               {
-                "name": "CoinMetadata"
+                "cursor": "IkRlbnlDYXAi",
+                "node": {
+                  "name": "DenyCap"
+                }
               },
               {
-                "name": "CurrencyCreated"
+                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "RegulatedCoinMetadata"
+                }
               }
             ],
             "pageInfo": {
               "hasNextPage": true,
-              "hasPreviousPage": false
+              "hasPreviousPage": true
             }
           },
           "suffixExcess": {
-            "nodes": [
+            "edges": [
               {
-                "name": "Coin"
+                "cursor": "IkNvaW4i",
+                "node": {
+                  "name": "Coin"
+                }
               },
               {
-                "name": "CoinMetadata"
+                "cursor": "IkNvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "CoinMetadata"
+                }
               },
               {
-                "name": "CurrencyCreated"
+                "cursor": "IkN1cnJlbmN5Q3JlYXRlZCI",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
+              },
+              {
+                "cursor": "IkRlbnlDYXAi",
+                "node": {
+                  "name": "DenyCap"
+                }
+              },
+              {
+                "cursor": "IlJlZ3VsYXRlZENvaW5NZXRhZGF0YSI",
+                "node": {
+                  "name": "RegulatedCoinMetadata"
+                }
               }
             ],
             "pageInfo": {

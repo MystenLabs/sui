@@ -1,0 +1,5 @@
+[package]
+name = "C-rename"
+
+[addresses]
+A = "_"

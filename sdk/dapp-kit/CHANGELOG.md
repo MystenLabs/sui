@@ -1,5 +1,38 @@
 # @mysten/dapp-kit
 
+## 0.11.1
+
+### Patch Changes
+
+- Updated dependencies [9ac0a4ec01]
+  - @mysten/wallet-standard@0.10.1
+  - @mysten/sui.js@0.49.1
+
+## 0.11.0
+
+### Minor Changes
+
+- e5f9e3ba21: Replace tsup based build to fix issues with esm/cjs dual publishing
+
+### Patch Changes
+
+- 9ba167b0af: Default storage to memory storage when local storage isn't available during SSR
+- Updated dependencies [e5f9e3ba21]
+  - @mysten/wallet-standard@0.10.0
+  - @mysten/sui.js@0.49.0
+
+## 0.10.3
+
+### Patch Changes
+
+- 165ad6b21d: Support both `id` and `name` as unique wallet identifiers.
+- dd362ec1d6: Update docs url to sdk.mystenlabs.com
+- d55db38647: Set a high z-index for the account dropdown so that it doesn't get hidden
+- Updated dependencies [dd362ec1d6]
+- Updated dependencies [165ad6b21d]
+  - @mysten/wallet-standard@0.9.0
+  - @mysten/sui.js@0.48.1
+
 ## 0.10.2
 
 ### Patch Changes

@@ -10,18 +10,72 @@ use bytes::Bytes;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use indicatif::ProgressBar;
+use itertools::Itertools;
 use object_store::path::Path;
 use object_store::{DynObjectStore, Error, ObjectStore};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::time::Instant;
 use tracing::{error, warn};
 use url::Url;
 
 pub const MANIFEST_FILENAME: &str = "MANIFEST";
+
+#[derive(Serialize, Deserialize)]
+
+pub struct Manifest {
+    pub available_epochs: Vec<u64>,
+}
+
+impl Manifest {
+    pub fn new(available_epochs: Vec<u64>) -> Self {
+        Manifest { available_epochs }
+    }
+
+    pub fn epoch_exists(&self, epoch: u64) -> bool {
+        self.available_epochs.contains(&epoch)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PerEpochManifest {
+    pub lines: Vec<String>,
+}
+
+impl PerEpochManifest {
+    pub fn new(lines: Vec<String>) -> Self {
+        PerEpochManifest { lines }
+    }
+
+    pub fn serialize_as_newline_delimited(&self) -> String {
+        self.lines.join("\n")
+    }
+
+    pub fn deserialize_from_newline_delimited(s: &str) -> PerEpochManifest {
+        PerEpochManifest {
+            lines: s.lines().map(String::from).collect(),
+        }
+    }
+
+    // Method to filter lines by a given prefix
+    pub fn filter_by_prefix(&self, prefix: &str) -> PerEpochManifest {
+        let filtered_lines = self
+            .lines
+            .iter()
+            .filter(|line| line.starts_with(prefix))
+            .cloned()
+            .collect();
+
+        PerEpochManifest {
+            lines: filtered_lines,
+        }
+    }
+}
 
 pub async fn get<S: ObjectStoreGetExt>(store: &S, src: &Path) -> Result<Bytes> {
     let bytes = retry(backoff::ExponentialBackoff::default(), || async {
@@ -32,6 +86,10 @@ pub async fn get<S: ObjectStoreGetExt>(store: &S, src: &Path) -> Result<Bytes> {
     })
     .await?;
     Ok(bytes)
+}
+
+pub async fn exists<S: ObjectStoreGetExt>(store: &S, src: &Path) -> bool {
+    store.get_bytes(src).await.is_ok()
 }
 
 pub async fn put<S: ObjectStorePutExt>(store: &S, src: &Path, bytes: Bytes) -> Result<()> {
@@ -198,6 +256,49 @@ pub async fn find_all_dirs_with_epoch_prefix(
     Ok(dirs)
 }
 
+pub async fn list_all_epochs(object_store: Arc<DynObjectStore>) -> Result<Vec<u64>> {
+    let remote_epoch_dirs = find_all_dirs_with_epoch_prefix(&object_store, None).await?;
+    let mut out = vec![];
+    let mut success_marker_found = false;
+    for (epoch, path) in remote_epoch_dirs.iter().sorted() {
+        let success_marker = path.child("_SUCCESS");
+        let get_result = object_store.get(&success_marker).await;
+        match get_result {
+            Err(_) => {
+                if !success_marker_found {
+                    error!("No success marker found for epoch: {epoch}");
+                }
+            }
+            Ok(_) => {
+                out.push(*epoch);
+                success_marker_found = true;
+            }
+        }
+    }
+    Ok(out)
+}
+
+pub async fn run_manifest_update_loop(
+    store: Arc<DynObjectStore>,
+    mut recv: tokio::sync::broadcast::Receiver<()>,
+) -> Result<()> {
+    let mut update_interval = tokio::time::interval(Duration::from_secs(300));
+    loop {
+        tokio::select! {
+            _now = update_interval.tick() => {
+                if let Ok(epochs) = list_all_epochs(store.clone()).await {
+                    let manifest_path = Path::from(MANIFEST_FILENAME);
+                    let manifest = Manifest::new(epochs);
+                    let bytes = serde_json::to_string(&manifest)?;
+                    put(&store, &manifest_path, Bytes::from(bytes)).await?;
+                }
+            },
+             _ = recv.recv() => break,
+        }
+    }
+    Ok(())
+}
+
 /// This function will find all child directories in the input store which are of the form "epoch_num"
 /// and return a map of epoch number to the directory path
 pub async fn find_all_files_with_epoch_prefix(
@@ -276,11 +377,11 @@ pub fn get_path(prefix: &str) -> Path {
 // this simplicty enables easy parsing for scripts to download snapshots
 pub async fn write_snapshot_manifest<S: ObjectStoreListExt + ObjectStorePutExt>(
     dir: &Path,
-    local_disk: &S,
+    store: &S,
     epoch_prefix: String,
 ) -> Result<()> {
     let mut file_names = vec![];
-    let mut paths = local_disk.list_objects(Some(dir)).await?;
+    let mut paths = store.list_objects(Some(dir)).await?;
     while let Some(res) = paths.next().await {
         if let Ok(object_metadata) = res {
             // trim the "epoch_XX/" dir prefix here
@@ -296,9 +397,10 @@ pub async fn write_snapshot_manifest<S: ObjectStoreListExt + ObjectStorePutExt>(
         }
     }
 
-    let bytes = Bytes::from(file_names.join("\n"));
+    let epoch_manifest = PerEpochManifest::new(file_names);
+    let bytes = Bytes::from(epoch_manifest.serialize_as_newline_delimited());
     put(
-        local_disk,
+        store,
         &Path::from(format!("{}/{}", dir, MANIFEST_FILENAME)),
         bytes,
     )

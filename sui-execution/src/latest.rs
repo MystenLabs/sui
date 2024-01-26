@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
 use std::{collections::HashSet, sync::Arc};
 
 use move_binary_format::CompiledModule;
@@ -23,16 +24,14 @@ use sui_types::{
 
 use move_bytecode_verifier_latest::meter::Scope;
 use move_vm_runtime_latest::move_vm::MoveVM;
-use sui_adapter_latest::adapter::{
-    default_verifier_config, new_move_vm, run_metered_move_bytecode_verifier,
-};
+use sui_adapter_latest::adapter::{new_move_vm, run_metered_move_bytecode_verifier};
 use sui_adapter_latest::execution_engine::{
     execute_genesis_state_update, execute_transaction_to_effects,
 };
 use sui_adapter_latest::type_layout_resolver::TypeLayoutResolver;
 use sui_move_natives_latest::all_natives;
 use sui_types::storage::BackingStore;
-use sui_verifier_latest::meter::SuiVerifierMeter;
+use sui_verifier_latest::{default_verifier_config, meter::SuiVerifierMeter};
 
 use crate::executor;
 use crate::verifier;
@@ -49,12 +48,13 @@ pub(crate) struct Verifier<'m> {
 impl Executor {
     pub(crate) fn new(
         protocol_config: &ProtocolConfig,
-        _paranoid_checks: bool,
         silent: bool,
+        enable_profiler: Option<PathBuf>,
     ) -> Result<Self, SuiError> {
         Ok(Executor(Arc::new(new_move_vm(
             all_natives(silent),
             protocol_config,
+            enable_profiler,
         )?)))
     }
 }
@@ -93,6 +93,7 @@ impl executor::Executor for Executor {
         transaction_digest: TransactionDigest,
     ) -> (
         InnerTemporaryStore,
+        SuiGasStatus,
         TransactionEffects,
         Result<(), ExecutionError>,
     ) {
@@ -129,27 +130,48 @@ impl executor::Executor for Executor {
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
+        skip_all_checks: bool,
     ) -> (
         InnerTemporaryStore,
+        SuiGasStatus,
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
     ) {
-        execute_transaction_to_effects::<execution_mode::DevInspect>(
-            store,
-            input_objects,
-            gas_coins,
-            gas_status,
-            transaction_kind,
-            transaction_signer,
-            transaction_digest,
-            &self.0,
-            epoch_id,
-            epoch_timestamp_ms,
-            protocol_config,
-            metrics,
-            enable_expensive_checks,
-            certificate_deny_set,
-        )
+        if skip_all_checks {
+            execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
+                store,
+                input_objects,
+                gas_coins,
+                gas_status,
+                transaction_kind,
+                transaction_signer,
+                transaction_digest,
+                &self.0,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                metrics,
+                enable_expensive_checks,
+                certificate_deny_set,
+            )
+        } else {
+            execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
+                store,
+                input_objects,
+                gas_coins,
+                gas_status,
+                transaction_kind,
+                transaction_signer,
+                transaction_digest,
+                &self.0,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                metrics,
+                enable_expensive_checks,
+                certificate_deny_set,
+            )
+        }
     }
 
     fn update_genesis_state(

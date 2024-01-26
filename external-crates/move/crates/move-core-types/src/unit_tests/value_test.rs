@@ -28,7 +28,7 @@ fn struct_deserialization() {
     // test each deserialization scheme
     let runtime_value = R::MoveStruct(values);
     assert_eq!(
-        serde_json::to_value(&runtime_value).unwrap(),
+        serde_json::to_value(runtime_value).unwrap(),
         json!([7, true])
     );
 
@@ -95,7 +95,7 @@ fn nested_typed_struct_deserialization() {
     // test each deserialization scheme
     let nested_runtime_struct = R::MoveValue::Struct(R::MoveStruct(vec![R::MoveValue::U64(7)]));
     let runtime_value = R::MoveStruct(vec![nested_runtime_struct]);
-    assert_eq!(serde_json::to_value(&runtime_value).unwrap(), json!([[7]]));
+    assert_eq!(serde_json::to_value(runtime_value).unwrap(), json!([[7]]));
 
     let nested_typed_struct = A::MoveValue::Struct(A::MoveStruct::new(
         nested_struct_type,

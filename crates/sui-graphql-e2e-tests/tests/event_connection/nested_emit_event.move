@@ -40,11 +40,9 @@ module Test::M3 {
 
 //# create-checkpoint
 
-//# run-graphql --variables A
+//# run-graphql
 {
-  eventConnection(
-    filter: {sender: $A}
-  ) {
+  events(filter: {sender: "@{A}"}) {
     nodes {
       sendingModule {
         name
@@ -52,7 +50,7 @@ module Test::M3 {
       type {
         repr
       }
-      senders {
+      sender {
         address
       }
       json
@@ -61,11 +59,9 @@ module Test::M3 {
   }
 }
 
-//# run-graphql --variables A Test
+//# run-graphql
 {
-  eventConnection(
-    filter: {sender: $A, emittingPackage: $Test}
-  ) {
+  events(filter: {sender: "@{A}", emittingModule: "@{Test}"}) {
     nodes {
       sendingModule {
         name
@@ -73,7 +69,7 @@ module Test::M3 {
       type {
         repr
       }
-      senders {
+      sender {
         address
       }
       json
@@ -82,11 +78,9 @@ module Test::M3 {
   }
 }
 
-//# run-graphql --variables A Test
+//# run-graphql
 {
-  eventConnection(
-    filter: {sender: $A, emittingPackage: $Test, emittingModule: "M1"}
-  ) {
+  events(filter: {sender: "@{A}", emittingModule: "@{Test}::M1"}) {
     nodes {
       sendingModule {
         name
@@ -94,7 +88,7 @@ module Test::M3 {
       type {
         repr
       }
-      senders {
+      sender {
         address
       }
       json
@@ -103,11 +97,9 @@ module Test::M3 {
   }
 }
 
-//# run-graphql --variables A Test
+//# run-graphql
 {
-  eventConnection(
-    filter: {sender: $A, emittingPackage: $Test, emittingModule: "M2"}
-  ) {
+  events(filter: {sender: "@{A}", emittingModule: "@{Test}::M2"}) {
     nodes {
       sendingModule {
         name
@@ -115,7 +107,7 @@ module Test::M3 {
       type {
         repr
       }
-      senders {
+      sender {
         address
       }
       json
@@ -124,11 +116,9 @@ module Test::M3 {
   }
 }
 
-//# run-graphql --variables A Test
+//# run-graphql
 {
-  eventConnection(
-    filter: {sender: $A, emittingPackage: $Test, emittingModule: "M3"}
-  ) {
+  events(filter: {sender: "@{A}", emittingModule: "@{Test}::M3"}) {
     nodes {
       sendingModule {
         name
@@ -136,7 +126,7 @@ module Test::M3 {
       type {
         repr
       }
-      senders {
+      sender {
         address
       }
       json

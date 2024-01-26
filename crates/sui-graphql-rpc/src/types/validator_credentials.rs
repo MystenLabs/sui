@@ -4,6 +4,7 @@
 use super::base64::Base64;
 use async_graphql::*;
 
+/// The credentials related fields associated with a validator.
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 pub(crate) struct ValidatorCredentials {
     pub protocol_pub_key: Option<Base64>,

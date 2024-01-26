@@ -8,16 +8,12 @@ use crate::{
     diag,
     diagnostics::{Diagnostic, WarningFilters},
     editions::Flavor,
-    expansion::ast::{AbilitySet, AttributeName_, Fields, ModuleIdent, Visibility},
+    expansion::ast::{AbilitySet, Fields, ModuleIdent, Visibility},
     naming::ast::{
         self as N, BuiltinTypeName_, FunctionSignature, StructFields, Type, TypeName_, Type_, Var,
     },
     parser::ast::{Ability_, FunctionName, Mutability, StructName},
-    shared::{
-        known_attributes::{KnownAttribute, TestingAttribute},
-        program_info::TypingProgramInfo,
-        CompilationEnv, Identifier,
-    },
+    shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier},
     sui_mode::*,
     typing::{
         ast::{self as T, ModuleCall},
@@ -115,22 +111,16 @@ impl<'a> TypingVisitorContext for Context<'a> {
     fn visit_module_custom(&mut self, ident: ModuleIdent, mdef: &mut T::ModuleDefinition) -> bool {
         let config = self.env.package_config(mdef.package_name);
         if config.flavor != Flavor::Sui {
-            // skip if not sui
+            // Skip if not sui
             return true;
         }
-
-        if !mdef.is_source_module {
+        if config.is_dependency || !mdef.is_source_module {
             // Skip non-source, dependency modules
             return true;
         }
 
         self.set_module(ident);
-        self.in_test = mdef.attributes.iter().any(|(_, attr_, _)| {
-            matches!(
-                attr_,
-                AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::TestOnly))
-            )
-        });
+        self.in_test = mdef.attributes.is_test_or_test_only();
         if let Some(sdef) = mdef.structs.get_(&self.otw_name()) {
             let valid_fields = if let N::StructFields::Defined(fields) = &sdef.fields {
                 invalid_otw_field_loc(fields).is_none()
@@ -260,14 +250,7 @@ fn function(context: &mut Context, name: FunctionName, fdef: &mut T::Function) {
         entry,
     } = fdef;
     let prev_in_test = context.in_test;
-    if attributes.iter().any(|(_, attr_, _)| {
-        matches!(
-            attr_,
-            AttributeName_::Known(KnownAttribute::Testing(
-                TestingAttribute::Test | TestingAttribute::TestOnly
-            ))
-        )
-    }) {
+    if attributes.is_test_or_test_only() {
         context.in_test = true;
     }
     if name.0.value == INIT_FUNCTION_NAME {
@@ -903,6 +886,23 @@ fn exp(context: &mut Context, e: &T::Exp) {
             let is_transfer_module = module.value.is(SUI_ADDR_NAME, TRANSFER_MODULE_NAME);
             if is_transfer_module && PRIVATE_TRANSFER_FUNCTIONS.contains(&name.value()) {
                 check_private_transfer(context, e.exp.loc, mcall)
+            }
+            // TODO(tzakian): Temporary
+            if is_transfer_module && &*name.value() == "receiving_object_id" {
+                let diag = diag!(
+                    crate::diagnostics::codes::custom(
+                        SUI_DIAG_PREFIX,
+                        Severity::NonblockingError,
+                        TYPING,
+                        10,
+                        "Non-supported call"
+                    ),
+                    (
+                        e.exp.loc,
+                        "Calling 'receiving_object_id' is not supported at this time"
+                    ),
+                );
+                context.env.add_diag(diag);
             }
         }
         T::UnannotatedExp_::Pack(m, s, _, _) => {

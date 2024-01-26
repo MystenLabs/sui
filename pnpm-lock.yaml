@@ -73,6 +73,9 @@ importers:
       prettier-plugin-tailwindcss:
         specifier: ^0.4.1
         version: 0.4.1(@ianvs/prettier-plugin-sort-imports@4.1.0)(prettier@3.0.0)
+      tsx:
+        specifier: ^3.12.7
+        version: 3.12.7
       turbo:
         specifier: ^1.10.8
         version: 1.10.8
@@ -145,7 +148,7 @@ importers:
         version: 18.2.15
       '@vanilla-extract/vite-plugin':
         specifier: ^3.9.0
-        version: 3.9.0(@types/node@20.4.2)(vite@4.4.4)
+        version: 3.9.0(vite@4.4.4)
       postcss:
         specifier: ^8.4.31
         version: 8.4.31
@@ -203,9 +206,6 @@ importers:
       '@mysten/ui':
         specifier: workspace:*
         version: link:../ui
-      '@mysten/wallet-kit':
-        specifier: workspace:*
-        version: link:../../sdk/wallet-kit/react
       '@radix-ui/react-collapsible':
         specifier: ^1.0.3
         version: 1.0.3(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0)(react@18.2.0)
@@ -239,9 +239,6 @@ importers:
       '@types/throttle-debounce':
         specifier: ^5.0.0
         version: 5.0.0
-      '@vanilla-extract/css':
-        specifier: ^1.13.0
-        version: 1.13.0
       '@visx/axis':
         specifier: ^3.3.0
         version: 3.3.0(react@18.2.0)
@@ -384,9 +381,6 @@ importers:
       '@types/topojson-client':
         specifier: ^3.1.1
         version: 3.1.1
-      '@vanilla-extract/vite-plugin':
-        specifier: ^3.9.0
-        version: 3.9.0(@types/node@20.4.2)(vite@4.4.4)
       '@vitejs/plugin-react':
         specifier: ^4.0.3
         version: 4.0.3(vite@4.4.4)
@@ -911,15 +905,15 @@ importers:
       '@headlessui/react':
         specifier: ^1.7.15
         version: 1.7.15(react-dom@18.2.0)(react@18.2.0)
+      '@mysten/dapp-kit':
+        specifier: workspace:*
+        version: link:../../sdk/dapp-kit
       '@mysten/kiosk':
         specifier: workspace:*
         version: link:../../sdk/kiosk
       '@mysten/sui.js':
         specifier: workspace:*
         version: link:../../sdk/typescript
-      '@mysten/wallet-kit':
-        specifier: workspace:*
-        version: link:../../sdk/wallet-kit/react
       '@tanstack/react-query':
         specifier: ^5.0.0
         version: 5.0.0(react-dom@18.2.0)(react@18.2.0)
@@ -1042,12 +1036,12 @@ importers:
         specifier: ^3.21.4
         version: 3.21.4
     devDependencies:
+      '@mysten/dapp-kit':
+        specifier: workspace:*
+        version: link:../../sdk/dapp-kit
       '@mysten/sui.js':
         specifier: workspace:*
         version: link:../../sdk/typescript
-      '@mysten/wallet-kit':
-        specifier: workspace:*
-        version: link:../../sdk/wallet-kit/react
       '@tailwindcss/forms':
         specifier: ^0.5.4
         version: 0.5.4(tailwindcss@3.3.3)
@@ -1084,6 +1078,9 @@ importers:
 
   dapps/sponsored-transactions:
     dependencies:
+      '@tanstack/react-query':
+        specifier: ^5.0.0
+        version: 5.0.0(react-dom@18.2.0)(react@18.2.0)
       react:
         specifier: ^18.2.0
         version: 18.2.0
@@ -1091,12 +1088,12 @@ importers:
         specifier: ^18.2.0
         version: 18.2.0(react@18.2.0)
     devDependencies:
+      '@mysten/dapp-kit':
+        specifier: workspace:*
+        version: link:../../sdk/dapp-kit
       '@mysten/sui.js':
         specifier: workspace:*
         version: link:../../sdk/typescript
-      '@mysten/wallet-kit':
-        specifier: workspace:*
-        version: link:../../sdk/wallet-kit/react
       '@types/react':
         specifier: ^18.2.15
         version: 18.2.15
@@ -1128,15 +1125,15 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0
     devDependencies:
+      '@mysten/build-scripts':
+        specifier: workspace:*
+        version: link:../build-scripts
       '@size-limit/preset-small-lib':
         specifier: ^8.2.6
         version: 8.2.6(size-limit@8.2.6)
       size-limit:
         specifier: ^8.2.6
         version: 8.2.6
-      tsup:
-        specifier: ^7.1.0
-        version: 7.1.0(ts-node@10.9.1)(typescript@5.1.6)
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
@@ -1190,9 +1187,6 @@ importers:
       '@mysten/build-scripts':
         specifier: workspace:*
         version: link:../build-scripts
-      tsx:
-        specifier: ^3.12.7
-        version: 3.12.7
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
@@ -1327,6 +1321,9 @@ importers:
       '@mysten/wallet-standard':
         specifier: workspace:*
         version: link:../wallet-standard
+      '@mysten/zksend':
+        specifier: workspace:*
+        version: link:../zksend
       '@radix-ui/react-dialog':
         specifier: ^1.0.4
         version: 1.0.4(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0)(react@18.2.0)
@@ -1397,9 +1394,6 @@ importers:
       size-limit:
         specifier: ^8.2.6
         version: 8.2.6
-      tsx:
-        specifier: ^3.12.7
-        version: 3.12.7
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
@@ -1416,6 +1410,9 @@ importers:
         specifier: workspace:*
         version: link:../typescript
     devDependencies:
+      '@mysten/build-scripts':
+        specifier: workspace:*
+        version: link:../build-scripts
       '@types/node':
         specifier: ^20.4.2
         version: 20.4.2
@@ -1428,9 +1425,6 @@ importers:
       ts-retry-promise:
         specifier: ^0.7.0
         version: 0.7.0
-      tsup:
-        specifier: ^7.1.0
-        version: 7.1.0(ts-node@10.9.1)(typescript@5.1.6)
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
@@ -1517,9 +1511,6 @@ importers:
       react-dom:
         specifier: ^18.2.0
         version: 18.2.0(react@18.2.0)
-      tsx:
-        specifier: ^3.12.7
-        version: 3.12.7
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
@@ -1533,6 +1524,9 @@ importers:
         specifier: workspace:*
         version: link:../typescript
     devDependencies:
+      '@mysten/build-scripts':
+        specifier: workspace:*
+        version: link:../build-scripts
       cross-env:
         specifier: ^7.0.3
         version: 7.0.3
@@ -1542,9 +1536,6 @@ importers:
       ts-retry-promise:
         specifier: ^0.7.0
         version: 0.7.0
-      tsup:
-        specifier: ^7.1.0
-        version: 7.1.0(ts-node@10.9.1)(typescript@5.1.6)
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
@@ -1570,6 +1561,9 @@ importers:
       '@ledgerhq/hw-transport-mocker':
         specifier: ^6.27.13
         version: 6.27.13
+      '@mysten/build-scripts':
+        specifier: workspace:*
+        version: link:../build-scripts
       '@size-limit/preset-small-lib':
         specifier: ^8.2.6
         version: 8.2.6(size-limit@8.2.6)
@@ -1579,9 +1573,6 @@ importers:
       size-limit:
         specifier: ^8.2.6
         version: 8.2.6
-      tsup:
-        specifier: ^7.1.0
-        version: 7.1.0(ts-node@10.9.1)(typescript@5.1.6)
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
@@ -1591,9 +1582,9 @@ importers:
 
   sdk/move-binary-format-wasm:
     devDependencies:
-      tsup:
-        specifier: ^7.1.0
-        version: 7.1.0(ts-node@10.9.1)(typescript@5.1.6)
+      '@mysten/build-scripts':
+        specifier: workspace:*
+        version: link:../build-scripts
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
@@ -1613,12 +1604,12 @@ importers:
       '@faker-js/faker':
         specifier: ^8.0.2
         version: 8.0.2
+      '@mysten/build-scripts':
+        specifier: workspace:*
+        version: link:../build-scripts
       ts-node:
         specifier: ^10.9.1
         version: 10.9.1(@types/node@20.4.2)(typescript@5.1.6)
-      tsup:
-        specifier: ^7.1.0
-        version: 7.1.0(ts-node@10.9.1)(typescript@5.1.6)
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
@@ -1680,9 +1671,6 @@ importers:
       ts-retry-promise:
         specifier: ^0.7.0
         version: 0.7.0
-      tsx:
-        specifier: ^3.12.7
-        version: 3.12.7
       typedoc:
         specifier: ^0.24.8
         version: 0.24.8(typescript@5.1.6)
@@ -1702,93 +1690,6 @@ importers:
         specifier: ^8.14.2
         version: 8.14.2
 
-  sdk/wallet-kit/core:
-    dependencies:
-      '@mysten/sui.js':
-        specifier: workspace:*
-        version: link:../../typescript
-      '@mysten/wallet-standard':
-        specifier: workspace:*
-        version: link:../../wallet-standard
-    devDependencies:
-      tsup:
-        specifier: ^7.1.0
-        version: 7.1.0(ts-node@10.9.1)(typescript@5.1.6)
-      typescript:
-        specifier: ^5.1.6
-        version: 5.1.6
-
-  sdk/wallet-kit/example:
-    dependencies:
-      '@mysten/sui.js':
-        specifier: workspace:*
-        version: link:../../typescript
-      '@mysten/wallet-kit':
-        specifier: workspace:*
-        version: link:../react
-      '@types/node':
-        specifier: ^20.4.2
-        version: 20.4.2
-      '@types/react':
-        specifier: ^18.2.15
-        version: 18.2.15
-      '@types/react-dom':
-        specifier: ^18.2.7
-        version: 18.2.7
-      react:
-        specifier: ^18.2.0
-        version: 18.2.0
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.2.0(react@18.2.0)
-      typescript:
-        specifier: ^5.1.6
-        version: 5.1.6
-    devDependencies:
-      '@vitejs/plugin-react':
-        specifier: ^4.0.3
-        version: 4.0.3(vite@4.4.4)
-      vite:
-        specifier: ^4.4.4
-        version: 4.4.4(@types/node@20.4.2)(sass@1.63.6)
-
-  sdk/wallet-kit/react:
-    dependencies:
-      '@headlessui/react':
-        specifier: ^1.7.15
-        version: 1.7.15(react-dom@18.2.0)(react@18.2.0)
-      '@mysten/sui.js':
-        specifier: workspace:*
-        version: link:../../typescript
-      '@mysten/wallet-kit-core':
-        specifier: workspace:*
-        version: link:../core
-      '@mysten/wallet-standard':
-        specifier: workspace:*
-        version: link:../../wallet-standard
-      '@stitches/react':
-        specifier: ^1.2.8
-        version: 1.2.8(react@18.2.0)
-    devDependencies:
-      '@types/react':
-        specifier: ^18.2.15
-        version: 18.2.15
-      '@types/react-dom':
-        specifier: ^18.2.7
-        version: 18.2.7
-      react:
-        specifier: ^18.2.0
-        version: 18.2.0
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.2.0(react@18.2.0)
-      tsup:
-        specifier: ^7.1.0
-        version: 7.1.0(ts-node@10.9.1)(typescript@5.1.6)
-      typescript:
-        specifier: ^5.1.6
-        version: 5.1.6
-
   sdk/wallet-standard:
     dependencies:
       '@mysten/sui.js':
@@ -1798,9 +1699,9 @@ importers:
         specifier: 1.0.3
         version: 1.0.3
     devDependencies:
-      tsup:
-        specifier: ^7.1.0
-        version: 7.1.0(ts-node@10.9.1)(typescript@5.1.6)
+      '@mysten/build-scripts':
+        specifier: workspace:*
+        version: link:../build-scripts
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
@@ -1829,9 +1730,6 @@ importers:
       '@types/node':
         specifier: ^20.4.2
         version: 20.4.2
-      tsx:
-        specifier: ^3.12.7
-        version: 3.12.7
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
@@ -1841,9 +1739,21 @@ importers:
 
   sdk/zksend:
     dependencies:
+      '@mysten/sui.js':
+        specifier: workspace:*
+        version: link:../typescript
       '@mysten/wallet-standard':
         specifier: workspace:*
         version: link:../wallet-standard
+      mitt:
+        specifier: ^3.0.1
+        version: 3.0.1
+      nanostores:
+        specifier: ^0.9.3
+        version: 0.9.3
+      valibot:
+        specifier: ^0.25.0
+        version: 0.25.0
     devDependencies:
       '@mysten/build-scripts':
         specifier: workspace:*
@@ -1851,9 +1761,6 @@ importers:
       '@types/node':
         specifier: ^20.4.2
         version: 20.4.2
-      tsx:
-        specifier: ^3.12.7
-        version: 3.12.7
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
@@ -8083,14 +7990,6 @@ packages:
       size-limit: 8.2.6
     dev: true
 
-  /@stitches/react@1.2.8(react@18.2.0):
-    resolution: {integrity: sha512-9g9dWI4gsSVe8bNLlb+lMkBYsnIKCZTmvqvDG+Avnn69XfmHZKiaMrx7cgTaddq7aTPPmXiTsbFcUy0xgI4+wA==}
-    peerDependencies:
-      react: '>= 16.3.0'
-    dependencies:
-      react: 18.2.0
-    dev: false
-
   /@storybook/addon-a11y@7.1.0(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-omKNbkE5m2KglFD8HLBmmpLP7ZdiDDPwb29vkBBkNRAWw4xqwMN/TEAavTTdQdmGr3zvbANZc+LgIlnS5oiwLg==}
     peerDependencies:
@@ -10741,7 +10640,7 @@ packages:
       '@vanilla-extract/css': 1.13.0
     dev: false
 
-  /@vanilla-extract/vite-plugin@3.9.0(@types/node@20.4.2)(vite@4.4.4):
+  /@vanilla-extract/vite-plugin@3.9.0(vite@4.4.11):
     resolution: {integrity: sha512-Q2HYAyEJ93Uy7GHQPPiP8SXwPMHGpd4d0YnrIQqB0YZccYbGJR/WFIln9Dmbzx2pdngQUoOfhwEg6kJF8sQrog==}
     peerDependencies:
       vite: ^2.2.3 || ^3.0.0 || ^4.0.3
@@ -10750,7 +10649,7 @@ packages:
       outdent: 0.8.0
       postcss: 8.4.31
       postcss-load-config: 3.1.4(postcss@8.4.31)
-      vite: 4.4.4(@types/node@20.4.2)(sass@1.63.6)
+      vite: 4.4.11(@types/node@20.4.2)(sass@1.63.6)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -10763,7 +10662,7 @@ packages:
       - ts-node
     dev: true
 
-  /@vanilla-extract/vite-plugin@3.9.0(vite@4.4.11):
+  /@vanilla-extract/vite-plugin@3.9.0(vite@4.4.4):
     resolution: {integrity: sha512-Q2HYAyEJ93Uy7GHQPPiP8SXwPMHGpd4d0YnrIQqB0YZccYbGJR/WFIln9Dmbzx2pdngQUoOfhwEg6kJF8sQrog==}
     peerDependencies:
       vite: ^2.2.3 || ^3.0.0 || ^4.0.3
@@ -10772,7 +10671,7 @@ packages:
       outdent: 0.8.0
       postcss: 8.4.31
       postcss-load-config: 3.1.4(postcss@8.4.31)
-      vite: 4.4.11(@types/node@20.4.2)(sass@1.63.6)
+      vite: 4.4.4(@types/node@20.4.2)(sass@1.63.6)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -12277,16 +12176,6 @@ packages:
     engines: {node: '>=12'}
     dependencies:
       run-applescript: 5.0.0
-    dev: true
-
-  /bundle-require@4.0.1(esbuild@0.18.14):
-    resolution: {integrity: sha512-9NQkRHlNdNpDBGmLpngF3EFDcwodhMUuLz9PaWYciVcQF9SE4LFjM2DB/xV1Li5JiuDMv7ZUWuC3rGbqR0MAXQ==}
-    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
-    peerDependencies:
-      esbuild: '>=0.17'
-    dependencies:
-      esbuild: 0.18.14
-      load-tsconfig: 0.2.5
     dev: true
 
   /bunyan@1.8.15:
@@ -17648,11 +17537,6 @@ packages:
     resolution: {integrity: sha512-j8GhLiKmUAh+dsFXlX1aJCbt5KMibuKb+d7j1JaOJG6s2UjX1PQlW+OKB/sD4a/5ZYF4RcmYmLSndOoU3Lt/3g==}
     dev: false
 
-  /joycon@3.1.1:
-    resolution: {integrity: sha512-34wB/Y7MW7bzjKRjUKTa46I2Z7eV62Rkhva+KkopW7Qvv/OSWBqvkSY7vusOPrNuZcUG3tApvdVgNB8POj3SPw==}
-    engines: {node: '>=10'}
-    dev: true
-
   /js-levenshtein@1.1.6:
     resolution: {integrity: sha512-X2BB11YZtrRqY4EnQcLX5Rh373zbK4alC1FW7D7MBhL2gtcC17cTnr6DmfHZeS0s2rTHjUTMMHfG7gO8SSdw+g==}
     engines: {node: '>=0.10.0'}
@@ -18011,11 +17895,6 @@ packages:
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
     dev: true
 
-  /load-tsconfig@0.2.5:
-    resolution: {integrity: sha512-IXO6OCs9yg8tMKzfPZ1YmheJbZCiEsnBdcB03l0OcfK9prKnJb96siuHCr5Fl37/yo9DnKU+TLpxzTUspw9shg==}
-    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
-    dev: true
-
   /load-yaml-file@0.2.0:
     resolution: {integrity: sha512-OfCBkGEw4nN6JLtgRidPX6QxjBQGQf72q3si2uvqyFEMbycSFFHwAZeXx6cJgFM9wmLrf9zBwCP3Ivqa+LLZPw==}
     engines: {node: '>=6'}
@@ -18088,10 +17967,6 @@ packages:
 
   /lodash.merge@4.6.2:
     resolution: {integrity: sha512-0KpjqXRVvrYyCsX1swR/XTK0va6VQkQM6MNo7PqW77ByjAhoARA8EfrP1N4+KlKj8YS0ZUCtRT/YUuhyYDujIQ==}
-    dev: true
-
-  /lodash.sortby@4.7.0:
-    resolution: {integrity: sha512-HDWXG8isMntAyRF5vZ7xKuEvOhT4AhlRt/3czTSjvGUxjYCBVRQY48ViDHyfYz9VIoBkW4TMGQNapx+l3RUwdA==}
     dev: true
 
   /lodash.startcase@4.4.0:
@@ -22612,13 +22487,6 @@ packages:
     resolution: {integrity: sha512-l3BikUxvPOcn5E74dZiq5BGsTb5yEwhaTSzccU6t4sDOH8NWJCstKO5QT2CvtFoK6F0saL7p9xHAqHOlCPJygA==}
     engines: {node: '>= 8'}
 
-  /source-map@0.8.0-beta.0:
-    resolution: {integrity: sha512-2ymg6oRBpebeZi9UUNsgQ89bhx01TcTkmNTGnNO88imTmbSgy4nfujrgVEFKWpMTEGA11EDkTt7mqObTPdigIA==}
-    engines: {node: '>= 8'}
-    dependencies:
-      whatwg-url: 7.1.0
-    dev: true
-
   /space-separated-tokens@1.1.5:
     resolution: {integrity: sha512-q/JSVd1Lptzhf5bkYm4ob4iWPjx0KiRe3sRFBNrVqbJkFaBm5vbbowy1mymoPNLRa52+oadOhJ+K49wsSeSjTA==}
     dev: true
@@ -23554,12 +23422,6 @@ packages:
     resolution: {integrity: sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==}
     dev: true
 
-  /tr46@1.0.1:
-    resolution: {integrity: sha512-dTpowEjclQ7Kgx5SdBkqRzVhERQXov8/l9Ft9dVM9fmg0W0KQSVaXX9T4i6twCPNtYiZM53lpSSUAwJbFPOHxA==}
-    dependencies:
-      punycode: 2.3.0
-    dev: true
-
   /tr46@5.0.0:
     resolution: {integrity: sha512-tk2G5R2KRwBd+ZN0zaEXpmzdKyOYksXwywulIX95MBODjSzMIuQnQ3m8JxgbhnL1LeVo7lqQKsYa1O3Htl7K5g==}
     engines: {node: '>=18'}
@@ -23700,42 +23562,6 @@ packages:
 
   /tslib@2.6.2:
     resolution: {integrity: sha512-AEYxH93jGFPn/a2iVAwW87VuUIkR1FVUKB77NwMF7nBTDkDrrT/Hpt/IrCJ0QXhW27jTBDcf5ZY7w6RiqTMw2Q==}
-
-  /tsup@7.1.0(ts-node@10.9.1)(typescript@5.1.6):
-    resolution: {integrity: sha512-mazl/GRAk70j8S43/AbSYXGgvRP54oQeX8Un4iZxzATHt0roW0t6HYDVZIXMw0ZQIpvr1nFMniIVnN5186lW7w==}
-    engines: {node: '>=16.14'}
-    hasBin: true
-    peerDependencies:
-      '@swc/core': ^1
-      postcss: '>=8.4.31'
-      typescript: '>=4.1.0'
-    peerDependenciesMeta:
-      '@swc/core':
-        optional: true
-      postcss:
-        optional: true
-      typescript:
-        optional: true
-    dependencies:
-      bundle-require: 4.0.1(esbuild@0.18.14)
-      cac: 6.7.14
-      chokidar: 3.5.3
-      debug: 4.3.4(supports-color@8.1.1)
-      esbuild: 0.18.14
-      execa: 5.1.1
-      globby: 11.1.0
-      joycon: 3.1.1
-      postcss-load-config: 4.0.1(postcss@8.4.31)(ts-node@10.9.1)
-      resolve-from: 5.0.0
-      rollup: 3.26.3
-      source-map: 0.8.0-beta.0
-      sucrase: 3.33.0
-      tree-kill: 1.2.2
-      typescript: 5.1.6
-    transitivePeerDependencies:
-      - supports-color
-      - ts-node
-    dev: true
 
   /tsutils@3.21.0(typescript@5.1.6):
     resolution: {integrity: sha512-mHKK3iUXL+3UF6xL5k0PEhKRUBKPBCv/+RkEOpjRWxxx27KKRBmmA60A9pgOUvMi8GKhRMPEmjBRPzs2W7O1OA==}
@@ -23952,6 +23778,7 @@ packages:
     resolution: {integrity: sha512-zaWCozRZ6DLEWAWFrVDz1H6FVXzUSfTy5FUMWsQlU8Ym5JP9eO4xkTIROFCQvhQf61z6O/G6ugw3SgAnvvm+HA==}
     engines: {node: '>=14.17'}
     hasBin: true
+    dev: true
 
   /ufo@1.1.2:
     resolution: {integrity: sha512-TrY6DsjTQQgyS3E3dBaOXf0TpPD8u9FVrVYmKVegJuFw51n/YB9XPt+U6ydzFG5ZIN7+DIjPbNmXoBj9esYhgQ==}
@@ -24400,6 +24227,10 @@ packages:
       '@types/istanbul-lib-coverage': 2.0.4
       convert-source-map: 1.9.0
     dev: true
+
+  /valibot@0.25.0:
+    resolution: {integrity: sha512-cmD0ca15oyAbT75iYLNW6uU6doAeIwYfOshpXka/E1Bx4frzbkrgb7gvkI7K0YK/DVOksei4FfxWfRoBP3NFTg==}
+    dev: false
 
   /validate-npm-package-license@3.0.4:
     resolution: {integrity: sha512-DpKm2Ui/xN7/HQKCtpZxoRWBhZ9Z0kqtygG8XCgNQ8ZlDnxuQmWhj566j8fN4Cu3/JmbhsDo7fcAJq4s9h27Ew==}
@@ -24961,10 +24792,6 @@ packages:
     resolution: {integrity: sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ==}
     dev: true
 
-  /webidl-conversions@4.0.2:
-    resolution: {integrity: sha512-YQ+BmxuTgd6UXZW3+ICGfyqRyHXVlD5GtQr5+qjiNW7bF0cqrzX500HVXPBOvgXb5YnzDd+h0zqyv61KUD7+Sg==}
-    dev: true
-
   /webidl-conversions@7.0.0:
     resolution: {integrity: sha512-VwddBukDzu71offAQR975unBIGqfKZpM+8ZX6ySk8nYhVoo5CYaZyzt3YBvYtRtO+aoGlqxPg/B87NGVZ/fu6g==}
     engines: {node: '>=12'}
@@ -25164,14 +24991,6 @@ packages:
     dependencies:
       tr46: 0.0.3
       webidl-conversions: 3.0.1
-    dev: true
-
-  /whatwg-url@7.1.0:
-    resolution: {integrity: sha512-WUu7Rg1DroM7oQvGWfOiAK21n74Gg+T4elXEQYkOhtyLeWiJFoOGLXPKI/9gzIie9CtwVLm8wtw6YJdKyxSjeg==}
-    dependencies:
-      lodash.sortby: 4.7.0
-      tr46: 1.0.1
-      webidl-conversions: 4.0.2
     dev: true
 
   /when@3.7.7:

@@ -24,7 +24,7 @@ use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_sdk::SuiClientBuilder;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
-use sui_types::crypto::{PublicKey, SuiKeyPair, ZkLoginPublicIdentifier};
+use sui_types::crypto::{PublicKey, SuiKeyPair};
 use sui_types::multisig::{MultiSig, MultiSigPublicKey};
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::Transaction;
@@ -102,13 +102,7 @@ pub async fn perform_zk_login_test_tx(
     let skp1 = SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([1; 32])));
     let multisig_pk = MultiSigPublicKey::new(
         vec![
-            PublicKey::ZkLogin(
-                ZkLoginPublicIdentifier::new(
-                    zk_login_inputs.get_iss(),
-                    zk_login_inputs.get_address_seed(),
-                )
-                .unwrap(),
-            ),
+            PublicKey::from_zklogin_inputs(&zk_login_inputs)?,
             skp1.public(),
         ],
         vec![1, 1],
@@ -183,7 +177,7 @@ pub async fn perform_zk_login_test_tx(
     let transaction_response = sui
         .quorum_driver_api()
         .execute_transaction_block(
-            Transaction::from_generic_sig_data(txb_res, Intent::sui_transaction(), vec![multisig]),
+            Transaction::from_generic_sig_data(txb_res, vec![multisig]),
             SuiTransactionBlockResponseOptions::full_content(),
             None,
         )

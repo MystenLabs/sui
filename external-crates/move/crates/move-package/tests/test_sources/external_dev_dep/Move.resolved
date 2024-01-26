@@ -2,6 +2,7 @@ ResolvedGraph {
     graph: DependencyGraph {
         root_path: "tests/test_sources/external_dev_dep",
         root_package: "Root",
+        root_package_orig_name: "Root",
         package_graph: {
             "Root": [
                 (
@@ -51,7 +52,6 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/A",
                 ),
-                version: None,
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
@@ -60,7 +60,6 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/ADep",
                 ),
-                version: None,
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
@@ -69,7 +68,6 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/B",
                 ),
-                version: None,
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
@@ -78,7 +76,6 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/BDep",
                 ),
-                version: None,
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
@@ -89,7 +86,7 @@ ResolvedGraph {
             "ADep",
             "Root",
         },
-        manifest_digest: "64CF52DCF661C2F1581935BC7AEA0424EE20B10997D1F183779443C8679727F1",
+        manifest_digest: "84A0B503BE9F9B341AC66860713D12704876E5C2425891E3B94626B12E4313E5",
         deps_digest: "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600",
     },
     build_options: BuildConfig {
@@ -118,11 +115,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "A",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -139,7 +131,6 @@ ResolvedGraph {
                                 "../ADep",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -156,11 +147,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "ADep",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -182,11 +168,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "B",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -203,7 +184,6 @@ ResolvedGraph {
                                 "../BDep",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -220,11 +200,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "BDep",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -246,11 +221,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "Root",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,

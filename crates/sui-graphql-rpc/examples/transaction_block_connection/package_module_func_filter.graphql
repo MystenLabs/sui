@@ -1,10 +1,8 @@
 # Filtering on package, module and function
 {
-  transactionBlockConnection(
+  transactionBlocks(
     filter: {
-      package: "0x0000000000000000000000000000000000000000000000000000000000000003"
-      module: "sui_system"
-      function: "request_withdraw_stake"
+      function: "0x3::sui_system::request_withdraw_stake"
     }
   ) {
     nodes {

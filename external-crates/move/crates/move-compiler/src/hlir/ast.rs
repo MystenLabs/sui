@@ -4,9 +4,7 @@
 
 use crate::{
     diagnostics::WarningFilters,
-    expansion::ast::{
-        ability_modifiers_ast_debug, AbilitySet, Attributes, Friend, ModuleIdent, SpecId,
-    },
+    expansion::ast::{ability_modifiers_ast_debug, AbilitySet, Attributes, Friend, ModuleIdent},
     naming::ast::{BuiltinTypeName, BuiltinTypeName_, StructTypeParameter, TParam},
     parser::ast::{
         self as P, BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER,
@@ -335,8 +333,6 @@ pub enum UnannotatedExp_ {
     Cast(Box<Exp>, BuiltinTypeName),
 
     Unreachable,
-
-    Spec(SpecId, BTreeMap<Var, SingleType>),
 
     UnresolvedError,
 }
@@ -1134,12 +1130,13 @@ impl AstDebug for Statement_ {
                 if *has_break {
                     w.write("#has_break");
                 }
+                w.write(" ");
                 name.ast_debug(w);
                 w.write(": ");
                 w.block(|w| block.ast_debug(w))
             }
             S::NamedBlock { name, block } => {
-                w.write("loop");
+                w.write("named-block ");
                 name.ast_debug(w);
                 w.write(": ");
                 w.block(|w| block.ast_debug(w))
@@ -1357,14 +1354,6 @@ impl AstDebug for UnannotatedExp_ {
                 w.write(" as ");
                 bt.ast_debug(w);
                 w.write(")");
-            }
-            E::Spec(u, used_locals) => {
-                w.write(&format!("spec #{}", u));
-                if !used_locals.is_empty() {
-                    w.write("uses [");
-                    w.comma(used_locals, |w, (n, st)| w.annotate(|w| n.ast_debug(w), st));
-                    w.write("]");
-                }
             }
             E::UnresolvedError => w.write("_|_"),
             E::Unreachable => w.write("unreachable"),

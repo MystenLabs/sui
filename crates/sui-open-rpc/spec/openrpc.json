@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.16.0"
+    "version": "1.18.0"
   },
   "methods": [
     {
@@ -52,6 +52,13 @@
           "schema": {
             "$ref": "#/components/schemas/BigInt_for_uint64"
           }
+        },
+        {
+          "name": "additional_args",
+          "description": "Additional arguments including gas_budget, gas_objects, gas_sponsor and skip_checks.",
+          "schema": {
+            "$ref": "#/components/schemas/DevInspectArgs"
+          }
         }
       ],
       "result": {
@@ -80,6 +87,10 @@
             {
               "name": "epoch",
               "value": 8888
+            },
+            {
+              "name": "additional_args",
+              "value": null
             }
           ],
           "result": {
@@ -365,7 +376,8 @@
                 "showEffects": true,
                 "showEvents": true,
                 "showObjectChanges": true,
-                "showBalanceChanges": true
+                "showBalanceChanges": true,
+                "showRawEffects": false
               }
             },
             {
@@ -1347,21 +1359,25 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "32",
+              "maxSupportedProtocolVersion": "35",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
                 "advance_epoch_start_time_in_safe_mode": true,
                 "advance_to_highest_supported_protocol_version": false,
+                "allow_receiving_object_id": false,
                 "ban_entry_init": false,
                 "commit_root_state_digest": false,
                 "consensus_order_end_of_epoch_last": true,
                 "disable_invariant_violation_check_in_swap_loc": false,
                 "disallow_adding_abilities_on_upgrade": false,
                 "disallow_change_struct_type_params_on_upgrade": false,
+                "enable_coin_deny_list": false,
                 "enable_effects_v2": false,
                 "enable_jwk_consensus_updates": false,
+                "enable_poseidon": false,
                 "end_of_epoch_transaction_supported": false,
+                "hardened_otw_check": false,
                 "include_consensus_digest_in_prologue": false,
                 "loaded_child_object_format": false,
                 "loaded_child_object_format_type": false,
@@ -1828,6 +1844,8 @@
                 "package_publish_cost_per_byte": {
                   "u64": "80"
                 },
+                "poseidon_bn254_cost_base": null,
+                "poseidon_bn254_cost_per_block": null,
                 "random_beacon_reduction_allowed_delta": null,
                 "reward_slashing_rate": {
                   "u64": "10000"
@@ -1956,7 +1974,8 @@
                 "showEffects": true,
                 "showEvents": true,
                 "showObjectChanges": false,
-                "showBalanceChanges": false
+                "showBalanceChanges": false,
+                "showRawEffects": false
               }
             }
           ],
@@ -2333,7 +2352,8 @@
                 "showEffects": true,
                 "showEvents": true,
                 "showObjectChanges": false,
-                "showBalanceChanges": false
+                "showBalanceChanges": false,
+                "showRawEffects": false
               }
             }
           ],
@@ -5603,6 +5623,71 @@
           }
         }
       },
+      "DevInspectArgs": {
+        "description": "Additional rguments supplied to dev inspect beyond what is allowed in today's API.",
+        "type": "object",
+        "properties": {
+          "gasBudget": {
+            "description": "The gas budget for the transaction.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gasObjects": {
+            "description": "The gas objects used to pay for the transaction.",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/ObjectID"
+                },
+                {
+                  "$ref": "#/components/schemas/SequenceNumber"
+                },
+                {
+                  "$ref": "#/components/schemas/ObjectDigest"
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3
+            }
+          },
+          "gasSponsor": {
+            "description": "The sponsor of the gas for the transaction, might be different from the sender.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SuiAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "showRawTxnDataAndEffects": {
+            "description": "Whether to return the raw transaction data and effects.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "skipChecks": {
+            "description": "Whether to skip transaction checks for the transaction.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        }
+      },
       "DevInspectResults": {
         "description": "The response from processing a dev inspect transaction",
         "type": "object",
@@ -5631,6 +5716,24 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Event"
+            }
+          },
+          "rawEffects": {
+            "description": "The raw effects of the transaction that was dev inspected.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "rawTxnData": {
+            "description": "The raw transaction data that was dev inspected.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
             }
           },
           "results": {
@@ -8357,7 +8460,8 @@
             "type": "string",
             "enum": [
               "AuthenticatorStateCreate",
-              "RandomnessStateCreate"
+              "RandomnessStateCreate",
+              "CoinDenyListStateCreate"
             ]
           },
           {
@@ -10338,6 +10442,14 @@
               "$ref": "#/components/schemas/ObjectChange"
             }
           },
+          "rawEffects": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
           "rawTransaction": {
             "description": "BCS encoded [SenderSignedData] that includes input object references returns empty array if `show_raw_transaction` is false",
             "allOf": [
@@ -10394,6 +10506,11 @@
           },
           "showObjectChanges": {
             "description": "Whether to show object_changes. Default to be False",
+            "default": false,
+            "type": "boolean"
+          },
+          "showRawEffects": {
+            "description": "Whether to show raw transaction effects. Default to be False",
             "default": false,
             "type": "boolean"
           },

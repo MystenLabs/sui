@@ -170,7 +170,7 @@ module capy::capy_item {
 
     /// Construct an image URL for the `CapyItem`.
     fun img_url(name: vector<u8>): Url {
-        let capy_url = *&IMAGE_URL;
+        let capy_url = IMAGE_URL;
         vec::append(&mut capy_url, name);
         vec::append(&mut capy_url, b"/svg");
 

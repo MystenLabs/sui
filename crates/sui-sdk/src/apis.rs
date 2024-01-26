@@ -10,12 +10,13 @@ use std::collections::BTreeMap;
 use std::future;
 use std::sync::Arc;
 use std::time::Instant;
+use sui_json_rpc_types::DevInspectArgs;
 
 use crate::error::{Error, SuiRpcResult};
 use crate::RpcClient;
-use sui_json_rpc::api::GovernanceReadApiClient;
-use sui_json_rpc::api::{
-    CoinReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient, WriteApiClient,
+use sui_json_rpc_api::{
+    CoinReadApiClient, GovernanceReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient,
+    WriteApiClient,
 };
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake, DevInspectResults,
@@ -39,7 +40,7 @@ use sui_types::transaction::{Transaction, TransactionData, TransactionKind};
 
 const WAIT_FOR_LOCAL_EXECUTION_RETRY_COUNT: u8 = 3;
 
-/// The main read API structure with functions for retriving data about different objects and transactions
+/// The main read API structure with functions for retrieving data about different objects and transactions
 #[derive(Debug)]
 pub struct ReadApi {
     api: Arc<RpcClient>,
@@ -651,6 +652,7 @@ impl ReadApi {
         tx: TransactionKind,
         gas_price: Option<BigInt<u64>>,
         epoch: Option<BigInt<u64>>,
+        additional_args: Option<DevInspectArgs>,
     ) -> SuiRpcResult<DevInspectResults> {
         Ok(self
             .api
@@ -660,6 +662,7 @@ impl ReadApi {
                 Base64::from_bytes(&bcs::to_bytes(&tx)?),
                 gas_price,
                 epoch,
+                additional_args,
             )
             .await?)
     }
@@ -1172,7 +1175,7 @@ impl GovernanceApi {
     /// use sui_sdk::SuiClientBuilder;
     ///
     /// #[tokio::main]
-    /// async fn main() -> Result<(), anyhow::Error> {     
+    /// async fn main() -> Result<(), anyhow::Error> {
     ///     let sui = SuiClientBuilder::default().build_localnet().await?;
     ///     let committee_info = sui
     ///         .governance_api()

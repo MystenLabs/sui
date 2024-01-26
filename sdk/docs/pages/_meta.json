@@ -11,12 +11,12 @@
 		"title": "Kiosk SDK",
 		"type": "page"
 	},
-	"bcs": {
-		"title": "BCS",
+	"zksend": {
+		"title": "zkSend SDK",
 		"type": "page"
 	},
-	"wallet-kit": {
-		"title": "Wallet Kit",
+	"bcs": {
+		"title": "BCS",
 		"type": "page"
 	}
 }

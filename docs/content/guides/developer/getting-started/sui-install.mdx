@@ -16,6 +16,15 @@ Sui supports the following operating systems:
 - macOS - macOS Monterey
 - Microsoft Windows - Windows 10 and 11
 
+## Install using Homebrew {#install-homebrew}
+
+If you use [Homebrew](https://brew.sh/), you can install Sui with the following commands:
+
+```bash
+brew tap mystenlabs/tap
+brew install mystenlabs/tap/sui
+```
+
 ## Install from binaries {#install-binaries}
 
 Each Sui release provides a set of binaries for several operating systems. You can download these binaries from GitHub and use them to install Sui.
@@ -211,24 +220,31 @@ sudo apt-get install build-essential
 The prerequisites needed for the macOS operating system include:
 
 - Rust and Cargo
-- Brew
+- Homebrew
 - cURL
 - CMake
+- libpq
 - Git CLI
 
-macOS includes a version of cURL you can use to install Brew. Use Brew to install other tools, including a newer version of cURL.
+macOS includes a version of cURL you can use to install Homebrew. Use Homebrew to install other tools, including a newer version of cURL.
 
-#### Brew {#brew}
+#### Homebrew {#brew}
 
-Use the following command to install [Brew](https://brew.sh/):
+Use the following command to install [Homebrew](https://brew.sh/):
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
+:::info
+
+If you used the commands in the [Install using Homebrew](#install-homebrew) section, you do not need to install anything else.
+
+:::
+
 #### All macOS prerequisites
 
-With Brew installed, you can install individual prerequisites from the following sections or install them all at once with this command:
+With Homebrew installed, you can install individual prerequisites from the following sections or install them all at once with this command:
 
 ```bash
 brew install curl cmake git
@@ -252,6 +268,12 @@ brew install cmake
 ```
 
 To customize the installation, see [Installing CMake](https://cmake.org/install/) on the CMake website.
+
+#### libpq {#libpq-1}
+Use the following command to install libpq:
+```bash
+brew install libpq
+```
 
 #### Git CLI {#git-cli-1}
 
@@ -329,7 +351,7 @@ The command installs Sui components in the `~/.cargo/bin` folder.
 If you previously installed the Sui binaries, you can update them to the most recent release with the same command you used to install them:
 
 ```shell
-cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui
 ```
 
 ## Next steps {#next-steps}

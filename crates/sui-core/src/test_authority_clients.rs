@@ -12,12 +12,10 @@ use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
-use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::SuiResult;
 use sui_types::messages_grpc::{
-    HandleCertificateResponse, HandleCertificateResponseV2, HandleTransactionResponse,
-    ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest,
-    TransactionInfoResponse,
+    HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
+    SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
@@ -25,6 +23,10 @@ use sui_types::{
     error::SuiError,
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
     transaction::{CertifiedTransaction, Transaction, VerifiedTransaction},
+};
+use sui_types::{
+    effects::{TransactionEffectsAPI, TransactionEvents},
+    messages_checkpoint::{CheckpointRequestV2, CheckpointResponseV2},
 };
 
 #[derive(Clone, Copy, Default)]
@@ -71,15 +73,6 @@ impl AuthorityAPI for LocalAuthorityClient {
         result
     }
 
-    async fn handle_certificate(
-        &self,
-        certificate: CertifiedTransaction,
-    ) -> Result<HandleCertificateResponse, SuiError> {
-        self.handle_certificate_v2(certificate)
-            .await
-            .map(|r| r.into())
-    }
-
     async fn handle_certificate_v2(
         &self,
         certificate: CertifiedTransaction,
@@ -117,11 +110,20 @@ impl AuthorityAPI for LocalAuthorityClient {
         state.handle_checkpoint_request(&request)
     }
 
+    async fn handle_checkpoint_v2(
+        &self,
+        request: CheckpointRequestV2,
+    ) -> Result<CheckpointResponseV2, SuiError> {
+        let state = self.state.clone();
+
+        state.handle_checkpoint_request_v2(&request)
+    }
+
     async fn handle_system_state_object(
         &self,
         _request: SystemStateRequest,
     ) -> Result<SuiSystemState, SuiError> {
-        Ok(self.state.database.get_sui_system_state_object()?)
+        self.state.get_sui_system_state_object_for_testing()
     }
 }
 
@@ -231,14 +233,6 @@ impl AuthorityAPI for MockAuthorityApi {
     }
 
     /// Execute a certificate.
-    async fn handle_certificate(
-        &self,
-        _certificate: CertifiedTransaction,
-    ) -> Result<HandleCertificateResponse, SuiError> {
-        unimplemented!()
-    }
-
-    /// Execute a certificate.
     async fn handle_certificate_v2(
         &self,
         _certificate: CertifiedTransaction,
@@ -282,6 +276,13 @@ impl AuthorityAPI for MockAuthorityApi {
         unimplemented!();
     }
 
+    async fn handle_checkpoint_v2(
+        &self,
+        _request: CheckpointRequestV2,
+    ) -> Result<CheckpointResponseV2, SuiError> {
+        unimplemented!();
+    }
+
     async fn handle_system_state_object(
         &self,
         _request: SystemStateRequest,
@@ -293,6 +294,7 @@ impl AuthorityAPI for MockAuthorityApi {
 #[derive(Clone)]
 pub struct HandleTransactionTestAuthorityClient {
     pub tx_info_resp_to_return: SuiResult<HandleTransactionResponse>,
+    pub cert_resp_to_return: SuiResult<HandleCertificateResponseV2>,
     // If set, sleep for this duration before responding to a request.
     // This is useful in testing a timeout scenario.
     pub sleep_duration_before_responding: Option<Duration>,
@@ -310,18 +312,14 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         self.tx_info_resp_to_return.clone()
     }
 
-    async fn handle_certificate(
-        &self,
-        _certificate: CertifiedTransaction,
-    ) -> Result<HandleCertificateResponse, SuiError> {
-        unimplemented!()
-    }
-
     async fn handle_certificate_v2(
         &self,
         _certificate: CertifiedTransaction,
     ) -> Result<HandleCertificateResponseV2, SuiError> {
-        unimplemented!()
+        if let Some(duration) = self.sleep_duration_before_responding {
+            tokio::time::sleep(duration).await;
+        }
+        self.cert_resp_to_return.clone()
     }
 
     async fn handle_object_info_request(
@@ -345,6 +343,13 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         unimplemented!()
     }
 
+    async fn handle_checkpoint_v2(
+        &self,
+        _request: CheckpointRequestV2,
+    ) -> Result<CheckpointResponseV2, SuiError> {
+        unimplemented!()
+    }
+
     async fn handle_system_state_object(
         &self,
         _request: SystemStateRequest,
@@ -357,6 +362,7 @@ impl HandleTransactionTestAuthorityClient {
     pub fn new() -> Self {
         Self {
             tx_info_resp_to_return: Err(SuiError::Unknown("".to_string())),
+            cert_resp_to_return: Err(SuiError::Unknown("".to_string())),
             sleep_duration_before_responding: None,
         }
     }
@@ -371,6 +377,18 @@ impl HandleTransactionTestAuthorityClient {
 
     pub fn reset_tx_info_response(&mut self) {
         self.tx_info_resp_to_return = Err(SuiError::Unknown("".to_string()));
+    }
+
+    pub fn set_cert_resp_to_return(&mut self, resp: HandleCertificateResponseV2) {
+        self.cert_resp_to_return = Ok(resp);
+    }
+
+    pub fn set_cert_resp_to_return_error(&mut self, error: SuiError) {
+        self.cert_resp_to_return = Err(error);
+    }
+
+    pub fn reset_cert_response(&mut self) {
+        self.cert_resp_to_return = Err(SuiError::Unknown("".to_string()));
     }
 
     pub fn set_sleep_duration_before_responding(&mut self, duration: Duration) {

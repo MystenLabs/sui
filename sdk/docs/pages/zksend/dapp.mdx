@@ -1,0 +1,81 @@
+import { Callout } from 'nextra/components';
+
+# dApp Integration
+
+<Callout type="info">
+	If you are using `dapp-kit`, you do not need to install any additional packages to integrate with
+	the zkSend wallet. [Read how to integrate with dapp-kit.](../dapp-kit/zksend.mdx)
+</Callout>
+
+Using the zkSend SDK, you can allow users to connect to the zkSend wallet from your dApp. The wallet
+is provided through the [Wallet Standard](https://docs.sui.io/standards/wallet-standard), and should
+appear automatically in your existing wallet connection UI.
+
+## Considerations
+
+- zkSend only supports mainnet at this time.
+- Users will only be able to connect their zkLogin wallet from zkSend.
+- The zkLogin account will be managed by zkSend, you do not need to set up any OAuth providers.
+- You will not get access to the user's private key, you will only be able to connect to the wallet,
+  and suggest transactions and messages to sign, just like any other wallet in the ecosystem.
+
+## Setup
+
+To use the zkSend wallet, you will need to register it in your application, using
+`registerZkSendWallet`. This only needs to be done once, and should be done as early as possible in
+your application's lifecycle.
+
+`registerZkSendWallet` takes two arguments:
+
+- `name`: The name of your dApp. This will be shown to the user when they are asked to approve the
+  connection in zkSend.
+- `options`: An optional object with the following properties:
+  - `origin`: The origin of the zkSend website. Defaults to `https://zksend.com`.
+
+```ts
+import { registerZkSendWallet } from '@mysten/zksend';
+
+registerZkSendWallet('Your dApp Name');
+```
+
+<Callout type="warning">
+	This functionality is currently limited to the preview version of zkSend. You can set the `origin` option to use the preview URL instead of the production URL.
+
+    ```ts
+    registerZkSendWallet('Your dApp Name', { origin: 'https://preview.zksend.com' });
+    ```
+
+</Callout>
+
+## Supported features
+
+The zkSend wallet currently supports the following features:
+
+- `signTransactionBlock`
+- `signPersonalMessage`
+
+We intentionally do not support `signAndExecuteTransactionBlock`, and suggest that your dApp instead
+use `signTransactionBlock`, and submit the signed transaction within your dApp instead. This
+provides better control around execution, and avoids potential issues around data inconsistency. If
+you believe you have a strong reason for using `signAndExecuteTransactionBlock`, please
+[open an issue](https://github.com/MystenLabs/sui/issues/new/choose).
+
+## Detecting the zkSend wallet
+
+If you'd like to detect whether the user is connected to the zkSend wallet, you can use the `name`
+property on the wallet
+
+For example, if you are using `dapp-kit`, you can use the `useCurrentWallet` hook to get the current
+wallet, and check if it is the zkSend wallet.
+
+```ts
+import { useCurrentWallet } from '@mysten/dapp-kit';
+import { ZKSEND_WALLET_NAME } from '@mysten/zksend';
+
+function ZkSendOnly() {
+	const { curentWallet } = useCurrentWallet();
+	const walletIsZkSendWallet = curentWallet?.name === ZKSEND_WALLET_NAME;
+
+	// rest of component logic...
+}
+```

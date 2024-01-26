@@ -425,7 +425,7 @@ fn test_basic_args_linter_top_level() {
         .into_modules();
     let example_package = Object::new_package_for_testing(
         &compiled_modules,
-        TransactionDigest::genesis(),
+        TransactionDigest::genesis_marker(),
         BuiltInFramework::genesis_move_packages(),
     )
     .unwrap();
@@ -537,7 +537,7 @@ fn test_basic_args_linter_top_level() {
         .into_modules();
     let example_package = Object::new_package_for_testing(
         &compiled_modules,
-        TransactionDigest::genesis(),
+        TransactionDigest::genesis_marker(),
         BuiltInFramework::genesis_move_packages(),
     )
     .unwrap();
@@ -624,7 +624,7 @@ fn test_basic_args_linter_top_level() {
         .into_modules();
     let example_package = Object::new_package_for_testing(
         &compiled_modules,
-        TransactionDigest::genesis(),
+        TransactionDigest::genesis_marker(),
         BuiltInFramework::genesis_move_packages(),
     )
     .unwrap();

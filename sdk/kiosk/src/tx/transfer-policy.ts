@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { bcs } from '@mysten/sui.js/bcs';
-import {
+import type {
 	TransactionArgument,
 	TransactionBlock,
 	TransactionObjectArgument,
 } from '@mysten/sui.js/transactions';
 
-import { ObjectArgument, TRANSFER_POLICY_MODULE, TRANSFER_POLICY_TYPE } from '../types';
+import type { ObjectArgument } from '../types/index.js';
+import { TRANSFER_POLICY_MODULE, TRANSFER_POLICY_TYPE } from '../types/index.js';
 
 /**
  * Call the `transfer_policy::new` function to create a new transfer policy.

@@ -291,7 +291,7 @@ impl<'a> sui_types::storage::ObjectStore for EpochEndIndexingObjectStore<'a> {
     fn get_object(
         &self,
         object_id: &ObjectID,
-    ) -> Result<Option<Object>, sui_types::error::SuiError> {
+    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
         Ok(self
             .objects
             .iter()
@@ -304,7 +304,7 @@ impl<'a> sui_types::storage::ObjectStore for EpochEndIndexingObjectStore<'a> {
         &self,
         object_id: &ObjectID,
         version: sui_types::base_types::VersionNumber,
-    ) -> Result<Option<Object>, sui_types::error::SuiError> {
+    ) -> Result<Option<Object>, sui_types::storage::error::Error> {
         Ok(self
             .objects
             .iter()

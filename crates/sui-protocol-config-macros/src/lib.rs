@@ -159,7 +159,7 @@ pub fn accessors_macro(input: TokenStream) -> TokenStream {
     let output = quote! {
         // For each getter, expand it out into a function in the impl block
         impl #struct_name {
-            const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protocol version";
+            const CONSTANT_ERR_MSG: &'static str = "protocol constant not present in current protocol version";
             #(#getters)*
 
             /// Lookup a config attribute by its string representation

@@ -12,7 +12,7 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use sui_config::node::{DBCheckpointConfig, OverloadThresholdConfig};
+use sui_config::node::{DBCheckpointConfig, OverloadThresholdConfig, RunWithRange};
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
@@ -36,7 +36,9 @@ use sui_swarm_config::network_config_builder::{
 };
 use sui_swarm_config::node_config_builder::{FullnodeConfigBuilder, ValidatorConfigBuilder};
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::base_types::ConciseableName;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
+use sui_types::committee::CommitteeTrait;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
@@ -53,7 +55,7 @@ use sui_types::transaction::{
 };
 use tokio::time::{timeout, Instant};
 use tokio::{task::JoinHandle, time::sleep};
-use tracing::info;
+use tracing::{error, info};
 
 const NUM_VALIDATOR: usize = 4;
 
@@ -225,6 +227,13 @@ impl TestCluster {
             .await
     }
 
+    pub async fn get_latest_object_ref(&self, object_id: &ObjectID) -> ObjectRef {
+        self.get_object_from_fullnode_store(object_id)
+            .await
+            .unwrap()
+            .compute_object_reference()
+    }
+
     pub async fn get_object_or_tombstone_from_fullnode_store(
         &self,
         object_id: ObjectID,
@@ -275,6 +284,39 @@ impl TestCluster {
         })
         .await
         .expect("Timed out waiting for cluster to target epoch")
+    }
+
+    pub async fn wait_for_run_with_range_shutdown_signal(&self) -> Option<RunWithRange> {
+        self.wait_for_run_with_range_shutdown_signal_with_timeout(Duration::from_secs(60))
+            .await
+    }
+
+    pub async fn wait_for_run_with_range_shutdown_signal_with_timeout(
+        &self,
+        timeout_dur: Duration,
+    ) -> Option<RunWithRange> {
+        let mut shutdown_channel_rx = self
+            .fullnode_handle
+            .sui_node
+            .with(|node| node.subscribe_to_shutdown_channel());
+
+        timeout(timeout_dur, async move {
+            tokio::select! {
+                msg = shutdown_channel_rx.recv() =>
+                {
+                    match msg {
+                        Ok(Some(run_with_range)) => Some(run_with_range),
+                        Ok(None) => None,
+                        Err(e) => {
+                            error!("failed recv from sui-node shutdown channel: {}", e);
+                            None
+                        },
+                    }
+                },
+            }
+        })
+        .await
+        .expect("Timed out waiting for cluster to hit target epoch and recv shutdown signal from sui-node")
     }
 
     pub async fn wait_for_protocol_version(
@@ -351,7 +393,15 @@ impl TestCluster {
                     loop {
                         let epoch = node.state().epoch_store_for_testing().epoch();
                         if epoch == target_epoch {
-                            break;
+                            if let Some(agg) = node.clone_authority_aggregator() {
+                                // This is a fullnode, we need to wait for its auth aggregator to reconfigure as well.
+                                if agg.committee.epoch() == target_epoch {
+                                    break;
+                                }
+                            } else {
+                                // This is a validator, we don't need to check the auth aggregator.
+                                break;
+                            }
                         }
                         tokio::time::sleep(Duration::from_secs(1)).await;
                         retries += 1;
@@ -438,6 +488,20 @@ impl TestCluster {
 
     pub async fn test_transaction_builder(&self) -> TestTransactionBuilder {
         let (sender, gas) = self.wallet.get_one_gas_object().await.unwrap().unwrap();
+        self.test_transaction_builder_with_gas_object(sender, gas)
+            .await
+    }
+
+    pub async fn test_transaction_builder_with_sender(
+        &self,
+        sender: SuiAddress,
+    ) -> TestTransactionBuilder {
+        let gas = self
+            .wallet
+            .get_one_gas_object_owned_by_address(sender)
+            .await
+            .unwrap()
+            .unwrap();
         self.test_transaction_builder_with_gas_object(sender, gas)
             .await
     }
@@ -656,6 +720,7 @@ pub struct TestClusterBuilder {
     default_jwks: bool,
     overload_threshold_config: Option<OverloadThresholdConfig>,
     data_ingestion_dir: Option<PathBuf>,
+    fullnode_run_with_range: Option<RunWithRange>,
 }
 
 impl TestClusterBuilder {
@@ -677,7 +742,15 @@ impl TestClusterBuilder {
             default_jwks: false,
             overload_threshold_config: None,
             data_ingestion_dir: None,
+            fullnode_run_with_range: None,
         }
+    }
+
+    pub fn with_fullnode_run_with_range(mut self, run_with_range: Option<RunWithRange>) -> Self {
+        if let Some(run_with_range) = run_with_range {
+            self.fullnode_run_with_range = Some(run_with_range);
+        }
+        self
     }
 
     pub fn with_fullnode_rpc_port(mut self, rpc_port: u16) -> Self {
@@ -906,7 +979,8 @@ impl TestClusterBuilder {
                     .clone()
                     .unwrap_or(self.validator_supported_protocol_versions_config.clone()),
             )
-            .with_db_checkpoint_config(self.db_checkpoint_config_fullnodes.clone());
+            .with_db_checkpoint_config(self.db_checkpoint_config_fullnodes.clone())
+            .with_fullnode_run_with_range(self.fullnode_run_with_range);
 
         if let Some(genesis_config) = self.genesis_config.take() {
             builder = builder.with_genesis_config(genesis_config);
@@ -948,7 +1022,7 @@ impl TestClusterBuilder {
         let wallet_path = dir.join(SUI_CLIENT_CONFIG);
         let keystore_path = dir.join(SUI_KEYSTORE_FILENAME);
 
-        swarm.config().save(&network_path)?;
+        swarm.config().save(network_path)?;
         let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
         for key in &swarm.config().account_keys {
             keystore.add_key(None, SuiKeyPair::Ed25519(key.copy()))?;

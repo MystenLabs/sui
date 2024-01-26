@@ -17,6 +17,10 @@ use std::str::FromStr;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_json::SuiJsonValue;
+use sui_json_rpc_api::{
+    cap_page_limit, validate_limit, IndexerApiOpenRpc, IndexerApiServer, JsonRpcMetrics,
+    ReadApiServer, QUERY_MAX_RESULT_LIMIT,
+};
 use sui_json_rpc_types::{
     DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiObjectDataOptions,
     SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponse,
@@ -35,10 +39,6 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tracing::{debug, instrument, warn};
 
 use crate::{
-    api::{
-        cap_page_limit, validate_limit, IndexerApiServer, JsonRpcMetrics, ReadApiServer,
-        QUERY_MAX_RESULT_LIMIT,
-    },
     authority_state::StateRead,
     error::{Error, SuiRpcInputError},
     name_service::{Domain, NameRecord, NameServiceConfig},
@@ -402,7 +402,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         _limit: Option<usize>,
     ) -> RpcResult<Page<String, ObjectID>> {
         with_tracing!(async move {
-            let reverse_record_id = self.name_service_config.reverse_record_field_id(address);
+            let reverse_record_id = self
+                .name_service_config
+                .reverse_record_field_id(address.as_ref());
 
             let field_reverse_record_object =
                 match self.state.get_object(&reverse_record_id).await? {
@@ -438,6 +440,6 @@ impl<R: ReadApiServer> SuiRpcModule for IndexerApi<R> {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::IndexerApiOpenRpc::module_doc()
+        IndexerApiOpenRpc::module_doc()
     }
 }

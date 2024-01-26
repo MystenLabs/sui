@@ -1,26 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::checkpoint::Checkpoint;
-use crate::context_data::db_data_provider::PgManager;
+use super::checkpoint::{Checkpoint, CheckpointId};
 use async_graphql::*;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct AvailableRange;
+pub(crate) struct AvailableRange {
+    pub first: u64,
+    pub last: u64,
+}
 
 // TODO: do both in one query?
+/// Range of checkpoints that the RPC is guaranteed to produce a consistent response for.
 #[Object]
 impl AvailableRange {
     async fn first(&self, ctx: &Context<'_>) -> Result<Option<Checkpoint>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_earliest_complete_checkpoint()
+        Checkpoint::query(ctx.data_unchecked(), CheckpointId::by_seq_num(self.first))
             .await
             .extend()
     }
 
     async fn last(&self, ctx: &Context<'_>) -> Result<Option<Checkpoint>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_checkpoint(None, None)
+        Checkpoint::query(ctx.data_unchecked(), CheckpointId::by_seq_num(self.last))
             .await
             .extend()
     }

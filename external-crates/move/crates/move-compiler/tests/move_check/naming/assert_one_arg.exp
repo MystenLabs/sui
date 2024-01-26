@@ -29,5 +29,5 @@ error[E03009]: unbound variable
   ┌─ tests/move_check/naming/assert_one_arg.move:5:22
   │
 5 │         assert!(x != y);
-  │                      ^ Invalid variable usage. Unbound variable 'y'
+  │                      ^ Unbound variable 'y'
 

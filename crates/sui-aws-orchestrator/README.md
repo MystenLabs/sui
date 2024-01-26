@@ -4,7 +4,7 @@ The Orchestrator crate provides facilities for quickly deploying and benchmarkin
 
 This guide provides a step-by-step explanation of how to run geo-distributed benchmarks on [Amazon Web Services (AWS)](http://aws.amazon.com).
 
-## Step 1. Set up cloud provider credentials
+## Step 1. Set up credentials
 
 To enable programmatic access to your cloud provider account from your local machine, you need to set up your cloud provider credentials. These credentials authorize your machine to create, delete, and edit instances programmatically on your account.
 
@@ -21,13 +21,20 @@ aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 
 Do not specify any AWS region in that file, as the scripts need to handle multiple regions programmatically.
 
+### Setting up SSH credentials
+
+Running `ssh-keygen -t ed25519 -C "..."` would generate a new ssh key pair under the specified path,
+e.g. private key at `~/.ssh/aws` and public key at `~/.ssh/aws.pub`. If the public key is not
+at the corresponding private key path with `.pub` extension, then the public key path must be specified
+for `ssh_public_key_file` in `settings.json`.
+
 ## Step 2. Specify the testbed configuration
 
-Create a file called `settings.json` that contains all the configuration parameters for the testbed deployment. You can find an example file at `./assets/settings.json` with the following content:
+Create a file called `settings.json` that contains all the configuration parameters for the testbed deployment. You can find a template at `./assets/settings-template.json`. Example content:
 
 ```json
 {
-  "testbed_id": "alberto",
+  "testbed_id": "alberto-0",
   "cloud_provider": "aws",
   "token_file": "/Users/alberto/.aws/credentials",
   "ssh_private_key_file": "/Users/alberto/.ssh/aws",
@@ -53,7 +60,9 @@ Create a file called `settings.json` that contains all the configuration paramet
 }
 ```
 
-The documentation of the `Settings` struct in `./src/settings.rs` provides detailed information about each field and indicates which ones are optional. If you're working with a private GitHub repository, you can include a [private access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) in the repository URL. For example, if your access token is `[your_token]`, the repository URL should be formatted as follows:
+The documentation of the `Settings` struct in `./src/settings.rs` provides detailed information about each `Settings` field.
+
+If you're working with a private GitHub repository, you can include a [private access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) in the repository URL. For example, if your access token is `[your_token]`, the repository URL should be formatted as follows:
 
 ```json
 "repository": {

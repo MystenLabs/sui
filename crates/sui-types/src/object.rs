@@ -376,7 +376,7 @@ impl MoveObject {
                 *balances.entry(type_tag).or_insert(0) += balance;
             }
         } else {
-            let layout = layout_resolver.get_annotated_layout(self)?;
+            let layout = layout_resolver.get_annotated_layout(&self.type_().clone().into())?;
             let move_struct = self.to_move_struct(&layout)?;
             Self::get_coin_balances_in_struct(&move_struct, &mut balances, 0)?;
         }
@@ -962,7 +962,7 @@ impl Object {
         ObjectInner {
             owner: Owner::Immutable,
             data,
-            previous_transaction: TransactionDigest::genesis(),
+            previous_transaction: TransactionDigest::genesis_marker(),
             storage_rebate: 0,
         }
         .into()
@@ -987,7 +987,7 @@ impl Object {
         let owner = Owner::Shared {
             initial_shared_version: obj.version(),
         };
-        Object::new_move(obj, owner, TransactionDigest::genesis())
+        Object::new_move(obj, owner, TransactionDigest::genesis_marker())
     }
 
     pub fn with_id_owner_gas_for_testing(id: ObjectID, owner: SuiAddress, gas: u64) -> Self {
@@ -1000,7 +1000,7 @@ impl Object {
         ObjectInner {
             owner: Owner::AddressOwner(owner),
             data,
-            previous_transaction: TransactionDigest::genesis(),
+            previous_transaction: TransactionDigest::genesis_marker(),
             storage_rebate: 0,
         }
         .into()
@@ -1016,7 +1016,7 @@ impl Object {
         ObjectInner {
             owner: Owner::Immutable,
             data,
-            previous_transaction: TransactionDigest::genesis(),
+            previous_transaction: TransactionDigest::genesis_marker(),
             storage_rebate: 0,
         }
         .into()
@@ -1032,7 +1032,7 @@ impl Object {
         ObjectInner {
             owner: Owner::Immutable,
             data,
-            previous_transaction: TransactionDigest::genesis(),
+            previous_transaction: TransactionDigest::genesis_marker(),
             storage_rebate: 0,
         }
         .into()
@@ -1048,7 +1048,7 @@ impl Object {
         ObjectInner {
             owner: Owner::ObjectOwner(owner.into()),
             data,
-            previous_transaction: TransactionDigest::genesis(),
+            previous_transaction: TransactionDigest::genesis_marker(),
             storage_rebate: 0,
         }
         .into()
@@ -1073,7 +1073,7 @@ impl Object {
         ObjectInner {
             owner: Owner::AddressOwner(owner),
             data,
-            previous_transaction: TransactionDigest::genesis(),
+            previous_transaction: TransactionDigest::genesis_marker(),
             storage_rebate: 0,
         }
         .into()
@@ -1090,7 +1090,7 @@ impl Object {
         Object::new_move(
             obj,
             Owner::AddressOwner(owner),
-            TransactionDigest::genesis(),
+            TransactionDigest::genesis_marker(),
         )
     }
 

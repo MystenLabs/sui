@@ -36,6 +36,7 @@ fastcrypto = { workspace = true, features = ["copy_key"] }
 mysten-metrics.workspace = true
 sui-json.workspace = true
 sui-json-rpc.workspace = true
+sui-json-rpc-api.workspace = true
 sui-json-rpc-types.workspace = true
 sui-open-rpc.workspace = true
 sui-sdk.workspace = true
@@ -63,6 +64,7 @@ sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
 ntest.workspace = true
 criterion.workspace = true
+simulacrum.workspace = true
 
 [[bin]]
 name = "sui-indexer"

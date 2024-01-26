@@ -40,9 +40,11 @@ use move_package::{
 };
 use move_package::{
     resolution::resolution_graph::Package, source_package::parsed_manifest::CustomDepInfo,
+    source_package::parsed_manifest::SourceManifest,
 };
 use move_symbol_pool::Symbol;
 use serde_reflection::Registry;
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::ObjectID,
     error::{SuiError, SuiResult},
@@ -50,14 +52,14 @@ use sui_types::{
     move_package::{FnInfo, FnInfoKey, FnInfoMap, MovePackage},
     DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
 };
-use sui_verifier::verifier as sui_bytecode_verifier;
+use sui_verifier::{default_verifier_config, verifier as sui_bytecode_verifier};
 
 #[cfg(test)]
 #[path = "unit_tests/build_tests.rs"]
 mod build_tests;
 
 /// Wrapper around the core Move `CompiledPackage` with some Sui-specific traits and info
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CompiledPackage {
     pub package: MoveCompiledPackage,
     /// Address the package is recorded as being published at.
@@ -87,6 +89,21 @@ impl BuildConfig {
         build_config.config.install_dir = Some(install_dir);
         build_config.config.lock_file = Some(lock_file);
         build_config.config.no_lint = true;
+        build_config
+    }
+
+    pub fn new_for_testing_replace_addresses<I, S>(dep_original_addresses: I) -> Self
+    where
+        I: IntoIterator<Item = (S, ObjectID)>,
+        S: Into<String>,
+    {
+        let mut build_config = Self::new_for_testing();
+        for (addr_name, obj_id) in dep_original_addresses {
+            build_config
+                .config
+                .additional_named_addresses
+                .insert(addr_name.into(), AccountAddress::from(obj_id));
+        }
         build_config
     }
 
@@ -145,12 +162,23 @@ impl BuildConfig {
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
         let resolution_graph = self.resolution_graph(&path)?;
-        build_from_resolution_graph(
-            path,
+        let result = build_from_resolution_graph(
+            path.clone(),
             resolution_graph,
             run_bytecode_verifier,
             print_diags_to_stderr,
-        )
+        );
+        if let Ok(ref compiled) = result {
+            compiled
+                .package
+                .compiled_package_info
+                .build_flags
+                .update_lock_file_toolchain_version(&path, env!("CARGO_PKG_VERSION").into())
+                .map_err(|e| SuiError::ModuleBuildFailure {
+                    error: format!("Failed to update Move.lock toolchain version: {e}"),
+                })?;
+        }
+        result
     }
 
     pub fn resolution_graph(mut self, path: &Path) -> SuiResult<ResolvedGraph> {
@@ -235,7 +263,14 @@ pub fn build_from_resolution_graph(
                     error: err.to_string(),
                 }
             })?;
-            sui_bytecode_verifier::sui_verify_module_unmetered(m, &fn_info)?;
+            sui_bytecode_verifier::sui_verify_module_unmetered(
+                m,
+                &fn_info,
+                &default_verifier_config(
+                    &ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown),
+                    false,
+                ),
+            )?;
         }
         // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
     }
@@ -570,7 +605,11 @@ pub struct SuiPackageHooks;
 
 impl PackageHooks for SuiPackageHooks {
     fn custom_package_info_fields(&self) -> Vec<String> {
-        vec![PUBLISHED_AT_MANIFEST_FIELD.to_string()]
+        vec![
+            PUBLISHED_AT_MANIFEST_FIELD.to_string(),
+            // TODO: remove this once version fields are removed from all manifests
+            "version".to_string(),
+        ]
     }
 
     fn custom_dependency_key(&self) -> Option<String> {
@@ -584,9 +623,13 @@ impl PackageHooks for SuiPackageHooks {
     ) -> anyhow::Result<()> {
         Ok(())
     }
+
+    fn custom_resolve_pkg_name(&self, manifest: &SourceManifest) -> anyhow::Result<Symbol> {
+        Ok(manifest.package.name)
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PackageDependencies {
     /// Set of published dependencies (name and address).
     pub published: BTreeMap<Symbol, ObjectID>,
@@ -596,7 +639,7 @@ pub struct PackageDependencies {
     pub invalid: BTreeMap<Symbol, String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PublishedAtError {
     Invalid(String),
     NotPresent,

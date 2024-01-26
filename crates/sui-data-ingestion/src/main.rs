@@ -6,7 +6,10 @@ use prometheus::Registry;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::PathBuf;
-use sui_data_ingestion::{DataIngestionMetrics, DynamoDBProgressStore, S3TaskConfig, S3Worker};
+use sui_data_ingestion::{
+    BlobTaskConfig, BlobWorker, DataIngestionMetrics, DynamoDBProgressStore, KVStoreTaskConfig,
+    KVStoreWorker,
+};
 use sui_data_ingestion::{IndexerExecutor, WorkerPool};
 use tokio::signal;
 use tokio::sync::oneshot;
@@ -14,13 +17,15 @@ use tokio::sync::oneshot;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "lowercase")]
 enum Task {
-    S3(S3TaskConfig),
+    Blob(BlobTaskConfig),
+    KV(KVStoreTaskConfig),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct TaskConfig {
     #[serde(flatten)]
     task: Task,
+    name: String,
     concurrency: usize,
 }
 
@@ -38,6 +43,12 @@ struct IndexerConfig {
     path: PathBuf,
     tasks: Vec<TaskConfig>,
     progress_store: ProgressStoreConfig,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    remote_store_url: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    remote_store_options: Vec<(String, String)>,
+    #[serde(default = "default_remote_read_batch_size")]
+    remote_read_batch_size: usize,
     #[serde(default = "default_metrics_host")]
     metrics_host: String,
     #[serde(default = "default_metrics_port")]
@@ -50,6 +61,10 @@ fn default_metrics_host() -> String {
 
 fn default_metrics_port() -> u16 {
     8081
+}
+
+fn default_remote_read_batch_size() -> usize {
+    100
 }
 
 fn setup_env(exit_sender: oneshot::Sender<()>) {
@@ -97,14 +112,35 @@ async fn main() -> Result<()> {
         config.progress_store.table_name,
     )
     .await;
-    let mut executor = IndexerExecutor::new(progress_store, metrics);
+    let mut executor = IndexerExecutor::new(progress_store, config.tasks.len(), metrics);
     for task_config in config.tasks {
-        let worker = match task_config.task {
-            Task::S3(s3_config) => S3Worker::new(s3_config).await,
+        match task_config.task {
+            Task::Blob(blob_config) => {
+                let worker_pool = WorkerPool::new(
+                    BlobWorker::new(blob_config),
+                    task_config.name,
+                    task_config.concurrency,
+                );
+                executor.register(worker_pool).await?;
+            }
+            Task::KV(kv_config) => {
+                let worker_pool = WorkerPool::new(
+                    KVStoreWorker::new(kv_config).await,
+                    task_config.name,
+                    task_config.concurrency,
+                );
+                executor.register(worker_pool).await?;
+            }
         };
-        let worker_pool = WorkerPool::new(worker, task_config.concurrency);
-        executor.register(worker_pool).await?;
     }
-    executor.run(config.path, exit_receiver).await?;
+    executor
+        .run(
+            config.path,
+            config.remote_store_url,
+            config.remote_store_options,
+            config.remote_read_batch_size,
+            exit_receiver,
+        )
+        .await?;
     Ok(())
 }

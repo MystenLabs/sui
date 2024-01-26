@@ -29,6 +29,7 @@ const guides = [
 					'guides/developer/getting-started/local-network',
 					'guides/developer/getting-started/get-address',
 					'guides/developer/getting-started/get-coins',
+					'guides/developer/getting-started/graphql-rpc',
 				],
 			},
 			{
@@ -61,8 +62,15 @@ const guides = [
 					'guides/developer/sui-101/access-time',
 					'guides/developer/sui-101/sign-and-send-txn',
 					'guides/developer/sui-101/sponsor-txn',
-					'guides/developer/sui-101/coin-mgt',
-					'guides/developer/sui-101/building-ptb',
+					{
+						type: 'category',
+						label: 'Working with PTBs',
+						items: [
+							'guides/developer/sui-101/simulating-refs',
+							'guides/developer/sui-101/coin-mgt',
+							'guides/developer/sui-101/building-ptb',
+						],
+					},
 				],
 			},
 			{
@@ -82,6 +90,11 @@ const guides = [
 			{
 				type: 'category',
 				label: 'Advanced Topics',
+				items: ['guides/developer/advanced/asset-tokenization'],
+			},
+			/*{
+				type: 'category',
+				label: 'Advanced Topics',
 				link: {
 					type: 'doc',
 					id: 'guides/developer/advanced',
@@ -99,8 +112,9 @@ const guides = [
 					'guides/developer/advanced/wallet-integrations',
 					'guides/developer/advanced/security-best-practices',
 					'guides/developer/advanced/maximize-reach',
+					'guides/developer/advanced/asset-tokenization',
 				],
-			},
+			},*/
 			{
 				type: 'category',
 				label: 'App Examples',
@@ -154,7 +168,6 @@ const guides = [
 			'guides/operator/validator-committee',
 			'guides/operator/validator-tasks',
 			'guides/operator/node-tools',
-			'guides/operator/formal-snapshot',
 			'guides/operator/exchange-integration',
 		],
 	},

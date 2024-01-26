@@ -269,15 +269,14 @@ impl Worker {
                     network = n;
                     break;
                 }
-                Err(_) => {
+                Err(e) => {
                     retries_left -= 1;
 
                     if retries_left <= 0 {
                         panic!();
                     }
                     error!(
-                        "Address {} should be available for the primary Narwhal service, retrying in one second",
-                        addr
+                        "Address {addr} should be available for the primary Narwhal service, retrying in one second: {e:#?}",
                     );
                     sleep(Duration::from_secs(1));
                 }

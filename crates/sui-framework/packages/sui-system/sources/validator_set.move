@@ -1267,7 +1267,4 @@ module sui_system::validator_set {
         };
         res
     }
-
-    // TODO: investigate prover failure and turn verification back on.
-    spec module { pragma verify = false; }
 }

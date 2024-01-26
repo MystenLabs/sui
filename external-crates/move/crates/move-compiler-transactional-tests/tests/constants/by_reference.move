@@ -3,6 +3,7 @@ module 0x42::m {
     const C: u64 = 0;
     const BYTES: vector<u8> = b"hello";
 
+    #[allow(implicit_const_copy)]
     fun check() {
         assert!(C == 0, 42);
         assert!(BYTES == b"hello", 42);

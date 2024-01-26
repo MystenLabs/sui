@@ -3,10 +3,11 @@
 
 use crate::key_derive::{derive_key_pair_from_path, generate_new_key};
 use crate::random_names::{random_name, random_names};
-use anyhow::{anyhow, bail, Context};
+use anyhow::{anyhow, bail, ensure, Context};
 use bip32::DerivationPath;
 use bip39::{Language, Mnemonic, Seed};
 use rand::{rngs::StdRng, SeedableRng};
+use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::collections::{BTreeMap, HashSet};
@@ -49,6 +50,7 @@ pub trait AccountKeystore: Send + Sync {
     }
     fn addresses_with_alias(&self) -> Vec<(&SuiAddress, &Alias)>;
     fn aliases(&self) -> Vec<&Alias>;
+    fn aliases_mut(&mut self) -> Vec<&mut Alias>;
     fn alias_names(&self) -> Vec<&str> {
         self.aliases()
             .into_iter()
@@ -57,12 +59,50 @@ pub trait AccountKeystore: Send + Sync {
     }
     /// Get alias of address
     fn get_alias_by_address(&self, address: &SuiAddress) -> Result<String, anyhow::Error>;
+    fn get_address_by_alias(&self, alias: String) -> Result<&SuiAddress, anyhow::Error>;
     /// Check if an alias exists by its name
     fn alias_exists(&self, alias: &str) -> bool {
         self.alias_names().contains(&alias)
     }
 
     fn create_alias(&self, alias: Option<String>) -> Result<String, anyhow::Error>;
+
+    fn update_alias(
+        &mut self,
+        old_alias: &str,
+        new_alias: Option<&str>,
+    ) -> Result<String, anyhow::Error>;
+
+    // Internal function. Use update_alias instead
+    fn update_alias_value(
+        &mut self,
+        old_alias: &str,
+        new_alias: Option<&str>,
+    ) -> Result<String, anyhow::Error> {
+        if !self.alias_exists(old_alias) {
+            bail!("The provided alias {old_alias} does not exist");
+        }
+        let new_alias_name = match new_alias {
+            Some(x) => validate_alias(x)?,
+            None => random_name(
+                &self
+                    .alias_names()
+                    .into_iter()
+                    .map(|x| x.to_string())
+                    .collect::<HashSet<_>>(),
+            ),
+        };
+        for a in self.aliases_mut() {
+            if a.alias == old_alias {
+                let pk = &a.public_key_base64;
+                *a = Alias {
+                    alias: new_alias_name.clone(),
+                    public_key_base64: pk.clone(),
+                };
+            }
+        }
+        Ok(new_alias_name)
+    }
 
     fn generate_and_add_new_key(
         &mut self,
@@ -202,6 +242,11 @@ impl AccountKeystore for FileBasedKeystore {
         self.aliases.iter().collect::<Vec<_>>()
     }
 
+    /// Return an array of `Alias`, consisting of every alias and its corresponding public key.
+    fn aliases_mut(&mut self) -> Vec<&mut Alias> {
+        self.aliases.values_mut().collect()
+    }
+
     fn keys(&self) -> Vec<PublicKey> {
         self.keys.values().map(|key| key.public()).collect()
     }
@@ -214,7 +259,7 @@ impl AccountKeystore for FileBasedKeystore {
             Some(a) if self.alias_exists(&a) => {
                 bail!("Alias {a} already exists. Please choose another alias.")
             }
-            Some(a) => Ok(a),
+            Some(a) => validate_alias(&a),
             None => Ok(random_name(
                 &self
                     .alias_names()
@@ -225,7 +270,16 @@ impl AccountKeystore for FileBasedKeystore {
         }
     }
 
-    /// Get alias of address
+    /// Get the address by its alias
+    fn get_address_by_alias(&self, alias: String) -> Result<&SuiAddress, anyhow::Error> {
+        self.addresses_with_alias()
+            .iter()
+            .find(|x| x.1.alias == alias)
+            .ok_or_else(|| anyhow!("Cannot resolve alias {alias} to an address"))
+            .map(|x| x.0)
+    }
+
+    /// Get the alias if it exists, or return an error if it does not exist.
     fn get_alias_by_address(&self, address: &SuiAddress) -> Result<String, anyhow::Error> {
         match self.aliases.get(address) {
             Some(alias) => Ok(alias.alias.clone()),
@@ -238,6 +292,18 @@ impl AccountKeystore for FileBasedKeystore {
             Some(key) => Ok(key),
             None => Err(anyhow!("Cannot find key for address: [{address}]")),
         }
+    }
+
+    /// Updates an old alias to the new alias and saves it to the alias file.
+    /// If the new_alias is None, it will generate a new random alias.
+    fn update_alias(
+        &mut self,
+        old_alias: &str,
+        new_alias: Option<&str>,
+    ) -> Result<String, anyhow::Error> {
+        let new_alias_name = self.update_alias_value(old_alias, new_alias)?;
+        self.save_aliases()?;
+        Ok(new_alias_name)
     }
 }
 
@@ -463,6 +529,15 @@ impl AccountKeystore for InMemKeystore {
         }
     }
 
+    /// Get the address by its alias
+    fn get_address_by_alias(&self, alias: String) -> Result<&SuiAddress, anyhow::Error> {
+        self.addresses_with_alias()
+            .iter()
+            .find(|x| x.1.alias == alias)
+            .ok_or_else(|| anyhow!("Cannot resolve alias {alias} to an address"))
+            .map(|x| x.0)
+    }
+
     /// This function returns an error if the provided alias already exists. If the alias
     /// has not already been used, then it returns the alias.
     /// If no alias has been passed, it will generate a new alias.
@@ -471,7 +546,7 @@ impl AccountKeystore for InMemKeystore {
             Some(a) if self.alias_exists(&a) => {
                 bail!("Alias {a} already exists. Please choose another alias.")
             }
-            Some(a) => Ok(a),
+            Some(a) => validate_alias(&a),
             None => Ok(random_name(
                 &self
                     .alias_names()
@@ -480,6 +555,20 @@ impl AccountKeystore for InMemKeystore {
                     .collect::<HashSet<_>>(),
             )),
         }
+    }
+
+    fn aliases_mut(&mut self) -> Vec<&mut Alias> {
+        self.aliases.values_mut().collect()
+    }
+
+    /// Updates an old alias to the new alias. If the new_alias is None,
+    /// it will generate a new random alias.
+    fn update_alias(
+        &mut self,
+        old_alias: &str,
+        new_alias: Option<&str>,
+    ) -> Result<String, anyhow::Error> {
+        self.update_alias_value(old_alias, new_alias)
     }
 }
 
@@ -507,5 +596,39 @@ impl InMemKeystore {
             .collect::<BTreeMap<_, _>>();
 
         Self { aliases, keys }
+    }
+}
+
+fn validate_alias(alias: &str) -> Result<String, anyhow::Error> {
+    let re = Regex::new(r"^[A-Za-z][A-Za-z0-9-_\.]*$")
+        .map_err(|_| anyhow!("Cannot build the regex needed to validate the alias naming"))?;
+    let alias = alias.trim();
+    ensure!(
+        re.is_match(alias),
+        "Invalid alias. A valid alias must start with a letter and can contain only letters, digits, hyphens (-), dots (.), or underscores (_)."
+    );
+    Ok(alias.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::keystore::validate_alias;
+
+    #[test]
+    fn validate_alias_test() {
+        // OK
+        assert!(validate_alias("A.B_dash").is_ok());
+        assert!(validate_alias("A.B-C1_dash").is_ok());
+        assert!(validate_alias("abc_123.sui").is_ok());
+        // Not allowed
+        assert!(validate_alias("A.B-C_dash!").is_err());
+        assert!(validate_alias(".B-C_dash!").is_err());
+        assert!(validate_alias("_test").is_err());
+        assert!(validate_alias("123").is_err());
+        assert!(validate_alias("@@123").is_err());
+        assert!(validate_alias("@_Ab").is_err());
+        assert!(validate_alias("_Ab").is_err());
+        assert!(validate_alias("^A").is_err());
+        assert!(validate_alias("-A").is_err());
     }
 }

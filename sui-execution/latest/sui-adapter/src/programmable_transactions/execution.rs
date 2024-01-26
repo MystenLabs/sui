@@ -58,6 +58,7 @@ mod checked {
         execution_status::{CommandArgumentError, PackageUpgradeError},
     };
     use sui_verifier::{
+        default_verifier_config,
         private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
         INIT_FN_NAME,
     };
@@ -92,6 +93,7 @@ mod checked {
                 let object_runtime: &ObjectRuntime = context.object_runtime();
                 // We still need to record the loaded child objects for replay
                 let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
+                // we do not save the wrapped objects since on error, they should not be modified
                 drop(context);
                 state_view.save_loaded_runtime_objects(loaded_runtime_objects);
                 return Err(err.with_command_index(idx));
@@ -104,11 +106,15 @@ mod checked {
         // Record the objects loaded at runtime (dynamic fields + received) for
         // storage rebate calculation.
         let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
+        // We record what objects were contained in at the start of the transaction
+        // for expensive invariant checks
+        let wrapped_object_containers = object_runtime.wrapped_object_containers();
 
         // apply changes
         let finished = context.finish::<Mode>();
         // Save loaded objects for debug. We dont want to lose the info
         state_view.save_loaded_runtime_objects(loaded_runtime_objects);
+        state_view.save_wrapped_object_containers(wrapped_object_containers);
         state_view.record_execution_results(finished?);
         Ok(mode_results)
     }
@@ -832,7 +838,11 @@ mod checked {
         for module in modules {
             // Run Sui bytecode verifier, which runs some additional checks that assume the Move
             // bytecode verifier has passed.
-            sui_verifier::verifier::sui_verify_module_unmetered(module, &BTreeMap::new())?;
+            sui_verifier::verifier::sui_verify_module_unmetered(
+                module,
+                &BTreeMap::new(),
+                &default_verifier_config(context.protocol_config, false),
+            )?;
         }
 
         Ok(())

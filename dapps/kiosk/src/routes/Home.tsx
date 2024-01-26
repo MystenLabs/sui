@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useWalletKit } from '@mysten/wallet-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 
 import { Loading } from '../components/Base/Loading';
 import { WalletNotConnected } from '../components/Base/WalletNotConnected';
@@ -12,7 +12,7 @@ import { useOwnedKiosk } from '../hooks/kiosk';
 import { useKioskSelector } from '../hooks/useKioskSelector';
 
 function Home() {
-	const { currentAccount } = useWalletKit();
+	const currentAccount = useCurrentAccount();
 
 	const {
 		data: ownedKiosk,

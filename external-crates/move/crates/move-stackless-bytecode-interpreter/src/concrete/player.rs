@@ -19,7 +19,7 @@ use move_core_types::{
     vm_status::{sub_status, StatusCode},
 };
 use move_model::{
-    ast::{Exp, MemoryLabel, TempIndex},
+    ast::TempIndex,
     model::{FunId, FunctionEnv, ModuleId, StructId},
     ty as MT,
 };
@@ -28,18 +28,17 @@ use move_stackless_bytecode::{
     function_target_pipeline::FunctionTargetsHolder,
     stackless_bytecode::{
         AbortAction, AssignKind, BorrowEdge, BorrowNode, Bytecode, Constant, HavocKind, Label,
-        Operation, PropKind,
+        Operation,
     },
 };
 
 use crate::{
     concrete::{
-        evaluator::{Evaluator, ExpState},
         local_state::{AbortInfo, LocalState, TerminationStatus},
         settings::InterpreterSettings,
         ty::{
-            convert_model_base_type, convert_model_local_type, convert_model_partial_struct_type,
-            convert_model_struct_type, BaseType, CodeOffset, Type,
+            convert_model_base_type, convert_model_local_type, convert_model_struct_type, BaseType,
+            CodeOffset, Type,
         },
         value::{BaseValue, EvalState, GlobalState, LocalSlot, Pointer, TypedValue},
     },
@@ -115,7 +114,7 @@ impl<'env> FunctionContext<'env> {
                 addresses.push(*v);
             }
             BaseValue::Vector(vec) | BaseValue::Struct(vec) => {
-                for (_, val) in vec.iter().enumerate() {
+                for val in vec.iter() {
                     Self::collect_addresses(val, addresses);
                 }
             }
@@ -133,7 +132,7 @@ impl<'env> FunctionContext<'env> {
         eval_state: &mut EvalState,
     ) -> ExecResult<LocalState> {
         // collect addresses
-        for (_, typed_arg) in typed_args.iter().enumerate() {
+        for typed_arg in typed_args.iter() {
             let mut addresses = vec![];
             Self::collect_addresses(typed_arg.get_val(), &mut addresses);
             global_state.put_touched_addresses(&addresses);
@@ -364,28 +363,6 @@ impl<'env> FunctionContext<'env> {
             Bytecode::Abort(_, index) => self.handle_abort(*index, local_state),
             Bytecode::Ret(_, rets) => self.handle_return(rets, local_state),
             Bytecode::Nop(_) => (),
-            Bytecode::SaveMem(_, mem_label, qid) => self.handle_save_mem(
-                *mem_label,
-                qid.module_id,
-                qid.id,
-                &qid.inst,
-                global_state,
-                eval_state,
-            ),
-            Bytecode::Prop(_, PropKind::Assert, exp) => {
-                if !local_state.is_spec_skipped() {
-                    self.handle_prop_assert(exp, eval_state, local_state, global_state)
-                }
-            }
-            Bytecode::Prop(_, PropKind::Assume, exp) => {
-                if !local_state.is_spec_skipped() {
-                    self.handle_prop_assume(exp, eval_state, local_state, global_state)?
-                }
-            }
-            // expressions (TODO: not supported yet)
-            Bytecode::Prop(_, PropKind::Modifies, _) => {}
-            // not-in-use as of now
-            Bytecode::SaveSpecVar(..) => unreachable!(),
         }
         local_state.ready_pc_for_next_instruction();
         Ok(())
@@ -534,17 +511,6 @@ impl<'env> FunctionContext<'env> {
                 if cfg!(debug_assertions) {
                     assert_eq!(srcs.len(), 1);
                     assert!(local_state.get_type(srcs[0]).is_compatible_for_abort_code());
-                }
-                return Ok(());
-            }
-            Operation::TraceExp(_kind, node_id) => {
-                // Perhaps do something with kind?
-                if cfg!(debug_assertions) {
-                    let env = self.target.global_env();
-                    let node_ty =
-                        convert_model_local_type(env, &env.get_node_type(*node_id), &self.ty_args);
-                    assert_eq!(srcs.len(), 1);
-                    assert_eq!(local_state.get_type(srcs[0]), &node_ty);
                 }
                 return Ok(());
             }
@@ -700,7 +666,7 @@ impl<'env> FunctionContext<'env> {
             | Operation::UnpackRefDeep => {
                 if cfg!(debug_assertions) {
                     assert_eq!(typed_args.len(), 1);
-                    let arg_ty = typed_args.get(0).unwrap().get_ty();
+                    let arg_ty = typed_args.first().unwrap().get_ty();
                     assert!(arg_ty.is_struct() || arg_ty.is_ref_struct(Some(true)));
                 }
                 Ok(vec![])
@@ -904,8 +870,6 @@ impl<'env> FunctionContext<'env> {
                     self.handle_binary_boolean(op, lhs, rhs, local_state.get_type(dsts[0]));
                 Ok(vec![calculated])
             }
-            // event (TODO: not supported yet)
-            Operation::EmitEvent | Operation::EventStoreDiverge => Ok(vec![]),
             // already handled
             Operation::Stop
             | Operation::Uninit
@@ -913,9 +877,7 @@ impl<'env> FunctionContext<'env> {
             | Operation::Havoc(..)
             | Operation::TraceLocal(..)
             | Operation::TraceReturn(..)
-            | Operation::TraceAbort
-            | Operation::TraceExp(..)
-            | Operation::TraceGlobalMem(..) => {
+            | Operation::TraceAbort => {
                 unreachable!();
             }
         };
@@ -1234,7 +1196,7 @@ impl<'env> FunctionContext<'env> {
                 Pointer::ArgRef(idx, _) => {
                     if idx == parent_idx {
                         if trace.len() == 1 {
-                            follow_pointer_edge(trace.get(0).unwrap(), edge)
+                            follow_pointer_edge(trace.first().unwrap(), edge)
                         } else {
                             match edge {
                                 BorrowEdge::Hyper(hyper) => {
@@ -1327,7 +1289,7 @@ impl<'env> FunctionContext<'env> {
                 // check pointer validity
                 if cfg!(debug_assertions) {
                     assert_eq!(trace.len(), 1);
-                    match trace.get(0).unwrap() {
+                    match trace.first().unwrap() {
                         Pointer::ArgRef(ref_idx, original_ptr) => {
                             assert_eq!(*ref_idx, local_ref);
                             assert_eq!(original_ptr.as_ref(), old_val.get_ptr());
@@ -1372,7 +1334,7 @@ impl<'env> FunctionContext<'env> {
                         }
                         _ => unreachable!(),
                     }
-                    match trace.get(0).unwrap() {
+                    match trace.first().unwrap() {
                         Pointer::RefField(_, ref_field) => {
                             assert_eq!(*ref_field, field_num);
                         }
@@ -1408,7 +1370,7 @@ impl<'env> FunctionContext<'env> {
                     }
                     _ => unreachable!(),
                 }
-                match trace.get(0).unwrap() {
+                match trace.first().unwrap() {
                     Pointer::RefElement(_, elem_num) => elem_num,
                     _ => unreachable!(),
                 }
@@ -2017,57 +1979,6 @@ impl<'env> FunctionContext<'env> {
         local_state.terminate_with_return(ret_vals);
     }
 
-    fn handle_prop_assert(
-        &self,
-        exp: &Exp,
-        eval_state: &EvalState,
-        local_state: &LocalState,
-        global_state: &GlobalState,
-    ) {
-        let evaluator = Evaluator::new(
-            self.holder,
-            &self.target,
-            &self.ty_args,
-            self.level,
-            ExpState::default(),
-            eval_state,
-            local_state,
-            global_state,
-        );
-        evaluator.check_assert(exp);
-    }
-
-    fn handle_prop_assume(
-        &self,
-        exp: &Exp,
-        eval_state: &EvalState,
-        local_state: &mut LocalState,
-        global_state: &GlobalState,
-    ) -> ExecResult<()> {
-        let evaluator = Evaluator::new(
-            self.holder,
-            &self.target,
-            &self.ty_args,
-            self.level,
-            ExpState::default(),
-            eval_state,
-            local_state,
-            global_state,
-        );
-        match evaluator.check_assume(exp) {
-            None => (),
-            // handle let-bindings
-            Some(Ok((local_idx, local_val))) => {
-                local_state.put_value_override(local_idx, local_val);
-            }
-            Some(Err(_)) => {
-                // unable to find a satisfiable value for a let-binding
-                local_state.skip_specs();
-            }
-        }
-        Ok(())
-    }
-
     //
     // natives
     //
@@ -2076,7 +1987,7 @@ impl<'env> FunctionContext<'env> {
         if cfg!(debug_assertions) {
             assert_eq!(self.ty_args.len(), 1);
         }
-        TypedValue::mk_vector(self.ty_args.get(0).unwrap().clone(), vec![])
+        TypedValue::mk_vector(self.ty_args.first().unwrap().clone(), vec![])
     }
 
     fn native_vector_length(&self, vec_val: TypedValue) -> TypedValue {
@@ -2086,7 +1997,7 @@ impl<'env> FunctionContext<'env> {
             // This is different from the Move native implementation.
             assert_eq!(
                 vec_val.get_ty().get_vector_elem(),
-                self.ty_args.get(0).unwrap()
+                self.ty_args.first().unwrap()
             );
         }
         TypedValue::mk_u64(vec_val.into_vector().len() as u64)
@@ -2103,7 +2014,7 @@ impl<'env> FunctionContext<'env> {
             // This is different from the Move native implementation.
             assert_eq!(
                 vec_val.get_ty().get_vector_elem(),
-                self.ty_args.get(0).unwrap()
+                self.ty_args.first().unwrap()
             );
         }
         let elem_num = elem_val.into_u64() as usize;
@@ -2122,7 +2033,7 @@ impl<'env> FunctionContext<'env> {
             assert_eq!(self.ty_args.len(), 1);
             assert_eq!(
                 vec_val.get_ty().get_ref_vector_elem(Some(true)),
-                self.ty_args.get(0).unwrap()
+                self.ty_args.first().unwrap()
             );
         }
         let elem_num = elem_val.into_u64() as usize;
@@ -2136,7 +2047,7 @@ impl<'env> FunctionContext<'env> {
             assert_eq!(self.ty_args.len(), 1);
             assert_eq!(
                 vec_val.get_ty().get_ref_vector_elem(Some(true)),
-                self.ty_args.get(0).unwrap()
+                self.ty_args.first().unwrap()
             );
         }
         vec_val.update_ref_vector_push_back(elem_val)
@@ -2150,7 +2061,7 @@ impl<'env> FunctionContext<'env> {
             assert_eq!(self.ty_args.len(), 1);
             assert_eq!(
                 vec_val.get_ty().get_ref_vector_elem(Some(true)),
-                self.ty_args.get(0).unwrap()
+                self.ty_args.first().unwrap()
             );
         }
         vec_val
@@ -2163,7 +2074,7 @@ impl<'env> FunctionContext<'env> {
             assert_eq!(self.ty_args.len(), 1);
             assert_eq!(
                 vec_val.get_ty().get_vector_elem(),
-                self.ty_args.get(0).unwrap()
+                self.ty_args.first().unwrap()
             );
         }
         if !vec_val.into_vector().is_empty() {
@@ -2182,7 +2093,7 @@ impl<'env> FunctionContext<'env> {
             assert_eq!(self.ty_args.len(), 1);
             assert_eq!(
                 vec_val.get_ty().get_ref_vector_elem(Some(true)),
-                self.ty_args.get(0).unwrap()
+                self.ty_args.first().unwrap()
             );
         }
         vec_val
@@ -2237,7 +2148,7 @@ impl<'env> FunctionContext<'env> {
             assert_eq!(self.ty_args.len(), 1);
             object
                 .get_ty()
-                .is_ref_of(self.ty_args.get(0).unwrap(), Some(false));
+                .is_ref_of(self.ty_args.first().unwrap(), Some(false));
         }
         object
             .into_bcs_bytes()
@@ -2259,7 +2170,7 @@ impl<'env> FunctionContext<'env> {
             assert_eq!(self.ty_args.len(), 1);
             assert_eq!(
                 msg_val.get_ty().get_base_type(),
-                self.ty_args.get(0).unwrap()
+                self.ty_args.first().unwrap()
             );
         }
         let guid = guid_val
@@ -2321,24 +2232,6 @@ impl<'env> FunctionContext<'env> {
             .collect();
         let verified = ed25519_verify_signature(&key, &sig, &msg_bytes).is_ok();
         TypedValue::mk_bool(verified)
-    }
-
-    //
-    // expressions
-    //
-
-    fn handle_save_mem(
-        &self,
-        mem_label: MemoryLabel,
-        module_id: ModuleId,
-        struct_id: StructId,
-        ty_args: &[MT::Type],
-        global_state: &GlobalState,
-        eval_state: &mut EvalState,
-    ) {
-        let env = self.target.global_env();
-        let inst = convert_model_partial_struct_type(env, module_id, struct_id, ty_args);
-        eval_state.save_memory(mem_label, inst, global_state);
     }
 
     //

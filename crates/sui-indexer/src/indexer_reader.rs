@@ -18,7 +18,7 @@ use crate::{
     },
     schema_v2::{
         address_metrics, checkpoints, display, epochs, events, move_call_metrics, objects,
-        packages, transactions,
+        objects_snapshot, packages, transactions,
     },
     types_v2::{IndexerResult, OwnerType},
     PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection,
@@ -48,7 +48,9 @@ use sui_json_rpc_types::{
     Balance, Coin as SuiCoin, SuiCoinMetadata, SuiTransactionBlockEffects,
     SuiTransactionBlockEffectsAPI,
 };
-use sui_types::{balance::Supply, coin::TreasuryCap, dynamic_field::DynamicFieldName};
+use sui_types::{
+    balance::Supply, coin::TreasuryCap, dynamic_field::DynamicFieldName, object::MoveObject,
+};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
     committee::EpochId,
@@ -126,6 +128,22 @@ impl IndexerReader {
             .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
     }
 
+    pub fn run_query_repeatable<T, E, F>(&self, query: F) -> Result<T, IndexerError>
+    where
+        F: FnOnce(&mut PgConnection) -> Result<T, E>,
+        E: From<diesel::result::Error> + std::error::Error,
+    {
+        blocking_call_is_ok_or_panic();
+
+        let mut connection = self.get_connection()?;
+        connection
+            .build_transaction()
+            .read_only()
+            .repeatable_read()
+            .run(query)
+            .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
+    }
+
     pub async fn spawn_blocking<F, R, E>(&self, f: F) -> Result<R, E>
     where
         F: FnOnce(Self) -> Result<R, E> + Send + 'static,
@@ -151,6 +169,16 @@ impl IndexerReader {
         T: Send + 'static,
     {
         self.spawn_blocking(move |this| this.run_query(query)).await
+    }
+
+    pub async fn run_query_repeatable_async<T, E, F>(&self, query: F) -> Result<T, IndexerError>
+    where
+        F: FnOnce(&mut PgConnection) -> Result<T, E> + Send + 'static,
+        E: From<diesel::result::Error> + std::error::Error + Send + 'static,
+        T: Send + 'static,
+    {
+        self.spawn_blocking(move |this| this.run_query_repeatable(query))
+            .await
     }
 }
 
@@ -389,6 +417,31 @@ impl IndexerReader {
         let system_state: SuiSystemStateSummary =
             sui_types::sui_system_state::get_sui_system_state(self)?
                 .into_sui_system_state_summary();
+        Ok(system_state)
+    }
+
+    /// Retrieve the system state data for the given epoch. If no epoch is given,
+    /// it will retrieve the latest epoch's data and return the system state.
+    /// System state of the an epoch is written at the end of the epoch, so system state
+    /// of the current epoch is empty until the epoch ends. You can call
+    /// `get_latest_sui_system_state` for current epoch instead.
+    pub fn get_epoch_sui_system_state(
+        &self,
+        epoch: Option<EpochId>,
+    ) -> Result<SuiSystemStateSummary, IndexerError> {
+        let stored_epoch = self.get_epoch_info_from_db(epoch)?;
+        let stored_epoch = match stored_epoch {
+            Some(stored_epoch) => stored_epoch,
+            None => return Err(IndexerError::InvalidArgumentError("Invalid epoch".into())),
+        };
+
+        let system_state: SuiSystemStateSummary = bcs::from_bytes(&stored_epoch.system_state)
+            .map_err(|_| {
+                IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "Failed to deserialize `system_state` for epoch {:?}",
+                    epoch,
+                ))
+            })?;
         Ok(system_state)
     }
 
@@ -994,12 +1047,13 @@ impl IndexerReader {
             .into_iter()
             .enumerate()
             .map(|(i, event)| {
+                let layout = MoveObject::get_layout_from_struct_tag(event.type_.clone(), self)?;
                 sui_json_rpc_types::SuiEvent::try_from(
                     event,
                     digest,
                     i as u64,
                     Some(timestamp_ms as u64),
-                    self,
+                    layout,
                 )
             })
             .collect::<Result<Vec<_>, _>>()
@@ -1637,6 +1691,31 @@ impl IndexerReader {
                 )))?;
         Ok(TreasuryCap::try_from(treasury_cap_obj_object)?.total_supply)
     }
+
+    pub fn get_consistent_read_range(&self) -> Result<(i64, i64), IndexerError> {
+        let latest_checkpoint_sequence = self
+            .run_query(|conn| {
+                checkpoints::table
+                    .select(checkpoints::sequence_number)
+                    .order(checkpoints::sequence_number.desc())
+                    .first::<i64>(conn)
+                    .optional()
+            })?
+            .unwrap_or_default();
+        let latest_object_snapshot_checkpoint_sequence = self
+            .run_query(|conn| {
+                objects_snapshot::table
+                    .select(objects_snapshot::checkpoint_sequence_number)
+                    .order(objects_snapshot::checkpoint_sequence_number.desc())
+                    .first::<i64>(conn)
+                    .optional()
+            })?
+            .unwrap_or_default();
+        Ok((
+            latest_object_snapshot_checkpoint_sequence,
+            latest_checkpoint_sequence,
+        ))
+    }
 }
 
 #[derive(Clone, Default)]
@@ -1673,18 +1752,18 @@ impl sui_types::storage::ObjectStore for IndexerReader {
     fn get_object(
         &self,
         object_id: &ObjectID,
-    ) -> Result<Option<sui_types::object::Object>, sui_types::error::SuiError> {
+    ) -> Result<Option<sui_types::object::Object>, sui_types::storage::error::Error> {
         self.get_object(object_id, None)
-            .map_err(|e| sui_types::error::SuiError::GenericStorageError(e.to_string()))
+            .map_err(sui_types::storage::error::Error::custom)
     }
 
     fn get_object_by_key(
         &self,
         object_id: &ObjectID,
         version: sui_types::base_types::VersionNumber,
-    ) -> Result<Option<sui_types::object::Object>, sui_types::error::SuiError> {
+    ) -> Result<Option<sui_types::object::Object>, sui_types::storage::error::Error> {
         self.get_object(object_id, Some(version))
-            .map_err(|e| sui_types::error::SuiError::GenericStorageError(e.to_string()))
+            .map_err(sui_types::storage::error::Error::custom)
     }
 }
 

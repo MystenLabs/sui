@@ -10,8 +10,8 @@ use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::{RpcModule, SubscriptionSink};
 
 use move_core_types::identifier::Identifier;
-use sui_json_rpc::api::{cap_page_limit, IndexerApiClient, IndexerApiServer};
 use sui_json_rpc::SuiRpcModule;
+use sui_json_rpc_api::{cap_page_limit, IndexerApiClient, IndexerApiServer};
 use sui_json_rpc_types::{
     DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiObjectDataFilter,
     SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponseQuery,
@@ -480,6 +480,6 @@ where
     }
 
     fn rpc_doc_module() -> Module {
-        sui_json_rpc::api::IndexerApiOpenRpc::module_doc()
+        sui_json_rpc_api::IndexerApiOpenRpc::module_doc()
     }
 }

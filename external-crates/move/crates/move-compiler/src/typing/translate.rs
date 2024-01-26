@@ -11,13 +11,16 @@ use crate::{
     diagnostics::{codes::*, Diagnostic},
     editions::{FeatureGate, Flavor},
     expansion::ast::{
-        AttributeName_, AttributeValue_, Attribute_, Attributes, Fields, Friend, ModuleAccess_,
-        ModuleIdent, ModuleIdent_, Value_, Visibility,
+        AttributeName_, AttributeValue_, Attribute_, Attributes, DottedUsage, Fields, Friend,
+        ModuleAccess_, ModuleIdent, ModuleIdent_, Value_, Visibility,
     },
     naming::ast::{self as N, BlockLabel, TParam, TParamID, Type, TypeName_, Type_},
-    parser::ast::{Ability_, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_},
+    parser::ast::{
+        Ability_, BinOp, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_,
+    },
     shared::{
         known_attributes::{KnownAttribute, TestingAttribute},
+        process_binops,
         program_info::TypingProgramInfo,
         unique_map::UniqueMap,
         *,
@@ -127,7 +130,6 @@ fn module(
         mut structs,
         functions: nfunctions,
         constants: nconstants,
-        spec_dependencies,
     } = mdef;
     context.current_module = Some(ident);
     context.current_package = package_name;
@@ -156,7 +158,6 @@ fn module(
         structs,
         constants,
         functions,
-        spec_dependencies,
     };
     // get the list of new friends and reset the list.
     let new_friends = std::mem::take(&mut context.new_friends);
@@ -425,7 +426,6 @@ mod check_valid_constant {
             //*****************************************
             // Invalid cases
             //*****************************************
-            E::Spec(_, _) => "Spec blocks are",
             E::BorrowLocal(_, _) => REFERENCE_CASE,
             E::ModuleCall(call) => {
                 exp(context, &call.arguments);
@@ -1055,157 +1055,28 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
     Box::new(exp_(context, *ne))
 }
 
-fn exp_(context: &mut Context, initial_ne: N::Exp) -> T::Exp {
+fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
     use N::Exp_ as NE;
     use T::UnannotatedExp_ as TE;
-    struct Stack<'a, 'env> {
-        frames: Vec<Box<dyn FnOnce(&mut Self)>>,
-        operands: Vec<T::Exp>,
-        context: &'a mut Context<'env>,
-    }
-    macro_rules! inner {
-        ($e:expr) => {{
-            move |s: &mut Stack| exp_loop(s, $e)
-        }};
-    }
-    fn exp_loop(stack: &mut Stack, sp!(loc, cur_): N::Exp) {
-        match cur_ {
-            NE::BinopExp(nlhs, bop, nrhs) => {
-                let f_lhs = inner!(*nlhs);
-                let f_rhs = inner!(*nrhs);
-                let f_binop = move |s: &mut Stack| {
-                    let er = Box::new(s.operands.pop().unwrap());
-                    let el = Box::new(s.operands.pop().unwrap());
-                    use BinOp_::*;
-                    let msg = || format!("Incompatible arguments to '{}'", &bop);
-                    let context = &mut s.context;
-                    let (ty, operand_ty) = match &bop.value {
-                        Sub | Add | Mul | Mod | Div => {
-                            context.add_numeric_constraint(
-                                el.exp.loc,
-                                bop.value.symbol(),
-                                el.ty.clone(),
-                            );
-                            context.add_numeric_constraint(
-                                er.exp.loc,
-                                bop.value.symbol(),
-                                el.ty.clone(),
-                            );
-                            let operand_ty =
-                                join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
-                            (operand_ty.clone(), operand_ty)
-                        }
 
-                        BitOr | BitAnd | Xor => {
-                            context.add_bits_constraint(
-                                el.exp.loc,
-                                bop.value.symbol(),
-                                el.ty.clone(),
-                            );
-                            context.add_bits_constraint(
-                                er.exp.loc,
-                                bop.value.symbol(),
-                                el.ty.clone(),
-                            );
-                            let operand_ty =
-                                join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
-                            (operand_ty.clone(), operand_ty)
-                        }
-
-                        Shl | Shr => {
-                            let msg = || format!("Invalid argument to '{}'", &bop);
-                            let u8ty = Type_::u8(er.exp.loc);
-                            context.add_bits_constraint(
-                                el.exp.loc,
-                                bop.value.symbol(),
-                                el.ty.clone(),
-                            );
-                            subtype(context, er.exp.loc, msg, er.ty.clone(), u8ty);
-                            (el.ty.clone(), el.ty.clone())
-                        }
-
-                        Lt | Gt | Le | Ge => {
-                            context.add_ordered_constraint(
-                                el.exp.loc,
-                                bop.value.symbol(),
-                                el.ty.clone(),
-                            );
-                            context.add_ordered_constraint(
-                                er.exp.loc,
-                                bop.value.symbol(),
-                                el.ty.clone(),
-                            );
-                            let operand_ty =
-                                join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
-                            (Type_::bool(loc), operand_ty)
-                        }
-
-                        Eq | Neq => {
-                            let ability_msg = Some(format!(
-                                "'{}' requires the '{}' ability as the value is consumed. Try \
-                                 borrowing the values with '&' first.'",
-                                &bop,
-                                Ability_::Drop,
-                            ));
-                            context.add_ability_constraint(
-                                el.exp.loc,
-                                ability_msg.clone(),
-                                el.ty.clone(),
-                                Ability_::Drop,
-                            );
-                            context.add_ability_constraint(
-                                er.exp.loc,
-                                ability_msg,
-                                er.ty.clone(),
-                                Ability_::Drop,
-                            );
-                            let ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
-                            context.add_single_type_constraint(loc, msg(), ty.clone());
-                            (Type_::bool(loc), ty)
-                        }
-
-                        And | Or => {
-                            let msg = || format!("Invalid argument to '{}'", &bop);
-                            let lloc = el.exp.loc;
-                            subtype(context, lloc, msg, el.ty.clone(), Type_::bool(bop.loc));
-                            let rloc = er.exp.loc;
-                            subtype(context, rloc, msg, er.ty.clone(), Type_::bool(bop.loc));
-                            (Type_::bool(loc), Type_::bool(loc))
-                        }
-
-                        Range | Implies | Iff => panic!("specification operator unexpected"),
-                    };
-                    let binop =
-                        T::exp(ty, sp(loc, TE::BinopExp(el, bop, Box::new(operand_ty), er)));
-                    s.operands.push(binop)
-                };
-
-                stack.frames.push(Box::new(f_binop));
-                stack.frames.push(Box::new(f_rhs));
-                stack.frames.push(Box::new(f_lhs));
+    if matches!(ne_, NE::BinopExp(..)) {
+        return process_binops!(
+            (BinOp, Loc),
+            T::Exp,
+            sp(eloc, ne_),
+            sp!(loc, cur_),
+            cur_,
+            NE::BinopExp(lhs, op, rhs) => { (*lhs, (op, loc), *rhs) },
+            { exp_(context, sp(loc, cur_)) },
+            value_stack,
+            (bop, loc) => {
+                let el = value_stack.pop().expect("ICE binop typing issue");
+                let er = value_stack.pop().expect("ICE binop typing issue");
+                binop(context, el, bop, loc, er)
             }
-            cur_ => stack.operands.push(exp_inner(stack.context, sp(loc, cur_))),
-        }
+        );
     }
 
-    let mut stack = Stack {
-        frames: vec![],
-        operands: vec![],
-        context,
-    };
-    exp_loop(&mut stack, initial_ne);
-    while let Some(f) = stack.frames.pop() {
-        f(&mut stack)
-    }
-    let e_res = stack.operands.pop().unwrap();
-    assert!(stack.frames.is_empty());
-    assert!(stack.operands.is_empty());
-    e_res
-}
-
-fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
-    use N::Exp_ as NE;
-    use T::UnannotatedExp_ as TE;
     let (ty, e_) = match ne_ {
         NE::Unit { trailing } => (sp(eloc, Type_::Unit), TE::Unit { trailing }),
         NE::Value(sp!(vloc, Value_::InferredNum(v))) => (
@@ -1224,26 +1095,7 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             (ty, TE::Constant(m, c))
         }
 
-        NE::Move(var) => {
-            let ty = context.get_local_type(&var);
-            let from_user = true;
-            (ty, TE::Move { var, from_user })
-        }
-        NE::Copy(var) => {
-            let ty = context.get_local_type(&var);
-            context.add_ability_constraint(
-                eloc,
-                Some(format!(
-                    "Invalid 'copy' of owned value without the '{}' ability",
-                    Ability_::Copy
-                )),
-                ty.clone(),
-                Ability_::Copy,
-            );
-            let from_user = true;
-            (ty, TE::Copy { var, from_user })
-        }
-        NE::Use(var) => {
+        NE::Var(var) => {
             let ty = context.get_local_type(&var);
             (ty, TE::Use(var))
         }
@@ -1482,8 +1334,13 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             (bt, TE::Pack(m, n, targs, tfields))
         }
 
-        NE::Borrow(mut_, sp!(_, N::ExpDotted_::Exp(ner))) => {
+        NE::ExpDotted(DottedUsage::Use, sp!(_, N::ExpDotted_::Exp(ner))) => {
             let er = exp_(context, *ner);
+            (er.ty, er.exp.value)
+        }
+        NE::ExpDotted(DottedUsage::Borrow(mut_), sp!(_, N::ExpDotted_::Exp(ner))) => {
+            let er = exp_(context, *ner);
+            warn_on_constant_borrow(context, eloc, &er);
             context.add_base_type_constraint(eloc, "Invalid borrow", er.ty.clone());
             let ty = sp(eloc, Type_::Ref(mut_, Box::new(er.ty.clone())));
             let eborrow = match er.exp {
@@ -1497,18 +1354,81 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             };
             (ty, eborrow)
         }
+        NE::ExpDotted(DottedUsage::Move(loc), sp!(_, N::ExpDotted_::Exp(ner))) => {
+            let er = exp_(context, *ner);
 
-        NE::Borrow(mut_, ndotted) => {
+            match er.exp.value {
+                TE::Use(var) => (
+                    er.ty,
+                    TE::Move {
+                        var,
+                        from_user: true,
+                    },
+                ),
+                TE::UnresolvedError => (er.ty, TE::UnresolvedError),
+                er_ => {
+                    let msg = if matches!(er_, TE::Constant(_, _)) {
+                        "Invalid 'move'. Cannot 'move' constants"
+                    } else {
+                        "Invalid 'move'. Expected a variable or path."
+                    };
+                    context
+                        .env
+                        .add_diag(diag!(TypeSafety::InvalidMoveOp, (loc, msg)));
+                    (context.error_type(eloc), TE::UnresolvedError)
+                }
+            }
+        }
+        NE::ExpDotted(DottedUsage::Copy(loc), sp!(_, N::ExpDotted_::Exp(ner))) => {
+            let er = exp_(context, *ner);
+            let (ty, ecopy) = match er.exp.value {
+                TE::Use(var) => (
+                    er.ty,
+                    TE::Copy {
+                        var,
+                        from_user: true,
+                    },
+                ),
+                er_ @ TE::Constant(_, _) => {
+                    context.env.check_feature(
+                        FeatureGate::Move2024Paths,
+                        context.current_package(),
+                        loc,
+                    );
+                    (er.ty, er_)
+                }
+                TE::UnresolvedError => (er.ty, TE::UnresolvedError),
+                _ => {
+                    let msg = "Invalid 'copy'. Expected a variable or path.".to_owned();
+                    context
+                        .env
+                        .add_diag(diag!(TypeSafety::InvalidCopyOp, (loc, msg)));
+                    (context.error_type(eloc), TE::UnresolvedError)
+                }
+            };
+            if !matches!(ecopy, TE::UnresolvedError) {
+                context.add_ability_constraint(
+                    eloc,
+                    Some(format!(
+                        "Invalid 'copy' of owned value without the '{}' ability",
+                        Ability_::Copy
+                    )),
+                    ty.clone(),
+                    Ability_::Copy,
+                );
+            }
+            (ty, ecopy)
+        }
+
+        NE::ExpDotted(DottedUsage::Borrow(mut_), ndotted) => {
             let (edotted, _) = exp_dotted(context, Some("borrow"), ndotted);
             let eborrow = exp_dotted_to_borrow(context, eloc, mut_, edotted);
             (eborrow.ty, eborrow.exp.value)
         }
 
-        NE::DerefBorrow(ndotted) => {
-            assert!(!matches!(ndotted, sp!(_, N::ExpDotted_::Exp(_))));
-
+        NE::ExpDotted(usage, ndotted) => {
             let (edotted, inner_ty) = exp_dotted(context, Some("dot access"), ndotted);
-            let ederefborrow = exp_dotted_to_owned_value(context, eloc, edotted, inner_ty);
+            let ederefborrow = exp_dotted_to_owned_value(context, usage, eloc, edotted, inner_ty);
             (ederefborrow.ty, ederefborrow.exp.value)
         }
 
@@ -1534,16 +1454,6 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             );
             (rhs.clone(), TE::Annotate(el, Box::new(rhs)))
         }
-        NE::Spec(u, used_locals) => {
-            let used_local_types = used_locals
-                .into_iter()
-                .map(|v| {
-                    let ty = context.get_local_type(&v);
-                    (v, ty)
-                })
-                .collect();
-            (sp(eloc, Type_::Unit), TE::Spec(u, used_local_types))
-        }
         NE::UnresolvedError => {
             assert!(context.env.has_errors());
             (context.error_type(eloc), TE::UnresolvedError)
@@ -1552,6 +1462,79 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
         NE::BinopExp(..) => unreachable!(),
     };
     T::exp(ty, sp(eloc, e_))
+}
+
+fn binop(context: &mut Context, el: T::Exp, bop: BinOp, loc: Loc, er: T::Exp) -> T::Exp {
+    use BinOp_::*;
+    use T::UnannotatedExp_ as TE;
+    let msg = || format!("Incompatible arguments to '{}'", &bop);
+    let (ty, operand_ty) = match &bop.value {
+        Sub | Add | Mul | Mod | Div => {
+            context.add_numeric_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
+            context.add_numeric_constraint(er.exp.loc, bop.value.symbol(), el.ty.clone());
+            let operand_ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
+            (operand_ty.clone(), operand_ty)
+        }
+
+        BitOr | BitAnd | Xor => {
+            context.add_bits_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
+            context.add_bits_constraint(er.exp.loc, bop.value.symbol(), el.ty.clone());
+            let operand_ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
+            (operand_ty.clone(), operand_ty)
+        }
+
+        Shl | Shr => {
+            let msg = || format!("Invalid argument to '{}'", &bop);
+            let u8ty = Type_::u8(er.exp.loc);
+            context.add_bits_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
+            subtype(context, er.exp.loc, msg, er.ty.clone(), u8ty);
+            (el.ty.clone(), el.ty.clone())
+        }
+
+        Lt | Gt | Le | Ge => {
+            context.add_ordered_constraint(el.exp.loc, bop.value.symbol(), el.ty.clone());
+            context.add_ordered_constraint(er.exp.loc, bop.value.symbol(), el.ty.clone());
+            let operand_ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
+            (Type_::bool(loc), operand_ty)
+        }
+
+        Eq | Neq => {
+            let ability_msg = Some(format!(
+                "'{}' requires the '{}' ability as the value is consumed. Try \
+                         borrowing the values with '&' first.'",
+                &bop,
+                Ability_::Drop,
+            ));
+            context.add_ability_constraint(
+                el.exp.loc,
+                ability_msg.clone(),
+                el.ty.clone(),
+                Ability_::Drop,
+            );
+            context.add_ability_constraint(er.exp.loc, ability_msg, er.ty.clone(), Ability_::Drop);
+            let ty = join(context, bop.loc, msg, el.ty.clone(), er.ty.clone());
+            context.add_single_type_constraint(loc, msg(), ty.clone());
+            (Type_::bool(loc), ty)
+        }
+
+        And | Or => {
+            let msg = || format!("Invalid argument to '{}'", &bop);
+            let lloc = el.exp.loc;
+            subtype(context, lloc, msg, el.ty.clone(), Type_::bool(bop.loc));
+            let rloc = er.exp.loc;
+            subtype(context, rloc, msg, er.ty.clone(), Type_::bool(bop.loc));
+            (Type_::bool(loc), Type_::bool(loc))
+        }
+
+        Range | Implies | Iff => panic!("specification operator unexpected"),
+    };
+    T::exp(
+        ty,
+        sp(
+            loc,
+            TE::BinopExp(Box::new(el), bop, Box::new(operand_ty), Box::new(er)),
+        ),
+    )
 }
 
 fn loop_body(
@@ -1972,6 +1955,7 @@ fn exp_dotted(
         NE::Exp(ne) => {
             use Type_::*;
             let e = exp(context, ne);
+            warn_on_constant_borrow(context, dloc, &e);
             let ety = &e.ty;
             let unfolded = core::unfold_type(&context.subst, ety.clone());
             let (borrow_needed, ty) = match unfolded.value {
@@ -2064,14 +2048,21 @@ fn exp_dotted_to_borrow(
 
 fn exp_dotted_to_owned_value(
     context: &mut Context,
+    usage: DottedUsage,
     eloc: Loc,
     edot: ExpDotted,
     inner_ty: Type,
 ) -> T::Exp {
     use T::UnannotatedExp_ as TE;
     match edot {
-        // TODO investigate this nonsense
-        sp!(_, ExpDotted_::Exp(lhs)) | sp!(_, ExpDotted_::TmpBorrow(lhs, _)) => *lhs,
+        sp!(_, ExpDotted_::Exp(lhs)) | sp!(_, ExpDotted_::TmpBorrow(lhs, _)) => {
+            debug_assert!(
+                usage == DottedUsage::Use,
+                "ICE this case should only come from method calls. \
+                move/copy/borrow should be covered above"
+            );
+            *lhs
+        }
         edot => {
             let name = match &edot {
                 sp!(_, ExpDotted_::Exp(_)) | sp!(_, ExpDotted_::TmpBorrow(_, _)) => {
@@ -2080,18 +2071,61 @@ fn exp_dotted_to_owned_value(
                 sp!(_, ExpDotted_::Dot(_, name, _)) => *name,
             };
             let eborrow = exp_dotted_to_borrow(context, eloc, false, edot);
-            context.add_ability_constraint(
-                eloc,
-                Some(format!(
-                    "Invalid implicit copy of field '{}' without the '{}' ability",
-                    name,
-                    Ability_::COPY,
-                )),
-                inner_ty.clone(),
-                Ability_::Copy,
-            );
-            T::exp(inner_ty, sp(eloc, TE::Dereference(Box::new(eborrow))))
+            let case = match usage {
+                DottedUsage::Move(loc) => {
+                    let new_syntax = context.env.check_feature(
+                        FeatureGate::Move2024Paths,
+                        context.current_package(),
+                        loc,
+                    );
+                    if new_syntax {
+                        let msg = "Invalid 'move'. 'move' works only with \
+                            variables, e.g. 'move x'. 'move' on a path access is not supported";
+                        context
+                            .env
+                            .add_diag(diag!(TypeSafety::InvalidMoveOp, (loc, msg)));
+                    }
+                    None
+                }
+                DottedUsage::Copy(loc) => {
+                    context.env.check_feature(
+                        FeatureGate::Move2024Paths,
+                        context.current_package(),
+                        loc,
+                    );
+                    Some("'copy'")
+                }
+                DottedUsage::Use => Some("implicit copy"),
+                DottedUsage::Borrow(_) => unreachable!("ICE covered above"),
+            };
+            if let Some(case) = case {
+                context.add_ability_constraint(
+                    eloc,
+                    Some(format!(
+                        "Invalid {} of field '{}' without the '{}' ability",
+                        case,
+                        name,
+                        Ability_::COPY,
+                    )),
+                    inner_ty.clone(),
+                    Ability_::Copy,
+                );
+                T::exp(inner_ty, sp(eloc, TE::Dereference(Box::new(eborrow))))
+            } else {
+                // 'move' case, which is not supported
+                T::exp(context.error_type(eloc), sp(eloc, TE::UnresolvedError))
+            }
         }
+    }
+}
+
+fn warn_on_constant_borrow(context: &mut Context, loc: Loc, e: &T::Exp) {
+    use T::UnannotatedExp_ as TE;
+    if matches!(&e.exp.value, TE::Constant(_, _)) {
+        let msg = "This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit";
+        context
+            .env
+            .add_diag(diag!(TypeSafety::ImplicitConstantCopy, (loc, msg)))
     }
 }
 
@@ -2191,7 +2225,7 @@ fn method_call(
             }
             exp_dotted_to_borrow(context, loc, *mut_, edotted)
         }
-        _ => exp_dotted_to_owned_value(context, loc, edotted, edotted_ty),
+        _ => exp_dotted_to_owned_value(context, DottedUsage::Use, loc, edotted, edotted_ty),
     };
     args.insert(0, first_arg);
     let call = module_call_impl(context, loc, m, f, targs, parameters, argloc, args);

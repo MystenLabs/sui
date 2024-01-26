@@ -9,9 +9,8 @@ use futures::future::{select, Either};
 use futures::pin_mut;
 use futures::FutureExt;
 use itertools::Itertools;
-use mysten_network::Multiaddr;
 use narwhal_types::{TransactionProto, TransactionsClient};
-use narwhal_worker::LocalNarwhalClient;
+use narwhal_worker::LazyNarwhalClient;
 use parking_lot::{Mutex, RwLockReadGuard};
 use prometheus::Histogram;
 use prometheus::HistogramVec;
@@ -34,13 +33,13 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 use sui_types::base_types::TransactionDigest;
-use sui_types::committee::Committee;
+use sui_types::committee::{Committee, CommitteeTrait};
 use sui_types::error::{SuiError, SuiResult};
 
 use tap::prelude::*;
 use tokio::sync::{Semaphore, SemaphorePermit};
 use tokio::task::JoinHandle;
-use tokio::time::{self, sleep, timeout};
+use tokio::time::{self};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::{classify, SequencedConsensusTransactionKey};
@@ -208,48 +207,6 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
                 warn!("Submit transaction failed with: {:?}", r);
             })?;
         Ok(())
-    }
-}
-
-/// A Narwhal client that instantiates LocalNarwhalClient lazily.
-pub struct LazyNarwhalClient {
-    /// Outer ArcSwapOption allows initialization after the first connection to Narwhal.
-    /// Inner ArcSwap allows Narwhal restarts across epoch changes.
-    client: ArcSwapOption<ArcSwap<LocalNarwhalClient>>,
-    addr: Multiaddr,
-}
-
-impl LazyNarwhalClient {
-    /// Lazily instantiates LocalNarwhalClient keyed by the address of the Narwhal worker.
-    pub fn new(addr: Multiaddr) -> Self {
-        Self {
-            client: ArcSwapOption::empty(),
-            addr,
-        }
-    }
-
-    async fn get(&self) -> Arc<ArcSwap<LocalNarwhalClient>> {
-        // Narwhal may not have started and created LocalNarwhalClient, so retry in a loop.
-        // Retries should only happen on Sui process start.
-        const NARWHAL_WORKER_START_TIMEOUT: Duration = Duration::from_secs(30);
-        if let Ok(client) = timeout(NARWHAL_WORKER_START_TIMEOUT, async {
-            loop {
-                match LocalNarwhalClient::get_global(&self.addr) {
-                    Some(c) => return c,
-                    None => {
-                        sleep(Duration::from_millis(100)).await;
-                    }
-                };
-            }
-        })
-        .await
-        {
-            return client;
-        }
-        panic!(
-            "Timed out after {:?} waiting for Narwhal worker ({}) to start!",
-            NARWHAL_WORKER_START_TIMEOUT, self.addr,
-        );
     }
 }
 
@@ -819,28 +776,20 @@ impl ConsensusAdapter {
         let send_end_of_publish = if let ConsensusTransactionKind::UserTransaction(_cert) =
             &transaction.kind
         {
-            let reconfig_guard = epoch_store.get_reconfig_state_read_lock_guard();
             // If we are in RejectUserCerts state and we just drained the list we need to
             // send EndOfPublish to signal other validators that we are not submitting more certificates to the epoch.
             // Note that there could be a race condition here where we enter this check in RejectAllCerts state.
             // In that case we don't need to send EndOfPublish because condition to enter
             // RejectAllCerts is when 2f+1 other validators already sequenced their EndOfPublish message.
-            if reconfig_guard.is_reject_user_certs() {
+            // Also note that we could sent multiple EndOfPublish due to that multiple tasks can enter here with
+            // pending_count == 0. This doesn't affect correctness.
+            if epoch_store
+                .get_reconfig_state_read_lock_guard()
+                .is_reject_user_certs()
+            {
                 let pending_count = epoch_store.pending_consensus_certificates_count();
                 debug!(epoch=?epoch_store.epoch(), ?pending_count, "Deciding whether to send EndOfPublish");
-                // Send end of epoch if empty and all deferred tx are procesed.
-                if pending_count > 0 {
-                    false
-                } else {
-                    // Don't check deferred table until pending_count is already 0, since it may
-                    // require scanning through a bunch of deletion markers.
-                    let deferred_is_empty = epoch_store.deferred_transactions_empty();
-                    debug!(
-                        ?deferred_is_empty,
-                        "Deciding whether to block EndOfPublish on deferred tx"
-                    );
-                    deferred_is_empty
-                }
+                pending_count == 0 // send end of epoch if empty
             } else {
                 false
             }
@@ -959,6 +908,7 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
             let send_end_of_publish = pending_count == 0;
             epoch_store.close_user_certs(reconfig_guard);
             send_end_of_publish
+            // reconfig_guard lock is dropped here.
         };
         if send_end_of_publish {
             if let Err(err) = self.submit(

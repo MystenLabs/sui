@@ -15,12 +15,12 @@ Checkpoint created: 1
 task 4 'run-graphql'. lines 18-30:
 Response: {
   "data": {
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "nodes": [
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Move Runtime Abort. Location: 00cc077085024849b290aa0b6d88bb5793d457e99fe08b472b7fcd73f775bf91::m::boom (function index 1) at offset 1, Abort Code: 42 in 1st command."
+            "errors": "Move Runtime Abort. Location: e6623dd347a3ac67cab583e13ee0fa58e269b7051026dba6715ef83136417f13::m::boom (function index 1) at offset 1, Abort Code: 42 in 1st command."
           }
         }
       ]
@@ -38,12 +38,12 @@ Checkpoint created: 2
 task 7 'run-graphql'. lines 39-52:
 Response: {
   "data": {
-    "transactionBlockConnection": {
+    "transactionBlocks": {
       "nodes": [
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Move Runtime Abort. Location: 00cc077085024849b290aa0b6d88bb5793d457e99fe08b472b7fcd73f775bf91::m::boom (function index 1) at offset 1, Abort Code: 42 in 3rd command."
+            "errors": "Move Runtime Abort. Location: e6623dd347a3ac67cab583e13ee0fa58e269b7051026dba6715ef83136417f13::m::boom (function index 1) at offset 1, Abort Code: 42 in 3rd command."
           }
         }
       ]

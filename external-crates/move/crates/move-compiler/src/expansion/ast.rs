@@ -6,8 +6,7 @@ use crate::{
     diagnostics::WarningFilters,
     parser::ast::{
         self as P, Ability, Ability_, BinOp, BlockLabel, ConstantName, Field, FunctionName,
-        ModuleName, Mutability, QuantKind, SpecApplyPattern, StructName, UnaryOp, Var,
-        ENTRY_MODIFIER,
+        ModuleName, Mutability, QuantKind, StructName, UnaryOp, Var, ENTRY_MODIFIER,
     },
     shared::{
         ast_debug::*, known_attributes::KnownAttribute, unique_map::UniqueMap,
@@ -16,11 +15,7 @@ use crate::{
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
-    fmt,
-    hash::Hash,
-};
+use std::{collections::VecDeque, fmt, hash::Hash};
 
 //**************************************************************************************************
 // Program
@@ -87,29 +82,10 @@ pub enum Attribute_ {
 }
 pub type Attribute = Spanned<Attribute_>;
 
-impl Attribute_ {
-    pub fn attribute_name(&self) -> &Name {
-        match self {
-            Attribute_::Name(nm)
-            | Attribute_::Assigned(nm, _)
-            | Attribute_::Parameterized(nm, _) => nm,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AttributeName_ {
     Unknown(Symbol),
     Known(KnownAttribute),
-}
-
-impl AttributeName_ {
-    pub fn name(&self) -> Symbol {
-        match self {
-            Self::Unknown(s) => *s,
-            Self::Known(a) => a.name().into(),
-        }
-    }
 }
 
 pub type AttributeName = Spanned<AttributeName_>;
@@ -150,7 +126,6 @@ pub struct ModuleDefinition {
     pub structs: UniqueMap<StructName, StructDefinition>,
     pub functions: UniqueMap<FunctionName, Function>,
     pub constants: UniqueMap<ConstantName, Constant>,
-    pub specs: Vec<SpecBlock>,
 }
 
 //**************************************************************************************************
@@ -235,7 +210,6 @@ pub struct Function {
     pub entry: Option<Loc>,
     pub signature: FunctionSignature,
     pub body: FunctionBody,
-    pub specs: BTreeMap<SpecId, SpecBlock>,
 }
 
 //**************************************************************************************************
@@ -251,105 +225,6 @@ pub struct Constant {
     pub loc: Loc,
     pub signature: Type,
     pub value: Exp,
-}
-
-//**************************************************************************************************
-// Specification Blocks
-//**************************************************************************************************
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct SpecBlock_ {
-    pub attributes: Attributes,
-    pub target: SpecBlockTarget,
-    pub members: Vec<SpecBlockMember>,
-}
-pub type SpecBlock = Spanned<SpecBlock_>;
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum SpecBlockTarget_ {
-    Code,
-    Module,
-    Member(Name, Option<Box<FunctionSignature>>),
-    Schema(Name, Vec<(Name, AbilitySet)>),
-}
-
-pub type SpecBlockTarget = Spanned<SpecBlockTarget_>;
-
-#[derive(Debug, Clone, PartialEq)]
-#[allow(clippy::large_enum_variant)]
-pub enum SpecBlockMember_ {
-    Condition {
-        kind: SpecConditionKind,
-        properties: Vec<PragmaProperty>,
-        exp: Exp,
-        additional_exps: Vec<Exp>,
-    },
-    Function {
-        uninterpreted: bool,
-        name: FunctionName,
-        signature: FunctionSignature,
-        body: FunctionBody,
-    },
-    Variable {
-        is_global: bool,
-        name: Name,
-        type_parameters: Vec<(Name, AbilitySet)>,
-        type_: Type,
-        init: Option<Exp>,
-    },
-    Update {
-        lhs: Exp,
-        rhs: Exp,
-    },
-    Let {
-        name: Name,
-        post_state: bool,
-        def: Exp,
-    },
-    Include {
-        properties: Vec<PragmaProperty>,
-        exp: Exp,
-    },
-    Apply {
-        exp: Exp,
-        patterns: Vec<SpecApplyPattern>,
-        exclusion_patterns: Vec<SpecApplyPattern>,
-    },
-    Pragma {
-        properties: Vec<PragmaProperty>,
-    },
-}
-pub type SpecBlockMember = Spanned<SpecBlockMember_>;
-
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub enum SpecConditionKind_ {
-    Assert,
-    Assume,
-    Decreases,
-    AbortsIf,
-    AbortsWith,
-    SucceedsIf,
-    Modifies,
-    Emits,
-    Ensures,
-    Requires,
-    Invariant(Vec<(Name, AbilitySet)>),
-    InvariantUpdate(Vec<(Name, AbilitySet)>),
-    Axiom(Vec<(Name, AbilitySet)>),
-}
-pub type SpecConditionKind = Spanned<SpecConditionKind_>;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PragmaProperty_ {
-    pub name: Name,
-    pub value: Option<PragmaValue>,
-}
-pub type PragmaProperty = Spanned<PragmaProperty_>;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PragmaValue {
-    Literal(Value),
-    Ident(ModuleAccess),
 }
 
 //**************************************************************************************************
@@ -411,6 +286,15 @@ pub enum ExpDotted_ {
 }
 pub type ExpDotted = Spanned<ExpDotted_>;
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+
+pub enum DottedUsage {
+    Move(Loc),
+    Copy(Loc),
+    Use,
+    Borrow(/* mut */ bool),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Value_ {
     // 0x<hex representation up to 64 digits with padding 0s>
@@ -440,8 +324,6 @@ pub type Value = Spanned<Value_>;
 #[allow(clippy::large_enum_variant)]
 pub enum Exp_ {
     Value(Value),
-    Move(Var),
-    Copy(Var),
 
     Name(ModuleAccess, Option<Vec<Type>>),
     Call(
@@ -471,7 +353,6 @@ pub enum Exp_ {
     Assign(LValueList, Box<Exp>),
     FieldMutate(Box<ExpDotted>, Box<Exp>),
     Mutate(Box<Exp>, Box<Exp>),
-
     Abort(Box<Exp>),
     Return(Option<BlockLabel>, Box<Exp>),
     Break(Option<BlockLabel>, Box<Exp>),
@@ -486,14 +367,11 @@ pub enum Exp_ {
         trailing: bool,
     },
 
-    Borrow(bool, Box<Exp>),
-    ExpDotted(Box<ExpDotted>),
+    ExpDotted(DottedUsage, Box<ExpDotted>),
     Index(Box<Exp>, Box<Exp>), // spec only (no mutation needed right now)
 
     Cast(Box<Exp>, Type),
     Annotate(Box<Exp>, Type),
-
-    Spec(SpecId, BTreeSet<Name>),
 
     UnresolvedError,
 }
@@ -602,6 +480,35 @@ impl Hash for Address {
 // impls
 //**************************************************************************************************
 
+impl Attribute_ {
+    pub fn attribute_name(&self) -> &Name {
+        match self {
+            Attribute_::Name(nm)
+            | Attribute_::Assigned(nm, _)
+            | Attribute_::Parameterized(nm, _) => nm,
+        }
+    }
+}
+
+impl AttributeName_ {
+    pub fn name(&self) -> Symbol {
+        match self {
+            Self::Unknown(s) => *s,
+            Self::Known(a) => a.name().into(),
+        }
+    }
+}
+
+impl Attributes {
+    pub fn is_test_or_test_only(&self) -> bool {
+        self.contains_key_(&AttributeName_::Known(KnownAttribute::Testing(
+            known_attributes::TestingAttribute::TestOnly,
+        ))) || self.contains_key_(&AttributeName_::Known(KnownAttribute::Testing(
+            known_attributes::TestingAttribute::Test,
+        )))
+    }
+}
+
 impl UseFuns {
     pub fn new() -> Self {
         Self {
@@ -656,16 +563,6 @@ impl ModuleIdent_ {
             module: m,
         } = self;
         a.is(address) && m == module.as_ref()
-    }
-}
-
-impl SpecId {
-    pub fn new(u: usize) -> Self {
-        SpecId(u)
-    }
-
-    pub fn inner(self) -> usize {
-        self.0
     }
 }
 
@@ -931,12 +828,6 @@ impl fmt::Display for Type_ {
     }
 }
 
-impl fmt::Display for SpecId {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 //**************************************************************************************************
 // Debug
 //**************************************************************************************************
@@ -1068,7 +959,6 @@ impl AstDebug for ModuleDefinition {
             structs,
             functions,
             constants,
-            specs,
             warning_filter,
         } = self;
         warning_filter.ast_debug(w);
@@ -1096,10 +986,6 @@ impl AstDebug for ModuleDefinition {
         }
         for fdef in functions.key_cloned_iter() {
             fdef.ast_debug(w);
-            w.new_line();
-        }
-        for spec in specs {
-            spec.ast_debug(w);
             w.new_line();
         }
     }
@@ -1159,192 +1045,6 @@ impl AstDebug for (StructName, &StructDefinition) {
     }
 }
 
-impl AstDebug for SpecBlock_ {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        w.write(" spec ");
-        self.target.ast_debug(w);
-        w.write("{");
-        w.semicolon(&self.members, |w, m| m.ast_debug(w));
-        w.write("}");
-    }
-}
-
-impl AstDebug for SpecBlockTarget_ {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        match self {
-            SpecBlockTarget_::Code => {}
-            SpecBlockTarget_::Module => w.write("module "),
-            SpecBlockTarget_::Member(name, sign_opt) => {
-                w.write(name.value);
-                if let Some(sign) = sign_opt {
-                    sign.ast_debug(w);
-                }
-            }
-            SpecBlockTarget_::Schema(n, tys) => {
-                w.write(&format!("schema {}", n.value));
-                if !tys.is_empty() {
-                    w.write("<");
-                    w.list(tys, ", ", |w, ty| {
-                        ty.ast_debug(w);
-                        true
-                    });
-                    w.write(">");
-                }
-            }
-        }
-    }
-}
-
-impl AstDebug for SpecConditionKind_ {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        use SpecConditionKind_::*;
-        match self {
-            Assert => w.write("assert "),
-            Assume => w.write("assume "),
-            Decreases => w.write("decreases "),
-            AbortsIf => w.write("aborts_if "),
-            AbortsWith => w.write("aborts_with "),
-            SucceedsIf => w.write("succeeds_if "),
-            Modifies => w.write("modifies "),
-            Emits => w.write("emits "),
-            Ensures => w.write("ensures "),
-            Requires => w.write("requires "),
-            Invariant(ty_params) => {
-                w.write("invariant");
-                ty_params.ast_debug(w);
-                w.write(" ")
-            }
-            InvariantUpdate(ty_params) => {
-                w.write("invariant");
-                ty_params.ast_debug(w);
-                w.write(" update ")
-            }
-            Axiom(ty_params) => {
-                w.write("axiom");
-                ty_params.ast_debug(w);
-                w.write(" ")
-            }
-        }
-    }
-}
-
-impl AstDebug for SpecBlockMember_ {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        match self {
-            SpecBlockMember_::Condition {
-                kind,
-                properties: _,
-                exp,
-                additional_exps,
-            } => {
-                kind.ast_debug(w);
-                exp.ast_debug(w);
-                w.list(additional_exps, ",", |w, e| {
-                    e.ast_debug(w);
-                    true
-                });
-            }
-            SpecBlockMember_::Function {
-                uninterpreted,
-                signature,
-                name,
-                body,
-            } => {
-                if *uninterpreted {
-                    w.write("uninterpreted ")
-                } else if let FunctionBody_::Native = &body.value {
-                    w.write("native ");
-                }
-                w.write(&format!("define {}", name));
-                signature.ast_debug(w);
-                match &body.value {
-                    FunctionBody_::Defined(body) => body.ast_debug(w),
-                    FunctionBody_::Native => w.writeln(";"),
-                }
-            }
-            SpecBlockMember_::Variable {
-                is_global,
-                name,
-                type_parameters,
-                type_,
-                init: _,
-            } => {
-                if *is_global {
-                    w.write("global ");
-                } else {
-                    w.write("local");
-                }
-                w.write(&format!("{}", name));
-                type_parameters.ast_debug(w);
-                w.write(": ");
-                type_.ast_debug(w);
-            }
-            SpecBlockMember_::Update { lhs, rhs } => {
-                w.write("update ");
-                lhs.ast_debug(w);
-                w.write(" = ");
-                rhs.ast_debug(w);
-            }
-            SpecBlockMember_::Let {
-                name,
-                post_state,
-                def,
-            } => {
-                w.write(&format!(
-                    "let {}{} = ",
-                    if *post_state { "post " } else { "" },
-                    name
-                ));
-                def.ast_debug(w);
-            }
-            SpecBlockMember_::Include { properties: _, exp } => {
-                w.write("include ");
-                exp.ast_debug(w);
-            }
-            SpecBlockMember_::Apply {
-                exp,
-                patterns,
-                exclusion_patterns,
-            } => {
-                w.write("apply ");
-                exp.ast_debug(w);
-                w.write(" to ");
-                w.list(patterns, ", ", |w, p| {
-                    p.ast_debug(w);
-                    true
-                });
-                if !exclusion_patterns.is_empty() {
-                    w.write(" exclude ");
-                    w.list(exclusion_patterns, ", ", |w, p| {
-                        p.ast_debug(w);
-                        true
-                    });
-                }
-            }
-            SpecBlockMember_::Pragma { properties } => {
-                w.write("pragma ");
-                w.list(properties, ", ", |w, p| {
-                    p.ast_debug(w);
-                    true
-                });
-            }
-        }
-    }
-}
-
-impl AstDebug for PragmaProperty_ {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        w.write(self.name.value);
-        if let Some(value) = &self.value {
-            w.write(" = ");
-            match value {
-                PragmaValue::Literal(l) => l.ast_debug(w),
-                PragmaValue::Ident(i) => i.ast_debug(w),
-            }
-        }
-    }
-}
-
 impl AstDebug for (FunctionName, &Function) {
     fn ast_debug(&self, w: &mut AstWriter) {
         let (
@@ -1357,7 +1057,6 @@ impl AstDebug for (FunctionName, &Function) {
                 entry,
                 signature,
                 body,
-                specs: _specs,
                 warning_filter,
             },
         ) = self;
@@ -1591,8 +1290,6 @@ impl AstDebug for Exp_ {
                 trailing: _trailing,
             } => w.write("/*()*/"),
             E::Value(v) => v.ast_debug(w),
-            E::Move(v) => w.write(&format!("move {}", v)),
-            E::Copy(v) => w.write(&format!("copy {}", v)),
             E::Name(ma, tys_opt) => {
                 ma.ast_debug(w);
                 if let Some(ss) = tys_opt {
@@ -1754,14 +1451,17 @@ impl AstDebug for Exp_ {
                 w.write(" ");
                 r.ast_debug(w)
             }
-            E::Borrow(mut_, e) => {
-                w.write("&");
-                if *mut_ {
-                    w.write("mut ");
-                }
-                e.ast_debug(w);
+            E::ExpDotted(usage, ed) => {
+                let case = match usage {
+                    DottedUsage::Move(_) => "move ",
+                    DottedUsage::Copy(_) => "copy ",
+                    DottedUsage::Use => "use ",
+                    DottedUsage::Borrow(false) => "&",
+                    DottedUsage::Borrow(true) => "&mut ",
+                };
+                w.write(case);
+                ed.ast_debug(w)
             }
-            E::ExpDotted(ed) => ed.ast_debug(w),
             E::Cast(e, ty) => {
                 w.write("(");
                 e.ast_debug(w);
@@ -1781,14 +1481,6 @@ impl AstDebug for Exp_ {
                 w.write(": ");
                 ty.ast_debug(w);
                 w.write(")");
-            }
-            E::Spec(u, unbound_names) => {
-                w.write(&format!("spec #{}", u));
-                if !unbound_names.is_empty() {
-                    w.write("uses [");
-                    w.comma(unbound_names, |w, n| w.write(&format!("{}", n)));
-                    w.write("]");
-                }
             }
             E::UnresolvedError => w.write("_|_"),
         }

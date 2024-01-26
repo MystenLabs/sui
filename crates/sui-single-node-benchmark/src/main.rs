@@ -18,6 +18,13 @@ async fn main() {
         Workload::new(args.tx_count, args.workload, args.num_input_objects),
         args.component,
         args.checkpoint_size,
+        args.print_sample_tx,
     )
     .await;
+
+    if std::env::var("TRACE_FILTER").is_ok() {
+        println!("Sleeping for 60 seconds to allow tracing to flush.");
+        println!("You can ctrl-c to exit once you see trace data appearing in grafana");
+        tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+    }
 }

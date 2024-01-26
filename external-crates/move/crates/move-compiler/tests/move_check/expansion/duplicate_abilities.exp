@@ -22,27 +22,3 @@ error[E02001]: duplicate declaration, item, or annotation
   │                │        
   │                Ability previously given here
 
-error[E02001]: duplicate declaration, item, or annotation
-  ┌─ tests/move_check/expansion/duplicate_abilities.move:9:28
-  │
-9 │         invariant<T: key + key> exists<T>(0x1) == exists<T>(0x1);
-  │                      ---   ^^^ Duplicate 'key' ability constraint
-  │                      │      
-  │                      Ability previously given here
-
-error[E02001]: duplicate declaration, item, or annotation
-   ┌─ tests/move_check/expansion/duplicate_abilities.move:10:26
-   │
-10 │         axiom<T: store + store + key + key> exists<T>(0x2);
-   │                  -----   ^^^^^ Duplicate 'store' ability constraint
-   │                  │        
-   │                  Ability previously given here
-
-error[E02001]: duplicate declaration, item, or annotation
-   ┌─ tests/move_check/expansion/duplicate_abilities.move:10:40
-   │
-10 │         axiom<T: store + store + key + key> exists<T>(0x2);
-   │                                  ---   ^^^ Duplicate 'key' ability constraint
-   │                                  │      
-   │                                  Ability previously given here
-

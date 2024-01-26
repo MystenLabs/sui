@@ -36,6 +36,7 @@ mod checked {
     };
     use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
     use sui_types::committee::EpochId;
+    use sui_types::deny_list::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution::is_certificate_denied;
@@ -80,6 +81,7 @@ mod checked {
         certificate_deny_set: &HashSet<TransactionDigest>,
     ) -> (
         InnerTemporaryStore,
+        SuiGasStatus,
         TransactionEffects,
         Result<Mode::ExecutionResults, ExecutionError>,
     ) {
@@ -177,7 +179,7 @@ mod checked {
         );
 
         // Remove from dependencies the generic hash
-        transaction_dependencies.remove(&TransactionDigest::genesis());
+        transaction_dependencies.remove(&TransactionDigest::genesis_marker());
 
         if enable_expensive_checks && !Mode::allow_arbitrary_function_calls() {
             temporary_store
@@ -194,7 +196,12 @@ mod checked {
             &mut gas_charger,
             *epoch_id,
         );
-        (inner, effects, execution_result)
+        (
+            inner,
+            gas_charger.into_gas_status(),
+            effects,
+            execution_result,
+        )
     }
 
     pub fn execute_genesis_state_update(
@@ -602,6 +609,10 @@ mod checked {
                         EndOfEpochTransactionKind::RandomnessStateCreate => {
                             assert!(protocol_config.random_beacon());
                             builder = setup_randomness_state_create(builder);
+                        }
+                        EndOfEpochTransactionKind::DenyListStateCreate => {
+                            assert!(protocol_config.enable_coin_deny_list());
+                            builder = setup_coin_deny_list_state_create(builder);
                         }
                     }
                 }
@@ -1076,5 +1087,20 @@ mod checked {
             gas_charger,
             pt,
         )
+    }
+
+    fn setup_coin_deny_list_state_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                DENY_LIST_MODULE.to_owned(),
+                DENY_LIST_CREATE_FUNC.to_owned(),
+                vec![],
+                vec![],
+            )
+            .expect("Unable to generate coin_deny_list_create transaction!");
+        builder
     }
 }

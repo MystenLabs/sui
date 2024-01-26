@@ -111,9 +111,9 @@ pub fn parse_source_manifest(tval: TV) -> Result<PM::SourceManifest> {
 pub fn parse_package_info(tval: TV) -> Result<PM::PackageInfo> {
     match tval {
         TV::Table(mut table) => {
-            check_for_required_field_names(&table, &["name", "version"])?;
+            check_for_required_field_names(&table, &["name"])?;
             let hook_names = package_hooks::custom_package_info_fields();
-            let known_names = ["name", "version", "authors", "license", "edition", "flavor"]
+            let known_names = ["name", "authors", "license", "edition", "flavor"]
                 .into_iter()
                 .chain(hook_names.iter().map(|s| s.as_str()))
                 .collect::<Vec<_>>();
@@ -121,14 +121,10 @@ pub fn parse_package_info(tval: TV) -> Result<PM::PackageInfo> {
             let name = table
                 .remove("name")
                 .ok_or_else(|| format_err!("'name' is a required field but was not found",))?;
-            let version = table
-                .remove("version")
-                .ok_or_else(|| format_err!("'version' is a required field but was not found",))?;
             let name = name
                 .as_str()
                 .ok_or_else(|| format_err!("Package name must be a string"))?;
             let name = PM::PackageName::from(name);
-            let version = parse_version(version)?;
             let license = table.remove("license").map(|x| Symbol::from(x.to_string()));
             let authors = match table.remove("authors") {
                 None => Vec::new(),
@@ -182,7 +178,6 @@ pub fn parse_package_info(tval: TV) -> Result<PM::PackageInfo> {
 
             Ok(PM::PackageInfo {
                 name,
-                version,
                 authors,
                 license,
                 custom_properties,
@@ -353,7 +348,6 @@ pub fn parse_dependency(dep_name: &str, mut tval: TV) -> Result<PM::Dependency> 
         .remove("addr_subst")
         .map(parse_substitution)
         .transpose()?;
-    let version = table.remove("version").map(parse_version).transpose()?;
     let digest = table.remove("digest").map(parse_digest).transpose()?;
     let dep_override = table
         .remove("override")
@@ -460,7 +454,6 @@ pub fn parse_dependency(dep_name: &str, mut tval: TV) -> Result<PM::Dependency> 
     Ok(PM::Dependency::Internal(PM::InternalDependency {
         kind,
         subst,
-        version,
         digest,
         dep_override,
     }))

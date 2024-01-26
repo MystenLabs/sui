@@ -6,7 +6,7 @@ use std::str::FromStr;
 use async_graphql::*;
 use move_core_types::account_address::AccountAddress;
 use serde::{Deserialize, Serialize};
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{ObjectID, SuiAddress as NativeSuiAddress};
 use thiserror::Error;
 
 const SUI_ADDRESS_LENGTH: usize = 32;
@@ -36,21 +36,6 @@ pub(crate) enum FromVecError {
     WrongLength(usize),
 }
 
-#[Scalar]
-impl ScalarType for SuiAddress {
-    fn parse(value: Value) -> InputValueResult<Self> {
-        let Value::String(s) = value else {
-            return Err(InputValueError::expected_type(value));
-        };
-
-        Ok(SuiAddress::from_str(&s)?)
-    }
-
-    fn to_value(&self) -> Value {
-        Value::String(format!("0x{}", hex::encode(self.0)))
-    }
-}
-
 impl SuiAddress {
     pub fn from_array(arr: [u8; SUI_ADDRESS_LENGTH]) -> Self {
         SuiAddress(arr)
@@ -71,6 +56,29 @@ impl SuiAddress {
     }
 }
 
+#[Scalar(use_type_description = true)]
+impl ScalarType for SuiAddress {
+    fn parse(value: Value) -> InputValueResult<Self> {
+        let Value::String(s) = value else {
+            return Err(InputValueError::expected_type(value));
+        };
+
+        Ok(SuiAddress::from_str(&s)?)
+    }
+
+    fn to_value(&self) -> Value {
+        Value::String(format!("0x{}", hex::encode(self.0)))
+    }
+}
+
+impl Description for SuiAddress {
+    fn description() -> &'static str {
+        "String containing 32B hex-encoded address, with a leading \"0x\". Leading zeroes can be \
+         omitted on input but will always appear in outputs (SuiAddress in output is guaranteed \
+         to be 66 characters long)."
+    }
+}
+
 impl TryFrom<Vec<u8>> for SuiAddress {
     type Error = FromVecError;
 
@@ -85,9 +93,33 @@ impl From<AccountAddress> for SuiAddress {
     }
 }
 
+impl From<SuiAddress> for AccountAddress {
+    fn from(value: SuiAddress) -> Self {
+        AccountAddress::new(value.0)
+    }
+}
+
 impl From<ObjectID> for SuiAddress {
     fn from(value: ObjectID) -> Self {
         SuiAddress(value.into_bytes())
+    }
+}
+
+impl From<SuiAddress> for ObjectID {
+    fn from(value: SuiAddress) -> Self {
+        ObjectID::new(value.0)
+    }
+}
+
+impl From<NativeSuiAddress> for SuiAddress {
+    fn from(value: NativeSuiAddress) -> Self {
+        SuiAddress(value.to_inner())
+    }
+}
+
+impl From<SuiAddress> for NativeSuiAddress {
+    fn from(value: SuiAddress) -> Self {
+        AccountAddress::from(value).into()
     }
 }
 

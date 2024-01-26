@@ -56,7 +56,7 @@ export function GasFeeSection({
 			<DescriptionItem
 				title={
 					<Text variant="bodySmall" weight="medium" color="steel-dark">
-						Fees ({WALLET_FEES_PERCENTAGE}%)
+						Access Fees ({WALLET_FEES_PERCENTAGE}%)
 					</Text>
 				}
 			>

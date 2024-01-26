@@ -14,12 +14,13 @@
 		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
 	},
 	"dependencies": {
+		"@tanstack/react-query": "^5.0.0",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0"
 	},
 	"devDependencies": {
+		"@mysten/dapp-kit": "workspace:*",
 		"@mysten/sui.js": "workspace:*",
-		"@mysten/wallet-kit": "workspace:*",
 		"@types/react": "^18.2.15",
 		"@types/react-dom": "^18.2.7",
 		"@vitejs/plugin-react": "^4.0.3",

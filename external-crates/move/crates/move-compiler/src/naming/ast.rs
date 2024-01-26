@@ -5,8 +5,9 @@
 use crate::{
     diagnostics::WarningFilters,
     expansion::ast::{
-        ability_constraints_ast_debug, ability_modifiers_ast_debug, AbilitySet, Attributes, Fields,
-        Friend, ImplicitUseFunCandidate, ModuleIdent, SpecId, Value, Value_, Visibility,
+        ability_constraints_ast_debug, ability_modifiers_ast_debug, AbilitySet, Attributes,
+        DottedUsage, Fields, Friend, ImplicitUseFunCandidate, ModuleIdent, Value, Value_,
+        Visibility,
     },
     parser::ast::{
         Ability_, BinOp, ConstantName, Field, FunctionName, Mutability, StructName, UnaryOp,
@@ -50,7 +51,7 @@ pub enum UseFunKind {
     // From a function declaration in the module
     FunctionDeclaration,
     // From a normal, non 'use fun' use declaration,
-    UseAlias { used: bool },
+    UseAlias,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -62,6 +63,10 @@ pub struct UseFun {
     // If None, disregard any use/unused information.
     // If Some, we track whether or not the associated function alias was used prior to receiver
     pub kind: UseFunKind,
+    // Set to true on usage during typing on usage.
+    // For UseAlias implicit use funs, this might already be set to true if it was used in a
+    // non method syntax case
+    pub used: bool,
 }
 
 // Mapping from type to their possible "methods"
@@ -90,8 +95,6 @@ pub struct ModuleDefinition {
     pub structs: UniqueMap<StructName, StructDefinition>,
     pub constants: UniqueMap<ConstantName, Constant>,
     pub functions: UniqueMap<FunctionName, Function>,
-    // module dependencies referenced in specs
-    pub spec_dependencies: BTreeSet<(ModuleIdent, Neighbor)>,
 }
 
 //**************************************************************************************************
@@ -280,9 +283,7 @@ pub type BuiltinFunction = Spanned<BuiltinFunction_>;
 #[allow(clippy::large_enum_variant)]
 pub enum Exp_ {
     Value(Value),
-    Move(Var),
-    Copy(Var),
-    Use(Var),
+    Var(Var),
     Constant(ModuleIdent, ConstantName),
 
     ModuleCall(
@@ -320,13 +321,10 @@ pub enum Exp_ {
         trailing: bool,
     },
 
-    DerefBorrow(ExpDotted),
-    Borrow(bool, ExpDotted),
+    ExpDotted(DottedUsage, ExpDotted),
 
     Cast(Box<Exp>, Type),
     Annotate(Box<Exp>, Type),
-
-    Spec(SpecId, BTreeSet<Var>),
 
     UnresolvedError,
 }
@@ -768,6 +766,7 @@ impl AstDebug for UseFun {
             is_public,
             target_function: (target_m, target_f),
             kind,
+            used,
         } = self;
         attributes.ast_debug(w);
         w.new_line();
@@ -775,12 +774,12 @@ impl AstDebug for UseFun {
             w.write("public ")
         }
         let kind_str = match kind {
-            UseFunKind::Explicit => "",
-            UseFunKind::UseAlias { used: true } => "#used",
-            UseFunKind::UseAlias { used: false } => "#unused",
+            UseFunKind::Explicit => "#explicit",
+            UseFunKind::UseAlias => "#use-alias",
             UseFunKind::FunctionDeclaration => "#fundecl",
         };
-        w.write(&format!("use{kind_str} {target_m}::{target_f}"));
+        let usage = if *used { "#used" } else { "#unused" };
+        w.write(&format!("use{kind_str}{usage} {target_m}::{target_f}"));
     }
 }
 
@@ -833,7 +832,6 @@ impl AstDebug for ModuleDefinition {
             structs,
             constants,
             functions,
-            spec_dependencies,
         } = self;
         warning_filter.ast_debug(w);
         if let Some(n) = package_name {
@@ -846,11 +844,6 @@ impl AstDebug for ModuleDefinition {
             w.writeln("source module")
         }
         use_funs.ast_debug(w);
-        for (m, neighbor) in spec_dependencies {
-            w.write(&format!("spec_dep {m} is"));
-            neighbor.ast_debug(w);
-            w.writeln(";");
-        }
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(&format!("friend {};", mident));
             w.new_line();
@@ -1168,15 +1161,7 @@ impl AstDebug for Exp_ {
                 trailing: _trailing,
             } => w.write("/*()*/"),
             E::Value(v) => v.ast_debug(w),
-            E::Move(v) => {
-                w.write("move ");
-                v.ast_debug(w)
-            }
-            E::Copy(v) => {
-                w.write("copy ");
-                v.ast_debug(w)
-            }
-            E::Use(v) => v.ast_debug(w),
+            E::Var(v) => v.ast_debug(w),
             E::Constant(m, c) => w.write(&format!("{}::{}", m, c)),
             E::ModuleCall(m, f, tys_opt, sp!(_, rhs)) => {
                 w.write(&format!("{}::{}", m, f));
@@ -1319,15 +1304,15 @@ impl AstDebug for Exp_ {
                 w.write(" ");
                 r.ast_debug(w)
             }
-            E::Borrow(mut_, e) => {
-                w.write("&");
-                if *mut_ {
-                    w.write("mut ");
-                }
-                e.ast_debug(w);
-            }
-            E::DerefBorrow(ed) => {
-                w.write("(&*)");
+            E::ExpDotted(usage, ed) => {
+                let case = match usage {
+                    DottedUsage::Move(_) => "move ",
+                    DottedUsage::Copy(_) => "copy ",
+                    DottedUsage::Use => "use ",
+                    DottedUsage::Borrow(false) => "&",
+                    DottedUsage::Borrow(true) => "&mut ",
+                };
+                w.write(case);
                 ed.ast_debug(w)
             }
             E::Cast(e, ty) => {
@@ -1343,14 +1328,6 @@ impl AstDebug for Exp_ {
                 w.write(": ");
                 ty.ast_debug(w);
                 w.write(")");
-            }
-            E::Spec(u, used_locals) => {
-                w.write(&format!("spec #{}", u));
-                if !used_locals.is_empty() {
-                    w.write("uses [");
-                    w.comma(used_locals, |w, n| n.ast_debug(w));
-                    w.write("]");
-                }
             }
             E::UnresolvedError => w.write("_|_"),
         }

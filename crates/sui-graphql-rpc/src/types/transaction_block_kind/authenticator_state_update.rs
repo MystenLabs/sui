@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{
-    connection::{Connection, Edge},
+    connection::{Connection, CursorType, Edge},
     *,
 };
 
@@ -11,10 +11,9 @@ use sui_types::{
     transaction::AuthenticatorStateUpdate as NativeAuthenticatorStateUpdateTransaction,
 };
 
-use crate::{
-    context_data::db_data_provider::{validate_cursor_pagination, PgManager},
-    error::Error,
-    types::epoch::Epoch,
+use crate::types::{
+    cursor::{JsonCursor, Page},
+    epoch::Epoch,
 };
 
 #[derive(Clone, PartialEq, Eq)]
@@ -22,14 +21,17 @@ pub(crate) struct AuthenticatorStateUpdateTransaction(
     pub NativeAuthenticatorStateUpdateTransaction,
 );
 
+pub(crate) type CActiveJwk = JsonCursor<usize>;
+
+/// The active JSON Web Key representing a set of public keys for an OpenID provider
 struct ActiveJwk(NativeActiveJwk);
 
+/// System transaction for updating the on-chain state used by zkLogin.
 #[Object]
 impl AuthenticatorStateUpdateTransaction {
     /// Epoch of the authenticator state update transaction.
-    async fn epoch(&self, ctx: &Context<'_>) -> Result<Epoch> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_epoch_strict(self.0.epoch)
+    async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
+        Epoch::query(ctx.data_unchecked(), Some(self.0.epoch))
             .await
             .extend()
     }
@@ -40,73 +42,29 @@ impl AuthenticatorStateUpdateTransaction {
     }
 
     /// Newly active JWKs (JSON Web Keys).
-    async fn new_active_jwk_connection(
+    async fn new_active_jwks(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<CActiveJwk>,
         last: Option<u64>,
-        before: Option<String>,
+        before: Option<CActiveJwk>,
     ) -> Result<Connection<String, ActiveJwk>> {
-        // TODO: make cursor opaque (currently just an offset).
-        validate_cursor_pagination(&first, &after, &last, &before).extend()?;
-
-        let total = self.0.new_active_jwks.len();
-
-        let mut lo = if let Some(after) = after {
-            1 + after
-                .parse::<usize>()
-                .map_err(|_| Error::InvalidCursor("Failed to parse 'after' cursor.".to_string()))
-                .extend()?
-        } else {
-            0
-        };
-
-        let mut hi = if let Some(before) = before {
-            before
-                .parse::<usize>()
-                .map_err(|_| Error::InvalidCursor("Failed to parse 'before' cursor.".to_string()))
-                .extend()?
-        } else {
-            total
-        };
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let mut connection = Connection::new(false, false);
-        if hi <= lo {
+        let Some((prev, next, cs)) = page.paginate_indices(self.0.new_active_jwks.len()) else {
             return Ok(connection);
-        }
+        };
 
-        // If there's a `first` limit, bound the upperbound to be at most `first` away from the
-        // lowerbound.
-        if let Some(first) = first {
-            let first = first as usize;
-            if hi - lo > first {
-                hi = lo + first;
-            }
-        }
+        connection.has_previous_page = prev;
+        connection.has_next_page = next;
 
-        // If there's a `last` limit, bound the lowerbound to be at most `last` away from the
-        // upperbound.  NB. This applies after we bounded the upperbound, using `first`.
-        if let Some(last) = last {
-            let last = last as usize;
-            if hi - lo > last {
-                lo = hi - last;
-            }
-        }
-
-        connection.has_previous_page = 0 < lo;
-        connection.has_next_page = hi < total;
-
-        for (idx, active_jwk) in self
-            .0
-            .new_active_jwks
-            .iter()
-            .enumerate()
-            .skip(lo)
-            .take(hi - lo)
-        {
+        for c in cs {
+            let active_jwk = ActiveJwk(self.0.new_active_jwks[*c].clone());
             connection
                 .edges
-                .push(Edge::new(idx.to_string(), ActiveJwk(active_jwk.clone())));
+                .push(Edge::new(c.encode_cursor(), active_jwk));
         }
 
         Ok(connection)
@@ -151,9 +109,8 @@ impl ActiveJwk {
     }
 
     /// The most recent epoch in which the JWK was validated.
-    async fn epoch(&self, ctx: &Context<'_>) -> Result<Epoch> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_epoch_strict(self.0.epoch)
+    async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
+        Epoch::query(ctx.data_unchecked(), Some(self.0.epoch))
             .await
             .extend()
     }

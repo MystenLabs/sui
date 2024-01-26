@@ -1,6 +1,6 @@
 # Fetch some default amount of transactions, ascending
 {
-  transactionBlockConnection {
+  transactionBlocks {
     nodes {
       digest
       effects {

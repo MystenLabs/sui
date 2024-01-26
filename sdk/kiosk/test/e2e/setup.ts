@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execSync } from 'child_process';
-import {
+import type {
 	DevInspectResults,
-	getFullnodeUrl,
-	SuiClient,
 	SuiObjectChangePublished,
 	SuiTransactionBlockResponse,
 } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
@@ -16,7 +15,8 @@ import tmp from 'tmp';
 import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
 
-import { KioskClient, KioskTransaction } from '../../src';
+import type { KioskClient } from '../../src/index.js';
+import { KioskTransaction } from '../../src/index.js';
 
 //@ts-ignore-next-line
 const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');

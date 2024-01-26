@@ -339,6 +339,12 @@ impl TestFailure {
     }
 }
 
+impl Default for TestStatistics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestStatistics {
     pub fn new() -> Self {
         Self {

@@ -15,22 +15,14 @@ use log::{debug, info, warn};
 use move_compiler::shared::PackagePaths;
 use move_docgen::Docgen;
 use move_errmapgen::ErrmapGen;
-use move_model::{
-    code_writer::CodeWriter, model::GlobalEnv, parse_addresses_from_options,
-    run_model_builder_with_options,
-};
-use move_prover_boogie_backend::{
-    add_prelude, boogie_wrapper::BoogieWrapper, bytecode_translator::BoogieTranslator,
-};
+use move_model::{model::GlobalEnv, parse_addresses_from_options, run_model_builder_with_options};
 use move_stackless_bytecode::{
     escape_analysis::EscapeAnalysisProcessor,
     function_target_pipeline::{FunctionTargetPipeline, FunctionTargetsHolder},
     number_operation::GlobalNumberOperationState,
     pipeline_factory,
-    read_write_set_analysis::{self, ReadWriteSetProcessor},
 };
 use std::{
-    collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
     time::Instant,
@@ -120,13 +112,6 @@ pub fn run_move_prover_with_model<W: WriteColor>(
             Ok(())
         };
     }
-    // Same for read/write set analysis
-    if options.run_read_write_set {
-        return {
-            run_read_write_set(env, &options, now);
-            Ok(())
-        };
-    }
     // Same for escape analysis
     if options.run_escape {
         return {
@@ -135,53 +120,8 @@ pub fn run_move_prover_with_model<W: WriteColor>(
         };
     }
 
-    // Check correct backend versions.
-    options.backend.check_tool_versions()?;
-
-    // Print functions that are reachable from the script function if the flag is set
-    if options.script_reach {
-        print_script_reach(env);
-    }
-
-    // Create and process bytecode
-    let now = Instant::now();
-    let targets = create_and_process_bytecode(&options, env);
-    let trafo_duration = now.elapsed();
-    check_errors(
-        env,
-        &options,
-        error_writer,
-        "exiting with bytecode transformation errors",
-    )?;
-
-    // Generate boogie code
-    let now = Instant::now();
-    let code_writer = generate_boogie(env, &options, &targets)?;
-    let gen_duration = now.elapsed();
-    check_errors(
-        env,
-        &options,
-        error_writer,
-        "exiting with condition generation errors",
-    )?;
-
-    // Verify boogie code.
-    let now = Instant::now();
-    verify_boogie(env, &options, &targets, code_writer)?;
-    let verify_duration = now.elapsed();
-
     // Report durations.
-    info!(
-        "{:.3}s build, {:.3}s trafo, {:.3}s gen, {:.3}s verify, total {:.3}s",
-        build_duration.as_secs_f64(),
-        trafo_duration.as_secs_f64(),
-        gen_duration.as_secs_f64(),
-        verify_duration.as_secs_f64(),
-        build_duration.as_secs_f64()
-            + trafo_duration.as_secs_f64()
-            + gen_duration.as_secs_f64()
-            + verify_duration.as_secs_f64()
-    );
+    info!("{:.3}s build", build_duration.as_secs_f64(),);
     check_errors(
         env,
         &options,
@@ -204,49 +144,13 @@ pub fn check_errors<W: WriteColor>(
     }
 }
 
-pub fn generate_boogie(
-    env: &GlobalEnv,
-    options: &Options,
-    targets: &FunctionTargetsHolder,
-) -> anyhow::Result<CodeWriter> {
-    let writer = CodeWriter::new(env.internal_loc());
-    add_prelude(env, &options.backend, &writer)?;
-    let mut translator = BoogieTranslator::new(env, &options.backend, targets, &writer);
-    translator.translate();
-    Ok(writer)
-}
-
-pub fn verify_boogie(
-    env: &GlobalEnv,
-    options: &Options,
-    targets: &FunctionTargetsHolder,
-    writer: CodeWriter,
-) -> anyhow::Result<()> {
-    let output_existed = std::path::Path::new(&options.output_path).exists();
-    debug!("writing boogie to `{}`", &options.output_path);
-    writer.process_result(|result| fs::write(&options.output_path, result))?;
-    if !options.prover.generate_only {
-        let boogie = BoogieWrapper {
-            env,
-            targets,
-            writer: &writer,
-            options: &options.backend,
-        };
-        boogie.call_boogie_and_verify_output(&options.output_path)?;
-        if !output_existed && !options.backend.keep_artifacts {
-            std::fs::remove_file(&options.output_path).unwrap_or_default();
-        }
-    }
-    Ok(())
-}
-
 /// Create bytecode and process it.
 pub fn create_and_process_bytecode(options: &Options, env: &GlobalEnv) -> FunctionTargetsHolder {
     let mut targets = FunctionTargetsHolder::default();
     let output_dir = Path::new(&options.output_path)
         .parent()
         .expect("expect the parent directory of the output path to exist");
-    let output_prefix = options.move_sources.get(0).map_or("bytecode", |s| {
+    let output_prefix = options.move_sources.first().map_or("bytecode", |s| {
         Path::new(s).file_name().unwrap().to_str().unwrap()
     });
 
@@ -288,37 +192,6 @@ pub fn create_and_process_bytecode(options: &Options, env: &GlobalEnv) -> Functi
 // Tools using the Move prover top-level driver
 // ============================================
 
-// TODO: make those tools independent. Need to first address the todo to
-// move the model builder into the move-model crate.
-
-// Print functions that are reachable from script functions available in the `GlobalEnv`
-fn print_script_reach(env: &GlobalEnv) {
-    let target_modules = env.get_target_modules();
-    let mut func_ids = BTreeSet::new();
-
-    for m in &target_modules {
-        for f in m.get_functions() {
-            if f.is_entry() {
-                let qualified_id = f.get_qualified_id();
-                func_ids.insert(qualified_id);
-                let trans_funcs = f.get_transitive_closure_of_called_functions();
-                for trans_func in trans_funcs {
-                    func_ids.insert(trans_func);
-                }
-            }
-        }
-    }
-
-    if func_ids.is_empty() {
-        println!("no function is reached from the script functions in the target module");
-    } else {
-        for func_id in func_ids {
-            let func_env = env.get_function(func_id);
-            println!("{}", func_env.get_full_name_str());
-        }
-    }
-}
-
 fn run_docgen<W: WriteColor>(
     env: &GlobalEnv,
     options: &Options,
@@ -359,27 +232,6 @@ fn run_errmapgen(env: &GlobalEnv, options: &Options, now: Instant) {
         checking_elapsed.as_secs_f64(),
         (generating_elapsed - checking_elapsed).as_secs_f64()
     );
-}
-
-fn run_read_write_set(env: &GlobalEnv, options: &Options, now: Instant) {
-    let mut targets = FunctionTargetsHolder::default();
-
-    for module_env in env.get_modules() {
-        for func_env in module_env.get_functions() {
-            targets.add_target(&func_env)
-        }
-    }
-    let mut pipeline = FunctionTargetPipeline::default();
-    pipeline.add_processor(ReadWriteSetProcessor::new());
-
-    let start = now.elapsed();
-    info!("generating read/write set");
-    pipeline.run(env, &mut targets);
-    read_write_set_analysis::get_read_write_set(env, &targets);
-    println!("generated for {:?}", options.move_sources);
-
-    let end = now.elapsed();
-    info!("{:.3}s analyzing", (end - start).as_secs_f64());
 }
 
 fn run_escape(env: &GlobalEnv, options: &Options, now: Instant) {

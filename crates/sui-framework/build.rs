@@ -101,6 +101,7 @@ fn build_packages(
         "sui-framework",
         "move-stdlib",
         config,
+        true,
     );
     let config = MoveBuildConfig {
         generate_docs: true,
@@ -120,6 +121,7 @@ fn build_packages(
         "sui-framework-test",
         "move-stdlib-test",
         config,
+        false,
     );
 }
 
@@ -133,6 +135,7 @@ fn build_packages_with_move_config(
     framework_dir: &str,
     stdlib_dir: &str,
     config: MoveBuildConfig,
+    write_docs: bool,
 ) {
     let framework_pkg = BuildConfig {
         config: config.clone(),
@@ -167,20 +170,28 @@ fn build_packages_with_move_config(
     serialize_modules_to_file(move_stdlib, &out_dir.join(stdlib_dir)).unwrap();
     // write out generated docs
     // TODO: remove docs of deleted files
-    for (fname, doc) in deepbook_pkg.package.compiled_docs.unwrap() {
-        let mut dst_path = PathBuf::from(DOCS_DIR);
-        dst_path.push(fname);
-        fs::write(dst_path, doc).unwrap();
-    }
-    for (fname, doc) in system_pkg.package.compiled_docs.unwrap() {
-        let mut dst_path = PathBuf::from(DOCS_DIR);
-        dst_path.push(fname);
-        fs::write(dst_path, doc).unwrap();
-    }
-    for (fname, doc) in framework_pkg.package.compiled_docs.unwrap() {
-        let mut dst_path = PathBuf::from(DOCS_DIR);
-        dst_path.push(fname);
-        fs::write(dst_path, doc).unwrap();
+    if write_docs {
+        for (fname, doc) in deepbook_pkg.package.compiled_docs.unwrap() {
+            let mut dst_path = PathBuf::from(DOCS_DIR);
+            dst_path.push(deepbook_dir);
+            dst_path.push(fname);
+            fs::create_dir_all(dst_path.parent().unwrap()).unwrap();
+            fs::write(dst_path, doc).unwrap();
+        }
+        for (fname, doc) in system_pkg.package.compiled_docs.unwrap() {
+            let mut dst_path = PathBuf::from(DOCS_DIR);
+            dst_path.push(system_dir);
+            dst_path.push(fname);
+            fs::create_dir_all(dst_path.parent().unwrap()).unwrap();
+            fs::write(dst_path, doc).unwrap();
+        }
+        for (fname, doc) in framework_pkg.package.compiled_docs.unwrap() {
+            let mut dst_path = PathBuf::from(DOCS_DIR);
+            dst_path.push(framework_dir);
+            dst_path.push(fname);
+            fs::create_dir_all(dst_path.parent().unwrap()).unwrap();
+            fs::write(dst_path, doc).unwrap();
+        }
     }
 }
 

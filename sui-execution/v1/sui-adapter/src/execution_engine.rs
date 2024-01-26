@@ -75,6 +75,7 @@ mod checked {
         certificate_deny_set: &HashSet<TransactionDigest>,
     ) -> (
         InnerTemporaryStore,
+        SuiGasStatus,
         TransactionEffects,
         Result<Mode::ExecutionResults, ExecutionError>,
     ) {
@@ -172,7 +173,7 @@ mod checked {
         );
 
         // Remove from dependencies the generic hash
-        transaction_dependencies.remove(&TransactionDigest::genesis());
+        transaction_dependencies.remove(&TransactionDigest::genesis_marker());
 
         if enable_expensive_checks && !Mode::allow_arbitrary_function_calls() {
             temporary_store
@@ -189,7 +190,12 @@ mod checked {
             &mut gas_charger,
             *epoch_id,
         );
-        (inner, effects, execution_result)
+        (
+            inner,
+            gas_charger.into_gas_status(),
+            effects,
+            execution_result,
+        )
     }
 
     pub fn execute_genesis_state_update(
@@ -598,6 +604,9 @@ mod checked {
                         }
                         EndOfEpochTransactionKind::RandomnessStateCreate => {
                             panic!("EndOfEpochTransactionKind::RandomnessStateCreate should not exist in v1");
+                        }
+                        EndOfEpochTransactionKind::DenyListStateCreate => {
+                            panic!("EndOfEpochTransactionKind::CoinDenyListStateCreate should not exist in v1");
                         }
                     }
                 }

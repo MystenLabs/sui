@@ -31,7 +31,7 @@ use sui_types::error::{ExecutionError, SuiError, SuiResult};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::object::Owner;
+use sui_types::object::{MoveObject, Owner};
 use sui_types::parse_sui_type_tag;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::signature::GenericSignature;
@@ -45,6 +45,7 @@ use sui_types::transaction::{
     InputObjectKind, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction, SenderSignedData,
     TransactionData, TransactionDataAPI, TransactionKind, VersionedProtocolMessage,
 };
+use sui_types::type_resolver::LayoutResolver;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use tabled::{
     builder::Builder as TableBuilder,
@@ -104,6 +105,8 @@ pub struct SuiTransactionBlockResponseOptions {
     pub show_object_changes: bool,
     /// Whether to show balance_changes. Default to be False
     pub show_balance_changes: bool,
+    /// Whether to show raw transaction effects. Default to be False
+    pub show_raw_effects: bool,
 }
 
 impl SuiTransactionBlockResponseOptions {
@@ -119,6 +122,9 @@ impl SuiTransactionBlockResponseOptions {
             show_events: true,
             show_object_changes: true,
             show_balance_changes: true,
+            // This field is added for graphql execution. We keep it false here
+            // so current users of `full_content` will not get raw effects unexpectedly.
+            show_raw_effects: false,
         }
     }
 
@@ -152,6 +158,11 @@ impl SuiTransactionBlockResponseOptions {
         self
     }
 
+    pub fn with_raw_effects(mut self) -> Self {
+        self.show_raw_effects = true;
+        self
+    }
+
     /// default to return `WaitForEffectsCert` unless some options require
     /// local execution
     pub fn default_execution_request_type(&self) -> ExecuteTransactionRequestType {
@@ -176,6 +187,7 @@ impl SuiTransactionBlockResponseOptions {
             || self.show_events
             || self.show_balance_changes
             || self.show_object_changes
+            || self.show_raw_effects
     }
 
     pub fn only_digest(&self) -> bool {
@@ -219,6 +231,8 @@ pub struct SuiTransactionBlockResponse {
     pub checkpoint: Option<CheckpointSequenceNumber>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub errors: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub raw_effects: Vec<u8>,
 }
 
 impl SuiTransactionBlockResponse {
@@ -499,6 +513,9 @@ impl SuiTransactionBlockKind {
                             EndOfEpochTransactionKind::RandomnessStateCreate => {
                                 SuiEndOfEpochTransactionKind::RandomnessStateCreate
                             }
+                            EndOfEpochTransactionKind::DenyListStateCreate => {
+                                SuiEndOfEpochTransactionKind::CoinDenyListStateCreate
+                            }
                         })
                         .collect(),
                 })
@@ -757,7 +774,34 @@ impl SuiTransactionBlockEffectsAPI for SuiTransactionBlockEffectsV1 {
     }
 }
 
-impl SuiTransactionBlockEffects {}
+impl SuiTransactionBlockEffects {
+    #[cfg(any(feature = "test-utils", test))]
+    pub fn new_for_testing(
+        transaction_digest: TransactionDigest,
+        status: SuiExecutionStatus,
+    ) -> Self {
+        Self::V1(SuiTransactionBlockEffectsV1 {
+            transaction_digest,
+            status,
+            gas_object: OwnedObjectRef {
+                owner: Owner::AddressOwner(SuiAddress::random_for_testing_only()),
+                reference: sui_types::base_types::random_object_ref().into(),
+            },
+            executed_epoch: 0,
+            modified_at_versions: vec![],
+            gas_used: GasCostSummary::default(),
+            shared_objects: vec![],
+            created: vec![],
+            mutated: vec![],
+            unwrapped: vec![],
+            deleted: vec![],
+            unwrapped_then_deleted: vec![],
+            wrapped: vec![],
+            events_digest: None,
+            dependencies: vec![],
+        })
+    }
+}
 
 impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
     type Error = SuiError;
@@ -932,6 +976,26 @@ impl SuiTransactionBlockEvents {
         events: TransactionEvents,
         tx_digest: TransactionDigest,
         timestamp_ms: Option<u64>,
+        resolver: &mut dyn LayoutResolver,
+    ) -> SuiResult<Self> {
+        Ok(Self {
+            data: events
+                .data
+                .into_iter()
+                .enumerate()
+                .map(|(seq, event)| {
+                    let layout = resolver.get_annotated_layout(&event.type_)?;
+                    SuiEvent::try_from(event, tx_digest, seq as u64, timestamp_ms, layout)
+                })
+                .collect::<Result<_, _>>()?,
+        })
+    }
+
+    // TODO: this is only called from the indexer. Remove this once indexer moves to its own resolver.
+    pub fn try_from_using_module_resolver(
+        events: TransactionEvents,
+        tx_digest: TransactionDigest,
+        timestamp_ms: Option<u64>,
         resolver: &impl GetModule,
     ) -> SuiResult<Self> {
         Ok(Self {
@@ -940,7 +1004,9 @@ impl SuiTransactionBlockEvents {
                 .into_iter()
                 .enumerate()
                 .map(|(seq, event)| {
-                    SuiEvent::try_from(event, tx_digest, seq as u64, timestamp_ms, resolver)
+                    let layout =
+                        MoveObject::get_layout_from_struct_tag(event.type_.clone(), resolver)?;
+                    SuiEvent::try_from(event, tx_digest, seq as u64, timestamp_ms, layout)
                 })
                 .collect::<Result<_, _>>()?,
         })
@@ -971,6 +1037,23 @@ impl Display for SuiTransactionBlockEvents {
     }
 }
 
+// TODO: this file might not be the best place for this struct.
+/// Additional rguments supplied to dev inspect beyond what is allowed in today's API.
+#[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "DevInspectArgs", rename_all = "camelCase")]
+pub struct DevInspectArgs {
+    /// The sponsor of the gas for the transaction, might be different from the sender.
+    pub gas_sponsor: Option<SuiAddress>,
+    /// The gas budget for the transaction.
+    pub gas_budget: Option<BigInt<u64>>,
+    /// The gas objects used to pay for the transaction.
+    pub gas_objects: Option<Vec<ObjectRef>>,
+    /// Whether to skip transaction checks for the transaction.
+    pub skip_checks: Option<bool>,
+    /// Whether to return the raw transaction data and effects.
+    pub show_raw_txn_data_and_effects: Option<bool>,
+}
+
 /// The response from processing a dev inspect transaction
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "DevInspectResults", rename_all = "camelCase")]
@@ -987,6 +1070,12 @@ pub struct DevInspectResults {
     /// Execution error from executing the transactions
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// The raw transaction data that was dev inspected.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub raw_txn_data: Vec<u8>,
+    /// The raw effects of the transaction that was dev inspected.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub raw_effects: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -1011,7 +1100,9 @@ impl DevInspectResults {
         effects: TransactionEffects,
         events: TransactionEvents,
         return_values: Result<Vec<ExecutionResult>, ExecutionError>,
-        resolver: &impl GetModule,
+        raw_txn_data: Vec<u8>,
+        raw_effects: Vec<u8>,
+        resolver: &mut dyn LayoutResolver,
     ) -> SuiResult<Self> {
         let tx_digest = *effects.transaction_digest();
         let mut error = None;
@@ -1045,6 +1136,8 @@ impl DevInspectResults {
             events: SuiTransactionBlockEvents::try_from(events, tx_digest, None, resolver)?,
             results,
             error,
+            raw_txn_data,
+            raw_effects,
         })
     }
 }
@@ -1360,6 +1453,7 @@ pub enum SuiEndOfEpochTransactionKind {
     AuthenticatorStateCreate,
     AuthenticatorStateExpire(SuiAuthenticatorStateExpire),
     RandomnessStateCreate,
+    CoinDenyListStateCreate,
 }
 
 #[serde_as]
@@ -1896,7 +1990,7 @@ impl SuiCallArg {
     ) -> Result<Self, anyhow::Error> {
         Ok(match value {
             CallArg::Pure(p) => SuiCallArg::Pure(SuiPureValue {
-                value_type: layout.map(|l| l.try_into()).transpose()?,
+                value_type: layout.map(|l| l.into()),
                 value: SuiJsonValue::from_bcs_bytes(layout, &p)?,
             }),
             CallArg::Object(ObjectArg::ImmOrOwnedObject((id, version, digest))) => {

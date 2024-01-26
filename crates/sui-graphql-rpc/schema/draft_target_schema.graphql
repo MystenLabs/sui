@@ -50,85 +50,83 @@ type Query {
   #     checks that prevent access to objects that are owned by
   #     addresses other than the sender, and calling non-public,
   #     non-entry functions.  Defaults to false.
-  #
-  # `epoch` the epoch to simulate executing the transaction in.
-  #     Defaults to the current epoch.
   dryRunTransactionBlock(
     txBytes: Base64!,
     txMeta: TransactionMetadata,
     skipChecks: Boolean,
-    epoch: Int
   ): DryRunResult
 
   owner(address: SuiAddress!): Owner
   object(address: SuiAddress!, version: Int): Object
   address(address: SuiAddress!): Address
+  type(type: String!): MoveType!
 
-  # `epochId` defaults to the latest epoch.
-  epoch(epochId: Int): Epoch
+  # Fetch epoch information by ID (defaults to the latest epoch).
+  epoch(id: Int): Epoch
 
   # `protocolVersion` defaults to the latest protocol version.
   protocolConfig(protocolVersion: Int): ProtocolConfigs
 
-  # If no `id` is provided, fetch the latest available checkpoint.
-  checkpoint(id: CheckpointID): Checkpoint
+  # Fetch checkpoint information by sequence number or digest
+  # (defaults to the latest available checkpoint).
+  checkpoint(id: CheckpointId): Checkpoint
 
-  # Find a transaction block by its transaction digest
+  # Fetch a transaction block by its transaction digest
   transactionBlock(digest: String!): TransactionBlock
 
   coinMetadata(coinType: String!): CoinMetadata
 
-  checkpointConnection(
+  checkpoints(
     first: Int,
     after: String,
     last: Int,
     before: String,
-  ): CheckpointConnection
+  ): CheckpointConnection!
 
-  coinConnection(
+  coins(
     first: Int,
     after: String,
     last: Int,
     before: String,
     type: String,
-  ): CheckpointConnection
+  ): CoinConnection!
 
-  transactionBlockConnection(
+  transactionBlocks(
     first: Int,
     after: String,
     last: Int,
     before: String,
     filter: TransactionBlockFilter,
-  ): TransactionBlockConnection
+  ): TransactionBlockConnection!
 
-  eventConnection(
+  events(
     first: Int,
     after: String,
     last: Int,
     before: String,
     filter: EventFilter,
-  ): EventConnection
+  ): EventConnection!
 
-  objectConnection(
+  objects(
     first: Int,
     after: String,
     last: Int,
     before: String,
     filter: ObjectFilter,
-  ): ObjectConnection
+  ): ObjectConnection!
 
-  resolveNameServiceAddress(name: String!): Address
+  resolveSuinsAddress(name: String!): Address
 
   # NB. Will be moved into a private, explorer-specific extension.
   networkMetrics: NetworkMetrics
   moveCallMetrics: MoveCallMetrics
 
-  allEpochAddressMetricsConnection(
+  allEpochAddressMetrics(
     first: Int,
     after: String,
     last: Int,
     before: String,
-  ): AddressMetricsConnection
+  ): AddressMetricsConnection!
 }
 
 # NB. Add after MVP has stabilised.
@@ -141,14 +139,14 @@ type Query {
 # e.g. When subscription `subscribe { events(filter: F) }` pushes
 # cursor `E`.  Then
 #
-#     query { eventsConnection(before: E, filter: F) }
+#     query { events(before: E, filter: F) }
 #
 # Will start paginating events up to the new data (multiple calls may
 # be required if there are multiple pages of information between the
 # start and the latest).  If the client has already processed some
 # prefix, up to cursor `P`, then they can resume with:
 #
-#    query { eventsConnection(after: P, before: E, filter: F) }
+#    query { events(after: P, before: E, filter: F) }
 #
 # The API for transactions is similar.
 type Subscription {
@@ -173,7 +171,10 @@ type Mutation {
   ): ExecutionResult
 }
 
-# String containing 32B hex-encoded address
+# String containing 32B hex-encoded address, with a leading "0x".
+# Leading zeroes can be omitted on input but will always appear in
+# outputs (SuiAddress in output is guaranteed to be 66 characters
+# long).
 scalar SuiAddress
 
 # String representation of an arbitrary width, possibly signed integer
@@ -196,6 +197,7 @@ scalar JSON
 #   | { Bool:    bool }
 #   | { Address: SuiAddress }
 #   | { UID:     SuiAddress }
+#   | { ID:      SuiAddress }
 #   | { String:  string }
 #   | { Vector:  [MoveData] }
 #   | { Option:   MoveData? }
@@ -230,7 +232,12 @@ scalar MoveTypeSignature
 #   | "bool"
 #   | "u8" | "u16" | ... | "u256"
 #   | { vector: MoveTypeLayout }
-#   | { struct: [{ name: string, layout: MoveTypeLayout }] }
+#   | {
+#       struct: {
+#         type: string,
+#         fields: [{ name: string, layout: MoveTypeLayout }],
+#       }
+#     }
 scalar MoveTypeLayout
 
 # The shape of an abstract Move Type (a type that can contain free
@@ -248,37 +255,59 @@ scalar MoveTypeLayout
 #   | "u8" | "u16" | ... | "u256"
 #   | { vector: OpenMoveTypeSignatureBody }
 #   | {
-#       package: string,
-#       module: string,
-#       type: string,
-#       typeParameters: [OpenMoveTypeSignatureBody]?
+#       struct: {
+#         package: string,
+#         module: string,
+#         type: string,
+#         typeParameters: [OpenMoveTypeSignatureBody]?
+#       }
 #     }
-#   | { TypeParameter: number }
+#   | { typeParameter: number }
 scalar OpenMoveTypeSignature
 
 # The extra data required to turn a `TransactionKind` into a
 # `TransactionData` in a dry-run.
 input TransactionMetadata {
   sender: SuiAddress
-  gasPrice: BigInt
-  gasObjects: [SuiAddress!]
+  gasPrice: Int
+  gasBudget: Int
+  gasObjects: [ObjectRef!]
+  gasSponsor: SuiAddress
+}
+
+# A reference to a particular version of an object.
+input ObjectRef {
+  address: SuiAddress!
+  version: Int!
+  digest: String!
 }
 
 # Filter either by the digest, or the sequence number, or neither, to
 # get the latest checkpoint.
-input CheckpointID {
+input CheckpointId {
   digest: String
   sequenceNumber: Int
 }
 
 input ObjectFilter {
-  # Cascading (type requires module requires package)
-  package: SuiAddress
-  module: String
+  # This field is used to specify the type of objects that should be
+  # include in the query results.
+  #
+  # Objects can be filtered by their type's package, package::module,
+  # or their fully qualified type name.
+  #
+  # Generic types can be queried by either the generic type name, e.g.
+  # `0x2::coin::Coin`, or by the full type name, such as
+  # `0x2::coin::Coin<0x2::sui::SUI>`.
   type: String
 
+  # Filter for live objects by their current owners.
   owner: SuiAddress
+
+  # Filter for live objects by their IDs.
   objectIds: [SuiAddress!]
+
+  # Filter for live or potentially historical objects by their ID and version.
   objectKeys: [ObjectKey!]
 
   # Enhancement (post-MVP), compound filters.  Compound filters are
@@ -300,13 +329,21 @@ input EventFilter {
   afterCheckpoint: Int
   beforeCheckpoint: Int
 
-  # Cascading (module requires package)
-  emittingPackage: SuiAddress
+  # Events emitted by a particular module. An event is emitted by a
+  # particular module if some function in the module is called by a
+  # PTB and emits an event.
+  #
+  # Modules can be filtered by their package, or package::module.
   emittingModule: String
 
-  # Cascading (type requires module requires package)
-  eventPackage: SuiAddress
-  eventModule: String
+  # This field is used to specify the type of event emitted.
+  #
+  # Events can be filtered by their type's package, package::module,
+  # or their fully qualified type name.
+  #
+  # Generic types can be queried by either the generic type name, e.g.
+  # `0x2::coin::Coin`, or by the full type name, such as
+  # `0x2::coin::Coin<0x2::sui::SUI>`.
   eventType: String
 
   # Enhancement (post-MVP), requires compound filters to be useful.
@@ -321,9 +358,8 @@ input EventFilter {
 }
 
 input TransactionBlockFilter {
-  # Cascading (function requires module requires package)
-  package: SuiAddress
-  module: String
+  # Filter by the function called. Limited to an individual package,
+  # package::module, or package::module::function.
   function: String
 
   kind: TransactionBlockKindInput
@@ -353,14 +389,24 @@ input TransactionBlockFilter {
 }
 
 input DynamicFieldFilter {
-  # Cascading (type requires module requires package)
-  namePackage: SuiAddress
-  nameModule: String
+  # Filter the type of dynamic field name.
+  #
+  # Names can be filtered by their type's package, package::module, or
+  # their fully qualified type name.
+  #
+  # Generic types can be queried by either the generic type name, e.g.
+  # `0x2::coin::Coin`, or by the full type name, such as
+  # `0x2::coin::Coin<0x2::sui::SUI>`.
   nameType: String
 
-  # Cascading (type requires module requires package)
-  valuePackage: SuiAddress
-  valueModule: String
+  # Filter the type of dynamic field value.
+  #
+  # Values can be filtered by their type's package, package::module,
+  # or their fully qualified type name.
+  #
+  # Generic types can be queried by either the generic type name, e.g.
+  # `0x2::coin::Coin`, or by the full type name, such as
+  # `0x2::coin::Coin<0x2::sui::SUI>`.
   valueType: String
 }
 
@@ -373,8 +419,13 @@ type ServiceConfig {
   enabledFeatures: [Feature!]
   isEnabled(feature: Feature!): Boolean!
 
-  maxQueryDepth: Int
-  maxQueryNodes: Int
+  maxQueryDepth: Int!
+  maxQueryNodes: Int!
+  maxOutputNodes: Int!
+  defaultPageSize: Int!
+  maxPageSize: Int!
+  requestTimeoutMs: Int!
+  maxQueryPayloadSize: Int!
 }
 
 enum Feature {
@@ -389,63 +440,85 @@ enum Feature {
 interface IOwner {
   address: SuiAddress!
 
-  objectConnection(
+  objects(
     first: Int,
     after: String,
     last: Int,
     before: String,
     # Enhancement (post-MVP) relies on compound filters.
     filter: ObjectFilter,
-  ): MoveObjectConnection
+  ): MoveObjectConnection!
 
   balance(type: String!): Balance
-  balanceConnection(
+  balances(
     first: Int,
     after: String,
     last: Int,
     before: String,
-  ): BalanceConnection
+  ): BalanceConnection!
 
   # `type` defaults to `0x2::sui::SUI`.
-  coinConnection(
+  coins(
     first: Int,
     after: String,
     last: Int,
     before: String,
     type: String,
-  ): CoinConnection
+  ): CoinConnection!
 
-  stakedSuiConnection(
+  stakedSuis(
     first: Int,
     after: String,
     last: Int,
     before: String,
-  ): StakeConnection
+  ): StakedSuiConnection!
 
   dynamicField(dynamicFieldName: DynamicFieldName!): DynamicField
-  dynamicFieldConnection(
+  dynamicObjectField(dynamicFieldName: DynamicFieldName!): DynamicField
+  dynamicFields(
     first: Int,
     after: String,
     last: Int,
     before: String,
     # Enhancement (post-MVP) to filter dynamic fields by type.
     filter: DynamicFieldFilter,
-  ): DynamicFieldConnection
+  ): DynamicFieldConnection!
 
-  defaultNameServiceName: String
-  nameServiceNameConnection(
+  defaultSuinsName: String
+  suinsRegistrations(
     first: Int,
     after: String,
     last: Int,
     before: String,
-  ): NameServiceNameConnection
+  ): SuinsRegistrationConnection!
+}
+
+union ObjectOwner = Immutable | Shared | Parent | AddressOwner
+
+type Immutable {
+  # Dummy field
+  _: Boolean
+}
+
+type Shared {
+  initialSharedVersion: Int!
+}
+
+type Parent {
+  # Child objects are an implementation-detail of dynamic fields. Only
+  # another object can be a parent of a child object (not an address).
+  parent: Object
+}
+
+type AddressOwner {
+  # The address that owns an object could be an Address, or an Object.
+  owner: Owner
 }
 
 interface IObject {
   version: Int!
   digest: String!
-  owner: Owner
-  kind: ObjectKind
+  owner: ObjectOwner
 
   previousTransactionBlock: TransactionBlock
   storageRebate: BigInt
@@ -453,21 +526,20 @@ interface IObject {
   display: [DisplayEntry!]
 
   # Transaction Blocks that sent objects to this object
-  receivedTransactionBlockConnection(
+  receivedTransactionBlocks(
     first: Int,
     after: String,
     last: Int,
     before: String,
     # Enhancement (post-MVP) relies on compound filters.
     filter: TransactionBlockFilter,
-  ): TransactionBlockConnection
+  ): TransactionBlockConnection!
 
   bcs: Base64
 }
 
 interface IMoveObject {
   contents: MoveValue
-  hasPublicTransfer: Boolean
 }
 
 # Returned by Object.owner, where we can't disambiguate between
@@ -478,7 +550,7 @@ type Owner implements IOwner {
 }
 
 type Address implements IOwner {
-  transactionBlockConnection(
+  transactionBlocks(
     first: Int,
     after: String,
     last: Int,
@@ -486,7 +558,7 @@ type Address implements IOwner {
     relation: AddressTransactionBlockRelationship,
     # Enhancement (post-MVP) relies on compound filters.
     filter: TransactionBlockFilter,
-  ): TransactionBlockConnection
+  ): TransactionBlockConnection!
 }
 
 enum AddressTransactionBlockRelationship {
@@ -496,13 +568,6 @@ enum AddressTransactionBlockRelationship {
   PAID # Transactions that were paid for by this address
 }
 
-enum ObjectKind {
-  OWNED
-  CHILD
-  SHARED
-  IMMUTABLE
-}
-
 type Object implements IOwner & IObject {
   asMoveObject: MoveObject
   asMovePackage: MovePackage
@@ -510,15 +575,17 @@ type Object implements IOwner & IObject {
 
 type DisplayEntry {
   key: String!
-  value: String!
+  value: String
+  error: String
 }
 
 type Epoch {
   epochId: Int!
   protocolConfigs: ProtocolConfigs
   referenceGasPrice: BigInt
+  validatorSet: ValidatorSet
 
-  startTimestamp: DateTime
+  startTimestamp: DateTime!
   endTimestamp: DateTime
 
   totalCheckpoints: BigInt
@@ -530,34 +597,28 @@ type Epoch {
   fundInflow: BigInt
   fundOutflow: BigInt
 
-  # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
-  systemState: SystemState
+  # SystemState fields
+  storageFund: StorageFund
+  safeMode: SafeMode
+  systemStateVersion: BigInt
+  systemParameters: SystemParameters
+  systemStakeSubsidy: StakeSubsidy
 
-  checkpointConnection(
+  checkpoints(
     first: Int,
     after: String,
     last: Int,
     before: String,
-  ): CheckpointConnection
+  ): CheckpointConnection!
 
-  transactionBlockConnection(
+  transactionBlocks(
     first: Int,
     after: String,
     last: Int,
     before: String,
     # Enhancement (post-MVP) relies on compound filters.
     filter: TransactionBlockFilter,
-  ): TransactionBlockConnection
-}
-
-type SystemState {
-  version: Int
-
-  systemParameters: SystemParameters
-  stakeSubsidy: StakeSubsidy
-  validatorSet: ValidatorSet
-  storageFund: StorageFund
-  safeMode: SafeMode
+  ): TransactionBlockConnection!
 }
 
 type ProtocolConfigs {
@@ -602,7 +663,12 @@ type StakeSubsidy {
 type ValidatorSet {
   totalStake: BigInt
 
-  activeValidators: [Validator]
+  activeValidators(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String
+  ): ValidatorConnection!
 
   # Indices into `activeValidators`
   pendingRemovals: [Int]
@@ -658,7 +724,7 @@ type Validator {
   atRisk: Int
 
   # The other validators this validator has reported
-  reportRecords: [SuiAddress]
+  reportRecords: [SuiAddress!]
 
   apy: Int
 }
@@ -689,8 +755,8 @@ type Checkpoint {
   digest: String!
   sequenceNumber: Int!
 
-  timestamp: DateTime
-  validatorSignature: Base64
+  timestamp: DateTime!
+  validatorSignatures: Base64
 
   # Commitments
   previousCheckpointDigest: String
@@ -701,23 +767,23 @@ type Checkpoint {
 
   epoch: Epoch
 
-  transactionBlockConnection(
+  transactionBlocks(
     first: Int,
     after: String,
     last: Int,
     before: String,
     # Enhancement (post-MVP) relies on compound filters.
     filter: TransactionBlockFilter,
-  ): TransactionBlockConnection
+  ): TransactionBlockConnection!
 
   # NB. Will be moved into a private, explorer-specific extension.
   addressMetrics: AddressMetrics
 }
 
 type TransactionBlock {
-  digest: String!
+  digest: String
 
-  senders: [Address]
+  sender: Address
   gasInput: GasInput
   kind: TransactionBlockKind
   signatures: [Base64!]
@@ -743,45 +809,86 @@ union TransactionBlockKind =
   | EndOfEpochTransaction
 
 type ConsensusCommitPrologueTransaction {
-  epoch: Epoch
-  # TODO: This is the "leader round" -- does this line up with
-  # checkpoints? In which case, it may suffice to have a `Checkpoint`
-  # here.
-  round: Int
-  timestamp: DateTime
+  epoch: Epoch!
+  round: Int!
+  commitTimestamp: DateTime!
+  consensusCommitDigest: String
 }
 
 type GenesisTransaction {
-  objects: [SuiAddress]
+  objects(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): ObjectConnection!
 }
 
 type ChangeEpochTransaction {
   epoch: Epoch
-  timestamp: DateTime
+  protocolVersion: Int!
+  startTimestamp: DateTime!
 
-  storageCharge: BigInt
-  computationCharge: BigInt
-  storageRebate: BigInt
+  storageCharge: BigInt!
+  computationCharge: BigInt!
+  storageRebate: BigInt!
+  nonRefundableStorageFee: BigInt!
+
+  systemPackages(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): MovePackageConnection!
 }
 
 type ProgrammableTransactionBlock {
-  inputs: [TransactionInput]
-  transactions: [ProgrammableTransaction]
+  inputs(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): TransactionInputConnection!
+
+  transactions(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): ProgrammableTransactionConnection!
 }
 
-union TransactionInput = MovePackage | MoveObject | SharedInput
+union TransactionInput = OwnedOrImmutable | SharedInput | Receiving | Pure
+
+type OwnedOrImmutable {
+  address: SuiAddress!
+  version: Int!
+  digest: String!
+  object: Object
+}
 
 type SharedInput {
-  id: SuiAddress
-  initialSharedVersion: Int
-  mutable: Boolean
+  address: SuiAddress!
+  initialSharedVersion: Int!
+  mutable: Boolean!
+}
+
+type Receiving {
+  address: SuiAddress!
+  version: Int!
+  digest: String!
+  object: Object
+}
+
+type Pure {
+  bytes: Base64!
 }
 
 union TransactionArgument = GasCoin | Input | Result
 
-type GasCoin
-type Input   { ix: Int }
-type Result  { cmd: Int, ix: Int }
+type GasCoin { _: Boolean }
+type Input   { ix: Int! }
+type Result  { cmd: Int!, ix: Int }
 
 union ProgrammableTransaction =
     MoveCallTransaction
@@ -793,39 +900,44 @@ union ProgrammableTransaction =
   | MakeMoveVecTransaction
 
 type MoveCallTransaction {
+  package: SuiAddress!
+  module: String!
+  functionName: String!
   function: MoveFunction
-  typeArguments: [MoveType]
-  arguments: [TransactionArgument]
+  typeArguments: [MoveType!]!
+  arguments: [TransactionArgument!]!
 }
 
 type TransferObjectsTransaction {
-  objects: [TransactionArgument]
-  address: TransactionArgument
+  objects: [TransactionArgument!]!
+  address: TransactionArgument!
 }
 
-type SplitCoinTransaction {
-  coin: TransactionArgument
-  amounts: [TransactionArgument]
+type SplitCoinsTransaction {
+  coin: TransactionArgument!
+  amounts: [TransactionArgument!]!
 }
 
 type MergeCoinsTransaction {
-  coin: TransactionArgument
-  coins: [TransactionArgument]
+  coin: TransactionArgument!
+  coins: [TransactionArgument!]!
 }
 
 type PublishTransaction {
-  dependencies: [MovePackage]
+  modules: [Base64!]!
+  dependencies: [SuiAddress!]!
 }
 
 type UpgradeTransaction {
-  dependencies: [MovePackage]
-  currentPackage: MovePackage
-  upgradeTicket: TransactionArgument
+  modules: [Base64!]!
+  dependencies: [SuiAddress!]!
+  currentPackage: SuiAddress!
+  upgradeTicket: TransactionArgument!
 }
 
 type MakeMoveVecTransaction {
   type: MoveType
-  elements: [TransactionArgument]
+  elements: [TransactionArgument!]!
 }
 
 type TransactionBlockEffects {
@@ -833,25 +945,49 @@ type TransactionBlockEffects {
   status: ExecutionStatus
 
   errors: String
-  dependencies: [TransactionBlock!]
+  dependencies(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): TransactionBlockConnection!
 
   lamportVersion: Int
   gasEffects: GasEffects
-  objectReads: [Object!]
-  objectChanges: [ObjectChange!]
-  balanceChanges: [BalanceChange!]
+
+  unchangedSharedObjects(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): UnchangedSharedObjectConnection!
+
+  objectChanges(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): ObjectChangeConnection!
+
+  balanceChanges(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): BalanceChangeConnection!
+
   timestamp: DateTime
   epoch: Epoch
   checkpoint: Checkpoint
 
-  eventConnection(
+  events(
     first: Int,
     after: String,
     last: Int,
     before: String,
     # Extension (post-MVP) relies on compound filters
     filter: EventFilter,
-  ): EventConnection
+  ): EventConnection!
 
   bcs: Base64
 }
@@ -863,7 +999,12 @@ enum ExecutionStatus {
 
 type GasInput {
   gasSponsor: Address
-  gasPayment: [Object!]
+  gasPayment(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+  ): ObjectConnection!
 
   gasPrice: BigInt
   gasBudget: BigInt
@@ -881,8 +1022,26 @@ type GasCostSummary {
   nonRefundableStorageFee: BigInt
 }
 
+union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete
+
+type SharedObjectRead {
+  address: SuiAddress!
+  version: u64!
+  digest: String!
+  object: Object
+}
+
+type SharedObjectDelete {
+  address: SuiAddress!
+  version: u64!
+
+  # Whether this transaction intended to use this shared object
+  # mutably or not.
+  mutable: Boolean!
+}
+
 type ObjectChange {
-  location: SuiAddress!
+  address: SuiAddress!
 
   inputState: Object
   outputState: Object
@@ -901,7 +1060,7 @@ type Event {
   # Module that the event was emitted by
   sendingModule: MoveModule
 
-  senders: [Address]
+  sender: Address
   timestamp: DateTime
 
   type: MoveType!
@@ -917,11 +1076,11 @@ type Balance {
 }
 
 type Coin implements IOwner & IObject {
-  balance: BigInt
+  coinBalance: BigInt
 }
 
 type StakedSui implements IOwner & IObject {
-  status: StakeStatus
+  stakeStatus: StakeStatus!
   requestEpoch: Epoch
   activeEpoch: Epoch
   principal: BigInt
@@ -941,7 +1100,7 @@ type CoinMetadata implements IOwner & IObject {
   name: String
   symbol: String
   description: String
-  iconURL: String
+  iconUrl: String
   supply: BigInt
 }
 
@@ -961,19 +1120,20 @@ type MoveObject implements IOwner & IObject & IMoveObject {
   asCoin: Coin
   asStakedSui: StakedSui
   asCoinMetadata: CoinMetadata
+  asSuinsRegistration: SuinsRegistration
 }
 
 type MovePackage implements IOwner & IObject {
   module(name: String!): MoveModule
-  moduleConnection(
+  modules(
     first: Int,
     after: String,
     last: Int,
     before: String,
-  ): MoveModuleConnection
+  ): MoveModuleConnection!
 
   linkage: [Linkage!]
-  origins: [TypeOrigin!]
+  typeOrigins: [TypeOrigin!]
 
   moduleBcs: Base64
 }
@@ -986,8 +1146,8 @@ type Linkage {
 
 type TypeOrigin {
   module: String!
-  name: String!
-  package: SuiAddress!
+  struct: String!
+  definingId: SuiAddress!
 }
 
 enum MoveAbility {
@@ -1004,12 +1164,12 @@ enum MoveVisibility {
 }
 
 type MoveStructTypeParameter {
-  constraints: [MoveAbility]
-  isPhantom: Boolean
+  constraints: [MoveAbility!]!
+  isPhantom: Boolean!
 }
 
 type MoveFunctionTypeParameter {
-  constraints: [MoveAbility]
+  constraints: [MoveAbility!]!
 }
 
 type MoveModule {
@@ -1018,28 +1178,28 @@ type MoveModule {
 
   fileFormatVersion: Int!
 
-  friendConnection(
+  friends(
     first: Int,
     after: String,
     last: Int,
     before: String
-  ): MoveModuleConnection
+  ): MoveModuleConnection!
 
   struct(name: String!): MoveStruct
-  structConnection(
+  structs(
     first: Int,
     after: String,
     last: Int,
     before: String,
-  ): MoveStructConnection
+  ): MoveStructConnection!
 
   function(name: String!): MoveFunction
-  functionConnection(
+  functions(
     first: Int,
     after: String,
     last: Int,
     before: String,
-  ): MoveFunctionConnection
+  ): MoveFunctionConnection!
 
   bytes: Base64
   disassembly: String
@@ -1048,13 +1208,13 @@ type MoveModule {
 type MoveStruct {
   module: MoveModule!
   name: String!
-  abilities: [MoveAbility]
-  typeParameters: [MoveStructTypeParameter]
-  fields: [MoveField]
+  abilities: [MoveAbility!]
+  typeParameters: [MoveStructTypeParameter!]
+  fields: [MoveField!]
 }
 
 type MoveField {
-  name: String
+  name: String!
   type: OpenMoveType
 }
 
@@ -1065,27 +1225,29 @@ type MoveFunction {
   visibility: MoveVisibility
   isEntry: Boolean
 
-  typeParameters: [MoveFunctionTypeParameter]
-  parameters: [OpenMoveType]
-  return: [OpenMoveType]
+  typeParameters: [MoveFunctionTypeParameter!]
+  parameters: [OpenMoveType!]
+  return: [OpenMoveType!]
 }
 
 type MoveValue {
   type: MoveType!
-  data: MoveData
-  json: JSON
+  data: MoveData!
+  json: JSON!
 
-  bcs: Base64
+  bcs: Base64!
 }
 
 # Represents concrete types (no type parameters, no references)
 type MoveType {
   # Flat representation of the type signature, as a displayable string.
-  repr: String
+  repr: String!
   # Structured representation of the type signature.
-  signature: MoveTypeSignature
+  signature: MoveTypeSignature!
   # Structured representation of the "shape" of values that match this type.
-  layout: MoveTypeLayout
+  layout: MoveTypeLayout!
+  # The abilities this concrete type has.
+  abilities: [MoveAbility!]!
 }
 
 # Represents types that could contain references or free type
@@ -1093,9 +1255,9 @@ type MoveType {
 # in structs.
 type OpenMoveType {
   # Flat representation of the type signature, as a displayable string.
-  repr: String
+  repr: String!
   # Structured representation of the type signature.
-  signature: OpenMoveTypeSignature
+  signature: OpenMoveTypeSignature!
 }
 
 # Metrics (omitted for brevity)
@@ -1108,14 +1270,12 @@ type AddressMetrics
 # Either TransactionBlockEffects on success, or error on failure.
 type ExecutionResult {
   effects: TransactionBlockEffects
-  errors: String
+  errors: [String!]
 }
 
 type DryRunResult {
   transaction: TransactionBlock
-  errors: String
-
-  events: [Event!]
+  error: String
   results: [DryRunEffect!]
 }
 
@@ -1129,7 +1289,7 @@ type DryRunEffect {
 }
 
 type DryRunMutation {
-  input: TransactionInput
+  input: TransactionArgument
   type: MoveType
   bcs: Base64
 }
@@ -1152,6 +1312,7 @@ type PageInfo {
 # Checkpoints
 type CheckpointConnection {
   edges: [CheckpointEdge!]!
+  nodes: [Checkpoint!]!
   pageInfo: PageInfo!
 }
 
@@ -1163,6 +1324,7 @@ type CheckpointEdge {
 # Balance
 type BalanceConnection {
   edges: [BalanceEdge!]!
+  nodes: [Balance!]!
   pageInfo: PageInfo!
 }
 
@@ -1174,6 +1336,7 @@ type BalanceEdge {
 # Coin
 type CoinConnection {
   edges: [CoinEdge!]!
+  nodes: [Coin!]!
   pageInfo: PageInfo!
 }
 
@@ -1185,6 +1348,7 @@ type CoinEdge {
 # DynamicField
 type DynamicFieldConnection {
   edges: [DynamicFieldEdge!]!
+  nodes: [DynamicField!]!
   pageInfo: PageInfo!
 }
 
@@ -1196,6 +1360,7 @@ type DynamicFieldEdge {
 # Object
 type ObjectConnection {
   edges: [ObjectEdge!]!
+  nodes: [Object!]!
   pageInfo: PageInfo!
 }
 
@@ -1207,6 +1372,7 @@ type ObjectEdge {
 # MoveObject
 type MoveObjectConnection {
   edges: [MoveObjectEdge!]!
+  nodes: [MoveObject!]!
   pageInfo: PageInfo!
 }
 
@@ -1215,9 +1381,22 @@ type MoveObjectEdge {
   node: MoveObject!
 }
 
+# MovePackage
+type MovePackageConnection {
+  edges: [MovePackageEdge!]!
+  nodes: [MovePackage!]!
+  pageInfo: PageInfo!
+}
+
+type MovePackageEdge {
+  cursor: String
+  node: MovePackage!
+}
+
 # Event
 type EventConnection {
   edges: [EventEdge!]!
+  nodes: [Event!]!
   pageInfo: PageInfo!
 }
 
@@ -1229,6 +1408,7 @@ type EventEdge {
 # MoveFunction
 type MoveFunctionConnection {
   edges: [MoveFunctionEdge!]!
+  nodes: [MoveFunction!]!
   pageInfo: PageInfo!
 }
 
@@ -1240,6 +1420,7 @@ type MoveFunctionEdge {
 # MoveModuleConnection
 type MoveModuleConnection {
   edges: [MoveModuleEdge]
+  nodes: [MoveModule]
   pageInfo: PageInfo!
 }
 
@@ -1251,6 +1432,7 @@ type MoveModuleEdge {
 # MoveStructConnection
 type MoveStructConnection {
   edges: [MoveStructEdge!]!
+  nodes: [MoveStruct!]!
   pageInfo: PageInfo!
 }
 
@@ -1263,6 +1445,7 @@ type MoveStructEdge {
 type TransactionBlockConnection {
   totalTransactionBlocks: Int
   edges: [TransactionBlockEdge!]!
+  nodes: [TransactionBlock!]!
   pageInfo: PageInfo!
 }
 
@@ -1271,9 +1454,71 @@ type TransactionBlockEdge {
   node: TransactionBlock!
 }
 
+# TransactionInputConnection
+type TransactionInputConnection {
+  edges: [TransactionInputEdge!]!
+  nodes: [TransactionInput!]!
+  pageInfo: PageInfo!
+}
+
+type TransactionInputEdge {
+  cursor: String
+  node: TransactionInput!
+}
+
+# ProgrammableTransactionConnection
+type ProgrammableTransactionConnection {
+  edges: [ProgrammableTransactionEdge!]!
+  nodes: [ProgrammableTransaction!]!
+  pageInfo: PageInfo!
+}
+
+type ProgrammableTransactionEdge {
+  cursor: String
+  node: ProgrammableTransaction!
+}
+
+# UnchangedSharedObjectConnection
+
+type UnchangedSharedObjectConnection {
+  edges: [UnchangedSharedObjectEdge!]!
+  nodes: [UnchangedSharedObject!]!
+  pageInfo: PageInfo!
+}
+
+type UnchangedSharedObjectEdge {
+  cursor: String
+  node: UnchangedSharedObject!
+}
+
+# ObjectChangeConnection
+type ObjectChangeConnection {
+  edges: [ObjectChangeEdge!]!
+  nodes: [ObjectChange!]!
+  pageInfo: PageInfo!
+}
+
+type ObjectChangeEdge {
+  cursor: String
+  node: ObjectChange
+}
+
+# BalanceChangeConnection
+type BalanceChangeConnection {
+  edges: [BalanceChangeEdge!]!
+  nodes: [BalanceChange!]!
+  pageInfo: PageInfo!
+}
+
+type BalanceChangeEdge {
+  cursor: String
+  node: BalanceChange
+}
+
 # MoveModuleConnection
 type MoveModuleConnection {
   edges: [MoveModuleEdge!]!
+  nodes: [MoveModule!]!
   pageInfo: PageInfo!
 }
 
@@ -1282,20 +1527,33 @@ type MoveModuleEdge {
   node: MoveModule!
 }
 
-# NameServiceNameConnection
-type NameServiceNameConnection {
-  edges: [NameServiceNameEdge!]!
+# SuinsRegistrationConnection
+type SuinsRegistrationConnection {
+  edges: [SuinsRegistrationEdge!]!
+  nodes: [SuinsRegistration!]!
   pageInfo: PageInfo!
 }
 
-type NameServiceNameEdge {
+type SuinsRegistrationEdge {
   cursor: String
-  node: String!  # is this correct?
+  node: SuinsRegistration
+}
+
+type SuinsRegistration {
+	"""
+	Domain name of the SuinsRegistration object
+	"""
+	domain: String!
+	"""
+	Convert the SuinsRegistration object into a Move object
+	"""
+	asMoveObject: MoveObject!
 }
 
 # AddressMetricsConnection
 type AddressMetricsConnection {
   edges: [AddressMetricEdge!]!
+  nodes: [AddressMetric!]!
   pageInfo: PageInfo!
 }
 
@@ -1304,13 +1562,26 @@ type AddressMetricEdge {
   node: AddressMetrics!
 }
 
-# StakeConnection
+# StakedSuiConnection
 type StakedSuiConnection {
   edges: [StakedSuiEdge!]!
+  nodes: [StakedSui!]!
   pageInfo: PageInfo!
 }
 
-type StakeEdge {
+type StakedSuiEdge {
   cursor: String
   node: StakedSui!
+}
+
+# ValidatorConnection
+type ValidatorConnection {
+  edges: [ValidatorEdge!]!
+  nodes: [Validator!]!
+  pageInfo: PageInfo!
+}
+
+type ValidatorEdge {
+  cursor: String
+  node: Validator!
 }

@@ -1,0 +1,132 @@
+import { Callout } from 'nextra/components';
+
+# Creating zkSend Links
+
+<Callout type="warning">
+	Products and services that incorporate zkSend links may be subject to financial regulations,
+	including obtaining money transmitter licenses in jurisdictions where you provide your services.
+	It is the developer's responsibility to ensure compliance with all relevant laws and obtain any
+	necessary licenses. The information provided by Mysten Labs is not legal advice, and developers
+	should consult with a qualified legal professional to address their specific circumstances.
+</Callout>
+
+## Limitations
+
+- zkSend only supports mainnet at this time.
+- Links must contain gas to claim them. The SDK will automatically determine a gas amount to use,
+  and during claiming we will attempt to refund any unused gas to the address that created the link.
+- Objects within links must be publically transferrable.
+
+## Create a link
+
+<Callout type="warning">
+	zkSend does not keep a record of created links, and losing access to a link will result in the
+	loss of funds of any assets contained within this link.
+</Callout>
+
+You can start creating your own zkSend link using the `ZkSendLinkBuilder` class. This class
+constructor takes an object with the following options:
+
+- **`sender`** (required) - Required. The address of the sender / creator of the link.
+- **`redirect`** (optional) - The redirect configuration for the link. See "Claim redirect" below
+  for more information.
+  - **`url`** - The url to redirect to after the link have been claimed.
+  - **`name`** - The name of your dApp. This will be shown to the user when claiming the link.
+- **`client`** (optional) - The `@mysten/sui.js` client used to fetch data to construct the link. If
+  not provided, a default client will be used.
+
+```ts
+import { ZkSendLinkBuilder } from '@mysten/zksend';
+
+const link = new ZkSendLinkBuilder({
+	sender: '0x...',
+});
+```
+
+#### Adding SUI to the link
+
+You can add SUI to the link by calling `link.addClaimableMist()`. This method takes the following
+params:
+
+- **`amount`** (required) - The amount of MIST (the base unit of SUI) to add to the link.
+
+#### Adding non-SUI coins to the link
+
+You can add non-SUI coins to the link by calling `link.addClaimableBalance()`. This method takes the
+following params:
+
+- **`coinType`** (required) - The coin type of the coin to add to the link (e.g. `0x2::sui::SUI`).
+- **`amount`** (required) - The amount of the coin to add to the link. Represented in the base unit
+  of the coin.
+
+The SDK will automatically perform the necessary coin management logic to transfer the defined
+amount, such as merging and splitting coin objects.
+
+#### Adding objects to the link
+
+You can add a publically-transferrable object to the link by calling `link.addClaimableObject()`.
+This method takes the following params:
+
+- **`id`** (required) - The ID of the object. This must be owned by the `sender` you configured when
+  creating the link.
+
+#### Getting the link URL
+
+At any time, you can get the URL for the link by calling `link.getLink()`.
+
+## Submitting the link transaction
+
+Once you have built your zkSend link, you need to execute a transaction to transfer assets and make
+the link claimable.
+
+You can call the `link.createSendTransaction()` method, which returns a `TransactionBlock` object
+that you can sign and submit to the blockchain.
+
+```ts
+const txb = await link.createSendTransaction();
+
+const { bytes, signature } = txb.sign({ client, signer: keypair });
+
+const result = await client.executeTransactionBlock({
+	transactionBlock: bytes,
+	signature,
+});
+```
+
+If you have a keypair you would like to send the transaction with, you can use the `create` method
+as shorthand for creating the send transaction, signing it, and submitting it to the blockchain.
+
+```ts
+await link.create({
+	signer: yourKeypair,
+});
+```
+
+## Claim redirect
+
+You can configure a redirect for the link, which will redirect the user to a URL of your choice
+after the link has been claimed. This is useful for dApps that want to use zkSend as an onboarding
+tool, and have the user redirected to their dApp after claiming the link.
+
+To configure a redirect, you need to provide a `redirect` object when creating the link. This object
+takes the following params:
+
+- **`url`** - The URL to redirect to after the link has been claimed.
+- **`name`** - The name of your dApp. This will be shown to the user when claiming the link.
+
+When redirecting to the URL, if the user claims with zkLogin, then zkSend will automatically add a
+`zksend_address` query paramter to the URL, containing the Sui address of the user that claimed the
+asset. The [zkSend wallet](./dapp.mdx) will automatically read this query parameter, and consider
+itself connected as a result of a claim redirect.
+
+```ts
+import { ZkSendLinkBuilder } from '@mysten/zksend';
+
+const link = new ZkSendLinkBuilder({
+	sender: '0x...',
+	redirect: {
+		url: 'https://your-dapp.com',
+		name: 'Your dApp',
+	},
+});
+```

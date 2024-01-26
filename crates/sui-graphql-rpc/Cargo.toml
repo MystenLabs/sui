@@ -1,6 +1,6 @@
 [package]
 name = "sui-graphql-rpc"
-version = "0.1.0"
+version = "2024.1.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -9,13 +9,15 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
-async-graphql = {workspace = true, features = ["dataloader"] }
+async-graphql = {workspace = true, features = ["dataloader", "apollo_tracing", "tracing", "opentelemetry"] }
 async-graphql-axum.workspace = true
+async-graphql-value.workspace = true
 async-trait.workspace = true
 axum.workspace = true
 chrono.workspace = true
 clap.workspace = true
 diesel.workspace = true
+either.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 futures.workspace = true
 hex.workspace = true
@@ -42,6 +44,7 @@ shared-crypto.workspace = true
 similar.workspace = true
 sui-sdk.workspace = true
 sui-types.workspace = true
+tap.workspace = true
 telemetry-subscribers.workspace = true
 tracing.workspace = true
 tokio.workspace = true
@@ -49,6 +52,10 @@ toml.workspace = true
 tower.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
+
+sui-graphql-rpc-headers.workspace = true
+sui-graphql-rpc-client.workspace = true
+
 
 # TODO: put these behind feature flag to prevent leakage
 # Used for dummy data
@@ -70,6 +77,7 @@ expect-test.workspace = true
 hyper.workspace = true
 insta.workspace = true
 serde_json.workspace = true
+sui-framework.workspace = true
 tower.workspace = true
 
 [features]

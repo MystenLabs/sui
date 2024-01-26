@@ -1,13 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::{
-    test_authority_builder::TestAuthorityBuilder, AuthorityState, EffectsNotifyRead,
-};
-use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
-use crate::epoch::committee_store::CommitteeStore;
-use crate::state_accumulator::StateAccumulator;
-use crate::test_authority_clients::LocalAuthorityClient;
 use fastcrypto::hash::MultisetHash;
 use fastcrypto::traits::KeyPair;
 use futures::future::join_all;
@@ -24,6 +17,7 @@ use sui_config::local_ip_utils;
 use sui_config::node::OverloadThresholdConfig;
 use sui_framework::BuiltInFramework;
 use sui_genesis_builder::validator_info::ValidatorInfo;
+use sui_macros::nondeterministic;
 use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{random_object_ref, ObjectID};
@@ -51,6 +45,14 @@ use sui_types::{
 use tokio::time::timeout;
 use tracing::{info, warn};
 
+use crate::authority::{
+    test_authority_builder::TestAuthorityBuilder, AuthorityState, EffectsNotifyRead,
+};
+use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
+use crate::epoch::committee_store::CommitteeStore;
+use crate::state_accumulator::StateAccumulator;
+use crate::test_authority_clients::LocalAuthorityClient;
+
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub async fn send_and_confirm_transaction(
@@ -60,7 +62,7 @@ pub async fn send_and_confirm_transaction(
 ) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
     // Make the initial request
     let epoch_store = authority.load_epoch_store_one_call_per_task();
-    let transaction = authority.verify_transaction(transaction)?;
+    let transaction = epoch_store.verify_transaction(transaction)?;
     let response = authority
         .handle_transaction(&epoch_store, transaction.clone())
         .await?;
@@ -108,7 +110,7 @@ pub(crate) fn init_state_parameters_from_rng<R>(rng: &mut R) -> (Genesis, Author
 where
     R: rand::CryptoRng + rand::RngCore,
 {
-    let dir = tempfile::TempDir::new().unwrap();
+    let dir = nondeterministic!(tempfile::TempDir::new().unwrap());
     let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
         .rng(rng)
         .build();
@@ -216,7 +218,7 @@ async fn init_genesis(
     let genesis_move_packages: Vec<_> = BuiltInFramework::genesis_move_packages().collect();
     let pkg = Object::new_package(
         &modules,
-        TransactionDigest::genesis(),
+        TransactionDigest::genesis_marker(),
         ProtocolConfig::get_for_max_version_UNSAFE().max_move_package_size(),
         &genesis_move_packages,
     )
@@ -433,7 +435,6 @@ pub fn make_dummy_tx(
             TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
             10,
         ),
-        Intent::sui_transaction(),
         vec![sender_sec],
     )
 }

@@ -11,13 +11,10 @@ module sui::balance {
 
     /// For when trying to destroy a non-zero balance.
     const ENonZero: u64 = 0;
-
     /// For when an overflow is happening on Supply operations.
     const EOverflow: u64 = 1;
-
     /// For when trying to withdraw more than there is.
     const ENotEnough: u64 = 2;
-
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 3;
 
@@ -68,21 +65,11 @@ module sui::balance {
         Balance { value: 0 }
     }
 
-    spec zero {
-        aborts_if false;
-        ensures result.value == 0;
-    }
-
     /// Join two balances together.
     public fun join<T>(self: &mut Balance<T>, balance: Balance<T>): u64 {
         let Balance { value } = balance;
         self.value = self.value + value;
         self.value
-    }
-
-    spec join {
-        ensures self.value == old(self.value) + balance.value;
-        ensures result == self.value;
     }
 
     /// Split a `Balance` and take a sub balance from it.
@@ -92,30 +79,16 @@ module sui::balance {
         Balance { value }
     }
 
-    spec split {
-        aborts_if self.value < value with ENotEnough;
-        ensures self.value == old(self.value) - value;
-        ensures result.value == value;
-    }
-
     /// Withdraw all balance. After this the remaining balance must be 0.
     public fun withdraw_all<T>(self: &mut Balance<T>): Balance<T> {
         let value = self.value;
         split(self, value)
     }
 
-    spec withdraw_all {
-        ensures self.value == 0;
-    }
-
     /// Destroy a zero `Balance`.
     public fun destroy_zero<T>(balance: Balance<T>) {
         assert!(balance.value == 0, ENonZero);
         let Balance { value: _ } = balance;
-    }
-
-    spec destroy_zero {
-        aborts_if balance.value != 0 with ENonZero;
     }
 
     #[allow(unused_function)]

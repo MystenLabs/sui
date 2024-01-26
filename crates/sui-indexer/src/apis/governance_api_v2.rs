@@ -8,9 +8,8 @@ use async_trait::async_trait;
 use jsonrpsee::{core::RpcResult, RpcModule};
 
 use cached::{proc_macro::cached, SizedCache};
-use sui_json_rpc::{
-    api::GovernanceReadApiServer, governance_api::ValidatorExchangeRates, SuiRpcModule,
-};
+use sui_json_rpc::{governance_api::ValidatorExchangeRates, SuiRpcModule};
+use sui_json_rpc_api::GovernanceReadApiServer;
 use sui_json_rpc_types::{
     DelegatedStake, EpochInfo, StakeStatus, SuiCommittee, SuiObjectDataFilter, ValidatorApys,
 };
@@ -31,6 +30,31 @@ pub struct GovernanceReadApiV2 {
 impl GovernanceReadApiV2 {
     pub fn new(inner: IndexerReader) -> Self {
         Self { inner }
+    }
+
+    /// Get a validator's APY by its address
+    pub async fn get_validator_apy(
+        &self,
+        address: &SuiAddress,
+    ) -> Result<Option<f64>, IndexerError> {
+        let apys = validators_apys_map(self.get_validators_apy().await?);
+        Ok(apys.get(address).copied())
+    }
+
+    async fn get_validators_apy(&self) -> Result<ValidatorApys, IndexerError> {
+        let system_state_summary: SuiSystemStateSummary =
+            self.get_latest_sui_system_state().await?;
+        let epoch = system_state_summary.epoch;
+        let stake_subsidy_start_epoch = system_state_summary.stake_subsidy_start_epoch;
+
+        let exchange_rate_table = exchange_rates(self, system_state_summary).await?;
+
+        let apys = sui_json_rpc::governance_api::calculate_apys(
+            stake_subsidy_start_epoch,
+            exchange_rate_table,
+        );
+
+        Ok(ValidatorApys { apys, epoch })
     }
 
     pub async fn get_epoch_info(&self, epoch: Option<EpochId>) -> Result<EpochInfo, IndexerError> {
@@ -261,6 +285,16 @@ async fn exchange_rates(
     Ok(exchange_rates)
 }
 
+/// Cache a map representing the validators' APYs for this epoch
+#[cached(
+    type = "SizedCache<EpochId, BTreeMap<SuiAddress, f64>>",
+    create = "{ SizedCache::with_size(1) }",
+    convert = " {apys.epoch} "
+)]
+fn validators_apys_map(apys: ValidatorApys) -> BTreeMap<SuiAddress, f64> {
+    BTreeMap::from_iter(apys.apys.iter().map(|x| (x.address, x.apy)))
+}
+
 #[async_trait]
 impl GovernanceReadApiServer for GovernanceReadApiV2 {
     async fn get_stakes_by_ids(
@@ -297,19 +331,7 @@ impl GovernanceReadApiServer for GovernanceReadApiV2 {
     }
 
     async fn get_validators_apy(&self) -> RpcResult<ValidatorApys> {
-        let system_state_summary: SuiSystemStateSummary =
-            self.get_latest_sui_system_state().await?;
-        let epoch = system_state_summary.epoch;
-        let stake_subsidy_start_epoch = system_state_summary.stake_subsidy_start_epoch;
-
-        let exchange_rate_table = exchange_rates(self, system_state_summary).await?;
-
-        let apys = sui_json_rpc::governance_api::calculate_apys(
-            stake_subsidy_start_epoch,
-            exchange_rate_table,
-        );
-
-        Ok(ValidatorApys { apys, epoch })
+        Ok(self.get_validators_apy().await?)
     }
 }
 
@@ -319,6 +341,6 @@ impl SuiRpcModule for GovernanceReadApiV2 {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_json_rpc::api::GovernanceReadApiOpenRpc::module_doc()
+        sui_json_rpc_api::GovernanceReadApiOpenRpc::module_doc()
     }
 }

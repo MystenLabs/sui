@@ -3,6 +3,7 @@
 
 #[cfg(feature = "pg_integration")]
 mod tests {
+    use fastcrypto::encoding::Base64;
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     use serde_json::json;
@@ -11,6 +12,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
     use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
+    use sui_graphql_rpc::client::ClientError;
     use sui_graphql_rpc::config::ConnectionConfig;
     use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
     use sui_types::digests::ChainIdentifier;
@@ -29,8 +31,6 @@ mod tests {
 
         let cluster =
             sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
-
-        // Wait for servers to start and catchup
 
         let query = r#"
             {
@@ -83,6 +83,7 @@ mod tests {
             connection_config,
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
+            None,
         )
         .await;
 
@@ -114,6 +115,7 @@ mod tests {
             connection_config,
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
+            None,
         )
         .await;
 
@@ -134,7 +136,8 @@ mod tests {
         assert!(res.errors().is_empty());
 
         let usage = res.usage().unwrap().unwrap();
-        assert_eq!(*usage.get("nodes").unwrap(), 1);
+        assert_eq!(*usage.get("inputNodes").unwrap(), 1);
+        assert_eq!(*usage.get("outputNodes").unwrap(), 1);
         assert_eq!(*usage.get("depth").unwrap(), 1);
         assert_eq!(*usage.get("variables").unwrap(), 0);
         assert_eq!(*usage.get("fragments").unwrap(), 0);
@@ -154,6 +157,7 @@ mod tests {
             connection_config,
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
+            None,
         )
         .await;
 
@@ -246,6 +250,50 @@ mod tests {
             .await;
 
         assert!(res.is_err());
+
+        let bad_variables = vec![
+            GraphqlQueryVariable {
+                name: "framework addr".to_string(),
+                ty: "SuiAddress!".to_string(),
+                value: json!("0x2"),
+            },
+            GraphqlQueryVariable {
+                name: " deepbook_addr".to_string(),
+                ty: "SuiAddress!".to_string(),
+                value: json!("0xdee9"),
+            },
+            GraphqlQueryVariable {
+                name: "4deepbook_addr".to_string(),
+                ty: "SuiAddressP!".to_string(),
+                value: json!("0xdee9"),
+            },
+            GraphqlQueryVariable {
+                name: "".to_string(),
+                ty: "SuiAddress!".to_string(),
+                value: json!("0xdee9"),
+            },
+            GraphqlQueryVariable {
+                name: " ".to_string(),
+                ty: "SuiAddress!".to_string(),
+                value: json!("0xdee9"),
+            },
+        ];
+
+        for var in bad_variables {
+            let res = cluster
+                .graphql_client
+                .execute_to_graphql(query.to_string(), true, vec![var.clone()], vec![])
+                .await;
+
+            assert!(res.is_err());
+            assert!(
+                res.unwrap_err().to_string()
+                    == ClientError::InvalidVariableName {
+                        var_name: var.name.clone()
+                    }
+                    .to_string()
+            );
+        }
     }
 
     #[tokio::test]
@@ -279,8 +327,7 @@ mod tests {
         let tx_bytes = tx_bytes.encoded();
         let sigs = sigs.iter().map(|sig| sig.encoded()).collect::<Vec<_>>();
 
-        let mutation =
-            r#"{ executeTransactionBlock(txBytes: $tx,  signatures: $sigs) {digest errors}}"#;
+        let mutation = r#"{ executeTransactionBlock(txBytes: $tx,  signatures: $sigs) { effects { transactionBlock { digest } } errors}}"#;
 
         let variables = vec![
             GraphqlQueryVariable {
@@ -302,7 +349,15 @@ mod tests {
         let binding = res.response_body().data.clone().into_json().unwrap();
         let res = binding.get("executeTransactionBlock").unwrap();
 
-        let digest = res.get("digest").unwrap().as_str().unwrap();
+        let digest = res
+            .get("effects")
+            .unwrap()
+            .get("transactionBlock")
+            .unwrap()
+            .get("digest")
+            .unwrap()
+            .as_str()
+            .unwrap();
         assert!(res.get("errors").unwrap().is_null());
         assert_eq!(digest, original_digest.to_string());
 
@@ -343,6 +398,101 @@ mod tests {
         assert_eq!(sender_read, sender.to_string());
     }
 
+    // TODO: add more test cases for transaction execution/dry run in transactional test runner.
+    #[tokio::test]
+    #[serial]
+    async fn test_transaction_dry_run() {
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+
+        let cluster =
+            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+
+        let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
+
+        let sender = addresses[0];
+        let recipient = addresses[1];
+        let tx = cluster
+            .validator_fullnode_handle
+            .test_transaction_builder()
+            .await
+            .transfer_sui(Some(1_000), recipient)
+            .build();
+        let tx_bytes = Base64::from_bytes(&bcs::to_bytes(&tx).unwrap());
+        let tx_bytes = tx_bytes.encoded();
+
+        let query = r#"{ dryRunTransactionBlock(txBytes: $tx) {
+                transaction {
+                    digest
+                    sender {
+                        address
+                    }
+                    gasInput {
+                        gasSponsor {
+                            address
+                        }
+                        gasPrice
+                    }
+                }
+                error
+                results {
+                    mutatedReferences {
+                        input {
+                            __typename
+                            ... on Input {
+                                ix
+                            }
+                            ... on Result {
+                                cmd
+                                ix
+                            }
+                        }
+                        type {
+                            repr
+                        }
+                    }
+                    returnValues {
+                        type {
+                            repr
+                        }
+                        bcs
+                    }
+                }
+            }
+        }"#;
+        let variables = vec![GraphqlQueryVariable {
+            name: "tx".to_string(),
+            ty: "String!".to_string(),
+            value: json!(tx_bytes),
+        }];
+        let res = cluster
+            .graphql_client
+            .execute_to_graphql(query.to_string(), true, variables, vec![])
+            .await
+            .unwrap();
+        let binding = res.response_body().data.clone().into_json().unwrap();
+        let res = binding.get("dryRunTransactionBlock").unwrap();
+
+        let digest = res.get("transaction").unwrap().get("digest").unwrap();
+        // Dry run txn does not have digest
+        assert!(digest.is_null());
+        assert!(res.get("error").unwrap().is_null());
+        let sender_read = res
+            .get("transaction")
+            .unwrap()
+            .get("sender")
+            .unwrap()
+            .get("address")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert_eq!(sender_read, sender.to_string());
+        assert!(res.get("results").unwrap().is_array());
+    }
+
     use sui_graphql_rpc::server::builder::tests::*;
 
     #[tokio::test]
@@ -373,11 +523,5 @@ mod tests {
     #[serial]
     async fn test_query_max_page_limit() {
         test_query_max_page_limit_impl().await;
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_query_complexity_metrics() {
-        test_query_complexity_metrics_impl().await;
     }
 }

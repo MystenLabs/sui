@@ -68,6 +68,7 @@ move-core-types.workspace = true
 move-package.workspace = true
 csv.workspace = true
 workspace-hack.workspace = true
+move-vm-profiler.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl.workspace = true
@@ -90,3 +91,9 @@ normal = ["jemalloc-ctl"]
 name = "generate-genesis-checkpoint"
 path = "src/generate_genesis_checkpoint.rs"
 test = false
+
+[features]
+gas-profiler = [
+    "sui-types/gas-profiler",
+    "sui-execution/gas-profiler",
+]

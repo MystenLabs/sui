@@ -69,12 +69,12 @@ proptest! {
         // This effectively checks that if a string doesn't match the ALLOWED_IDENTIFIERS regex, it
         // will be rejected by the is_valid validator. Note that the converse is checked by the
         // Arbitrary impl for Identifier.
-        prop_assert!(!Identifier::is_valid(&identifier));
+        prop_assert!(!Identifier::is_valid(identifier));
     }
 
     #[test]
     fn valid_identifiers_proptest(identifier in ALLOWED_NO_SELF_IDENTIFIERS) {
-        prop_assert!(Identifier::is_valid(&identifier));
+        prop_assert!(Identifier::is_valid(identifier));
     }
 
     #[test]

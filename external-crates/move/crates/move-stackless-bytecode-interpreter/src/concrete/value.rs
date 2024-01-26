@@ -17,14 +17,9 @@ use move_core_types::{
     runtime_value::{MoveStruct, MoveValue},
     u256,
 };
-use move_model::ast::{MemoryLabel, TempIndex};
+use move_model::ast::TempIndex;
 
-use crate::{
-    concrete::ty::{
-        BaseType, PartialStructInstantiation, PrimitiveType, StructInstantiation, Type,
-    },
-    shared::ident::StructIdent,
-};
+use crate::concrete::ty::{BaseType, PrimitiveType, StructInstantiation, Type};
 
 //**************************************************************************************************
 // Value core
@@ -1273,117 +1268,4 @@ impl GlobalState {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
-pub struct EvalState {
-    // global resources specifically marked as saved
-    saved_memory: BTreeMap<
-        MemoryLabel,
-        BTreeMap<StructIdent, BTreeMap<StructInstantiation, BTreeMap<AccountAddress, BaseValue>>>,
-    >,
-}
-
-impl EvalState {
-    /// Collect resources of the (partial) instantiation type from the global state and save them
-    /// under the given memory label
-    pub fn save_memory(
-        &mut self,
-        label: MemoryLabel,
-        partial_inst: PartialStructInstantiation,
-        global_state: &GlobalState,
-    ) {
-        let mut per_struct_map = BTreeMap::new();
-        for (addr, state) in &global_state.accounts {
-            for (inst, val) in &state.storage {
-                if inst.ident == partial_inst.ident {
-                    per_struct_map
-                        .entry(inst.clone())
-                        .or_insert_with(BTreeMap::new)
-                        .insert(*addr, val.clone());
-                }
-            }
-        }
-        self.saved_memory
-            .entry(label)
-            .and_modify(|per_label_map| per_label_map.clear())
-            .or_default()
-            .insert(partial_inst.ident, per_struct_map);
-    }
-
-    /// Load a resource with given instantiation type from the specified address, saved by the
-    /// given memory label.
-    pub fn load_memory(
-        &self,
-        label: &MemoryLabel,
-        inst: &StructInstantiation,
-        addr: &AccountAddress,
-    ) -> Option<BaseValue> {
-        self.saved_memory
-            .get(label)
-            .and_then(|sub| sub.get(&inst.ident))
-            .and_then(|sub| sub.get(inst))
-            .and_then(|sub| sub.get(addr))
-            .cloned()
-    }
-
-    /// Populate a global state with the resources saved by the given memmory label
-    pub fn register_memory(&self, label: &MemoryLabel, global_state: &mut GlobalState) {
-        for inst_map in self.saved_memory.get(label).unwrap().values() {
-            for (inst, account_map) in inst_map {
-                for (addr, val) in account_map {
-                    let typed_val = TypedValue {
-                        ty: Type::mk_struct(inst.clone()),
-                        val: val.clone(),
-                        ptr: Pointer::None,
-                    };
-                    let exists = global_state.put_resource(*addr, inst.clone(), typed_val);
-                    if cfg!(debug_assertions) {
-                        assert!(exists.is_none());
-                    }
-                }
-            }
-        }
-    }
-
-    /// Return all addresses in the state
-    pub fn all_addresses(&self) -> BTreeSet<AccountAddress> {
-        self.saved_memory
-            .values()
-            .flat_map(|v1| v1.values().map(|v2| v2.values().map(|v3| v3.keys())))
-            .flatten()
-            .flatten()
-            .copied()
-            .collect()
-    }
-
-    /// Return all resources with instantiation matching
-    pub fn all_resources_by_inst(&self, inst: &StructInstantiation) -> Vec<BaseValue> {
-        let mut resources = vec![];
-        for v1 in self.saved_memory.values() {
-            match v1.get(&inst.ident) {
-                None => (),
-                Some(v2) => match v2.get(inst) {
-                    None => (),
-                    Some(v3) => {
-                        resources.extend(v3.values().cloned());
-                    }
-                },
-            }
-        }
-        resources
-    }
-
-    /// Return all resources with identity matching
-    pub fn all_resources_by_ident(&self, ident: &StructIdent) -> Vec<BaseValue> {
-        let mut resources = vec![];
-        for v1 in self.saved_memory.values() {
-            match v1.get(ident) {
-                None => (),
-                Some(v2) => {
-                    for v3 in v2.values() {
-                        resources.extend(v3.values().cloned());
-                    }
-                }
-            }
-        }
-        resources
-    }
-}
+pub struct EvalState {}

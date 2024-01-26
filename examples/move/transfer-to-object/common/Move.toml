@@ -1,0 +1,9 @@
+[package]
+name = "common"
+version = "0.0.1"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/devnet" }
+
+[addresses]
+common = "0x0"

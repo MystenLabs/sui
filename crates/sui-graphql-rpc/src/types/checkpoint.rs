@@ -1,84 +1,257 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::context_data::db_data_provider::PgManager;
-
 use super::{
     base64::Base64,
+    cursor::{self, Page, Target},
     date_time::DateTime,
-    end_of_epoch_data::EndOfEpochData,
+    digest::Digest,
     epoch::Epoch,
     gas::GasCostSummary,
-    transaction_block::{TransactionBlock, TransactionBlockFilter},
+    transaction_block::{self, TransactionBlock, TransactionBlockFilter},
 };
-use async_graphql::{connection::Connection, *};
+use crate::{
+    data::{self, Db, DbConnection, QueryExecutor},
+    error::Error,
+};
+use async_graphql::{
+    connection::{Connection, CursorType, Edge},
+    *,
+};
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
+use fastcrypto::encoding::{Base58, Encoding};
+use sui_indexer::{models_v2::checkpoints::StoredCheckpoint, schema_v2::checkpoints};
+use sui_types::messages_checkpoint::{CheckpointCommitment, CheckpointDigest};
 
-#[derive(InputObject)]
+/// Filter either by the digest, or the sequence number, or neither, to get the latest checkpoint.
+#[derive(Default, InputObject)]
 pub(crate) struct CheckpointId {
-    pub digest: Option<String>,
+    pub digest: Option<Digest>,
     pub sequence_number: Option<u64>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
-#[graphql(complex)]
+#[derive(Clone)]
 pub(crate) struct Checkpoint {
-    /// A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58.
-    /// This hash can be used to verify checkpoint contents by checking signatures against the committee,
-    /// Hashing contents to match digest, and checking that the previous checkpoint digest matches.
-    pub digest: String,
-    /// This checkpoint's position in the total order of finalized checkpoints, agreed upon by consensus.
-    pub sequence_number: u64,
-    /// The timestamp at which the checkpoint is agreed to have happened according to consensus.
-    /// Transactions that access time in this checkpoint will observe this timestamp.
-    pub timestamp: Option<DateTime>,
-    /// This is an aggregation of signatures from a quorum of validators for the checkpoint proposal.
-    pub validator_signature: Option<Base64>,
-    /// The digest of the checkpoint at the previous sequence number.
-    pub previous_checkpoint_digest: Option<String>,
-    /// This is a commitment by the committee at the end of epoch
-    /// on the contents of the live object set at that time.
-    /// This can be used to verify state snapshots.
-    pub live_object_set_digest: Option<String>,
-    /// Tracks the total number of transaction blocks in the network at the time of the checkpoint.
-    pub network_total_transactions: Option<u64>,
-    /// The computation and storage cost, storage rebate, and nonrefundable storage fee accumulated
-    /// during this epoch, up to and including this checkpoint.
-    /// These values increase monotonically across checkpoints in the same epoch.
-    pub rolling_gas_summary: Option<GasCostSummary>,
-    #[graphql(skip)]
-    pub epoch_id: u64,
-    /// End of epoch data is only available on the final checkpoint of an epoch.
-    /// This field provides information on the new committee and protocol version for the next epoch.
-    pub end_of_epoch: Option<EndOfEpochData>,
+    /// Representation of transaction data in the Indexer's Store. The indexer stores the
+    /// transaction data and its effects together, in one table.
+    pub stored: StoredCheckpoint,
 }
 
-#[ComplexObject]
-impl Checkpoint {
-    async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        let epoch = ctx
-            .data_unchecked::<PgManager>()
-            .fetch_epoch_strict(self.epoch_id)
-            .await
-            .extend()?;
+pub(crate) type Cursor = cursor::JsonCursor<u64>;
+type Query<ST, GB> = data::Query<ST, checkpoints::table, GB>;
 
-        Ok(Some(epoch))
+/// Checkpoints contain finalized transactions and are used for node synchronization
+/// and global transaction ordering.
+#[Object]
+impl Checkpoint {
+    /// A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58. This
+    /// hash can be used to verify checkpoint contents by checking signatures against the committee,
+    /// Hashing contents to match digest, and checking that the previous checkpoint digest matches.
+    async fn digest(&self) -> Result<String> {
+        Ok(self.digest_impl().extend()?.base58_encode())
     }
 
-    async fn transaction_block_connection(
+    /// This checkpoint's position in the total order of finalized checkpoints, agreed upon by
+    /// consensus.
+    async fn sequence_number(&self) -> u64 {
+        self.sequence_number_impl()
+    }
+
+    /// The timestamp at which the checkpoint is agreed to have happened according to consensus.
+    /// Transactions that access time in this checkpoint will observe this timestamp.
+    async fn timestamp(&self) -> Result<DateTime> {
+        DateTime::from_ms(self.stored.timestamp_ms).extend()
+    }
+
+    /// This is an aggregation of signatures from a quorum of validators for the checkpoint
+    /// proposal.
+    async fn validator_signatures(&self) -> Base64 {
+        Base64::from(&self.stored.validator_signature)
+    }
+
+    /// The digest of the checkpoint at the previous sequence number.
+    async fn previous_checkpoint_digest(&self) -> Option<String> {
+        self.stored
+            .previous_checkpoint_digest
+            .as_ref()
+            .map(Base58::encode)
+    }
+
+    /// A commitment by the committee at the end of epoch on the contents of the live object set at
+    /// that time. This can be used to verify state snapshots.
+    async fn live_object_set_digest(&self) -> Result<Option<String>> {
+        use CheckpointCommitment as C;
+        Ok(
+            bcs::from_bytes::<Vec<C>>(&self.stored.checkpoint_commitments)
+                .map_err(|e| Error::Internal(format!("Error deserializing commitments: {e}")))
+                .extend()?
+                .into_iter()
+                .map(|commitment| {
+                    let C::ECMHLiveObjectSetDigest(digest) = commitment;
+                    Base58::encode(digest.digest.into_inner())
+                })
+                .next(),
+        )
+    }
+
+    /// The total number of transaction blocks in the network by the end of this checkpoint.
+    async fn network_total_transactions(&self) -> Option<u64> {
+        Some(self.stored.network_total_transactions as u64)
+    }
+
+    /// The computation cost, storage cost, storage rebate, and non-refundable storage fee
+    /// accumulated during this epoch, up to and including this checkpoint. These values increase
+    /// monotonically across checkpoints in the same epoch, and reset on epoch boundaries.
+    async fn rolling_gas_summary(&self) -> Option<GasCostSummary> {
+        Some(GasCostSummary {
+            computation_cost: self.stored.computation_cost as u64,
+            storage_cost: self.stored.storage_cost as u64,
+            storage_rebate: self.stored.storage_rebate as u64,
+            non_refundable_storage_fee: self.stored.non_refundable_storage_fee as u64,
+        })
+    }
+
+    /// The epoch this checkpoint is part of.
+    async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
+        Epoch::query(ctx.data_unchecked(), Some(self.stored.epoch as u64))
+            .await
+            .extend()
+    }
+
+    /// Transactions in this checkpoint.
+    async fn transaction_blocks(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<transaction_block::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
+        before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
-    ) -> Result<Option<Connection<String, TransactionBlock>>> {
-        let mut filter = filter;
-        filter.get_or_insert_with(Default::default).at_checkpoint = Some(self.sequence_number);
+    ) -> Result<Connection<String, TransactionBlock>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
-        ctx.data_unchecked::<PgManager>()
-            .fetch_txs(first, after, last, before, filter)
+        let Some(filter) = filter
+            .unwrap_or_default()
+            .intersect(TransactionBlockFilter {
+                at_checkpoint: Some(self.stored.sequence_number as u64),
+                ..Default::default()
+            })
+        else {
+            return Ok(Connection::new(false, false));
+        };
+
+        TransactionBlock::paginate(ctx.data_unchecked(), page, filter)
             .await
             .extend()
+    }
+}
+
+impl CheckpointId {
+    pub(crate) fn by_seq_num(seq_num: u64) -> Self {
+        CheckpointId {
+            sequence_number: Some(seq_num),
+            digest: None,
+        }
+    }
+}
+
+impl Checkpoint {
+    pub(crate) fn sequence_number_impl(&self) -> u64 {
+        self.stored.sequence_number as u64
+    }
+
+    pub(crate) fn digest_impl(&self) -> Result<CheckpointDigest, Error> {
+        CheckpointDigest::try_from(self.stored.checkpoint_digest.clone())
+            .map_err(|e| Error::Internal(format!("Failed to deserialize checkpoint digest: {e}")))
+    }
+
+    /// Look up a `Checkpoint` in the database, filtered by either sequence number or digest. If
+    /// both filters are supplied they will both be applied. If none are supplied, the latest
+    /// checkpoint is fetched.
+    pub(crate) async fn query(db: &Db, filter: CheckpointId) -> Result<Option<Self>, Error> {
+        use checkpoints::dsl;
+
+        let digest = filter.digest.map(|d| d.to_vec());
+        let seq_num = filter.sequence_number.map(|n| n as i64);
+
+        let stored = db
+            .execute(move |conn| {
+                conn.first(move || {
+                    let mut query = dsl::checkpoints
+                        .order_by(dsl::sequence_number.desc())
+                        .into_boxed();
+
+                    if let Some(digest) = digest.clone() {
+                        query = query.filter(dsl::checkpoint_digest.eq(digest));
+                    }
+
+                    if let Some(seq_num) = seq_num {
+                        query = query.filter(dsl::sequence_number.eq(seq_num));
+                    }
+
+                    query
+                })
+                .optional()
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch checkpoint: {e}")))?;
+
+        Ok(stored.map(|stored| Checkpoint { stored }))
+    }
+
+    /// Query the database for a `page` of checkpoints. The Page uses checkpoint sequence numbers as
+    /// the cursor, and can optionally be further `filter`-ed by an epoch number (to only return
+    /// checkpoints within that epoch).
+    pub(crate) async fn paginate(
+        db: &Db,
+        page: Page<Cursor>,
+        filter: Option<u64>,
+    ) -> Result<Connection<String, Checkpoint>, Error> {
+        use checkpoints::dsl;
+
+        let (prev, next, results) = db
+            .execute(move |conn| {
+                page.paginate_query::<StoredCheckpoint, _, _, _>(conn, move || {
+                    let mut query = dsl::checkpoints.into_boxed();
+                    if let Some(epoch) = filter {
+                        query = query.filter(dsl::epoch.eq(epoch as i64));
+                    }
+                    query
+                })
+            })
+            .await?;
+
+        let mut conn = Connection::new(prev, next);
+        for stored in results {
+            let cursor = stored.cursor().encode_cursor();
+            conn.edges.push(Edge::new(cursor, Checkpoint { stored }));
+        }
+
+        Ok(conn)
+    }
+}
+
+impl Target<Cursor> for StoredCheckpoint {
+    type Source = checkpoints::table;
+
+    fn filter_ge<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
+        query.filter(checkpoints::dsl::sequence_number.ge(**cursor as i64))
+    }
+
+    fn filter_le<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
+        query.filter(checkpoints::dsl::sequence_number.le(**cursor as i64))
+    }
+
+    fn order<ST, GB>(asc: bool, query: Query<ST, GB>) -> Query<ST, GB> {
+        use checkpoints::dsl;
+        if asc {
+            query.order(dsl::sequence_number)
+        } else {
+            query.order(dsl::sequence_number.desc())
+        }
+    }
+
+    fn cursor(&self) -> Cursor {
+        Cursor::new(self.sequence_number as u64)
     }
 }

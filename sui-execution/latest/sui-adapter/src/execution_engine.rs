@@ -37,6 +37,7 @@ mod checked {
     };
     use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
     use sui_types::committee::EpochId;
+    use sui_types::deny_list::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution::is_certificate_denied;
@@ -80,10 +81,16 @@ mod checked {
         certificate_deny_set: &HashSet<TransactionDigest>,
     ) -> (
         InnerTemporaryStore,
+        SuiGasStatus,
         TransactionEffects,
         Result<Mode::ExecutionResults, ExecutionError>,
     ) {
         let input_objects = input_objects.into_inner();
+        let mutable_inputs = if enable_expensive_checks {
+            input_objects.mutable_inputs().keys().copied().collect()
+        } else {
+            HashSet::new()
+        };
         let shared_object_refs = input_objects.filter_shared_objects();
         let receiving_objects = transaction_kind.receiving_objects();
         let mut transaction_dependencies = input_objects.transaction_dependencies();
@@ -176,12 +183,19 @@ mod checked {
             status
         );
 
-        // Remove from dependencies the generic hash
-        transaction_dependencies.remove(&TransactionDigest::genesis());
+        // Genesis writes a special digest to indicate that an object was created during
+        // genesis and not written by any normal transaction - remove that from the
+        // dependencies
+        transaction_dependencies.remove(&TransactionDigest::genesis_marker());
 
         if enable_expensive_checks && !Mode::allow_arbitrary_function_calls() {
             temporary_store
-                .check_ownership_invariants(&transaction_signer, &mut gas_charger, is_epoch_change)
+                .check_ownership_invariants(
+                    &transaction_signer,
+                    &mut gas_charger,
+                    &mutable_inputs,
+                    is_epoch_change,
+                )
                 .unwrap()
         } // else, in dev inspect mode and anything goes--don't check
 
@@ -194,7 +208,13 @@ mod checked {
             &mut gas_charger,
             *epoch_id,
         );
-        (inner, effects, execution_result)
+
+        (
+            inner,
+            gas_charger.into_gas_status(),
+            effects,
+            execution_result,
+        )
     }
 
     pub fn execute_genesis_state_update(
@@ -604,6 +624,10 @@ mod checked {
                         EndOfEpochTransactionKind::RandomnessStateCreate => {
                             assert!(protocol_config.random_beacon());
                             builder = setup_randomness_state_create(builder);
+                        }
+                        EndOfEpochTransactionKind::DenyListStateCreate => {
+                            assert!(protocol_config.enable_coin_deny_list());
+                            builder = setup_coin_deny_list_state_create(builder);
                         }
                     }
                 }
@@ -1078,5 +1102,20 @@ mod checked {
             gas_charger,
             pt,
         )
+    }
+
+    fn setup_coin_deny_list_state_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                DENY_LIST_MODULE.to_owned(),
+                DENY_LIST_CREATE_FUNC.to_owned(),
+                vec![],
+                vec![],
+            )
+            .expect("Unable to generate coin_deny_list_create transaction!");
+        builder
     }
 }

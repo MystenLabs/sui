@@ -6,6 +6,7 @@ module sui::address {
     use std::ascii;
     use std::bcs;
     use std::string;
+    use std::vector;
 
     /// The length of an address, in bytes
     const LENGTH: u64 = 32;
@@ -21,34 +22,13 @@ module sui::address {
     /// (e.g., `to_u256(0x1) == 1`)
     public native fun to_u256(a: address): u256;
 
-    spec to_u256 {
-        pragma opaque;
-        // TODO: stub to be replaced by actual abort conditions if any
-        aborts_if [abstract] true;
-        // TODO: specify actual function behavior
-    }
-
     /// Convert `n` into an address by encoding it as a big-endian integer (e.g., `from_u256(1) = @0x1`)
     /// Aborts if `n` > `MAX_ADDRESS`
     public native fun from_u256(n: u256): address;
 
-    spec from_u256 {
-        pragma opaque;
-        // TODO: stub to be replaced by actual abort conditions if any
-        aborts_if [abstract] true;
-        // TODO: specify actual function behavior
-    }
-
     /// Convert `bytes` into an address.
     /// Aborts with `EAddressParseError` if the length of `bytes` is not 32
     public native fun from_bytes(bytes: vector<u8>): address;
-
-    spec from_bytes {
-        pragma opaque;
-        // TODO: stub to be replaced by actual abort conditions if any
-        aborts_if [abstract] true;
-        // TODO: specify actual function behavior
-    }
 
     /// Convert `a` into BCS-encoded bytes.
     public fun to_bytes(a: address): vector<u8> {
@@ -65,6 +45,32 @@ module sui::address {
         string::from_ascii(to_ascii_string(a))
     }
 
+    /// Converts an ASCII string to an address, taking the numerical value for each character. The
+    /// string must be Base16 encoded, and thus exactly 64 characters long.
+    /// For example, the string "00000000000000000000000000000000000000000000000000000000DEADB33F"
+    /// will be converted to the address @0xDEADB33F.
+    /// Aborts with `EAddressParseError` if the length of `s` is not 64,
+    /// or if an invalid character is encountered.
+    public fun from_ascii_bytes(bytes: &vector<u8>): address {
+        assert!(vector::length(bytes) == 64, EAddressParseError);
+        let hex_bytes = vector[];
+        let i = 0;
+        while (i < 64) {
+            let hi = hex_char_value(*vector::borrow(bytes, i));
+            let lo = hex_char_value(*vector::borrow(bytes, i + 1));
+            vector::push_back(&mut hex_bytes, (hi << 4) | lo);
+            i = i + 2;
+        };
+        from_bytes(hex_bytes)
+    }
+
+    fun hex_char_value(c: u8): u8 {
+        if (c >= 48 && c <= 57) c - 48 // 0-9
+        else if (c >= 65 && c <= 70) c - 55 // A-F
+        else if (c >= 97 && c <= 102) c - 87 // a-f
+        else abort EAddressParseError
+    }
+
     /// Length of a Sui address in bytes
     public fun length(): u64 {
         LENGTH
@@ -74,6 +80,4 @@ module sui::address {
     public fun max(): u256 {
         MAX
     }
-
-    spec module { pragma verify = false; }
 }

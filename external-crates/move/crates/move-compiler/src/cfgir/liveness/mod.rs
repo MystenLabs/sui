@@ -124,10 +124,6 @@ fn exp(state: &mut LivenessState, parent_e: &Exp) {
             state.0.insert(*var);
         }
 
-        E::Spec(_, used_locals) => used_locals.keys().for_each(|v| {
-            state.0.insert(*v);
-        }),
-
         E::ModuleCall(mcall) => mcall.arguments.iter().for_each(|e| exp(state, e)),
         E::Vector(_, _, _, args) => args.iter().for_each(|e| exp(state, e)),
         E::Freeze(e)
@@ -325,13 +321,6 @@ mod last_usage {
                 context.dropped_live.remove(var);
             }
 
-            E::Spec(_, used_locals) => {
-                // remove it from context to prevent accidental dropping in previous usages
-                used_locals.keys().for_each(|var| {
-                    context.dropped_live.remove(var);
-                })
-            }
-
             E::Copy { var, from_user } => {
                 // Even if not switched to a move:
                 // remove it from dropped_live to prevent accidental dropping in previous usages
@@ -454,7 +443,7 @@ fn release_dead_refs_block(
         return;
     }
 
-    let cmd_loc = block.get(0).unwrap().loc;
+    let cmd_loc = block.front().unwrap().loc;
     let cur_state = {
         let mut s = liveness_pre_state.clone();
         for cmd in block.iter().rev() {

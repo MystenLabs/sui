@@ -22,7 +22,7 @@ fn test_additonal_addresses() {
     .collect();
 
     let manifest_string =
-        std::fs::read_to_string(&path.join(SourcePackageLayout::Manifest.path())).unwrap();
+        std::fs::read_to_string(path.join(SourcePackageLayout::Manifest.path())).unwrap();
 
     let mut dep_graph_builder = DG::DependencyGraphBuilder::new(
         /* skip_fetch_latest_git_deps */ true,
@@ -78,7 +78,7 @@ fn test_additonal_addresses_already_assigned_same_value() {
         .collect();
 
     let manifest_string =
-        std::fs::read_to_string(&path.join(SourcePackageLayout::Manifest.path())).unwrap();
+        std::fs::read_to_string(path.join(SourcePackageLayout::Manifest.path())).unwrap();
 
     let mut dep_graph_builder = DG::DependencyGraphBuilder::new(
         /* skip_fetch_latest_git_deps */ true,
@@ -123,7 +123,7 @@ fn test_additonal_addresses_already_assigned_different_value() {
         .collect();
 
     let manifest_string =
-        std::fs::read_to_string(&path.join(SourcePackageLayout::Manifest.path())).unwrap();
+        std::fs::read_to_string(path.join(SourcePackageLayout::Manifest.path())).unwrap();
 
     let mut dep_graph_builder = DG::DependencyGraphBuilder::new(
         /* skip_fetch_latest_git_deps */ true,

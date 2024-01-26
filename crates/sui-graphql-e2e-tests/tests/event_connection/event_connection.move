@@ -100,128 +100,178 @@ module Test::M2 {
 
 //# create-checkpoint
 
-//# run-graphql --variables A
+//# run-graphql
 {
-  eventConnection(
-    filter: {sender: $A}
-  ) {
-    nodes {
-      sendingModule {
-        name
+  events(filter: {sender: "@{A}"}) {
+    edges {
+      cursor
+      node {
+        sendingModule {
+          name
+        }
+        type {
+          repr
+        }
+        sender {
+          address
+        }
+        json
+        bcs
       }
-      type {
-        repr
-      }
-      senders {
-        address
-      }
-      json
-      bcs
     }
   }
 }
 
-//# run-graphql --variables A Test
+//# run-graphql
 {
-  eventConnection(
-    filter: {sender: $A, eventPackage: $Test}
-  ) {
-    nodes {
-      sendingModule {
-        name
+  events(filter: {sender: "@{A}", eventType: "@{Test}"}) {
+    edges {
+      cursor
+      node {
+        sendingModule {
+          name
+        }
+        type {
+          repr
+        }
+        sender {
+          address
+        }
+        json
+        bcs
       }
-      type {
-        repr
-      }
-      senders {
-        address
-      }
-      json
-      bcs
     }
   }
 }
 
-//# run-graphql --variables A Test
+//# run-graphql
 {
-  eventConnection(
-    filter: {sender: $A, eventPackage: $Test, eventModule: "M1"}
-  ) {
-    nodes {
-      sendingModule {
-        name
+  events(filter: {sender: "@{A}", eventType: "@{Test}::M1"}) {
+    edges {
+      cursor
+      node {
+        sendingModule {
+          name
+        }
+        type {
+          repr
+        }
+        sender {
+          address
+        }
+        json
+        bcs
       }
-      type {
-        repr
-      }
-      senders {
-        address
-      }
-      json
-      bcs
     }
   }
 }
 
-//# run-graphql --variables A Test
+//# run-graphql
 {
-  eventConnection(
-    filter: {sender: $A, eventPackage: $Test, eventModule: "M1", eventType: "EventA"}
-  ) {
-    nodes {
-      sendingModule {
-        name
+  events(filter: {sender: "@{A}", eventType: "@{Test}::M1::EventA"}) {
+    edges {
+      cursor
+      node {
+        sendingModule {
+          name
+        }
+        type {
+          repr
+        }
+        sender {
+          address
+        }
+        json
+        bcs
       }
-      type {
-        repr
-      }
-      senders {
-        address
-      }
-      json
-      bcs
     }
   }
 }
 
-//# run-graphql --variables A Test
+//# run-graphql
 {
-  eventConnection(
-    filter: {sender: $A, eventPackage: $Test, eventModule: "M1", eventType: "EventB"}
-  ) {
-    nodes {
-      sendingModule {
-        name
+  events(filter: {sender: "@{A}", eventType: "@{Test}::M1::EventB"}) {
+    edges {
+      cursor
+      node {
+        sendingModule {
+          name
+        }
+        type {
+          repr
+        }
+        sender {
+          address
+        }
+        json
+        bcs
       }
-      type {
-        repr
-      }
-      senders {
-        address
-      }
-      json
-      bcs
     }
   }
 }
 
-//# run-graphql --variables A Test
+//# run-graphql
 {
-  eventConnection(
-    filter: {sender: $A, eventPackage: $Test, eventModule: "M1", eventType: "EventB<"}
-  ) {
-    nodes {
-      sendingModule {
-        name
+  events(filter: {sender: "@{A}", eventType: "@{Test}::M1::EventB<"}) {
+    edges {
+      cursor
+      node {
+        sendingModule {
+          name
+        }
+        type {
+          repr
+        }
+        sender {
+          address
+        }
+        json
+        bcs
       }
-      type {
-        repr
+    }
+  }
+}
+
+//# run-graphql
+{
+  events(filter: {sender: "@{A}", eventType: "::M1"}) {
+    edges {
+      cursor
+      node {
+        sendingModule {
+          name
+        }
+        type {
+          repr
+        }
+        sender {
+          address
+        }
+        json
+        bcs
       }
-      senders {
-        address
+    }
+  }
+}
+
+//# run-graphql
+{
+  events(filter: {sender: "@{A}", eventType: "@{Test}::"}) {
+    edges {
+      cursor
+      node {
+        sendingModule {
+          name
+        }
+        type {
+          repr
+        }
+        sender {
+          address
+        }
+        json
+        bcs
       }
-      json
-      bcs
     }
   }
 }

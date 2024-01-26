@@ -32,8 +32,10 @@ const TYP_UID: &IdentStr = ident_str!("UID");
 #[derive(SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct MoveValue {
+    /// The value's Move type.
     #[graphql(name = "type")]
     type_: MoveType,
+    /// The BCS representation of this value, Base64 encoded.
     bcs: Base64,
 }
 
@@ -45,6 +47,7 @@ scalar!(
 type MoveData =
     { Address: SuiAddress }
   | { UID:     SuiAddress }
+  | { ID:      SuiAddress }
   | { Bool:    bool }
   | { Number:  BigInt }
   | { String:  string }
@@ -58,6 +61,8 @@ pub(crate) enum MoveData {
     Address(SuiAddress),
     #[serde(rename = "UID")]
     Uid(SuiAddress),
+    #[serde(rename = "ID")]
+    Id(SuiAddress),
     Bool(bool),
     Number(BigInt),
     String(String),
@@ -72,6 +77,7 @@ pub(crate) struct MoveField {
     value: MoveData,
 }
 
+/// An instance of a Move type.
 #[ComplexObject]
 impl MoveValue {
     /// Structured contents of a Move value.
@@ -88,7 +94,7 @@ impl MoveValue {
 
     /// Representation of a Move value in JSON, where:
     ///
-    /// - Addresses and UIDs are represented in canonical form, as JSON strings.
+    /// - Addresses, IDs, and UIDs are represented in canonical form, as JSON strings.
     /// - Bools are represented by JSON boolean literals.
     /// - u8, u16, and u32 are represented as JSON numbers.
     /// - u64, u128, and u256 are represented as JSON strings.
@@ -120,12 +126,11 @@ impl MoveValue {
         // TODO: If this becomes a performance bottleneck, it can be made more efficient by not
         // deserializing via `value::MoveValue` (but this is significantly more code).
         bcs::from_bytes_seed(&layout, &self.bcs.0[..]).map_err(|_| {
-            let type_tag: Option<TypeTag> = (&layout).try_into().ok();
-            Error::Internal(if let Some(type_tag) = type_tag {
-                format!("Failed to deserialize Move value for type: {}", type_tag)
-            } else {
-                "Failed to deserialize Move value for type: <unknown>".to_string()
-            })
+            let type_tag: TypeTag = (&layout).into();
+            Error::Internal(format!(
+                "Failed to deserialize Move value for type: {}",
+                type_tag
+            ))
         })
     }
 
@@ -177,6 +182,9 @@ impl TryFrom<A::MoveValue> for MoveData {
                 } else if is_type(&type_, &SUI, MOD_OBJECT, TYP_UID) {
                     // 0x2::object::UID
                     Self::Uid(extract_uid(&type_, fields)?.into())
+                } else if is_type(&type_, &SUI, MOD_OBJECT, TYP_ID) {
+                    // 0x2::object::ID
+                    Self::Id(extract_id(&type_, fields)?.into())
                 } else {
                     // Arbitrary structs
                     let fields: Result<Vec<_>, _> =
@@ -238,6 +246,11 @@ fn try_to_json_value(value: A::MoveValue) -> Result<Value, Error> {
                 // 0x2::object::UID
                 Value::String(
                     extract_uid(&type_, fields)?.to_canonical_string(/* with_prefix */ true),
+                )
+            } else if is_type(&type_, &SUI, MOD_OBJECT, TYP_ID) {
+                // 0x2::object::ID
+                Value::String(
+                    extract_id(&type_, fields)?.to_canonical_string(/* with_prefix */ true),
                 )
             } else {
                 // Arbitrary structs
@@ -331,6 +344,28 @@ fn extract_string(
 /// following shape:
 ///
 /// ```notrust
+///     { bytes: address }
+/// ```
+///
+/// Which matches `0x2::object::ID`.
+fn extract_id(
+    type_: &StructTag,
+    fields: Vec<(Identifier, A::MoveValue)>,
+) -> Result<AccountAddress, Error> {
+    use A::MoveValue as V;
+    let V::Address(addr) = extract_field!(type_, fields, bytes) else {
+        return Err(Error::Internal(
+            "Expected ID.bytes to have type address.".to_string(),
+        ));
+    };
+
+    Ok(addr)
+}
+
+/// Extracts an address from the contents of a Move Struct, assuming the struct matches the
+/// following shape:
+///
+/// ```notrust
 ///     { id: 0x2::object::ID { bytes: address } }
 /// ```
 ///
@@ -349,17 +384,11 @@ fn extract_uid(
     let A::MoveStruct { type_, fields } = s;
     if !is_type(&type_, &SUI, MOD_OBJECT, TYP_ID) {
         return Err(Error::Internal(
-            "Expected UID.id to to have type ID.".to_string(),
+            "Expected UID.id to have type ID.".to_string(),
         ));
     }
 
-    let V::Address(addr) = extract_field!(type_, fields, bytes) else {
-        return Err(Error::Internal(
-            "Expected ID.bytes to to have type address.".to_string(),
-        ));
-    };
-
-    Ok(addr)
+    extract_id(&type_, fields)
 }
 
 /// Extracts a value from the contents of a Move Struct, assuming the struct matches the following
@@ -424,7 +453,7 @@ mod tests {
     }
 
     fn data<T: Serialize>(layout: A::MoveTypeLayout, data: T) -> Result<MoveData, Error> {
-        let tag: TypeTag = (&layout).try_into().expect("Error fetching type tag");
+        let tag: TypeTag = (&layout).into();
 
         // The format for type from its `Display` impl does not technically match the format that
         // the RPC expects from the data layer (where a type's package should be canonicalized), but
@@ -444,7 +473,7 @@ mod tests {
     }
 
     fn json<T: Serialize>(layout: A::MoveTypeLayout, data: T) -> Result<Json, Error> {
-        let tag: TypeTag = (&layout).try_into().expect("Error fetching type tag");
+        let tag: TypeTag = (&layout).into();
         let type_ = MoveType::new(tag);
         let bcs = Base64(bcs::to_bytes(&data).unwrap());
         MoveValue { type_, bcs }.json_impl(layout)

@@ -5,7 +5,9 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-
+    #[cfg(feature = "gas-profiler")]
+    use move_vm_config::runtime::VMProfilerConfig;
+    use std::path::PathBuf;
     use std::{collections::BTreeMap, sync::Arc};
 
     use anyhow::Result;
@@ -78,14 +80,23 @@ mod checked {
             max_per_fun_meter_units,
             max_per_mod_meter_units,
             max_idenfitier_len: protocol_config.max_move_identifier_len_as_option(), // Before protocol version 9, there was no limit
+            allow_receiving_object_id: protocol_config.allow_receiving_object_id(),
         }
     }
 
     pub fn new_move_vm(
         natives: NativeFunctionTable,
         protocol_config: &ProtocolConfig,
-        paranoid_type_checks: bool,
+        _enable_profiler: Option<PathBuf>,
     ) -> Result<MoveVM, SuiError> {
+        #[cfg(not(feature = "gas-profiler"))]
+        let vm_profiler_config = None;
+        #[cfg(feature = "gas-profiler")]
+        let vm_profiler_config = _enable_profiler.clone().map(|path| VMProfilerConfig {
+            full_path: path,
+            track_bytecode_instructions: false,
+            use_long_function_name: false,
+        });
         MoveVM::new_with_config(
             natives,
             VMConfig {
@@ -94,10 +105,10 @@ mod checked {
                     false, /* we do not enable metering in execution*/
                 ),
                 max_binary_format_version: protocol_config.move_binary_format_version(),
-                paranoid_type_checks,
                 runtime_limits_config: VMRuntimeLimitsConfig {
                     vector_len_max: protocol_config.max_move_vector_len(),
                     max_value_nest_depth: protocol_config.max_move_value_depth_as_option(),
+                    hardened_otw_check: protocol_config.hardened_otw_check(),
                 },
                 enable_invariant_violation_check_in_swap_loc: !protocol_config
                     .disable_invariant_violation_check_in_swap_loc(),
@@ -105,8 +116,8 @@ mod checked {
                     .no_extraneous_module_bytes(),
                 // Don't augment errors with execution state on-chain
                 error_execution_state: false,
-                #[cfg(debug_assertions)]
-                profiler_config: Default::default(),
+
+                profiler_config: vm_profiler_config,
             },
         )
         .map_err(|_| SuiError::ExecutionInvariantViolation)

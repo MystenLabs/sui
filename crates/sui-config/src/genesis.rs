@@ -6,25 +6,24 @@ use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::hash::HashFunction;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{fs, path::Path};
-use sui_types::authenticator_state::{
-    get_authenticator_state, get_authenticator_state_obj_initial_shared_version,
-    AuthenticatorStateInner,
-};
-use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+use sui_types::authenticator_state::{get_authenticator_state, AuthenticatorStateInner};
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::clock::Clock;
 use sui_types::committee::CommitteeWithNetworkMetadata;
 use sui_types::crypto::DefaultHash;
+use sui_types::deny_list::{get_coin_deny_list, PerTypeDenyList};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
 };
-use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
+use sui_types::storage::ObjectStore;
 use sui_types::sui_system_state::{
     get_sui_system_state, get_sui_system_state_wrapper, SuiSystemState, SuiSystemStateTrait,
     SuiSystemStateWrapper, SuiValidatorGenesis,
 };
 use sui_types::transaction::Transaction;
+use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use sui_types::{
     committee::{Committee, EpochId, ProtocolVersion},
     error::SuiResult,
@@ -153,16 +152,6 @@ impl Genesis {
 
     pub fn sui_system_object(&self) -> SuiSystemState {
         get_sui_system_state(&self.objects()).expect("Sui System State object must always exist")
-    }
-
-    pub fn authenticator_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
-        get_authenticator_state_obj_initial_shared_version(&self.objects())
-            .expect("Read from genesis cannot fail")
-    }
-
-    pub fn randomness_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
-        get_randomness_state_obj_initial_shared_version(&self.objects())
-            .expect("Read from genesis cannot fail")
     }
 
     pub fn clock(&self) -> Clock {
@@ -335,6 +324,17 @@ impl UnsignedGenesis {
 
     pub fn authenticator_state_object(&self) -> Option<AuthenticatorStateInner> {
         get_authenticator_state(&self.objects()).expect("read from genesis cannot fail")
+    }
+
+    pub fn has_randomness_state_object(&self) -> bool {
+        self.objects()
+            .get_object(&SUI_RANDOMNESS_STATE_OBJECT_ID)
+            .expect("read from genesis cannot fail")
+            .is_some()
+    }
+
+    pub fn coin_deny_list_state(&self) -> Option<PerTypeDenyList> {
+        get_coin_deny_list(&self.objects())
     }
 }
 

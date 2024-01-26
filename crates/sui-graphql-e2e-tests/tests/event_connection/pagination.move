@@ -27,9 +27,13 @@ module Test::M1 {
 
 //# create-checkpoint
 
-//# run-graphql --variables A
+//# run-graphql
 {
-  eventConnection(filter: {sender: $A}) {
+  events(filter: {sender: "@{A}"}) {
+    pageInfo {
+      hasPreviousPage
+      hasNextPage
+    }
     edges {
       cursor
       node {
@@ -39,7 +43,7 @@ module Test::M1 {
         type {
           repr
         }
-        senders {
+        sender {
           address
         }
         json
@@ -49,9 +53,13 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --variables A
+//# run-graphql --cursors {"tx":2,"e":0}
 {
-  eventConnection(first: 2 after: "2:0", filter: {sender: $A}) {
+  events(first: 2 after: "@{cursor_0}", filter: {sender: "@{A}"}) {
+    pageInfo {
+      hasPreviousPage
+      hasNextPage
+    }
     edges {
       cursor
       node {
@@ -61,7 +69,7 @@ module Test::M1 {
         type {
           repr
         }
-        senders {
+        sender {
           address
         }
         json
@@ -71,9 +79,13 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --variables A
+//# run-graphql --cursors {"tx":3,"e":1}
 {
-  eventConnection(last: 2 before: "3:1", filter: {sender: $A}) {
+  events(last: 2 before: "@{cursor_0}", filter: {sender: "@{A}"}) {
+    pageInfo {
+      hasPreviousPage
+      hasNextPage
+    }
     edges {
       cursor
       node {
@@ -83,7 +95,33 @@ module Test::M1 {
         type {
           repr
         }
-        senders {
+        sender {
+          address
+        }
+        json
+        bcs
+      }
+    }
+  }
+}
+
+//# run-graphql
+{
+  events(last: 2) {
+    pageInfo {
+      hasPreviousPage
+      hasNextPage
+    }
+    edges {
+      cursor
+      node {
+        sendingModule {
+          name
+        }
+        type {
+          repr
+        }
+        sender {
           address
         }
         json

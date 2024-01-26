@@ -1,6 +1,5 @@
 [package]
 name = "Root"
-version = "0.0.0"
 
 [dependencies]
 A = { local = "./deps_only/A", addr_subst = { "AA" = "0x1" } }

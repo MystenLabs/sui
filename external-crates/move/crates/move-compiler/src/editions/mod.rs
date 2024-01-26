@@ -37,6 +37,7 @@ pub enum FeatureGate {
     Move2024Optimizations,
     Move2024Keywords,
     BlockLabels,
+    Move2024Paths,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -113,6 +114,7 @@ const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
     FeatureGate::LetMut,
     FeatureGate::Move2024Keywords,
     FeatureGate::BlockLabels,
+    FeatureGate::Move2024Paths,
 ];
 
 impl Edition {
@@ -125,9 +127,9 @@ impl Edition {
         release: Some(symbol!("alpha")),
     };
 
-    const SEP: &str = ".";
+    const SEP: &'static str = ".";
 
-    pub const ALL: &[Self] = &[Self::LEGACY, Self::E2024_ALPHA];
+    pub const ALL: &'static [Self] = &[Self::LEGACY, Self::E2024_ALPHA];
 
     pub fn supports(&self, feature: FeatureGate) -> bool {
         SUPPORTED_FEATURES.get(self).unwrap().contains(&feature)
@@ -173,9 +175,9 @@ impl Edition {
 }
 
 impl Flavor {
-    pub const GLOBAL_STORAGE: &str = "global-storage";
-    pub const SUI: &str = "sui";
-    pub const ALL: &[Self] = &[Self::GlobalStorage, Self::Sui];
+    pub const GLOBAL_STORAGE: &'static str = "global-storage";
+    pub const SUI: &'static str = "sui";
+    pub const ALL: &'static [Self] = &[Self::GlobalStorage, Self::Sui];
 }
 
 impl FeatureGate {
@@ -191,6 +193,7 @@ impl FeatureGate {
             FeatureGate::Move2024Optimizations => "Move 2024 optimizations are",
             FeatureGate::Move2024Keywords => "Move 2024 keywords are",
             FeatureGate::BlockLabels => "Block labels are",
+            FeatureGate::Move2024Paths => "Move 2024 paths are",
         }
     }
 }

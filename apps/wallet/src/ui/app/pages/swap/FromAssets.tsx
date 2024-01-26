@@ -4,13 +4,19 @@
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 import { filterAndSortTokenBalances } from '_helpers';
-import { useActiveAddress, useCoinsReFetchingConfig, useSortedCoinsByCategories } from '_hooks';
+import {
+	useActiveAddress,
+	useAllowedSwapCoinsList,
+	useCoinsReFetchingConfig,
+	useSortedCoinsByCategories,
+} from '_hooks';
 import { TokenRow } from '_pages/home/tokens/TokensDetails';
+import { DeepBookContextProvider } from '_shared/deepBook/context';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-export function FromAssets() {
+function FromAssetsComponent() {
 	const navigate = useNavigate();
 	const selectedAddress = useActiveAddress();
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
@@ -27,12 +33,17 @@ export function FromAssets() {
 	);
 
 	const { recognized } = useSortedCoinsByCategories(coins ?? []);
+	const allowedSwapCoinsList = useAllowedSwapCoinsList();
+
+	const renderedRecognizedCoins = recognized.filter(({ coinType }) =>
+		allowedSwapCoinsList.includes(coinType),
+	);
 
 	return (
 		<Overlay showModal title="Select a Coin" closeOverlay={() => navigate(-1)}>
 			<Loading loading={isPending}>
 				<div className="flex flex-shrink-0 justify-start flex-col w-full">
-					{recognized?.map((coinBalance, index) => {
+					{renderedRecognizedCoins?.map((coinBalance, index) => {
 						return (
 							<Fragment key={coinBalance.coinType}>
 								<TokenRow
@@ -51,5 +62,13 @@ export function FromAssets() {
 				</div>
 			</Loading>
 		</Overlay>
+	);
+}
+
+export function FromAssets() {
+	return (
+		<DeepBookContextProvider>
+			<FromAssetsComponent />
+		</DeepBookContextProvider>
 	);
 }

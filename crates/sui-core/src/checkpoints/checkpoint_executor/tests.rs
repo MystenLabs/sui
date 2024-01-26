@@ -52,7 +52,7 @@ pub async fn test_checkpoint_executor_crash_recovery() {
 
     let epoch_store = state.epoch_store_for_testing().clone();
     let executor_handle =
-        spawn_monitored_task!(async move { executor.run_epoch(epoch_store).await });
+        spawn_monitored_task!(async move { executor.run_epoch(epoch_store, None).await });
     tokio::time::sleep(Duration::from_secs(5)).await;
 
     // ensure we executed all synced checkpoints
@@ -86,7 +86,7 @@ pub async fn test_checkpoint_executor_crash_recovery() {
 
     let epoch_store = state.epoch_store_for_testing().clone();
     let executor_handle =
-        spawn_monitored_task!(async move { executor.run_epoch(epoch_store).await });
+        spawn_monitored_task!(async move { executor.run_epoch(epoch_store, None).await });
     tokio::time::sleep(Duration::from_secs(15)).await;
 
     let highest_executed = checkpoint_store
@@ -196,7 +196,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
 
     // Ensure executor reaches end of epoch in a timely manner
     timeout(Duration::from_secs(5), async {
-        executor.run_epoch(epoch_store.clone()).await;
+        executor.run_epoch(epoch_store.clone(), None).await;
     })
     .await
     .unwrap();
@@ -227,7 +227,12 @@ pub async fn test_checkpoint_executor_cross_epoch() {
             &authority_state.epoch_store_for_testing(),
             SupportedProtocolVersions::SYSTEM_DEFAULT,
             second_committee.committee().clone(),
-            EpochStartConfiguration::new_v1(system_state, Default::default()),
+            EpochStartConfiguration::new(
+                system_state,
+                Default::default(),
+                &authority_state.database,
+            )
+            .unwrap(),
             &executor,
             accumulator,
             &ExpensiveSafetyCheckConfig::default(),
@@ -238,7 +243,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     // checkpoint execution should resume starting at checkpoints
     // of next epoch
     timeout(Duration::from_secs(5), async {
-        executor.run_epoch(new_epoch_store.clone()).await;
+        executor.run_epoch(new_epoch_store.clone(), None).await;
     })
     .await
     .unwrap();
@@ -323,7 +328,7 @@ pub async fn test_reconfig_crash_recovery() {
 
     timeout(Duration::from_secs(1), async {
         executor
-            .run_epoch(authority_state.epoch_store_for_testing().clone())
+            .run_epoch(authority_state.epoch_store_for_testing().clone(), None)
             .await;
     })
     .await
@@ -353,7 +358,7 @@ pub async fn test_reconfig_crash_recovery() {
 
     timeout(Duration::from_millis(200), async {
         executor
-            .run_epoch(authority_state.epoch_store_for_testing().clone())
+            .run_epoch(authority_state.epoch_store_for_testing().clone(), None)
             .await;
     })
     .await

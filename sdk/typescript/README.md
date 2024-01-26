@@ -1,6 +1,6 @@
 # Docs site
 
-For more complete docs, visit the [Sui TypeScript SDK docs](https://sui-typescript-docs.vercel.app/)
+For more complete docs, visit the [Sui TypeScript SDK docs](https://sdk.mystenlabs.com/)
 
 # Sui TypeScript SDK
 

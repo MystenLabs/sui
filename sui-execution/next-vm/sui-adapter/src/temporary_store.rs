@@ -747,8 +747,11 @@ impl<'backing> TemporaryStore<'backing> {
             // new object size
             let new_object_size = object.object_size_for_gas_metering();
             // track changes and compute the new object `storage_rebate`
-            let new_storage_rebate =
-                gas_charger.track_storage_mutation(new_object_size, old_storage_rebate);
+            let new_storage_rebate = gas_charger.track_storage_mutation(
+                object.id(),
+                new_object_size,
+                old_storage_rebate,
+            );
             object.storage_rebate = new_storage_rebate;
         }
 
@@ -770,7 +773,7 @@ impl<'backing> TemporaryStore<'backing> {
                 // Unwrap is safe because this loop iterates through all modified objects.
                 .unwrap()
                 .storage_rebate;
-            gas_charger.track_storage_mutation(0, storage_rebate);
+            gas_charger.track_storage_mutation(*object_id, 0, storage_rebate);
         }
     }
 
@@ -1094,6 +1097,13 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     ) {
         TemporaryStore::save_loaded_runtime_objects(self, loaded_runtime_objects)
+    }
+
+    fn save_wrapped_object_containers(
+        &mut self,
+        _wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
+    ) {
+        unreachable!("Unused in next-vm")
     }
 }
 

@@ -88,8 +88,6 @@ fn query_packages(pool: &PgPool) -> Result<Vec<StoredPackage>> {
 }
 
 fn dump_package(output_dir: &Path, id: SuiAddress, pkg: &[u8]) -> Result<()> {
-    let package_dir = output_dir.join(id.to_string());
-
     let package = bcs::from_bytes::<MovePackage>(pkg).context("Deserializing")?;
     let origins: BTreeMap<_, _> = package
         .type_origin_table()
@@ -102,6 +100,7 @@ fn dump_package(output_dir: &Path, id: SuiAddress, pkg: &[u8]) -> Result<()> {
         })
         .collect();
 
+    let package_dir = output_dir.join(format!("{}.{}", id, package.version().value()));
     fs::create_dir(&package_dir).context("Making output directory")?;
 
     let linkage_json =
@@ -109,6 +108,7 @@ fn dump_package(output_dir: &Path, id: SuiAddress, pkg: &[u8]) -> Result<()> {
     let origins_json =
         serde_json::to_string_pretty(&origins).context("Serializing type origins")?;
 
+    fs::write(package_dir.join("package.bcs"), pkg).context("Writing package BCS")?;
     fs::write(package_dir.join("linkage.json"), linkage_json).context("Writing linkage")?;
     fs::write(package_dir.join("origins.json"), origins_json).context("Writing type origins")?;
 

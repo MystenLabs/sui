@@ -9,7 +9,6 @@ use move_core_types::gas_algebra::{AbstractMemorySize, InternalGas, NumArgs, Num
 use move_core_types::language_storage::ModuleId;
 
 use move_core_types::vm_status::StatusCode;
-#[cfg(debug_assertions)]
 use move_vm_profiler::GasProfiler;
 use move_vm_types::gas::{GasMeter, SimpleInstruction};
 use move_vm_types::loaded_data::runtime_types::Type;
@@ -76,7 +75,6 @@ pub struct GasStatus {
     instructions_next_tier_start: Option<u64>,
     instructions_current_tier_mult: u64,
 
-    #[cfg(debug_assertions)]
     profiler: Option<GasProfiler>,
 }
 
@@ -114,7 +112,6 @@ impl GasStatus {
             stack_height_next_tier_start,
             stack_size_next_tier_start,
             instructions_next_tier_start,
-            #[cfg(debug_assertions)]
             profiler: None,
         }
     }
@@ -142,7 +139,6 @@ impl GasStatus {
             stack_height_next_tier_start: None,
             stack_size_next_tier_start: None,
             instructions_next_tier_start: None,
-            #[cfg(debug_assertions)]
             profiler: None,
         }
     }
@@ -336,6 +332,22 @@ impl GasStatus {
         } else {
             val.abstract_memory_size()
         }
+    }
+
+    pub fn gas_price(&self) -> u64 {
+        self.gas_price
+    }
+
+    pub fn stack_height_high_water_mark(&self) -> u64 {
+        self.stack_height_high_water_mark
+    }
+
+    pub fn stack_size_high_water_mark(&self) -> u64 {
+        self.stack_size_high_water_mark
+    }
+
+    pub fn instructions_executed(&self) -> u64 {
+        self.instructions_executed
     }
 }
 
@@ -658,12 +670,10 @@ impl GasMeter for GasStatus {
         self.gas_left
     }
 
-    #[cfg(debug_assertions)]
     fn get_profiler_mut(&mut self) -> Option<&mut GasProfiler> {
         self.profiler.as_mut()
     }
 
-    #[cfg(debug_assertions)]
     fn set_profiler(&mut self, profiler: GasProfiler) {
         self.profiler = Some(profiler);
     }
@@ -908,20 +918,8 @@ pub fn initial_cost_schedule_v5() -> CostTable {
 pub fn initial_cost_schedule_for_unit_tests() -> move_vm_test_utils::gas_schedule::CostTable {
     let table = initial_cost_schedule_v5();
     move_vm_test_utils::gas_schedule::CostTable {
-        instruction_tiers: table
-            .instruction_tiers
-            .into_iter()
-            .map(|(k, v)| (k, v))
-            .collect(),
-        stack_height_tiers: table
-            .stack_height_tiers
-            .into_iter()
-            .map(|(k, v)| (k, v))
-            .collect(),
-        stack_size_tiers: table
-            .stack_size_tiers
-            .into_iter()
-            .map(|(k, v)| (k, v))
-            .collect(),
+        instruction_tiers: table.instruction_tiers.into_iter().collect(),
+        stack_height_tiers: table.stack_height_tiers.into_iter().collect(),
+        stack_size_tiers: table.stack_size_tiers.into_iter().collect(),
     }
 }

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses Test=0x0 A=0x42 --simulator
+//# init --addresses Test=0x0 A=0x42 --simulator --custom-validator-account --reference-gas-price 234 --default-gas-price 1000
 
 //# publish
 module Test::M1 {
@@ -27,32 +27,36 @@ module Test::M1 {
     }
 }
 
-//# run Test::M1::create --args 0 @A
+//# run Test::M1::create --args 0 @A --gas-price 1000
+
+//# run Test::M1::create --args 0 @validator_0
+
+//# view-object 0,0
 
 //# view-object 2,0
+
+//# view-object 3,0
 
 //# create-checkpoint 4
 
 //# view-checkpoint
-
 
 //# advance-epoch 6
 
 //# view-checkpoint
 
 //# run-graphql
-
 {
   checkpoint {
     sequenceNumber
   }
 }
+
 //# create-checkpoint
 
 //# view-checkpoint
 
 //# run-graphql
-
 {
   checkpoint {
     sequenceNumber
@@ -60,7 +64,6 @@ module Test::M1 {
 }
 
 //# run-graphql --show-usage --show-headers --show-service-version
-
 {
   checkpoint {
     sequenceNumber
@@ -74,55 +77,106 @@ module Test::M1 {
 // Demonstrates using variables
 // If the variable ends in _opt, this is the optional variant
 
-//# run-graphql --variables A
+//# run-graphql
 {
-  address(address: $A) {
-    objectConnection{
+  address(address: "@{A}") {
+    objects {
       edges {
         node {
           address
           digest
-          kind
+          owner {
+              __typename
+          }
         }
       }
     }
   }
 }
 
-//# run-graphql --variables Test A obj_2_0
+//# run-graphql
 {
-  address(address: $Test) {
-    objectConnection{
+  address(address: "@{Test}") {
+    objects {
       edges {
         node {
           address
           digest
-          kind
+          owner {
+              __typename
+          }
         }
       }
     }
   }
-  second: address(address: $A) {
-    objectConnection{
+  second: address(address: "@{A}") {
+    objects {
       edges {
         node {
           address
           digest
-          kind
+          owner {
+              __typename
+          }
         }
       }
     }
   }
 
-  object(address: $obj_2_0) {
+  val_objs: address(address: "@{validator_0}") {
+    objects {
+      edges {
+        node {
+          address
+          digest
+          owner {
+              __typename
+          }
+        }
+      }
+    }
+  }
+
+  object(address: "@{obj_2_0}") {
     version
     owner {
-      address
+      __typename
+      ... on AddressOwner {
+        owner {
+          address
+        }
+      }
     }
   }
 
 }
 
+//# run-graphql
+{
+  epoch {
+    validatorSet {
+      activeValidators {
+        address {
+          address
+        }
+      }
+    }
+  }
+  address(address: "@{validator_0}") {
+    address
+  }
+}
 
-//# view-graphql-variables
-// List all the graphql variables
+//# run-graphql
+# Since we set it at the init, it should be the same as 234
+{
+  epoch {
+    referenceGasPrice
+  }
+}
+
+//# run Test::M1::create --args 0 @A --gas-price 999
+
+//# run Test::M1::create --args 0 @A --gas-price 1000
+
+//# run Test::M1::create --args 0 @A --gas-price 235

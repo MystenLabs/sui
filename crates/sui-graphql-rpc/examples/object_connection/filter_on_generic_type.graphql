@@ -1,12 +1,10 @@
 {
-  objectConnection(filter: {type: "0x2::coin::Coin"}) {
+  objects(filter: {type: "0x2::coin::Coin"}) {
     edges {
       node {
         asMoveObject {
           contents {
-            type {
-              repr
-            }
+            type { repr }
           }
         }
       }

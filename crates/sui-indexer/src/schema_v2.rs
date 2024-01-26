@@ -153,7 +153,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    objects_history (object_id, object_version, checkpoint_sequence_number) {
+    objects_history (checkpoint_sequence_number, object_id, object_version) {
         object_id -> Bytea,
         object_version -> Int8,
         object_status -> Int2,
@@ -173,7 +173,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    objects_history_partition_0 (object_id, object_version, checkpoint_sequence_number) {
+    objects_history_partition_0 (checkpoint_sequence_number, object_id, object_version) {
         object_id -> Bytea,
         object_version -> Int8,
         object_status -> Int2,
@@ -299,22 +299,6 @@ diesel::table! {
     }
 }
 
-diesel::table! {
-    tx_indices (tx_sequence_number) {
-        tx_sequence_number -> Int8,
-        checkpoint_sequence_number -> Int8,
-        transaction_digest -> Bytea,
-        input_objects -> Array<Nullable<Bytea>>,
-        changed_objects -> Array<Nullable<Bytea>>,
-        senders -> Array<Nullable<Bytea>>,
-        payers -> Array<Nullable<Bytea>>,
-        recipients -> Array<Nullable<Bytea>>,
-        packages -> Array<Nullable<Bytea>>,
-        package_modules -> Array<Nullable<Text>>,
-        package_module_functions -> Array<Nullable<Text>>,
-    }
-}
-
 diesel::allow_tables_to_appear_in_same_query!(
     active_addresses,
     address_metrics,
@@ -339,8 +323,4 @@ diesel::allow_tables_to_appear_in_same_query!(
     tx_input_objects,
     tx_recipients,
     tx_senders,
-    tx_indices,
 );
-
-use diesel::sql_types::Text;
-diesel::sql_function! {fn query_cost(x : Text) ->Float8;}

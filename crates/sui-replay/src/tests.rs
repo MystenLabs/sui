@@ -6,7 +6,7 @@ use crate::types::ReplayEngineError;
 use crate::types::{MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD};
 use crate::LocalExec;
 use sui_config::node::ExpensiveSafetyCheckConfig;
-use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
+use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::SuiAddress;
@@ -103,7 +103,7 @@ async fn extract_one_system_tx(
     mut txs: Vec<TransactionDigest>,
 ) -> Option<TransactionDigest> {
     let opts = SuiTransactionBlockResponseOptions::full_content();
-    txs.retain(|q| *q != TransactionDigest::genesis());
+    txs.retain(|q| *q != TransactionDigest::genesis_marker());
 
     for ch in txs.chunks(*QUERY_MAX_RESULT_LIMIT) {
         match rpc_client
@@ -141,7 +141,14 @@ async fn execute_replay(url: &str, tx: &TransactionDigest) -> Result<(), ReplayE
         .await?
         .init_for_execution()
         .await?
-        .execute_transaction(tx, ExpensiveSafetyCheckConfig::default(), true, None, None)
+        .execute_transaction(
+            tx,
+            ExpensiveSafetyCheckConfig::default(),
+            true,
+            None,
+            None,
+            None,
+        )
         .await?
         .check_effects()?;
     tokio::task::yield_now().await;
@@ -149,7 +156,14 @@ async fn execute_replay(url: &str, tx: &TransactionDigest) -> Result<(), ReplayE
         .await?
         .init_for_execution()
         .await?
-        .execute_transaction(tx, ExpensiveSafetyCheckConfig::default(), false, None, None)
+        .execute_transaction(
+            tx,
+            ExpensiveSafetyCheckConfig::default(),
+            false,
+            None,
+            None,
+            None,
+        )
         .await?
         .check_effects()?;
     tokio::task::yield_now().await;

@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::committee::CommitteeTrait;
 use anyhow::{anyhow, Error};
 use derive_more::{AsMut, AsRef, From};
 use eyre::eyre;
@@ -25,6 +26,7 @@ pub use fastcrypto::traits::{
     VerifyingKey,
 };
 use fastcrypto_zkp::bn254::utils::big_int_str_to_bytes;
+use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
 use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
 use roaring::RoaringBitmap;
@@ -39,7 +41,7 @@ use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use strum::EnumString;
 
-use crate::base_types::{AuthorityName, SuiAddress};
+use crate::base_types::{AuthorityName, ConciseableName, SuiAddress};
 use crate::committee::{Committee, EpochId, StakeUnit};
 use crate::error::{SuiError, SuiResult};
 use crate::signature::GenericSignature;
@@ -346,6 +348,13 @@ impl PublicKey {
             PublicKey::ZkLogin(_) => SignatureScheme::ZkLoginAuthenticator,
         }
     }
+
+    pub fn from_zklogin_inputs(inputs: &ZkLoginInputs) -> SuiResult<Self> {
+        Ok(PublicKey::ZkLogin(ZkLoginPublicIdentifier::new(
+            inputs.get_iss(),
+            inputs.get_address_seed(),
+        )?))
+    }
 }
 
 /// Defines the compressed version of the public key that we pass around
@@ -377,17 +386,22 @@ impl AuthorityPublicKeyBytes {
         write!(f, "k#{}", s)?;
         Ok(())
     }
+}
+
+impl<'a> ConciseableName<'a> for AuthorityPublicKeyBytes {
+    type ConciseTypeRef = ConciseAuthorityPublicKeyBytesRef<'a>;
+    type ConciseType = ConciseAuthorityPublicKeyBytes;
 
     /// Get a ConciseAuthorityPublicKeyBytesRef. Usage:
     ///
     ///   debug!(name = ?authority.concise());
     ///   format!("{:?}", authority.concise());
-    pub fn concise(&self) -> ConciseAuthorityPublicKeyBytesRef<'_> {
+    fn concise(&'a self) -> ConciseAuthorityPublicKeyBytesRef<'a> {
         ConciseAuthorityPublicKeyBytesRef(self)
     }
 
-    pub fn into_concise(self) -> ConciseAuthorityPublicKeyBytes {
-        ConciseAuthorityPublicKeyBytes(self)
+    fn concise_owned(&self) -> ConciseAuthorityPublicKeyBytes {
+        ConciseAuthorityPublicKeyBytes(*self)
     }
 }
 

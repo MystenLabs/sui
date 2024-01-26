@@ -69,7 +69,7 @@ npm install @mysten/zklogin@experimental
 
 ## Configure a developer account with OpenID provider
 
-Sui currently supports Google, Facebook, and Twitch. More OpenID-compatible providers will be enabled in the future.
+See [latest table](#openid-providers) for all enabled providers. More OpenID-compatible providers will be enabled in the future.
 
 For example, the following TypeScript code can be used to construct a login URL for testing.
 
@@ -138,13 +138,13 @@ _Go to Settings_
 
 ### Kakao
 
-1. Register for a Kakao developer account. Access the [dashboard](https://developers.kakao.com/console/app) and add an application. 
+1. Register for a Kakao developer account. Access the [dashboard](https://developers.kakao.com/console/app) and add an application.
 
 ![1](images/zklogin-kakao1.png "Add applications to Kakao")
 
 *Add applications to Kakao*
 
-1. Go to "App Keys" where you can find the corresponding client ID for different platforms. 
+1. Go to "App Keys" where you can find the corresponding client ID for different platforms.
 
 - Native app key: Used to call APIs through the Android or iOS SDK.
 - JavaScript key: Used to call APIs through the JavaScript SDK.
@@ -162,27 +162,70 @@ _Go to Settings_
 
 ### Slack
 
-1. Register for a Slack developer account. Access the [dashboard](https://api.slack.com/apps) and go to "Create New App" then choose "From scratch". 
+1. Register for a Slack developer account. Access the [dashboard](https://api.slack.com/apps) and go to "Create New App" then choose "From scratch".
 
 	![1](images/zklogin-slack1.png "Create app in Slack")
-	
+
 	*Create app in Slack*
 
-1. Find the Client ID and Client Secret under "App Credentials". 
+1. Find the Client ID and Client Secret under "App Credentials".
 
 	![1](images/zklogin-slack2.png "Find Client ID and Client Secret")
-	
+
 	*Find Client ID and Client Secret*
 
 1. Set Redirect URL in "OAuth & Permissions" under "Features". This should be the wallet or application frontend.
 
 	![1](images/zklogin-slack3.png "Set Redirect URL")
-	
+
 	*Set Redirect URL*
+
+### Apple
+
+1. Register for an [Apple developer account](https://developer.apple.com/). Go to the **Certificates, Identifiers and Profiles** section.
+
+	![1](images/zklogin-apple1.png "Click on Certificates, Identifiers and Profiles")
+	
+	*This is where you can create Certificates, Identifiers and Profiles*
+
+1. Create an App ID
+    - From the sidebar, select **Identifiers** and click the blue plus icon to create a new one.
+    - Choose **App IDs** as the identifier type and click **Continue**.
+    - In the next screen, enter a descriptive name for your App ID and a unique Bundle ID in reverse-dns format (for example, `com.example.app`).
+    - Scroll down to the list of capabilities and enable **Sign In with Apple** by checking the box next to it.
+
+	![1](images/zklogin-apple2.png "Create an App ID")
+	
+	*This is how you can enable Sign In with Apple for your App ID*
+
+1. Create a Services ID
+
+	A Services ID identifies a specific instance of your app and is used as the OAuth `client_id`. You need a Services ID if you want to use **Sign In with Apple** for your web app.
+
+	![1](images/zklogin-apple3.png "Create a Services ID")
+
+	*This is where you Create a Services ID*
+
+1. Create a new identifier and select **Services IDs** as the identifier type.
+
+    - In the next step, enter a name for your app that will be displayed to the users during the sign-in process and a unique identifier that will be used as the OAuth `client_id`. Make sure to enable **Sign In with Apple** by checking the box next to it.
+	- Click the **Configure** button next to **Sign In with Apple** to set up the domain and redirect URLs for your app. You need to specify the domain name where your app is hosted and the redirect URL that will handle the OAuth response from Apple.
+
+	Select the App ID that you created in the previous step as the Primary App ID. This will associate your Services ID with your App ID.
+
+	Enter the domain name of your app (for example, example-app.com) and the redirect URL that will receive the authorization code from Apple (for example, https://example-app.com/redirect). Note that Apple does not allow localhost or IP addresses as valid domains or redirect URLs.
+
+	Click **Save** and then **Continue** and **Register** until you complete this step.
+
+	You have now created an App ID and a Services ID for your app. The identifier of your Services ID is your OAuth `client_id`. In my example, that is com.example.client.
+
+	![1](images/zklogin-apple4.png "Set Redirect URL")
+	
+	*This is where you Set Redirect URL*
 
 ## Get JWT Token
 
-1. Generate an ephemeral KeyPair. Follow the same process as you would generating a KeyPair in a traditional wallet. See [Sui SDK](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs) for details.
+1. Generate an ephemeral KeyPair. Follow the same process as you would generating a KeyPair in a traditional wallet. See [Sui SDK](https://sdk.mystenlabs.com/typescript/cryptography/keypairs) for details.
 
 1. Set the expiration time for the ephemeral KeyPair. The wallet decides whether the maximum epoch is the current epoch or later. The wallet also determines whether this is adjustable by the user.
 
@@ -202,18 +245,18 @@ const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, randomnes
 ```
 The auth flow URL can be constructed with `$CLIENT_ID`, `$REDIRECT_URL` and `$NONCE`.
 
-For some providers ("Yes" for "Auth Flow Only"), the JWT token can be found immediately in the redirect URL after the auth flow. 
+For some providers ("Yes" for "Auth Flow Only"), the JWT token can be found immediately in the redirect URL after the auth flow.
 
 For other providers ("No" for "Auth Flow Only"), the auth flow only returns a code (`$AUTH_CODE`) in redirect URL. To retrieve the JWT token, an additional POST call is required with "Token Exchange URL".
 
-| Provider | Auth Flow URL | Token Exchange URL | Auth Flow Only | 
+| Provider | Auth Flow URL | Token Exchange URL | Auth Flow Only |
 | ----------- | ----------- | ----------- | ----------- |
 | Google | `https://accounts.google.com/o/oauth2/v2/auth?client_id=$CLIENT_ID&response_type=id_token&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE` | N/A | Yes |
 | Facebook | `https://www.facebook.com/v17.0/dialog/oauth?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE&response_type=id_token` | N/A | Yes |
 | Twitch | `https://id.twitch.tv/oauth2/authorize?client_id=$CLIENT_ID&force_verify=true&lang=en&login_type=login&redirect_uri=$REDIRECT_URL& response_type=id_token&scope=openid&nonce=$NONCE` | N/A | Yes |
 | Kakao | `https://kauth.kakao.com/oauth/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE` | `https://kauth.kakao.com/oauth/token?grant_type=authorization_code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&code=$AUTH_CODE` | No |
 | Apple | `https://appleid.apple.com/auth/authorize?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=email&response_mode=form_post&response_type=code%20id_token&nonce=$NONCE` | N/A | Yes |
-| Slack | `https://slack.com/openid/connect/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE&scope=openid` | `https://slack.com/api/openid.connect.token?code=$AUTH_CODE&client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET` | No | 
+| Slack | `https://slack.com/openid/connect/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE&scope=openid` | `https://slack.com/api/openid.connect.token?code=$AUTH_CODE&client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET` | No |
 
 ## Decoding JWT
 
@@ -232,7 +275,7 @@ To decode the JWT you can use a library like: `jwt_decode:` and map the response
 const decodedJwt = jwt_decode(encodedJWT) as JwtPayload;
 
 export interface JwtPayload {
-   iss?: string;  
+   iss?: string;
    sub?: string;  //Subject ID
    aud?: string[] | string;
    exp?: number;
@@ -274,7 +317,7 @@ const zkLoginUserAddress = jwtToAddress(jwt, userSalt);
 
 ## Get the Zero-Knowledge Proof
 
-The next step is to fetch the ZK proof. This is an attestation (proof) over the ephemeral key pair that proves the ephemeral key pair is valid. 
+The next step is to fetch the ZK proof. This is an attestation (proof) over the ephemeral key pair that proves the ephemeral key pair is valid.
 
 First, generate the extended ephemeral public key to use as an input to the ZKP.
 
@@ -288,20 +331,20 @@ You need to fetch a new ZK proof if the previous ephemeral key pair is expired o
 
 Because generating a ZK proof can be resource-intensive and potentially slow on the client side, it's advised that wallets utilize a backend service endpoint dedicated to ZK proof generation.
 
-There are two options:  
+There are two options:
 1. Call the Mysten Labs-maintained proving service
-1. Run the proving service in your backend using the provided Docker images. 
+1. Run the proving service in your backend using the provided Docker images.
 
 ### Call the Mysten Labs-maintained proving service
 
 If you wish to use the Mysten ran ZK Proving Service for Mainnet, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
 
-To use `prover-dev` endpoint, you do not need to whitelist client IDs. Note that the proof generated with the `prover-dev` endpoint can only be submitted for Devnet zkLogin transactions, submitting it to Testnet or Mainnet fails.  
+To use `prover-dev` endpoint, you do not need to whitelist client IDs. Note that the proof generated with the `prover-dev` endpoint can only be submitted for Devnet zkLogin transactions, submitting it to Testnet or Mainnet fails.
 
 | Network | Prover URL |
 | ------- | ---------- |
-| Mainnet, Testnet | https://prover.mystenlabs.com/v1 | 
-| Devnet | https://prover-dev.mystenlabs.com/v1 | 
+| Mainnet, Testnet | https://prover.mystenlabs.com/v1 |
+| Devnet | https://prover-dev.mystenlabs.com/v1 |
 
 You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`. The following examples show two sample requests with the first using BigInt encoding and the second using Base64.
 
@@ -338,7 +381,7 @@ Response:
 		["12744153306027049365027606189549081708414309055722206371798414155740784907883",
 		"17883388059920040098415197241200663975335711492591606641576557652282627716838"],
 		["1","0"]],
-		
+
 		"c":["14769767061575837119226231519343805418804298487906870764117230269550212315249",
 		"19108054814174425469923382354535700312637807408963428646825944966509611405530","1"]
 		},
@@ -351,7 +394,7 @@ Response:
 
 To avoid possible CORS errors in Frontend apps, it is suggested to delegate this call to a backend service.
 
-The response can be mapped to the inputs parameter type of `getZkLoginSignature` of zkLogin SDK. 
+The response can be mapped to the inputs parameter type of `getZkLoginSignature` of zkLogin SDK.
 
 ```typescript
 const proofResponse = await post('/your-internal-api/zkp/get', zkpRequestPayload);
@@ -364,8 +407,6 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 ```
 
 ### Run the proving service in your backend
-
-1. Download two images from from Docker Hub [repository](https://hub.docker.com/repository/docker/mysten/zklogin/general) that are tagged as `prover` and `prover-fe`. 
 
 1. Download the [Groth16 proving key zkey file](https://docs.circom.io/getting-started/proving-circuits/) that will be later used as an argument to run the prover. There are zkeys available for Mainnet and Testnet, as well as a test zkey for Devnet. See [the Ceremony section](#ceremony) for more details on how the main proving key is generated. Please install [git lfs](https://git-lfs.com/) which is needed before downloading the zkey.
 
@@ -385,31 +426,39 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 		| Mainnet, Testnet |  `zkLogin-main.zkey` | `060beb961802568ac9ac7f14de0fbcd55e373e8f5ec7cc32189e26fb65700aa4e36f5604f868022c765e634d14ea1cd58bd4d79cef8f3cf9693510696bcbcbce` |
 		| Devnet | `zkLogin-test.zkey` | `686e2f5fd969897b1c034d7654799ee2c3952489814e4eaaf3d7e1bb539841047ae8ee5fdcdaca5f4ddd76abb5a8e8eb77b44b693a2ba9d4be57e94292b26ce2` |
 
-1. Run `prover` at `PORT1` with the downloaded zkey. This needs to be run on Linux-based machines (amd64). Further, we recommended using at least 16 vcpu, preferably an AMD cpu and at least 16gb ram for production use. Whereas 8 vcpu, 8gb ram works for testing (but its not fast).
+1. For the next step, you need two Docker images from the [mysten/zklogin repository](https://hub.docker.com/repository/docker/mysten/zklogin/general) (tagged as `prover` and `prover-fe`). To simplify, a docker compose file is available that automates this process. Run `docker compose` with the downloaded `zkey` from the same directory as the YAML file.
 
-	```bash
-	docker run \
-	-e ZKEY=/app/binaries/zkLogin.zkey \
-	-e WITNESS_BINARIES=/app/binaries \
-	-v <path_to_zkLogin.zkey>:/app/binaries/zkLogin.zkey \
-	-p PORT1:8080 \
-	<prover-image>
-	```
+```yaml
+services:
+  backend:
+    image: mysten/zklogin:prover-stable
+    volumes:
+      # The ZKEY environment variable must be set to the path of the zkey file.
+      - ${ZKEY}:/app/binaries/zkLogin.zkey
+    environment:
+      - ZKEY=/app/binaries/zkLogin.zkey
+      - WITNESS_BINARIES=/app/binaries
 
-1. Run `prover-fe` at `PORT2`:
+  frontend:
+    image: mysten/zklogin:prover-fe-stable
+    command: "8080"
+    ports:
+      # The PROVER_PORT environment variable must be set to the desired port.
+      - "${PROVER_PORT}:8080"
+    environment:
+      - PROVER_URI=http://backend:8080/input
+      - NODE_ENV=production
+      - DEBUG=zkLogin:info,jwks
+      # The default timeout is 15 seconds. Uncomment the following line to change it.
+      # - PROVER_TIMEOUT=30
+```
 
-	```bash
-	docker run \
-		-e PROVER_URI='http://localhost:PORT1/input' \
-		-e NODE_ENV=production \
-		-e DEBUG=zkLogin:info,jwks \
-		-p PORT2:8080 \
-		<prover-fe-image> 8080
-	```
+```
+ZKEY=<path_to_zkLogin.zkey> PROVER_PORT=<PROVER_PORT> docker compose up
+```
 
-1. Expose the `prover-fe` service appropriately and keep the prover service internal.
-1. To call the proving service, the following two endpoints are supported:
-   - `/ping`: To test if the service is up. Running `curl http://localhost:PORT2/ping` should return `pong`.
+1. To call the service, the following two endpoints are supported:
+   - `/ping`: To test if the service is up. Running `curl http://localhost:PROVER_PORT/ping` should return `pong`.
    - `/v1`: The request and response are the same as the Mysten Labs maintained service.
 
 A few things to note:
@@ -422,7 +471,7 @@ A few things to note:
 
 ## Assemble the zkLogin signature and submit the transaction
 
-First, sign the transaction bytes with the ephemeral private key using the key pair generated previously. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs). Make sure that the transaction `sender ` is also defined.
+First, sign the transaction bytes with the ephemeral private key using the key pair generated previously. This is the same as [traditional KeyPair signing](https://sdk.mystenlabs.com/typescript/cryptography/keypairs). Make sure that the transaction `sender ` is also defined.
 
 ```typescript
  const ephemeralKeyPair = new Ed25519Keypair();
@@ -481,7 +530,7 @@ However, the ephemeral key pair needs to be treated as a secret akin to a key pa
 Consequently, you should not store them persistently in an unsecure storage location, on any platform. For example, on browsers, use session storage instead of local storage to store the ephemeral key pair and the ZK proof.
 
 
-# How zkLogin Works
+## How zkLogin Works {#how-zklogin-works}
 
 In rough sketches, the zkLogin protocol relies on the following:
 
@@ -658,7 +707,7 @@ In the future, the user can opt in to verify their OAuth identity associated wit
 
 ### What providers is zkLogin compatible with?
 
-zkLogin can support providers that work with OpenID Connect built on top of the OAuth 2.0 framework. This is a subset of OAuth 2.0 compatible providers. Sui currently supports Google, Facebook and Twitch. Other compatible providers will be enabled via protocol upgrades in the future.
+zkLogin can support providers that work with OpenID Connect built on top of the OAuth 2.0 framework. This is a subset of OAuth 2.0 compatible providers. See [latest table](#openid-providers) for all enabled providers. Other compatible providers will be enabled via protocol upgrades in the future.
 
 ### How is a zkLogin Wallet different from a traditional private key wallet?
 
@@ -758,12 +807,12 @@ The key differentiators that zkLogin brings to Sui are:
 
 ## How to verify a zkLogin signature offchain?
 
-The following options support a zkLogin signature over either transaction data or personal message. 
+The following options support a zkLogin signature over either transaction data or personal message.
 
-1. Use keytool: See usage in keytool. 
+1. Use keytool: See usage in keytool.
 
 ```bash
 $SUI_BINARY keytool zk-login-sig-verify -h
 ```
 
-2. Use a self hosted server endpoint: See usage in [zklogin-verifier](https://github.com/MystenLabs/zklogin-verifier). 
+2. Use a self hosted server endpoint: See usage in [zklogin-verifier](https://github.com/MystenLabs/zklogin-verifier).

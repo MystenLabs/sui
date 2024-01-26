@@ -1,4 +1,4 @@
-processed 3 tasks
+processed 7 tasks
 
 init:
 A: object(0,0)
@@ -8,11 +8,11 @@ Response: {
   "data": null,
   "errors": [
     {
-      "message": "Fields with directives are not supported",
+      "message": "Directive `@deprecated` is not supported. Supported directives are `@include`, `@skip`",
       "locations": [
         {
           "line": 2,
-          "column": 3
+          "column": 19
         }
       ],
       "extensions": {
@@ -22,16 +22,16 @@ Response: {
   ]
 }
 
-task 2 'run-graphql'. lines 12-40:
+task 2 'run-graphql'. lines 12-42:
 Response: {
   "data": null,
   "errors": [
     {
-      "message": "Fragments with directives are not supported",
+      "message": "Directive `@deprecated` is not supported. Supported directives are `@include`, `@skip`",
       "locations": [
         {
           "line": 1,
-          "column": 1
+          "column": 29
         }
       ],
       "extensions": {
@@ -39,4 +39,28 @@ Response: {
       }
     }
   ]
+}
+
+task 3 'run-graphql'. lines 44-48:
+Response: {
+  "data": {}
+}
+
+task 4 'run-graphql'. lines 50-54:
+Response: {
+  "data": {
+    "chainIdentifier": "407cd87e"
+  }
+}
+
+task 5 'run-graphql'. lines 56-60:
+Response: {
+  "data": {
+    "chainIdentifier": "407cd87e"
+  }
+}
+
+task 6 'run-graphql'. lines 62-66:
+Response: {
+  "data": {}
 }

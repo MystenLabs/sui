@@ -3,14 +3,6 @@
 
 /// A variable-sized container that can hold any type. Indexing is 0-based, and
 /// vectors are growable. This module has many native functions.
-/// Verification of modules that use this one uses model functions that are implemented
-/// directly in Boogie. The specification language has built-in functions operations such
-/// as `singleton_vector`. There are some helper functions defined here for specifications in other
-/// modules as well.
-///
-/// >Note: We did not verify most of the
-/// Move functions here because many have loops, requiring loop invariants to prove, and
-/// the return on investment didn't seem worth it for these simple functions.
 module std::vector {
 
     /// The index into the vector is out of bounds
@@ -59,12 +51,6 @@ module std::vector {
         push_back(&mut v, e);
         v
     }
-    spec singleton {
-        // TODO: when using opaque here, we get verification errors.
-        // pragma opaque;
-        aborts_if false;
-        ensures result == vec(e);
-    }
 
     /// Reverses the order of the elements in the vector `v` in place.
     public fun reverse<Element>(v: &mut vector<Element>) {
@@ -79,10 +65,6 @@ module std::vector {
             back_index = back_index - 1;
         }
     }
-    spec reverse {
-        pragma intrinsic = true;
-    }
-
 
     /// Pushes all of the elements of the `other` vector into the `lhs` vector.
     public fun append<Element>(lhs: &mut vector<Element>, other: vector<Element>) {
@@ -90,13 +72,6 @@ module std::vector {
         while (!is_empty(&other)) push_back(lhs, pop_back(&mut other));
         destroy_empty(other);
     }
-    spec append {
-        pragma intrinsic = true;
-    }
-    spec is_empty {
-        pragma intrinsic = true;
-    }
-
 
     /// Return `true` if the vector `v` has no elements and `false` otherwise.
     public fun is_empty<Element>(v: &vector<Element>): bool {
@@ -114,9 +89,6 @@ module std::vector {
         };
         false
     }
-    spec contains {
-        pragma intrinsic = true;
-    }
 
     /// Return `(true, i)` if `e` is in the vector `v` at index `i`.
     /// Otherwise, returns `(false, 0)`.
@@ -128,9 +100,6 @@ module std::vector {
             i = i + 1;
         };
         (false, 0)
-    }
-    spec index_of {
-        pragma intrinsic = true;
     }
 
     /// Remove the `i`th element of the vector `v`, shifting all subsequent elements.
@@ -144,9 +113,6 @@ module std::vector {
         len = len - 1;
         while (i < len) swap(v, i, { i = i + 1; i });
         pop_back(v)
-    }
-    spec remove {
-        pragma intrinsic = true;
     }
 
     /// Insert `e` at position `i` in the vector `v`.
@@ -165,9 +131,6 @@ module std::vector {
             i = i + 1
         }
     }
-    spec insert {
-        pragma intrinsic = true;
-    }
 
     /// Swap the `i`th element of the vector `v` with the last element and then pop the vector.
     /// This is O(1), but does not preserve ordering of elements in the vector.
@@ -177,44 +140,5 @@ module std::vector {
         let last_idx = length(v) - 1;
         swap(v, i, last_idx);
         pop_back(v)
-    }
-    spec swap_remove {
-        pragma intrinsic = true;
-    }
-
-    // =================================================================
-    // Module Specification
-
-    spec module {} // Switch to module documentation context
-
-    /// # Helper Functions
-
-    spec module {
-        /// Check if `v1` is equal to the result of adding `e` at the end of `v2`
-        fun eq_push_back<Element>(v1: vector<Element>, v2: vector<Element>, e: Element): bool {
-            len(v1) == len(v2) + 1 &&
-            v1[len(v1)-1] == e &&
-            v1[0..len(v1)-1] == v2[0..len(v2)]
-        }
-
-        /// Check if `v` is equal to the result of concatenating `v1` and `v2`
-        fun eq_append<Element>(v: vector<Element>, v1: vector<Element>, v2: vector<Element>): bool {
-            len(v) == len(v1) + len(v2) &&
-            v[0..len(v1)] == v1 &&
-            v[len(v1)..len(v)] == v2
-        }
-
-        /// Check `v1` is equal to the result of removing the first element of `v2`
-        fun eq_pop_front<Element>(v1: vector<Element>, v2: vector<Element>): bool {
-            len(v1) + 1 == len(v2) &&
-            v1 == v2[1..len(v2)]
-        }
-
-        /// Check that `v1` is equal to the result of removing the element at index `i` from `v2`.
-        fun eq_remove_elem_at_index<Element>(i: u64, v1: vector<Element>, v2: vector<Element>): bool {
-            len(v1) + 1 == len(v2) &&
-            v1[0..i] == v2[0..i] &&
-            v1[i..len(v1)] == v2[i + 1..len(v2)]
-        }
     }
 }

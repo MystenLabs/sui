@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 32;
+const MAX_PROTOCOL_VERSION: u64 = 35;
 
 // Record history of protocol version allocations here:
 //
@@ -97,7 +97,14 @@ const MAX_PROTOCOL_VERSION: u64 = 32;
 //             Enable transfer to object in testnet.
 //             Enable Narwhal CertificateV2 on mainnet
 //             Make critbit tree and order getters public in deepbook.
-//             Enable effects v2 on mainnet.
+// Version 33: Add support for `receiving_object_id` function in framework
+//             Hardened OTW check.
+//             Enable transfer-to-object in mainnet.
+//             Enable shared object deletion in testnet.
+//             Enable effects v2 in mainnet.
+// Version 34: Framework changes for random beacon.
+// Version 35: Add poseidon hash function.
+//             Enable coin deny list.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -353,6 +360,22 @@ struct FeatureFlags {
     // It can be used to detect consensus output folk.
     #[serde(skip_serializing_if = "is_false")]
     include_consensus_digest_in_prologue: bool,
+
+    // If true, use the hardened OTW check
+    #[serde(skip_serializing_if = "is_false")]
+    hardened_otw_check: bool,
+
+    // If true allow calling receiving_object_id function
+    #[serde(skip_serializing_if = "is_false")]
+    allow_receiving_object_id: bool,
+
+    // Enable the poseidon hash function
+    #[serde(skip_serializing_if = "is_false")]
+    enable_poseidon: bool,
+
+    // If true, enable the coin deny list.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_coin_deny_list: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -816,10 +839,15 @@ pub struct ProtocolConfig {
     hash_blake2b256_cost_base: Option<u64>,
     hash_blake2b256_data_cost_per_byte: Option<u64>,
     hash_blake2b256_data_cost_per_block: Option<u64>,
+
     // hash::keccak256
     hash_keccak256_cost_base: Option<u64>,
     hash_keccak256_data_cost_per_byte: Option<u64>,
     hash_keccak256_data_cost_per_block: Option<u64>,
+
+    // poseidon::poseidon_bn254
+    poseidon_bn254_cost_base: Option<u64>,
+    poseidon_bn254_cost_per_block: Option<u64>,
 
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
@@ -881,6 +909,10 @@ impl ProtocolConfig {
                 self.version
             )))
         }
+    }
+
+    pub fn allow_receiving_object_id(&self) -> bool {
+        self.feature_flags.allow_receiving_object_id
     }
 
     pub fn receiving_objects_supported(&self) -> bool {
@@ -1058,6 +1090,18 @@ impl ProtocolConfig {
     pub fn include_consensus_digest_in_prologue(&self) -> bool {
         self.feature_flags.include_consensus_digest_in_prologue
     }
+
+    pub fn hardened_otw_check(&self) -> bool {
+        self.feature_flags.hardened_otw_check
+    }
+
+    pub fn enable_poseidon(&self) -> bool {
+        self.feature_flags.enable_poseidon
+    }
+
+    pub fn enable_coin_deny_list(&self) -> bool {
+        self.feature_flags.enable_coin_deny_list
+    }
 }
 
 #[cfg(not(msim))]
@@ -1210,16 +1254,16 @@ impl ProtocolConfig {
             max_event_emit_size: Some(250 * 1024),
             max_move_vector_len: Some(256 * 1024),
 
-            /// TODO: Is this too low/high?
+            // TODO: Is this too low/high?
             max_back_edges_per_function: Some(10_000),
 
-            /// TODO:  Is this too low/high?
+            // TODO:  Is this too low/high?
             max_back_edges_per_module: Some(10_000),
 
-            /// TODO: Is this too low/high?
+            // TODO: Is this too low/high?
             max_verifier_meter_ticks_per_function: Some(6_000_000),
 
-            /// TODO: Is this too low/high?
+            // TODO: Is this too low/high?
             max_meter_ticks_per_module: Some(6_000_000),
 
             object_runtime_max_num_cached_objects: Some(1000),
@@ -1248,7 +1292,7 @@ impl ProtocolConfig {
             // MUSTFIX: This number should be increased to at least 2000 (20%) for mainnet.
             buffer_stake_for_protocol_upgrade_bps: Some(0),
 
-            /// === Native Function Costs ===
+            // === Native Function Costs ===
             // `address` module
             // Cost params for the Move native function `address::from_bytes(bytes: vector<u8>)`
             address_from_bytes_cost_base: Some(52),
@@ -1272,7 +1316,7 @@ impl ProtocolConfig {
             dynamic_field_borrow_child_object_cost_base: Some(100),
             dynamic_field_borrow_child_object_child_ref_cost_per_byte: Some(10),
             dynamic_field_borrow_child_object_type_cost_per_byte: Some(10),
-             // Cost params for the Move native function `remove_child_object<Child: key>(parent: address, id: address): Child`
+            // Cost params for the Move native function `remove_child_object<Child: key>(parent: address, id: address): Child`
             dynamic_field_remove_child_object_cost_base: Some(100),
             dynamic_field_remove_child_object_child_cost_per_byte: Some(2),
             dynamic_field_remove_child_object_type_cost_per_byte: Some(2),
@@ -1288,7 +1332,7 @@ impl ProtocolConfig {
             event_emit_cost_base: Some(52),
             event_emit_value_size_derivation_cost_per_byte: Some(2),
             event_emit_tag_size_derivation_cost_per_byte: Some(5),
-            event_emit_output_cost_per_byte:Some(10),
+            event_emit_output_cost_per_byte: Some(10),
 
             //  `object` module
             // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
@@ -1399,6 +1443,9 @@ impl ProtocolConfig {
             hash_keccak256_data_cost_per_byte: Some(2),
             hash_keccak256_data_cost_per_block: Some(2),
 
+            poseidon_bn254_cost_base: None,
+            poseidon_bn254_cost_per_block: None,
+
             // hmac::hmac_sha3_256
             hmac_hmac_sha3_256_cost_base: Some(52),
             hmac_hmac_sha3_256_input_cost_per_byte: Some(2),
@@ -1433,7 +1480,6 @@ impl ProtocolConfig {
             max_age_of_jwk_in_epochs: None,
 
             random_beacon_reduction_allowed_delta: None,
-
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -1686,8 +1732,32 @@ impl ProtocolConfig {
 
                     // enable nw cert v2 on mainnet
                     cfg.feature_flags.narwhal_certificate_v2 = true;
+                }
+                33 => {
+                    cfg.feature_flags.hardened_otw_check = true;
+                    cfg.feature_flags.allow_receiving_object_id = true;
+
+                    // Enable transfer-to-object in mainnet
+                    cfg.transfer_receive_object_cost_base = Some(52);
+                    cfg.feature_flags.receive_objects = true;
+
+                    // Enable shared object deletion in testnet and devnet
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.shared_object_deletion = true;
+                    }
 
                     cfg.feature_flags.enable_effects_v2 = true;
+                }
+                34 => {}
+                35 => {
+                    // Add costs for poseidon::poseidon_bn254
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_poseidon = true;
+                        cfg.poseidon_bn254_cost_base = Some(260);
+                        cfg.poseidon_bn254_cost_per_block = Some(10);
+                    }
+
+                    cfg.feature_flags.enable_coin_deny_list = true;
                 }
                 // Use this template when making changes:
                 //

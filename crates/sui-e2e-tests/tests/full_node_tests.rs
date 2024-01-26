@@ -11,6 +11,7 @@ use rand::rngs::OsRng;
 use serde_json::json;
 use std::sync::Arc;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
+use sui_config::node::RunWithRange;
 use sui_core::authority::EffectsNotifyRead;
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, EventPage, SuiEvent, SuiExecutionStatus,
@@ -36,7 +37,7 @@ use sui_types::error::{SuiError, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::message_envelope::Message;
 use sui_types::messages_grpc::TransactionInfoRequest;
-use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
+use sui_types::object::{MoveObject, Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
@@ -95,7 +96,13 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
 
     let context = &mut test_cluster.wallet;
 
-    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
+    let sender = context
+        .config
+        .keystore
+        .addresses()
+        .first()
+        .cloned()
+        .unwrap();
     let (package_ref, counter_ref) = publish_basics_package_and_make_counter(context).await;
 
     let response = increment_counter(
@@ -544,7 +551,13 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
             let (sender, object_to_split, gas_obj) = {
                 let context = &mut context.lock().await;
 
-                let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
+                let sender = context
+                    .config
+                    .keystore
+                    .addresses()
+                    .first()
+                    .cloned()
+                    .unwrap();
 
                 let mut coins = context.gas_objects(sender).await.unwrap();
                 let object_to_split = coins.swap_remove(0).1.object_ref();
@@ -672,15 +685,15 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
         }
         other => panic!("Failed to get SuiEvent, but {:?}", other),
     };
-    let type_tag = parse_struct_tag(&struct_tag_str).unwrap();
-    let expected_parsed_event = Event::move_event_to_move_struct(
-        &type_tag,
-        &bcs,
+    let struct_tag = parse_struct_tag(&struct_tag_str).unwrap();
+    let layout = MoveObject::get_layout_from_struct_tag(
+        struct_tag.clone(),
         &**node.state().epoch_store_for_testing().module_cache(),
-    )
-    .unwrap();
+    )?;
+
+    let expected_parsed_event = Event::move_event_to_move_struct(&bcs, layout).unwrap();
     let (_, expected_parsed_event) =
-        type_and_fields_from_move_struct(&type_tag, expected_parsed_event);
+        type_and_fields_from_move_struct(&struct_tag, expected_parsed_event);
     let expected_event = SuiEvent {
         id: EventID {
             tx_digest: digest,
@@ -689,7 +702,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
         package_id,
         transaction_module: ident_str!("devnet_nft").into(),
         sender,
-        type_: type_tag,
+        type_: struct_tag,
         parsed_json: expected_parsed_event.to_json_value(),
         bcs,
         timestamp_ms: None,
@@ -1223,7 +1236,13 @@ async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
 
     let context = &mut test_cluster.wallet;
 
-    let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
+    let sender = context
+        .config
+        .keystore
+        .addresses()
+        .first()
+        .cloned()
+        .unwrap();
 
     // TODO: this is publishing the wrong package - we should be publishing the one in `sui-core/src/unit_tests/data` instead.
     let package_ref = publish_basics_package(context).await;
@@ -1317,7 +1336,10 @@ async fn test_access_old_object_pruned() {
         let epoch_store = state.epoch_store_for_testing();
         assert_eq!(
             state
-                .handle_transaction(&epoch_store, state.verify_transaction(tx.clone()).unwrap())
+                .handle_transaction(
+                    &epoch_store,
+                    epoch_store.verify_transaction(tx.clone()).unwrap()
+                )
                 .await
                 .unwrap_err(),
             SuiError::UserInputError {
@@ -1365,4 +1387,95 @@ async fn transfer_coin(
     );
     let resp = context.execute_transaction_must_succeed(txn).await;
     Ok((object_to_send.0, sender, receiver, resp.digest, gas_object))
+}
+
+#[sim_test]
+async fn test_full_node_run_with_range_checkpoint() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+    let stop_after_checkpoint_seq = 5;
+    let want_run_with_range = Some(RunWithRange::Checkpoint(stop_after_checkpoint_seq));
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(10_000)
+        .with_fullnode_run_with_range(want_run_with_range)
+        .build()
+        .await;
+
+    // wait for node to signal that we reached and processed our desired epoch
+    let got_run_with_range = test_cluster.wait_for_run_with_range_shutdown_signal().await;
+
+    // ensure we got the expected RunWithRange on shutdown channel
+    assert_eq!(got_run_with_range, want_run_with_range);
+
+    // ensure the highest synced checkpoint matches
+    assert!(test_cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .get_checkpoint_store()
+            .get_highest_executed_checkpoint_seq_number()
+            .unwrap()
+            == Some(stop_after_checkpoint_seq)
+    }));
+
+    // sleep some time to ensure we don't see further ccheckpoints executed
+    tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+
+    // verify again execution has not progressed beyond expectations
+    assert!(test_cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .get_checkpoint_store()
+            .get_highest_executed_checkpoint_seq_number()
+            .unwrap()
+            == Some(stop_after_checkpoint_seq)
+    }));
+
+    // we dont want transaction orchestrator enabled when run_with_range != None
+    assert!(test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.transaction_orchestrator())
+        .is_none());
+    Ok(())
+}
+
+#[sim_test]
+async fn test_full_node_run_with_range_epoch() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+    let stop_after_epoch = 2;
+    let want_run_with_range = Some(RunWithRange::Epoch(stop_after_epoch));
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(10_000)
+        .with_fullnode_run_with_range(want_run_with_range)
+        .build()
+        .await;
+
+    // wait for node to signal that we reached and processed our desired epoch
+    let got_run_with_range = test_cluster.wait_for_run_with_range_shutdown_signal().await;
+
+    // ensure we get the shutdown signal
+    assert_eq!(got_run_with_range, want_run_with_range);
+
+    // ensure we end up at epoch + 1
+    // this is because we execute the target epoch, reconfigure, and then send shutdown signal at
+    // epoch + 1
+    assert!(test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.current_epoch_for_testing() == stop_after_epoch + 1));
+
+    // epoch duration is 10s for testing, lets sleep long enough that epoch would normally progress
+    tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+
+    // ensure we are still at epoch + 1
+    assert!(test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.current_epoch_for_testing() == stop_after_epoch + 1));
+
+    // we dont want transaction orchestrator enabled when run_with_range != None
+    assert!(test_cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.transaction_orchestrator())
+        .is_none());
+
+    Ok(())
 }

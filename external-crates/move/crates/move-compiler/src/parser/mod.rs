@@ -11,7 +11,7 @@ pub(crate) mod merge_spec_modules;
 pub(crate) mod syntax;
 
 use crate::{
-    diagnostics::{codes::Severity, Diagnostics, FilesSourceText},
+    diagnostics::{Diagnostics, FilesSourceText},
     parser::{self, ast::PackageDefinition, syntax::parse_file_string},
     shared::{CompilationEnv, IndexedPackagePath, NamedAddressMaps},
 };
@@ -30,10 +30,7 @@ pub(crate) fn parse_program(
     named_address_maps: NamedAddressMaps,
     targets: Vec<IndexedPackagePath>,
     deps: Vec<IndexedPackagePath>,
-) -> anyhow::Result<(
-    FilesSourceText,
-    Result<(parser::ast::Program, CommentMap), Diagnostics>,
-)> {
+) -> anyhow::Result<(FilesSourceText, parser::ast::Program, CommentMap)> {
     fn find_move_filenames_with_address_mapping(
         paths_with_mapping: Vec<IndexedPackagePath>,
     ) -> anyhow::Result<Vec<IndexedPackagePath>> {
@@ -67,7 +64,6 @@ pub(crate) fn parse_program(
     let mut source_definitions = Vec::new();
     let mut source_comments = CommentMap::new();
     let mut lib_definitions = Vec::new();
-    let mut diags: Diagnostics = Diagnostics::new();
 
     for IndexedPackagePath {
         package,
@@ -83,7 +79,7 @@ pub(crate) fn parse_program(
             def,
         }));
         source_comments.insert(file_hash, comments);
-        diags.extend(ds);
+        compilation_env.add_diags(ds);
     }
 
     for IndexedPackagePath {
@@ -98,27 +94,15 @@ pub(crate) fn parse_program(
             named_address_map,
             def,
         }));
-        diags.extend(ds);
+        compilation_env.add_diags(ds);
     }
 
-    // TODO fix this so it works likes other passes and the handling of errors is done outside of
-    // this function
-    let env_result = compilation_env.check_diags_at_or_above_severity(Severity::BlockingError);
-    if let Err(env_diags) = env_result {
-        diags.extend(env_diags)
-    }
-
-    let res = if diags.is_empty() {
-        let pprog = parser::ast::Program {
-            named_address_maps,
-            source_definitions,
-            lib_definitions,
-        };
-        Ok((pprog, source_comments))
-    } else {
-        Err(diags)
+    let pprog = parser::ast::Program {
+        named_address_maps,
+        source_definitions,
+        lib_definitions,
     };
-    Ok((files, res))
+    Ok((files, pprog, source_comments))
 }
 
 fn ensure_targets_deps_dont_intersect(

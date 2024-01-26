@@ -5,7 +5,7 @@
     sequenceNumber
     timestamp
     liveObjectSetDigest
-    transactionBlockConnection {
+    transactionBlocks {
       edges {
         node {
           digest

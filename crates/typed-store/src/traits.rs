@@ -58,7 +58,7 @@ where
     /// This is potentially unsafe as it can perform a full table scan
     fn unbounded_iter(&'a self) -> Self::Iterator;
 
-    /// Returns an iterator visiting each key-value pair in the map.
+    /// Returns an iterator visiting each key-value pair within the specified bounds in the map.
     fn iter_with_bounds(&'a self, lower_bound: Option<K>, upper_bound: Option<K>)
         -> Self::Iterator;
 
@@ -66,8 +66,18 @@ where
     /// TODO: find better name
     fn range_iter(&'a self, range: impl RangeBounds<K>) -> Self::Iterator;
 
-    /// Same as `iter` but performs status check
+    /// Same as `iter` but performs status check.
     fn safe_iter(&'a self) -> Self::SafeIterator;
+
+    // Same as `iter_with_bounds` but performs status check.
+    fn safe_iter_with_bounds(
+        &'a self,
+        lower_bound: Option<K>,
+        upper_bound: Option<K>,
+    ) -> Self::SafeIterator;
+
+    // Same as `range_iter` but performs status check.
+    fn safe_range_iter(&'a self, range: impl RangeBounds<K>) -> Self::SafeIterator;
 
     /// Returns an iterator over each key in the map.
     fn keys(&'a self) -> Self::Keys;

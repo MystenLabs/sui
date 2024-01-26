@@ -18,7 +18,7 @@ use crate::tables::TransactionEntry;
 use crate::FileType;
 
 pub struct TransactionHandler {
-    transactions: Vec<TransactionEntry>,
+    pub(crate) transactions: Vec<TransactionEntry>,
 }
 
 #[async_trait::async_trait]
@@ -174,6 +174,50 @@ impl TransactionHandler {
             effects_json: Some(effects_json),
         };
         self.transactions.push(entry);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::handlers::transaction_handler::TransactionHandler;
+    use fastcrypto::encoding::{Base64, Encoding};
+    use simulacrum::Simulacrum;
+    use sui_indexer::framework::Handler;
+    use sui_rest_api::node_state_getter::NodeStateGetter;
+    use sui_types::base_types::SuiAddress;
+
+    #[tokio::test]
+    pub async fn test_transaction_handler() -> anyhow::Result<()> {
+        let mut sim = Simulacrum::new();
+
+        // Execute a simple transaction.
+        let transfer_recipient = SuiAddress::random_for_testing_only();
+        let (transaction, _) = sim.transfer_txn(transfer_recipient);
+        let (_effects, err) = sim.execute_transaction(transaction.clone()).unwrap();
+        assert!(err.is_none());
+
+        // Create a checkpoint which should include the transaction we executed.
+        let checkpoint = sim.create_checkpoint();
+        let checkpoint_data = sim.get_checkpoint_data(
+            checkpoint.clone(),
+            sim.get_checkpoint_contents(checkpoint.content_digest)?,
+        )?;
+        let mut txn_handler = TransactionHandler::new();
+        txn_handler.process_checkpoint(&checkpoint_data).await?;
+        let transaction_entries = txn_handler.transactions;
+        assert_eq!(transaction_entries.len(), 1);
+        let db_txn = transaction_entries.first().unwrap();
+
+        // Check that the transaction was stored correctly.
+        assert_eq!(db_txn.transaction_digest, transaction.digest().to_string());
+        assert_eq!(
+            db_txn.raw_transaction,
+            Base64::encode(bcs::to_bytes(&transaction.transaction_data()).unwrap())
+        );
+        assert_eq!(db_txn.epoch, checkpoint.epoch);
+        assert_eq!(db_txn.timestamp_ms, checkpoint.timestamp_ms);
+        assert_eq!(db_txn.checkpoint, checkpoint.sequence_number);
         Ok(())
     }
 }

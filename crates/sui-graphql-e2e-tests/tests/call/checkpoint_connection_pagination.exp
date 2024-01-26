@@ -1,124 +1,570 @@
-processed 8 tasks
+processed 17 tasks
 
-task 1 'create-checkpoint'. lines 18-18:
+task 1 'create-checkpoint'. lines 31-31:
 Checkpoint created: 12
 
-task 2 'run-graphql'. lines 20-27:
+task 2 'run-graphql'. lines 33-45:
 Response: {
   "data": {
-    "checkpointConnection": {
-      "nodes": [
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "edges": [
         {
-          "sequenceNumber": 7
+          "cursor": "Nw",
+          "node": {
+            "sequenceNumber": 7
+          }
         },
         {
-          "sequenceNumber": 8
+          "cursor": "OA",
+          "node": {
+            "sequenceNumber": 8
+          }
         },
         {
-          "sequenceNumber": 9
+          "cursor": "OQ",
+          "node": {
+            "sequenceNumber": 9
+          }
         },
         {
-          "sequenceNumber": 10
+          "cursor": "MTA",
+          "node": {
+            "sequenceNumber": 10
+          }
         }
       ]
     }
   }
 }
 
-task 3 'run-graphql'. lines 29-36:
-Response: {
-  "data": null,
-  "errors": [
-    {
-      "message": "'first' can only be used with 'after",
-      "locations": [
-        {
-          "line": 2,
-          "column": 3
-        }
-      ],
-      "path": [
-        "checkpointConnection"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
-    }
-  ]
-}
-
-task 4 'run-graphql'. lines 38-45:
-Response: {
-  "data": null,
-  "errors": [
-    {
-      "message": "'first' can only be used with 'after",
-      "locations": [
-        {
-          "line": 2,
-          "column": 3
-        }
-      ],
-      "path": [
-        "checkpointConnection"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
-    }
-  ]
-}
-
-task 5 'run-graphql'. lines 47-54:
-Response: {
-  "data": null,
-  "errors": [
-    {
-      "message": "'last' can only be used with 'before'",
-      "locations": [
-        {
-          "line": 2,
-          "column": 3
-        }
-      ],
-      "path": [
-        "checkpointConnection"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
-    }
-  ]
-}
-
-task 6 'run-graphql'. lines 56-63:
+task 3 'run-graphql'. lines 47-59:
 Response: {
   "data": {
-    "checkpointConnection": {
-      "nodes": [
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "edges": [
         {
-          "sequenceNumber": 2
-        },
-        {
-          "sequenceNumber": 3
-        },
-        {
-          "sequenceNumber": 4
-        },
-        {
-          "sequenceNumber": 5
+          "cursor": "Nw",
+          "node": {
+            "sequenceNumber": 7
+          }
         }
       ]
     }
   }
 }
 
-task 7 'run-graphql'. lines 65-72:
+task 4 'run-graphql'. lines 61-73:
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "MA",
+          "node": {
+            "sequenceNumber": 0
+          }
+        },
+        {
+          "cursor": "MQ",
+          "node": {
+            "sequenceNumber": 1
+          }
+        },
+        {
+          "cursor": "Mg",
+          "node": {
+            "sequenceNumber": 2
+          }
+        },
+        {
+          "cursor": "Mw",
+          "node": {
+            "sequenceNumber": 3
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 5 'run-graphql'. lines 75-87:
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "NA",
+          "node": {
+            "sequenceNumber": 4
+          }
+        },
+        {
+          "cursor": "NQ",
+          "node": {
+            "sequenceNumber": 5
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 6 'run-graphql'. lines 89-101:
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "MA",
+          "node": {
+            "sequenceNumber": 0
+          }
+        },
+        {
+          "cursor": "MQ",
+          "node": {
+            "sequenceNumber": 1
+          }
+        },
+        {
+          "cursor": "Mg",
+          "node": {
+            "sequenceNumber": 2
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 7 'run-graphql'. lines 103-115:
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "OQ",
+          "node": {
+            "sequenceNumber": 9
+          }
+        },
+        {
+          "cursor": "MTA",
+          "node": {
+            "sequenceNumber": 10
+          }
+        },
+        {
+          "cursor": "MTE",
+          "node": {
+            "sequenceNumber": 11
+          }
+        },
+        {
+          "cursor": "MTI",
+          "node": {
+            "sequenceNumber": 12
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 8 'run-graphql'. lines 117-129:
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "MA",
+          "node": {
+            "sequenceNumber": 0
+          }
+        },
+        {
+          "cursor": "MQ",
+          "node": {
+            "sequenceNumber": 1
+          }
+        },
+        {
+          "cursor": "Mg",
+          "node": {
+            "sequenceNumber": 2
+          }
+        },
+        {
+          "cursor": "Mw",
+          "node": {
+            "sequenceNumber": 3
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 9 'run-graphql'. lines 131-143:
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "NQ",
+          "node": {
+            "sequenceNumber": 5
+          }
+        },
+        {
+          "cursor": "Ng",
+          "node": {
+            "sequenceNumber": 6
+          }
+        },
+        {
+          "cursor": "Nw",
+          "node": {
+            "sequenceNumber": 7
+          }
+        },
+        {
+          "cursor": "OA",
+          "node": {
+            "sequenceNumber": 8
+          }
+        },
+        {
+          "cursor": "OQ",
+          "node": {
+            "sequenceNumber": 9
+          }
+        },
+        {
+          "cursor": "MTA",
+          "node": {
+            "sequenceNumber": 10
+          }
+        },
+        {
+          "cursor": "MTE",
+          "node": {
+            "sequenceNumber": 11
+          }
+        },
+        {
+          "cursor": "MTI",
+          "node": {
+            "sequenceNumber": 12
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 10 'run-graphql'. lines 145-157:
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "Mg",
+          "node": {
+            "sequenceNumber": 2
+          }
+        },
+        {
+          "cursor": "Mw",
+          "node": {
+            "sequenceNumber": 3
+          }
+        },
+        {
+          "cursor": "NA",
+          "node": {
+            "sequenceNumber": 4
+          }
+        },
+        {
+          "cursor": "NQ",
+          "node": {
+            "sequenceNumber": 5
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 11 'run-graphql'. lines 159-171:
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "NA",
+          "node": {
+            "sequenceNumber": 4
+          }
+        },
+        {
+          "cursor": "NQ",
+          "node": {
+            "sequenceNumber": 5
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 12 'run-graphql'. lines 173-185:
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "MTA",
+          "node": {
+            "sequenceNumber": 10
+          }
+        },
+        {
+          "cursor": "MTE",
+          "node": {
+            "sequenceNumber": 11
+          }
+        },
+        {
+          "cursor": "MTI",
+          "node": {
+            "sequenceNumber": 12
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 13 'run-graphql'. lines 187-199:
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "MA",
+          "node": {
+            "sequenceNumber": 0
+          }
+        },
+        {
+          "cursor": "MQ",
+          "node": {
+            "sequenceNumber": 1
+          }
+        },
+        {
+          "cursor": "Mg",
+          "node": {
+            "sequenceNumber": 2
+          }
+        },
+        {
+          "cursor": "Mw",
+          "node": {
+            "sequenceNumber": 3
+          }
+        },
+        {
+          "cursor": "NA",
+          "node": {
+            "sequenceNumber": 4
+          }
+        },
+        {
+          "cursor": "NQ",
+          "node": {
+            "sequenceNumber": 5
+          }
+        },
+        {
+          "cursor": "Ng",
+          "node": {
+            "sequenceNumber": 6
+          }
+        },
+        {
+          "cursor": "Nw",
+          "node": {
+            "sequenceNumber": 7
+          }
+        },
+        {
+          "cursor": "OA",
+          "node": {
+            "sequenceNumber": 8
+          }
+        },
+        {
+          "cursor": "OQ",
+          "node": {
+            "sequenceNumber": 9
+          }
+        },
+        {
+          "cursor": "MTA",
+          "node": {
+            "sequenceNumber": 10
+          }
+        },
+        {
+          "cursor": "MTE",
+          "node": {
+            "sequenceNumber": 11
+          }
+        },
+        {
+          "cursor": "MTI",
+          "node": {
+            "sequenceNumber": 12
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 14 'run-graphql'. lines 201-213:
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "MA",
+          "node": {
+            "sequenceNumber": 0
+          }
+        },
+        {
+          "cursor": "MQ",
+          "node": {
+            "sequenceNumber": 1
+          }
+        },
+        {
+          "cursor": "Mg",
+          "node": {
+            "sequenceNumber": 2
+          }
+        },
+        {
+          "cursor": "Mw",
+          "node": {
+            "sequenceNumber": 3
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 15 'run-graphql'. lines 215-227:
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "OQ",
+          "node": {
+            "sequenceNumber": 9
+          }
+        },
+        {
+          "cursor": "MTA",
+          "node": {
+            "sequenceNumber": 10
+          }
+        },
+        {
+          "cursor": "MTE",
+          "node": {
+            "sequenceNumber": 11
+          }
+        },
+        {
+          "cursor": "MTI",
+          "node": {
+            "sequenceNumber": 12
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 16 'run-graphql'. lines 229-241:
 Response: {
   "data": null,
   "errors": [
     {
-      "message": "'last' can only be used with 'before'",
+      "message": "'first' and 'last' must not be used together",
       "locations": [
         {
           "line": 2,
@@ -126,7 +572,7 @@ Response: {
         }
       ],
       "path": [
-        "checkpointConnection"
+        "checkpoints"
       ],
       "extensions": {
         "code": "BAD_USER_INPUT"

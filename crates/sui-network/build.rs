@@ -33,15 +33,6 @@ fn main() -> Result<()> {
         )
         .method(
             Method::builder()
-                .name("handle_certificate")
-                .route_name("CertifiedTransaction")
-                .input_type("sui_types::transaction::CertifiedTransaction")
-                .output_type("sui_types::messages_grpc::HandleCertificateResponse")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            Method::builder()
                 .name("handle_certificate_v2")
                 .route_name("CertifiedTransactionV2")
                 .input_type("sui_types::transaction::CertifiedTransaction")
@@ -82,6 +73,15 @@ fn main() -> Result<()> {
                 .route_name("Checkpoint")
                 .input_type("sui_types::messages_checkpoint::CheckpointRequest")
                 .output_type("sui_types::messages_checkpoint::CheckpointResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            Method::builder()
+                .name("checkpoint_v2")
+                .route_name("CheckpointV2")
+                .input_type("sui_types::messages_checkpoint::CheckpointRequestV2")
+                .output_type("sui_types::messages_checkpoint::CheckpointResponseV2")
                 .codec_path(codec_path)
                 .build(),
         )

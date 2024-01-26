@@ -6,9 +6,9 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E01010]: syntax item restricted to spec contexts
+error[E00002]: DEPRECATED. unexpected spec item
   ┌─ tests/move_check/parser/spec_parsing_fun_type_fail.move:2:29
   │
 2 │     fun fun_type_in_prog(p: |u64|u64) {
-  │                             ^^^^^^^^ `|_|_` function type only allowed in specifications
+  │                             ^^^^^^^^ Specification blocks are deprecated
 

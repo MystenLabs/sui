@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::str::FromStr;
 use sui_core::authority::NodeStateDump;
-use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
+use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::EventFilter;
 use sui_json_rpc_types::SuiEvent;
 use sui_json_rpc_types::SuiGetPastObjectRequest;

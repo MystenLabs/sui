@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
 use std::{collections::HashSet, sync::Arc};
 
 use move_binary_format::CompiledModule;
@@ -49,13 +50,13 @@ pub(crate) struct Verifier<'m> {
 impl Executor {
     pub(crate) fn new(
         protocol_config: &ProtocolConfig,
-        paranoid_type_checks: bool,
         silent: bool,
+        enable_profiler: Option<PathBuf>,
     ) -> Result<Self, SuiError> {
         Ok(Executor(Arc::new(new_move_vm(
             all_natives(silent),
             protocol_config,
-            paranoid_type_checks,
+            enable_profiler,
         )?)))
     }
 }
@@ -94,6 +95,7 @@ impl executor::Executor for Executor {
         transaction_digest: TransactionDigest,
     ) -> (
         InnerTemporaryStore,
+        SuiGasStatus,
         TransactionEffects,
         Result<(), ExecutionError>,
     ) {
@@ -130,27 +132,48 @@ impl executor::Executor for Executor {
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
+        skip_all_checks: bool,
     ) -> (
         InnerTemporaryStore,
+        SuiGasStatus,
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
     ) {
-        execute_transaction_to_effects::<execution_mode::DevInspect>(
-            store,
-            input_objects,
-            gas_coins,
-            gas_status,
-            transaction_kind,
-            transaction_signer,
-            transaction_digest,
-            &self.0,
-            epoch_id,
-            epoch_timestamp_ms,
-            protocol_config,
-            metrics,
-            enable_expensive_checks,
-            certificate_deny_set,
-        )
+        if skip_all_checks {
+            execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
+                store,
+                input_objects,
+                gas_coins,
+                gas_status,
+                transaction_kind,
+                transaction_signer,
+                transaction_digest,
+                &self.0,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                metrics,
+                enable_expensive_checks,
+                certificate_deny_set,
+            )
+        } else {
+            execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
+                store,
+                input_objects,
+                gas_coins,
+                gas_status,
+                transaction_kind,
+                transaction_signer,
+                transaction_digest,
+                &self.0,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                metrics,
+                enable_expensive_checks,
+                certificate_deny_set,
+            )
+        }
     }
 
     fn update_genesis_state(

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod error;
 mod object_store_trait;
 mod read_store;
 mod shared_in_memory_store;
@@ -187,6 +188,11 @@ pub trait Storage {
     fn save_loaded_runtime_objects(
         &mut self,
         loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
+    );
+
+    fn save_wrapped_object_containers(
+        &mut self,
+        wrapped_object_containers: BTreeMap<ObjectID, ObjectID>,
     );
 }
 
@@ -449,6 +455,11 @@ impl From<&ObjectRef> for ObjectKey {
     fn from(object_ref: &ObjectRef) -> Self {
         Self(object_ref.0, object_ref.1)
     }
+}
+
+pub enum ObjectOrTombstone {
+    Object(Object),
+    Tombstone(ObjectRef),
 }
 
 /// Fetch the `ObjectKey`s (IDs and versions) for non-shared input objects.  Includes owned,

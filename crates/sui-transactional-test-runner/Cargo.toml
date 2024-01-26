@@ -15,6 +15,7 @@ clap.workspace = true
 eyre.workspace = true
 once_cell.workspace = true
 rand.workspace = true
+regex.workspace = true
 tempfile.workspace = true
 async-trait.workspace = true
 tokio.workspace = true
@@ -45,6 +46,7 @@ sui-protocol-config.workspace = true
 sui-types = { workspace = true, features = ["test-utils"]}
 sui-json-rpc-types.workspace = true
 sui-json-rpc.workspace = true
+sui-json-rpc-api.workspace = true
 sui-framework-snapshot.workspace = true
 sui-storage.workspace = true
 typed-store.workspace = true

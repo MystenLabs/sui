@@ -109,9 +109,9 @@ pub fn make_transaction_data(sender: SuiAddress) -> TransactionData {
 
 /// Make a user signed transaction with the given sender and its keypair. This
 /// is not verified or signed by authority.
-pub fn make_transaction(sender: SuiAddress, kp: &SuiKeyPair, intent: Intent) -> Transaction {
+pub fn make_transaction(sender: SuiAddress, kp: &SuiKeyPair) -> Transaction {
     let data = make_transaction_data(sender);
-    Transaction::from_data_and_signer(data, intent, vec![kp])
+    Transaction::from_data_and_signer(data, vec![kp])
 }
 
 // This is used to sign transaction with signer using default Intent.
@@ -126,7 +126,7 @@ pub fn to_sender_signed_transaction_with_multi_signers(
     data: TransactionData,
     signers: Vec<&dyn Signer<Signature>>,
 ) -> Transaction {
-    Transaction::from_data_and_signer(data, Intent::sui_transaction(), signers)
+    Transaction::from_data_and_signer(data, signers)
 }
 
 pub fn mock_certified_checkpoint<'a>(
@@ -160,16 +160,34 @@ pub fn mock_certified_checkpoint<'a>(
 }
 
 mod zk_login {
+    use fastcrypto::traits::EncodeDecodeBase64;
     use fastcrypto_zkp::bn254::{utils::big_int_str_to_bytes, zk_login::ZkLoginInputs};
     use shared_crypto::intent::PersonalMessage;
 
-    use crate::zk_login_util::get_zklogin_inputs;
+    use crate::{crypto::PublicKey, zk_login_util::get_zklogin_inputs};
 
     use super::*;
     pub static DEFAULT_ADDRESS_SEED: &str =
         "20794788559620669596206457022966176986688727876128223628113916380927502737911";
     pub static SHORT_ADDRESS_SEED: &str =
         "380704556853533152350240698167704405529973457670972223618755249929828551006";
+
+    pub fn load_test_vectors() -> Vec<(SuiKeyPair, PublicKey, ZkLoginInputs)> {
+        // read in test files that has a list of matching zklogin_inputs and its ephemeral private keys.
+        let file = std::fs::File::open("./src/unit_tests/zklogin_test_vectors.json")
+            .expect("Unable to open file");
+
+        let test_datum: Vec<TestData> = serde_json::from_reader(file).unwrap();
+        let mut res = vec![];
+        for test in test_datum {
+            let kp = SuiKeyPair::decode_base64(&test.kp).unwrap();
+            let inputs =
+                ZkLoginInputs::from_json(&test.zklogin_inputs, &test.address_seed).unwrap();
+            let pk_zklogin = PublicKey::from_zklogin_inputs(&inputs).unwrap();
+            res.push((kp, pk_zklogin, inputs));
+        }
+        res
+    }
 
     pub fn get_zklogin_user_address() -> SuiAddress {
         thread_local! {
@@ -201,20 +219,8 @@ mod zk_login {
     pub fn get_legacy_zklogin_user_address() -> SuiAddress {
         thread_local! {
             static USER_ADDRESS: SuiAddress = {
-                // Derive user address manually: Blake2b_256 hash of [zklogin_flag || iss_bytes_length || iss_bytes || address seed in bytes])
-                let mut hasher = DefaultHash::default();
-                hasher.update([SignatureScheme::ZkLoginAuthenticator.flag()]);
                 let inputs = get_inputs_with_bad_address_seed();
-                let iss_bytes = inputs.get_iss().as_bytes();
-                hasher.update([iss_bytes.len() as u8]);
-                hasher.update(iss_bytes);
-                let bytes = big_int_str_to_bytes(inputs.get_address_seed()).unwrap();
-                // The bytes from example address seed is 31 bytes, padded with 0 to 32 bytes.
-                let mut padded = Vec::new();
-                padded.extend(vec![0; 32 - bytes.len()]);
-                padded.extend(bytes);
-                hasher.update(padded);
-                SuiAddress::from_bytes(hasher.finalize().digest).unwrap()
+                SuiAddress::from(&PublicKey::from_zklogin_inputs(&inputs).unwrap())
             };
         }
         USER_ADDRESS.with(|a| *a)
@@ -248,11 +254,7 @@ mod zk_login {
         proof: ZkLoginInputs,
         data: TransactionData,
     ) -> (SuiAddress, Transaction, GenericSignature) {
-        let tx = Transaction::from_data_and_signer(
-            data.clone(),
-            Intent::sui_transaction(),
-            vec![user_key],
-        );
+        let tx = Transaction::from_data_and_signer(data.clone(), vec![user_key]);
 
         let s = match tx.inner().tx_signatures.first().unwrap() {
             GenericSignature::Signature(s) => s,
@@ -300,7 +302,7 @@ mod zk_login {
         )
         .unwrap();
         let addr = SuiAddress::from(&multisig_pk);
-        let tx = make_transaction(addr, &keys[0], Intent::sui_transaction());
+        let tx = make_transaction(addr, &keys[0]);
 
         let msg = IntentMessage::new(Intent::sui_transaction(), tx.transaction_data().clone());
         let sig1 = Signature::new_secure(&msg, &keys[0]).into();

@@ -88,7 +88,7 @@ impl WalletContext {
         self.config.active_address = Some(
             self.config
                 .active_address
-                .unwrap_or(*self.config.keystore.addresses().get(0).unwrap()),
+                .unwrap_or(*self.config.keystore.addresses().first().unwrap()),
         );
 
         Ok(self.config.active_address.unwrap())
@@ -286,7 +286,7 @@ impl WalletContext {
             .sign_secure(&data.sender(), data, Intent::sui_transaction())
             .unwrap();
         // TODO: To support sponsored transaction, we should also look at the gas owner.
-        Transaction::from_data(data.clone(), Intent::sui_transaction(), vec![sig])
+        Transaction::from_data(data.clone(), vec![sig])
     }
 
     /// Execute a transaction and wait for it to be locally executed on the fullnode.
@@ -296,7 +296,11 @@ impl WalletContext {
         tx: Transaction,
     ) -> SuiTransactionBlockResponse {
         let response = self.execute_transaction_may_fail(tx).await.unwrap();
-        assert!(response.status_ok().unwrap());
+        assert!(
+            response.status_ok().unwrap(),
+            "Transaction failed: {:?}",
+            response
+        );
         response
     }
 
@@ -314,7 +318,6 @@ impl WalletContext {
                 tx,
                 SuiTransactionBlockResponseOptions::new()
                     .with_effects()
-                    .with_events()
                     .with_input()
                     .with_events()
                     .with_object_changes()

@@ -160,8 +160,8 @@ pub struct ChainIdentifier(CheckpointDigest);
 pub static MAINNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 pub static TESTNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 
-/// For testing purposes, you can set this environment variable to force protocol config to use
-/// a specific Chain.
+/// For testing purposes or bootstrapping regenesis chaing configuration, you can set
+/// this environment variable to force protocol config to use a specific Chain.
 const SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME: &str = "SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE";
 
 static SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: Lazy<Option<Chain>> = Lazy::new(|| {
@@ -497,8 +497,10 @@ impl TransactionDigest {
 
     /// A digest we use to signify the parent transaction was the genesis,
     /// ie. for an object there is no parent digest.
+    /// Note that this is not the same as the digest of the genesis transaction,
+    /// which cannot be known ahead of time.
     // TODO(https://github.com/MystenLabs/sui/issues/65): we can pick anything here
-    pub const fn genesis() -> Self {
+    pub const fn genesis_marker() -> Self {
         Self::ZERO
     }
 

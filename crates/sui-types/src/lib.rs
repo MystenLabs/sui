@@ -11,6 +11,7 @@ use base_types::{SequenceNumber, SuiAddress};
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::{AbilitySet, SignatureToken};
 use move_bytecode_utils::resolve_struct;
+use move_core_types::language_storage::ModuleId;
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 pub use move_core_types::{identifier::Identifier, language_storage::TypeTag};
 use object::OBJECT_START_VERSION;
@@ -34,6 +35,7 @@ pub mod coin;
 pub mod collection_types;
 pub mod committee;
 pub mod crypto;
+pub mod deny_list;
 pub mod digests;
 pub mod display;
 pub mod dynamic_field;
@@ -115,11 +117,16 @@ pub const SUI_CLOCK_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION
 pub const SUI_AUTHENTICATOR_STATE_ADDRESS: AccountAddress = address_from_single_byte(7);
 pub const SUI_AUTHENTICATOR_STATE_OBJECT_ID: ObjectID =
     ObjectID::from_address(SUI_AUTHENTICATOR_STATE_ADDRESS);
+pub const SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
 
 /// 0x8: hardcode object ID for the singleton randomness state object.
 pub const SUI_RANDOMNESS_STATE_ADDRESS: AccountAddress = address_from_single_byte(8);
 pub const SUI_RANDOMNESS_STATE_OBJECT_ID: ObjectID =
     ObjectID::from_address(SUI_RANDOMNESS_STATE_ADDRESS);
+
+/// 0x403: hardcode object ID for the singleton DenyList object.
+pub const SUI_DENY_LIST_ADDRESS: AccountAddress = deny_list_addr();
+pub const SUI_DENY_LIST_OBJECT_ID: ObjectID = ObjectID::from_address(SUI_DENY_LIST_ADDRESS);
 
 /// Return `true` if `addr` is a special system package that can be upgraded at epoch boundaries.
 /// All new system package ID's must be added here.
@@ -144,20 +151,67 @@ const fn deepbook_addr() -> AccountAddress {
     AccountAddress::new(addr)
 }
 
+/// return 0x0...403
+const fn deny_list_addr() -> AccountAddress {
+    let mut addr = [0u8; AccountAddress::LENGTH];
+    addr[AccountAddress::LENGTH - 2] = 4;
+    addr[AccountAddress::LENGTH - 1] = 3;
+    AccountAddress::new(addr)
+}
+
 pub fn sui_framework_address_concat_string(suffix: &str) -> String {
     format!("{}{suffix}", SUI_FRAMEWORK_ADDRESS.to_hex_literal())
 }
 
+/// Parses `s` as an address. Valid formats for addresses are:
+///
+/// - A 256bit number, encoded in decimal, or hexadecimal with a leading "0x" prefix.
+/// - One of a number of pre-defined named addresses: std, sui, sui_system, deepbook.
+///
+/// Parsing succeeds if and only if `s` matches one of these formats exactly, with no remaining
+/// suffix. This function is intended for use within the authority codebases.
+pub fn parse_sui_address(s: &str) -> anyhow::Result<SuiAddress> {
+    use move_command_line_common::address::ParsedAddress;
+    Ok(ParsedAddress::parse(s)?
+        .into_account_address(&resolve_address)?
+        .into())
+}
+
+/// Parse `s` as a Module ID: An address (see `parse_sui_address`), followed by `::`, and then a
+/// module name (an identifier). Parsing succeeds if and only if `s` matches this format exactly,
+/// with no remaining input. This function is intended for use within the authority codebases.
+pub fn parse_sui_module_id(s: &str) -> anyhow::Result<ModuleId> {
+    use move_command_line_common::types::ParsedModuleId;
+    ParsedModuleId::parse(s)?.into_module_id(&resolve_address)
+}
+
+/// Parse `s` as a fully-qualified name: A Module ID (see `parse_sui_module_id`), followed by `::`,
+/// and then an identifier (for the module member). Parsing succeeds if and only if `s` matches this
+/// format exactly, with no remaining input. This function is intended for use within the authority
+/// codebases.
+pub fn parse_sui_fq_name(s: &str) -> anyhow::Result<(ModuleId, String)> {
+    use move_command_line_common::types::ParsedFqName;
+    ParsedFqName::parse(s)?.into_fq_name(&resolve_address)
+}
+
+/// Parse `s` as a struct type: A fully-qualified name, optionally followed by a list of type
+/// parameters (types -- see `parse_sui_type_tag`, separated by commas, surrounded by angle
+/// brackets). Parsing succeeds if and only if `s` matches this format exactly, with no remaining
+/// input. This function is intended for use within the authority codebase.
 pub fn parse_sui_struct_tag(s: &str) -> anyhow::Result<StructTag> {
     use move_command_line_common::types::ParsedStructType;
     ParsedStructType::parse(s)?.into_struct_tag(&resolve_address)
 }
 
+/// Parse `s` as a type: Either a struct type (see `parse_sui_struct_tag`), a primitive type, or a
+/// vector with a type parameter. Parsing succeeds if and only if `s` matches this format exactly,
+/// with no remaining input. This function is intended for use within the authority codebase.
 pub fn parse_sui_type_tag(s: &str) -> anyhow::Result<TypeTag> {
     use move_command_line_common::types::ParsedType;
     ParsedType::parse(s)?.into_type_tag(&resolve_address)
 }
 
+/// Resolve well-known named addresses into numeric addresses.
 fn resolve_address(addr: &str) -> Option<AccountAddress> {
     match addr {
         "deepbook" => Some(DEEPBOOK_ADDRESS),
@@ -170,6 +224,12 @@ fn resolve_address(addr: &str) -> Option<AccountAddress> {
 
 pub trait MoveTypeTagTrait {
     fn get_type_tag() -> TypeTag;
+}
+
+impl MoveTypeTagTrait for u8 {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::U8
+    }
 }
 
 impl MoveTypeTagTrait for u64 {
@@ -187,6 +247,12 @@ impl MoveTypeTagTrait for ObjectID {
 impl MoveTypeTagTrait for SuiAddress {
     fn get_type_tag() -> TypeTag {
         TypeTag::Address
+    }
+}
+
+impl<T: MoveTypeTagTrait> MoveTypeTagTrait for Vec<T> {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::Vector(Box::new(T::get_type_tag()))
     }
 }
 
@@ -282,6 +348,44 @@ mod tests {
     use expect_test::expect;
 
     #[test]
+    fn test_parse_sui_numeric_address() {
+        let result = parse_sui_address("0x2").expect("should not error");
+
+        let expected =
+            expect!["0x0000000000000000000000000000000000000000000000000000000000000002"];
+        expected.assert_eq(&result.to_string());
+    }
+
+    #[test]
+    fn test_parse_sui_named_address() {
+        let result = parse_sui_address("sui").expect("should not error");
+
+        let expected =
+            expect!["0x0000000000000000000000000000000000000000000000000000000000000002"];
+        expected.assert_eq(&result.to_string());
+    }
+
+    #[test]
+    fn test_parse_sui_module_id() {
+        let result = parse_sui_module_id("0x2::sui").expect("should not error");
+        let expected =
+            expect!["0x0000000000000000000000000000000000000000000000000000000000000002::sui"];
+        expected.assert_eq(&result.to_canonical_string(/* with_prefix */ true));
+    }
+
+    #[test]
+    fn test_parse_sui_fq_name() {
+        let (module, name) = parse_sui_fq_name("0x2::object::new").expect("should not error");
+        let expected = expect![
+            "0x0000000000000000000000000000000000000000000000000000000000000002::object::new"
+        ];
+        expected.assert_eq(&format!(
+            "{}::{name}",
+            module.to_canonical_display(/* with_prefix */ true)
+        ));
+    }
+
+    #[test]
     fn test_parse_sui_struct_tag_short_account_addr() {
         let result = parse_sui_struct_tag("0x2::sui::SUI").expect("should not error");
 
@@ -347,7 +451,7 @@ mod tests {
 
     #[test]
     fn test_complex_struct_tag_with_long_addr() {
-        let result = parse_sui_struct_tag("0x00000000000000000000000000000000000000000000000000000000000000e7::vec_coin::VecCoin<vector<0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>>>")    
+        let result = parse_sui_struct_tag("0x00000000000000000000000000000000000000000000000000000000000000e7::vec_coin::VecCoin<vector<0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>>>")
             .expect("should not error");
 
         let expected = expect!["0xe7::vec_coin::VecCoin<vector<0x2::coin::Coin<0x2::sui::SUI>>>"];

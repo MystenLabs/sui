@@ -219,7 +219,7 @@ impl<'a> sui_types::storage::ObjectStore for CheckpointDataObjectStore<'a> {
     fn get_object(
         &self,
         object_id: &ObjectID,
-    ) -> Result<Option<sui_types::object::Object>, sui_types::error::SuiError> {
+    ) -> Result<Option<sui_types::object::Object>, sui_types::storage::error::Error> {
         Ok(self
             .objects
             .iter()
@@ -232,7 +232,7 @@ impl<'a> sui_types::storage::ObjectStore for CheckpointDataObjectStore<'a> {
         &self,
         object_id: &ObjectID,
         version: sui_types::base_types::VersionNumber,
-    ) -> Result<Option<sui_types::object::Object>, sui_types::error::SuiError> {
+    ) -> Result<Option<sui_types::object::Object>, sui_types::storage::error::Error> {
         Ok(self
             .objects
             .iter()

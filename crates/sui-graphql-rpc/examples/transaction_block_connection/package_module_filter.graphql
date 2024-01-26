@@ -1,9 +1,8 @@
 # Filtering on package and module
 {
-  transactionBlockConnection(
+  transactionBlocks(
     filter: {
-      package: "0x0000000000000000000000000000000000000000000000000000000000000003"
-      module: "sui_system"
+      function: "0x3::sui_system"
     }
   ) {
     nodes {

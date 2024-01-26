@@ -14,6 +14,7 @@ bcs.workspace = true
 byteorder.workspace = true
 im.workspace = true
 itertools.workspace = true
+nonempty.workspace = true
 once_cell.workspace = true
 prometheus.workspace = true
 rand.workspace = true
@@ -77,5 +78,11 @@ name = "accumulator_bench"
 harness = false
 
 [features]
+default = []
 test-utils = []
+gas-profiler = [
+    "move-vm-profiler/gas-profiler",
+    "move-vm-types/gas-profiler",
+    "move-vm-test-utils/gas-profiler"
+]
 fuzzing = ["move-core-types/fuzzing"]

@@ -8,6 +8,7 @@ use crate::{
     error::{ExecutionError, ExecutionErrorKind, SuiError},
     event::Event,
     execution_status::CommandArgumentError,
+    is_system_package,
     object::{Data, Object, Owner},
     storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, StorageView},
     transfer::Receiving,
@@ -24,7 +25,7 @@ pub trait SuiResolver: ResourceResolver<Error = SuiError> + BackingPackageStore 
 }
 
 /// A type containing all of the information needed to work with a deleted shared object in
-/// execution and when commiting the execution effects of the transaction. This holds:
+/// execution and when committing the execution effects of the transaction. This holds:
 /// 0. The object ID of the deleted shared object.
 /// 1. The version of the shared object.
 /// 2. Whether the object appeared as mutable (or owned) in the transaction, or as a read-only shared object.
@@ -146,6 +147,7 @@ impl ExecutionResultsV2 {
                     // only applies to system packages).  All other packages can only be created,
                     // and they are left alone.
                     if self.modified_objects.contains(id) {
+                        debug_assert!(is_system_package(*id));
                         pkg.increment_version();
                     }
                 }

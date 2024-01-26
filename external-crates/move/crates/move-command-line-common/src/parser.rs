@@ -3,7 +3,7 @@
 
 use crate::{
     address::{NumericalAddress, ParsedAddress},
-    types::{ParsedStructType, ParsedType, TypeToken},
+    types::{ParsedFqName, ParsedModuleId, ParsedStructType, ParsedType, TypeToken},
     values::{ParsableValue, ParsedValue, ValueToken},
 };
 use anyhow::{anyhow, bail, Result};
@@ -38,6 +38,18 @@ pub struct Parser<'a, Tok: Token, I: Iterator<Item = (Tok, &'a str)>> {
 impl ParsedType {
     pub fn parse(s: &str) -> Result<ParsedType> {
         parse(s, |parser| parser.parse_type())
+    }
+}
+
+impl ParsedModuleId {
+    pub fn parse(s: &str) -> Result<ParsedModuleId> {
+        parse(s, |parser| parser.parse_module_id())
+    }
+}
+
+impl ParsedFqName {
+    pub fn parse(s: &str) -> Result<ParsedFqName> {
+        parse(s, |parser| parser.parse_fq_name())
     }
 }
 
@@ -136,8 +148,45 @@ impl<'a, Tok: Token, I: Iterator<Item = (Tok, &'a str)>> Parser<'a, Tok, I> {
 }
 
 impl<'a, I: Iterator<Item = (TypeToken, &'a str)>> Parser<'a, TypeToken, I> {
+    pub fn parse_module_id(&mut self) -> Result<ParsedModuleId> {
+        let (tok, contents) = self.advance_any()?;
+        self.parse_module_id_impl(tok, contents)
+    }
+
+    pub fn parse_fq_name(&mut self) -> Result<ParsedFqName> {
+        let (tok, contents) = self.advance_any()?;
+        self.parse_fq_name_impl(tok, contents)
+    }
+
     pub fn parse_type(&mut self) -> Result<ParsedType> {
         self.parse_type_impl(0)
+    }
+
+    pub fn parse_module_id_impl(
+        &mut self,
+        tok: TypeToken,
+        contents: &'a str,
+    ) -> Result<ParsedModuleId> {
+        let tok = match tok {
+            TypeToken::Ident => ValueToken::Ident,
+            TypeToken::AddressIdent => ValueToken::Number,
+            tok => bail!("unexpected token {tok}, expected address"),
+        };
+        let address = parse_address_impl(tok, contents)?;
+        self.advance(TypeToken::ColonColon)?;
+        let name = self.advance(TypeToken::Ident)?.to_owned();
+        Ok(ParsedModuleId { address, name })
+    }
+
+    pub fn parse_fq_name_impl(
+        &mut self,
+        tok: TypeToken,
+        contents: &'a str,
+    ) -> Result<ParsedFqName> {
+        let module = self.parse_module_id_impl(tok, contents)?;
+        self.advance(TypeToken::ColonColon)?;
+        let name = self.advance(TypeToken::Ident)?.to_owned();
+        Ok(ParsedFqName { module, name })
     }
 
     fn parse_type_impl(&mut self, depth: u64) -> Result<ParsedType> {
@@ -146,8 +195,8 @@ impl<'a, I: Iterator<Item = (TypeToken, &'a str)>> Parser<'a, TypeToken, I> {
         if depth > MAX_TYPE_DEPTH || self.count > MAX_TYPE_NODE_COUNT {
             bail!("Type exceeds maximum nesting depth or node count")
         }
-        let (tok, contents) = self.advance_any()?;
-        Ok(match (tok, contents) {
+
+        Ok(match self.advance_any()? {
             (TypeToken::Ident, "u8") => ParsedType::U8,
             (TypeToken::Ident, "u16") => ParsedType::U16,
             (TypeToken::Ident, "u32") => ParsedType::U32,
@@ -163,17 +212,9 @@ impl<'a, I: Iterator<Item = (TypeToken, &'a str)>> Parser<'a, TypeToken, I> {
                 self.advance(TypeToken::Gt)?;
                 ParsedType::Vector(Box::new(ty))
             }
-            (TypeToken::Ident, _) | (TypeToken::AddressIdent, _) => {
-                let addr_tok = match tok {
-                    TypeToken::Ident => ValueToken::Ident,
-                    TypeToken::AddressIdent => ValueToken::Number,
-                    _ => unreachable!(),
-                };
-                let address = parse_address_impl(addr_tok, contents)?;
-                self.advance(TypeToken::ColonColon)?;
-                let module_contents = self.advance(TypeToken::Ident)?;
-                self.advance(TypeToken::ColonColon)?;
-                let struct_contents = self.advance(TypeToken::Ident)?;
+
+            (tok @ (TypeToken::Ident | TypeToken::AddressIdent), contents) => {
+                let fq_name = self.parse_fq_name_impl(tok, contents)?;
                 let type_args = match self.peek_tok() {
                     Some(TypeToken::Lt) => {
                         self.advance(TypeToken::Lt)?;
@@ -188,14 +229,9 @@ impl<'a, I: Iterator<Item = (TypeToken, &'a str)>> Parser<'a, TypeToken, I> {
                     }
                     _ => vec![],
                 };
-                ParsedType::Struct(ParsedStructType {
-                    address,
-                    module: module_contents.to_owned(),
-                    name: struct_contents.to_owned(),
-                    type_args,
-                })
+                ParsedType::Struct(ParsedStructType { fq_name, type_args })
             }
-            _ => bail!("unexpected token {}, expected type", tok),
+            (tok, _) => bail!("unexpected token {tok}, expected type"),
         })
     }
 }

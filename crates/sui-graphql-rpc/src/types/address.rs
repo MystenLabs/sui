@@ -1,182 +1,164 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{connection::Connection, *};
-use sui_json_rpc::name_service::NameServiceConfig;
-
-use crate::{context_data::db_data_provider::PgManager, error::Error};
-
 use super::{
-    balance::Balance,
+    balance::{self, Balance},
     coin::Coin,
-    dynamic_field::{DynamicField, DynamicFieldName},
-    object::{Object, ObjectFilter},
+    cursor::Page,
+    move_object::MoveObject,
+    object::{self, ObjectFilter},
+    owner::OwnerImpl,
     stake::StakedSui,
     sui_address::SuiAddress,
-    transaction_block::{TransactionBlock, TransactionBlockFilter},
+    suins_registration::SuinsRegistration,
+    transaction_block::{self, TransactionBlock, TransactionBlockFilter},
+    type_filter::ExactTypeFilter,
 };
+use async_graphql::{connection::Connection, *};
 
 #[derive(Clone, Debug, PartialEq, Eq, Copy)]
 pub(crate) struct Address {
     pub address: SuiAddress,
 }
 
+/// The possible relationship types for a transaction block: sign, sent, received, or paid.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum AddressTransactionBlockRelationship {
-    Sign, // Transactions this address has signed
-    Sent, // Transactions that transferred objects from this address
-    Recv, // Transactions that received objects into this address
-    Paid, // Transactions that were paid for by this address
+    /// Transactions this address has signed either as a sender or as a sponsor.
+    Sign,
+    /// Transactions that sent objects to this address.
+    Recv,
 }
 
+/// The 32-byte address that is an account address (corresponding to a public key).
 #[Object]
 impl Address {
-    /// Similar behavior to the `transactionBlockConnection` in Query but
-    /// supports additional `AddressTransactionBlockRelationship` filter
-    async fn transaction_block_connection(
+    pub(crate) async fn address(&self) -> SuiAddress {
+        OwnerImpl(self.address).address().await
+    }
+
+    /// Objects owned by this address, optionally `filter`-ed.
+    pub(crate) async fn objects(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<object::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
+        before: Option<object::Cursor>,
+        filter: Option<ObjectFilter>,
+    ) -> Result<Connection<String, MoveObject>> {
+        OwnerImpl(self.address)
+            .objects(ctx, first, after, last, before, filter)
+            .await
+    }
+
+    /// Total balance of all coins with marker type owned by this address. If type is not supplied,
+    /// it defaults to `0x2::sui::SUI`.
+    pub(crate) async fn balance(
+        &self,
+        ctx: &Context<'_>,
+        type_: Option<ExactTypeFilter>,
+    ) -> Result<Option<Balance>> {
+        OwnerImpl(self.address).balance(ctx, type_).await
+    }
+
+    /// The balances of all coin types owned by this address.
+    pub(crate) async fn balances(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<balance::Cursor>,
+        last: Option<u64>,
+        before: Option<balance::Cursor>,
+    ) -> Result<Connection<String, Balance>> {
+        OwnerImpl(self.address)
+            .balances(ctx, first, after, last, before)
+            .await
+    }
+
+    /// The coin objects for this address.
+    ///
+    ///`type` is a filter on the coin's type parameter, defaulting to `0x2::sui::SUI`.
+    pub(crate) async fn coins(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<object::Cursor>,
+        last: Option<u64>,
+        before: Option<object::Cursor>,
+        type_: Option<ExactTypeFilter>,
+    ) -> Result<Connection<String, Coin>> {
+        OwnerImpl(self.address)
+            .coins(ctx, first, after, last, before, type_)
+            .await
+    }
+
+    /// The `0x3::staking_pool::StakedSui` objects owned by this address.
+    pub(crate) async fn staked_suis(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<object::Cursor>,
+        last: Option<u64>,
+        before: Option<object::Cursor>,
+    ) -> Result<Connection<String, StakedSui>> {
+        OwnerImpl(self.address)
+            .staked_suis(ctx, first, after, last, before)
+            .await
+    }
+
+    /// The domain explicitly configured as the default domain pointing to this address.
+    pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+        OwnerImpl(self.address).default_suins_name(ctx).await
+    }
+
+    /// The SuinsRegistration NFTs owned by this address. These grant the owner the capability to
+    /// manage the associated domain.
+    pub(crate) async fn suins_registrations(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<object::Cursor>,
+        last: Option<u64>,
+        before: Option<object::Cursor>,
+    ) -> Result<Connection<String, SuinsRegistration>> {
+        OwnerImpl(self.address)
+            .suins_registrations(ctx, first, after, last, before)
+            .await
+    }
+
+    /// Similar behavior to the `transactionBlocks` in Query but supporting the additional
+    /// `AddressTransactionBlockRelationship` filter, which defaults to `SIGN`.
+    async fn transaction_blocks(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<transaction_block::Cursor>,
+        last: Option<u64>,
+        before: Option<transaction_block::Cursor>,
         relation: Option<AddressTransactionBlockRelationship>,
         filter: Option<TransactionBlockFilter>,
-    ) -> Result<Option<Connection<String, TransactionBlock>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_txs_for_address(
-                first,
-                after,
-                last,
-                before,
-                filter,
-                (
-                    self.address,
-                    // Assume signer if no relationship is specified
-                    relation.unwrap_or(AddressTransactionBlockRelationship::Sign),
-                ),
-            )
+    ) -> Result<Connection<String, TransactionBlock>> {
+        use AddressTransactionBlockRelationship as R;
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+
+        let Some(filter) = filter.unwrap_or_default().intersect(match relation {
+            // Relationship defaults to "signer" if none is supplied.
+            Some(R::Sign) | None => TransactionBlockFilter {
+                sign_address: Some(self.address),
+                ..Default::default()
+            },
+
+            Some(R::Recv) => TransactionBlockFilter {
+                recv_address: Some(self.address),
+                ..Default::default()
+            },
+        }) else {
+            return Ok(Connection::new(false, false));
+        };
+
+        TransactionBlock::paginate(ctx.data_unchecked(), page, filter)
             .await
             .extend()
-    }
-
-    // =========== Owner interface methods =============
-
-    pub async fn address(&self) -> SuiAddress {
-        self.address
-    }
-
-    pub async fn object_connection(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        filter: Option<ObjectFilter>,
-    ) -> Result<Option<Connection<String, Object>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_owned_objs(first, after, last, before, filter, self.address)
-            .await
-            .extend()
-    }
-
-    pub async fn balance(
-        &self,
-        ctx: &Context<'_>,
-        type_: Option<String>,
-    ) -> Result<Option<Balance>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_balance(self.address, type_)
-            .await
-            .extend()
-    }
-
-    pub async fn balance_connection(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, Balance>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_balances(self.address, first, after, last, before)
-            .await
-            .extend()
-    }
-
-    /// The coin objects for the given address.
-    /// The type field is a string of the inner type of the coin
-    /// by which to filter (e.g., 0x2::sui::SUI).
-    pub async fn coin_connection(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        type_: Option<String>,
-    ) -> Result<Option<Connection<String, Coin>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_coins(Some(self.address), type_, first, after, last, before)
-            .await
-            .extend()
-    }
-
-    /// The `0x3::staking_pool::StakedSui` objects owned by the given address.
-    pub async fn staked_sui_connection(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, StakedSui>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_staked_sui(self.address, first, after, last, before)
-            .await
-            .extend()
-    }
-
-    pub async fn default_name_service_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        ctx.data_unchecked::<PgManager>()
-            .default_name_service_name(ctx.data_unchecked::<NameServiceConfig>(), self.address)
-            .await
-            .extend()
-    }
-
-    // TODO disabled-for-rpc-1.5
-    // pub async fn name_service_connection(
-    //     &self,
-    //     first: Option<u64>,
-    //     after: Option<String>,
-    //     last: Option<u64>,
-    //     before: Option<String>,
-    // ) -> Result<Option<Connection<String, NameService>>> {
-    //     unimplemented!()
-    // }
-
-    /// This resolver is not supported on the Address type.
-    pub async fn dynamic_field(&self, _name: DynamicFieldName) -> Result<Option<DynamicField>> {
-        Err(Error::DynamicFieldOnAddress.extend())
-    }
-
-    /// This resolver is not supported on the Address type.
-    pub async fn dynamic_object_field(
-        &self,
-        _name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>> {
-        Err(Error::DynamicFieldOnAddress.extend())
-    }
-
-    pub async fn dynamic_field_connection(
-        &self,
-        _first: Option<u64>,
-        _after: Option<String>,
-        _last: Option<u64>,
-        _before: Option<String>,
-    ) -> Result<Option<Connection<String, DynamicField>>> {
-        Err(Error::DynamicFieldOnAddress.extend())
     }
 }

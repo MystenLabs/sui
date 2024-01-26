@@ -30,6 +30,13 @@ move-stdlib.workspace = true
 
 [features]
 default = []
+gas-profiler = [
+    "move-vm-config/gas-profiler",
+    "move-vm-runtime/gas-profiler",
+    "move-vm-profiler/gas-profiler",
+    "move-vm-types/gas-profiler",
+    "move-vm-test-utils/gas-profiler",
+]
 
 [[bin]]
 name = "instantiation"

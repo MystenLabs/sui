@@ -1,9 +1,9 @@
 ---
 title: Building Programmable Transaction Blocks
-description: Using the Sui TypeScript SDK, you can create programmable transaction blocks to perform multiple commands in a single transaction. 
+description: Using the Sui TypeScript SDK, you can create programmable transaction blocks to perform multiple commands in a single transaction.
 ---
 
-This guide explores creating a programmable transaction block (PTB) on Sui using the TypeScript SDK. For an overview of what a PTB is, see [Programmable Transaction Blocks](/concepts/transactions/prog-txn-blocks.mdx) in the Concepts section. If you don't already have the Sui TypeScript SDK, follow the [install instructions](https://sui-typescript-docs.vercel.app/typescript/install) on the Sui TypeScript SDK site.
+This guide explores creating a programmable transaction block (PTB) on Sui using the TypeScript SDK. For an overview of what a PTB is, see [Programmable Transaction Blocks](/concepts/transactions/prog-txn-blocks.mdx) in the Concepts section. If you don't already have the Sui TypeScript SDK, follow the [install instructions](https://sdk.mystenlabs.com/typescript/install) on the Sui TypeScript SDK site.
 
 This example starts by constructing a PTB to send Sui. If you are familiar with the legacy Sui transaction types, this is similar to a `paySui` transaction. To construct transactions, import the `TransactionBlock` class, and construct it:
 
@@ -54,18 +54,18 @@ After you have the PTB defined, you can directly execute it with a `signer` usin
 signer.signAndExecuteTransactionBlock({ transactionBlock: txb });
 ```
 
-## Constructing inputs 
+## Constructing inputs
 
-Inputs are how you provide external values to PTBs. For example, defining an amount of Sui to transfer, or which object to pass into a Move call, or a shared object. 
+Inputs are how you provide external values to PTBs. For example, defining an amount of Sui to transfer, or which object to pass into a Move call, or a shared object.
 
 There are currently two ways to define inputs:
 
 - For objects: the `txb.object(objectId)` function is used to construct an input that contains an object reference.
-- For pure values: the `txb.pure(value, type?)` function is used to construct an input for a non-object input. 
-    - If value is a `Uint8Array`, then the value is assumed to be raw bytes and is used directly. 
+- For pure values: the `txb.pure(value, type?)` function is used to construct an input for a non-object input.
+    - If value is a `Uint8Array`, then the value is assumed to be raw bytes and is used directly.
     - If type is provided, it's used to generate the BCS serialization layout for the value. If not provided, the type is automatically determined based on the value.
 
-## Available transactions 
+## Available transactions
 
 Sui supports following transaction commands:
 
@@ -81,7 +81,7 @@ Sui supports following transaction commands:
     - Example: `txb.makeMoveVec({ objects: [txb.object(id1), txb.object(id2)] })`
 - `txb.publish(modules, dependencies)`: Publishes a Move package. Returns the upgrade capability object.
 
-## Passing transaction results as arguments 
+## Passing transaction results as arguments
 
 You can use the result of a transaction command as an argument in subsequent transaction commands. Each transaction command method on the transaction builder returns a reference to the transaction result.
 
@@ -90,7 +90,11 @@ You can use the result of a transaction command as an argument in subsequent tra
 const [coin] = txb.splitCoins(txb.gas, [txb.pure(100)]);
 // Transfer the resulting coin object:
 txb.transferObjects([coin], txb.pure(address));
+```
+
 When a transaction command returns multiple results, you can access the result at a specific index either using destructuring, or array indexes.
+
+```ts
 // Destructuring (preferred, as it gives you logical local names):
 const [nft1, nft2] = txb.moveCall({ target: "0x2::nft::mint_many" });
 txb.transferObjects([nft1, nft2], txb.pure(address));
@@ -106,7 +110,7 @@ With PTBs, you can use the gas payment coin to construct coins with a set balanc
 
 You can also transfer the gas coin using `transferObjects`, in the event that you want to transfer all of your coin balance to another address.
 
-## Get PTB bytes 
+## Get PTB bytes
 
 If you need the PTB bytes, instead of signing or executing the PTB, you can use the `build` method on the transaction builder itself.
 
@@ -133,7 +137,7 @@ const bytes = getTransactionBlockBytesFromSomewhere();
 const txb = TransactionBlock.from(bytes);
 ```
 
-## Building offline 
+## Building offline
 
 In the event that you want to build a PTB offline (as in with no `provider` required), you need to fully define all of your input values, and gas configuration (see the following example). For pure values, you can provide a `Uint8Array` which is used directly in the transaction. For objects, you can use the `Inputs` helper to construct an object reference.
 
@@ -156,7 +160,7 @@ You can then omit the `provider` object when calling `build` on the transaction.
 
 The new transaction builder comes with default behavior for all gas logic, including automatically setting the gas price, budget, and selecting coins to be used as gas. This behavior can be customized.
 
-### Gas price 
+### Gas price
 
 By default, the gas price is set to the reference gas price of the network. You can also explicitly set the gas price of the PTB by calling `setGasPrice` on the transaction builder.
 
@@ -164,7 +168,7 @@ By default, the gas price is set to the reference gas price of the network. You 
 txb.setGasPrice(gasPrice);
 ```
 
-### Budget 
+### Budget
 
 By default, the gas budget is automatically derived by executing a dry-run of the PTB beforehand. The dry run gas consumption is then used to determine a balance for the transaction. You can override this behavior by explicitly setting a gas budget for the transaction, by calling `setGasBudget` on the transaction builder.
 
@@ -178,7 +182,7 @@ The gas budget is represented in Sui, and should take the gas price of the PTB i
 txb.setGasBudget(gasBudgetAmount);
 ```
 
-### Gas payment 
+### Gas payment
 
 By default, the gas payment is automatically determined by the SDK. The SDK selects all coins at the provided address that are not used as inputs in the PTB.
 
@@ -190,7 +194,7 @@ The list of coins used as gas payment will be merged down into a single gas coin
 txb.setGasPayment([coin1, coin2]);
 ```
 
-### dApp / Wallet integration 
+### dApp / Wallet integration
 
 The Wallet Standard interface has been updated to support the `TransactionBlock` kind directly. All `signTransaction` and `signAndExecuteTransaction` calls from dApps into wallets is expected to provide a `TransactionBlock` class. This PTB class can then be serialized and sent to your wallet for execution.
 

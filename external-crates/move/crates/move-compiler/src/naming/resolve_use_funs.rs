@@ -196,11 +196,14 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             }
             continue;
         };
-        let kind = match ekind {
-            E::ImplicitUseFunKind::FunctionDeclaration => N::UseFunKind::FunctionDeclaration,
+        let (kind, used) = match ekind {
+            E::ImplicitUseFunKind::FunctionDeclaration => (
+                N::UseFunKind::FunctionDeclaration,
+                /* silences unused warning */ true,
+            ),
             E::ImplicitUseFunKind::UseAlias { used } => {
                 assert!(is_public.is_none());
-                N::UseFunKind::UseAlias { used }
+                (N::UseFunKind::UseAlias, used)
             }
         };
         let nuf = N::UseFun {
@@ -209,6 +212,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             is_public,
             target_function: (target_m, target_f),
             kind,
+            used,
         };
         let nuf_loc = nuf.loc;
         let methods = resolved.entry(tn.clone()).or_insert_with(UniqueMap::new);
@@ -298,13 +302,10 @@ fn sequence(context: &mut Context, (uf, seq): &mut N::Sequence) {
 fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
     match e_ {
         N::Exp_::Value(_)
-        | N::Exp_::Move(_)
-        | N::Exp_::Copy(_)
-        | N::Exp_::Use(_)
+        | N::Exp_::Var(_)
         | N::Exp_::Constant(_, _)
         | N::Exp_::Continue(_)
         | N::Exp_::Unit { .. }
-        | N::Exp_::Spec(_, _)
         | N::Exp_::UnresolvedError => (),
         N::Exp_::Return(e)
         | N::Exp_::Abort(e)
@@ -354,7 +355,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             }
         }
 
-        N::Exp_::DerefBorrow(ed) | N::Exp_::Borrow(_, ed) => exp_dotted(context, ed),
+        N::Exp_::ExpDotted(_, ed) => exp_dotted(context, ed),
     }
 }
 

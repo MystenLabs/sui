@@ -11,7 +11,11 @@ use serde::{Deserialize, Serialize};
 #[serde(transparent)]
 pub(crate) struct BigInt(String);
 
-#[Scalar]
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+#[error("The provided string is not a number")]
+pub(crate) struct NotANumber;
+
+#[Scalar(use_type_description = true)]
 impl ScalarType for BigInt {
     fn parse(value: Value) -> InputValueResult<Self> {
         match value {
@@ -26,9 +30,11 @@ impl ScalarType for BigInt {
     }
 }
 
-#[derive(thiserror::Error, Debug, PartialEq, Eq)]
-#[error("The provided string is not a number")]
-pub(crate) struct NotANumber;
+impl Description for BigInt {
+    fn description() -> &'static str {
+        "String representation of an arbitrary width, possibly signed integer."
+    }
+}
 
 impl FromStr for BigInt {
     type Err = NotANumber;

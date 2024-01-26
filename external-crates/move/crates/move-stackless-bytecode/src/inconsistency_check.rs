@@ -20,7 +20,7 @@
 //! any post-condition can be proved. Checking of this behavior is turned-off by default, and can
 //! be enabled with the `unconditional-abort-as-inconsistency` flag.
 
-use move_model::{exp_generator::ExpGenerator, model::FunctionEnv};
+use move_model::model::FunctionEnv;
 
 use crate::{
     function_data_builder::FunctionDataBuilder,
@@ -28,12 +28,7 @@ use crate::{
     function_target_pipeline::{
         FunctionTargetProcessor, FunctionTargetsHolder, FunctionVariant, VerificationFlavor,
     },
-    options::ProverOptions,
-    stackless_bytecode::{Bytecode, PropKind},
 };
-
-// This message is for the boogie wrapper, and not shown to the users.
-const EXPECTED_TO_FAIL: &str = "expected to fail";
 
 pub struct InconsistencyCheckInstrumenter {}
 
@@ -51,7 +46,7 @@ impl FunctionTargetProcessor for InconsistencyCheckInstrumenter {
         data: FunctionData,
         _scc_opt: Option<&[FunctionEnv]>,
     ) -> FunctionData {
-        if fun_env.is_native() || fun_env.is_intrinsic() {
+        if fun_env.is_native() {
             // Nothing to do.
             return data;
         }
@@ -64,9 +59,6 @@ impl FunctionTargetProcessor for InconsistencyCheckInstrumenter {
             FunctionVariant::Verification(flavor) => flavor.clone(),
         };
 
-        // obtain the options first
-        let options = ProverOptions::get(fun_env.module_env.env);
-
         // create a clone of the data for inconsistency check
         let new_data = data.fork(FunctionVariant::Verification(
             VerificationFlavor::Inconsistency(Box::new(flavor)),
@@ -76,15 +68,6 @@ impl FunctionTargetProcessor for InconsistencyCheckInstrumenter {
         let mut builder = FunctionDataBuilder::new(fun_env, new_data);
         let old_code = std::mem::take(&mut builder.data.code);
         for bc in old_code {
-            if matches!(bc, Bytecode::Ret(..))
-                || (matches!(bc, Bytecode::Abort(..))
-                    && !options.unconditional_abort_as_inconsistency)
-            {
-                let loc = builder.fun_env.get_spec_loc();
-                builder.set_loc_and_vc_info(loc, EXPECTED_TO_FAIL);
-                let exp = builder.mk_bool_const(false);
-                builder.emit_with(|id| Bytecode::Prop(id, PropKind::Assert, exp));
-            }
             builder.emit(bc);
         }
 

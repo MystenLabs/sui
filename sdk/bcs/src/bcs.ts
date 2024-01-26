@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { BcsTypeOptions } from './bcs-type.js';
 import {
 	BcsType,
-	BcsTypeOptions,
 	bigUIntBcsType,
 	dynamicSizeBcsType,
 	fixedSizeBcsType,
@@ -11,7 +11,7 @@ import {
 	stringLikeBcsType,
 	uIntBcsType,
 } from './bcs-type.js';
-import { GenericPlaceholder, ReplaceBcsGenerics } from './types.js';
+import type { GenericPlaceholder, ReplaceBcsGenerics } from './types.js';
 import { ulebEncode } from './uleb.js';
 
 export const bcs = {
@@ -563,7 +563,7 @@ export const bcs = {
 	 * ```
 	 */
 	generic<const Names extends readonly string[], const Type extends BcsType<any>>(
-		names: Names,
+		_names: Names,
 		cb: (...types: { [K in keyof Names]: BcsType<GenericPlaceholder<Names[K]>> }) => Type,
 	): <T extends { [K in keyof Names]: BcsType<any> }>(
 		...types: T

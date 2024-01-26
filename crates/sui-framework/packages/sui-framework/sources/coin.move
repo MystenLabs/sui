@@ -10,10 +10,12 @@ module sui::coin {
     use std::option::{Self, Option};
     use sui::balance::{Self, Balance, Supply};
     use sui::tx_context::TxContext;
-    use sui::object::{Self, UID};
+    use sui::object::{Self, UID, ID};
     use sui::transfer;
     use sui::url::{Self, Url};
     use std::vector;
+    use sui::deny_list::{Self, DenyList};
+    use std::type_name;
 
     /// A type passed to create_supply is not a one-time witness.
     const EBadWitness: u64 = 0;
@@ -47,11 +49,27 @@ module sui::coin {
         icon_url: Option<Url>
     }
 
+    /// Similar to CoinMetadata, but created only for regulated coins that use the DenyList.
+    /// This object is always immutable.
+    struct RegulatedCoinMetadata<phantom T> has key {
+        id: UID,
+        /// The ID of the coin's CoinMetadata object.
+        coin_metadata_object: ID,
+        /// The ID of the coin's DenyCap object.
+        deny_cap_object: ID,
+    }
+
     /// Capability allowing the bearer to mint and burn
     /// coins of type `T`. Transferable
     struct TreasuryCap<phantom T> has key, store {
         id: UID,
         total_supply: Supply<T>
+    }
+
+    /// Capability allowing the bearer to freeze addresses, preventing those addresses from
+    /// interacting with the coin as an input to a transaction.
+    struct DenyCap<phantom T> has key, store {
+        id: UID,
     }
 
     // === Supply <-> TreasuryCap morphing and accessors  ===
@@ -121,26 +139,9 @@ module sui::coin {
         }
     }
 
-    spec take {
-        let before_val = balance.value;
-        let post after_val = balance.value;
-        ensures after_val == before_val - value;
-
-        aborts_if value > before_val;
-        aborts_if ctx.ids_created + 1 > MAX_U64;
-    }
-
     /// Put a `Coin<T>` to the `Balance<T>`.
     public fun put<T>(balance: &mut Balance<T>, coin: Coin<T>) {
         balance::join(balance, into_balance(coin));
-    }
-
-    spec put {
-        let before_val = balance.value;
-        let post after_val = balance.value;
-        ensures after_val == before_val + coin.balance.value;
-
-        aborts_if before_val + coin.balance.value > MAX_U64;
     }
 
     // === Base Coin functionality ===
@@ -153,29 +154,12 @@ module sui::coin {
         balance::join(&mut self.balance, balance);
     }
 
-    spec join {
-        let before_val = self.balance.value;
-        let post after_val = self.balance.value;
-        ensures after_val == before_val + c.balance.value;
-
-        aborts_if before_val + c.balance.value > MAX_U64;
-    }
-
     /// Split coin `self` to two coins, one with balance `split_amount`,
     /// and the remaining balance is left is `self`.
     public fun split<T>(
         self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext
     ): Coin<T> {
         take(&mut self.balance, split_amount, ctx)
-    }
-
-    spec split {
-        let before_val = self.balance.value;
-        let post after_val = self.balance.value;
-        ensures after_val == before_val - split_amount;
-
-        aborts_if split_amount > before_val;
-        aborts_if ctx.ids_created + 1 > MAX_U64;
     }
 
     /// Split coin `self` into `n - 1` coins with equal balances. The remainder is left in
@@ -189,29 +173,11 @@ module sui::coin {
         let vec = vector::empty<Coin<T>>();
         let i = 0;
         let split_amount = value(self) / n;
-        while ({
-            spec {
-                invariant i <= n-1;
-                invariant self.balance.value == old(self).balance.value - (i * split_amount);
-                invariant ctx.ids_created == old(ctx).ids_created + i;
-            };
-            i < n - 1
-        }) {
+        while (i < n - 1) {
             vector::push_back(&mut vec, split(self, split_amount, ctx));
             i = i + 1;
         };
         vec
-    }
-
-    spec divide_into_n {
-        let before_val = self.balance.value;
-        let post after_val = self.balance.value;
-        let split_amount = before_val / n;
-        ensures after_val == before_val - ((n - 1) * split_amount);
-
-        aborts_if n == 0;
-        aborts_if self.balance.value < n;
-        aborts_if ctx.ids_created + n - 1 > MAX_U64;
     }
 
     /// Make any Coin with a zero value. Useful for placeholding
@@ -260,6 +226,38 @@ module sui::coin {
         )
     }
 
+    /// This creates a new currency, via `create_currency`, but with an extra capability that
+    /// allows for specific addresses to have their coins frozen. Those addresses cannot interact
+    /// with the coin as input objects.
+    public fun create_regulated_currency<T: drop>(
+        witness: T,
+        decimals: u8,
+        symbol: vector<u8>,
+        name: vector<u8>,
+        description: vector<u8>,
+        icon_url: Option<Url>,
+        ctx: &mut TxContext
+    ): (TreasuryCap<T>, DenyCap<T>, CoinMetadata<T>) {
+        let (treasury_cap, metadata) = create_currency(
+            witness,
+            decimals,
+            symbol,
+            name,
+            description,
+            icon_url,
+            ctx
+        );
+        let deny_cap = DenyCap {
+            id: object::new(ctx),
+        };
+        transfer::freeze_object(RegulatedCoinMetadata<T> {
+            id: object::new(ctx),
+            coin_metadata_object: object::id(&metadata),
+            deny_cap_object: object::id(&deny_cap),
+        });
+        (treasury_cap, deny_cap, metadata)
+    }
+
     /// Create a coin worth `value`. and increase the total supply
     /// in `cap` accordingly.
     public fun mint<T>(
@@ -271,22 +269,6 @@ module sui::coin {
         }
     }
 
-    spec schema MintBalance<T> {
-        cap: TreasuryCap<T>;
-        value: u64;
-
-        let before_supply = cap.total_supply.value;
-        let post after_supply = cap.total_supply.value;
-        ensures after_supply == before_supply + value;
-
-        aborts_if before_supply + value >= MAX_U64;
-    }
-
-    spec mint {
-        include MintBalance<T>;
-        aborts_if ctx.ids_created + 1 > MAX_U64;
-    }
-
     /// Mint some amount of T as a `Balance` and increase the total
     /// supply in `cap` accordingly.
     /// Aborts if `value` + `cap.total_supply` >= U64_MAX
@@ -294,10 +276,6 @@ module sui::coin {
         cap: &mut TreasuryCap<T>, value: u64
     ): Balance<T> {
         balance::increase_supply(&mut cap.total_supply, value)
-    }
-
-    spec mint_balance {
-        include MintBalance<T>;
     }
 
     /// Destroy the coin `c` and decrease the total supply in `cap`
@@ -308,19 +286,61 @@ module sui::coin {
         balance::decrease_supply(&mut cap.total_supply, balance)
     }
 
-    spec schema Burn<T> {
-        cap: TreasuryCap<T>;
-        c: Coin<T>;
+    /// The index into the deny list vector for the `sui::coin::Coin` type.
+    const DENY_LIST_COIN_INDEX: u64 = 0; // TODO public(package) const
 
-        let before_supply = cap.total_supply.value;
-        let post after_supply = cap.total_supply.value;
-        ensures after_supply == before_supply - c.balance.value;
-
-        aborts_if before_supply < c.balance.value;
+    /// Adds the given address to the deny list, preventing it
+    /// from interacting with the specified coin type as an input to a transaction.
+    public fun deny_list_add<T>(
+       deny_list: &mut DenyList,
+       _deny_cap: &mut DenyCap<T>,
+       addr: address,
+       _ctx: &mut TxContext
+    ) {
+        let type =
+            ascii::into_bytes(type_name::into_string(type_name::get_with_original_ids<T>()));
+        deny_list::add(
+            deny_list,
+            DENY_LIST_COIN_INDEX,
+            type,
+            addr,
+        )
     }
 
-    spec burn {
-        include Burn<T>;
+    /// Removes an address from the deny list.
+    /// Aborts with `ENotFrozen` if the address is not already in the list.
+    public fun deny_list_remove<T>(
+       deny_list: &mut DenyList,
+       _deny_cap: &mut DenyCap<T>,
+       addr: address,
+       _ctx: &mut TxContext
+    ) {
+        let type =
+            ascii::into_bytes(type_name::into_string(type_name::get_with_original_ids<T>()));
+        deny_list::remove(
+            deny_list,
+            DENY_LIST_COIN_INDEX,
+            type,
+            addr,
+        )
+    }
+
+    /// Returns true iff the given address is denied for the given coin type. It will
+    /// return false if given a non-coin type.
+    public fun deny_list_contains<T>(
+       freezer: &DenyList,
+       addr: address,
+    ): bool {
+        let name = type_name::get_with_original_ids<T>();
+        if (type_name::is_primitive(&name)) return false;
+
+        let type = ascii::into_bytes(type_name::into_string(name));
+        deny_list::contains(
+            freezer,
+            DENY_LIST_COIN_INDEX,
+            type,
+            addr,
+        )
     }
 
     // === Entrypoints ===

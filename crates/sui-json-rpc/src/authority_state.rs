@@ -124,6 +124,11 @@ pub trait StateRead: Send + Sync {
         sender: SuiAddress,
         transaction_kind: TransactionKind,
         gas_price: Option<u64>,
+        gas_budget: Option<u64>,
+        gas_sponsor: Option<SuiAddress>,
+        gas_objects: Option<Vec<ObjectRef>>,
+        show_raw_txn_data_and_effects: Option<bool>,
+        skip_checks: Option<bool>,
     ) -> StateReadResult<DevInspectResults>;
 
     // indexer_api
@@ -347,9 +352,23 @@ impl StateRead for AuthorityState {
         sender: SuiAddress,
         transaction_kind: TransactionKind,
         gas_price: Option<u64>,
+        gas_budget: Option<u64>,
+        gas_sponsor: Option<SuiAddress>,
+        gas_objects: Option<Vec<ObjectRef>>,
+        show_raw_txn_data_and_effects: Option<bool>,
+        skip_checks: Option<bool>,
     ) -> StateReadResult<DevInspectResults> {
         Ok(self
-            .dev_inspect_transaction_block(sender, transaction_kind, gas_price)
+            .dev_inspect_transaction_block(
+                sender,
+                transaction_kind,
+                gas_price,
+                gas_budget,
+                gas_sponsor,
+                gas_objects,
+                show_raw_txn_data_and_effects,
+                skip_checks,
+            )
             .await?)
     }
 
@@ -396,7 +415,7 @@ impl StateRead for AuthorityState {
             .await?)
     }
     fn get_system_state(&self) -> StateReadResult<SuiSystemState> {
-        Ok(self.database.get_sui_system_state_object()?)
+        Ok(self.database.get_sui_system_state_object_unsafe()?)
     }
     fn get_or_latest_committee(&self, epoch: Option<BigInt<u64>>) -> StateReadResult<Committee> {
         Ok(self
@@ -487,28 +506,18 @@ impl StateRead for AuthorityState {
         &self,
         digests: &[TransactionDigest],
     ) -> StateReadResult<Vec<Option<(EpochId, CheckpointSequenceNumber)>>> {
-        let epoch_store = self.load_epoch_store_one_call_per_task();
-        let epoch = epoch_store.epoch();
-        assert!(epoch_store.per_epoch_finalized_txns_enabled());
-        Ok(epoch_store
-            .multi_get_transaction_checkpoint(digests)
-            .map(|seqs| {
-                seqs.into_iter()
-                    .map(|e| e.map(|seq| (epoch, seq)))
-                    .collect()
-            })?)
+        Ok(self
+            .database
+            .deprecated_multi_get_transaction_checkpoint(digests)?)
     }
 
     fn deprecated_get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
     ) -> StateReadResult<Option<(EpochId, CheckpointSequenceNumber)>> {
-        let epoch_store = self.load_epoch_store_one_call_per_task();
-        let epoch = epoch_store.epoch();
-        assert!(epoch_store.per_epoch_finalized_txns_enabled());
-        Ok(epoch_store
-            .get_transaction_checkpoint(digest)
-            .map(|r| r.map(|seq| (epoch, seq)))?)
+        Ok(self
+            .database
+            .deprecated_get_transaction_checkpoint(digest)?)
     }
 
     fn multi_get_checkpoint_by_sequence_number(

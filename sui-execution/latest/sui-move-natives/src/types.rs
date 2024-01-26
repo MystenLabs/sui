@@ -16,7 +16,11 @@ use std::collections::VecDeque;
 
 use crate::NativesCostTable;
 
-pub(crate) fn is_otw_struct(struct_layout: &MoveStructLayout, type_tag: &TypeTag) -> bool {
+pub(crate) fn is_otw_struct(
+    struct_layout: &MoveStructLayout,
+    type_tag: &TypeTag,
+    hardened_check: bool,
+) -> bool {
     let has_one_bool_field = matches!(struct_layout.0.as_slice(), [MoveTypeLayout::Bool]);
 
     // If a struct type has the same name as the module that defines it but capitalized, and it has
@@ -26,7 +30,12 @@ pub(crate) fn is_otw_struct(struct_layout: &MoveStructLayout, type_tag: &TypeTag
     // have all the remaining properties of a one-time witness type will cause a verifier error).
     matches!(
         type_tag,
-        TypeTag::Struct(struct_tag) if has_one_bool_field && struct_tag.name.to_string() == struct_tag.module.to_string().to_ascii_uppercase())
+        TypeTag::Struct(struct_tag) if
+        has_one_bool_field &&
+        struct_tag.name.to_string() == struct_tag.module.to_string().to_ascii_uppercase() &&
+        // hardened check ==> no generic types
+        (!hardened_check || struct_tag.type_params.is_empty())
+    )
 }
 
 #[derive(Clone)]
@@ -84,7 +93,8 @@ pub fn is_one_time_witness(
         return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 
-    let is_otw = is_otw_struct(&struct_layout, &type_tag);
+    let hardened_check = context.runtime_limits_config().hardened_otw_check;
+    let is_otw = is_otw_struct(&struct_layout, &type_tag, hardened_check);
 
     Ok(NativeResult::ok(cost, smallvec![Value::bool(is_otw)]))
 }

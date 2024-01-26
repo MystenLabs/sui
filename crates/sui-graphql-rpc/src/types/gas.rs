@@ -1,27 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::context_data::db_data_provider::PgManager;
 use crate::types::object::Object;
 use async_graphql::connection::Connection;
 use async_graphql::*;
-use sui_json_rpc_types::SuiGasData;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress as NativeSuiAddress},
     effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
     gas::GasCostSummary as NativeGasCostSummary,
     transaction::GasData,
 };
 
-use super::object::ObjectFilter;
-use super::{address::Address, big_int::BigInt, sui_address::SuiAddress};
+use super::{address::Address, big_int::BigInt, object::ObjectVersionKey, sui_address::SuiAddress};
+use super::{
+    cursor::Page,
+    object::{self, ObjectFilter, ObjectKey},
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct GasInput {
-    pub owner: NativeSuiAddress,
+    pub owner: SuiAddress,
     pub price: u64,
     pub budget: u64,
-    pub payment_obj_ids: Vec<ObjectID>,
+    pub payment_obj_keys: Vec<ObjectKey>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,11 +39,14 @@ pub(crate) struct GasEffects {
     pub object_version: u64,
 }
 
+/// Configuration for this transaction's gas price and the coins used to pay for gas.
 #[Object]
 impl GasInput {
     /// Address of the owner of the gas object(s) used
     async fn gas_sponsor(&self) -> Option<Address> {
-        Some(Address::from(SuiAddress::from(self.owner)))
+        Some(Address {
+            address: self.owner,
+        })
     }
 
     /// Objects used to pay for a transaction's execution and storage
@@ -51,22 +54,18 @@ impl GasInput {
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<String>,
+        after: Option<object::Cursor>,
         last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, Object>>> {
+        before: Option<object::Cursor>,
+    ) -> Result<Connection<String, Object>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+
         let filter = ObjectFilter {
-            object_ids: Some(
-                self.payment_obj_ids
-                    .iter()
-                    .map(|id| SuiAddress::from_array(***id))
-                    .collect(),
-            ),
+            object_keys: Some(self.payment_obj_keys.clone()),
             ..Default::default()
         };
 
-        ctx.data_unchecked::<PgManager>()
-            .fetch_objs(first, after, last, before, Some(filter))
+        Object::paginate(ctx.data_unchecked(), page, filter)
             .await
             .extend()
     }
@@ -83,6 +82,7 @@ impl GasInput {
     }
 }
 
+/// Breakdown of gas costs in effects.
 #[Object]
 impl GasCostSummary {
     /// Gas paid for executing this transaction (in MIST).
@@ -109,13 +109,17 @@ impl GasCostSummary {
     }
 }
 
+/// Effects related to gas (costs incurred and the identity of the smashed gas object returned).
 #[Object]
 impl GasEffects {
     async fn gas_object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_obj(self.object_id, Some(self.object_version))
-            .await
-            .extend()
+        Object::query(
+            ctx.data_unchecked(),
+            self.object_id,
+            ObjectVersionKey::Historical(self.object_version),
+        )
+        .await
+        .extend()
     }
 
     async fn gas_summary(&self) -> Option<&GasCostSummary> {
@@ -134,24 +138,20 @@ impl GasEffects {
     }
 }
 
-impl From<&SuiGasData> for GasInput {
-    fn from(s: &SuiGasData) -> Self {
-        Self {
-            owner: s.owner,
-            price: s.price,
-            budget: s.budget,
-            payment_obj_ids: s.payment.iter().map(|o| o.object_id).collect(),
-        }
-    }
-}
-
 impl From<&GasData> for GasInput {
     fn from(s: &GasData) -> Self {
         Self {
-            owner: s.owner,
+            owner: s.owner.into(),
             price: s.price,
             budget: s.budget,
-            payment_obj_ids: s.payment.iter().map(|o| o.0).collect(),
+            payment_obj_keys: s
+                .payment
+                .iter()
+                .map(|o| ObjectKey {
+                    object_id: o.0.into(),
+                    version: o.1.value(),
+                })
+                .collect(),
         }
     }
 }

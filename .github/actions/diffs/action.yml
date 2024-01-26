@@ -27,6 +27,7 @@ runs:
     with:
       filters: |
         isRust:
+          - 'consensus/**'
           - 'crates/**'
           - 'external-crates/**'
           - 'narwhal/**'
@@ -51,6 +52,7 @@ runs:
           - 'examples/**'
           - 'sui_programmability/**'
         isReleaseNotesEligible:
+          - 'consensus/**'
           - 'crates/**'
           - 'dashboards/**'
           - 'doc/**'
