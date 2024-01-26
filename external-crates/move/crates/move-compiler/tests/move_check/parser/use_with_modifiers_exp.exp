@@ -27,3 +27,9 @@ error[E03004]: unbound type
 3 │         public use fun bar as X.baz;
   │                               ^ Unbound type 'X' in current scope
 
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/use_with_modifiers_exp.move:5:1
+  │
+5 │ }
+  │ ^ Invalid code unit. Expected 'address' or 'module'. Got '}'
+
