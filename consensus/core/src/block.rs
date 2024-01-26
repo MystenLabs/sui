@@ -11,14 +11,14 @@ use std::{
 
 use bytes::Bytes;
 use consensus_config::{
-    to_intent_message, AuthorityIndex, AuthoritySignature, DefaultHashFunction, Epoch,
-    NetworkKeySignature, DIGEST_LENGTH,
+    AuthorityIndex, DefaultHashFunction, Epoch, NetworkKeySignature, DIGEST_LENGTH,
 };
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, HashFunction};
 use fastcrypto::traits::{Signer, ToFromBytes};
 use serde::{Deserialize, Serialize};
 
+use crate::authority_signature::{to_consensus_block_intent, AuthoritySignature};
 use crate::context::Context;
 use crate::ensure;
 use crate::error::{ConsensusError, ConsensusResult};
@@ -314,7 +314,7 @@ impl SignedBlock {
         S: Signer<NetworkKeySignature>,
     {
         let digest = compute_digest(&block)?;
-        let signature = NetworkKeySignature::new(&to_intent_message(digest), signer);
+        let signature = NetworkKeySignature::new(&to_consensus_block_intent(digest), signer);
         let signature_bytes = signature.as_bytes();
         Ok(Self {
             inner: block,
@@ -337,8 +337,8 @@ impl SignedBlock {
         let signature = NetworkKeySignature::from_bytes(self.signature.as_ref())?;
 
         signature
-            .verify(&to_intent_message(digest), &authority.network_key)
-            .map_err(ConsensusError::CryptographicOperationFailure)
+            .verify(&to_consensus_block_intent(digest), &authority.network_key)
+            .map_err(ConsensusError::SignatureVerificationFailure)
     }
 
     /// Serialises the block using the bcs serializer
@@ -547,7 +547,7 @@ mod tests {
         // Now verify the block, it should fail
         let result = signed_block.verify(&context);
         match result.err().unwrap() {
-            ConsensusError::CryptographicOperationFailure(err) => {
+            ConsensusError::SignatureVerificationFailure(err) => {
                 assert_eq!(err, FastCryptoError::InvalidSignature);
             }
             err => panic!("Unexpected error: {err:?}"),

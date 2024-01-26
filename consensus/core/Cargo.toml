@@ -20,6 +20,7 @@ parking_lot.workspace = true
 prometheus.workspace = true
 rand.workspace = true
 serde.workspace = true
+shared-crypto.workspace = true
 sui-protocol-config.workspace = true
 tap.workspace = true
 thiserror.workspace = true

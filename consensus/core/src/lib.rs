@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod authority_node;
+mod authority_signature;
 mod base_committer;
 mod block;
 mod block_manager;

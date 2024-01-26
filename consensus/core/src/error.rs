@@ -15,8 +15,8 @@ pub enum ConsensusError {
     #[error("RocksDB failure: {0}")]
     RocksDBFailure(#[from] TypedStoreError),
 
-    #[error("FastCrypto failure: {0}")]
-    CryptographicOperationFailure(#[from] FastCryptoError),
+    #[error("Failed to verify the block's signature with error: {0}")]
+    SignatureVerificationFailure(#[from] FastCryptoError),
 
     #[error("Unknown authority provided: {0}")]
     UnknownAuthority(String),
