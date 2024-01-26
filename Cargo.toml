@@ -520,6 +520,7 @@ x509-parser = "0.14.0"
 zstd = "0.12.3"
 zeroize = "1.6.0"
 versions = "4.1.0"
+miette = {version = "5.10.0", features = ["fancy"] }
 
 # Move dependencies
 move-binary-format = { path = "external-crates/move/crates/move-binary-format" }

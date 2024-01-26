@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::ptb::ptb_parser::build_ptb::PTBBuilder;
+use crate::ptb::ptb_parser::errors::render_errors;
 use crate::ptb::ptb_parser::parser::PTBParser;
 use anyhow::anyhow;
 use clap::parser::ValuesRef;
@@ -63,10 +64,10 @@ pub struct PTB {
     #[clap(long, num_args(2))]
     transfer_objects: Vec<String>,
     /// Publish the move package. It takes as input the folder where the package exists.
-    #[clap(long, num_args(0..2), required=false)]
+    #[clap(long, num_args(1), required=false)]
     publish: String,
     /// Upgrade the move package. It takes as input the folder where the package exists.
-    #[clap(long, num_args(0..2), required=false)]
+    #[clap(long, num_args(2), required=false)]
     upgrade: String,
     /// Preview the PTB instead of executing it
     #[clap(long)]
@@ -339,22 +340,18 @@ impl PTB {
 
         // Build the PTB
         let mut parser = PTBParser::new();
-        for command in commands {
+        for command in commands.clone() {
             parser.parse(command.1);
         }
 
         let (parsed, errors) = parser.finish();
 
         if !errors.is_empty() {
-            let errs: Vec<_> = errors
-                .iter()
-                .enumerate()
-                .map(|(i, e)| format!("[{i}]: {e}"))
-                .collect();
-            anyhow::bail!(
-                "Encountered errors when parsing the PTB\n{}",
-                errs.join("\n")
-            );
+            let rendered = render_errors(commands, errors);
+            for e in rendered.iter() {
+                println!("{:?}", e);
+            }
+            anyhow::bail!("Encountered errors when parsing the PTB",);
         }
 
         // We need to resolve object IDs, so we need a fullnode to access
@@ -370,15 +367,11 @@ impl PTB {
 
         let (ptb, budget, _preview) = match builder.finish() {
             Err(errors) => {
-                let errs: Vec<_> = errors
-                    .iter()
-                    .enumerate()
-                    .map(|(i, e)| format!("[{i}]: {e}"))
-                    .collect();
-                anyhow::bail!(
-                    "Encountered errors when building the PTB:\n{}",
-                    errs.join("\n")
-                );
+                let rendered = render_errors(commands, errors);
+                for e in rendered.iter() {
+                    println!("{:?}", e);
+                }
+                anyhow::bail!("Encountered errors when building the PTB",);
             }
             Ok(x) => x,
         };

@@ -169,6 +169,23 @@ impl CommandToken {
             },
         }
     }
+    pub fn all() -> Vec<&'static str> {
+        vec![
+            TRANSFER_OBJECTS,
+            SPLIT_COINS,
+            MERGE_COINS,
+            MAKE_MOVE_VEC,
+            MOVE_CALL,
+            PUBLISH,
+            UPGRADE,
+            ASSIGN,
+            FILE,
+            PREVIEW,
+            WARN_SHADOWS,
+            PICK_GAS_BUDGET,
+            GAS_BUDGET,
+        ]
+    }
 }
 
 #[cfg(test)]
