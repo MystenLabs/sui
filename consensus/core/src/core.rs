@@ -48,7 +48,7 @@ pub(crate) struct Core {
     /// The transactions that haven't been proposed yet and are to be included in the next proposal
     pending_transactions: Vec<Transaction>,
     /// The pending ancestors to be included in proposals organised by round.
-    pending_ancestors: BTreeMap<Round, Vec<PendingAncestorEntry>>,
+    pending_ancestors: BTreeMap<Round, Vec<VerifiedBlock>>,
     /// The block manager which is responsible for keeping track of the DAG dependencies when processing new blocks
     /// and accept them or suspend if we are missing their causal history
     block_manager: BlockManager,
@@ -75,13 +75,13 @@ impl Core {
         genesis_others.push(genesis_my.clone());
 
         // populate the threshold clock to properly advance the round & also the pending ancestors
-        let mut pending_ancestors: BTreeMap<Round, Vec<PendingAncestorEntry>> = BTreeMap::new();
+        let mut pending_ancestors: BTreeMap<Round, Vec<VerifiedBlock>> = BTreeMap::new();
         for ancestor in genesis_others {
             threshold_clock.add_block(ancestor.reference());
             pending_ancestors
                 .entry(ancestor.round())
                 .or_default()
-                .push(ancestor.into())
+                .push(ancestor)
         }
 
         // emit a signal for the last threshold clock round, even if that's unnecessary it will ensure that the timeout
@@ -134,7 +134,7 @@ impl Core {
             self.pending_ancestors
                 .entry(accepted_block.round())
                 .or_default()
-                .push(accepted_block.into());
+                .push(accepted_block);
         }
 
         // Attempt to create a new block
@@ -210,7 +210,7 @@ impl Core {
             self.pending_ancestors
                 .entry(verified_block.round())
                 .or_default()
-                .push((&verified_block).into());
+                .push(verified_block.clone());
 
             // TODO: use the DagState instead to accept the block directly. Will address on follow up PR when I'll inject
             // the DagState. Now that's necessary to ensure that blocks aren't double processed.
@@ -246,20 +246,20 @@ impl Core {
         // Ensure that timestamps are correct
         ancestors.iter().for_each(|block|{
             // We assume that our system's clock can't go backwards when we perform the check here (ex due to ntp corrections)
-            assert!(block.timestamp <= block_timestamp, "Violation, ancestor block timestamp {} greater than our timestamp {block_timestamp}", block.timestamp);
+            assert!(block.timestamp_ms() <= block_timestamp, "Violation, ancestor block timestamp {} greater than our timestamp {block_timestamp}", block.timestamp_ms());
         });
 
         // Compress the references in the block. We don't want to include an ancestors that already referenced by other blocks
         // we are about to include.
         let all_ancestors_parents: HashSet<&BlockRef> = ancestors
             .iter()
-            .flat_map(|block| &block.ancestors)
+            .flat_map(|block| block.ancestors())
             .collect();
 
         let mut to_propose = HashSet::new();
         for block in ancestors.into_iter() {
-            if !all_ancestors_parents.contains(&block.reference) {
-                to_propose.insert(block.reference);
+            if !all_ancestors_parents.contains(&block.reference()) {
+                to_propose.insert(block.reference());
             }
         }
 
@@ -291,7 +291,7 @@ impl Core {
             return leaders.iter().all(|leader| {
                 ancestors
                     .iter()
-                    .any(|entry| entry.reference.author == *leader)
+                    .any(|entry| entry.reference().author == *leader)
             });
         }
         false
@@ -329,34 +329,6 @@ impl Core {
         mem::swap(&mut payload, &mut self.pending_transactions);
 
         payload
-    }
-}
-
-/// A helper struct to keep a much reduced info set for a block that is pending to potentially be included
-/// in a next block proposal.
-struct PendingAncestorEntry {
-    reference: BlockRef,
-    timestamp: BlockTimestampMs,
-    ancestors: Vec<BlockRef>,
-}
-
-impl From<&VerifiedBlock> for PendingAncestorEntry {
-    fn from(value: &VerifiedBlock) -> Self {
-        Self {
-            reference: value.reference(),
-            timestamp: value.timestamp_ms(),
-            ancestors: value.ancestors().to_vec(),
-        }
-    }
-}
-
-impl From<VerifiedBlock> for PendingAncestorEntry {
-    fn from(value: VerifiedBlock) -> Self {
-        Self {
-            reference: value.reference(),
-            timestamp: value.timestamp_ms(),
-            ancestors: value.ancestors().to_vec(),
-        }
     }
 }
 
