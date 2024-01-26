@@ -38,7 +38,7 @@ impl AuthoritySignature<BlockDigest> for NetworkKeySignature {
     }
 }
 
-/// Wrap a message in an intent message. Currently in Consensus, the scope is always IntentScope::BlockDigest and the app id is AppId::Consensus.
+/// Wrap a message in an intent message. Currently in Consensus, the scope is always IntentScope::ConsensusBlock and the app id is AppId::Consensus.
 pub fn to_consensus_block_intent(value: BlockDigest) -> IntentMessage<BlockDigest> {
     IntentMessage::new(Intent::consensus_app(IntentScope::ConsensusBlock), value)
 }
