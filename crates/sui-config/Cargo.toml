@@ -27,9 +27,6 @@ sui-protocol-config.workspace = true
 sui-types.workspace = true
 workspace-hack.workspace = true
 
-[target.'cfg(msim)'.dependencies]
-sui-simulator.workspace = true
-
 [dev-dependencies]
 insta.workspace = true
 tempfile.workspace = true
