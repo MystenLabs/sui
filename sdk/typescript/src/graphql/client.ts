@@ -1036,7 +1036,7 @@ export class GraphQLSuiClient extends SuiClient {
 				type: field.value?.__typename === 'MoveObject' ? 'DynamicObject' : 'DynamicField',
 				version: (field.value?.__typename === 'MoveObject'
 					? field.value.version
-					: undefined) as unknown as string,
+					: field.value?.__typename) as unknown as string,
 			})),
 			nextCursor: pageInfo.endCursor ?? null,
 			hasNextPage: pageInfo.hasNextPage,

@@ -348,6 +348,53 @@ const StructTag = bcs.struct('StructTag', {
 	typeParams: bcs.vector(TypeTag),
 });
 
+// type MoveValue =
+// 	| { U8: number }
+// 	| { U64: string }
+// 	| { U128: string }
+// 	| { Bool: boolean }
+// 	| { Address: string }
+// 	| { Vector: MoveValue[] }
+// 	| { Struct: typeof StructTag.$inferType }
+// 	| { Signer: string }
+// 	| { U16: number }
+// 	| { U32: number }
+// 	| { U256: string };
+
+// type MoveValueInput =
+// 	| { U8: number }
+// 	| { U64: string | number | bigint }
+// 	| { U128: string | number | bigint }
+// 	| { Bool: boolean }
+// 	| { Address: string | Uint8Array }
+// 	| { Vector: Iterable<MoveValueInput> & { length: number } }
+// 	| {
+// 			Struct: typeof StructTag.$inferInput;
+// 	  }
+// 	| { Signer: string | Uint8Array }
+// 	| { U16: number }
+// 	| { U32: number }
+// 	| { U256: string | number | bigint };
+
+// const MoveValue: BcsType<MoveValue, MoveValueInput> = bcs.enum('MoveValue', {
+// 	U8: bcs.u8(),
+// 	U64: bcs.u64(),
+// 	U128: bcs.u128(),
+// 	Bool: bcs.bool(),
+// 	Address: Address,
+// 	Vector: bcs.vector(bcs.lazy(() => MoveValue)),
+// 	Struct: bcs.lazy(() => MoveStruct),
+// 	Signer: Address,
+// 	U16: bcs.u16(),
+// 	U32: bcs.u32(),
+// 	U256: bcs.u256(),
+// }) as never;
+
+// const MoveStruct = bcs.struct('MoveStruct', {
+// 	type_: StructTag,
+// 	fields: bcs.vector(bcs.tuple([bcs.string(), MoveValue])),
+// });
+
 const GasData = bcs.struct('GasData', {
 	payment: bcs.vector(SuiObjectRef),
 	owner: Address,
@@ -466,6 +513,8 @@ const suiBcs = {
 	SenderSignedTransaction,
 	SharedObjectRef,
 	StructTag,
+	// MoveValue,
+	// MoveStruct,
 	SuiObjectRef,
 	Transaction,
 	TransactionData,
