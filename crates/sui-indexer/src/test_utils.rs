@@ -172,10 +172,9 @@ fn replace_db_name(db_url: &str, new_db_name: &str) -> (String, String) {
 }
 
 pub async fn force_delete_database(db_url: String) {
-    // Connect to the `postgres` database to drop the active database.
+    // Replace the database name with the default `postgres`, which should be the last string after `/`
     // This is necessary because you can't drop a database while being connected to it.
-
-    // Replace the database name with `postgres`, which should be the last string after `/`
+    // Hence switch to the default `postgres` database to drop the active database.
     let (default_db_url, db_name) = replace_db_name(&db_url, "postgres");
 
     let blocking_pool = new_pg_connection_pool_impl(&default_db_url, Some(5)).unwrap();

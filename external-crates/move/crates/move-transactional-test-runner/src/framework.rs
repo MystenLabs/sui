@@ -730,7 +730,12 @@ where
     let (mut adapter, result_opt) =
         Adapter::init(default_syntax, fully_compiled_program_opt, init_opt, path).await;
     if let Some(result) = result_opt {
-        writeln!(output, "\ninit:\n{}", result)?;
+        if let Err(e) = writeln!(output, "\ninit:\n{}", result) {
+            // TODO: if this fails, it masks the actual error, need better error handling
+            // in case cleanup_resources() fails
+            adapter.cleanup_resources().await?;
+            return Err(Box::new(e));
+        }
     }
     for task in tasks {
         handle_known_task(&mut output, &mut adapter, task).await;

@@ -257,8 +257,6 @@ impl ExecutorCluster {
     pub async fn cleanup_resources(self) {
         // Delete the database
         let db_url = self.graphql_connection_config.db_url.clone();
-
-        drop(self);
         force_delete_database(db_url).await;
     }
 }

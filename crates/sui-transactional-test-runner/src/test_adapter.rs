@@ -40,6 +40,7 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::fmt::{self, Write};
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::path::PathBuf;
 use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -304,13 +305,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 reference_gas_price,
                 object_snapshot_min_checkpoint_lag,
                 object_snapshot_max_checkpoint_lag,
-                // Hash the file path to create custom unique DB name
-                {
-                    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-                    path.hash(&mut hasher);
-                    let db_name = format!("sui_graphql_test_{}", hasher.finish());
-                    db_name
-                },
+                path.to_path_buf(),
             )
             .await
         } else {
@@ -1868,7 +1863,7 @@ async fn init_sim_executor(
     reference_gas_price: Option<u64>,
     object_snapshot_min_checkpoint_lag: Option<usize>,
     object_snapshot_max_checkpoint_lag: Option<usize>,
-    db_name: String,
+    test_file_path: PathBuf,
 ) -> (
     Box<dyn TransactionalAdapter>,
     AccountSetup,
@@ -1934,16 +1929,26 @@ async fn init_sim_executor(
         None,
     );
 
-    // Take the last 4 digits of the db name and use it as the port number
-    let base_port = db_name
+    // Hash the file path to create custom unique DB name
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    test_file_path.hash(&mut hasher);
+    let hash = hasher.finish();
+    let db_name = format!("sui_graphql_test_{}", hash);
+
+    // Take the last 4 digits of the has and use it as the port number
+    let base_port = hash
+        .to_string()
         .chars()
         .rev()
         .take(4)
         .collect::<String>()
         .chars()
         .rev()
-        .collect::<String>();
-    let graphql_port = 20000 + base_port.parse::<u16>().unwrap();
+        .collect::<String>()
+        .parse::<u16>()
+        .unwrap();
+
+    let graphql_port = 20000 + base_port;
     let graphql_prom_port = graphql_port + 1;
     let internal_data_port = graphql_prom_port + 1;
     let cluster = serve_executor(
