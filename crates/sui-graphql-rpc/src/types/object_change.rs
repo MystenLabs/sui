@@ -5,7 +5,7 @@ use async_graphql::*;
 use sui_types::effects::{IDOperation, ObjectChange as NativeObjectChange};
 
 use super::{
-    object::{Object, ObjectVersionKey},
+    object::{Object, ObjectLookupKey},
     sui_address::SuiAddress,
 };
 
@@ -30,7 +30,10 @@ impl ObjectChange {
         Object::query(
             ctx.data_unchecked(),
             self.native.id.into(),
-            ObjectVersionKey::Historical(version.value()),
+            ObjectLookupKey::VersionAt {
+                version: version.value(),
+                checkpoint_viewed_at: None,
+            },
         )
         .await
         .extend()
@@ -45,7 +48,10 @@ impl ObjectChange {
         Object::query(
             ctx.data_unchecked(),
             self.native.id.into(),
-            ObjectVersionKey::Historical(version.value()),
+            ObjectLookupKey::VersionAt {
+                version: version.value(),
+                checkpoint_viewed_at: None,
+            },
         )
         .await
         .extend()

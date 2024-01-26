@@ -27,7 +27,7 @@ use super::{
     epoch::Epoch,
     event::{self, Event, EventFilter},
     move_type::MoveType,
-    object::{self, Object, ObjectFilter, ObjectVersionKey},
+    object::{self, Object, ObjectFilter, ObjectLookupKey},
     owner::Owner,
     protocol_config::ProtocolConfigs,
     sui_address::SuiAddress,
@@ -178,7 +178,7 @@ impl Query {
     async fn owner(&self, address: SuiAddress) -> Option<Owner> {
         Some(Owner {
             address,
-            checkpoint_sequence_number: None,
+            checkpoint_viewed_at: None,
         })
     }
 
@@ -194,11 +194,14 @@ impl Query {
             Some(version) => Object::query(
                 ctx.data_unchecked(),
                 address,
-                ObjectVersionKey::Historical(version),
+                ObjectLookupKey::VersionAt {
+                    version,
+                    checkpoint_viewed_at: None,
+                },
             )
             .await
             .extend(),
-            None => Object::query(ctx.data_unchecked(), address, ObjectVersionKey::Latest)
+            None => Object::query(ctx.data_unchecked(), address, ObjectLookupKey::Latest)
                 .await
                 .extend(),
         }
@@ -208,7 +211,7 @@ impl Query {
     async fn address(&self, address: SuiAddress) -> Option<Address> {
         Some(Address {
             address,
-            checkpoint_sequence_number: None,
+            checkpoint_viewed_at: None,
         })
     }
 
@@ -367,7 +370,7 @@ impl Query {
         .and_then(|r| r.target_address)
         .map(|a| Address {
             address: a.into(),
-            checkpoint_sequence_number: None,
+            checkpoint_viewed_at: None,
         }))
     }
 

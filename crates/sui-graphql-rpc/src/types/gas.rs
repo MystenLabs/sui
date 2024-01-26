@@ -10,7 +10,7 @@ use sui_types::{
     transaction::GasData,
 };
 
-use super::{address::Address, big_int::BigInt, object::ObjectVersionKey, sui_address::SuiAddress};
+use super::{address::Address, big_int::BigInt, object::ObjectLookupKey, sui_address::SuiAddress};
 use super::{
     cursor::Page,
     object::{self, ObjectFilter, ObjectKey},
@@ -22,7 +22,7 @@ pub(crate) struct GasInput {
     pub price: u64,
     pub budget: u64,
     pub payment_obj_keys: Vec<ObjectKey>,
-    pub checkpoint_sequence_number: Option<u64>,
+    pub checkpoint_viewed_at: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -47,7 +47,7 @@ impl GasInput {
     async fn gas_sponsor(&self) -> Option<Address> {
         Some(Address {
             address: self.owner,
-            checkpoint_sequence_number: self.checkpoint_sequence_number,
+            checkpoint_viewed_at: self.checkpoint_viewed_at,
         })
     }
 
@@ -71,7 +71,7 @@ impl GasInput {
             ctx.data_unchecked(),
             page,
             filter,
-            self.checkpoint_sequence_number,
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()
@@ -123,7 +123,10 @@ impl GasEffects {
         Object::query(
             ctx.data_unchecked(),
             self.object_id,
-            ObjectVersionKey::Historical(self.object_version),
+            ObjectLookupKey::VersionAt {
+                version: self.object_version,
+                checkpoint_viewed_at: None,
+            },
         )
         .await
         .extend()
@@ -146,7 +149,7 @@ impl GasEffects {
 }
 
 impl GasInput {
-    pub(crate) fn from(s: &GasData, checkpoint_sequence_number: Option<u64>) -> Self {
+    pub(crate) fn from(s: &GasData, checkpoint_viewed_at: Option<u64>) -> Self {
         Self {
             owner: s.owner.into(),
             price: s.price,
@@ -159,7 +162,7 @@ impl GasInput {
                     version: o.1.value(),
                 })
                 .collect(),
-            checkpoint_sequence_number,
+            checkpoint_viewed_at,
         }
     }
 }

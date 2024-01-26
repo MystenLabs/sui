@@ -336,11 +336,17 @@ impl StakedSui {
 impl StakedSui {
     /// Query the database for a `page` of Staked SUI. The page uses the same cursor type as is used
     /// for `Object`, and is further filtered to a particular `owner`.
+    ///
+    /// The `checkpoint_viewed_at` parameter is an Option<u64> representing the
+    /// checkpoint_sequence_number at which this page was queried for, or None if the data was
+    /// requested at the latest checkpoint. Each entity returned in the connection will inherit this
+    /// checkpoint, so that when viewing that entity's state, it will be from the reference of this
+    /// checkpoint_viewed_at parameter.
     pub(crate) async fn paginate(
         db: &Db,
         page: Page<object::Cursor>,
         owner: SuiAddress,
-        checkpoint_sequence_number: Option<u64>,
+        checkpoint_viewed_at: Option<u64>,
     ) -> Result<Connection<String, StakedSui>, Error> {
         let type_: StructTag = MoveObjectType::staked_sui().into();
 
@@ -350,26 +356,20 @@ impl StakedSui {
             ..Default::default()
         };
 
-        Object::paginate_subtype(
-            db,
-            page,
-            filter,
-            |object| {
-                let address = object.address;
-                let move_object = MoveObject::try_from(&object).map_err(|_| {
-                    Error::Internal(format!(
-                        "Expected {address} to be a StakedSui, but it's not a Move Object.",
-                    ))
-                })?;
+        Object::paginate_subtype(db, page, filter, checkpoint_viewed_at, |object| {
+            let address = object.address;
+            let move_object = MoveObject::try_from(&object).map_err(|_| {
+                Error::Internal(format!(
+                    "Expected {address} to be a StakedSui, but it's not a Move Object.",
+                ))
+            })?;
 
-                StakedSui::try_from(&move_object).map_err(|_| {
-                    Error::Internal(format!(
-                        "Expected {address} to be a StakedSui, but it is not."
-                    ))
-                })
-            },
-            checkpoint_sequence_number,
-        )
+            StakedSui::try_from(&move_object).map_err(|_| {
+                Error::Internal(format!(
+                    "Expected {address} to be a StakedSui, but it is not."
+                ))
+            })
+        })
         .await
     }
 

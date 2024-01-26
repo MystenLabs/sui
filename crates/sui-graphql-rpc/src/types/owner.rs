@@ -7,7 +7,7 @@ use super::cursor::Page;
 use super::dynamic_field::DynamicField;
 use super::dynamic_field::DynamicFieldName;
 use super::move_package::MovePackage;
-use super::object::ObjectVersionKey;
+use super::object::ObjectLookupKey;
 use super::stake::StakedSui;
 use super::suins_registration::NameService;
 use super::suins_registration::SuinsRegistration;
@@ -28,13 +28,13 @@ use sui_types::gas_coin::GAS;
 #[derive(Clone, Debug)]
 pub(crate) struct Owner {
     pub address: SuiAddress,
-    pub checkpoint_sequence_number: Option<u64>,
+    pub checkpoint_viewed_at: Option<u64>,
 }
 
 /// Type to implement GraphQL fields that are shared by all Owners.
 pub(crate) struct OwnerImpl {
     pub address: SuiAddress,
-    pub checkpoint_sequence_number: Option<u64>,
+    pub checkpoint_viewed_at: Option<u64>,
 }
 
 /// Interface implemented by GraphQL types representing entities that can own objects. Object owners
@@ -223,7 +223,7 @@ impl Owner {
         // For now only addresses can be owners
         Some(Address {
             address: self.address,
-            checkpoint_sequence_number: self.checkpoint_sequence_number,
+            checkpoint_viewed_at: self.checkpoint_viewed_at,
         })
     }
 
@@ -231,9 +231,9 @@ impl Owner {
         Object::query(
             ctx.data_unchecked(),
             self.address,
-            match self.checkpoint_sequence_number {
-                Some(chkpt) => ObjectVersionKey::LatestAt(chkpt),
-                None => ObjectVersionKey::Latest,
+            match self.checkpoint_viewed_at {
+                Some(checkpoint_viewed_at) => ObjectLookupKey::LatestAt(checkpoint_viewed_at),
+                None => ObjectLookupKey::Latest,
             },
         )
         .await
@@ -311,7 +311,7 @@ impl OwnerImpl {
             ctx.data_unchecked(),
             page,
             filter,
-            self.checkpoint_sequence_number,
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()
@@ -358,7 +358,7 @@ impl OwnerImpl {
             page,
             coin,
             Some(self.address),
-            self.checkpoint_sequence_number,
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()
@@ -377,7 +377,7 @@ impl OwnerImpl {
             ctx.data_unchecked(),
             page,
             self.address,
-            self.checkpoint_sequence_number,
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()
@@ -408,7 +408,7 @@ impl OwnerImpl {
             ctx.data_unchecked::<NameServiceConfig>(),
             page,
             self.address,
-            self.checkpoint_sequence_number,
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()
@@ -458,7 +458,7 @@ impl From<&Address> for OwnerImpl {
     fn from(address: &Address) -> Self {
         OwnerImpl {
             address: address.address,
-            checkpoint_sequence_number: address.checkpoint_sequence_number,
+            checkpoint_viewed_at: address.checkpoint_viewed_at,
         }
     }
 }
@@ -467,7 +467,7 @@ impl From<&Owner> for OwnerImpl {
     fn from(owner: &Owner) -> Self {
         OwnerImpl {
             address: owner.address,
-            checkpoint_sequence_number: owner.checkpoint_sequence_number,
+            checkpoint_viewed_at: owner.checkpoint_viewed_at,
         }
     }
 }
@@ -476,7 +476,7 @@ impl From<&Object> for OwnerImpl {
     fn from(object: &Object) -> Self {
         OwnerImpl {
             address: object.address,
-            checkpoint_sequence_number: object.checkpoint_sequence_number,
+            checkpoint_viewed_at: object.checkpoint_viewed_at,
         }
     }
 }

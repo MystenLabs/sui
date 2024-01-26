@@ -5,7 +5,7 @@ use crate::context_data::db_data_provider::PgManager;
 
 use super::big_int::BigInt;
 use super::move_object::MoveObject;
-use super::object::ObjectVersionKey;
+use super::object::ObjectLookupKey;
 use super::sui_address::SuiAddress;
 use super::validator_credentials::ValidatorCredentials;
 use super::{address::Address, base64::Base64};
@@ -17,7 +17,9 @@ pub(crate) struct Validator {
     pub validator_summary: NativeSuiValidatorSummary,
     pub at_risk: Option<u64>,
     pub report_records: Option<Vec<Address>>,
-    pub checkpoint_sequence_number: Option<u64>,
+    // The checkpoint_sequence_number at which this was viewed at, or None if the data was requested
+    // at the latest checkpoint.
+    pub checkpoint_viewed_at: Option<u64>,
 }
 
 #[Object]
@@ -26,7 +28,7 @@ impl Validator {
     async fn address(&self) -> Address {
         Address {
             address: SuiAddress::from(self.validator_summary.sui_address),
-            checkpoint_sequence_number: self.checkpoint_sequence_number,
+            checkpoint_viewed_at: self.checkpoint_viewed_at,
         }
     }
 
@@ -92,11 +94,9 @@ impl Validator {
         MoveObject::query(
             ctx.data_unchecked(),
             self.operation_cap_id(),
-            match self.checkpoint_sequence_number {
-                Some(checkpoint_sequence_number) => {
-                    ObjectVersionKey::LatestAt(checkpoint_sequence_number)
-                }
-                None => ObjectVersionKey::Latest,
+            match self.checkpoint_viewed_at {
+                Some(checkpoint_viewed_at) => ObjectLookupKey::LatestAt(checkpoint_viewed_at),
+                None => ObjectLookupKey::Latest,
             },
         )
         .await
@@ -109,11 +109,9 @@ impl Validator {
         MoveObject::query(
             ctx.data_unchecked(),
             self.staking_pool_id(),
-            match self.checkpoint_sequence_number {
-                Some(checkpoint_sequence_number) => {
-                    ObjectVersionKey::LatestAt(checkpoint_sequence_number)
-                }
-                None => ObjectVersionKey::Latest,
+            match self.checkpoint_viewed_at {
+                Some(checkpoint_viewed_at) => ObjectLookupKey::LatestAt(checkpoint_viewed_at),
+                None => ObjectLookupKey::Latest,
             },
         )
         .await
@@ -126,11 +124,9 @@ impl Validator {
         MoveObject::query(
             ctx.data_unchecked(),
             self.exchange_rates_id(),
-            match self.checkpoint_sequence_number {
-                Some(checkpoint_sequence_number) => {
-                    ObjectVersionKey::LatestAt(checkpoint_sequence_number)
-                }
-                None => ObjectVersionKey::Latest,
+            match self.checkpoint_viewed_at {
+                Some(checkpoint_viewed_at) => ObjectLookupKey::LatestAt(checkpoint_viewed_at),
+                None => ObjectLookupKey::Latest,
             },
         )
         .await

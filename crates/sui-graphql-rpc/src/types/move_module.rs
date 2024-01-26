@@ -15,7 +15,7 @@ use sui_package_resolver::Module as ParsedMoveModule;
 use super::cursor::{JsonCursor, Page};
 use super::move_function::MoveFunction;
 use super::move_struct::MoveStruct;
-use super::object::ObjectVersionKey;
+use super::object::ObjectLookupKey;
 use super::{base64::Base64, move_package::MovePackage, sui_address::SuiAddress};
 
 #[derive(Clone)]
@@ -38,7 +38,7 @@ impl MoveModule {
         MovePackage::query(
             ctx.data_unchecked(),
             self.storage_id,
-            ObjectVersionKey::Latest,
+            ObjectLookupKey::Latest,
         )
         .await
         .extend()?
@@ -87,7 +87,7 @@ impl MoveModule {
         let Some(package) = MovePackage::query(
             ctx.data_unchecked(),
             self.storage_id,
-            ObjectVersionKey::Latest,
+            ObjectLookupKey::Latest,
         )
         .await
         .extend()?
@@ -301,7 +301,7 @@ impl MoveModule {
         address: SuiAddress,
         name: &str,
     ) -> Result<Option<Self>, Error> {
-        let Some(package) = MovePackage::query(db, address, ObjectVersionKey::Latest).await? else {
+        let Some(package) = MovePackage::query(db, address, ObjectLookupKey::Latest).await? else {
             return Ok(None);
         };
 

@@ -11,7 +11,7 @@ use super::{
     transaction_block::{self, TransactionBlock, TransactionBlockFilter},
 };
 use crate::{
-    data::{self, pg::PgConnection, Db, DbConnection, QueryExecutor},
+    data::{self, Conn, Db, DbConnection, QueryExecutor},
     error::Error,
 };
 use async_graphql::{
@@ -235,9 +235,7 @@ impl Checkpoint {
 
     /// Queries the database for the available range supported by the graphql server. This method
     /// takes a connection, so that it can be used in an execute_repeatable transaction.
-    pub(crate) fn available_range(
-        conn: &mut PgConnection,
-    ) -> Result<(u64, u64), diesel::result::Error> {
+    pub(crate) fn available_range(conn: &mut Conn) -> Result<(u64, u64), diesel::result::Error> {
         use checkpoints::dsl as checkpoints;
         use objects_snapshot::dsl as snapshots;
 

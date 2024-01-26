@@ -13,7 +13,7 @@ use super::{
     dynamic_field::{DynamicField, DynamicFieldName},
     move_object::{MoveObject, MoveObjectImpl},
     move_value::MoveValue,
-    object::{self, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus, ObjectVersionKey},
+    object::{self, Object, ObjectFilter, ObjectImpl, ObjectLookupKey, ObjectOwner, ObjectStatus},
     owner::OwnerImpl,
     stake::StakedSui,
     string_input::impl_string_input,
@@ -310,8 +310,7 @@ impl NameService {
     ) -> Result<Option<NameRecord>, Error> {
         let record_id = config.record_field_id(&domain.0);
 
-        let Some(object) =
-            MoveObject::query(db, record_id.into(), ObjectVersionKey::Latest).await?
+        let Some(object) = MoveObject::query(db, record_id.into(), ObjectLookupKey::Latest).await?
         else {
             return Ok(None);
         };
@@ -334,7 +333,7 @@ impl NameService {
         let reverse_record_id = config.reverse_record_field_id(address.as_slice());
 
         let Some(object) =
-            MoveObject::query(db, reverse_record_id.into(), ObjectVersionKey::Latest).await?
+            MoveObject::query(db, reverse_record_id.into(), ObjectLookupKey::Latest).await?
         else {
             return Ok(None);
         };
@@ -357,7 +356,7 @@ impl SuinsRegistration {
         config: &NameServiceConfig,
         page: Page<object::Cursor>,
         owner: SuiAddress,
-        checkpoint_sequence_number: Option<u64>,
+        checkpoint_viewed_at: Option<u64>,
     ) -> Result<Connection<String, SuinsRegistration>, Error> {
         let type_ = SuinsRegistration::type_(config.package_address.into());
 
@@ -367,26 +366,20 @@ impl SuinsRegistration {
             ..Default::default()
         };
 
-        Object::paginate_subtype(
-            db,
-            page,
-            filter,
-            |object| {
-                let address = object.address;
-                let move_object = MoveObject::try_from(&object).map_err(|_| {
-                    Error::Internal(format!(
-                        "Expected {address} to be a SuinsRegistration, but it's not a Move Object.",
-                    ))
-                })?;
+        Object::paginate_subtype(db, page, filter, checkpoint_viewed_at, |object| {
+            let address = object.address;
+            let move_object = MoveObject::try_from(&object).map_err(|_| {
+                Error::Internal(format!(
+                    "Expected {address} to be a SuinsRegistration, but it's not a Move Object.",
+                ))
+            })?;
 
-                SuinsRegistration::try_from(&move_object, &type_).map_err(|_| {
-                    Error::Internal(format!(
-                        "Expected {address} to be a SuinsRegistration, but it is not."
-                    ))
-                })
-            },
-            checkpoint_sequence_number,
-        )
+            SuinsRegistration::try_from(&move_object, &type_).map_err(|_| {
+                Error::Internal(format!(
+                    "Expected {address} to be a SuinsRegistration, but it is not."
+                ))
+            })
+        })
         .await
     }
 

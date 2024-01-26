@@ -9,7 +9,7 @@ use super::cursor::{JsonCursor, Page};
 use super::move_module::MoveModule;
 use super::move_object::MoveObject;
 use super::object::{
-    self, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus, ObjectVersionKey,
+    self, Object, ObjectFilter, ObjectImpl, ObjectLookupKey, ObjectOwner, ObjectStatus,
 };
 use super::owner::OwnerImpl;
 use super::stake::StakedSui;
@@ -405,7 +405,7 @@ impl MovePackage {
     pub(crate) async fn query(
         db: &Db,
         address: SuiAddress,
-        key: ObjectVersionKey,
+        key: ObjectLookupKey,
     ) -> Result<Option<Self>, Error> {
         let Some(object) = Object::query(db, address, key).await? else {
             return Ok(None);

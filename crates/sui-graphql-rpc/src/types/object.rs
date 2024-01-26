@@ -37,7 +37,7 @@ use move_core_types::language_storage::StructTag;
 use sui_indexer::models_v2::objects::{
     StoredDeletedHistoryObject, StoredHistoryObject, StoredObject,
 };
-use sui_indexer::schema_v2::{checkpoints, objects, objects_history, objects_snapshot};
+use sui_indexer::schema_v2::{objects, objects_history, objects_snapshot};
 use sui_indexer::types_v2::ObjectStatus as NativeObjectStatus;
 use sui_indexer::types_v2::OwnerType;
 use sui_package_resolver::Resolver;
@@ -50,9 +50,9 @@ use sui_types::TypeTag;
 pub(crate) struct Object {
     pub address: SuiAddress,
     pub kind: ObjectKind,
-    /// The checkpoint at which this object was read. This may be the latest checkpoint sequence
-    /// number, or inherited from its parent in the GraphQL request.
-    pub checkpoint_sequence_number: Option<u64>,
+    // The checkpoint_sequence_number at which this was viewed at, or None if the data was requested
+    // at the latest checkpoint.
+    pub checkpoint_viewed_at: Option<u64>,
 }
 
 /// Type to implement GraphQL fields that are shared by all Objects.
@@ -171,10 +171,13 @@ pub struct AddressOwner {
 }
 
 #[allow(dead_code)]
-pub(crate) enum ObjectVersionKey {
+pub(crate) enum ObjectLookupKey {
     Latest,
-    LatestAt(u64),   // checkpoint_sequence_number
-    Historical(u64), // version
+    LatestAt(u64),
+    VersionAt {
+        version: u64,
+        checkpoint_viewed_at: Option<u64>,
+    },
 }
 
 pub(crate) type Cursor = cursor::BcsCursor<Vec<u8>>;
@@ -493,7 +496,7 @@ impl ObjectImpl<'_> {
                 Some(ObjectOwner::Address(AddressOwner {
                     owner: Some(Owner {
                         address,
-                        checkpoint_sequence_number: self.0.checkpoint_sequence_number,
+                        checkpoint_viewed_at: self.0.checkpoint_viewed_at,
                     }),
                 }))
             }
@@ -502,7 +505,7 @@ impl ObjectImpl<'_> {
                 let parent = Object::query(
                     ctx.data_unchecked(),
                     address.into(),
-                    ObjectVersionKey::Latest,
+                    ObjectLookupKey::Latest,
                 )
                 .await
                 .ok()
@@ -622,12 +625,12 @@ impl Object {
     pub(crate) fn from_native(
         address: SuiAddress,
         native: NativeObject,
-        checkpoint_sequence_number: Option<u64>,
+        checkpoint_viewed_at: Option<u64>,
     ) -> Object {
         Object {
             address,
             kind: ObjectKind::NotIndexed(native),
-            checkpoint_sequence_number,
+            checkpoint_viewed_at,
         }
     }
 
@@ -652,24 +655,36 @@ impl Object {
     }
 
     /// Query the database for a `page` of objects, optionally `filter`-ed.
+    ///
+    /// The `checkpoint_viewed_at` parameter is an Option<u64> representing the
+    /// checkpoint_sequence_number at which this page was queried for, or None if the data was
+    /// requested at the latest checkpoint. Each entity returned in the connection will inherit this
+    /// checkpoint, so that when viewing that entity's state, it will be from the reference of this
+    /// checkpoint_viewed_at parameter.
     pub(crate) async fn paginate(
         db: &Db,
         page: Page<Cursor>,
         filter: ObjectFilter,
-        checkpoint_sequence_number: Option<u64>,
+        checkpoint_viewed_at: Option<u64>,
     ) -> Result<Connection<String, Object>, Error> {
-        Self::paginate_subtype(db, page, filter, Ok, checkpoint_sequence_number).await
+        Self::paginate_subtype(db, page, filter, checkpoint_viewed_at, Ok).await
     }
 
     /// Query the database for a `page` of some sub-type of Object. The page uses the bytes of an
     /// Object ID as the cursor, and can optionally be further `filter`-ed. The subtype is created
     /// using the `downcast` function, which is allowed to fail, if the downcast has failed.
+    ///
+    /// The `checkpoint_viewed_at` parameter is an Option<u64> representing the
+    /// checkpoint_sequence_number at which this page was queried for, or None if the data was
+    /// requested at the latest checkpoint. Each entity returned in the connection will inherit this
+    /// checkpoint, so that when viewing that entity's state, it will be from the reference of this
+    /// checkpoint_viewed_at parameter.
     pub(crate) async fn paginate_subtype<T: OutputType>(
         db: &Db,
         page: Page<Cursor>,
         filter: ObjectFilter,
+        checkpoint_viewed_at: Option<u64>,
         downcast: impl Fn(Object) -> Result<T, Error>,
-        checkpoint_sequence_number: Option<u64>,
     ) -> Result<Connection<String, T>, Error> {
         let (prev, next, results) = db
             .execute(move |conn| {
@@ -715,27 +730,37 @@ impl Object {
 
         for stored in results {
             let cursor = stored.cursor().encode_cursor();
-            let object = Self::try_from_stored_object(stored, checkpoint_sequence_number)?;
+            let object = Self::try_from_stored_object(stored, checkpoint_viewed_at)?;
             conn.edges.push(Edge::new(cursor, downcast(object)?));
         }
 
         Ok(conn)
     }
 
-    /// Query for the object at a specific version.
+    /// Query for the object at a specific version, at the checkpoint_viewed_at if given, else
+    /// against the latest checkpoint.
     async fn query_at_version(
         db: &Db,
         address: SuiAddress,
         version: u64,
+        checkpoint_viewed_at: Option<u64>,
     ) -> Result<Option<Self>, Error> {
-        use checkpoints::dsl as checkpoints;
         use objects_history::dsl as history;
         use objects_snapshot::dsl as snapshot;
 
         let version = version as i64;
 
-        let stored_objs: Vec<StoredHistoryObject> = db
-            .execute(move |conn| {
+        let stored_objs: Option<Vec<StoredHistoryObject>> = db
+            .execute_repeatable(move |conn| {
+                let (lhs, mut rhs) = Checkpoint::available_range(conn)?;
+
+                if let Some(checkpoint_viewed_at) = checkpoint_viewed_at {
+                    if checkpoint_viewed_at < lhs || rhs < checkpoint_viewed_at {
+                        return Ok(None);
+                    }
+                    rhs = checkpoint_viewed_at;
+                }
+
                 conn.results(move || {
                     // If an object was created or mutated in a checkpoint outside the current
                     // available range, and never touched again, it will not show up in the
@@ -743,54 +768,30 @@ impl Object {
                     // table as well.
                     let snapshot_query = snapshot::objects_snapshot
                         .filter(snapshot::object_id.eq(address.into_vec()))
-                        .filter(snapshot::object_version.eq(version))
-                        .into_boxed();
-                    let mut historical_query = history::objects_history
+                        .filter(snapshot::object_version.eq(version));
+
+                    let historical_query = history::objects_history
                         .filter(history::object_id.eq(address.into_vec()))
                         .filter(history::object_version.eq(version))
+                        .filter(history::checkpoint_sequence_number.between(lhs as i64, rhs as i64))
                         .order_by(history::object_version.desc())
-                        .limit(1)
-                        .into_boxed();
-
-                    let left = snapshot::objects_snapshot
-                        .select(snapshot::checkpoint_sequence_number)
-                        .order(snapshot::checkpoint_sequence_number.desc())
                         .limit(1);
-
-                    let right = checkpoints::checkpoints
-                        .select(checkpoints::sequence_number)
-                        .order(checkpoints::sequence_number.desc())
-                        .limit(1);
-
-                    historical_query = historical_query
-                        .filter(
-                            left.single_value()
-                                .is_null()
-                                .or(history::checkpoint_sequence_number
-                                    .nullable()
-                                    .ge(left.single_value())),
-                        )
-                        .filter(
-                            history::checkpoint_sequence_number
-                                .nullable()
-                                .le(right.single_value()),
-                        );
 
                     snapshot_query.union(historical_query)
                 })
+                .optional() // Return optional to match the state when checkpoint_viewed_at is out of range
             })
             .await?;
+
+        let Some(stored_objs) = stored_objs else {
+            return Ok(None);
+        };
 
         // Select the max by key after the union query, because Diesel currently does not support order_by on union
         stored_objs
             .into_iter()
             .max_by_key(|o| o.object_version)
-            .map(|obj| {
-                // The object's checkpoint_sequence_number is set as the historical context, so that
-                // its fields are correctly bounded.
-                let chkpt = obj.checkpoint_sequence_number as u64;
-                Self::try_from_stored_history_object(obj, Some(chkpt))
-            })
+            .map(|obj| Self::try_from_stored_history_object(obj, checkpoint_viewed_at))
             .transpose()
     }
 
@@ -808,14 +809,18 @@ impl Object {
             .execute_repeatable(move |conn| {
                 let (lhs, mut rhs) = Checkpoint::available_range(conn)?;
 
-                if let Some(checkpoint_sequence_number) = checkpoint_viewed_at {
-                    if checkpoint_sequence_number > rhs || checkpoint_sequence_number < lhs {
+                if let Some(checkpoint_viewed_at) = checkpoint_viewed_at {
+                    if checkpoint_viewed_at < lhs || rhs < checkpoint_viewed_at {
                         return Ok(None);
                     }
-                    rhs = checkpoint_sequence_number;
+                    rhs = checkpoint_viewed_at;
                 }
 
                 conn.results(move || {
+                    // If an object was created or mutated in a checkpoint outside the current
+                    // available range, and never touched again, it will not show up in the
+                    // objects_history table. Thus, we always need to check the objects_snapshot
+                    // table as well.
                     let snapshot_query = snapshot::objects_snapshot
                         .filter(snapshot::object_id.eq(address.into_vec()));
 
@@ -846,17 +851,18 @@ impl Object {
     pub(crate) async fn query(
         db: &Db,
         address: SuiAddress,
-        key: ObjectVersionKey,
+        key: ObjectLookupKey,
     ) -> Result<Option<Self>, Error> {
         match key {
-            ObjectVersionKey::Latest => Self::query_latest_at_checkpoint(db, address, None).await,
-            ObjectVersionKey::LatestAt(checkpoint_sequence_number) => {
+            ObjectLookupKey::Latest => Self::query_latest_at_checkpoint(db, address, None).await,
+            ObjectLookupKey::LatestAt(checkpoint_sequence_number) => {
                 Self::query_latest_at_checkpoint(db, address, Some(checkpoint_sequence_number))
                     .await
             }
-            ObjectVersionKey::Historical(version) => {
-                Self::query_at_version(db, address, version).await
-            }
+            ObjectLookupKey::VersionAt {
+                version,
+                checkpoint_viewed_at,
+            } => Self::query_at_version(db, address, version, checkpoint_viewed_at).await,
         }
         .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))
     }
@@ -886,7 +892,7 @@ impl Object {
 
     pub(crate) fn try_from_stored_object(
         stored_object: StoredObject,
-        checkpoint_sequence_number: Option<u64>,
+        checkpoint_viewed_at: Option<u64>,
     ) -> Result<Self, Error> {
         let address = addr(&stored_object.object_id)?;
         let native_object = bcs::from_bytes(&stored_object.serialized_object)
@@ -895,13 +901,13 @@ impl Object {
         Ok(Self {
             address,
             kind: ObjectKind::Live(native_object, stored_object),
-            checkpoint_sequence_number,
+            checkpoint_viewed_at,
         })
     }
 
     pub(crate) fn try_from_stored_history_object(
         history_object: StoredHistoryObject,
-        checkpoint_sequence_number: Option<u64>,
+        checkpoint_viewed_at: Option<u64>,
     ) -> Result<Self, Error> {
         let address = addr(&history_object.object_id)?;
 
@@ -929,7 +935,7 @@ impl Object {
                 Ok(Self {
                     address,
                     kind: ObjectKind::Historical(native_object, history_object),
-                    checkpoint_sequence_number,
+                    checkpoint_viewed_at,
                 })
             }
             NativeObjectStatus::WrappedOrDeleted => Ok(Self {
@@ -940,7 +946,7 @@ impl Object {
                     object_status: history_object.object_status,
                     checkpoint_sequence_number: history_object.checkpoint_sequence_number,
                 }),
-                checkpoint_sequence_number,
+                checkpoint_viewed_at,
             }),
         }
     }

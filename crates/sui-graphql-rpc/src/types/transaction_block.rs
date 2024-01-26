@@ -114,7 +114,7 @@ impl TransactionBlock {
     async fn sender(&self) -> Option<Address> {
         let sender = self.native().sender();
 
-        let checkpoint_sequence_number = match self {
+        let checkpoint_viewed_at = match self {
             TransactionBlock::Stored { stored_tx, .. } => {
                 Some(stored_tx.checkpoint_sequence_number as u64)
             }
@@ -123,7 +123,7 @@ impl TransactionBlock {
 
         (sender != NativeSuiAddress::ZERO).then(|| Address {
             address: SuiAddress::from(sender),
-            checkpoint_sequence_number,
+            checkpoint_viewed_at,
         })
     }
 
