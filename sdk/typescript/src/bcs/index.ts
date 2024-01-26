@@ -463,6 +463,7 @@ const suiBcs = {
 	ProgrammableTransaction,
 	PublicKey,
 	SenderSignedData,
+	SenderSignedTransaction,
 	SharedObjectRef,
 	StructTag,
 	SuiObjectRef,

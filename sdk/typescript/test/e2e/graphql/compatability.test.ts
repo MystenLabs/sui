@@ -349,8 +349,7 @@ describe('GraphQL SuiClient compatibility', () => {
 				showBalanceChanges: true,
 				showEffects: true,
 				showEvents: true,
-				// TODO
-				showInput: false,
+				showInput: true,
 				showObjectChanges: true,
 				showRawInput: true,
 			},
@@ -365,8 +364,7 @@ describe('GraphQL SuiClient compatibility', () => {
 					showBalanceChanges: true,
 					showEffects: true,
 					showEvents: true,
-					// TODO
-					showInput: false,
+					showInput: true,
 					showObjectChanges: true,
 					showRawInput: true,
 				},
@@ -376,26 +374,24 @@ describe('GraphQL SuiClient compatibility', () => {
 	});
 
 	test.skip('getTransactionBlock', async () => {
-		const rpcTransactionBlock = await toolbox.client.getTransactionBlock({
+		const { rawEffects, ...rpcTransactionBlock } = (await toolbox.client.getTransactionBlock({
 			digest: transactionBlockDigest,
 			options: {
 				showBalanceChanges: true,
 				showEffects: true,
 				showEvents: true,
-				// TODO
-				showInput: false,
+				showInput: true,
 				showObjectChanges: true,
 				showRawInput: true,
 			},
-		});
+		})) as SuiTransactionBlockResponse & { rawEffects: unknown };
 		const graphQLTransactionBlock = await toolbox.graphQLClient!.getTransactionBlock({
 			digest: transactionBlockDigest,
 			options: {
 				showBalanceChanges: true,
 				showEffects: true,
 				showEvents: true,
-				// TODO
-				showInput: false,
+				showInput: true,
 				showObjectChanges: true,
 				showRawInput: true,
 			},
@@ -574,7 +570,7 @@ describe('GraphQL SuiClient compatibility', () => {
 					showBalanceChanges: true,
 					showEffects: true,
 					showEvents: true,
-					// showInput: true,
+					showInput: true,
 					showObjectChanges: true,
 					showRawInput: true,
 				},
@@ -589,7 +585,7 @@ describe('GraphQL SuiClient compatibility', () => {
 					showBalanceChanges: true,
 					showEffects: true,
 					showEvents: true,
-					// showInput: true,
+					showInput: true,
 					showObjectChanges: true,
 					showRawInput: true,
 				},

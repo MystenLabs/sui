@@ -820,11 +820,9 @@ export class GraphQLSuiClient extends SuiClient {
 					new Date(systemState.startTimestamp).getTime(),
 			),
 			epochStartTimestampMs: String(new Date(systemState.startTimestamp).getTime()),
-			inactivePoolsId: 'TODO',
 			inactivePoolsSize: String(systemState.validatorSet?.inactivePoolsSize),
 			maxValidatorCount: String(systemState.systemParameters?.maxValidatorCount),
 			minValidatorJoiningStake: String(systemState.systemParameters?.minValidatorJoiningStake),
-			pendingActiveValidatorsId: 'TODO',
 			pendingActiveValidatorsSize: String(systemState.validatorSet?.pendingActiveValidatorsSize),
 			pendingRemovals: systemState.validatorSet?.pendingRemovals?.map((idx) => String(idx)) ?? [],
 			protocolVersion: String(systemState.protocolConfigs?.protocolVersion),
@@ -844,7 +842,6 @@ export class GraphQLSuiClient extends SuiClient {
 			stakeSubsidyDistributionCounter: String(systemState.systemStakeSubsidy?.distributionCounter),
 			stakeSubsidyPeriodLength: String(systemState.systemStakeSubsidy?.periodLength),
 			stakeSubsidyStartEpoch: String(systemState.systemParameters?.stakeSubsidyStartEpoch),
-			stakingPoolMappingsId: 'TODO',
 			stakingPoolMappingsSize: String(systemState.validatorSet?.stakePoolMappingsSize),
 			storageFundNonRefundableBalance: String(systemState.storageFund?.nonRefundableBalance),
 			storageFundTotalObjectStorageRebates: String(
@@ -852,7 +849,6 @@ export class GraphQLSuiClient extends SuiClient {
 			),
 			systemStateVersion: String(systemState.systemStateVersion),
 			totalStake: systemState.validatorSet?.totalStake,
-			validatorCandidatesId: 'TODO',
 			validatorCandidatesSize: systemState.validatorSet?.validatorCandidatesSize?.toString()!,
 			validatorLowStakeGracePeriod: systemState.systemParameters?.validatorLowStakeGracePeriod,
 			validatorLowStakeThreshold: systemState.systemParameters?.validatorLowStakeThreshold,
@@ -860,6 +856,10 @@ export class GraphQLSuiClient extends SuiClient {
 				(validator) => validator.reportRecords?.map((record) => record.address)!,
 			)!,
 			validatorVeryLowStakeThreshold: systemState.systemParameters?.validatorVeryLowStakeThreshold,
+			validatorCandidatesId: '', // TODO
+			inactivePoolsId: '', // TODO
+			pendingActiveValidatorsId: '', // TODO
+			stakingPoolMappingsId: '', // TODO
 		};
 	}
 
@@ -918,7 +918,10 @@ export class GraphQLSuiClient extends SuiClient {
 			nextCursor: (pagination.last ? pageInfo.startCursor : pageInfo.endCursor) as never,
 			data: events.map((event) => ({
 				bcs: event.bcs,
-				id: 'TODO' as never, // TODO: turn id into an object
+				id: {
+					eventSeq: '', // TODO
+					txDigest: '', // TODO
+				},
 				packageId: event.sendingModule?.package.address!,
 				parsedJson: event.json ? JSON.parse(event.json) : undefined,
 				sender: event.sender?.address,

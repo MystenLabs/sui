@@ -1,11 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64 } from '@mysten/bcs';
+import { fromB64, toB64 } from '@mysten/bcs';
 
-import { bcs } from '../../bcs/index.js';
+import { bcs, TypeTagSerializer } from '../../bcs/index.js';
 import type {
 	ExecutionStatus,
+	SuiArgument,
+	SuiCallArg,
+	SuiTransaction,
+	SuiTransactionBlock,
 	SuiTransactionBlockResponse,
 	SuiTransactionBlockResponseOptions,
 } from '../../client/index.js';
@@ -31,7 +35,7 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 			owner: mapGraphQLOwnerToRpcOwner(change?.outputState?.owner)!,
 			reference: {
 				digest: change?.outputState?.digest!,
-				version: change?.outputState?.version as unknown as string, // RPC type is wrong here
+				version: change?.outputState?.version as unknown as string,
 				objectId: change?.outputState?.address,
 			},
 		}));
@@ -68,7 +72,7 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 						reference: {
 							digest: transactionBlock.effects?.gasEffects?.gasObject?.digest!,
 							version: transactionBlock.effects?.gasEffects?.gasObject
-								?.version as unknown as string, // RPC type is wrong here
+								?.version as unknown as string,
 							objectId: transactionBlock.effects?.gasEffects?.gasObject?.address,
 						},
 					},
@@ -109,22 +113,26 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 		events: options?.showEvents
 			? transactionBlock.effects?.events?.nodes.map((event) => ({
 					bcs: event.bcs,
-					id: 'TODO' as never, // TODO: turn id into an object
+					id: {
+						eventSeq: '', // TODO
+						txDigest: '', // TODO
+					},
 					packageId: event.sendingModule?.package.address!,
 					parsedJson: event.json ? JSON.parse(event.json) : undefined,
 					sender: event.sender?.address,
 					timestampMs: new Date(event.timestamp).getTime().toString(),
-					transactionModule: 'TODO',
+					transactionModule: '', // TODO,
 					type: toShortTypeString(event.type?.repr)!,
 			  })) ?? []
 			: undefined,
 		rawTransaction: options?.showRawInput ? transactionBlock.rawTransaction : undefined,
 		...(options?.showInput
 			? {
-					transaction: transactionBlock.rawTransaction && {
-						data: bcs.SenderSignedData.parse(fromB64(transactionBlock.rawTransaction))[0]
-							.intentMessage.value.V1,
-					},
+					transaction:
+						transactionBlock.rawTransaction &&
+						mapTransactionBlockToInput(
+							bcs.SenderSignedData.parse(fromB64(transactionBlock.rawTransaction))[0],
+						),
 			  }
 			: {}),
 		objectChanges: options?.showObjectChanges
@@ -149,7 +157,9 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 									objectType: toShortTypeString(
 										change?.outputState?.asMoveObject?.contents?.type.repr,
 									),
-									previousVersion: change?.inputState?.version.toString()!,
+									...((typeof change?.inputState?.version === 'number'
+										? { previousVersion: change?.inputState?.version.toString()! }
+										: {}) as { previousVersion: string }),
 									sender: transactionBlock.sender?.address,
 									type: change?.idCreated ? ('created' as const) : ('mutated' as const),
 									version: change?.outputState?.version.toString()!,
@@ -165,4 +175,175 @@ export function mapGraphQLTransactionBlockToRpcTransactionBlock(
 					})
 			: undefined,
 	};
+}
+
+function mapTransactionBlockToInput(
+	data: typeof bcs.SenderSignedTransaction.$inferType,
+): SuiTransactionBlock | null {
+	const txData = data.intentMessage.value.V1;
+
+	const programableTransaction =
+		'ProgrammableTransaction' in txData.kind ? txData.kind.ProgrammableTransaction : null;
+
+	if (!programableTransaction) {
+		return null;
+	}
+
+	return {
+		txSignatures: data.txSignatures,
+		data: {
+			gasData: {
+				budget: txData.gasData.budget,
+				owner: txData.gasData.owner,
+				payment: txData.gasData.payment.map((payment) => ({
+					digest: payment.digest,
+					objectId: payment.objectId,
+					version: Number(payment.version) as never as string,
+				})),
+				price: txData.gasData.price,
+			},
+			messageVersion: 'v1',
+			sender: txData.sender,
+			transaction: {
+				inputs: programableTransaction.inputs.map(mapTransactionInput),
+				kind: 'ProgrammableTransaction',
+				transactions: programableTransaction.transactions.map(mapTransaction),
+			},
+		},
+	};
+}
+
+function mapTransactionInput(input: typeof bcs.CallArg.$inferType): SuiCallArg {
+	if ('Pure' in input) {
+		return {
+			type: 'pure',
+			value: Uint8Array.from(input.Pure),
+		};
+	}
+
+	if ('Object' in input) {
+		if ('ImmOrOwned' in input.Object) {
+			return {
+				type: 'object',
+				digest: input.Object.ImmOrOwned.digest,
+				version: input.Object.ImmOrOwned.version,
+				objectId: input.Object.ImmOrOwned.objectId,
+				objectType: 'immOrOwnedObject',
+			};
+		}
+		if ('Shared' in input.Object) {
+			return {
+				type: 'object',
+				initialSharedVersion: input.Object.Shared.initialSharedVersion,
+				objectId: input.Object.Shared.objectId,
+				mutable: input.Object.Shared.mutable,
+				objectType: 'sharedObject',
+			};
+		}
+
+		if ('Receiving' in input.Object) {
+			return {
+				type: 'object',
+				digest: input.Object.Receiving.digest,
+				version: input.Object.Receiving.version,
+				objectId: input.Object.Receiving.objectId,
+				objectType: 'receiving',
+			};
+		}
+
+		throw new Error(`Unknown object type: ${input.Object}`);
+	}
+
+	throw new Error(`Unknown input type ${input}`);
+}
+
+function mapTransaction(transaction: typeof bcs.Transaction.$inferType): SuiTransaction {
+	switch (transaction.kind) {
+		case 'MoveCall': {
+			const [pkg, module, fn] = transaction.target.split('::');
+			return {
+				MoveCall: {
+					arguments: transaction.arguments.map(mapTransactionArgument),
+					function: fn,
+					module,
+					package: pkg,
+					type_arguments: transaction.typeArguments,
+				},
+			};
+		}
+
+		case 'MakeMoveVec': {
+			return {
+				MakeMoveVec: [
+					'Some' in transaction.type ? TypeTagSerializer.tagToString(transaction.type.Some) : null,
+					transaction.objects.map(mapTransactionArgument),
+				],
+			};
+		}
+		case 'MergeCoins': {
+			return {
+				MergeCoins: [
+					mapTransactionArgument(transaction.destination),
+					transaction.sources.map(mapTransactionArgument),
+				],
+			};
+		}
+		case 'Publish': {
+			return {
+				Publish: transaction.modules.map((module) => toB64(Uint8Array.from(module))),
+			};
+		}
+		case 'SplitCoins': {
+			return {
+				SplitCoins: [
+					mapTransactionArgument(transaction.coin),
+					transaction.amounts.map(mapTransactionArgument),
+				],
+			};
+		}
+		case 'TransferObjects': {
+			return {
+				TransferObjects: [
+					transaction.objects.map(mapTransactionArgument),
+					mapTransactionArgument(transaction.address),
+				],
+			};
+		}
+		case 'Upgrade': {
+			return {
+				Upgrade: [
+					transaction.modules.map((module) => toB64(Uint8Array.from(module))),
+					transaction.packageId,
+					mapTransactionArgument(transaction.ticket),
+				],
+			};
+		}
+	}
+
+	throw new Error(`Unknown transaction type ${transaction}`);
+}
+
+function mapTransactionArgument(arg: typeof bcs.Argument.$inferType): SuiArgument {
+	switch (arg.kind) {
+		case 'GasCoin': {
+			return 'GasCoin';
+		}
+		case 'Input': {
+			return {
+				Input: arg.index,
+			};
+		}
+		case 'Result': {
+			return {
+				Result: arg.index,
+			};
+		}
+		case 'NestedResult': {
+			return {
+				NestedResult: [arg.index, arg.resultIndex],
+			};
+		}
+	}
+
+	throw new Error(`Unknown argument type ${arg}`);
 }
