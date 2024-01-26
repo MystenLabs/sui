@@ -1,0 +1,38 @@
+name: Code Coverage
+on:
+  workflow_dispatch:
+
+jobs:
+  cargo-llvm-cov:
+    name: Generate code coverage
+    runs-on: [ubuntu-ghcloud]
+    timeout-minutes: 120
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bmwill/rust-cache@v1
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+    
+      - name: Install nextest
+        uses: taiki-e/install-action@nextest
+
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 256
+
+      - name: Install Rust
+        run: rustup update stable
+        
+      - name: Generate code coverage for nextest
+        continue-on-error: true
+        run: SUI_SKIP_SIMTESTS=1 cargo llvm-cov --no-fail-fast -lcov --output-path lcov.info nextest
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: lcov.info
+          fail_ci_if_error: true
