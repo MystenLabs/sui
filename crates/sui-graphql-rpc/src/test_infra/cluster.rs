@@ -199,11 +199,10 @@ impl ExecutorCluster {
             .indexer_store
             .get_latest_tx_checkpoint_sequence_number()
             .await
-            .unwrap()
             .unwrap();
 
-        let checkpoint_diff = std::cmp::max(1, checkpoint.saturating_sub(current_checkpoint));
-        let timeout = base_timeout.mul_f64(checkpoint_diff as f64);
+        let diff = checkpoint.saturating_sub(current_checkpoint.unwrap_or(0)).max(1);
+        let timeout = base_timeout.mul_f64(diff as f64);
 
         tokio::time::timeout(timeout, async {
             while self
@@ -211,8 +210,7 @@ impl ExecutorCluster {
                 .get_latest_tx_checkpoint_sequence_number()
                 .await
                 .unwrap()
-                .unwrap()
-                < checkpoint
+                < Some(checkpoint)
             {
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
