@@ -40,14 +40,18 @@ const SINGLETON_KEY: u64 = 0;
 // Randomness generation:
 // TODO: document when implemented.
 pub struct RandomnessManager {
+    inner: Mutex<Inner>,
+}
+
+pub struct Inner {
     epoch_store: Weak<AuthorityPerEpochStore>,
     consensus_adapter: Arc<ConsensusAdapter>,
 
     // State for DKG.
     party: dkg::Party<PkG, EncG>,
-    processed_messages: Mutex<BTreeMap<PartyId, dkg::ProcessedMessage<PkG, EncG>>>,
+    processed_messages: BTreeMap<PartyId, dkg::ProcessedMessage<PkG, EncG>>,
     used_messages: OnceCell<dkg::UsedProcessedMessages<PkG, EncG>>,
-    confirmations: Mutex<BTreeMap<PartyId, dkg::Confirmation<EncG>>>,
+    confirmations: BTreeMap<PartyId, dkg::Confirmation<EncG>>,
     dkg_output: OnceCell<dkg::Output<PkG, EncG>>,
 }
 
@@ -142,13 +146,13 @@ impl RandomnessManager {
         );
 
         // Load existing data from store.
-        let manager = Self {
+        let mut inner = Inner {
             epoch_store: epoch_store_weak,
             consensus_adapter,
             party,
-            processed_messages: Mutex::new(BTreeMap::new()),
+            processed_messages: BTreeMap::new(),
             used_messages: OnceCell::new(),
-            confirmations: Mutex::new(BTreeMap::new()),
+            confirmations: BTreeMap::new(),
             dkg_output: OnceCell::new(),
         };
         let dkg_output = tables
@@ -164,7 +168,7 @@ impl RandomnessManager {
                 .metrics
                 .epoch_random_beacon_dkg_num_shares
                 .set(dkg_output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
-            manager
+            inner
                 .dkg_output
                 .set(dkg_output)
                 .expect("setting new OnceCell should succeed");
@@ -174,7 +178,7 @@ impl RandomnessManager {
                 committee.epoch()
             );
             // Load intermediate data.
-            manager.processed_messages.lock().unwrap().extend(
+            inner.processed_messages.extend(
                 tables
                     .dkg_processed_messages
                     .safe_iter()
@@ -185,12 +189,12 @@ impl RandomnessManager {
                 .get(&SINGLETON_KEY)
                 .expect("typed_store should not fail")
             {
-                manager
+                inner
                     .used_messages
                     .set(used_messages.clone())
                     .expect("setting new OnceCell should succeed");
             }
-            manager.confirmations.lock().unwrap().extend(
+            inner.confirmations.extend(
                 tables
                     .dkg_confirmations
                     .safe_iter()
@@ -198,10 +202,63 @@ impl RandomnessManager {
             );
         }
 
-        Some(manager)
+        Some(RandomnessManager {
+            inner: Mutex::new(inner),
+        })
     }
 
     pub fn start_dkg(&self) -> SuiResult {
+        self.inner.lock().unwrap().start_dkg()
+    }
+
+    pub fn advance_dkg(&self, batch: &mut DBBatch) -> SuiResult {
+        self.inner.lock().unwrap().advance_dkg(batch)
+    }
+
+    pub fn add_message(&self, batch: &mut DBBatch, msg: dkg::Message<PkG, EncG>) -> SuiResult {
+        self.inner.lock().unwrap().add_message(batch, msg)
+    }
+
+    pub fn add_confirmation(
+        &self,
+        batch: &mut DBBatch,
+        conf: dkg::Confirmation<EncG>,
+    ) -> SuiResult {
+        self.inner.lock().unwrap().add_confirmation(batch, conf)
+    }
+
+    fn randomness_dkg_info_from_committee(
+        committee: &Committee,
+    ) -> Vec<(
+        u16,
+        fastcrypto_tbls::ecies::PublicKey<bls12381::G2Element>,
+        StakeUnit,
+    )> {
+        committee
+            .members()
+            .map(|(name, stake)| {
+                let index: u16 = committee
+                    .authority_index(name)
+                    .expect("lookup of known committee member should succeed")
+                    .try_into()
+                    .expect("authority index should fit in u16");
+                let pk = bls12381::G2Element::from_byte_array(
+                    committee
+                        .public_key(name)
+                        .expect("lookup of known committee member should succeed")
+                        .as_bytes()
+                        .try_into()
+                        .expect("key length should match"),
+                )
+                .expect("should work to convert BLS key to G2Element");
+                (index, fastcrypto_tbls::ecies::PublicKey::from(pk), *stake)
+            })
+            .collect()
+    }
+}
+
+impl Inner {
+    pub fn start_dkg(&mut self) -> SuiResult {
         if self.used_messages.initialized() || self.dkg_output.initialized() {
             // DKG already started (or completed).
             return Ok(());
@@ -222,7 +279,7 @@ impl RandomnessManager {
         Ok(())
     }
 
-    pub fn advance_dkg(&self, batch: &mut DBBatch) -> SuiResult {
+    pub fn advance_dkg(&mut self, batch: &mut DBBatch) -> SuiResult {
         let epoch_store = self.epoch_store()?;
 
         // Once we have enough ProcessedMessages, send a Confirmation.
@@ -230,8 +287,6 @@ impl RandomnessManager {
             match self.party.merge(
                 &self
                     .processed_messages
-                    .lock()
-                    .unwrap()
                     .iter()
                     .map(|(_, message)| message.clone())
                     .collect::<Vec<_>>(),
@@ -269,8 +324,6 @@ impl RandomnessManager {
                     .expect("checked above that `used_messages` is initialized"),
                 &self
                     .confirmations
-                    .lock()
-                    .unwrap()
                     .iter()
                     .map(|(_, conf)| conf.clone())
                     .collect::<Vec<_>>(),
@@ -301,7 +354,7 @@ impl RandomnessManager {
         Ok(())
     }
 
-    pub fn add_message(&self, batch: &mut DBBatch, msg: dkg::Message<PkG, EncG>) -> SuiResult {
+    pub fn add_message(&mut self, batch: &mut DBBatch, msg: dkg::Message<PkG, EncG>) -> SuiResult {
         if self.used_messages.initialized() || self.dkg_output.initialized() {
             // We've already sent a `Confirmation`, so we can't add any more messages.
             return Ok(());
@@ -309,8 +362,6 @@ impl RandomnessManager {
         match self.party.process_message(msg, &mut rand::thread_rng()) {
             Ok(processed) => {
                 self.processed_messages
-                    .lock()
-                    .unwrap()
                     .insert(processed.message.sender, processed.clone());
                 batch.insert_batch(
                     &self.tables()?.dkg_processed_messages,
@@ -325,7 +376,7 @@ impl RandomnessManager {
     }
 
     pub fn add_confirmation(
-        &self,
+        &mut self,
         batch: &mut DBBatch,
         conf: dkg::Confirmation<EncG>,
     ) -> SuiResult {
@@ -333,10 +384,7 @@ impl RandomnessManager {
             // Once we have completed DKG, no more `Confirmation`s are needed.
             return Ok(());
         }
-        self.confirmations
-            .lock()
-            .unwrap()
-            .insert(conf.sender, conf.clone());
+        self.confirmations.insert(conf.sender, conf.clone());
         batch.insert_batch(
             &self.tables()?.dkg_confirmations,
             std::iter::once((conf.sender, conf)),
@@ -350,35 +398,6 @@ impl RandomnessManager {
 
     fn tables(&self) -> SuiResult<Arc<AuthorityEpochTables>> {
         self.epoch_store()?.tables()
-    }
-
-    fn randomness_dkg_info_from_committee(
-        committee: &Committee,
-    ) -> Vec<(
-        u16,
-        fastcrypto_tbls::ecies::PublicKey<bls12381::G2Element>,
-        StakeUnit,
-    )> {
-        committee
-            .members()
-            .map(|(name, stake)| {
-                let index: u16 = committee
-                    .authority_index(name)
-                    .expect("lookup of known committee member should succeed")
-                    .try_into()
-                    .expect("authority index should fit in u16");
-                let pk = bls12381::G2Element::from_byte_array(
-                    committee
-                        .public_key(name)
-                        .expect("lookup of known committee member should succeed")
-                        .as_bytes()
-                        .try_into()
-                        .expect("key length should match"),
-                )
-                .expect("should work to convert BLS key to G2Element");
-                (index, fastcrypto_tbls::ecies::PublicKey::from(pk), *stake)
-            })
-            .collect()
     }
 }
 
@@ -501,7 +520,12 @@ mod tests {
 
         // Verify DKG completed.
         for randomness_manager in &randomness_managers {
-            assert!(randomness_manager.dkg_output.initialized());
+            assert!(randomness_manager
+                .inner
+                .lock()
+                .unwrap()
+                .dkg_output
+                .initialized());
         }
     }
 }
