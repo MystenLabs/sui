@@ -24,7 +24,7 @@ $ psql "postgres://$ME:$ME@localhost:5432/postgres" \
 
 ```sh
 $ psql "postgres://postgres:postgrespw@localhost:5432/postgres" \
-    -c "CREATE DATABASE sui_indexer_v2; -c 'ALTER SYSTEM SET max_connections = 1000;"
+    -c "CREATE DATABASE sui_indexer_v2; -c 'ALTER SYSTEM SET max_connections = 500;"
 ```
 
 4. Finally, restart the `postgres` server so the max connections change takes effect.
