@@ -1,0 +1,35 @@
+---
+title: Coin Standard
+---
+
+The Coin standard is the technical standard used for smart contracts on Sui for implementing tokens on the blockchain. The standardization of coin creation on Sui means that wallets, exchanges, and other smart contracts can manage tokens created on Sui the same as the SUI token, without any additional processing logic. 
+
+Although tokens on Sui follow the Coin standard, they still offer specialized abilities. For example, a [closed-loop token](./closed-loop-token.mdx) allows its creator to limit access and set up custom policies defining its usage. Similarly, you can create a regulated coin that allows its creator to add specific addresses to a deny list, so that the identified addresses cannot use the coin as inputs to transactions.
+
+## Fungible tokens
+
+Coins are fungible tokens, which means there are many of a specific type and each coin of that type is the same as the next. If you created a regulated coin and named it REGCOIN, then you could mint as many of those coins as you wanted and each REGCOIN would have the same properties as the next. 
+
+### Basket
+
+Basket tokens are a synthetic token that represent a "basket" of underlying assets. These underlying assets can be various cryptocurrencies like SUI, stocks, commodities, or other financial instruments. The key idea is that the basket token's value is derived from the combined value of these multiple assets. Although the basket of assets can be a number of different items, the basket coin itself is fungible.
+
+#### Basket token example 
+
+```mdx-code-block
+<details>
+  <summary>
+  Show example code
+  </summary>
+```
+
+
+```mdx-code-block
+</details>
+```
+
+### Managed
+
+### Regulated
+
+### Treasury lock
