@@ -45,9 +45,10 @@ impl Context {
         }
     }
 
+    /// Create a test context with a committee of optional given size and even stake
     #[cfg(test)]
-    pub(crate) fn new_for_test() -> Self {
-        let (committee, _) = Committee::new_for_test(0, vec![1, 1, 1, 1]);
+    pub(crate) fn new_for_test(committee_size: usize) -> Self {
+        let (committee, _) = Committee::new_for_test(0, vec![1; committee_size]);
         let metrics = test_metrics();
         Context::new(
             AuthorityIndex::new_for_test(0),

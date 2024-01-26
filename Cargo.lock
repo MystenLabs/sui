@@ -2628,6 +2628,7 @@ dependencies = [
  "serde",
  "sui-protocol-config",
  "tap",
+ "telemetry-subscribers",
  "tempfile",
  "thiserror",
  "tokio",

@@ -400,7 +400,7 @@ mod test {
 
     #[tokio::test]
     async fn test_core_propose_after_genesis() {
-        let context = Arc::new(Context::new_for_test());
+        let context = Arc::new(Context::new_for_test(4));
         let block_manager = BlockManager::new();
         let (transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
         let transactions_consumer = TransactionsConsumer::new(tx_receiver);
@@ -469,7 +469,7 @@ mod test {
 
     #[tokio::test]
     async fn test_core_propose_once_receiving_a_quorum() {
-        let context = Arc::new(Context::new_for_test());
+        let context = Arc::new(Context::new_for_test(4));
         let block_manager = BlockManager::new();
         let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
         let transactions_consumer = TransactionsConsumer::new(tx_receiver);
