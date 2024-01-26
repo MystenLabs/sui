@@ -29,8 +29,7 @@ impl AuthorityNode {
         committee: Committee,
         parameters: Parameters,
         protocol_config: ProtocolConfig,
-        // To avoid accidentally leaking the private key, the key pair should only be
-        // stored in the Block signer.
+        // To avoid accidentally leaking the private key, the key pair should only be stored in core
         block_signer: NetworkKeyPair,
         _signer: ProtocolKeyPair,
         _block_verifier: impl BlockVerifier,
