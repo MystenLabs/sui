@@ -139,6 +139,7 @@ use crate::consensus_adapter::ConsensusAdapter;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_driver::execution_process;
 use crate::in_mem_execution_cache::{ExecutionCache, ExecutionCacheRead, ExecutionCacheWrite};
+use crate::metrics::LatencyObserver;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
 use crate::state_accumulator::{StateAccumulator, WrappedObject};
@@ -231,6 +232,7 @@ pub struct AuthorityMetrics {
 
     pub(crate) execution_driver_executed_transactions: IntCounter,
     pub(crate) execution_driver_dispatch_queue: IntGauge,
+    pub(crate) execution_queueing_delay_ms: IntGauge,
 
     pub(crate) skipped_consensus_txns: IntCounter,
     pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
@@ -263,6 +265,8 @@ pub struct AuthorityMetrics {
     pub zklogin_sig_count: IntCounter,
     /// Count of multisig signatures
     pub multisig_sig_count: IntCounter,
+
+    pub execution_queueing_latency: LatencyObserver,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -502,6 +506,12 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            execution_queueing_delay_ms: register_int_gauge_with_registry!(
+                "execution_queueing_delay_ms",
+                "Average queueing delay between a transaction is ready for execution until it starts executing.",
+                registry
+            )
+            .unwrap(),
             skipped_consensus_txns: register_int_counter_with_registry!(
                 "skipped_consensus_txns",
                 "Total number of consensus transactions skipped",
@@ -603,7 +613,8 @@ impl AuthorityMetrics {
                 "consensus_calculated_throughput_profile",
                 "The current active calculated throughput profile",
                 registry
-            ).unwrap()
+            ).unwrap(),
+            execution_queueing_latency: LatencyObserver::new(),
         }
     }
 }
