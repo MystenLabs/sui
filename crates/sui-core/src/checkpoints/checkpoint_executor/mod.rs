@@ -69,6 +69,12 @@ type CheckpointExecutionBuffer = FuturesOrdered<JoinHandle<VerifiedCheckpoint>>;
 /// The interval to log checkpoint progress, in # of checkpoints processed.
 const CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL: u64 = 5000;
 
+#[cfg(msim)]
+const SCHEDULING_EVENT_FUTURE_TIMEOUT_MS: u64 = 200;
+
+#[cfg(not(msim))]
+const SCHEDULING_EVENT_FUTURE_TIMEOUT_MS: u64 = 1000;
+
 #[derive(PartialEq, Eq, Debug)]
 pub enum StopReason {
     EpochComplete,
@@ -174,6 +180,7 @@ impl CheckpointExecutor {
             .as_ref()
             .map(|c| c.network_total_transactions)
             .unwrap_or(0);
+        let scheduling_timeout = Duration::from_millis(SCHEDULING_EVENT_FUTURE_TIMEOUT_MS);
 
         loop {
             // If we have executed the last checkpoint of the current epoch, stop.
@@ -207,6 +214,7 @@ impl CheckpointExecutor {
             self.metrics
                 .checkpoint_exec_inflight
                 .set(pending.len() as i64);
+
             tokio::select! {
                 // Check for completed workers and ratchet the highest_checkpoint_executed
                 // watermark accordingly. Note that given that checkpoints are guaranteed to
@@ -236,8 +244,16 @@ impl CheckpointExecutor {
                     }
                 }
                 // Check for newly synced checkpoints from StateSync.
-                received = self.mailbox.recv() => match received {
-                    Ok(checkpoint) => {
+                received = timeout(scheduling_timeout, self.mailbox.recv()) => match received {
+                    Err(_elapsed) => {
+                        error!(
+                            "Received no new synced checkpoints for {:?}. Next checkpoint to be scheduled: {}",
+                            scheduling_timeout,
+                            next_to_schedule,
+                        );
+                        fail_point!("cp_exec_scheduling_timeout_reached");
+                    },
+                    Ok(Ok(checkpoint)) => {
                         debug!(
                             sequence_number = ?checkpoint.sequence_number,
                             "received checkpoint summary from state sync"
@@ -246,13 +262,13 @@ impl CheckpointExecutor {
                     },
                     // In this case, messages in the mailbox have been overwritten
                     // as a result of lagging too far behind.
-                    Err(RecvError::Lagged(num_skipped)) => {
+                    Ok(Err(RecvError::Lagged(num_skipped))) => {
                         debug!(
                             "Checkpoint Execution Recv channel overflowed {:?} messages",
                             num_skipped,
                         );
                     }
-                    Err(RecvError::Closed) => {
+                    Ok(Err(RecvError::Closed)) => {
                         panic!("Checkpoint Execution Sender (StateSync) closed channel unexpectedly");
                     }
                 }
