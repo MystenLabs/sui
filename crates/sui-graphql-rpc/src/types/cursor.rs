@@ -257,29 +257,27 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
             // From here onwards, we know that the results are non-empty and if a cursor was
             // supplied on the end the page is being drawn from, it was found in the results
             // (implying a page follows in that direction).
-
-            // If both cursors are provided, and match both edges of the results, then we are in a
-            // special case where the limit, or the end of the page being drawn from do not matter,
-            // because the subsequence defined by the cursors is smaller than the limit.
-            (Some(a), Some(f), Some(l), Some(b), _) if f.cursor() == *a && l.cursor() == *b => {
-                (true, true, 1, 1)
-            }
-
-            // From here onwards, to detect whether there is a page on the other side than the page
-            // is being drawn from, it is enough to check the length of the results.
-            (after, _, _, _, End::Front) => {
+            (after, _, Some(l), before, End::Front) => {
                 let has_previous_page = after.is_some();
                 let prefix = has_previous_page as usize;
-                let suffix = results.len() - results.len().min(self.limit() + prefix);
+
+                // If results end with the before cursor, we will at least need to trim one element
+                // from the suffix and we trim more off the end if there is more after applying the
+                // limit.
+                let mut suffix = before.is_some_and(|b| *b == l.cursor()) as usize;
+                suffix += results.len().saturating_sub(self.limit() + prefix + suffix);
                 let has_next_page = suffix > 0;
 
                 (has_previous_page, has_next_page, prefix, suffix)
             }
 
-            (_, _, _, before, End::Back) => {
+            // Symmetric to the previous case, but drawing from the back.
+            (after, Some(f), _, before, End::Back) => {
                 let has_next_page = before.is_some();
                 let suffix = has_next_page as usize;
-                let prefix = results.len() - results.len().min(self.limit() + suffix);
+
+                let mut prefix = after.is_some_and(|a| *a == f.cursor()) as usize;
+                prefix += results.len().saturating_sub(self.limit() + prefix + suffix);
                 let has_previous_page = prefix > 0;
 
                 (has_previous_page, has_next_page, prefix, suffix)
