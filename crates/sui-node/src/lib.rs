@@ -73,6 +73,7 @@ use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::epoch::data_removal::EpochDataRemover;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
+use sui_core::in_mem_execution_cache::ExecutionCache;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::state_accumulator::StateAccumulator;
@@ -440,6 +441,8 @@ impl SuiNode {
             &prometheus_registry,
         )
         .await?;
+        let execution_cache = Arc::new(ExecutionCache::new(store.clone(), &prometheus_registry));
+
         let cur_epoch = store.get_recovery_epoch_at_restart()?;
         let committee = committee_store
             .get_committee(&cur_epoch)?
@@ -458,7 +461,7 @@ impl SuiNode {
             Some(epoch_options.options),
             EpochMetrics::new(&registry_service.default_registry()),
             epoch_start_configuration,
-            store.clone(),
+            execution_cache.clone(),
             cache_metrics,
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
@@ -500,8 +503,10 @@ impl SuiNode {
             genesis.checkpoint_contents().clone(),
             &epoch_store,
         );
+
         let state_sync_store = RocksDbStore::new(
             store.clone(),
+            execution_cache.clone(),
             committee_store.clone(),
             checkpoint_store.clone(),
         );
@@ -573,6 +578,7 @@ impl SuiNode {
             secret,
             config.supported_protocol_versions.unwrap(),
             store.clone(),
+            execution_cache,
             epoch_store.clone(),
             committee_store.clone(),
             index_store.clone(),
@@ -1218,7 +1224,7 @@ impl SuiNode {
             state.clone(),
             checkpoint_store,
             epoch_store,
-            Box::new(state.db()),
+            state.get_effects_notify_read(),
             accumulator,
             checkpoint_output,
             Box::new(certified_checkpoint_output),
@@ -1342,8 +1348,7 @@ impl SuiNode {
         let mut checkpoint_executor = CheckpointExecutor::new(
             self.state_sync.subscribe_to_synced_checkpoints(),
             self.checkpoint_store.clone(),
-            self.state.database.clone(),
-            self.state.transaction_manager().clone(),
+            self.state.clone(),
             self.accumulator.clone(),
             self.config.checkpoint_executor_config.clone(),
             &self.registry_service.default_registry(),

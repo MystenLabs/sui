@@ -666,7 +666,7 @@ pub struct CheckpointBuilder {
     epoch_store: Arc<AuthorityPerEpochStore>,
     notify: Arc<Notify>,
     notify_aggregator: Arc<Notify>,
-    effects_store: Box<dyn EffectsNotifyRead>,
+    effects_store: Arc<dyn EffectsNotifyRead>,
     accumulator: Arc<StateAccumulator>,
     output: Box<dyn CheckpointOutput>,
     exit: watch::Receiver<()>,
@@ -704,7 +704,7 @@ impl CheckpointBuilder {
         tables: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         notify: Arc<Notify>,
-        effects_store: Box<dyn EffectsNotifyRead>,
+        effects_store: Arc<dyn EffectsNotifyRead>,
         accumulator: Arc<StateAccumulator>,
         output: Box<dyn CheckpointOutput>,
         exit: watch::Receiver<()>,
@@ -942,7 +942,7 @@ impl CheckpointBuilder {
             .collect();
         let transactions_and_sizes = self
             .state
-            .database
+            .get_cache_reader()
             .get_transactions_and_serialized_sizes(&all_digests)?;
         let mut all_effects_and_transaction_sizes = Vec::with_capacity(all_effects.len());
         let mut transaction_keys = Vec::new();
@@ -1699,7 +1699,7 @@ impl CheckpointService {
         state: Arc<AuthorityState>,
         checkpoint_store: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
-        effects_store: Box<dyn EffectsNotifyRead>,
+        effects_store: Arc<dyn EffectsNotifyRead>,
         accumulator: Arc<StateAccumulator>,
         checkpoint_output: Box<dyn CheckpointOutput>,
         certified_checkpoint_output: Box<dyn CertifiedCheckpointOutput>,
@@ -1964,7 +1964,7 @@ mod tests {
         let (output, mut result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);
         let (certified_output, mut certified_result) =
             mpsc::channel::<CertifiedCheckpointSummary>(10);
-        let store = Box::new(store);
+        let store = Arc::new(store);
 
         let ckpt_dir = tempfile::tempdir().unwrap();
         let checkpoint_store = CheckpointStore::new(ckpt_dir.path());

@@ -29,9 +29,10 @@ use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::digests::ChainIdentifier;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::signature::GenericSignature;
+use sui_types::storage::InputKey;
 use sui_types::transaction::{
-    AuthenticatorStateUpdate, CertifiedTransaction, SenderSignedData, SharedInputObject,
-    Transaction, TransactionDataAPI, TransactionKind, VerifiedCertificate,
+    AuthenticatorStateUpdate, CertifiedTransaction, InputObjectKind, SenderSignedData,
+    SharedInputObject, Transaction, TransactionDataAPI, TransactionKind, VerifiedCertificate,
     VerifiedSignedTransaction, VerifiedTransaction,
 };
 use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
@@ -44,7 +45,7 @@ use typed_store::{
 
 use super::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
-use crate::authority::{AuthorityStore, ResolverWrapper};
+use crate::authority::ResolverWrapper;
 use crate::checkpoints::{
     BuilderCheckpointSummary, CheckpointCommitHeight, CheckpointServiceNotify, EpochStats,
     PendingCheckpoint, PendingCheckpointInfo,
@@ -55,6 +56,7 @@ use crate::consensus_handler::{
 };
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::reconfiguration::ReconfigState;
+use crate::in_mem_execution_cache::{ExecutionCache, ExecutionCacheRead};
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::post_consensus_tx_reorder::PostConsensusTxReorder;
 use crate::signature_verifier::*;
@@ -84,7 +86,6 @@ use sui_types::messages_consensus::{
 };
 use sui_types::storage::{
     transaction_input_object_keys, transaction_receiving_object_keys, GetSharedLocks, ObjectKey,
-    ObjectStore,
 };
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
@@ -208,7 +209,7 @@ pub struct ExecutionIndicesWithStats {
 pub struct ExecutionComponents {
     pub(crate) executor: Arc<dyn Executor + Send + Sync>,
     // TODO: use strategies (e.g. LRU?) to constraint memory usage
-    pub(crate) module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
+    pub(crate) module_cache: Arc<SyncModuleCache<ResolverWrapper<ExecutionCache>>>,
     metrics: Arc<ResolverMetrics>,
 }
 
@@ -655,7 +656,7 @@ impl AuthorityPerEpochStore {
         db_options: Option<Options>,
         metrics: Arc<EpochMetrics>,
         epoch_start_configuration: EpochStartConfiguration,
-        store: Arc<AuthorityStore>,
+        execution_cache: Arc<ExecutionCache>,
         cache_metrics: Arc<ResolverMetrics>,
         signature_verifier_metrics: Arc<SignatureVerifierMetrics>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
@@ -700,7 +701,7 @@ impl AuthorityPerEpochStore {
 
         let execution_component = ExecutionComponents::new(
             &protocol_config,
-            store.clone(),
+            execution_cache.clone(),
             cache_metrics,
             expensive_safety_check_config,
         );
@@ -734,7 +735,7 @@ impl AuthorityPerEpochStore {
 
         if authenticator_state_enabled {
             info!("authenticator_state enabled");
-            let authenticator_state = get_authenticator_state(&store)
+            let authenticator_state = get_authenticator_state(execution_cache.as_ref())
                 .expect("Read cannot fail")
                 .expect("Authenticator state must exist");
 
@@ -860,7 +861,7 @@ impl AuthorityPerEpochStore {
         name: AuthorityName,
         new_committee: Committee,
         epoch_start_configuration: EpochStartConfiguration,
-        store: Arc<AuthorityStore>,
+        cache: Arc<ExecutionCache>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
         chain_identifier: ChainIdentifier,
     ) -> Arc<Self> {
@@ -874,7 +875,7 @@ impl AuthorityPerEpochStore {
             self.db_options.clone(),
             self.metrics.clone(),
             epoch_start_configuration,
-            store,
+            cache,
             self.execution_component.metrics(),
             self.signature_verifier.metrics.clone(),
             expensive_safety_check_config,
@@ -920,7 +921,7 @@ impl AuthorityPerEpochStore {
         self.epoch_start_state().protocol_version()
     }
 
-    pub fn module_cache(&self) -> &Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>> {
+    pub fn module_cache(&self) -> &Arc<SyncModuleCache<ResolverWrapper<ExecutionCache>>> {
         &self.execution_component.module_cache
     }
 
@@ -1042,6 +1043,44 @@ impl AuthorityPerEpochStore {
         Ok(self.tables()?.next_shared_object_versions.multi_get(ids)?)
     }
 
+    /// Resolves InputObjectKinds into InputKeys, by consulting the shared object version
+    /// assignment table.
+    pub(crate) fn get_input_object_keys(
+        &self,
+        digest: &TransactionDigest,
+        objects: &[InputObjectKind],
+    ) -> BTreeSet<InputKey> {
+        let mut shared_locks = HashMap::<ObjectID, SequenceNumber>::new();
+        objects
+            .iter()
+            .map(|kind| {
+                match kind {
+                    InputObjectKind::SharedMoveObject { id, .. } => {
+                        if shared_locks.is_empty() {
+                            shared_locks = self
+                                .get_shared_locks(digest)
+                                .expect("Read from storage should not fail!")
+                                .into_iter()
+                                .collect();
+                        }
+                        // If we can't find the locked version, it means
+                        // 1. either we have a bug that skips shared object version assignment
+                        // 2. or we have some DB corruption
+                        let Some(version) = shared_locks.get(id) else {
+                            panic!(
+                                "Shared object locks should have been set. tx_digset: {digest:?}, obj \
+                                id: {id:?}",
+                            )
+                        };
+                        InputKey::VersionedObject{ id: *id, version: *version}
+                    }
+                    InputObjectKind::MovePackage(id) => InputKey::Package { id: *id },
+                    InputObjectKind::ImmOrOwnedMoveObject(objref) => InputKey::VersionedObject {id: objref.0, version: objref.1},
+                }
+            })
+            .collect()
+    }
+
     pub fn get_last_consensus_index(&self) -> SuiResult<ExecutionIndicesWithHash> {
         self.tables()?
             .get_last_consensus_index()
@@ -1092,9 +1131,7 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult<Vec<Accumulator>> {
         // We need to register waiters _before_ reading from the database to avoid
         // race conditions
-        let registrations = self
-            .checkpoint_state_notify_read
-            .register_all(checkpoints.clone());
+        let registrations = self.checkpoint_state_notify_read.register_all(&checkpoints);
         let accumulators = self
             .tables()?
             .state_hash_by_checkpoint
@@ -1230,7 +1267,7 @@ impl AuthorityPerEpochStore {
     async fn get_or_init_next_object_versions(
         &self,
         objects_to_init: impl Iterator<Item = (ObjectID, SequenceNumber)> + Clone,
-        object_store: impl ObjectStore,
+        cache_reader: &dyn ExecutionCacheRead,
     ) -> SuiResult<HashMap<ObjectID, SequenceNumber>> {
         let mut ret: HashMap<_, _>;
         // Since this can be called from consensus task, we must retry forever - the only other
@@ -1269,7 +1306,7 @@ impl AuthorityPerEpochStore {
                     // Note: we don't actually need to read from the transaction here, as no writer
                     // can update object_store until after get_or_init_next_object_versions
                     // completes.
-                    match object_store.get_object(id).expect("read cannot fail") {
+                    match cache_reader.get_object(id).expect("read cannot fail") {
                         Some(obj) => (*id, obj.version()),
                         None => (*id, *initial_version),
                     }
@@ -1301,7 +1338,7 @@ impl AuthorityPerEpochStore {
         &self,
         certificate: &VerifiedExecutableTransaction,
         assigned_versions: &Vec<(ObjectID, SequenceNumber)>,
-        object_store: impl ObjectStore,
+        cache_reader: &dyn ExecutionCacheRead,
     ) -> SuiResult {
         let tx_digest = certificate.digest();
 
@@ -1320,7 +1357,7 @@ impl AuthorityPerEpochStore {
             .map(SharedInputObject::into_id_and_version)
             .collect();
 
-        self.get_or_init_next_object_versions(shared_input_objects.into_iter(), object_store)
+        self.get_or_init_next_object_versions(shared_input_objects.into_iter(), cache_reader)
             .await?;
         self.tables()?
             .assigned_shared_object_versions
@@ -1437,7 +1474,7 @@ impl AuthorityPerEpochStore {
         &self,
         certificate: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
-        object_store: impl ObjectStore,
+        cache_reader: &dyn ExecutionCacheRead,
     ) -> SuiResult {
         self.set_assigned_shared_object_versions(
             certificate,
@@ -1446,7 +1483,7 @@ impl AuthorityPerEpochStore {
                 .into_iter()
                 .map(|iso| iso.id_and_version())
                 .collect(),
-            object_store,
+            cache_reader,
         )
         .await
     }
@@ -1565,7 +1602,7 @@ impl AuthorityPerEpochStore {
         &self,
         keys: Vec<SequencedConsensusTransactionKey>,
     ) -> Result<(), SuiError> {
-        let registrations = self.consensus_notify_read.register_all(keys.clone());
+        let registrations = self.consensus_notify_read.register_all(&keys);
 
         let unprocessed_keys_registrations = registrations
             .into_iter()
@@ -2127,7 +2164,7 @@ impl AuthorityPerEpochStore {
         transactions: Vec<SequencedConsensusTransaction>,
         consensus_stats: &ExecutionIndicesWithStats,
         checkpoint_service: &Arc<C>,
-        object_store: impl ObjectStore,
+        cache_reader: &dyn ExecutionCacheRead,
         commit_round: Round,
         commit_timestamp: TimestampMs,
         skipped_consensus_txns: &IntCounter,
@@ -2219,7 +2256,7 @@ impl AuthorityPerEpochStore {
                 &consensus_transactions,
                 &end_of_publish_transactions,
                 checkpoint_service,
-                object_store,
+                cache_reader,
                 commit_round,
                 previously_deferred_tx_digests,
                 last_randomness_round_written,
@@ -2288,14 +2325,14 @@ impl AuthorityPerEpochStore {
         self: &Arc<Self>,
         transactions: Vec<SequencedConsensusTransaction>,
         checkpoint_service: &Arc<C>,
-        object_store: impl ObjectStore,
+        cache_reader: &dyn ExecutionCacheRead,
         skipped_consensus_txns: &IntCounter,
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
         self.process_consensus_transactions_and_commit_boundary(
             transactions,
             &ExecutionIndicesWithStats::default(),
             checkpoint_service,
-            object_store,
+            cache_reader,
             self.get_highest_pending_checkpoint_height() + 1,
             0,
             skipped_consensus_txns,
@@ -2329,7 +2366,7 @@ impl AuthorityPerEpochStore {
         transactions: &[VerifiedSequencedConsensusTransaction],
         end_of_publish_transactions: &[VerifiedSequencedConsensusTransaction],
         checkpoint_service: &Arc<C>,
-        object_store: impl ObjectStore,
+        cache_reader: &dyn ExecutionCacheRead,
         commit_round: Round,
         previously_deferred_tx_digests: HashSet<TransactionDigest>,
         last_randomness_round: RandomnessRound,
@@ -2363,7 +2400,7 @@ impl AuthorityPerEpochStore {
 
             self.get_or_init_next_object_versions(
                 unique_shared_input_objects.into_iter(),
-                &object_store,
+                cache_reader,
             )
             .await?
         };
@@ -3015,7 +3052,7 @@ impl GetSharedLocks for AuthorityPerEpochStore {
 impl ExecutionComponents {
     fn new(
         protocol_config: &ProtocolConfig,
-        store: Arc<AuthorityStore>,
+        store: Arc<ExecutionCache>,
         metrics: Arc<ResolverMetrics>,
         // Keep this as a parameter for possible future use
         _expensive_safety_check_config: &ExpensiveSafetyCheckConfig,

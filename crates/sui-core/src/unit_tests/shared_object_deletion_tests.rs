@@ -560,7 +560,7 @@ impl TestRunner {
         epoch: EpochId,
     ) -> Option<TransactionDigest> {
         self.authority_state
-            .database
+            .get_cache_reader()
             .get_deleted_shared_object_previous_tx_digest(object_id, version, epoch)
             .unwrap()
     }

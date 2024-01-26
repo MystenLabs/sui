@@ -42,6 +42,7 @@ use sui_types::messages_consensus::{ConsensusCommitPrologue, ConsensusCommitProl
 use sui_types::object::Data;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
+use sui_types::storage::GetSharedLocks;
 use sui_types::sui_system_state::SuiSystemStateWrapper;
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
@@ -4853,7 +4854,7 @@ async fn test_consensus_message_processed() {
                 .acquire_shared_locks_from_effects(
                     &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
                     &effects1,
-                    authority2.db(),
+                    authority2.get_cache_reader().as_ref(),
                 )
                 .await
                 .unwrap();
