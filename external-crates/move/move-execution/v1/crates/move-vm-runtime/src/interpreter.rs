@@ -245,7 +245,7 @@ impl Interpreter {
                         .map_err(|e| set_err_info!(current_frame, e))?;
 
                     if func.is_native() {
-                        self.call_native(&resolver, gas_meter, extensions, func.clone(), vec![])?;
+                        self.call_native(&resolver, gas_meter, extensions, func, vec![])?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
                         profile_close_frame!(gas_meter, func_name.clone());
                         continue;
@@ -293,7 +293,7 @@ impl Interpreter {
                         .map_err(|e| set_err_info!(current_frame, e))?;
 
                     if func.is_native() {
-                        self.call_native(&resolver, gas_meter, extensions, func.clone(), ty_args)?;
+                        self.call_native(&resolver, gas_meter, extensions, func, ty_args)?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
                         profile_close_frame!(gas_meter, func_name.clone());
 
