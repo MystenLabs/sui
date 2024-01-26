@@ -23,24 +23,6 @@ struct Context<'env, 'lexer, 'input> {
     package_name: Option<Symbol>,
     env: &'env mut CompilationEnv,
     tokens: &'lexer mut Lexer<'input>,
-    /// Determines if a parser is in recovery mode. We need this to stop recording subsequent
-    /// parsing errors as they may become confusing to the developer. Consider the following
-    /// example:
-    ///
-    /// address 0x42 {
-    ///   module M {
-    ///     fun M() {
-    ///       friend 0x42::A;
-    ///     }
-    ///   }
-    /// }
-    ///
-    /// The parsing error triggering recovery mode (first diagnostic) is about unexpected `friend`
-    /// keyword, but after that parser will keep going and (correctly) parse the actual friend
-    /// declaration (thinking it's at the outer level), but trip (second diagnostic) on the last
-    /// closing curly (as friend declaration is in fact NOT at the outer level). A developer trying
-    /// to make sense of the second diagnostic will arguably be confused.
-    recovery_mode: bool,
 }
 
 impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
@@ -53,21 +35,6 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
             package_name,
             env,
             tokens,
-            recovery_mode: false,
-        }
-    }
-
-    pub fn set_recovery_mode(&mut self) {
-        self.recovery_mode = true;
-    }
-
-    pub fn in_recovery_mode(&self) -> bool {
-        self.recovery_mode
-    }
-
-    pub fn add_diag(&mut self, diag: Diagnostic) {
-        if !self.recovery_mode {
-            self.env.add_diag(diag);
         }
     }
 }
@@ -596,7 +563,7 @@ fn parse_module_member_modifiers(context: &mut Context) -> Result<Modifiers, Box
                 if let Some(prev_vis) = mods.visibility {
                     let msg = "Duplicate visibility modifier".to_string();
                     let prev_msg = "Visibility modifier previously given here".to_string();
-                    context.add_diag(diag!(
+                    context.env.add_diag(diag!(
                         Declarations::DuplicateItem,
                         (vis.loc().unwrap(), msg),
                         (prev_vis.loc().unwrap(), prev_msg),
@@ -610,7 +577,7 @@ fn parse_module_member_modifiers(context: &mut Context) -> Result<Modifiers, Box
                 if let Some(prev_loc) = mods.native {
                     let msg = "Duplicate 'native' modifier".to_string();
                     let prev_msg = "'native' modifier previously given here".to_string();
-                    context.add_diag(diag!(
+                    context.env.add_diag(diag!(
                         Declarations::DuplicateItem,
                         (loc, msg),
                         (prev_loc, prev_msg)
@@ -624,7 +591,7 @@ fn parse_module_member_modifiers(context: &mut Context) -> Result<Modifiers, Box
                 if let Some(prev_loc) = mods.entry {
                     let msg = format!("Duplicate '{}' modifier", ENTRY_MODIFIER);
                     let prev_msg = format!("'{}' modifier previously given here", ENTRY_MODIFIER);
-                    context.add_diag(diag!(
+                    context.env.add_diag(diag!(
                         Declarations::DuplicateItem,
                         (loc, msg),
                         (prev_loc, prev_msg)
@@ -1759,7 +1726,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                                 let msg = "Invalid field access. Expected a decimal number but was given a hexadecimal";
                                 let mut diag = diag!(Syntax::UnexpectedToken, (loc, msg));
                                 diag.add_note("Positional fields must be a decimal number in the range [0 .. 255] and not be typed, e.g. `0`");
-                                context.add_diag(diag);
+                                context.env.add_diag(diag);
                                 // Continue on with the parsing
                                 let field_access = Name::new(loc, contents.into());
                                 Exp_::Dot(Box::new(lhs), field_access)
@@ -1771,7 +1738,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                                 );
                                 let mut diag = diag!(Syntax::UnexpectedToken, (loc, msg));
                                 diag.add_note("Positional fields must be a decimal number in the range [0 .. 255] and not be typed, e.g. `0`");
-                                context.add_diag(diag);
+                                context.env.add_diag(diag);
                                 // Continue on with the parsing
                                 let field_access = Name::new(loc, contents.into());
                                 Exp_::Dot(Box::new(lhs), field_access)
@@ -2466,7 +2433,7 @@ fn parse_postfix_ability_declarations(
             let msg = "Duplicate ability declaration. Abilities can be declared before \
                        or after the field declarations, but not both.";
             let prev_msg = "Ability declaration previously given here";
-            context.add_diag(diag!(
+            context.env.add_diag(diag!(
                 Syntax::InvalidModifier,
                 (has_location, msg),
                 (previous_declaration_loc, prev_msg)
@@ -2549,7 +2516,7 @@ fn check_struct_visibility(visibility: Option<Visibility>, context: &mut Context
             let note = "Visibility annotations are required on struct declarations from the Move 2024 edition onwards.";
             let mut err = diag!(Syntax::InvalidModifier, (loc, msg));
             err.add_note(note);
-            context.add_diag(err);
+            context.env.add_diag(err);
         }
     } else if let Some(vis) = visibility {
         let msg = format!(
@@ -2560,7 +2527,7 @@ fn check_struct_visibility(visibility: Option<Visibility>, context: &mut Context
         let note = "Starting in the Move 2024 edition visibility must be annotated on struct declarations.";
         let mut err = diag!(Syntax::InvalidModifier, (vis.loc().unwrap(), msg));
         err.add_note(note);
-        context.add_diag(err);
+        context.env.add_diag(err);
     }
 }
 
@@ -2675,7 +2642,12 @@ fn parse_address_block(
         Tok::LBrace => {
             context.tokens.advance()?;
             let mut modules = vec![];
-            while context.tokens.peek() != Tok::RBrace {
+            loop {
+                let tok = context.tokens.peek();
+                if tok == Tok::RBrace || tok == Tok::EOF {
+                    break;
+                }
+
                 let mut attributes = parse_attributes(context)?;
                 loop {
                     let (module, next_mod_attributes) = parse_module(attributes, context)?;
@@ -2939,7 +2911,6 @@ fn parse_module(
         match parse_module_member(context) {
             Ok(m) => members.push(m),
             Err(ErrCase::ContinueToModule(attrs)) => {
-                context.set_recovery_mode();
                 // while trying to parse module members, we moved past the current module and
                 // encountered a new one - keep parsing it at a higher level, keeping the
                 // already parsed attributes
@@ -2948,9 +2919,9 @@ fn parse_module(
                 break;
             }
             Err(ErrCase::Unknown(diag)) => {
-                context.add_diag(*diag);
-                context.set_recovery_mode();
-                stop_parsing = skip_to_next_member_or_module_or_eof(context);
+                context.env.add_diag(*diag);
+                stop_parsing =
+                    skip_to_next_desired_tok_or_eof(context, is_start_of_member_or_module);
                 if stop_parsing {
                     break;
                 }
@@ -2984,27 +2955,30 @@ fn parse_module(
     Ok((def, next_mod_attributes))
 }
 
-/// Skips tokens until reaching either:
-/// - next top-level definition in the currently parsed module
-/// - beginning of the next module definition
-/// - EOF
-///
-/// Returns true if further parsing is impossible and parser should stop.
-fn skip_to_next_member_or_module_or_eof(context: &mut Context) -> bool {
+/// Skips tokens until reaching the desired one or EOF. Returns true if further parsing is
+/// impossible and parser should stop.
+fn skip_to_next_desired_tok_or_eof(
+    context: &mut Context,
+    is_desired_tok: fn(Tok, &str) -> bool,
+) -> bool {
     loop {
         let tok = context.tokens.peek();
         let content = context.tokens.content();
-        if is_start_of_next_member_or_module_or_eof(tok, content) {
-            return tok == Tok::EOF;
-        }
-        if context.tokens.advance().is_err() {
-            // cannot advance
+        if tok == Tok::EOF {
             return true;
+        }
+        if is_desired_tok(tok, content) {
+            return false;
+        }
+        if let Err(diag) = context.tokens.advance() {
+            // record diagnostics but keep advancing until encountering one of the desired tokens or
+            // (which is eventually guaranteed) EOF
+            context.env.add_diag(*diag);
         }
     }
 }
 
-fn is_start_of_next_member_or_module_or_eof(tok: Tok, content: &str) -> bool {
+fn is_start_of_member_or_module(tok: Tok, content: &str) -> bool {
     match tok {
         Tok::Invariant
         | Tok::Spec
@@ -3016,9 +2990,15 @@ fn is_start_of_next_member_or_module_or_eof(tok: Tok, content: &str) -> bool {
         | Tok::Struct
         | Tok::Use
         | Tok::Module
-        | Tok::NumSign
-        | Tok::EOF => true,
+        | Tok::NumSign => true,
         Tok::Identifier => content == ENTRY_MODIFIER, // TODO: add macro start
+        _ => false,
+    }
+}
+
+fn is_start_of_module_or_spec(tok: Tok, _: &str) -> bool {
+    match tok {
+        Tok::Spec | Tok::Module => true,
         _ => false,
     }
 }
@@ -3104,7 +3084,7 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
                         ),
                     );
                     if tok == Tok::Module {
-                        context.add_diag(*diag);
+                        context.env.add_diag(*diag);
                         Err(ErrCase::ContinueToModule(attributes))
                     } else {
                         Err(ErrCase::Unknown(diag))
@@ -3819,13 +3799,10 @@ fn parse_file(context: &mut Context) -> Result<Vec<Definition>, Box<Diagnostic>>
     let mut defs = vec![];
     while context.tokens.peek() != Tok::EOF {
         if let Err(diag) = parse_file_def(context, &mut defs) {
-            if context.in_recovery_mode() {
-                // return whatever has been computed so far (we ignore `diag` as all diagnostics to
-                // be reported have already been recorded at the time we entered recovery mode)
-                return Ok(defs);
-            } else {
-                return Err(diag);
-            }
+            context.env.add_diag(*diag);
+            // skip to the next def and try parsing it if it's there (ignore address blocks as they
+            // are pretty much defunct anyway)
+            skip_to_next_desired_tok_or_eof(context, is_start_of_module_or_spec);
         }
     }
     Ok(defs)
