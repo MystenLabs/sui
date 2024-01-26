@@ -1311,12 +1311,12 @@ impl SuiClientCommands {
 
                     if let Ok(env) = active_env {
                         let network = match env.rpc.as_str() {
-                            SUI_DEVNET_URL => format!("https://faucet.devnet.sui.io/v1/gas"),
-                            SUI_TESTNET_URL => format!("https://faucet.testnet.sui.io/v1/gas"),
-                            SUI_LOCAL_NETWORK_URL => SUI_LOCAL_NETWORK_GAS_URL.to_string(), 
+                            SUI_DEVNET_URL => "https://faucet.devnet.sui.io/v1/gas",
+                            SUI_TESTNET_URL => "https://faucet.testnet.sui.io/v1/gas",
+                            SUI_LOCAL_NETWORK_URL => SUI_LOCAL_NETWORK_GAS_URL,
                             _ => bail!("Cannot recognize the active network. Please provide the gas faucet full URL.")
                         };
-                        network
+                        network.to_string()
                     } else {
                         bail!("No URL for faucet was provided and there is no active network.")
                     }
@@ -2243,7 +2243,7 @@ pub async fn request_tokens_from_faucet(
         bail!("Faucet received too many requests from this ip address. Please try again after 60 minutes.");
     }
     println!("Waiting for the faucet to complete the gas request...");
-    
+
     let faucet_resp: FaucetResponse = resp.json().await?;
 
     let task_id = if let Some(err) = faucet_resp.error {
