@@ -219,10 +219,6 @@ impl RandomnessManager {
         let transaction = ConsensusTransaction::new_randomness_dkg_message(epoch_store.name, &msg);
         self.consensus_adapter
             .submit(transaction, None, &epoch_store)?;
-
-        let mut batch = self.tables()?.dkg_processed_messages.batch();
-        self.add_message(&mut batch, msg)?;
-        batch.write()?;
         Ok(())
     }
 
