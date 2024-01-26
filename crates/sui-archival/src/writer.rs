@@ -305,7 +305,7 @@ impl CheckpointWriter {
             .join(format!("{}{}", EPOCH_DIR_PREFIX, self.epoch_num))
     }
     fn update_to_next_epoch(&mut self) {
-        self.epoch_num = self.epoch_num.saturating_add(1);
+        self.epoch_num = self.epoch_num.checked_add(1).unwrap();
     }
 }
 

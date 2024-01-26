@@ -531,7 +531,7 @@ where
         }
 
         let checkpoint = *checkpoint;
-        let next_sequence_number = latest_checkpoint.sequence_number().saturating_add(1);
+        let next_sequence_number = latest_checkpoint.sequence_number().checked_add(1).unwrap();
         if *checkpoint.sequence_number() > next_sequence_number {
             debug!(
                 "consensus sent too new of a checkpoint, expecting: {}, got: {}",
@@ -576,7 +576,8 @@ where
         }) = checkpoint.end_of_epoch_data.as_ref()
         {
             let next_committee = next_epoch_committee.iter().cloned().collect();
-            let committee = Committee::new(checkpoint.epoch().saturating_add(1), next_committee);
+            let committee =
+                Committee::new(checkpoint.epoch().checked_add(1).unwrap(), next_committee);
             self.store
                 .insert_committee(committee)
                 .expect("store operation should not fail");
@@ -965,7 +966,7 @@ where
         PeerCheckpointRequestType::Summary,
     );
     // range of the next sequence_numbers to fetch
-    let mut request_stream = (current.sequence_number().saturating_add(1)
+    let mut request_stream = (current.sequence_number().checked_add(1).unwrap()
         ..=*checkpoint.sequence_number())
         .map(|next| {
             let peers = peer_balancer.clone().with_checkpoint(next);
@@ -1176,7 +1177,7 @@ async fn sync_checkpoint_contents<S>(
         .get_highest_synced_checkpoint()
         .expect("store operation should not fail");
 
-    let mut current_sequence = highest_synced.sequence_number().saturating_add(1);
+    let mut current_sequence = highest_synced.sequence_number().checked_add(1).unwrap();
     let mut target_sequence_cursor = 0;
     let mut highest_started_network_total_transactions = highest_synced.network_total_transactions;
     let mut checkpoint_contents_tasks = FuturesOrdered::new();
@@ -1188,7 +1189,7 @@ async fn sync_checkpoint_contents<S>(
             result = target_sequence_channel.changed() => {
                 match result {
                     Ok(()) => {
-                        target_sequence_cursor = (*target_sequence_channel.borrow_and_update()).saturating_add(1);
+                        target_sequence_cursor = (*target_sequence_channel.borrow_and_update()).checked_add(1).unwrap();
                     }
                     Err(_) => {
                         // Watch channel is closed, exit loop.

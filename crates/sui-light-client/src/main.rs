@@ -310,7 +310,8 @@ async fn check_and_sync_checkpoints(config: &Config) -> anyhow::Result<()> {
         }) = &summary.end_of_epoch_data
         {
             let next_committee = next_epoch_committee.iter().cloned().collect();
-            prev_committee = Committee::new(summary.epoch().saturating_add(1), next_committee);
+            prev_committee =
+                Committee::new(summary.epoch().checked_add(1).unwrap(), next_committee);
         } else {
             return Err(anyhow!(
                 "Expected all checkpoints to be end-of-epoch checkpoints"
@@ -402,7 +403,7 @@ async fn get_verified_effects_and_events(
 
         // Check we have the right checkpoint
         anyhow::ensure!(
-            prev_ckp.epoch().saturating_add(1) == full_check_point.checkpoint_summary.epoch(),
+            prev_ckp.epoch().checked_add(1).unwrap() == full_check_point.checkpoint_summary.epoch(),
             "Checkpoint sequence number does not match. Need to Sync."
         );
 
@@ -419,7 +420,7 @@ async fn get_verified_effects_and_events(
             .collect();
 
         // Make a committee object using this
-        Committee::new(prev_ckp.epoch().saturating_add(1), current_committee)
+        Committee::new(prev_ckp.epoch().checked_add(1).unwrap(), current_committee)
     } else {
         // Since we did not find a small committee checkpoint we use the genesis
         let mut genesis_path = config.checkpoint_summary_dir.clone();
@@ -596,7 +597,7 @@ mod tests {
             .collect();
 
         // Make a committee object using this
-        let committee = Committee::new(checkpoint.epoch().saturating_add(1), prev_committee);
+        let committee = Committee::new(checkpoint.epoch().checked_add(1).unwrap(), prev_committee);
 
         let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         d.push("example_config/20958462.bcs");

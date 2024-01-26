@@ -64,7 +64,7 @@ impl CheckpointFetcher {
 
         let checkpoint_range = self
             .last_downloaded_checkpoint
-            .map(|i| i.saturating_add(1))
+            .map(|i| i.checked_add(1).unwrap())
             .unwrap_or(0)..=self.highest_known_checkpoint;
 
         if !checkpoint_range.is_empty() {
