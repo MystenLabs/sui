@@ -450,9 +450,18 @@ pub struct AuthorityEpochTables {
     randomness_rounds_written: DBMap<RandomnessRound, ()>,
 
     /// Tables for recording DKG state for RandomnessManager.
+
+    /// Records messages processed from other nodes. Updated when receiving a new dkg::Message
+    /// via consensus.
     pub(crate) dkg_processed_messages: DBMap<PartyId, dkg::ProcessedMessage<PkG, EncG>>,
+    /// Records messages used to generate a DKG confirmation. Updated when enough DKG
+    /// messages are received to progress to the next phase.
     pub(crate) dkg_used_messages: DBMap<u64, dkg::UsedProcessedMessages<PkG, EncG>>,
+    /// Records confirmations received from other nodes. Updated when receiving a new
+    /// dkg::Confirmation via consensus.
     pub(crate) dkg_confirmations: DBMap<PartyId, dkg::Confirmation<EncG>>,
+    /// Records the final output of DKG after completion, including the public VSS key and
+    /// any local private shares.
     pub(crate) dkg_output: DBMap<u64, dkg::Output<PkG, EncG>>,
 }
 

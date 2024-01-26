@@ -201,7 +201,7 @@ impl RandomnessManager {
         Some(manager)
     }
 
-    pub fn start_dkg(&self) -> SuiResult<()> {
+    pub fn start_dkg(&self) -> SuiResult {
         if self.used_messages.initialized() || self.dkg_output.initialized() {
             // DKG already started (or completed).
             return Ok(());
@@ -222,7 +222,7 @@ impl RandomnessManager {
         Ok(())
     }
 
-    pub fn advance_dkg(&self, batch: &mut DBBatch) -> SuiResult<()> {
+    pub fn advance_dkg(&self, batch: &mut DBBatch) -> SuiResult {
         let epoch_store = self.epoch_store()?;
 
         // Once we have enough ProcessedMessages, send a Confirmation.
@@ -302,7 +302,7 @@ impl RandomnessManager {
         Ok(())
     }
 
-    pub fn add_message(&self, batch: &mut DBBatch, msg: dkg::Message<PkG, EncG>) -> SuiResult<()> {
+    pub fn add_message(&self, batch: &mut DBBatch, msg: dkg::Message<PkG, EncG>) -> SuiResult {
         if self.used_messages.initialized() || self.dkg_output.initialized() {
             // We've already sent a `Confirmation`, so we can't add any more messages.
             return Ok(());
@@ -329,7 +329,7 @@ impl RandomnessManager {
         &self,
         batch: &mut DBBatch,
         conf: dkg::Confirmation<EncG>,
-    ) -> SuiResult<()> {
+    ) -> SuiResult {
         if self.dkg_output.initialized() {
             // Once we have completed DKG, no more `Confirmation`s are needed.
             return Ok(());
