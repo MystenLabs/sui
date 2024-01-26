@@ -7,9 +7,11 @@ Objects on Sui can be shared (accessible for reads and writes by any transaction
 
 Transactions that use only owned objects benefit from very low latency to finality, because they do not need to go through consensus.  On the other hand, the fact that only the owner of the object can access it complicates processes that need to work with objects owned by multiple parties, and access to very hot objects needs to be coordinated off-chain.
 
-Transactions that access one or more shared objects require consensus to sequence reads and written to those objects.  This comes at a slightly higher gas cost and increases latency and transactions that access more shared objects or particularly popular objects may see increases in latency due to contention, but the expressivity of allowing multiple addresses to access the same shared object, and the simplicity of allowing the chain to coordinate access to hot objects are benefits.
+Transactions that access one or more shared objects require consensus to sequence reads and writes to those objects, resulting in a slightly higher gas cost and increased latency.
 
-To summarize, applications that are extremely sensitive to latency or gas costs, that do not need to handle complex multi-party transactions, or that already require an off-chain service could benefit from a design that only uses owned objects, while applications that require coordination between multiple parties, may prefer to use shared objects.
+Transactions that access multiple shared objects, or particularly popular objects, might have increases in latency due to contention. However, the advantage of using shared objects lies in the flexibility of allowing multiple addresses to access the same object in a coordinated manner.
+
+To summarize, applications that are extremely sensitive to latency or gas costs, that do not need to handle complex multi-party transactions, or that already require an off-chain service could benefit from a design that only uses owned objects. Applications that require coordination between multiple parties will likely benefit from using shared objects.
 
 For more information on the types of objects that Sui supports, see [Object Ownership](/concepts/object-ownership.mdx).
 
