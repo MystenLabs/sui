@@ -25,7 +25,7 @@ pub struct LoggerConfig {
 impl Default for LoggerConfig {
     fn default() -> Self {
         Self {
-            log_request_query: true,
+            log_request_query: false,
             log_response: true,
             log_complexity: true,
         }
@@ -82,9 +82,9 @@ impl Extension for LoggerExtension {
             .iter()
             .filter(|(_, operation)| operation.node.ty == OperationType::Query)
             .any(|(_, operation)| operation.node.selection_set.node.items.iter().any(|selection| matches!(&selection.node, Selection::Field(field) if field.node.name.node == "__schema")));
-        if !is_schema && self.config.log_request_query {
-            let query_id: &Uuid = ctx.data_unchecked();
-            let session_id: &SocketAddr = ctx.data_unchecked();
+        let query_id: &Uuid = ctx.data_unchecked();
+        let session_id: &SocketAddr = ctx.data_unchecked();
+        if !is_schema && self.config.log_request_query && !is_health_check_request(query_id) {
             info!(
                 %query_id,
                 %session_id,
@@ -101,9 +101,9 @@ impl Extension for LoggerExtension {
         next: NextValidation<'_>,
     ) -> Result<ValidationResult, Vec<ServerError>> {
         let res = next.run(ctx).await?;
-        if self.config.log_complexity {
-            let query_id: &Uuid = ctx.data_unchecked();
-            let session_id: &SocketAddr = ctx.data_unchecked();
+        let query_id: &Uuid = ctx.data_unchecked();
+        let session_id: &SocketAddr = ctx.data_unchecked();
+        if self.config.log_complexity && !is_health_check_request(query_id) {
             info!(
                 %query_id,
                 %session_id,
@@ -187,7 +187,7 @@ impl Extension for LoggerExtension {
                     )
                 }
             }
-        } else if self.config.log_response {
+        } else if self.config.log_response && !is_health_check_request(query_id) {
             match operation_name {
                 Some("IntrospectionQuery") => {
                     debug!(
@@ -205,4 +205,9 @@ impl Extension for LoggerExtension {
         }
         resp
     }
+}
+
+/// Check if the request comes from the `health` endpoint, which has the nil uuid
+fn is_health_check_request(id: &Uuid) -> bool {
+    id.is_nil()
 }
