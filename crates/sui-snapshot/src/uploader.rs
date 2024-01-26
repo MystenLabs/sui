@@ -16,7 +16,8 @@ use sui_storage::object_store::util::{
     find_all_dirs_with_epoch_prefix, find_missing_epochs_dirs, path_to_filesystem, put,
     run_manifest_update_loop,
 };
-use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
+use sui_types::storage::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
+
 use sui_storage::FileCompression;
 use tracing::{debug, error, info};
 

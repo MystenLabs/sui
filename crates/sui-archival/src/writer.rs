@@ -22,12 +22,12 @@ use std::thread::sleep;
 use std::time::Duration;
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_storage::object_store::util::{copy_file, path_to_filesystem};
-use sui_storage::object_store::ObjectStoreConfig;
 use sui_storage::{compress, FileCompression, StorageFormat};
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary as Checkpoint, CheckpointSequenceNumber,
     FullCheckpointContents as CheckpointContents,
 };
+use sui_types::storage::object_storage_config::ObjectStoreConfig;
 use sui_types::storage::{ReadStore, WriteStore};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};

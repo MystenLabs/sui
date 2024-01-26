@@ -51,13 +51,14 @@ use sui_core::storage::RocksDbStore;
 use sui_snapshot::reader::StateSnapshotReaderV1;
 use sui_snapshot::setup_db_state;
 use sui_storage::object_store::util::{copy_file, exists, get_path};
-use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreGetExt, ObjectStoreType};
+use sui_storage::object_store::ObjectStoreGetExt;
 use sui_storage::verify_checkpoint_range;
 use sui_types::messages_checkpoint::{CheckpointCommitment, ECMHLiveObjectSetDigest};
 use sui_types::messages_grpc::{
     ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse, TransactionInfoRequest,
     TransactionStatus,
 };
+use sui_types::storage::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 
 use sui_types::storage::{ReadStore, SharedInMemoryStore};
 use tracing::info;

@@ -22,9 +22,9 @@ use sui_rest_api::CheckpointData;
 use sui_storage::object_store::util::{
     find_all_dirs_with_epoch_prefix, find_all_files_with_epoch_prefix,
 };
-use sui_storage::object_store::ObjectStoreConfig;
 use sui_types::base_types::EpochId;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::storage::object_storage_config::ObjectStoreConfig;
 
 use crate::analytics_metrics::AnalyticsMetrics;
 use crate::analytics_processor::AnalyticsProcessor;

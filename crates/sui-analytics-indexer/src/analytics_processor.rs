@@ -18,8 +18,8 @@ use tracing::{error, info};
 use sui_indexer::framework::Handler;
 use sui_rest_api::CheckpointData;
 use sui_storage::object_store::util::{copy_file, path_to_filesystem};
-use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::storage::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 
 use crate::analytics_metrics::AnalyticsMetrics;
 use crate::handlers::AnalyticsHandler;
