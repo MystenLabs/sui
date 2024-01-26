@@ -221,8 +221,19 @@ impl PTB {
         }
 
         let file_content = std::fs::read_to_string(file_path)?.replace("\\", "");
-        let files_to_resolve = file_content
+        let ignore_comments = file_content
             .lines()
+            .filter(|x| !x.starts_with("#"))
+            .collect::<Vec<_>>();
+        if ignore_comments.iter().any(|x| x.contains("#")) {
+            return Err(anyhow!(
+                "Found inlined comments in file {filename}, which are not allowed."
+            ));
+        }
+
+        let files_to_resolve = ignore_comments
+            .iter()
+            .flat_map(|x| x.split_inclusive("--"))
             .filter(|x| x.starts_with("--file"))
             .map(|x| x.to_string().replace("--file", "").replace(" ", ""))
             .collect::<Vec<_>>();
@@ -248,8 +259,8 @@ impl PTB {
             )
         })?;
 
-        let lines = file_content
-            .lines()
+        let lines = ignore_comments
+            .iter()
             .flat_map(|x| x.split_whitespace())
             .collect::<Vec<_>>();
 
