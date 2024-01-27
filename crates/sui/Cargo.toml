@@ -36,6 +36,7 @@ reqwest.workspace = true
 im.workspace = true
 async-recursion.workspace = true
 thiserror.workspace = true
+datatest-stable.workspace = true
 
 sui-config.workspace = true
 sui-execution = { path = "../../sui-execution" }
@@ -97,6 +98,14 @@ normal = ["jemalloc-ctl"]
 name = "generate-genesis-checkpoint"
 path = "src/generate_genesis_checkpoint.rs"
 test = false
+
+[[test]]
+name = "ptb_files_tests"
+harness = false
+
+[[test]]
+name = "ptb_files_tests_bad"
+harness = false
 
 [features]
 gas-profiler = [
