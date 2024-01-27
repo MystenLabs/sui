@@ -65,6 +65,12 @@ impl LatencyObserver {
     }
 }
 
+impl Default for LatencyObserver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// RateTracker tracks events in a rolling window, and calculates the rate of events.
 /// Internally, the tracker divides the tracking window into multiple BIN_DURATION,
 /// and counts events in each BIN_DURATION in a fixed sized buffer.
