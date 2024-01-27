@@ -248,7 +248,7 @@ impl Query {
         ctx: &Context<'_>,
         digest: Digest,
     ) -> Result<Option<TransactionBlock>> {
-        TransactionBlock::query(ctx.data_unchecked(), digest)
+        TransactionBlock::query(ctx.data_unchecked(), digest, None)
             .await
             .extend()
     }
@@ -305,7 +305,7 @@ impl Query {
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Connection<String, TransactionBlock>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        TransactionBlock::paginate(ctx.data_unchecked(), page, filter.unwrap_or_default())
+        TransactionBlock::paginate(ctx.data_unchecked(), page, filter.unwrap_or_default(), None)
             .await
             .extend()
     }

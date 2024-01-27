@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::types::transaction_block_effects::TransactionBlockEffectsKind;
 use crate::{
     error::Error, types::execution_result::ExecutionResult,
     types::transaction_block_effects::TransactionBlockEffects,
@@ -124,10 +125,13 @@ impl Mutation {
             } else {
                 Some(result.errors)
             },
-            effects: TransactionBlockEffects::Executed {
-                tx_data,
-                native,
-                events,
+            effects: TransactionBlockEffects {
+                kind: TransactionBlockEffectsKind::Executed {
+                    tx_data,
+                    native,
+                    events,
+                },
+                checkpoint_viewed_at: None,
             },
         })
     }
