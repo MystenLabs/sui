@@ -3,7 +3,7 @@
 
 use super::base64::Base64;
 use super::move_type::MoveType;
-use super::transaction_block::TransactionBlock;
+use super::transaction_block::{TransactionBlock, TransactionBlockInner};
 use super::transaction_block_kind::programmable::TransactionArgument;
 use crate::error::Error;
 use async_graphql::*;
@@ -65,10 +65,13 @@ impl TryFrom<DevInspectResults> for DryRunResult {
             })?;
         let tx_data: NativeTransactionData = bcs::from_bytes(&results.raw_txn_data)
             .map_err(|e| Error::Internal(format!("Unable to deserialize transaction data: {e}")))?;
-        let transaction = Some(TransactionBlock::DryRun {
-            tx_data,
-            effects,
-            events,
+        let transaction = Some(TransactionBlock {
+            inner: TransactionBlockInner::DryRun {
+                tx_data,
+                effects,
+                events,
+            },
+            checkpoint_viewed_at: None,
         });
         Ok(Self {
             error: results.error,

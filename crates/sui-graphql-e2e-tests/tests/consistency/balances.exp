@@ -1,4 +1,4 @@
-processed 25 tasks
+processed 31 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -41,36 +41,11 @@ Checkpoint created: 6
 task 15 'create-checkpoint'. lines 79-79:
 Checkpoint created: 7
 
-task 16 'run-graphql'. lines 81-101:
+task 16 'run-graphql'. lines 81-102:
 Response: {
   "data": {
     "transactionBlocks": {
       "nodes": [
-        {
-          "sender": {
-            "fakeCoinBalance": {
-              "totalBalance": "600"
-            },
-            "allBalances": {
-              "nodes": [
-                {
-                  "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "299999983336400"
-                },
-                {
-                  "coinType": {
-                    "repr": "0x336283c39790fdda49011270655dd4b80b1bec01416c8c22d278ddfb01383691::fake::FAKE"
-                  },
-                  "coinObjectCount": 3,
-                  "totalBalance": "600"
-                }
-              ]
-            }
-          }
-        },
         {
           "sender": {
             "fakeCoinBalance": {
@@ -95,7 +70,17 @@ Response: {
               ]
             }
           }
-        },
+        }
+      ]
+    }
+  }
+}
+
+task 17 'run-graphql'. lines 104-125:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
         {
           "sender": {
             "fakeCoinBalance": {
@@ -120,7 +105,17 @@ Response: {
               ]
             }
           }
-        },
+        }
+      ]
+    }
+  }
+}
+
+task 18 'run-graphql'. lines 127-148:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
         {
           "sender": {
             "fakeCoinBalance": {
@@ -151,130 +146,14 @@ Response: {
   }
 }
 
-task 17 'force-object-snapshot-catchup'. lines 104-104:
-Objects snapshot updated to [0 to 2)
-
-task 18 'run-graphql'. lines 106-126:
-Response: {
-  "data": {
-    "transactionBlocks": {
-      "nodes": [
-        {
-          "sender": {
-            "fakeCoinBalance": {
-              "totalBalance": "600"
-            },
-            "allBalances": {
-              "nodes": [
-                {
-                  "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "299999983336400"
-                },
-                {
-                  "coinType": {
-                    "repr": "0x336283c39790fdda49011270655dd4b80b1bec01416c8c22d278ddfb01383691::fake::FAKE"
-                  },
-                  "coinObjectCount": 3,
-                  "totalBalance": "600"
-                }
-              ]
-            }
-          }
-        },
-        {
-          "sender": {
-            "fakeCoinBalance": {
-              "totalBalance": "700"
-            },
-            "allBalances": {
-              "nodes": [
-                {
-                  "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "299999982296272"
-                },
-                {
-                  "coinType": {
-                    "repr": "0x336283c39790fdda49011270655dd4b80b1bec01416c8c22d278ddfb01383691::fake::FAKE"
-                  },
-                  "coinObjectCount": 3,
-                  "totalBalance": "700"
-                }
-              ]
-            }
-          }
-        },
-        {
-          "sender": {
-            "fakeCoinBalance": {
-              "totalBalance": "600"
-            },
-            "allBalances": {
-              "nodes": [
-                {
-                  "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "299999981273168"
-                },
-                {
-                  "coinType": {
-                    "repr": "0x336283c39790fdda49011270655dd4b80b1bec01416c8c22d278ddfb01383691::fake::FAKE"
-                  },
-                  "coinObjectCount": 2,
-                  "totalBalance": "600"
-                }
-              ]
-            }
-          }
-        },
-        {
-          "sender": {
-            "fakeCoinBalance": {
-              "totalBalance": "300"
-            },
-            "allBalances": {
-              "nodes": [
-                {
-                  "coinType": {
-                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "299999980250064"
-                },
-                {
-                  "coinType": {
-                    "repr": "0x336283c39790fdda49011270655dd4b80b1bec01416c8c22d278ddfb01383691::fake::FAKE"
-                  },
-                  "coinObjectCount": 1,
-                  "totalBalance": "300"
-                }
-              ]
-            }
-          }
-        }
-      ]
-    }
-  }
-}
-
-task 19 'force-object-snapshot-catchup'. lines 129-129:
+task 19 'force-object-snapshot-catchup'. lines 150-150:
 Objects snapshot updated to [0 to 3)
 
-task 20 'run-graphql'. lines 131-151:
+task 20 'run-graphql'. lines 152-173:
 Response: {
   "data": {
     "transactionBlocks": {
       "nodes": [
-        {
-          "sender": null
-        },
         {
           "sender": {
             "fakeCoinBalance": {
@@ -299,7 +178,17 @@ Response: {
               ]
             }
           }
-        },
+        }
+      ]
+    }
+  }
+}
+
+task 21 'run-graphql'. lines 175-196:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
         {
           "sender": {
             "fakeCoinBalance": {
@@ -324,7 +213,17 @@ Response: {
               ]
             }
           }
-        },
+        }
+      ]
+    }
+  }
+}
+
+task 22 'run-graphql'. lines 198-219:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
         {
           "sender": {
             "fakeCoinBalance": {
@@ -352,44 +251,51 @@ Response: {
         }
       ]
     }
-  },
-  "errors": [
-    {
-      "message": "Requested data is outside the available range",
-      "locations": [
-        {
-          "line": 8,
-          "column": 9
-        }
-      ],
-      "path": [
-        "transactionBlocks",
-        "nodes",
-        0,
-        "sender",
-        "allBalances"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
-    }
-  ]
+  }
 }
 
-task 21 'force-object-snapshot-catchup'. lines 154-154:
+task 23 'force-object-snapshot-catchup'. lines 221-221:
 Objects snapshot updated to [0 to 4)
 
-task 22 'run-graphql'. lines 156-176:
+task 24 'run-graphql'. lines 223-244:
 Response: {
   "data": {
     "transactionBlocks": {
       "nodes": [
         {
           "sender": null
-        },
+        }
+      ]
+    }
+  },
+  "errors": [
+    {
+      "message": "Requested data is outside the available range",
+      "locations": [
         {
-          "sender": null
-        },
+          "line": 9,
+          "column": 9
+        }
+      ],
+      "path": [
+        "transactionBlocks",
+        "nodes",
+        0,
+        "sender",
+        "allBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 25 'run-graphql'. lines 246-267:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
         {
           "sender": {
             "fakeCoinBalance": {
@@ -414,7 +320,17 @@ Response: {
               ]
             }
           }
-        },
+        }
+      ]
+    }
+  }
+}
+
+task 26 'run-graphql'. lines 269-290:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
         {
           "sender": {
             "fakeCoinBalance": {
@@ -442,66 +358,17 @@ Response: {
         }
       ]
     }
-  },
-  "errors": [
-    {
-      "message": "Requested data is outside the available range",
-      "locations": [
-        {
-          "line": 8,
-          "column": 9
-        }
-      ],
-      "path": [
-        "transactionBlocks",
-        "nodes",
-        0,
-        "sender",
-        "allBalances"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
-    },
-    {
-      "message": "Requested data is outside the available range",
-      "locations": [
-        {
-          "line": 8,
-          "column": 9
-        }
-      ],
-      "path": [
-        "transactionBlocks",
-        "nodes",
-        1,
-        "sender",
-        "allBalances"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
-    }
-  ]
+  }
 }
 
-task 23 'force-object-snapshot-catchup'. lines 179-179:
+task 27 'force-object-snapshot-catchup'. lines 293-293:
 Objects snapshot updated to [0 to 6)
 
-task 24 'run-graphql'. lines 181-201:
+task 28 'run-graphql'. lines 295-316:
 Response: {
   "data": {
     "transactionBlocks": {
       "nodes": [
-        {
-          "sender": null
-        },
-        {
-          "sender": null
-        },
-        {
-          "sender": null
-        },
         {
           "sender": null
         }
@@ -513,7 +380,7 @@ Response: {
       "message": "Requested data is outside the available range",
       "locations": [
         {
-          "line": 8,
+          "line": 9,
           "column": 9
         }
       ],
@@ -527,57 +394,68 @@ Response: {
       "extensions": {
         "code": "BAD_USER_INPUT"
       }
-    },
+    }
+  ]
+}
+
+task 29 'run-graphql'. lines 318-339:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": null
+        }
+      ]
+    }
+  },
+  "errors": [
     {
       "message": "Requested data is outside the available range",
       "locations": [
         {
-          "line": 8,
+          "line": 9,
           "column": 9
         }
       ],
       "path": [
         "transactionBlocks",
         "nodes",
-        1,
+        0,
         "sender",
         "allBalances"
       ],
       "extensions": {
         "code": "BAD_USER_INPUT"
       }
-    },
+    }
+  ]
+}
+
+task 30 'run-graphql'. lines 341-362:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "sender": null
+        }
+      ]
+    }
+  },
+  "errors": [
     {
       "message": "Requested data is outside the available range",
       "locations": [
         {
-          "line": 8,
+          "line": 9,
           "column": 9
         }
       ],
       "path": [
         "transactionBlocks",
         "nodes",
-        2,
-        "sender",
-        "allBalances"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
-    },
-    {
-      "message": "Requested data is outside the available range",
-      "locations": [
-        {
-          "line": 8,
-          "column": 9
-        }
-      ],
-      "path": [
-        "transactionBlocks",
-        "nodes",
-        3,
+        0,
         "sender",
         "allBalances"
       ],

@@ -211,9 +211,13 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
     /// followed by an iterator of values in the page, fetched from the database.
     ///
     /// The values returned implement `Target<C>`, so are able to compute their own cursors.
+    ///
+    /// `checkpoint_viewed_at` is a required parameter to and passed to each element to construct a
+    /// consistent cursor.
     pub(crate) fn paginate_query<T, Q, ST, GB>(
         &self,
         conn: &mut Conn<'_>,
+        checkpoint_viewed_at: Option<u64>, // TODO (wlmyng) make this required once all paginable types have this value threaded through
         query: Q,
     ) -> QueryResult<(bool, bool, impl Iterator<Item = T>)>
     where
@@ -255,8 +259,14 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         };
 
         Ok(self.paginate_results(
-            results.first().map(|f| f.cursor()),
-            results.last().map(|l| l.cursor()),
+            results.first().map(|f| match checkpoint_viewed_at {
+                Some(checkpoint_viewed_at) => f.consistent_cursor(checkpoint_viewed_at),
+                None => f.cursor(),
+            }),
+            results.last().map(|l| match checkpoint_viewed_at {
+                Some(checkpoint_viewed_at) => l.consistent_cursor(checkpoint_viewed_at),
+                None => l.cursor(),
+            }),
             results,
         ))
     }
@@ -266,7 +276,8 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
     /// `query`. Returns two booleans indicating whether there is a previous or next page in the
     /// range, followed by an iterator of values in the page, fetched from the database.
     ///
-    /// The values returned implement `Target<C>`, so are able to compute their own cursors.
+    /// `checkpoint_viewed_at` is a required parameter to and passed to each element to construct a
+    /// consistent cursor.
     pub(crate) fn paginate_raw_query<T>(
         &self,
         conn: &mut Conn<'_>,
