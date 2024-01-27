@@ -44,8 +44,7 @@ use sui_replay::ReplayToolCommand;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::SuiClient;
 use sui_sdk::{
-    wallet_context::WalletContext, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_GAS_URL,
-    SUI_LOCAL_NETWORK_URL, SUI_TESTNET_URL,
+    wallet_context::WalletContext, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_TESTNET_URL,
 };
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
@@ -728,7 +727,6 @@ pub enum SuiClientCommands {
 
 #[derive(serde::Deserialize)]
 struct FaucetResponse {
-    task: String,
     error: Option<String>,
 }
 
@@ -1313,7 +1311,8 @@ impl SuiClientCommands {
                         let network = match env.rpc.as_str() {
                             SUI_DEVNET_URL => "https://faucet.devnet.sui.io/v1/gas",
                             SUI_TESTNET_URL => "https://faucet.testnet.sui.io/v1/gas",
-                            SUI_LOCAL_NETWORK_URL => SUI_LOCAL_NETWORK_GAS_URL,
+                            // TODO when using sui-test-validator, and 5003 when using sui start
+                            SUI_LOCAL_NETWORK_URL => "http://127.0.0.1:9123/gas",
                             _ => bail!("Cannot recognize the active network. Please provide the gas faucet full URL.")
                         };
                         network.to_string()
@@ -2234,24 +2233,15 @@ pub async fn request_tokens_from_faucet(
         .json(&json_body)
         .send()
         .await?;
-    println!("Requested gas from faucet: {url}");
-    println!(
-        "Faucet request for address {address_str} has status: {}",
-        resp.status()
-    );
     if resp.status() == 429 {
-        bail!("Faucet received too many requests from this ip address. Please try again after 60 minutes.");
+        bail!("Faucet received too many requests from this IP address. Please try again after 60 minutes.");
     }
-    println!("Waiting for the faucet to complete the gas request...");
-
     let faucet_resp: FaucetResponse = resp.json().await?;
 
-    let task_id = if let Some(err) = faucet_resp.error {
-        bail!("Faucet request was unsuccessful. Error is {err:?}")
+    if let Some(err) = faucet_resp.error {
+        bail!("Faucet request was unsuccessful: {err}")
     } else {
-        faucet_resp.task
-    };
-    println!("Faucet task id: {task_id}");
-    println!("The coin should be available in the next couple of minutes. Run sui client gas to find your coins.");
+        println!("Request successful. It can take up to 1 minute to get the coin. Run sui client gas to check your gas coins.");
+    }
     Ok(())
 }
