@@ -14,6 +14,7 @@ use diesel::{
     sql_types::{BigInt as SqlBigInt, Nullable, Text},
     OptionalExtension, QueryableByName,
 };
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use sui_types::{parse_sui_type_tag, TypeTag};
 
@@ -40,7 +41,16 @@ pub struct StoredBalance {
     pub coin_type: String,
 }
 
-pub(crate) type Cursor = cursor::JsonCursor<String>;
+pub(crate) type Cursor = cursor::JsonCursor<BalanceCursor>;
+
+/// The inner struct for the `Balance`'s cursor. The `coin_type` is used as the cursor, while the
+/// `checkpoint_viewed_at` sets the consistent upper bound for the cursor.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub(crate) struct BalanceCursor {
+    coin_type: String,
+    /// Since the `Balance` result is an aggregate query, the default value is set to None.
+    checkpoint_viewed_at: Option<u64>,
+}
 
 impl Balance {
     /// Query for the balance of coins owned by `address`, of coins with type `coin_type`. Note that
@@ -82,37 +92,45 @@ impl Balance {
         address: SuiAddress,
         checkpoint_viewed_at: Option<u64>,
     ) -> Result<Connection<String, Balance>, Error> {
+        // If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
+        // consistent. Otherwise, use the value from the parameter, or set to None. This is so that
+        // paginated queries are consistent with the previous query that created the cursor.
+        let cursor_viewed_at = validate_cursor_consistency(page.after(), page.before())?;
+        let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
+
         let response = db
             .execute_repeatable(move |conn| {
                 let (lhs, mut rhs) = Checkpoint::available_range(conn)?;
 
                 if let Some(checkpoint_viewed_at) = checkpoint_viewed_at {
                     if checkpoint_viewed_at < lhs || rhs < checkpoint_viewed_at {
-                        return Ok(None);
+                        return Ok::<_, diesel::result::Error>(None);
                     }
                     rhs = checkpoint_viewed_at;
                 }
 
-                page.paginate_raw_query::<StoredBalance>(
+                let result = page.paginate_raw_query::<StoredBalance>(
                     conn,
                     rhs,
                     balance_query(address, None, lhs as i64, rhs as i64),
-                )
-                .map(Some)
+                )?;
+
+                Ok(Some((result, rhs)))
             })
             .await?;
 
-        let mut conn = Connection::new(false, false);
-
-        let Some((prev, next, results)) = response else {
-            return Ok(conn);
+        let Some(((prev, next, results), checkpoint_viewed_at)) = response else {
+            return Err(Error::Client(
+                "Requested data is outside the available range".to_string(),
+            ));
         };
 
-        conn.has_previous_page = prev;
-        conn.has_next_page = next;
+        let mut conn = Connection::new(prev, next);
 
         for stored in results {
-            let cursor = stored.cursor().encode_cursor();
+            let cursor = stored
+                .consistent_cursor(checkpoint_viewed_at)
+                .encode_cursor();
             let balance = Balance::try_from(stored)?;
             conn.edges.push(Edge::new(cursor, balance));
         }
@@ -123,13 +141,11 @@ impl Balance {
 
 impl RawPaginated<Cursor> for StoredBalance {
     fn filter_ge(cursor: &Cursor, query: RawQuery) -> RawQuery {
-        // Specify candidates to help disambiguate
-        filter!(query, "coin_type >= {}", (**cursor).clone())
+        filter!(query, "coin_type >= {}", cursor.coin_type.clone())
     }
 
     fn filter_le(cursor: &Cursor, query: RawQuery) -> RawQuery {
-        // Specify candidates to help disambiguate
-        filter!(query, "coin_type <= {}", (**cursor).clone())
+        filter!(query, "coin_type <= {}", cursor.coin_type.clone())
     }
 
     fn order(asc: bool, query: RawQuery) -> RawQuery {
@@ -142,7 +158,17 @@ impl RawPaginated<Cursor> for StoredBalance {
 
 impl Target<Cursor> for StoredBalance {
     fn cursor(&self) -> Cursor {
-        Cursor::new(self.coin_type.clone())
+        Cursor::new(BalanceCursor {
+            coin_type: self.coin_type.clone(),
+            checkpoint_viewed_at: None,
+        })
+    }
+
+    fn consistent_cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
+        Cursor::new(BalanceCursor {
+            coin_type: self.coin_type.clone(),
+            checkpoint_viewed_at: Some(checkpoint_viewed_at),
+        })
     }
 }
 
@@ -248,4 +274,25 @@ fn filter(mut query: RawQuery, owner: SuiAddress, coin_type: Option<TypeTag>) ->
     };
 
     query
+}
+
+/// Check that the cursors, if provided, have the same checkpoint_viewed_at.
+pub(crate) fn validate_cursor_consistency(
+    after: Option<&Cursor>,
+    before: Option<&Cursor>,
+) -> Result<Option<u64>, Error> {
+    match (after, before) {
+        (Some(after_cursor), Some(before_cursor)) => {
+            if after_cursor.checkpoint_viewed_at == before_cursor.checkpoint_viewed_at {
+                Ok(after_cursor.checkpoint_viewed_at)
+            } else {
+                Err(Error::Client(
+                    "Cursors are inconsistent and cannot be used together in the same query."
+                        .to_string(),
+                ))
+            }
+        }
+        (Some(cursor), None) | (None, Some(cursor)) => Ok(cursor.checkpoint_viewed_at),
+        (None, None) => Ok(None),
+    }
 }
