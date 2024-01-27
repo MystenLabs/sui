@@ -457,17 +457,6 @@ impl AuthorityStore {
     }
 
     // DEPRECATED -- use function of same name in AuthorityPerEpochStore
-    pub fn deprecated_is_transaction_executed_in_checkpoint(
-        &self,
-        digest: &TransactionDigest,
-    ) -> SuiResult<bool> {
-        Ok(self
-            .perpetual_tables
-            .executed_transactions_to_checkpoint
-            .contains_key(digest)?)
-    }
-
-    // DEPRECATED -- use function of same name in AuthorityPerEpochStore
     pub fn deprecated_get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
