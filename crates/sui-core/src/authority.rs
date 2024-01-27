@@ -509,7 +509,7 @@ impl AuthorityMetrics {
             )
             .unwrap(),
             execution_queueing_delay_s: register_histogram_with_registry!(
-                "execution_queueing_delay_ms",
+                "execution_queueing_delay_s",
                 "Queueing delay between a transaction is ready for execution until it starts executing.",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry
