@@ -1,0 +1,20 @@
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/naming/use_fun_local_doesnt_shadow.move:4:21
+  │
+4 │     macro fun apply(id: |u8| u8) {
+  │                     ^^ Unused parameter 'id'. Consider removing or prefixing with an underscore: '_id'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/naming/use_fun_local_doesnt_shadow.move:6:9
+  │
+2 │     fun id(x: u64): u64 { x }
+  │               --- Expected: 'u64'
+  ·
+6 │         id((0u64.id() as u8)); // TODO this should resolve to the local lambda call
+  │         ^^^^^^^^^^^^^^^^^^^^^
+  │         │                │
+  │         │                Given: 'u8'
+  │         Invalid call of 'a::m::id'. Invalid argument for parameter 'x'
+

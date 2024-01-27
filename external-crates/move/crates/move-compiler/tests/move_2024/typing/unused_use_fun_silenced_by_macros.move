@@ -13,7 +13,7 @@ module a::m {
     public(package) macro fun some_macro() {}
 }
 
-// implicit unused method alias
+// implicit unused method alias, silenced by a public macro
 module a::x {
     public struct X() has drop;
     public fun drop(_: X) {}
@@ -29,4 +29,15 @@ module b::other {
 
     // this silences the unused use fun in the module, since we lose track its non-local usage
     public macro fun some_macro() {}
+}
+
+// explicit and implicit method alias, silenced by a private macro
+module a::another {
+    use a::x::drop as fdrop;
+
+    fun foo(_: u64) {}
+
+    use fun foo as u64.foo;
+
+    macro fun f() {}
 }

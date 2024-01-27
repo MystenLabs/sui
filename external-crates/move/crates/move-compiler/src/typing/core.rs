@@ -1001,7 +1001,7 @@ pub fn make_method_call_type(
     let target_function_opt = context.find_method_and_mark_used(tn, method);
     // try to find a function in the defining module for errors
     let Some((target_m, target_f)) = target_function_opt else {
-        let lhs_ty_str = error_format_nested(lhs_ty, &Subst::empty());
+        let lhs_ty_str = error_format_nested(lhs_ty, &context.subst);
         let defining_module = match &tn.value {
             TypeName_::Multiple(_) => panic!("ICE method on tuple"),
             TypeName_::Builtin(sp!(_, bt_)) => context.env.primitive_definer(*bt_),
@@ -1028,7 +1028,7 @@ pub fn make_method_call_type(
             };
             let arg_msg = match first_ty {
                 Some(ty) => {
-                    let tys_str = error_format(&ty, &Subst::empty());
+                    let tys_str = error_format(&ty, &context.subst);
                     format!("but it has a different type for its first argument, {tys_str}")
                 }
                 None => "but it takes no arguments".to_owned(),

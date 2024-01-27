@@ -78,6 +78,7 @@ pub fn program(
 }
 
 fn extract_macros(context: &mut Context, modules: &UniqueMap<ModuleIdent, N::ModuleDefinition>) {
+    // Merges the methods of the module into the local methods for each macro.
     fn merge_use_funs(module_use_funs: &N::UseFuns, mut macro_use_funs: N::UseFuns) -> N::UseFuns {
         let N::UseFuns {
             color: _,
@@ -1558,10 +1559,9 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
 
         NE::Cast(nl, ty) => {
             let el = exp(context, nl);
-            let tyloc = ty.loc;
             let rhs = core::instantiate(context, ty);
             context.add_numeric_constraint(el.exp.loc, "as", el.ty.clone());
-            context.add_numeric_constraint(tyloc, "as", rhs.clone());
+            context.add_numeric_constraint(el.exp.loc, "as", rhs.clone());
             (rhs.clone(), TE::Cast(el, Box::new(rhs)))
         }
 

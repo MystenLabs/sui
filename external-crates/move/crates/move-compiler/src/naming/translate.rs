@@ -775,13 +775,15 @@ fn module(
         context.restore_unscoped(unscoped.clone());
         constant(context, name, c)
     });
-    // silence unused use fun warnings if a module has public macros. The macro will pull in
-    // the use fun, and we will which case we will be unable to tell if it is used or not
-    // TODO we could approximate this by just checking for the name, regardless of the type
-    let has_public_macro = functions
-        .iter()
-        .any(|(_, _, f)| f.macro_.is_some() && !matches!(f.visibility, Visibility::Internal));
-    if has_public_macro {
+    // Silence unused use fun warnings if a module has macros.
+    // For public macros, the macro will pull in the use fun, and we will which case we will be
+    //   unable to tell if it is used or not
+    //   TODO we could approximate this by just checking for the name, regardless of the type
+    // For private macros, we duplicate the scope of the module and when resolving the method
+    //   fail to mark the outer scope as used (instead we only mark the modules scope cloned
+    //   into the macro)
+    let has_macro = functions.iter().any(|(_, _, f)| f.macro_.is_some());
+    if has_macro {
         mark_all_use_funs_as_used(&mut use_funs);
     }
     context.restore_unscoped(unscoped);
