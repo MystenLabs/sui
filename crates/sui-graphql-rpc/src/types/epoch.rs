@@ -196,7 +196,7 @@ impl Epoch {
             return Ok(Connection::new(false, false));
         };
 
-        TransactionBlock::paginate(ctx.data_unchecked(), page, filter)
+        TransactionBlock::paginate(ctx.data_unchecked(), page, filter, None) // TODO (wlmyng) - to be replaced with checkpoint_viewed_at from Epoch
             .await
             .extend()
     }

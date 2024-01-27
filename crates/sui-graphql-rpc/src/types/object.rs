@@ -542,9 +542,13 @@ impl ObjectImpl<'_> {
         };
         let digest = native.previous_transaction;
 
-        TransactionBlock::query(ctx.data_unchecked(), digest.into())
-            .await
-            .extend()
+        TransactionBlock::query(
+            ctx.data_unchecked(),
+            digest.into(),
+            self.0.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 
     pub(crate) async fn storage_rebate(&self) -> Option<BigInt> {
@@ -574,9 +578,14 @@ impl ObjectImpl<'_> {
             return Ok(Connection::new(false, false));
         };
 
-        TransactionBlock::paginate(ctx.data_unchecked(), page, filter)
-            .await
-            .extend()
+        TransactionBlock::paginate(
+            ctx.data_unchecked(),
+            page,
+            filter,
+            self.0.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 
     pub(crate) async fn bcs(&self) -> Result<Option<Base64>> {

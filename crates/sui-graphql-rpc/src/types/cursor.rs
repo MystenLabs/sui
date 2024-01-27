@@ -211,9 +211,13 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
     /// followed by an iterator of values in the page, fetched from the database.
     ///
     /// The values returned implement `Target<C>`, so are able to compute their own cursors.
+    ///
+    /// `checkpoint_viewed_at` is an optional parameter provided to each element to construct a
+    /// consistent cursor.
     pub(crate) fn paginate_query<T, Q, ST, GB>(
         &self,
         conn: &mut Conn<'_>,
+        checkpoint_viewed_at: Option<u64>,
         query: Q,
     ) -> QueryResult<(bool, bool, impl Iterator<Item = T>)>
     where
@@ -255,8 +259,14 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         };
 
         Ok(self.paginate_results(
-            results.first().map(|f| f.cursor()),
-            results.last().map(|l| l.cursor()),
+            results.first().map(|f| match checkpoint_viewed_at {
+                Some(checkpoint_viewed_at) => f.consistent_cursor(checkpoint_viewed_at),
+                None => f.cursor(),
+            }),
+            results.last().map(|l| match checkpoint_viewed_at {
+                Some(checkpoint_viewed_at) => l.consistent_cursor(checkpoint_viewed_at),
+                None => l.cursor(),
+            }),
             results,
         ))
     }
@@ -457,6 +467,7 @@ where
     type Error = <OpaqueCursor<C> as CursorType>::Error;
 
     fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
+        println!("decode_cursor: {}", s);
         Ok(JsonCursor(OpaqueCursor::decode_cursor(s)?))
     }
 

@@ -143,7 +143,7 @@ impl Checkpoint {
             return Ok(Connection::new(false, false));
         };
 
-        TransactionBlock::paginate(ctx.data_unchecked(), page, filter)
+        TransactionBlock::paginate(ctx.data_unchecked(), page, filter, None) // TODO (wlmyng) - to be replaced with checkpoint_viewed_at from Checkpoint
             .await
             .extend()
     }
@@ -214,7 +214,8 @@ impl Checkpoint {
 
         let (prev, next, results) = db
             .execute(move |conn| {
-                page.paginate_query::<StoredCheckpoint, _, _, _>(conn, move || {
+                // TODO (wlmyng) the None value will be replaced by self.checkpoint_viewed_at
+                page.paginate_query::<StoredCheckpoint, _, _, _>(conn, None, move || {
                     let mut query = dsl::checkpoints.into_boxed();
                     if let Some(epoch) = filter {
                         query = query.filter(dsl::epoch.eq(epoch as i64));
