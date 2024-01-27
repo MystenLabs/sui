@@ -2998,7 +2998,7 @@ impl AuthorityState {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn get_transaction_checkpoint(
+    pub fn get_transaction_checkpoint_for_tests(
         &self,
         digest: &TransactionDigest,
         epoch_store: &AuthorityPerEpochStore,
