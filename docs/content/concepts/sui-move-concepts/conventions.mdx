@@ -1,0 +1,331 @@
+---
+title: Conventions
+description: Recommended Sui Move 2024 best practices
+---
+
+The recommendations below are based on 2024 Move.
+
+## Add section titles
+
+```move
+module conventions::comments {
+  // === Imports ===
+
+  // === Constants ===
+
+  // === Errors ===
+
+  // === Structs ===
+
+  // === Public-View Functions ===
+
+  // === Public-Mutative Functions ===
+
+  // === Public-Friend Functions ===
+
+  // === Admin Functions ===
+
+  // === Private Functions ===
+
+  // === Test Functions ===
+}
+```
+
+## CRUD functions names
+
+- `add`: Adds a value.
+- `new`: Creates an object.
+- `drop`: Drops a struct.
+- `empty`: Creates a struct.
+- `remove`: Removes a value.
+- `exists`: Checks if a key exists.
+- `contains`: Checks if a collection contains a value.
+- `property_name`: Reads a property.
+- `destroy_empty`: Destroys an object or data structure that has values with the **drop** ability.
+- `to_object_name`: Transforms an Object X to Object Y.
+- `from_object_name`: Transforms an Object Y to Object X.
+- `property_name_mut`: Returns a mutable reference.
+- `property_name_immut`: Returns an immutable reference.
+
+## Potato Structs
+
+#### Do not call structs as Potato. It is a pattern recognized by the lack of abilities.
+
+```move
+module conventions::request {
+  // ✅ Right
+  struct Lock {}
+
+  // ❌ Wrong
+  struct RequestPotato {}
+}
+```
+
+## Read Functions
+
+#### Be mindful of the dot syntax when naming functions. Avoid using the object name on function names.
+
+```move
+module conventions::lib {
+  struct Profile {
+    age: u64
+  }
+
+  // ✅ Right
+  public fun age(self: &Profile):  u64 {
+    self.age
+  }
+
+  // ❌ Wrong
+  public fun profile_age(self: &Profile): u64 {
+    self.age
+  }
+}
+
+module conventions::lib {
+  use conventions::lib::{Self, Profile};
+
+  public fun get_tokens(profile: &Profile) {
+
+  // ✅ Right
+  let name = profile.age();
+
+  // ❌ Wrong
+  let name2 = profile.profile_age();
+}
+```
+## Empty Function
+
+#### Functions that create data structures must be called empty.
+
+```move
+module conventions::data_structure {
+  struct DataStructure has copy, drop, store {
+    bits: vector<u8>
+  }
+
+  public fun empty(): DataStructure {}
+}
+```
+## New Function
+
+#### Functions that create objects must be called new.
+
+```move
+module conventions::object {
+  struct Object has key, store {
+    id: UID
+  }
+
+  public fun new(ctx:&mut TxContext): Object {}
+}
+```
+
+## Shared Objects
+
+#### Shared objects must be created via a new function and be shared in a separate function. The share function must be named share.
+
+```move
+module conventions::profile {
+  struct Profile has key {
+    id: UID
+  }
+
+  public fun new(ctx:&mut TxContext): Profile {}
+
+  public fun share(profile: Profile) {}
+}
+```
+
+## Reference Functions
+
+#### Functions that return a reference must be named property_name_mut or property_name_immut. The borrow is implied by the mut and immut.
+
+```move
+module conventions::profile {
+  struct Profile has key {
+    id: UID,
+    name: String,
+    age: u8
+  }
+
+  // profile.name_immut()
+  public fun name_immut(self: &Profile): &String {}
+
+  // profile.age_mut()
+  public fun age_mut(self: &mut Profile): &mut u8 {}
+}
+```
+
+## Separation of Concerns
+
+#### Modules must be designed around one Object or Data Structure. A variant structure should have its own module to avoid complexity and bugs.
+
+```move
+module conventions::wallet {
+  struct Wallet has key, store {
+    id: UID,
+    amount: u64
+  }
+}
+
+module conventions::claw_back_wallet {
+  struct Wallet has key {
+    id: UID,
+    amount: u64
+  }
+}
+```
+
+## Errors
+
+#### Errors must be CamelCase, start with an E and be descriptive.
+
+```move
+module conventions::errors {
+  // ✅ Right
+  const ENameHasMaxLengthOf64Chars: u64 = 0;
+
+  // ❌ Wrong
+  const INVALID_NAME: u64 = 0;
+}
+```
+
+## Struct Property Comments
+
+#### Describe the properties of your structs.
+
+```move
+module conventions::profile {
+  struct Profile has key, store {
+    id: UID,
+    // The age of the user
+    age: u8,
+    // The first name of the user
+    name: String
+  }
+}
+```
+
+## Destroy Functions
+
+#### Provide functions to delete objects and structs. Empty objects must be destroyed with the function destroy_empty. The function drop must be used for objects that have types that can be dropped.
+
+```move
+module conventions::wallet {
+  struct Wallet<Value> {
+    id: UID,
+    value: Value
+  }
+
+  // Value has drop
+  public fun drop<Value: drop>(wallet: &mut Wallet<Value>) {}
+
+  // Value doesn't have drop
+  // Does NOT throw if the `wallet` is not empty.
+  public fun destroy<Value>(wallet: &mut Wallet<Value>) {}
+
+  // Value doesn't have drop
+  // Throws if the `wallet` is not empty.
+  public fun destroy_empty<Value>(wallet: &mut Wallet<Value>) {}
+}
+```
+
+## Pure Functions
+
+#### Keep your functions pure to maintain composability. Do not use transfer::transfer or transfer::public_transfer inside core functions.
+
+```move
+module conventions::amm {
+  struct Pool has key {
+    id: UID
+  }
+
+  // ✅ Right
+  // Return the excess coins even if they have zero value.
+  public fun add_liquidity<CoinX, CoinY, LP_Coin>(pool: &mut Pool, coin_x: Coin<CoinX>, coin_y: Coin<CoinY>): (Coin<LpCoin>, Coin<CoinX>, Coin<CoinY>) {}
+
+  // ✅ Right
+  public fun add_liquidity_and_transfer<CoinX, CoinY, LP_Coin>(pool: &mut Pool, coin_x: Coin<CoinX>, coin_y: Coin<CoinY>, recipient: address) {
+    let (lp_coin, coin_x, coin_y) = add_liquidity(pool, coin_x, coin_y);
+    transfer::public_transfer(lp_coin, recipient);
+    transfer::public_transfer(coin_x, recipient);
+    transfer::public_transfer(coin_y, recipient);
+  }
+
+  // ❌ Wrong
+  public fun add_liquidity<CoinX, CoinY, LP_Coin>(pool: &mut Pool, coin_x: Coin<CoinX>, coin_y: Coin<CoinY>, ctx: &mut TxContext): Coin<LpCoin> {
+    transfer::public_transfer(coin_x, tx_context::sender(ctx));
+    transfer::public_transfer(coin_y, tx_context::sender(ctx));
+
+    coin_lp
+  }
+}
+```
+
+## Coin argument
+
+#### Pass the Coin by value with the right amount directly, it's better for transaction readability from the frontend.
+
+```move
+module conventions::amm {
+  struct Pool has key {
+    id: UID
+  }
+
+  // ✅ Right
+  public fun swap<CoinX, CoinY>(coin_in: Coin<CoinX>): Coin<CoinY> {}
+
+  // ❌ Wrong
+  public fun swap<CoinX, CoinY>(coin_in: &mut Coin<CoinX>): Coin<CoinY> {}
+}
+```
+
+## Account Information
+
+#### To maintain composability, do not store the user's account data in a hashmap - e.g. (Table/Bag/VecSet). Create an object and return it to the user. Moreover, parallelization on Sui depends on objects so it's always a good idea to split the app state to a maximum.
+
+```move
+module conventions::social_network {
+  struct Account has key, store {
+    id: UID,
+    name: String
+  }
+
+  struct State has key {
+    id: UID,
+    accounts: Table<address, String>
+  }
+
+  // ✅ Right
+  public fun new(name: String): Account {}
+
+  // ❌ Wrong
+  public fun new(state: &mut State, name: String) {}
+}
+```
+
+## Admin Capability
+
+#### In admin-gated functions, the first parameter should be the capability. It helps the autocomplete with user types.
+
+```move
+module conventions::social_network {
+  struct Account has key {
+    id: UID,
+    name: String
+  }
+
+  struct Admin has key {
+    id: UID,
+  }
+
+  // ✅ Right
+  // cap.update(&mut account, b"jose");
+  public fun update(_: &Admin, account: &mut Account, new_name: String) {}
+
+  // ❌ Wrong
+  // account.update(&cap, b"jose");
+  public fun update(account: &mut Account, _: &Admin, new_name: String) {}
+}
+```
