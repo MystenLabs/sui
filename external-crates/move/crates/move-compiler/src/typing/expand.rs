@@ -87,9 +87,10 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
             }
         }
         Fun(args, result) => {
-            types(context, args);
-            type_(context, result);
-            if !context.in_macro_function {
+            if context.in_macro_function {
+                types(context, args);
+                type_(context, result);
+            } else {
                 unexpected_lambda_type(context, ty.loc);
                 *ty = sp(ty.loc, UnresolvedError)
             }
@@ -132,6 +133,15 @@ fn sequence_item(context: &mut Context, item: &mut T::SequenceItem) {
 pub fn exp(context: &mut Context, e: &mut T::Exp) {
     use T::UnannotatedExp_ as E;
     match &e.exp.value {
+        // Don't expand lambda type, it's always an error
+        E::Lambda(_) => {
+            let msg = "Lambdas can only be used directly as arguments to macro functions";
+            context
+                .env
+                .add_diag(diag!(TypeSafety::UnexpectedLambda, (e.exp.loc, msg)));
+            e.ty = sp(e.exp.loc, Type_::UnresolvedError);
+            return;
+        }
         // dont expand the type for return, abort, break, or continue
         E::Give(_, _) | E::Continue(_) | E::Return(_) | E::Abort(_) => {
             let t = e.ty.clone();
@@ -268,12 +278,6 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
         E::Loop { body: eloop, .. } => exp(context, eloop),
         E::NamedBlock(_, seq) => sequence(context, seq),
         E::Block(seq) => sequence(context, seq),
-        E::Lambda(_) => {
-            let msg = "Lambdas can only be used directly as arguments to macro functions";
-            context
-                .env
-                .add_diag(diag!(TypeSafety::UnexpectedLambda, (e.exp.loc, msg)));
-        }
         E::Assign(assigns, tys, er) => {
             lvalues(context, assigns);
             expected_types(context, tys);
@@ -309,6 +313,8 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
             exp(context, el);
             type_(context, rhs_ty);
         }
+
+        E::Lambda(_) => unreachable!(),
     }
 }
 

@@ -63,6 +63,12 @@ struct ResolvedModuleFunction {
     ty_args: Option<Vec<N::Type>>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ResolveFunctionCase {
+    UseFun,
+    Call,
+}
+
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
 enum LoopType {
     While,
@@ -840,7 +846,8 @@ fn explicit_use_fun(
         ty,
         method,
     } = e;
-    let m_f_opt = match resolve_function(context, loc, function, None) {
+    let m_f_opt = match resolve_function(context, ResolveFunctionCase::UseFun, loc, function, None)
+    {
         ResolvedFunction::Module(mf) => {
             let ResolvedModuleFunction {
                 module,
@@ -1685,7 +1692,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             use N::BuiltinFunction_ as BF;
             let ty_args = tys_opt.map(|tys| types(context, tys));
             let nes = call_args(context, rhs);
-            match resolve_function(context, eloc, ma, ty_args) {
+            match resolve_function(context, ResolveFunctionCase::Call, eloc, ma, ty_args) {
                 ResolvedFunction::Builtin(sp!(bloc, BF::Assert(_))) => {
                     if !is_macro {
                         let dep_msg = format!(
@@ -1970,13 +1977,25 @@ fn lvalue_list(
 
 fn resolve_function(
     context: &mut Context,
+    case: ResolveFunctionCase,
     loc: Loc,
     sp!(mloc, ma_): E::ModuleAccess,
     ty_args: Option<Vec<N::Type>>,
 ) -> ResolvedFunction {
     use E::ModuleAccess_ as EA;
-    match ma_ {
-        EA::Name(n) if N::BuiltinFunction_::all_names().contains(&n.value) => {
+    match (ma_, case) {
+        (EA::ModuleAccess(m, n), _) => match context.resolve_module_function(mloc, &m, &n) {
+            None => {
+                assert!(context.env.has_errors());
+                ResolvedFunction::Unbound
+            }
+            Some(_) => ResolvedFunction::Module(Box::new(ResolvedModuleFunction {
+                module: m,
+                function: FunctionName(n),
+                ty_args,
+            })),
+        },
+        (EA::Name(n), _) if N::BuiltinFunction_::all_names().contains(&n.value) => {
             match resolve_builtin_function(context, loc, &n, ty_args) {
                 None => {
                     assert!(context.env.has_errors());
@@ -1985,7 +2004,14 @@ fn resolve_function(
                 Some(f) => ResolvedFunction::Builtin(sp(mloc, f)),
             }
         }
-        EA::Name(n) => {
+        (EA::Name(n), ResolveFunctionCase::UseFun) => {
+            context.env.add_diag(diag!(
+                NameResolution::UnboundUnscopedName,
+                (n.loc, format!("Unbound function '{}' in current scope", n)),
+            ));
+            ResolvedFunction::Unbound
+        }
+        (EA::Name(n), ResolveFunctionCase::Call) => {
             match context.resolve_local(
                 n.loc,
                 |n| format!("Unbound function '{}' in current scope", n),
@@ -2006,17 +2032,6 @@ fn resolve_function(
                 }
             }
         }
-        EA::ModuleAccess(m, n) => match context.resolve_module_function(mloc, &m, &n) {
-            None => {
-                assert!(context.env.has_errors());
-                ResolvedFunction::Unbound
-            }
-            Some(_) => ResolvedFunction::Module(Box::new(ResolvedModuleFunction {
-                module: m,
-                function: FunctionName(n),
-                ty_args,
-            })),
-        },
     }
 }
 

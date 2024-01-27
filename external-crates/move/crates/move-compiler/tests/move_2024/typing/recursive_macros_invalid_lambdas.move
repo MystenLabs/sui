@@ -13,7 +13,7 @@ module a::m {
     }
 
     macro fun arg_eta(f: |u64| u64): u64 {
-        f(arg_eta!(|| f()))
+        f(arg_eta!(|x| f(x)))
     }
 
     macro fun arg_apply(f: |u64| u64): u64 {

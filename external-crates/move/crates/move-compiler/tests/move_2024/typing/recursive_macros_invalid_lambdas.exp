@@ -22,8 +22,8 @@ error[E04032]: unable to expand macro function
 error[E04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/recursive_macros_invalid_lambdas.move:16:11
    │
-16 │         f(arg_eta!(|| f()))
-   │           ^^^^^^^^^^^^^^^^ Recursive macro expansion. 'a::m::arg_eta' has already been expanded
+16 │         f(arg_eta!(|x| f(x)))
+   │           ^^^^^^^^^^^^^^^^^^ Recursive macro expansion. 'a::m::arg_eta' has already been expanded
    ·
 30 │         arg_eta!(|x| x);
    │         --------------- 'a::m::arg_eta' previously expanded here

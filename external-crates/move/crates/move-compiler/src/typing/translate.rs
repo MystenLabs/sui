@@ -2704,7 +2704,6 @@ fn expand_macro(
         assert!(context.env.has_errors());
         return (context.error_type(call_loc), TE::UnresolvedError);
     }
-    let argloc = args.loc;
     let res = match macro_expand::call(context, call_loc, m, f, type_args, args) {
         None => {
             assert!(context.env.has_errors());
@@ -2714,31 +2713,26 @@ fn expand_macro(
             argument_bindings,
             body,
         }) => {
-            // split the param bindings from their arguments and their types
-            let (lvalues_, es): (Vec<_>, Vec<_>) = argument_bindings
+            // bind the locals
+            let mut seq: VecDeque<_> = argument_bindings
                 .into_iter()
-                .map(|(mut_, v, ty, e)| {
+                .map(|(mut_, v, e)| {
                     let lvalue_ = N::LValue_::Var {
                         mut_,
                         var: v,
                         unused_binding: false,
                     };
-                    (sp(v.loc, lvalue_), (e, ty))
+                    let lvalue = sp(v.loc, lvalue_);
+                    let lvalues = sp(lvalue.loc, vec![lvalue]);
+                    let b = bind_list(context, lvalues, Some(e.ty.clone()));
+                    let lvalue_ty = lvalues_expected_types(context, &b);
+                    sp(b.loc, TS::Bind(b, lvalue_ty, Box::new(e)))
                 })
-                .unzip();
-            // we do not need to annotate the types since they were already checked at the call
-            let (es, tys): (Vec<_>, _) = es.into_iter().unzip();
-            // bind the locals  and push it on the macro body
-            let tys = Type_::multiple(argloc, tys);
-            let es = T::explist(argloc, es);
-            let b = bind_list(context, sp(argloc, lvalues_), Some(tys));
-            let lvalue_ty = lvalues_expected_types(context, &b);
+                .collect();
+            // add the body
             let body = exp(context, body);
             let ty = body.ty.clone();
-            let seq = VecDeque::from([
-                sp(argloc, TS::Bind(b, lvalue_ty, Box::new(es))),
-                sp(body.exp.loc, TS::Seq(body)),
-            ]);
+            seq.push_back(sp(body.exp.loc, TS::Seq(body)));
             let e_ = TE::Block(seq);
             (ty, e_)
         }
