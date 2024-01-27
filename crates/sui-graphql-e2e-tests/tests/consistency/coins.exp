@@ -801,14 +801,22 @@ Objects snapshot updated to [0 to 4)
 
 task 19 'run-graphql'. lines 256-297:
 Response: {
-  "data": {
-    "queryCoinsAtChkpt1AfterSnapshotCatchup": {
-      "edges": []
-    },
-    "queryAddressCoinsAtChkpt1AfterSnapshotCatchup": {
-      "coins": {
-        "edges": []
+  "data": null,
+  "errors": [
+    {
+      "message": "Requested data is outside the available range",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "queryCoinsAtChkpt1AfterSnapshotCatchup"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
       }
     }
-  }
+  ]
 }

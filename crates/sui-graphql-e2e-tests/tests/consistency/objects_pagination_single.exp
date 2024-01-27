@@ -215,14 +215,14 @@ Response: {
                 "objects": {
                   "nodes": [
                     {
-                      "version": 6,
+                      "version": 4,
                       "contents": {
                         "type": {
                           "repr": "0x3f0c6e4f85d1e65c8898b1ff76eb610c9cef63aae0522bfea31545f5bd227e61::M1::Object"
                         },
                         "json": {
                           "id": "0x84e2a26b6d4635aff08d1c23572eaf610f5472d7c142e9345fe908813210179b",
-                          "value": "300"
+                          "value": "1"
                         }
                       }
                     },
