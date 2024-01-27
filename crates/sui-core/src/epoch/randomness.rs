@@ -287,8 +287,8 @@ impl Inner {
             match self.party.merge(
                 &self
                     .processed_messages
-                    .iter()
-                    .map(|(_, message)| message.clone())
+                    .values()
+                    .cloned()
                     .collect::<Vec<_>>(),
             ) {
                 Ok((conf, used_msgs)) => {
@@ -322,11 +322,7 @@ impl Inner {
                 self.used_messages
                     .get()
                     .expect("checked above that `used_messages` is initialized"),
-                &self
-                    .confirmations
-                    .iter()
-                    .map(|(_, conf)| conf.clone())
-                    .collect::<Vec<_>>(),
+                &self.confirmations.values().cloned().collect::<Vec<_>>(),
                 self.party.t() * 2 - 1, // t==f+1, we want 2f+1
                 &mut rand::thread_rng(),
             ) {
