@@ -617,15 +617,35 @@ fn download_and_compile(
         // Check the platform and proceed if we can download a binary. If not, the user should follow error instructions to sideload the binary.
         let platform = detect_platform(&root, compiler_version, &dest_canonical_binary)?;
         // Download if binary does not exist.
-        let url = format!("https://github.com/MystenLabs/sui/releases/download/mainnet-v{}/sui-mainnet-v{}-{}.tgz", compiler_version, compiler_version, platform);
+        let mainnet_url = format!(
+            "https://github.com/MystenLabs/sui/releases/download/mainnet-v{compiler_version}/sui-mainnet-v{compiler_version}-{platform}.tgz",
+        );
 
         println!(
-            "{} compiler @ {} (this may take a while)",
+            "{} mainnet compiler @ {} (this may take a while)",
             "DOWNLOADING".bold().green(),
             compiler_version.yellow()
         );
 
-        let mut response = ureq::get(&url).call()?.into_reader();
+        let mut response = match ureq::get(&mainnet_url).call() {
+	    Ok(response) => response,
+	    Err(ureq::Error::Status(404, _)) => {
+		println!(
+		    "{} sui mainnet compiler {} not available, attempting to download testnet compiler release...",
+		    "WARNING".bold().yellow(),
+		    compiler_version.yellow()
+		);
+		println!(
+		    "{} testnet compiler @ {} (this may take a while)",
+		    "DOWNLOADING".bold().green(),
+		    compiler_version.yellow()
+		);
+		let testnet_url = format!("https://github.com/MystenLabs/sui/releases/download/testnet-v{compiler_version}/sui-testnet-v{compiler_version}-{platform}.tgz");
+		ureq::get(&testnet_url).call()?
+	    }
+	    Err(e) => return Err(e.into()),
+        }.into_reader();
+
         let dest_tarball = dest_version.join(format!("{}.tgz", compiler_version));
         debug!("tarball destination: {} ", dest_tarball.display());
         if let Some(parent) = dest_tarball.parent() {
