@@ -29,6 +29,10 @@ use tabled::{
     settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
 };
 
+#[cfg(test)]
+#[path = "../unit_tests/ptb_tests.rs"]
+mod ptb_tests;
+
 /// The ProgrammableTransactionBlock structure used in the CLI ptb command
 #[derive(Parser, Debug, Default)]
 pub struct PTB {

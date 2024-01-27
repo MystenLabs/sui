@@ -1,0 +1,1 @@
+--gas-budget 10000 --split-coins @0x1 "[1,2,3]"
