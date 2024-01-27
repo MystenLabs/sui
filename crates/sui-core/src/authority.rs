@@ -2968,23 +2968,12 @@ impl AuthorityState {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn get_transaction_checkpoint_sequence(
+    fn get_transaction_checkpoint_sequence(
         &self,
         digest: &TransactionDigest,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<Option<CheckpointSequenceNumber>> {
-        if epoch_store.per_epoch_finalized_txns_enabled() {
-            epoch_store.get_transaction_checkpoint(digest)
-        } else {
-            match self
-                .database
-                .deprecated_get_transaction_checkpoint(digest)?
-            {
-                Some((epoch_id, seq_num)) if epoch_id == epoch_store.epoch() => Ok(Some(seq_num)),
-                Some(_) => Ok(None),
-                None => Ok(None),
-            }
-        }
+        epoch_store.get_transaction_checkpoint(digest)
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -2998,7 +2987,7 @@ impl AuthorityState {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn get_transaction_checkpoint(
+    pub fn get_transaction_checkpoint_for_tests(
         &self,
         digest: &TransactionDigest,
         epoch_store: &AuthorityPerEpochStore,
@@ -3313,28 +3302,6 @@ impl AuthorityState {
         let transaction = kv_store.get_tx(digest).await?;
         let effects = kv_store.get_fx_by_tx_digest(digest).await?;
         Ok((transaction, effects))
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub fn multi_get_transaction_checkpoint(
-        &self,
-        digests: &[TransactionDigest],
-        epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>> {
-        if epoch_store.per_epoch_finalized_txns_enabled() {
-            epoch_store.multi_get_transaction_checkpoint(digests)
-        } else {
-            Ok(self
-                .database
-                .deprecated_multi_get_transaction_checkpoint(digests)?
-                .iter()
-                .map(|opt| match opt {
-                    Some((epoch_id, seq_num)) if *epoch_id == epoch_store.epoch() => Some(*seq_num),
-                    Some(_) => None,
-                    None => None,
-                })
-                .collect())
-        }
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -4542,15 +4509,7 @@ impl AuthorityState {
             pending_certificates,
         );
         for digest in pending_certificates {
-            if epoch_store.per_epoch_finalized_txns_enabled() {
-                if epoch_store.is_transaction_executed_in_checkpoint(&digest)? {
-                    info!("Not reverting pending consensus transaction {:?} - it was included in checkpoint", digest);
-                    continue;
-                }
-            } else if self
-                .database
-                .deprecated_is_transaction_executed_in_checkpoint(&digest)?
-            {
+            if epoch_store.is_transaction_executed_in_checkpoint(&digest)? {
                 info!("Not reverting pending consensus transaction {:?} - it was included in checkpoint", digest);
                 continue;
             }
