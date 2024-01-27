@@ -6,6 +6,7 @@ use crate::authority_client::{
     make_authority_clients_with_timeout_config, make_network_authority_clients_with_network_config,
     AuthorityAPI, NetworkAuthorityClient,
 };
+use crate::in_mem_execution_cache::ExecutionCacheRead;
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
 use fastcrypto::traits::ToFromBytes;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
@@ -55,7 +56,6 @@ use sui_types::messages_grpc::{
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use tokio::time::{sleep, timeout};
 
-use crate::authority::AuthorityStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
 
@@ -623,7 +623,7 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
     /// This function needs metrics parameters because registry will panic
     /// if we attempt to register already-registered metrics again.
     pub fn new_from_local_system_state(
-        store: &Arc<AuthorityStore>,
+        store: &Arc<dyn ExecutionCacheRead>,
         committee_store: &Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: AuthAggMetrics,

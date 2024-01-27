@@ -86,7 +86,6 @@ mod sim_only_tests {
         digests::TransactionDigest,
         object::Object,
         programmable_transaction_builder::ProgrammableTransactionBuilder,
-        storage::ObjectStore,
         transaction::TransactionKind,
         MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
     };
@@ -650,10 +649,10 @@ mod sim_only_tests {
 
         node_handle
             .with_async(|node| async {
-                let db = node.state().db();
-                let framework = db.get_object(package);
+                let store = node.state().get_cache_reader().clone();
+                let framework = store.get_object(package);
                 let digest = framework.unwrap().unwrap().previous_transaction;
-                let effects = db.get_executed_effects(&digest);
+                let effects = store.get_executed_effects(&digest);
                 effects.unwrap().unwrap()
             })
             .await
@@ -663,7 +662,13 @@ mod sim_only_tests {
         let node_handle = &cluster.fullnode_handle.sui_node;
 
         node_handle
-            .with_async(|node| async { node.state().db().get_object(object_id).unwrap().unwrap() })
+            .with_async(|node| async {
+                node.state()
+                    .get_cache_reader()
+                    .get_object(object_id)
+                    .unwrap()
+                    .unwrap()
+            })
             .await
     }
 
@@ -896,7 +901,12 @@ mod sim_only_tests {
             // Make sure we have 1 inactive validator for latter testing.
             assert_eq!(inner.validators.inactive_validators.size, 1);
             get_validator_from_table(
-                test_cluster.fullnode_handle.sui_node.state().db().as_ref(),
+                test_cluster
+                    .fullnode_handle
+                    .sui_node
+                    .state()
+                    .get_object_store()
+                    .as_ref(),
                 inner.validators.inactive_validators.id,
                 &ID::new(ObjectID::ZERO),
             )
@@ -916,7 +926,12 @@ mod sim_only_tests {
             // Make sure we have 1 inactive validator for latter testing.
             assert_eq!(inner.validators.inactive_validators.size, 1);
             get_validator_from_table(
-                test_cluster.fullnode_handle.sui_node.state().db().as_ref(),
+                test_cluster
+                    .fullnode_handle
+                    .sui_node
+                    .state()
+                    .get_object_store()
+                    .as_ref(),
                 inner.validators.inactive_validators.id,
                 &ID::new(ObjectID::ZERO),
             )

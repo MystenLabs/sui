@@ -2193,7 +2193,7 @@ impl ReadStore for SuiTestAdapter<'_> {
     fn get_transaction(
         &self,
         tx_digest: &TransactionDigest,
-    ) -> sui_types::storage::error::Result<Option<VerifiedTransaction>> {
+    ) -> sui_types::storage::error::Result<Option<Arc<VerifiedTransaction>>> {
         self.executor.get_transaction(tx_digest)
     }
 

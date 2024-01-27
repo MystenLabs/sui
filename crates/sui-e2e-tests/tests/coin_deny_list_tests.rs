@@ -26,7 +26,10 @@ async fn test_coin_deny_list_creation() {
         .await;
     for handle in test_cluster.all_node_handles() {
         handle.with(|node| {
-            assert!(get_deny_list_obj_initial_shared_version(&node.state().database).is_none());
+            assert!(get_deny_list_obj_initial_shared_version(
+                node.state().get_object_store().as_ref()
+            )
+            .is_none());
             assert!(!node
                 .state()
                 .epoch_store_for_testing()
@@ -51,7 +54,8 @@ async fn test_coin_deny_list_creation() {
                 .coin_deny_list_obj_initial_shared_version()
                 .unwrap();
 
-            let deny_list_object = get_deny_list_root_object(&node.state().database).unwrap();
+            let deny_list_object =
+                get_deny_list_root_object(node.state().get_object_store().as_ref()).unwrap();
             assert_eq!(deny_list_object.version(), version);
             assert!(deny_list_object.owner.is_shared());
             let deny_list: DenyList = deny_list_object.to_rust().unwrap();
@@ -64,7 +68,8 @@ async fn test_coin_deny_list_creation() {
                 prev_tx = Some(deny_list_object.previous_transaction);
             }
 
-            let coin_deny_list = get_coin_deny_list(&node.state().database).unwrap();
+            let coin_deny_list =
+                get_coin_deny_list(node.state().get_object_store().as_ref()).unwrap();
             assert_eq!(coin_deny_list.denied_count.size, 0);
             assert_eq!(coin_deny_list.denied_addresses.size, 0);
         });
@@ -89,7 +94,7 @@ async fn test_coin_deny_list_creation() {
         handle.with(|node| {
             assert_eq!(
                 node.state()
-                    .database
+                    .get_object_store()
                     .get_object(&SUI_DENY_LIST_OBJECT_ID)
                     .unwrap()
                     .unwrap()
