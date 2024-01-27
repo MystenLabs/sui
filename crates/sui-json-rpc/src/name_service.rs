@@ -240,12 +240,12 @@ pub struct SuinsRegistration {
     pub domain: Domain,
     pub domain_name: String,
     pub expiration_timestamp_ms: u64,
-    pub image_url: String
+    pub image_url: String,
 }
 
 /// A SubDomainRegistration object to manage a subdomain.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct SubDomainRegistration {
     pub id: UID,
-    pub nft: SuinsRegistration
+    pub nft: SuinsRegistration,
 }

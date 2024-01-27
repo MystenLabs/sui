@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use diesel::{dsl::sql, Connection, ExpressionMethods, RunQueryDsl};
+use diesel::{dsl::sql, upsert::excluded, Connection, ExpressionMethods, RunQueryDsl};
 use prometheus::Registry;
 use std::path::PathBuf;
 use sui_data_ingestion::{
@@ -28,13 +28,17 @@ struct SuinsIndexerWorker {
 }
 
 impl SuinsIndexerWorker {
-    /// Commits the list of VerifiedDomains into the db.
-    fn commit_updates_to_db(
-        &self,
-        updates: &Vec<VerifiedDomain>,
-        deletions: &Vec<String>,
-    ) -> Result<()> {
-        if updates.is_empty() && deletions.is_empty() {
+    /// Creates a transcation that upserts the given name record updates,
+    /// and deletes the given name record deletions.
+    ///
+    /// This is done using 1 or 2 queries, depending on whether there are any deletions/updates in the checkpoint.
+    ///
+    /// - The first query is a bulk insert of all updates, with an upsert on conflict.
+    /// - The second query is a bulk delete of all deletions.
+    ///
+    /// You can safely call this with empty updates/deletions as it will return Ok.
+    fn commit_to_db(&self, updates: &Vec<VerifiedDomain>, removals: &Vec<String>) -> Result<()> {
+        if updates.is_empty() && removals.is_empty() {
             return Ok(());
         }
 
@@ -57,18 +61,21 @@ impl SuinsIndexerWorker {
                         domains::last_checkpoint_updated
                             .eq(sql(&format_update_field_query("last_checkpoint_updated"))),
                         domains::field_id.eq(sql(&format_update_field_query("field_id"))),
-                        domains::subdomain_wrapper_id
-                            .eq(sql(&format_update_field_query("subdomain_wrapper_id"))),
+                        // We always want to respect the subdomain_wrapper re-assignment, even if the checkpoint is older.
+                        // That prevents a scenario where we first process a later checkpoint that did an update to the name record (e..g change target address),
+                        // without first executing the checkpoint that created the subdomain wrapper.
+                        // Since wrapper re-assignment can only happen every 2 days, we can't write invalid data here.
+                        domains::subdomain_wrapper_id.eq(excluded(domains::subdomain_wrapper_id)),
                     ))
                     .execute(tx)
                     .unwrap_or_else(|_| panic!("Failed to process updates: {:?}", updates));
             }
 
-            if !deletions.is_empty() {
+            if !removals.is_empty() {
                 diesel::delete(domains::table)
-                    .filter(domains::field_id.eq_any(deletions))
+                    .filter(domains::field_id.eq_any(removals))
                     .execute(tx)
-                    .unwrap_or_else(|_| panic!("Failed to process deletions: {:?}", deletions));
+                    .unwrap_or_else(|_| panic!("Failed to process deletions: {:?}", removals));
             }
 
             Ok(())
@@ -79,9 +86,9 @@ impl SuinsIndexerWorker {
 #[async_trait]
 impl Worker for SuinsIndexerWorker {
     async fn process_checkpoint(&self, checkpoint: CheckpointData) -> Result<()> {
-        let (db_updates, removals) = self.indexer.process_checkpoint(checkpoint);
+        let (updates, removals) = self.indexer.process_checkpoint(checkpoint);
 
-        self.commit_updates_to_db(&db_updates, &removals)?;
+        self.commit_to_db(&updates, &removals)?;
         Ok(())
     }
 }
