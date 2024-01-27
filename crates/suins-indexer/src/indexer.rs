@@ -3,6 +3,7 @@
 
 use std::{collections::HashMap, str::FromStr};
 
+use move_core_types::language_storage::StructTag;
 use sui_json_rpc::name_service::{Domain, NameRecord, SubDomainRegistration};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -25,10 +26,9 @@ pub struct NameRecordChange {
     /// the DF's ID.
     field_id: ObjectID,
 }
-
 pub struct SuinsIndexer {
-    registry_table_id: String,
-    subdomain_wrapper_type: String,
+    registry_table_id: SuiAddress,
+    subdomain_wrapper_type: StructTag,
 }
 
 impl std::default::Default for SuinsIndexer {
@@ -43,7 +43,10 @@ impl std::default::Default for SuinsIndexer {
 impl SuinsIndexer {
     /// Create a new config by passing the table ID + subdomain wrapper type.
     /// Useful for testing or custom environments.
-    pub fn new(registry_table_id: String, subdomain_wrapper_type: String) -> Self {
+    pub fn new(registry_address: String, wrapper_type: String) -> Self {
+        let registry_table_id = SuiAddress::from_str(&registry_address).unwrap();
+        let subdomain_wrapper_type = StructTag::from_str(&wrapper_type).unwrap();
+
         Self {
             registry_table_id,
             subdomain_wrapper_type,
@@ -54,8 +57,7 @@ impl SuinsIndexer {
     /// For subdomain wrappers, we're saving the ID of the wrapper object,
     /// to make it easy to locate the NFT (since the base NFT gets wrapped and indexing won't work there).
     pub fn is_subdomain_wrapper(&self, object: &Object) -> bool {
-        object.struct_tag().is_some()
-            && object.struct_tag().unwrap().to_canonical_string(true) == self.subdomain_wrapper_type
+        object.struct_tag().is_some() && object.struct_tag().unwrap() == self.subdomain_wrapper_type
     }
 
     // Filter by owner.
@@ -64,8 +66,7 @@ impl SuinsIndexer {
     // make sure we're dealing with a registry change.
     pub fn is_name_record(&self, object: &Object) -> bool {
         object.get_single_owner().is_some()
-            && object.get_single_owner()
-                == Some(SuiAddress::from_str(&self.registry_table_id).unwrap())
+            && object.get_single_owner() == Some(self.registry_table_id)
     }
 
     /// Parses the name record changes + subdomain wraps.
@@ -78,24 +79,24 @@ impl SuinsIndexer {
         name_record_changes: &mut Vec<NameRecordChange>,
         sub_domain_wrappers: &mut HashMap<String, String>,
     ) {
-        for &x in objects {
+        for &object in objects {
             // Parse all the changes to a `NameRecord`
-            if self.is_name_record(x) {
-                let name_record: Field<Domain, NameRecord> = x
+            if self.is_name_record(object) {
+                let name_record: Field<Domain, NameRecord> = object
                     .to_rust()
-                    .unwrap_or_else(|| panic!("Failed to parse name record for {:?}", x));
+                    .unwrap_or_else(|| panic!("Failed to parse name record for {:?}", object));
 
                 name_record_changes.push(NameRecordChange {
                     field: name_record,
-                    field_id: x.id(),
+                    field_id: object.id(),
                 });
             }
             // Parse subdomain wrappers and save them in our hashmap.
             // Later, we'll save the id of the wrapper in the name record.
             // NameRecords & their equivalent SubdomainWrappers are always created in the same PTB, so we can safely assume
             // that the wrapper will be created on the same checkpoint as the name record and vice versa.
-            if self.is_subdomain_wrapper(x) {
-                let sub_domain: SubDomainRegistration = x.to_rust().unwrap();
+            if self.is_subdomain_wrapper(object) {
+                let sub_domain: SubDomainRegistration = object.to_rust().unwrap();
                 sub_domain_wrappers.insert(
                     sub_domain.nft.domain_name,
                     sub_domain.id.id.bytes.to_string(),
@@ -122,9 +123,9 @@ impl SuinsIndexer {
             .map(|((id, _, _), _)| id)
             .collect();
 
-        for x in checkpoint.input_objects() {
-            if self.is_name_record(x) && deleted_objects.contains(&x.id()) {
-                removals.push(x.id().to_string());
+        for input in checkpoint.input_objects() {
+            if self.is_name_record(input) && deleted_objects.contains(&input.id()) {
+                removals.push(input.id().to_string());
             }
         }
     }

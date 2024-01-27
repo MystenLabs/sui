@@ -35,6 +35,7 @@ url.workspace = true
 workspace-hack.workspace = true
 sui-json-rpc.workspace = true
 dotenvy = "0.15"
+move-core-types.workspace = true
 
 [dev-dependencies]
 rand.workspace = true

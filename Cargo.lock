@@ -14016,6 +14016,7 @@ dependencies = [
  "diesel",
  "dotenvy",
  "futures",
+ "move-core-types",
  "mysten-metrics",
  "notify",
  "object_store 0.7.0",
