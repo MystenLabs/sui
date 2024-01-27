@@ -191,7 +191,7 @@ type MoveData =
 	| { Option: MoveData | null }
 	| { Struct: [{ name: string; value: MoveData }] };
 
-type MoveTypeLayout =
+export type MoveTypeLayout =
 	| 'address'
 	| 'bool'
 	| 'u8'
@@ -286,7 +286,10 @@ export function moveDataToRpcContent(data: MoveData, layout: MoveTypeLayout): Mo
 				return (result['vec'] as MoveValue[])[0] ?? null;
 		}
 
-		return result;
+		return {
+			type: toShortTypeString(layout.struct.type),
+			fields: result,
+		};
 	}
 
 	throw new Error('Invalid move data: ' + JSON.stringify(data));

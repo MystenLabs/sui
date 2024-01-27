@@ -4527,13 +4527,20 @@ export type Rpc_Validator_FieldsFragment = { __typename?: 'Validator', atRisk?: 
 
 export type Rpc_Credential_FieldsFragment = { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null };
 
+export type GetTypeLayoutQueryVariables = Exact<{
+  type: Scalars['String']['input'];
+}>;
+
+
+export type GetTypeLayoutQuery = { __typename?: 'Query', type: { __typename?: 'MoveType', layout: any } };
+
 export type GetDynamicFieldObjectQueryVariables = Exact<{
   parentId: Scalars['SuiAddress']['input'];
   name: DynamicFieldName;
 }>;
 
 
-export type GetDynamicFieldObjectQuery = { __typename?: 'Query', object?: { __typename?: 'Object', dynamicObjectField?: { __typename?: 'DynamicField', name?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null, value?: { __typename: 'MoveObject', hasPublicTransfer: boolean, address: any, digest?: string | null, version: number, contents?: { __typename?: 'MoveValue', data: any, type: { __typename?: 'MoveType', layout: any, repr: string } } | null, display?: Array<{ __typename?: 'DisplayEntry', key: string, value?: string | null, error?: string | null }> | null } | { __typename: 'MoveValue' } | null } | null } | null };
+export type GetDynamicFieldObjectQuery = { __typename?: 'Query', object?: { __typename?: 'Object', dynamicObjectField?: { __typename?: 'DynamicField', value?: { __typename: 'MoveObject', owner?: { __typename: 'AddressOwner' } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any, digest?: string | null, version: number, storageRebate?: any | null, owner?: { __typename: 'AddressOwner' } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared' } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, type: { __typename?: 'MoveType', repr: string, layout: any } } | null } | null } | null } | { __typename: 'Shared' } | null } | { __typename: 'MoveValue' } | null } | null } | null };
 
 export type GetDynamicFieldsQueryVariables = Exact<{
   parentId: Scalars['SuiAddress']['input'];
@@ -4542,7 +4549,7 @@ export type GetDynamicFieldsQueryVariables = Exact<{
 }>;
 
 
-export type GetDynamicFieldsQuery = { __typename?: 'Query', object?: { __typename?: 'Object', dynamicFields: { __typename?: 'DynamicFieldConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'DynamicField', name?: { __typename?: 'MoveValue', bcs: any, json: any, type: { __typename?: 'MoveType', layout: any, repr: string } } | null, value?: { __typename: 'MoveObject', storageRebate?: any | null, address: any, digest?: string | null, version: number, contents?: { __typename?: 'MoveValue', json: any, type: { __typename?: 'MoveType', repr: string } } | null } | { __typename: 'MoveValue' } | null }> } } | null };
+export type GetDynamicFieldsQuery = { __typename?: 'Query', object?: { __typename?: 'Object', dynamicFields: { __typename?: 'DynamicFieldConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'DynamicField', name?: { __typename?: 'MoveValue', bcs: any, json: any, type: { __typename?: 'MoveType', layout: any, repr: string } } | null, value?: { __typename: 'MoveObject', address: any, digest?: string | null, version: number, contents?: { __typename?: 'MoveValue', json: any, type: { __typename?: 'MoveType', repr: string } } | null } | { __typename: 'MoveValue', json: any, type: { __typename?: 'MoveType', repr: string } } | null }> } } | null };
 
 export type GetLatestCheckpointSequenceNumberQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -6180,33 +6187,51 @@ fragment RPC_CREDENTIAL_FIELDS on ValidatorCredentials {
   proofOfPossession
   protocolPubKey
 }`) as unknown as TypedDocumentString<GetCurrentEpochQuery, GetCurrentEpochQueryVariables>;
+export const GetTypeLayoutDocument = new TypedDocumentString(`
+    query getTypeLayout($type: String!) {
+  type(type: $type) {
+    layout
+  }
+}
+    `) as unknown as TypedDocumentString<GetTypeLayoutQuery, GetTypeLayoutQueryVariables>;
 export const GetDynamicFieldObjectDocument = new TypedDocumentString(`
     query getDynamicFieldObject($parentId: SuiAddress!, $name: DynamicFieldName!) {
   object(address: $parentId) {
     dynamicObjectField(name: $name) {
-      name {
-        type {
-          repr
-        }
-      }
       value {
         __typename
         ... on MoveObject {
-          contents {
-            data
-            type {
-              layout
-              repr
+          owner {
+            __typename
+            ... on Parent {
+              parent {
+                address
+                digest
+                version
+                storageRebate
+                owner {
+                  __typename
+                  ... on Parent {
+                    parent {
+                      address
+                    }
+                  }
+                }
+                previousTransactionBlock {
+                  digest
+                }
+                asMoveObject {
+                  contents {
+                    data
+                    type {
+                      repr
+                      layout
+                    }
+                  }
+                  hasPublicTransfer
+                }
+              }
             }
-          }
-          hasPublicTransfer
-          address
-          digest
-          version
-          display {
-            key
-            value
-            error
           }
         }
       }
@@ -6233,6 +6258,12 @@ export const GetDynamicFieldsDocument = new TypedDocumentString(`
         }
         value {
           __typename
+          ... on MoveValue {
+            json
+            type {
+              repr
+            }
+          }
           ... on MoveObject {
             contents {
               type {
@@ -6240,7 +6271,6 @@ export const GetDynamicFieldsDocument = new TypedDocumentString(`
               }
               json
             }
-            storageRebate
             address
             digest
             version

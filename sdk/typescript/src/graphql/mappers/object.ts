@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { MoveStruct, SuiObjectResponse } from '../../client/index.js';
+import type { SuiObjectResponse } from '../../client/index.js';
 import type {
+	MoveValue,
 	Rpc_Move_Object_FieldsFragment,
 	Rpc_Object_FieldsFragment,
 } from '../generated/queries.js';
@@ -27,12 +28,16 @@ export function mapGraphQLObjectToRpcObject(
 			: undefined,
 		content: {
 			dataType: 'moveObject' as const,
-			fields: moveDataToRpcContent(
+			...(moveDataToRpcContent(
 				object.asMoveObject?.contents?.data!,
 				object.asMoveObject?.contents?.type.layout!,
-			) as MoveStruct,
+			) as {
+				fields: {
+					[key: string]: MoveValue;
+				};
+				type: string;
+			}),
 			hasPublicTransfer: object.asMoveObject?.hasPublicTransfer!,
-			type: toShortTypeString(object.asMoveObject?.contents?.type.repr!),
 		},
 		digest: object.digest!,
 		display: formatDisplay(object),
@@ -61,12 +66,13 @@ export function mapGraphQLMoveObjectToRpcObject(
 			: undefined,
 		content: {
 			dataType: 'moveObject' as const,
-			fields: moveDataToRpcContent(
-				object?.contents?.data!,
-				object?.contents?.type.layout!,
-			) as MoveStruct,
+			...(moveDataToRpcContent(object?.contents?.data!, object?.contents?.type.layout!) as {
+				fields: {
+					[key: string]: MoveValue;
+				};
+				type: string;
+			}),
 			hasPublicTransfer: object?.hasPublicTransfer!,
-			type: toShortTypeString(object?.contents?.type.repr!),
 		},
 		digest: object.digest!,
 		display: formatDisplay(object),

@@ -512,24 +512,23 @@ describe('GraphQL SuiClient compatibility', () => {
 	});
 
 	test.skip('getDynamicFields', async () => {
-		const rpc = await toolbox.client.getDynamicFields({
+		const { nextCursor, ...rpc } = await toolbox.client.getDynamicFields({
 			parentId: parentObjectId,
 		});
 
-		const graphql = await toolbox.graphQLClient!.getDynamicFields({
+		const { nextCursor: _, ...graphql } = await toolbox.graphQLClient!.getDynamicFields({
 			parentId: parentObjectId,
 		});
 
 		expect(graphql).toEqual(rpc);
 	});
 
-	test.skip('getDynamicFieldObject', async () => {
-		const {
-			data: [field],
-		} = await toolbox.client.getDynamicFields({
+	test('getDynamicFieldObject', async () => {
+		const { data } = await toolbox.client.getDynamicFields({
 			parentId: parentObjectId,
-			limit: 1,
 		});
+
+		const field = data.find((field) => field.type === 'DynamicObject')!;
 
 		const rpc = await toolbox.client.getDynamicFieldObject({
 			parentId: parentObjectId,
@@ -538,11 +537,7 @@ describe('GraphQL SuiClient compatibility', () => {
 
 		const graphql = await toolbox.graphQLClient!.getDynamicFieldObject({
 			parentId: parentObjectId,
-			// TODO: name in RPC has encoded value, which we can't encoded to BCS consistently
-			name: {
-				type: field.name.type,
-				value: field.bcsName,
-			},
+			name: field.name,
 		});
 
 		expect(graphql).toEqual(rpc);

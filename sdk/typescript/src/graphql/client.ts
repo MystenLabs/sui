@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { fromB64, toB64 } from '@mysten/bcs';
+import { fromB64, toB58, toB64 } from '@mysten/bcs';
 import { print } from 'graphql';
 import type { DocumentNode } from 'graphql';
 
@@ -31,7 +31,7 @@ import type {
 	DelegatedStake,
 	DevInspectResults,
 	DryRunTransactionBlockResponse,
-	MoveStruct,
+	MoveValue,
 	ObjectRead,
 	PaginatedCoins,
 	PaginatedEvents,
@@ -120,6 +120,7 @@ import {
 	GetTotalSupplyDocument,
 	GetTotalTransactionBlocksDocument,
 	GetTransactionBlockDocument,
+	GetTypeLayoutDocument,
 	GetValidatorsApyDocument,
 	MultiGetObjectsDocument,
 	MultiGetTransactionBlocksDocument,
@@ -131,8 +132,8 @@ import {
 	TryGetPastObjectDocument,
 	TypedDocumentString,
 } from './generated/queries.js';
+import { mapJsonToBcs } from './mappers/bcs.js';
 import { mapGraphQLCheckpointToRpcCheckpoint } from './mappers/checkpint.js';
-import { formatDisplay } from './mappers/display.js';
 import {
 	mapNormalizedMoveFunction,
 	mapNormalizedMoveModule,
@@ -1030,20 +1031,20 @@ export class GraphQLSuiClient extends SuiClient {
 
 		return {
 			data: fields.map((field) => ({
-				bcsName: field.name?.bcs,
+				bcsName: field.name?.bcs && toB58(fromB64(field.name.bcs)),
 				digest: (field.value?.__typename === 'MoveObject' ? field.value.digest : undefined)!,
 				name: {
 					type: toShortTypeString(field.name?.type.repr)!,
-					value: field.name?.json.bytes,
+					value: field.name?.json,
 				},
 				objectId: field.value?.__typename === 'MoveObject' ? field.value.address : undefined,
 				objectType: (field.value?.__typename === 'MoveObject'
 					? field.value.contents?.type.repr
-					: undefined)!,
+					: field.value?.type.repr)!,
 				type: field.value?.__typename === 'MoveObject' ? 'DynamicObject' : 'DynamicField',
 				version: (field.value?.__typename === 'MoveObject'
 					? field.value.version
-					: field.value?.__typename) as unknown as string,
+					: undefined) as unknown as string,
 			})),
 			nextCursor: pageInfo.endCursor ?? null,
 			hasNextPage: pageInfo.hasNextPage,
@@ -1053,42 +1054,65 @@ export class GraphQLSuiClient extends SuiClient {
 	override async getDynamicFieldObject(
 		input: GetDynamicFieldObjectParams,
 	): Promise<SuiObjectResponse> {
-		const field = await this.#graphqlQuery(
+		const nameLayout = await this.#graphqlQuery(
+			{
+				query: GetTypeLayoutDocument,
+				variables: {
+					type: input.name.type,
+				},
+			},
+			(data) => data.type.layout,
+		);
+
+		const bcsName = mapJsonToBcs(input.name.value, nameLayout);
+
+		const parent = await this.#graphqlQuery(
 			{
 				query: GetDynamicFieldObjectDocument,
 				variables: {
 					parentId: input.parentId,
 					name: {
 						type: input.name.type,
-						bcs: input.name.value,
+						bcs: bcsName,
 					},
 				},
 			},
 			(data) => {
-				return data.object?.dynamicObjectField;
+				return data.object?.dynamicObjectField?.value?.__typename === 'MoveObject'
+					? data.object.dynamicObjectField.value.owner?.__typename === 'Parent'
+						? data.object.dynamicObjectField.value.owner.parent
+						: undefined
+					: undefined;
 			},
 		);
-
-		if (field.value?.__typename !== 'MoveObject') {
-			throw new Error('Expected a MoveObject');
-		}
 
 		return {
 			data: {
 				content: {
 					dataType: 'moveObject' as const,
-					fields: moveDataToRpcContent(
-						field.value.contents?.data!,
-						field.value?.contents?.type.layout!,
-					) as MoveStruct,
-					hasPublicTransfer: field.value.hasPublicTransfer!,
-					type: toShortTypeString(field.value.contents?.type.repr!),
+					...(moveDataToRpcContent(
+						parent?.asMoveObject?.contents?.data!,
+						parent?.asMoveObject?.contents?.type.layout!,
+					) as {
+						fields: {
+							[key: string]: MoveValue;
+						};
+						type: string;
+					}),
+					hasPublicTransfer: parent?.asMoveObject?.hasPublicTransfer!,
 				},
-				digest: field.value.digest!,
-				display: formatDisplay(field.value),
-				objectId: field.value.address,
-				type: toShortTypeString(field.value.contents?.type.repr),
-				version: field.value.version as unknown as string,
+				digest: parent?.digest!,
+				objectId: parent?.address,
+				type: toShortTypeString(parent?.asMoveObject?.contents?.type.repr),
+				version: parent?.version.toString()!,
+				storageRebate: parent.storageRebate,
+				previousTransaction: parent.previousTransactionBlock?.digest,
+				owner:
+					parent.owner?.__typename === 'Parent'
+						? {
+								ObjectOwner: parent.owner.parent?.address,
+						  }
+						: undefined,
 			},
 		};
 	}

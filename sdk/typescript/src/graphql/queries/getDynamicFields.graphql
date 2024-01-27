@@ -19,6 +19,12 @@ query getDynamicFields($parentId: SuiAddress!, $first: Int, $cursor: String) {
 				}
 				value {
 					__typename
+					... on MoveValue {
+						json
+						type {
+							repr
+						}
+					}
 					... on MoveObject {
 						contents {
 							type {
@@ -26,8 +32,6 @@ query getDynamicFields($parentId: SuiAddress!, $first: Int, $cursor: String) {
 							}
 							json
 						}
-
-						storageRebate
 						address
 						digest
 						version
