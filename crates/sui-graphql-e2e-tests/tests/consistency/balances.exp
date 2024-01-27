@@ -273,12 +273,7 @@ Response: {
     "transactionBlocks": {
       "nodes": [
         {
-          "sender": {
-            "fakeCoinBalance": null,
-            "allBalances": {
-              "nodes": []
-            }
-          }
+          "sender": null
         },
         {
           "sender": {
@@ -357,7 +352,28 @@ Response: {
         }
       ]
     }
-  }
+  },
+  "errors": [
+    {
+      "message": "Requested data is outside the available range",
+      "locations": [
+        {
+          "line": 8,
+          "column": 9
+        }
+      ],
+      "path": [
+        "transactionBlocks",
+        "nodes",
+        0,
+        "sender",
+        "allBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
 }
 
 task 21 'force-object-snapshot-catchup'. lines 154-154:
@@ -369,20 +385,10 @@ Response: {
     "transactionBlocks": {
       "nodes": [
         {
-          "sender": {
-            "fakeCoinBalance": null,
-            "allBalances": {
-              "nodes": []
-            }
-          }
+          "sender": null
         },
         {
-          "sender": {
-            "fakeCoinBalance": null,
-            "allBalances": {
-              "nodes": []
-            }
-          }
+          "sender": null
         },
         {
           "sender": {
@@ -436,7 +442,47 @@ Response: {
         }
       ]
     }
-  }
+  },
+  "errors": [
+    {
+      "message": "Requested data is outside the available range",
+      "locations": [
+        {
+          "line": 8,
+          "column": 9
+        }
+      ],
+      "path": [
+        "transactionBlocks",
+        "nodes",
+        0,
+        "sender",
+        "allBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Requested data is outside the available range",
+      "locations": [
+        {
+          "line": 8,
+          "column": 9
+        }
+      ],
+      "path": [
+        "transactionBlocks",
+        "nodes",
+        1,
+        "sender",
+        "allBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
 }
 
 task 23 'force-object-snapshot-catchup'. lines 179-179:
@@ -448,38 +494,96 @@ Response: {
     "transactionBlocks": {
       "nodes": [
         {
-          "sender": {
-            "fakeCoinBalance": null,
-            "allBalances": {
-              "nodes": []
-            }
-          }
+          "sender": null
         },
         {
-          "sender": {
-            "fakeCoinBalance": null,
-            "allBalances": {
-              "nodes": []
-            }
-          }
+          "sender": null
         },
         {
-          "sender": {
-            "fakeCoinBalance": null,
-            "allBalances": {
-              "nodes": []
-            }
-          }
+          "sender": null
         },
         {
-          "sender": {
-            "fakeCoinBalance": null,
-            "allBalances": {
-              "nodes": []
-            }
-          }
+          "sender": null
         }
       ]
     }
-  }
+  },
+  "errors": [
+    {
+      "message": "Requested data is outside the available range",
+      "locations": [
+        {
+          "line": 8,
+          "column": 9
+        }
+      ],
+      "path": [
+        "transactionBlocks",
+        "nodes",
+        0,
+        "sender",
+        "allBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Requested data is outside the available range",
+      "locations": [
+        {
+          "line": 8,
+          "column": 9
+        }
+      ],
+      "path": [
+        "transactionBlocks",
+        "nodes",
+        1,
+        "sender",
+        "allBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Requested data is outside the available range",
+      "locations": [
+        {
+          "line": 8,
+          "column": 9
+        }
+      ],
+      "path": [
+        "transactionBlocks",
+        "nodes",
+        2,
+        "sender",
+        "allBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Requested data is outside the available range",
+      "locations": [
+        {
+          "line": 8,
+          "column": 9
+        }
+      ],
+      "path": [
+        "transactionBlocks",
+        "nodes",
+        3,
+        "sender",
+        "allBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
 }
