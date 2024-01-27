@@ -10,7 +10,7 @@ use std::marker::PhantomData;
 use std::str::FromStr;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::collection_types::VecMap;
-use sui_types::id::ID;
+use sui_types::id::{ID, UID};
 use sui_types::TypeTag;
 
 const NAME_SERVICE_DOMAIN_MODULE: &IdentStr = ident_str!("domain");
@@ -48,7 +48,7 @@ pub struct Table<K, V> {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Domain {
-    labels: Vec<String>,
+    pub labels: Vec<String>,
 }
 
 impl Domain {
@@ -58,6 +58,14 @@ impl Domain {
             module: NAME_SERVICE_DOMAIN_MODULE.to_owned(),
             name: NAME_SERVICE_DOMAIN_STRUCT.to_owned(),
             type_params: vec![],
+        }
+    }
+
+    /// Derive the parent domain for a given domain
+    /// E.g. `test.example.sui` -> `example.sui`
+    pub fn parent(&self) -> Domain {
+        Domain {
+            labels: self.labels[0..(self.labels.len() - 1)].to_vec(),
         }
     }
 }
@@ -223,4 +231,21 @@ pub struct NameRecord {
     pub target_address: Option<SuiAddress>,
     /// Additional data which may be stored in a record
     pub data: VecMap<String, String>,
+}
+
+/// A SuinsRegistration object to manage an SLD
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct SuinsRegistration {
+    pub id: UID,
+    pub domain: Domain,
+    pub domain_name: String,
+    pub expiration_timestamp_ms: u64,
+    pub image_url: String
+}
+
+/// A SubDomainRegistration object to manage a subdomain.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct SubDomainRegistration {
+    pub id: UID,
+    pub nft: SuinsRegistration
 }

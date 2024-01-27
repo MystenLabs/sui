@@ -83,6 +83,7 @@ members = [
   "crates/shared-crypto",
   "crates/simulacrum",
   "crates/sui",
+  "crates/suins-indexer",
   "crates/sui-adapter-transactional-tests",
   "crates/sui-analytics-indexer",
   "crates/sui-analytics-indexer-derive",
