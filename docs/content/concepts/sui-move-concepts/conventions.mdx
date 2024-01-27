@@ -44,8 +44,8 @@ module conventions::comments {
 - `destroy_empty`: Destroys an object or data structure that has values with the **drop** ability.
 - `to_object_name`: Transforms an Object X to Object Y.
 - `from_object_name`: Transforms an Object Y to Object X.
+- `property_name`: Returns an immutable reference.
 - `property_name_mut`: Returns a mutable reference.
-- `property_name_immut`: Returns an immutable reference.
 
 ## Potato Structs
 
@@ -395,8 +395,10 @@ module conventions::access_control {
   public fun wrong_withdraw(state: &mut State, ctx: &mut TxContext): Coin<SUI> {
     let sender = tx_context::sender(ctx);
 
-    let authorized_balance = *table::borrow(&state.accounts, sender);
-    coin::take(&mut state.balance, authorized_balance, ctx)
+    let authorized_balance = table::borrow_mut(&mut state.accounts, sender);
+    let value = *authorized_balance;
+    *authorized_balance = 0;
+    coin::take(&mut state.balance, value, ctx)
   }
 }
 ```
@@ -439,7 +441,7 @@ module conventions::vesting_wallet {
   * If you wish to add extra functionality to a vesting wallet, it is best to share the object.
   * For example, if you wish the issuer of the wallet to be able to cancel the contract in the future.
   */
-  public fun new_shared(shared_wallet: &mut SharedWallet, deposit: Coin<SUI>, ctx: &mut TxContext): OwnedWallet {
+  public fun new_shared(shared_wallet: &mut SharedWallet, deposit: Coin<SUI>, ctx: &mut TxContext) {
     // Implementation omitted.
     abort(0)
   }
