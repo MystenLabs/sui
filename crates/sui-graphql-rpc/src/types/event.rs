@@ -147,7 +147,8 @@ impl Event {
     ) -> Result<Connection<String, Event>, Error> {
         let (prev, next, results) = db
             .execute(move |conn| {
-                page.paginate_query::<StoredEvent, _, _, _>(conn, move || {
+                // TODO (wlmyng) the None value will be replaced by self.checkpoint_viewed_at
+                page.paginate_query::<StoredEvent, _, _, _>(conn, None, move || {
                     let mut query = events::dsl::events.into_boxed();
 
                     // The transactions table doesn't have an index on the senders column, so use
