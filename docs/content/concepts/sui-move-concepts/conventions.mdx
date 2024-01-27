@@ -318,11 +318,11 @@ module conventions::amm {
 
   // ❌ Wrong
   public fun impure_add_liquidity<CoinX, CoinY, LpCoin>(pool: &mut Pool, coin_x: Coin<CoinX>, coin_y: Coin<CoinY>, ctx: &mut TxContext): Coin<LpCoin> {
+    let (lp_coin, coin_x, coin_y) = add_liquidity<CoinX, CoinY, LpCoin>(pool, coin_x, coin_y);
     transfer::public_transfer(coin_x, tx_context::sender(ctx));
     transfer::public_transfer(coin_y, tx_context::sender(ctx));
 
-    // Implementation omitted.
-    abort(0)
+    lp_coin
   }
 }
 ```
@@ -381,7 +381,7 @@ module conventions::access_control {
   }
 
   // ✅ Right
-  // With this function, another protocol can hold the `Account` in behalf of a user.
+  // With this function, another protocol can hold the `Account` on behalf of a user.
   public fun withdraw(state: &mut State, account: &mut Account, ctx: &mut TxContext): Coin<SUI> {
     let authorized_balance = account.balance;
 
@@ -454,6 +454,11 @@ module conventions::vesting_wallet {
 
 ```move
 module conventions::social_network {
+
+  use std::string::String;
+
+  use sui::object::UID;
+
   struct Account has key {
     id: UID,
     name: String
@@ -465,10 +470,16 @@ module conventions::social_network {
 
   // ✅ Right
   // cap.update(&mut account, b"jose");
-  public fun update(_: &Admin, account: &mut Account, new_name: String) {}
+  public fun update(_: &Admin, account: &mut Account, new_name: String) {
+    // Implementation omitted.
+    abort(0)
+  }
 
   // ❌ Wrong
   // account.update(&cap, b"jose");
-  public fun update(account: &mut Account, _: &Admin, new_name: String) {}
+  public fun set(account: &mut Account, _: &Admin, new_name: String) {
+    // Implementation omitted.
+    abort(0)
+  }
 }
 ```
