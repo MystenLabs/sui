@@ -1,4 +1,4 @@
-module M {
+module 0x42::M {
     struct X1 {}
     struct X2 {}
     // Test a missing comma in the acquires list.

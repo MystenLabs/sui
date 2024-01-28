@@ -1,4 +1,4 @@
-module M {
+module 0x42::M {
     struct R {}
 
     fun exists(): u64 { 0 }

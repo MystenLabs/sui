@@ -441,23 +441,36 @@ impl<'input> Lexer<'input> {
         std::mem::take(&mut self.matched_doc_comments)
     }
 
+    /// Advance to the next token. This function will keep trying to advance the lexer until it
+    /// actually finds a valid token, skipping over non-token text snippets if necessary (in the
+    /// worst case, it will eventually encounter EOF). If parsing errors are encountered when
+    /// skipping over non-tokens, the first diagnostic will be recorded and returned, so that it can
+    /// be acted upon (if parsing needs to stop) or ignored (if parsing should proceed regardless).
     pub fn advance(&mut self) -> Result<(), Box<Diagnostic>> {
         let text_end = self.text.len();
         self.prev_end = self.cur_end;
         let mut err = None;
+        // loop until the next valid token (which ultimately can be EOF) is found
         let token = loop {
             let mut cur_end = self.cur_end;
+            // loop until the next text snippet which may contain a valid token is found)
             let text = loop {
                 match self.trim_whitespace_and_comments(cur_end) {
                     Ok(t) => break t,
                     Err(diag) => {
+                        // only report the first diag encountered
                         err = err.or(Some(diag));
+                        // currently, this error can happen here if there is an unclosed block
+                        // comment, in which case we advance to the next whitespace and try trimming
+                        // again let
                         let trimmed = self.trim_until_whitespace(cur_end);
                         cur_end += trimmed.len();
                     }
                 };
             };
             let new_start = self.text.len() - text.len();
+            // panic_mode determines if a diag should be actually recorded in find_token (so that
+            // only first one is recorded)
             let panic_mode = err.is_some();
             let (result, len) =
                 find_token(panic_mode, self.file_hash, self.edition, text, new_start);
@@ -466,6 +479,7 @@ impl<'input> Lexer<'input> {
             match result {
                 Ok(token) => break token,
                 Err(diag_opt) => {
+                    // only report the first diag encountered
                     err = err.or(diag_opt);
                     if self.cur_end == text_end {
                         break Tok::EOF;
@@ -473,6 +487,8 @@ impl<'input> Lexer<'input> {
                 }
             }
         };
+        // regardless of whether an error was encountered (and diagnostic recorded) or not, the
+        // token is advanced
         self.token = token;
         if let Some(err) = err {
             Err(err)
