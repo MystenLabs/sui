@@ -377,6 +377,7 @@ impl TransactionBlockEffects {
         Checkpoint::query(
             ctx.data_unchecked(),
             CheckpointId::by_seq_num(stored_tx.checkpoint_sequence_number as u64),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()
