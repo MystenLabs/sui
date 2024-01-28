@@ -362,9 +362,13 @@ impl TransactionBlockEffects {
 
     /// The epoch this transaction was finalized in.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(ctx.data_unchecked(), Some(self.native().executed_epoch()))
-            .await
-            .extend()
+        Epoch::query(
+            ctx.data_unchecked(),
+            Some(self.native().executed_epoch()),
+            self.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 
     /// The checkpoint this transaction was finalized in.

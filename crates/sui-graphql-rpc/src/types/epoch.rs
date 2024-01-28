@@ -21,6 +21,7 @@ use sui_indexer::schema_v2::epochs;
 
 pub(crate) struct Epoch {
     pub stored: QueryableEpochInfo,
+    pub checkpoint_viewed_at: Option<u64>,
 }
 
 /// Operation of the Sui network is temporally partitioned into non-overlapping epochs,
@@ -52,7 +53,7 @@ impl Epoch {
         let active_validators = convert_to_validators(
             system_state.active_validators,
             None,
-            self.stored.last_checkpoint_id.map(|c| c as u64),
+            self.checkpoint_viewed_at,
         );
         let validator_set = ValidatorSet {
             total_stake: Some(BigInt::from(self.stored.total_stake)),
@@ -166,9 +167,14 @@ impl Epoch {
     ) -> Result<Connection<String, Checkpoint>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let epoch = self.stored.epoch as u64;
-        Checkpoint::paginate(ctx.data_unchecked(), page, Some(epoch), None)
-            .await
-            .extend()
+        Checkpoint::paginate(
+            ctx.data_unchecked(),
+            page,
+            Some(epoch),
+            self.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 
     /// The epoch's corresponding transaction blocks.
@@ -196,9 +202,14 @@ impl Epoch {
             return Ok(Connection::new(false, false));
         };
 
-        TransactionBlock::paginate(ctx.data_unchecked(), page, filter, None) // TODO (wlmyng) - to be replaced with checkpoint_viewed_at from Epoch
-            .await
-            .extend()
+        TransactionBlock::paginate(
+            ctx.data_unchecked(),
+            page,
+            filter,
+            self.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 }
 
@@ -210,7 +221,11 @@ impl Epoch {
 
     /// Look up an `Epoch` in the database, optionally filtered by its Epoch ID. If no ID is
     /// supplied, defaults to fetching the latest epoch.
-    pub(crate) async fn query(db: &Db, filter: Option<u64>) -> Result<Option<Self>, Error> {
+    pub(crate) async fn query(
+        db: &Db,
+        filter: Option<u64>,
+        checkpoint_viewed_at: Option<u64>,
+    ) -> Result<Option<Self>, Error> {
         use epochs::dsl;
 
         let id = filter.map(|id| id as i64);
@@ -233,12 +248,9 @@ impl Epoch {
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch epoch: {e}")))?;
 
-        Ok(stored.map(Epoch::from))
-    }
-}
-
-impl From<QueryableEpochInfo> for Epoch {
-    fn from(stored: QueryableEpochInfo) -> Self {
-        Epoch { stored }
+        Ok(stored.map(|stored| Epoch {
+            stored,
+            checkpoint_viewed_at,
+        }))
     }
 }

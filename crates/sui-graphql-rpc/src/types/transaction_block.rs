@@ -190,7 +190,9 @@ impl TransactionBlock {
             return Ok(None);
         };
 
-        Epoch::query(ctx.data_unchecked(), Some(*id)).await.extend()
+        Epoch::query(ctx.data_unchecked(), Some(*id), self.checkpoint_viewed_at)
+            .await
+            .extend()
     }
 
     /// Serialized form of this transaction's `SenderSignedData`, BCS serialized and Base64 encoded.
@@ -330,7 +332,7 @@ impl TransactionBlock {
 
                 let result = page.paginate_query::<StoredTransaction, _, _, _>(
                     conn,
-                    Some(checkpoint_viewed_at),
+                    checkpoint_viewed_at,
                     move || {
                         use transactions as tx;
                         let mut query = tx::dsl::transactions.into_boxed();

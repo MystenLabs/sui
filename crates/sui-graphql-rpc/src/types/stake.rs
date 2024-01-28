@@ -297,16 +297,24 @@ impl StakedSui {
 
     /// The epoch at which this stake became active.
     async fn activated_epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(ctx.data_unchecked(), Some(self.native.activation_epoch()))
-            .await
-            .extend()
+        Epoch::query(
+            ctx.data_unchecked(),
+            Some(self.native.activation_epoch()),
+            self.super_.super_.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 
     /// The epoch at which this object was requested to join a stake pool.
     async fn requested_epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(ctx.data_unchecked(), Some(self.native.request_epoch()))
-            .await
-            .extend()
+        Epoch::query(
+            ctx.data_unchecked(),
+            Some(self.native.request_epoch()),
+            self.super_.super_.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 
     /// The SUI that was initially staked.

@@ -169,7 +169,7 @@ impl Event {
 
                 let result = page.paginate_query::<StoredEvent, _, _, _>(
                     conn,
-                    Some(checkpoint_viewed_at),
+                    checkpoint_viewed_at,
                     move || {
                         let mut query = events::dsl::events.into_boxed();
 

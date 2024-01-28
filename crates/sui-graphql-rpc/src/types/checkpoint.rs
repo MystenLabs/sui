@@ -129,9 +129,13 @@ impl Checkpoint {
 
     /// The epoch this checkpoint is part of.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(ctx.data_unchecked(), Some(self.stored.epoch as u64))
-            .await
-            .extend()
+        Epoch::query(
+            ctx.data_unchecked(),
+            Some(self.stored.epoch as u64),
+            self.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 
     /// Transactions in this checkpoint.
@@ -267,7 +271,7 @@ impl Checkpoint {
 
                 let result = page.paginate_query::<StoredCheckpoint, _, _, _>(
                     conn,
-                    Some(checkpoint_viewed_at),
+                    checkpoint_viewed_at,
                     move || {
                         let mut query = dsl::checkpoints.into_boxed();
                         query = query.filter(dsl::sequence_number.le(checkpoint_viewed_at as i64));

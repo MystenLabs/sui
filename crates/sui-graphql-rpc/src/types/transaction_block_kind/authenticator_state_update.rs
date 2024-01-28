@@ -31,7 +31,8 @@ struct ActiveJwk(NativeActiveJwk);
 impl AuthenticatorStateUpdateTransaction {
     /// Epoch of the authenticator state update transaction.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(ctx.data_unchecked(), Some(self.0.epoch))
+        // Defer setting `checkpoint_viewed_at` since this type has no edge nodes
+        Epoch::query(ctx.data_unchecked(), Some(self.0.epoch), None)
             .await
             .extend()
     }
@@ -110,7 +111,7 @@ impl ActiveJwk {
 
     /// The most recent epoch in which the JWK was validated.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(ctx.data_unchecked(), Some(self.0.epoch))
+        Epoch::query(ctx.data_unchecked(), Some(self.0.epoch), None)
             .await
             .extend()
     }
