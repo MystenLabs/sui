@@ -9,7 +9,6 @@ use sui_indexer::types_v2::OwnerType;
 use sui_package_resolver::Resolver;
 use sui_types::dynamic_field::{derive_dynamic_field_id, DynamicFieldInfo, DynamicFieldType};
 
-use super::checkpoint::Checkpoint;
 use super::cursor::{Page, Target};
 use super::object::{
     self, deserialize_move_struct, validate_cursor_consistency, Object, ObjectKind, ObjectLookupKey,
@@ -18,11 +17,12 @@ use super::type_filter::ExactTypeFilter;
 use super::{
     base64::Base64, move_object::MoveObject, move_value::MoveValue, sui_address::SuiAddress,
 };
+use crate::consistency::{build_objects_query, consistent_range, View};
 use crate::context_data::package_cache::PackageCache;
 use crate::data::{Db, QueryExecutor};
 use crate::error::Error;
+use crate::filter;
 use crate::raw_query::RawQuery;
-use crate::{filter, query};
 
 pub(crate) struct DynamicField {
     pub super_: MoveObject,
@@ -191,14 +191,9 @@ impl DynamicField {
 
         let Some(((prev, next, results), checkpoint_viewed_at)) = db
             .execute_repeatable(move |conn| {
-                let (lhs, mut rhs) = Checkpoint::available_range(conn)?;
-
-                if let Some(checkpoint_viewed_at) = checkpoint_viewed_at {
-                    if checkpoint_viewed_at < lhs || rhs < checkpoint_viewed_at {
-                        return Ok::<_, diesel::result::Error>(None);
-                    }
-                    rhs = checkpoint_viewed_at;
-                }
+                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
+                    return Ok::<_, diesel::result::Error>(None);
+                };
 
                 let result = page.paginate_raw_query::<StoredHistoryObject>(
                     conn,
@@ -309,58 +304,13 @@ pub fn extract_field_from_move_struct(
 }
 
 fn dynamic_fields_query(parent: SuiAddress, version: Option<u64>, lhs: i64, rhs: i64) -> RawQuery {
-    // Construct the filtered inner query - apply the same filtering criteria to both
-    // objects_snapshot and objects_history tables.
-    let mut snapshot_objs = query!(r#"SELECT * FROM objects_snapshot"#);
-    snapshot_objs = apply_filter(snapshot_objs, parent, version);
-
-    // Additionally filter objects_history table for results between the available range, or
-    // checkpoint_viewed_at, if provided.
-    let mut history_objs = query!(r#"SELECT * FROM objects_history"#);
-    history_objs = apply_filter(history_objs, parent, version);
-    history_objs = filter!(
-        history_objs,
-        format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
-    );
-
-    // Combine the two queries, and select the most recent version of each object.
-    let candidates = query!(
-        r#"SELECT DISTINCT ON (object_id) * FROM (({}) UNION ({})) o"#,
-        snapshot_objs,
-        history_objs
-    )
-    .order_by("object_id")
-    .order_by("object_version DESC");
-
-    // The following conditions ensure that the version of object matching our filters is the latest
-    // version at the checkpoint we are viewing at. If the filter includes version constraints (an
-    // `object_keys` field), then this extra check is not required (it will filter out correct
-    // results).
-    if version.is_none() {
-        // Objects that fulfill the filtering criteria may not be the most recent version available.
-        // Left join the candidates table on newer to filter out any objects that have a newer
-        // version.
-        let mut newer = query!("SELECT object_id, object_version FROM objects_history");
-        newer = filter!(
-            newer,
-            format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
-        );
-        let query = query!(
-            r#"
-        SELECT candidates.*
-        FROM ({}) candidates
-        LEFT JOIN ({}) newer
-        ON (
-            candidates.object_id = newer.object_id
-            AND candidates.object_version < newer.object_version
-        )"#,
-            candidates,
-            newer
-        );
-        filter!(query, "newer.object_version IS NULL")
-    } else {
-        query!("SELECT * FROM ({}) candidates", candidates)
-    }
+    let view = match version {
+        Some(_) => View::Historical,
+        None => View::Consistent,
+    };
+    build_objects_query(view, lhs, rhs, move |query| {
+        apply_filter(query, parent, version)
+    })
 }
 
 fn apply_filter(query: RawQuery, parent: SuiAddress, parent_version: Option<u64>) -> RawQuery {

@@ -21,14 +21,14 @@ use super::transaction_block;
 use super::transaction_block::TransactionBlockFilter;
 use super::type_filter::{ExactTypeFilter, TypeFilter};
 use super::{owner::Owner, sui_address::SuiAddress, transaction_block::TransactionBlock};
+use crate::consistency::{build_objects_query, consistent_range, View};
 use crate::context_data::package_cache::PackageCache;
 use crate::data::{self, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
 use crate::raw_query::RawQuery;
 use crate::types::base64::Base64;
-use crate::types::checkpoint::Checkpoint;
 use crate::types::intersect;
-use crate::{filter, or_filter, query};
+use crate::{filter, or_filter};
 use async_graphql::connection::{CursorType, Edge};
 use async_graphql::{connection::Connection, *};
 use diesel::{CombineDsl, ExpressionMethods, OptionalExtension, QueryDsl};
@@ -715,14 +715,9 @@ impl Object {
 
         let response = db
             .execute_repeatable(move |conn| {
-                let (lhs, mut rhs) = Checkpoint::available_range(conn)?;
-
-                if let Some(checkpoint_viewed_at) = checkpoint_viewed_at {
-                    if checkpoint_viewed_at < lhs || rhs < checkpoint_viewed_at {
-                        return Ok::<_, diesel::result::Error>(None);
-                    }
-                    rhs = checkpoint_viewed_at;
-                }
+                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
+                    return Ok::<_, diesel::result::Error>(None);
+                };
 
                 let result = page.paginate_raw_query::<StoredHistoryObject>(
                     conn,
@@ -776,14 +771,9 @@ impl Object {
 
         let stored_objs: Option<Vec<StoredHistoryObject>> = db
             .execute_repeatable(move |conn| {
-                let (lhs, mut rhs) = Checkpoint::available_range(conn)?;
-
-                if let Some(checkpoint_viewed_at) = checkpoint_viewed_at {
-                    if checkpoint_viewed_at < lhs || rhs < checkpoint_viewed_at {
-                        return Ok(None);
-                    }
-                    rhs = checkpoint_viewed_at;
-                }
+                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
+                    return Ok::<_, diesel::result::Error>(None);
+                };
 
                 conn.results(move || {
                     // If an object was created or mutated in a checkpoint outside the current
@@ -831,14 +821,9 @@ impl Object {
 
         let stored_objs: Option<Vec<StoredHistoryObject>> = db
             .execute_repeatable(move |conn| {
-                let (lhs, mut rhs) = Checkpoint::available_range(conn)?;
-
-                if let Some(checkpoint_viewed_at) = checkpoint_viewed_at {
-                    if checkpoint_viewed_at < lhs || rhs < checkpoint_viewed_at {
-                        return Ok(None);
-                    }
-                    rhs = checkpoint_viewed_at;
-                }
+                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
+                    return Ok::<_, diesel::result::Error>(None);
+                };
 
                 conn.results(move || {
                     // If an object was created or mutated in a checkpoint outside the current
@@ -1304,58 +1289,13 @@ pub(crate) fn validate_cursor_consistency(
 }
 
 fn objects_query(filter: &ObjectFilter, lhs: i64, rhs: i64) -> RawQuery {
-    // Construct the filtered inner query - apply the same filtering criteria to both
-    // objects_snapshot and objects_history tables.
-    let mut snapshot_objs = query!(r#"SELECT * FROM objects_snapshot"#);
-    snapshot_objs = filter.apply(snapshot_objs);
-
-    // Additionally filter objects_history table for results between the available range, or
-    // checkpoint_viewed_at, if provided.
-    let mut history_objs = query!(r#"SELECT * FROM objects_history"#);
-    history_objs = filter.apply(history_objs);
-    history_objs = filter!(
-        history_objs,
-        format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
-    );
-
-    // Combine the two queries, and select the most recent version of each object.
-    let candidates = query!(
-        r#"SELECT DISTINCT ON (object_id) * FROM (({}) UNION ({})) o"#,
-        snapshot_objs,
-        history_objs
-    )
-    .order_by("object_id")
-    .order_by("object_version DESC");
-
-    // The following conditions ensure that the version of object matching our filters is the latest
-    // version at the checkpoint we are viewing at. If the filter includes version constraints (an
-    // `object_keys` field), then this extra check is not required (it will filter out correct
-    // results).
-    if filter.object_keys.is_none() {
-        // Objects that fulfill the filtering criteria may not be the most recent version available.
-        // Left join the candidates table on newer to filter out any objects that have a newer
-        // version.
-        let mut newer = query!("SELECT object_id, object_version FROM objects_history");
-        newer = filter!(
-            newer,
-            format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
-        );
-        let query = query!(
-            r#"SELECT candidates.*
-            FROM ({}) candidates
-            LEFT JOIN ({}) newer
-            ON (
-                candidates.object_id = newer.object_id
-                AND candidates.object_version < newer.object_version
-            )"#,
-            candidates,
-            newer
-        );
-
-        filter!(query, "newer.object_version IS NULL")
+    let view = if filter.object_keys.is_some() {
+        View::Historical
     } else {
-        query!("SELECT * FROM ({}) candidates", candidates)
-    }
+        View::Consistent
+    };
+
+    build_objects_query(view, lhs, rhs, move |query| filter.apply(query))
 }
 
 #[cfg(test)]
