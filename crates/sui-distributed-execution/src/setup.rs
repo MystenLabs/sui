@@ -19,7 +19,7 @@ use sui_types::{
 //     computation: 25,
 // };
 pub const WORKLOAD: WorkloadKind = WorkloadKind::Counter {
-    txs_per_counter: 10,
+    txs_per_counter: 1000,
 };
 pub const COMPONENT: Component = Component::PipeTxsToChannel;
 
