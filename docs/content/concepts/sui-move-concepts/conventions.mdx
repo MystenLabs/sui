@@ -440,8 +440,9 @@ module conventions::vesting_wallet {
   * If you wish to add extra functionality to a vesting wallet, it is best to share the object.
   * For example, if you wish the issuer of the wallet to be able to cancel the contract in the future.
   */
-  public fun new_shared(shared_wallet: &mut SharedWallet, deposit: Coin<SUI>, ctx: &mut TxContext) {
+  public fun new_shared(deposit: Coin<SUI>, ctx: &mut TxContext) {
     // Implementation omitted.
+    // It shares the `SharedWallet`
     abort(0)
   }
 }
