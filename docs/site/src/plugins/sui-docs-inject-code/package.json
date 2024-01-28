@@ -1,0 +1,38 @@
+{
+  "name": "sui-docs-inject-code",
+  "version": "0.0.1",
+  "description": "Injecting code plugin for Docusaurus.",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@docusaurus/core": "^2.0.0-beta.5",
+    "@docusaurus/types": "^2.0.0-beta.5",
+    "@docusaurus/utils": "^2.0.0-beta.5",
+    "fs-extra": "^10.0.0",
+    "path": "^0.12.7"
+  },
+  "devDependencies": {
+    "@docusaurus/module-type-aliases": "^2.0.0-beta.5",
+    "@tsconfig/docusaurus": "^1.0.2",
+    "@types/fs-extra": "^9.0.11",
+    "@types/node": "^16.7.6",
+    "@types/react": "^17.0.3",
+    "@types/react-helmet": "^6.1.1",
+    "@types/react-loadable": "^5.5.6",
+    "@types/react-router-config": "^5.0.3",
+    "@types/react-router-dom": "^5.1.7",
+    "@types/webpack-merge": "^5.0.0",
+    "typescript": "^4.2.4"
+  },
+  "peerDependencies": {
+    "react": "^16.8.4 || ^17.0.0",
+    "react-dom": "^16.8.4 || ^17.0.0"
+  },
+  "engines": {
+    "node": ">=12.13.0"
+  }
+}

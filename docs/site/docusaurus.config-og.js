@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 const lightCodeTheme = require("prism-react-renderer/themes/github");
-const darkCodeTheme = require("prism-react-renderer/themes/dracula");
+const darkCodeTheme = require("prism-react-renderer/themes/nightOwl");
 const math = require("remark-math");
 const katex = require("rehype-katex");
+require("dotenv").config();
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
@@ -14,6 +15,9 @@ const config = {
   favicon: "img/favicon.ico",
   url: "https://docs.sui.io",
   baseUrl: "/",
+  customFields: {
+    amplitudeKey: process.env.AMPLITUDE_KEY,
+  },
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "throw",
   /*  i18n: {
@@ -33,7 +37,20 @@ const config = {
     mermaid: true,
   },
   plugins: [
+    // ....
     "./src/plugins/sui-docs-inject-code",
+    [
+      "@graphql-markdown/docusaurus",
+      {
+        schema:
+          "../../crates/sui-graphql-rpc/schema/current_progress_schema.graphql",
+        rootPath: "../content", // docs will be generated under rootPath/baseURL
+        baseURL: "references/sui-api/graphql/reference",
+        loaders: {
+          GraphQLFileLoader: "@graphql-tools/graphql-file-loader",
+        },
+      },
+    ],
     [
       "docusaurus-plugin-includes",
       {
@@ -164,7 +181,7 @@ const config = {
             to: "references",
           },
 
-          /*          
+          /*
           {
             type: "docsVersionDropdown",
             position: "right",
@@ -181,10 +198,15 @@ const config = {
         style: "dark",
         copyright: `© ${new Date().getFullYear()} Sui Foundation | Documentation distributed under <a href="https://github.com/sui-foundation/sui-docs/blob/main/LICENSE">CC BY 4.0</a>`,
       },
+
+      /**
+       * Syntax Highlighting Configuration
+       * TODO: add better themes like Atom One Dark / Light
+       */
       prism: {
         theme: lightCodeTheme,
         darkTheme: darkCodeTheme,
-        additionalLanguages: ["rust"],
+        additionalLanguages: ["rust", "typescript", "toml"],
       },
     }),
 };
