@@ -47,7 +47,10 @@ impl From<NativeTransactionKind> for TransactionBlockKind {
                 T::AuthenticatorState(AuthenticatorStateUpdateTransaction(asu))
             }
             K::EndOfEpochTransaction(eoe) => T::EndOfEpoch(EndOfEpochTransaction(eoe)),
-            K::RandomnessStateUpdate(rsu) => T::Randomness(RandomnessStateUpdateTransaction(rsu)),
+            K::RandomnessStateUpdate(rsu) => T::Randomness(RandomnessStateUpdateTransaction {
+                native: rsu,
+                checkpoint_viewed_at: None, // TODO (wlmyng)
+            }),
         }
     }
 }
