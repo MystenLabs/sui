@@ -23,6 +23,7 @@ use sui_types::dynamic_field::DynamicFieldInfo;
 mod rpc_types_tests;
 
 mod balance_changes;
+mod displays;
 mod object_changes;
 mod sui_checkpoint;
 mod sui_coin;
