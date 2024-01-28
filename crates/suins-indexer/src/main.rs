@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use diesel::{dsl::sql, upsert::excluded, Connection, ExpressionMethods, RunQueryDsl};
+use diesel::{dsl::sql, Connection, ExpressionMethods, RunQueryDsl};
 use prometheus::Registry;
 use std::path::PathBuf;
 use sui_data_ingestion::{
@@ -12,7 +12,7 @@ use sui_data_ingestion::{
 use sui_types::full_checkpoint_content::CheckpointData;
 use suins_indexer::{
     get_connection_pool,
-    indexer::{format_update_field_query, SuinsIndexer},
+    indexer::{format_update_field_query, format_update_subdomain_wrapper_query, SuinsIndexer},
     models::VerifiedDomain,
     schema::domains,
     PgConnectionPool,
@@ -65,7 +65,9 @@ impl SuinsIndexerWorker {
                         // That prevents a scenario where we first process a later checkpoint that did an update to the name record (e..g change target address),
                         // without first executing the checkpoint that created the subdomain wrapper.
                         // Since wrapper re-assignment can only happen every 2 days, we can't write invalid data here.
-                        domains::subdomain_wrapper_id.eq(excluded(domains::subdomain_wrapper_id)),
+                        //
+                        domains::subdomain_wrapper_id
+                            .eq(sql(&format_update_subdomain_wrapper_query())),
                     ))
                     .execute(tx)
                     .unwrap_or_else(|_| panic!("Failed to process updates: {:?}", updates));

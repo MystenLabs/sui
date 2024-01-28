@@ -173,6 +173,11 @@ pub fn format_update_field_query(field: &str) -> String {
     )
 }
 
+/// Update the subdomain wrapper ID only if it is part of the checkpoint.
+pub fn format_update_subdomain_wrapper_query() -> String {
+    "CASE WHEN excluded.subdomain_wrapper_id IS NOT NULL THEN excluded.subdomain_wrapper_id ELSE domains.subdomain_wrapper_id END".to_string()
+}
+
 /// Prepares a vector of `VerifiedDomain`s to be inserted into the DB, taking in account
 /// the list of subdomain wrappers created as well as the checkpoint's sequence number.
 pub fn prepare_db_updates(
