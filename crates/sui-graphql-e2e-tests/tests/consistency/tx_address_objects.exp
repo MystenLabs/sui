@@ -1506,26 +1506,6 @@ Response: {
       "message": "Requested data is outside the available range",
       "locations": [
         {
-          "line": 21,
-          "column": 11
-        }
-      ],
-      "path": [
-        "all_transactions",
-        "nodes",
-        0,
-        "gasInput",
-        "gasSponsor",
-        "objects"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
-    },
-    {
-      "message": "Requested data is outside the available range",
-      "locations": [
-        {
           "line": 32,
           "column": 9
         }

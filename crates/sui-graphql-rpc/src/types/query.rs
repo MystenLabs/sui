@@ -321,7 +321,7 @@ impl Query {
         filter: Option<EventFilter>,
     ) -> Result<Connection<String, Event>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        Event::paginate(ctx.data_unchecked(), page, filter.unwrap_or_default())
+        Event::paginate(ctx.data_unchecked(), page, filter.unwrap_or_default(), None)
             .await
             .extend()
     }
