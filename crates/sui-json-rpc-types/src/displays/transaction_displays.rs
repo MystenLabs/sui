@@ -78,21 +78,18 @@ impl<'a> Display for Pretty<'a, SuiCommand> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let Pretty(command) = self;
         match command {
-            SuiCommand::MoveCall(p) => write!(f, "{}", Pretty(&**p)),
-            SuiCommand::TransferObjects(objs, addr) => {
-                write!(f, "TransferObjects:\n ┌\n │ Arguments: \n │   ")?;
-                write_sep(f, objs.iter().map(Pretty), "\n │   ")?;
-                write!(f, "\n │ Address: {}\n └", Pretty(addr))
-            }
-            SuiCommand::SplitCoins(coin, amounts) => {
-                write!(
-                    f,
-                    "SplitCoins:\n ┌\n │ Coin: {}\n │ Amounts: \n │   ",
-                    Pretty(coin)
-                )?;
-                write_sep(f, amounts.iter().map(Pretty), "\n │   ")?;
+            SuiCommand::MakeMoveVec(ty_opt, elems) => {
+                write!(f, "MakeMoveVec:\n ┌")?;
+                if let Some(ty) = ty_opt {
+                    write!(f, "\n │ Type Tag: {ty}")?;
+                }
+                write!(f, "\n │ Arguments:\n │   ")?;
+                write_sep(f, elems.iter().map(Pretty), "\n │   ")?;
                 write!(f, "\n └")
             }
+
+            SuiCommand::MoveCall(p) => write!(f, "{}", Pretty(&**p)),
+
             SuiCommand::MergeCoins(target, coins) => {
                 write!(
                     f,
@@ -102,11 +99,29 @@ impl<'a> Display for Pretty<'a, SuiCommand> {
                 write_sep(f, coins.iter().map(Pretty), "\n │   ")?;
                 write!(f, "\n └")
             }
+
+            SuiCommand::SplitCoins(coin, amounts) => {
+                write!(
+                    f,
+                    "SplitCoins:\n ┌\n │ Coin: {}\n │ Amounts: \n │   ",
+                    Pretty(coin)
+                )?;
+                write_sep(f, amounts.iter().map(Pretty), "\n │   ")?;
+                write!(f, "\n └")
+            }
+
             SuiCommand::Publish(deps) => {
                 write!(f, "Publish:\n ┌\n │ Dependencies: \n │   ")?;
                 write_sep(f, deps, "\n │   ")?;
                 write!(f, "\n └")
             }
+
+            SuiCommand::TransferObjects(objs, addr) => {
+                write!(f, "TransferObjects:\n ┌\n │ Arguments: \n │   ")?;
+                write_sep(f, objs.iter().map(Pretty), "\n │   ")?;
+                write!(f, "\n │ Address: {}\n └", Pretty(addr))
+            }
+
             SuiCommand::Upgrade(deps, current_package_id, ticket) => {
                 write!(f, "Upgrade:\n ┌\n │ Dependencies: \n │   ")?;
                 write_sep(f, deps, "\n │   ")?;
@@ -114,8 +129,6 @@ impl<'a> Display for Pretty<'a, SuiCommand> {
                 write!(f, "\n │ Ticket: {}", Pretty(ticket))?;
                 write!(f, "\n └")
             }
-
-            SuiCommand::MakeMoveVec(_, _) => todo!(),
         }
     }
 }
