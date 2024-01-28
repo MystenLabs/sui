@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::checkpoint::Checkpoint;
 use super::cursor::{self, Page, RawPaginated, Target};
 use super::{big_int::BigInt, move_type::MoveType, sui_address::SuiAddress};
+use crate::consistency::consistent_range;
 use crate::data::{Db, DbConnection, QueryExecutor};
 use crate::error::Error;
 use crate::raw_query::RawQuery;
@@ -64,14 +64,9 @@ impl Balance {
     ) -> Result<Option<Balance>, Error> {
         let stored: Option<StoredBalance> = db
             .execute_repeatable(move |conn| {
-                let (lhs, mut rhs) = Checkpoint::available_range(conn)?;
-
-                if let Some(checkpoint_viewed_at) = checkpoint_viewed_at {
-                    if checkpoint_viewed_at < lhs || rhs < checkpoint_viewed_at {
-                        return Ok(None);
-                    }
-                    rhs = checkpoint_viewed_at;
-                }
+                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
+                    return Ok::<_, diesel::result::Error>(None);
+                };
 
                 conn.result(move || {
                     balance_query(address, Some(coin_type.clone()), lhs as i64, rhs as i64)
@@ -100,14 +95,9 @@ impl Balance {
 
         let response = db
             .execute_repeatable(move |conn| {
-                let (lhs, mut rhs) = Checkpoint::available_range(conn)?;
-
-                if let Some(checkpoint_viewed_at) = checkpoint_viewed_at {
-                    if checkpoint_viewed_at < lhs || rhs < checkpoint_viewed_at {
-                        return Ok::<_, diesel::result::Error>(None);
-                    }
-                    rhs = checkpoint_viewed_at;
-                }
+                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
+                    return Ok::<_, diesel::result::Error>(None);
+                };
 
                 let result = page.paginate_raw_query::<StoredBalance>(
                     conn,
