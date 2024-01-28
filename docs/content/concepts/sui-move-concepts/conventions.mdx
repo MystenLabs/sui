@@ -48,7 +48,7 @@ module conventions::comments {
 
 ## Potato Structs
 
-#### Do not call structs as Potato. It is a pattern recognized by the lack of abilities.
+Do not call structs as Potato. It is a pattern recognized by the lack of abilities.
 
 ```move
 module conventions::request {
@@ -62,7 +62,7 @@ module conventions::request {
 
 ## Read Functions
 
-#### Be mindful of the dot syntax when naming functions. Avoid using the object name on function names.
+Be mindful of the dot syntax when naming functions. Avoid using the object name on function names.
 
 ```move
 module conventions::lib {
@@ -97,7 +97,7 @@ module conventions::defi {
 ```
 ## Empty Function
 
-#### Functions that create data structures must be called empty.
+Functions that create data structures must be called empty.
 
 ```move
 module conventions::collection {
@@ -115,7 +115,7 @@ module conventions::collection {
 ```
 ## New Function
 
-#### Functions that create objects must be called new.
+Functions that create objects must be called new.
 
 ```move
 module conventions::object {
@@ -137,7 +137,7 @@ module conventions::object {
 
 ## Shared Objects
 
-#### Library modules that share objects should provide two functions: one to create the object and another to share it. It allows the caller to access its UID and run custom functionality before sharing it.
+Library modules that share objects should provide two functions: one to create the object and another to share it. It allows the caller to access its UID and run custom functionality before sharing it.
 
 ```move
 module conventions::profile {
@@ -164,7 +164,7 @@ module conventions::profile {
 
 ## Reference Functions
 
-#### Functions that return a reference must be named property_name_mut or property_name.
+Functions that return a reference must be named property_name_mut or property_name.
 
 ```move
 module conventions::profile {
@@ -193,7 +193,7 @@ module conventions::profile {
 
 ## Separation of Concerns
 
-#### Modules must be designed around one Object or Data Structure. A variant structure should have its own module to avoid complexity and bugs.
+Modules must be designed around one Object or Data Structure. A variant structure should have its own module to avoid complexity and bugs.
 
 ```move
 module conventions::wallet {
@@ -219,7 +219,7 @@ module conventions::claw_back_wallet {
 
 ## Errors
 
-#### Errors must be CamelCase, start with an E and be descriptive.
+Errors must be CamelCase, start with an E and be descriptive.
 
 ```move
 module conventions::errors {
@@ -233,7 +233,7 @@ module conventions::errors {
 
 ## Struct Property Comments
 
-#### Describe the properties of your structs.
+Describe the properties of your structs.
 
 ```move
 module conventions::profile {
@@ -254,7 +254,7 @@ module conventions::profile {
 
 ## Destroy Functions
 
-#### Provide functions to delete objects. Empty objects must be destroyed with the function destroy_empty. The function drop must be used for objects that have types that can be dropped.
+Provide functions to delete objects. Empty objects must be destroyed with the function destroy_empty. The function drop must be used for objects that have types that can be dropped.
 
 ```move
 module conventions::wallet {
@@ -286,7 +286,7 @@ module conventions::wallet {
 
 ## Pure Functions
 
-#### Keep your functions pure to maintain composability. Do not use transfer::transfer or transfer::public_transfer inside core functions.
+Keep your functions pure to maintain composability. Do not use transfer::transfer or transfer::public_transfer inside core functions.
 
 ```move
 module conventions::amm {
@@ -328,7 +328,7 @@ module conventions::amm {
 
 ## Coin argument
 
-#### Pass the Coin by value with the right amount directly, it's better for transaction readability from the frontend.
+Pass the Coin by value with the right amount directly, it's better for transaction readability from the frontend.
 
 ```move
 module conventions::amm {
@@ -356,7 +356,7 @@ module conventions::amm {
 
 ## Access Control
 
-#### To maintain composability, use capabilities instead of addresses for access control.
+To maintain composability, use capabilities instead of addresses for access control.
 
 ```move
 module conventions::access_control {
@@ -404,7 +404,7 @@ module conventions::access_control {
 
 ## Data Storage in Owned vs Shared Objects
 
-#### If your dApp data has a one to one relationship, we recommend to use Owned Objects.
+If your dApp data has a one to one relationship, we recommend to use Owned Objects.
 
 ```move
 module conventions::vesting_wallet {
@@ -442,7 +442,7 @@ module conventions::vesting_wallet {
   */
   public fun new_shared(deposit: Coin<SUI>, ctx: &mut TxContext) {
     // Implementation omitted.
-    // It shares the `SharedWallet`
+    // It shares the `SharedWallet`.
     abort(0)
   }
 }
@@ -450,7 +450,7 @@ module conventions::vesting_wallet {
 
 ## Admin Capability
 
-#### In admin-gated functions, the first parameter should be the capability. It helps the autocomplete with user types.
+In admin-gated functions, the first parameter should be the capability. It helps the autocomplete with user types.
 
 ```move
 module conventions::social_network {
