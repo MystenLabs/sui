@@ -1801,6 +1801,27 @@ fn make_tparams(
         .collect()
 }
 
+// used in macros to make the signatures consistent with the bodies, in that we don't check
+// constraints until application
+pub fn give_tparams_all_abilities(sp!(_, ty_): &mut Type) {
+    match ty_ {
+        Type_::Unit | Type_::Var(_) | Type_::UnresolvedError | Type_::Anything => (),
+        Type_::Ref(_, inner) => give_tparams_all_abilities(inner),
+        Type_::Apply(_, _, ty_args) => {
+            for ty_arg in ty_args {
+                give_tparams_all_abilities(ty_arg)
+            }
+        }
+        Type_::Fun(args, ret) => {
+            for arg in args {
+                give_tparams_all_abilities(arg)
+            }
+            give_tparams_all_abilities(ret)
+        }
+        Type_::Param(_) => *ty_ = Type_::Anything,
+    }
+}
+
 //**************************************************************************************************
 // Subtype and joining
 //**************************************************************************************************

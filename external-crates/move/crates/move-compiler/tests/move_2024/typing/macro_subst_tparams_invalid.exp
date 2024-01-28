@@ -1,17 +1,4 @@
 error[E05001]: ability constraint not satisfied
-   ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:10:29
-   │
- 3 │     public struct X<phantom T: copy>() has copy, drop, store;
-   │                                ---- 'copy' constraint declared here
-   ·
-10 │     macro fun useless<U>(x: X<U>): X<U> {
-   │                       -     ^^^^
-   │                       │     │ │
-   │                       │     │ The type 'U' does not have the ability 'copy'
-   │                       │     'copy' constraint not satisifed
-   │                       To satisfy the constraint, the 'copy' ability would need to be added here
-
-error[E05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:10:36
    │
  2 │     public struct None() has drop;
@@ -24,19 +11,6 @@ error[E05001]: ability constraint not satisfied
    ·
 26 │         useless!<None>(X());
    │                  ---- The type 'a::m::None' does not have the ability 'copy'
-
-error[E05001]: ability constraint not satisfied
-   ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:10:36
-   │
- 3 │     public struct X<phantom T: copy>() has copy, drop, store;
-   │                                ---- 'copy' constraint declared here
-   ·
-10 │     macro fun useless<U>(x: X<U>): X<U> {
-   │                       -            ^^^^
-   │                       │            │ │
-   │                       │            │ The type 'U' does not have the ability 'copy'
-   │                       │            'copy' constraint not satisifed
-   │                       To satisfy the constraint, the 'copy' ability would need to be added here
 
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:11:16

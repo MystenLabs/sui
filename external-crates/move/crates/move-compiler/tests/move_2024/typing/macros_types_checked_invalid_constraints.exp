@@ -35,19 +35,6 @@ error[E04010]: cannot infer type
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:17:26
    │
- 3 │     public struct NeedsCopy<phantom T: copy> {} has copy, drop, store;
-   │                                        ---- 'copy' constraint declared here
-   ·
-17 │     macro fun ret2<T>(): NeedsCopy<T> {
-   │                    -     ^^^^^^^^^^^^
-   │                    │     │         │
-   │                    │     │         The type 'T' does not have the ability 'copy'
-   │                    │     'copy' constraint not satisifed
-   │                    To satisfy the constraint, the 'copy' ability would need to be added here
-
-error[E05001]: ability constraint not satisfied
-   ┌─ tests/move_2024/typing/macros_types_checked_invalid_constraints.move:17:26
-   │
  2 │     public struct None()
    │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
  3 │     public struct NeedsCopy<phantom T: copy> {} has copy, drop, store;

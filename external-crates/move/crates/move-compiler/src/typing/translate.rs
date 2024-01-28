@@ -238,7 +238,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
             Some(PublicForTesting::Entry(loc)) => Visibility::Public(loc),
             None => visibility,
         };
-    function_signature(context, &signature);
+    function_signature(context, macro_, &signature);
     expand::function_signature(context, &mut signature);
 
     let body = if macro_.is_some() {
@@ -263,11 +263,16 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     }
 }
 
-fn function_signature(context: &mut Context, sig: &N::FunctionSignature) {
+fn function_signature(context: &mut Context, macro_: Option<Loc>, sig: &N::FunctionSignature) {
     assert!(context.constraints.is_empty());
 
     for (mut_, param, param_ty) in &sig.parameters {
-        let param_ty = core::instantiate(context, param_ty.clone());
+        let mut param_ty = param_ty.clone();
+        if macro_.is_some() {
+            core::give_tparams_all_abilities(&mut param_ty)
+        };
+        let param_ty = core::instantiate(context, param_ty);
+        // TODO we can relax this for macros once we can bind tuples to variables
         context.add_single_type_constraint(
             param_ty.loc,
             "Invalid parameter type",
@@ -275,7 +280,11 @@ fn function_signature(context: &mut Context, sig: &N::FunctionSignature) {
         );
         context.declare_local(*mut_, *param, param_ty);
     }
-    context.return_type = Some(core::instantiate(context, sig.return_type.clone()));
+    let mut return_type = sig.return_type.clone();
+    if macro_.is_some() {
+        core::give_tparams_all_abilities(&mut return_type)
+    };
+    context.return_type = Some(core::instantiate(context, return_type));
     core::solve_constraints(context);
 }
 
