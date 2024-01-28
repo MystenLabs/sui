@@ -9,19 +9,6 @@ use std::sync::atomic::Ordering;
 use tokio::time::Duration;
 use tokio::time::Instant;
 
-/// Increment an IntGauge metric, and decrement it when the scope ends.
-/// metrics must be an Arc containing a struct containing the field $field.
-#[macro_export]
-macro_rules! scoped_counter {
-    ($metrics: expr, $field: ident) => {{
-        let metrics = $metrics.clone();
-        metrics.$field.inc();
-        ::scopeguard::guard(metrics, |metrics| {
-            metrics.$field.dec();
-        })
-    }};
-}
-
 pub struct LatencyObserver {
     data: Mutex<LatencyObserverInner>,
     latency_ms: AtomicU64,
