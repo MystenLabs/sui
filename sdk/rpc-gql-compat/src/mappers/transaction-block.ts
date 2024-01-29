@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB64 } from '@mysten/bcs';
-
-import { bcs, TypeTagSerializer } from '../../bcs/index.js';
+import { bcs, TypeTagSerializer } from '@mysten/sui.js/bcs';
 import type {
 	ExecutionStatus,
 	SuiArgument,
@@ -12,7 +11,8 @@ import type {
 	SuiTransactionBlock,
 	SuiTransactionBlockResponse,
 	SuiTransactionBlockResponseOptions,
-} from '../../client/index.js';
+} from '@mysten/sui.js/client';
+
 import type { Rpc_Transaction_FieldsFragment } from '../generated/queries.js';
 import { mapGraphQLOwnerToRpcOwner } from './owner.js';
 import { toShortTypeString } from './util.js';

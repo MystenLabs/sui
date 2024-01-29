@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { DelegatedStake } from '../../client/index.js';
+import type { DelegatedStake } from '@mysten/sui.js/client';
+
 import type { Rpc_Stake_FieldsFragment } from '../generated/queries.js';
 
 export function mapGraphQLStakeToRpcStake(stakes: Rpc_Stake_FieldsFragment[]): DelegatedStake[] {

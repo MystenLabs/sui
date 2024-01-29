@@ -3,57 +3,23 @@
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { fromB64, toB58, toB64 } from '@mysten/bcs';
-import { print } from 'graphql';
-import type { DocumentNode } from 'graphql';
-
-import { TransactionBlock } from '../builder/index.js';
-import type { PaginationArguments, SuiClientOptions } from '../client/client.js';
-import { SuiClient } from '../client/client.js';
 import type {
 	AddressMetrics,
 	AllEpochsAddressMetrics,
-	CheckpointPage,
-	DynamicFieldPage,
-	EpochInfo,
-	EpochPage,
-	MoveCallMetrics,
-	NetworkMetrics,
-	ResolvedNameServiceNames,
-	SuiMoveNormalizedModules,
-} from '../client/types/chain.js';
-import type { CoinBalance } from '../client/types/coins.js';
-import type { Unsubscribe } from '../client/types/common.js';
-import type {
 	Checkpoint,
+	CheckpointPage,
+	CoinBalance,
 	CoinMetadata,
 	CoinSupply,
 	CommitteeInfo,
 	DelegatedStake,
 	DevInspectResults,
-	DryRunTransactionBlockResponse,
-	MoveValue,
-	ObjectRead,
-	PaginatedCoins,
-	PaginatedEvents,
-	PaginatedObjectsResponse,
-	PaginatedTransactionResponse,
-	ProtocolConfig,
-	ProtocolConfigValue,
-	SuiArgument,
-	SuiEvent,
-	SuiMoveFunctionArgType,
-	SuiMoveNormalizedFunction,
-	SuiMoveNormalizedModule,
-	SuiMoveNormalizedStruct,
-	SuiObjectResponse,
-	SuiSystemStateSummary,
-	SuiTransactionBlockResponse,
-	TransactionEffects,
-	ValidatorsApy,
-} from '../client/types/generated.js';
-import type {
 	DevInspectTransactionBlockParams,
 	DryRunTransactionBlockParams,
+	DryRunTransactionBlockResponse,
+	DynamicFieldPage,
+	EpochInfo,
+	EpochPage,
 	ExecuteTransactionBlockParams,
 	GetAllBalancesParams,
 	GetAllCoinsParams,
@@ -77,17 +43,48 @@ import type {
 	GetStakesParams,
 	GetTotalSupplyParams,
 	GetTransactionBlockParams,
+	MoveCallMetrics,
+	MoveValue,
 	MultiGetObjectsParams,
 	MultiGetTransactionBlocksParams,
+	NetworkMetrics,
+	ObjectRead,
+	PaginatedCoins,
+	PaginatedEvents,
+	PaginatedObjectsResponse,
+	PaginatedTransactionResponse,
+	PaginationArguments,
+	ProtocolConfig,
+	ProtocolConfigValue,
 	QueryEventsParams,
 	QueryTransactionBlocksParams,
+	ResolvedNameServiceNames,
 	ResolveNameServiceAddressParams,
 	ResolveNameServiceNamesParams,
 	SubscribeEventParams,
 	SubscribeTransactionParams,
+	SuiArgument,
+	SuiClientOptions,
+	SuiEvent,
+	SuiMoveFunctionArgType,
+	SuiMoveNormalizedFunction,
+	SuiMoveNormalizedModule,
+	SuiMoveNormalizedModules,
+	SuiMoveNormalizedStruct,
+	SuiObjectResponse,
+	SuiSystemStateSummary,
+	SuiTransactionBlockResponse,
+	TransactionEffects,
 	TryGetPastObjectParams,
-} from '../client/types/params.js';
-import { normalizeStructTag, parseStructTag } from '../utils/sui-types.js';
+	Unsubscribe,
+	ValidatorsApy,
+} from '@mysten/sui.js/client';
+import { SuiClient } from '@mysten/sui.js/client';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { normalizeStructTag, parseStructTag } from '@mysten/sui.js/utils';
+import { print } from 'graphql';
+import type { DocumentNode } from 'graphql';
+
 import type { ObjectFilter, QueryEventsQueryVariables } from './generated/queries.js';
 import {
 	DevInspectTransactionBlockDocument,

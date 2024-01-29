@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiObjectResponse } from '../../client/index.js';
+import type { SuiObjectResponse } from '@mysten/sui.js/client';
+
 import type {
 	MoveValue,
 	Rpc_Move_Object_FieldsFragment,

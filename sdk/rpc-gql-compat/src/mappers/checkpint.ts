@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { Checkpoint, EndOfEpochData } from '../../client/index.js';
+import type { Checkpoint, EndOfEpochData } from '@mysten/sui.js/client';
+
 import type { Rpc_Checkpoint_FieldsFragment } from '../generated/queries.js';
 
 export function mapGraphQLCheckpointToRpcCheckpoint(
