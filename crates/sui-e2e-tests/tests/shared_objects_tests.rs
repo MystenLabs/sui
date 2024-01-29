@@ -506,7 +506,10 @@ async fn access_clock_object_test() {
             .sui_node
             .with_async(|node| async {
                 node.state()
-                    .get_transaction_checkpoint(&digest, &node.state().epoch_store_for_testing())
+                    .get_transaction_checkpoint_for_tests(
+                        &digest,
+                        &node.state().epoch_store_for_testing(),
+                    )
                     .unwrap()
             })
             .await;

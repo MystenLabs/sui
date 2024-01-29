@@ -11,7 +11,7 @@ use futures::FutureExt;
 use itertools::Itertools;
 use narwhal_types::{TransactionProto, TransactionsClient};
 use narwhal_worker::LazyNarwhalClient;
-use parking_lot::{Mutex, RwLockReadGuard};
+use parking_lot::RwLockReadGuard;
 use prometheus::Histogram;
 use prometheus::HistogramVec;
 use prometheus::IntCounterVec;
@@ -25,7 +25,7 @@ use prometheus::{
 };
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::future::Future;
 use std::ops::Deref;
 use std::sync::atomic::AtomicU64;
@@ -45,6 +45,7 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::{classify, SequencedConsensusTransactionKey};
 use crate::consensus_throughput_calculator::{ConsensusThroughputProfiler, Level};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
+use crate::metrics::LatencyObserver;
 use mysten_metrics::{spawn_monitored_task, GaugeGuard, GaugeGuardFutureExt};
 use sui_protocol_config::ProtocolConfig;
 use sui_simulator::anemo::PeerId;
@@ -1020,49 +1021,6 @@ impl<'a> Drop for InflightDropGuard<'a> {
             .sequencing_certificate_latency
             .with_label_values(&[&position, &self.tx_type])
             .observe(latency.as_secs_f64());
-    }
-}
-
-struct LatencyObserver {
-    data: Mutex<LatencyObserverInner>,
-    latency_ms: AtomicU64,
-}
-
-#[derive(Default)]
-struct LatencyObserverInner {
-    points: VecDeque<Duration>,
-    sum: Duration,
-}
-
-impl LatencyObserver {
-    pub fn new() -> Self {
-        Self {
-            data: Mutex::new(LatencyObserverInner::default()),
-            latency_ms: AtomicU64::new(u64::MAX),
-        }
-    }
-
-    pub fn report(&self, latency: Duration) {
-        const MAX_SAMPLES: usize = 64;
-        let mut data = self.data.lock();
-        data.points.push_back(latency);
-        data.sum += latency;
-        if data.points.len() >= MAX_SAMPLES {
-            let pop = data.points.pop_front().expect("data vector is not empty");
-            data.sum -= pop; // This does not overflow because of how running sum is calculated
-        }
-        let latency = data.sum.as_millis() as u64 / data.points.len() as u64;
-        self.latency_ms.store(latency, Ordering::Relaxed);
-    }
-
-    pub fn latency(&self) -> Option<Duration> {
-        let latency = self.latency_ms.load(Ordering::Relaxed);
-        if latency == u64::MAX {
-            // Not initialized yet (0 data points)
-            None
-        } else {
-            Some(Duration::from_millis(latency))
-        }
     }
 }
 

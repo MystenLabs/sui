@@ -139,6 +139,7 @@ use crate::consensus_adapter::ConsensusAdapter;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_driver::execution_process;
 use crate::in_mem_execution_cache::{ExecutionCache, ExecutionCacheRead, ExecutionCacheWrite};
+use crate::metrics::LatencyObserver;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
 use crate::state_accumulator::{StateAccumulator, WrappedObject};
@@ -231,6 +232,7 @@ pub struct AuthorityMetrics {
 
     pub(crate) execution_driver_executed_transactions: IntCounter,
     pub(crate) execution_driver_dispatch_queue: IntGauge,
+    pub(crate) execution_queueing_delay_s: Histogram,
 
     pub(crate) skipped_consensus_txns: IntCounter,
     pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
@@ -263,6 +265,10 @@ pub struct AuthorityMetrics {
     pub zklogin_sig_count: IntCounter,
     /// Count of multisig signatures
     pub multisig_sig_count: IntCounter,
+
+    // Tracks recent average txn queueing delay between when it is ready for execution
+    // until it starts executing.
+    pub execution_queueing_latency: LatencyObserver,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -502,6 +508,13 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            execution_queueing_delay_s: register_histogram_with_registry!(
+                "execution_queueing_delay_s",
+                "Queueing delay between a transaction is ready for execution until it starts executing.",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            )
+            .unwrap(),
             skipped_consensus_txns: register_int_counter_with_registry!(
                 "skipped_consensus_txns",
                 "Total number of consensus transactions skipped",
@@ -603,7 +616,8 @@ impl AuthorityMetrics {
                 "consensus_calculated_throughput_profile",
                 "The current active calculated throughput profile",
                 registry
-            ).unwrap()
+            ).unwrap(),
+            execution_queueing_latency: LatencyObserver::new(),
         }
     }
 }
@@ -2968,23 +2982,12 @@ impl AuthorityState {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn get_transaction_checkpoint_sequence(
+    fn get_transaction_checkpoint_sequence(
         &self,
         digest: &TransactionDigest,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<Option<CheckpointSequenceNumber>> {
-        if epoch_store.per_epoch_finalized_txns_enabled() {
-            epoch_store.get_transaction_checkpoint(digest)
-        } else {
-            match self
-                .database
-                .deprecated_get_transaction_checkpoint(digest)?
-            {
-                Some((epoch_id, seq_num)) if epoch_id == epoch_store.epoch() => Ok(Some(seq_num)),
-                Some(_) => Ok(None),
-                None => Ok(None),
-            }
-        }
+        epoch_store.get_transaction_checkpoint(digest)
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -2998,7 +3001,7 @@ impl AuthorityState {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn get_transaction_checkpoint(
+    pub fn get_transaction_checkpoint_for_tests(
         &self,
         digest: &TransactionDigest,
         epoch_store: &AuthorityPerEpochStore,
@@ -3313,28 +3316,6 @@ impl AuthorityState {
         let transaction = kv_store.get_tx(digest).await?;
         let effects = kv_store.get_fx_by_tx_digest(digest).await?;
         Ok((transaction, effects))
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub fn multi_get_transaction_checkpoint(
-        &self,
-        digests: &[TransactionDigest],
-        epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>> {
-        if epoch_store.per_epoch_finalized_txns_enabled() {
-            epoch_store.multi_get_transaction_checkpoint(digests)
-        } else {
-            Ok(self
-                .database
-                .deprecated_multi_get_transaction_checkpoint(digests)?
-                .iter()
-                .map(|opt| match opt {
-                    Some((epoch_id, seq_num)) if *epoch_id == epoch_store.epoch() => Some(*seq_num),
-                    Some(_) => None,
-                    None => None,
-                })
-                .collect())
-        }
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -4542,15 +4523,7 @@ impl AuthorityState {
             pending_certificates,
         );
         for digest in pending_certificates {
-            if epoch_store.per_epoch_finalized_txns_enabled() {
-                if epoch_store.is_transaction_executed_in_checkpoint(&digest)? {
-                    info!("Not reverting pending consensus transaction {:?} - it was included in checkpoint", digest);
-                    continue;
-                }
-            } else if self
-                .database
-                .deprecated_is_transaction_executed_in_checkpoint(&digest)?
-            {
+            if epoch_store.is_transaction_executed_in_checkpoint(&digest)? {
                 info!("Not reverting pending consensus transaction {:?} - it was included in checkpoint", digest);
                 continue;
             }
