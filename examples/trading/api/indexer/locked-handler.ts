@@ -18,11 +18,18 @@ type LockDestroyed = {
 	lock_id: string;
 };
 
-/** Handles all events emitted by the `lock` module. */
-export const handleLockObjects = async (events: SuiEvent[]) => {
+/**
+ * Handles all events emitted by the `lock` module.
+ * Data is modelled in a way that allows writing to the db in any order (DESC or ASC) without
+ * resulting in data incosistencies.
+ * We're constructing the updates to support multiple events involving a single record
+ * as part of the same batch of events (but using a single write/record to the DB).
+ * */
+export const handleLockObjects = async (events: SuiEvent[], type: string) => {
 	const updates: Record<string, Prisma.LockedCreateInput> = {};
 
 	for (const event of events) {
+		if (!event.type.startsWith(type)) throw new Error('Invalid event module origin');
 		const data = event.parsedJson as LockEvent;
 		const isDeletionEvent = !('key_id' in data);
 

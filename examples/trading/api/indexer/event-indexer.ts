@@ -20,7 +20,7 @@ type EventTracker = {
 	// The module that defines the type, with format `package::module`
 	type: string;
 	filter: SuiEventFilter;
-	callback: (events: SuiEvent[]) => any;
+	callback: (events: SuiEvent[], type: string) => any;
 };
 
 const EVENTS_TO_TRACK: EventTracker[] = [
@@ -62,7 +62,7 @@ const executeEventJob = async (
 		});
 
 		// handle the data transformations defined for each event
-		await tracker.callback(data);
+		await tracker.callback(data, tracker.type);
 
 		// We only update the cursor if we fetched extra data (which means there was a change).
 		if (nextCursor && data.length > 0) {
