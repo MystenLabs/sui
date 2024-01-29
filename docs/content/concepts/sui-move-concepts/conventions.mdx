@@ -101,6 +101,7 @@ module conventions::defi {
   let name2 = profile.profile_age();
 }
 ```
+
 ## Empty function
 
 Name the functions that create data structures as `empty`.
@@ -119,6 +120,7 @@ module conventions::collection {
   }
 }
 ```
+
 ## New function
 
 Name the functions that create objects as `new`.
@@ -200,6 +202,7 @@ module conventions::profile {
 ## Separation of concerns
 
 Design your modules around one object or data structure. A variant structure should have its own module to avoid complexity and bugs.
+
 ```move
 module conventions::wallet {
 
@@ -260,6 +263,7 @@ module conventions::profile {
 ## Destroy functions
 
 Provide functions to delete objects. Destroy empty objects with the function `destroy_empty`. Use the function `drop` for objects that have types that can be dropped.
+
 ```move
 module conventions::wallet {
 
@@ -291,6 +295,7 @@ module conventions::wallet {
 ## Pure functions
 
 Keep your functions pure to maintain composability. Do not use `transfer::transfer` or `transfer::public_transfer` inside core functions.
+
 ```move
 module conventions::amm {
 
