@@ -49,11 +49,6 @@ pub(crate) struct GasEffects {
 #[Object]
 impl GasInput {
     /// Address of the owner of the gas object(s) used
-    ///
-    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `GasInput`
-    /// was queried for, or `None` if the data was requested at the latest checkpoint. This is
-    /// stored on `GasInput` so that when viewing that entity's state, it will be as if it was read
-    /// at the same checkpoint.
     async fn gas_sponsor(&self) -> Option<Address> {
         Some(Address {
             address: self.owner,
@@ -129,10 +124,6 @@ impl GasCostSummary {
 /// Effects related to gas (costs incurred and the identity of the smashed gas object returned).
 #[Object]
 impl GasEffects {
-    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `GasEffects`
-    /// was queried for, or `None` if the data was requested at the latest checkpoint. This is
-    /// stored on `GasEffects` so that when viewing that entity's state, it will be as if it was
-    /// read at the same checkpoint.
     async fn gas_object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
         Object::query(
             ctx.data_unchecked(),
