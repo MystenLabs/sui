@@ -74,7 +74,7 @@ fn check_authority_overload(
     let execution_rate = authority.metrics.execution_rate_tracker.lock().rate();
 
     let (is_overload, load_shedding_percentage) =
-        check_overload_signals(&config, queueing_latency, txn_ready_rate, execution_rate);
+        check_overload_signals(config, queueing_latency, txn_ready_rate, execution_rate);
     if is_overload {
         authority
             .overload_info
