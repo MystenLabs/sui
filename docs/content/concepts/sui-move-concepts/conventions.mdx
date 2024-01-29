@@ -355,7 +355,7 @@ module conventions::amm {
   }
 
   // ❌ Wrong
-  public fun exchange<CoinX, CoinY>(coin_in: &mut Coin<CoinX>): Coin<CoinY> {
+  public fun exchange<CoinX, CoinY>(coin_in: &mut Coin<CoinX>, value: u64): Coin<CoinY> {
     // Implementation omitted.
     abort(0)
   }
