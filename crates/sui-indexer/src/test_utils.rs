@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
+use diesel::connection::SimpleConnection;
 use mysten_metrics::init_metrics;
 use prometheus::Registry;
 use tokio::task::JoinHandle;
@@ -44,6 +45,23 @@ pub async fn start_test_indexer_v2(
     use_indexer_experimental_methods: bool,
     reader_writer_config: ReaderWriterConfig,
 ) -> (PgIndexerStoreV2, JoinHandle<Result<(), IndexerError>>) {
+    start_test_indexer_v2_impl(
+        db_url,
+        rpc_url,
+        use_indexer_experimental_methods,
+        reader_writer_config,
+        None,
+    )
+    .await
+}
+
+pub async fn start_test_indexer_v2_impl(
+    db_url: Option<String>,
+    rpc_url: String,
+    use_indexer_experimental_methods: bool,
+    reader_writer_config: ReaderWriterConfig,
+    new_database: Option<String>,
+) -> (PgIndexerStoreV2, JoinHandle<Result<(), IndexerError>>) {
     // Reduce the connection pool size to 10 for testing
     // to prevent maxing out
     info!("Setting DB_POOL_SIZE to 10");
@@ -80,7 +98,31 @@ pub async fn start_test_indexer_v2(
 
     let indexer_metrics = IndexerMetrics::new(&registry);
 
-    let parsed_url = config.get_db_url().unwrap();
+    let mut parsed_url = config.get_db_url().unwrap();
+
+    if let Some(new_database) = new_database {
+        // Switch to default to create a new database
+        let (default_db_url, _) = replace_db_name(&parsed_url, "postgres");
+
+        // Open in default mode
+        let blocking_pool = new_pg_connection_pool_impl(&default_db_url, Some(5)).unwrap();
+
+        // Delete the old db if it exists
+        blocking_pool
+            .get()
+            .unwrap()
+            .batch_execute(&format!("DROP DATABASE IF EXISTS {}", new_database))
+            .unwrap();
+
+        // Create the new db
+        blocking_pool
+            .get()
+            .unwrap()
+            .batch_execute(&format!("CREATE DATABASE {}", new_database))
+            .unwrap();
+        parsed_url = replace_db_name(&parsed_url, &new_database).0;
+    }
+
     let blocking_pool = new_pg_connection_pool_impl(&parsed_url, Some(5)).unwrap();
     let store = PgIndexerStoreV2::new(blocking_pool.clone(), indexer_metrics.clone());
 
@@ -117,6 +159,30 @@ pub async fn start_test_indexer_v2(
     };
 
     (store, handle)
+}
+
+fn replace_db_name(db_url: &str, new_db_name: &str) -> (String, String) {
+    let pos = db_url.rfind('/').expect("Unable to find / in db_url");
+    let old_db_name = &db_url[pos + 1..];
+
+    (
+        format!("{}/{}", &db_url[..pos], new_db_name),
+        old_db_name.to_string(),
+    )
+}
+
+pub async fn force_delete_database(db_url: String) {
+    // Replace the database name with the default `postgres`, which should be the last string after `/`
+    // This is necessary because you can't drop a database while being connected to it.
+    // Hence switch to the default `postgres` database to drop the active database.
+    let (default_db_url, db_name) = replace_db_name(&db_url, "postgres");
+
+    let blocking_pool = new_pg_connection_pool_impl(&default_db_url, Some(5)).unwrap();
+    blocking_pool
+        .get()
+        .unwrap()
+        .batch_execute(&format!("DROP DATABASE IF EXISTS {} WITH (FORCE)", db_name))
+        .unwrap();
 }
 
 /// Spawns an indexer thread with provided Postgres DB url
