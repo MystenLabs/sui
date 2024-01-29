@@ -101,10 +101,10 @@ mod tests {
     use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
     use fastcrypto::traits::ToFromBytes;
     use prometheus::Registry;
-    use sui_protocol_config::ProtocolConfig;
 
     use crate::authority_node::AuthorityNode;
     use crate::block_verifier::TestBlockVerifier;
+    use crate::context::Context;
 
     #[tokio::test]
     async fn start_and_stop() {
@@ -121,7 +121,7 @@ mod tests {
             own_index,
             committee,
             parameters,
-            ProtocolConfig::get_for_min_version(),
+            Context::default_protocol_config_for_testing(),
             block_signer,
             signer,
             block_verifier,
