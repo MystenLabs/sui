@@ -164,12 +164,21 @@ impl CheckpointReader {
         let (processed_sender, processed_receiver) = mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
         let (exit_sender, exit_receiver) = oneshot::channel();
         let remote_store = remote_store_url.map(|url| {
-            parse_url_opts(
-                &Url::parse(&url).expect("failed to parse remote store url"),
-                remote_store_options,
-            )
-            .expect("failed to parse remote store config")
-            .0
+            if remote_store_options.is_empty() {
+                let builder = object_store::http::HttpBuilder::new().with_url(url);
+                Box::new(
+                    builder
+                        .build()
+                        .expect("failed to parse remote store config"),
+                )
+            } else {
+                parse_url_opts(
+                    &Url::parse(&url).expect("failed to parse remote store url"),
+                    remote_store_options,
+                )
+                .expect("failed to parse remote store config")
+                .0
+            }
         });
         let reader = Self {
             path,
