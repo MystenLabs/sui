@@ -915,7 +915,7 @@ fn module_warning_filter(context: &mut Context, attributes: &E::Attributes) -> W
 /// attribute.
 fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
     let mut warning_filters = WarningFilters::new_for_source();
-    let mut prefixed_filters: Vec<(Option<Symbol>, Vec<Name>)> = vec![];
+    let mut prefixed_filters: Vec<(DiagnosticAttribute, Option<Symbol>, Vec<Name>)> = vec![];
     // Gather lint_allow warnings
     if let Some(lint_allow_attr) = attributes.get_(&DiagnosticAttribute::LintAllow.into()) {
         // get the individual filters
@@ -923,7 +923,7 @@ fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningF
             get_allow_attribute_inners(context, DiagnosticAttribute::LINT_ALLOW, lint_allow_attr);
         if let Some(inners) = inners {
             let names = prefixed_warning_filters(context, DiagnosticAttribute::LINT_ALLOW, inners);
-            prefixed_filters.push((Some(symbol!("lint")), names));
+            prefixed_filters.push((DiagnosticAttribute::LintAllow, Some(symbol!("lint")), names));
         }
     }
     // Gather allow warnings
@@ -951,15 +951,27 @@ fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningF
                     (None, vec![*n])
                 }
             };
-            prefixed_filters.push((prefix, names));
+            prefixed_filters.push((DiagnosticAttribute::Allow, prefix, names));
         }
     }
     // Find the warning filter for each prefix+name instance
-    for (prefix, names) in prefixed_filters {
+    for (diag_attr, prefix, names) in prefixed_filters {
         for sp!(nloc, n_) in names {
             let filters = context.env().filter_from_str(prefix, n_);
             if filters.is_empty() {
-                let msg = format!("Unknown warning filter '{}'", format_allow_attr(prefix, n_));
+                let msg = match diag_attr {
+                    DiagnosticAttribute::Allow => {
+                        format!("Unknown warning filter '{}'", format_allow_attr(prefix, n_))
+                    }
+                    DiagnosticAttribute::LintAllow => {
+                        // specialized error message for the deprecated syntax
+                        format!(
+                            "Unknown warning filter '{}({})'",
+                            DiagnosticAttribute::LINT_ALLOW,
+                            n_
+                        )
+                    }
+                };
                 context
                     .env()
                     .add_diag(diag!(Attributes::ValueWarning, (nloc, msg)));
