@@ -20,7 +20,7 @@ export const getActiveAddress = () => {
 	return execSync(`${SUI_BIN} client active-address`, { encoding: 'utf8' }).trim();
 };
 
-/// Returns a signer based on the active address of system's sui.
+/** Returns a signer based on the active address of system's sui. */
 export const getSigner = () => {
 	const sender = getActiveAddress();
 
@@ -43,12 +43,12 @@ export const getSigner = () => {
 	throw new Error(`keypair not found for sender: ${sender}`);
 };
 
-/// Get the client for the specified network.
+/** Get the client for the specified network. */
 export const getClient = (network: Network) => {
 	return new SuiClient({ url: getFullnodeUrl(network) });
 };
 
-/// A helper to sign & execute a transaction.
+/** A helper to sign & execute a transaction. */
 export const signAndExecute = async (txb: TransactionBlock, network: Network) => {
 	const client = getClient(network);
 	const signer = getSigner();
@@ -63,7 +63,7 @@ export const signAndExecute = async (txb: TransactionBlock, network: Network) =>
 	});
 };
 
-/// Publishes a package and saves the package id to a specified json file.
+/** Publishes a package and saves the package id to a specified json file. */
 export const publishPackage = async ({
 	packagePath,
 	network,
@@ -74,7 +74,6 @@ export const publishPackage = async ({
 	exportFileName: string;
 }) => {
 	const txb = new TransactionBlock();
-	// const packagePath = __dirname + '/../../contract';
 
 	const { modules, dependencies } = JSON.parse(
 		execSync(`${SUI_BIN} move build --dump-bytecode-as-base64 --path ${packagePath}`, {
