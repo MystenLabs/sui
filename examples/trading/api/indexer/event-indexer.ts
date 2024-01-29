@@ -9,15 +9,19 @@ import { getClient } from '../sui-utils';
 import { handleEscrowObjects } from './escrow-handler';
 import { handleLockObjects } from './locked-handler';
 
+type SuiEventsCursor = EventId | null | undefined;
+
+type EventExecutionResult = {
+	cursor: SuiEventsCursor;
+	hasNextPage: boolean;
+};
+
 type EventTracker = {
-	// An move definition module in the format of `package::module`
+	// The module that defines the type, with format `package::module`
 	type: string;
 	filter: SuiEventFilter;
 	callback: (events: SuiEvent[]) => any;
 };
-
-const runningState: Record<string, boolean> = {};
-const runningCursors: Record<string, EventId | undefined> = {};
 
 const EVENTS_TO_TRACK: EventTracker[] = [
 	{
@@ -42,18 +46,12 @@ const EVENTS_TO_TRACK: EventTracker[] = [
 	},
 ];
 
-const runEventJob = async (client: SuiClient, tracker: EventTracker) => {
-	// allow a single run per type at each time.
-	if (runningState[tracker.type]) {
-		return;
-	}
-	// mark as running so we can't re-enter
-	runningState[tracker.type] = true;
-
+const executeEventJob = async (
+	client: SuiClient,
+	tracker: EventTracker,
+	cursor: SuiEventsCursor,
+): Promise<EventExecutionResult> => {
 	try {
-		// our cursor to do pagination properly
-		const cursor = (await getLatestCursor(tracker)) || undefined;
-
 		// get the events from the chain.
 		// For this implementation, we are going from start to finish.
 		// This will also allow filling in a database from scratch!
@@ -67,20 +65,34 @@ const runEventJob = async (client: SuiClient, tracker: EventTracker) => {
 		await tracker.callback(data);
 
 		// We only update the cursor if we fetched extra data (which means there was a change).
-		if (nextCursor && data.length > 0) await saveLatestCursor(tracker, nextCursor);
-		runningState[tracker.type] = false;
+		if (nextCursor && data.length > 0) {
+			await saveLatestCursor(tracker, nextCursor);
 
-		// we can speed up the polling if we know there are more events on the pipeline.
-		if (hasNextPage) {
-			runEventJob(client, tracker);
-			return;
+			return {
+				cursor: nextCursor,
+				hasNextPage,
+			};
 		}
 	} catch (e) {
 		console.error(e);
-		// wrap everything in a catch statement to make sure we turn off running states.
-		// We could also harden this further for better logging.
-		runningState[tracker.type] = false;
 	}
+	// By default, we return the same cursor as passed in.
+	return {
+		cursor,
+		hasNextPage: false,
+	};
+};
+
+const runEventJob = async (client: SuiClient, tracker: EventTracker, cursor: SuiEventsCursor) => {
+	const result = await executeEventJob(client, tracker, cursor);
+
+	// Trigger a timeout. Depending on the result, we either wait 0ms or the polling interval.
+	setTimeout(
+		() => {
+			runEventJob(client, tracker, result.cursor);
+		},
+		result.hasNextPage ? 0 : CONFIG.POLLING_INTERVAL_MS,
+	);
 };
 
 /**
@@ -88,17 +100,13 @@ const runEventJob = async (client: SuiClient, tracker: EventTracker) => {
  *  or from the running cursors.
  */
 const getLatestCursor = async (tracker: EventTracker) => {
-	if (Object.hasOwn(runningCursors, tracker.type)) return runningCursors[tracker.type];
-
 	const cursor = await prisma.cursor.findUnique({
 		where: {
 			id: tracker.type,
 		},
 	});
 
-	runningCursors[tracker.type] = cursor || undefined;
-
-	return runningCursors[tracker.type];
+	return cursor || undefined;
 };
 
 /**
@@ -111,8 +119,6 @@ const saveLatestCursor = async (tracker: EventTracker, cursor: EventId) => {
 		txDigest: cursor.txDigest,
 	};
 
-	runningCursors[tracker.type] = cursor;
-
 	return prisma.cursor.upsert({
 		where: {
 			id: tracker.type,
@@ -124,10 +130,8 @@ const saveLatestCursor = async (tracker: EventTracker, cursor: EventId) => {
 
 /// Sets up all the listeners for the events we want to track.
 /// They are polling the RPC endpoint every second.
-export const setupListeners = () => {
+export const setupListeners = async () => {
 	for (const event of EVENTS_TO_TRACK) {
-		setInterval(() => {
-			runEventJob(getClient(CONFIG.NETWORK), event);
-		}, CONFIG.POLLING_INTERVAL_MS);
+		runEventJob(getClient(CONFIG.NETWORK), event, await getLatestCursor(event));
 	}
 };

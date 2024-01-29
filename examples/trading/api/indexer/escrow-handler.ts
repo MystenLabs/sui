@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { SuiEvent } from '@mysten/sui.js/client';
-import { Escrow } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { prisma } from '../db';
-
-type Optional<T, K extends keyof T> = Pick<Partial<T>, K> & Omit<T, K>;
 
 type EscrowEvent = EscrowCreated | EscrowCancelled | EscrowSwapped;
 
@@ -26,10 +24,7 @@ type EscrowCancelled = {
 
 /** Handles all events emitted by the `lock` module. */
 export const handleEscrowObjects = async (events: SuiEvent[]) => {
-	const updates: Record<
-		string,
-		Optional<Escrow, 'id' | 'keyId' | 'cancelled' | 'sender' | 'recipient' | 'swapped'>
-	> = {};
+	const updates: Record<string, Prisma.EscrowCreateInput> = {};
 
 	for (const event of events) {
 		const data = event.parsedJson as EscrowEvent;
@@ -62,8 +57,10 @@ export const handleEscrowObjects = async (events: SuiEvent[]) => {
 		updates[data.escrow_id].keyId = creationData.key_id;
 	}
 
-	// SQLite does not support bulk insertion & conflict handling, so we have to insert 1 by 1.
-	//  Always use a single `bulkInsert` query with proper `onConflict` handling in production.
+	//  As part of the demo and to avoid having external dependencies, we use SQLite as our database.
+	// 	Prisma + SQLite does not support bulk insertion & conflict handling, so we have to insert these 1 by 1
+	// 	(resulting in multiple round-trips to the database).
+	//  Always use a single `bulkInsert` query with proper `onConflict` handling in production databases (e.g Postgres)
 	const promises = Object.values(updates).map((update) =>
 		prisma.escrow.upsert({
 			where: {

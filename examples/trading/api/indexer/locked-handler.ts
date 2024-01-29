@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { SuiEvent } from '@mysten/sui.js/client';
-import { Locked } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { prisma } from '../db';
-
-type Optional<T, K extends keyof T> = Pick<Partial<T>, K> & Omit<T, K>;
 
 type LockEvent = LockCreated | LockDestroyed;
 
@@ -21,7 +19,7 @@ type LockDestroyed = {
 
 /** Handles all events emitted by the `lock` module. */
 export const handleLockObjects = async (events: SuiEvent[]) => {
-	const updates: Record<string, Optional<Locked, 'id' | 'keyId' | 'deleted' | 'creator'>> = {};
+	const updates: Record<string, Prisma.LockedCreateInput> = {};
 
 	for (const event of events) {
 		const data = event.parsedJson as LockEvent;
@@ -44,8 +42,10 @@ export const handleLockObjects = async (events: SuiEvent[]) => {
 		updates[data.lock_id].creator = data.creator;
 	}
 
-	// SQLite does not support bulk insertion & conflict handling, so we have to insert 1 by 1.
-	//  Always use a single `bulkInsert` query with proper `onConflict` handling in production.
+	//  As part of the demo and to avoid having external dependencies, we use SQLite as our database.
+	// 	Prisma + SQLite does not support bulk insertion & conflict handling, so we have to insert these 1 by 1
+	// 	(resulting in multiple round-trips to the database).
+	//  Always use a single `bulkInsert` query with proper `onConflict` handling in production databases (e.g Postgres)
 	const promises = Object.values(updates).map((update) =>
 		prisma.locked.upsert({
 			where: {
