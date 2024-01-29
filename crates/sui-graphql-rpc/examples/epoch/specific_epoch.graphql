@@ -15,30 +15,32 @@
       inactivePoolsSize
       validatorCandidatesSize
       activeValidators {
-        name
-        description
-        imageUrl
-        projectUrl
-        exchangeRates {
-          storageRebate
-          bcs
-          hasPublicTransfer
+        nodes {
+          name
+          description
+          imageUrl
+          projectUrl
+          exchangeRates {
+            storageRebate
+            bcs
+            hasPublicTransfer
+          }
+          exchangeRatesSize
+          stakingPoolActivationEpoch
+          stakingPoolSuiBalance
+          rewardsPool
+          poolTokenBalance
+          pendingStake
+          pendingTotalSuiWithdraw
+          pendingPoolTokenWithdraw
+          votingPower
+          gasPrice
+          commissionRate
+          nextEpochStake
+          nextEpochGasPrice
+          nextEpochCommissionRate
+          atRisk
         }
-        exchangeRatesSize
-        stakingPoolActivationEpoch
-        stakingPoolSuiBalance
-        rewardsPool
-        poolTokenBalance
-        pendingStake
-        pendingTotalSuiWithdraw
-        pendingPoolTokenWithdraw
-        votingPower
-        gasPrice
-        commissionRate
-        nextEpochStake
-        nextEpochGasPrice
-        nextEpochCommissionRate
-        atRisk
       }
     }
   }

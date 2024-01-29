@@ -220,18 +220,20 @@ Response: {
   }
 }
 
-task 20 'run-graphql'. lines 154-168:
+task 20 'run-graphql'. lines 154-170:
 Response: {
   "data": {
     "epoch": {
       "validatorSet": {
-        "activeValidators": [
-          {
-            "address": {
-              "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+        "activeValidators": {
+          "nodes": [
+            {
+              "address": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              }
             }
-          }
-        ]
+          ]
+        }
       }
     },
     "address": {
@@ -240,7 +242,7 @@ Response: {
   }
 }
 
-task 21 'run-graphql'. lines 170-176:
+task 21 'run-graphql'. lines 172-178:
 Response: {
   "data": {
     "epoch": {
@@ -249,17 +251,17 @@ Response: {
   }
 }
 
-task 22 'run'. lines 178-178:
+task 22 'run'. lines 180-180:
 created: object(22,0)
 mutated: object(0,1)
 gas summary: computation_cost: 999000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 23 'run'. lines 180-180:
+task 23 'run'. lines 182-182:
 created: object(23,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 24 'run'. lines 182-182:
+task 24 'run'. lines 184-184:
 created: object(24,0)
 mutated: object(0,1)
 gas summary: computation_cost: 235000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
