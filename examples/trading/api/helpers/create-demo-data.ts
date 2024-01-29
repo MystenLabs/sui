@@ -10,7 +10,7 @@ import { ACTIVE_NETWORK, getActiveAddress, signAndExecute } from '../sui-utils';
 const createDemoLockedObjects = async (totalBears: number) => {
 	if (totalBears < 5) throw new Error('Please create at least 5 bears to run this script.');
 	const txb = new TransactionBlock();
-	const bears = [];
+	const toTransfer = [];
 
 	const DEMO_BEAR_TYPE = `${CONFIG.DEMO_CONTRACT.packageId}::demo_bear::DemoBear`;
 
@@ -22,7 +22,7 @@ const createDemoLockedObjects = async (totalBears: number) => {
 
 		// Let's keep a significant amount of bears to play with escrows.
 		if (i < totalBears / 3) {
-			bears.push(bear);
+			toTransfer.push(bear);
 			continue;
 		}
 
@@ -39,15 +39,15 @@ const createDemoLockedObjects = async (totalBears: number) => {
 				arguments: [locked, key],
 				typeArguments: [DEMO_BEAR_TYPE],
 			});
-			bears.push(item);
+			toTransfer.push(item);
 			continue;
 		}
 
-		bears.push(locked);
-		bears.push(key);
+		toTransfer.push(locked);
+		toTransfer.push(key);
 	}
 
-	txb.transferObjects(bears, txb.pure.address(getActiveAddress()));
+	txb.transferObjects(toTransfer, txb.pure.address(getActiveAddress()));
 
 	const res = await signAndExecute(txb, ACTIVE_NETWORK);
 
