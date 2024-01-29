@@ -1667,6 +1667,9 @@ importers:
       vitest:
         specifier: ^0.33.0
         version: 0.33.0(@vitest/ui@0.33.0)(happy-dom@10.5.1)
+      wait-on:
+        specifier: ^7.0.1
+        version: 7.0.1(debug@4.3.4)
 
   sdk/suins-toolkit:
     dependencies:

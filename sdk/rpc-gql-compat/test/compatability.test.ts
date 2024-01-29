@@ -1,27 +1,34 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { beforeAll, describe, expect, test } from 'vitest';
-
-import { TransactionBlock } from '../../../src/builder';
 import {
 	getFullnodeUrl,
 	SuiClient,
 	SuiObjectData,
 	SuiTransactionBlockResponse,
-} from '../../../src/client';
-import { publishPackage, setup, TestToolbox } from '../utils/setup';
+} from '@mysten/sui.js/client';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { beforeAll, describe, expect, test } from 'vitest';
+
+import { publishPackage, setup, TestToolbox } from '../../typescript/test/e2e/utils/setup';
+import { GraphQLSuiClient } from '../src';
+
+const DEFAULT_GRAPHQL_URL = import.meta.env.DEFAULT_GRAPHQL_URL ?? 'http:127.0.0.1:9125';
 
 describe('GraphQL SuiClient compatibility', () => {
 	let toolbox: TestToolbox;
 	let transactionBlockDigest: string;
 	let packageId: string;
 	let parentObjectId: string;
+	const graphQLClient = new GraphQLSuiClient({
+		graphqlURL: DEFAULT_GRAPHQL_URL,
+		url: DEFAULT_GRAPHQL_URL,
+	});
 
 	beforeAll(async () => {
 		toolbox = await setup({ rpcURL: 'http:127.0.0.1:9124' });
 
-		const packagePath = __dirname + '/../data/dynamic_fields';
+		const packagePath = __dirname + '/../../typescript/test/e2e/data/dynamic_fields';
 		({ packageId } = await publishPackage(packagePath, toolbox));
 
 		await toolbox.client
@@ -40,7 +47,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		const [coin] = txb.splitCoins(txb.gas, [1]);
 		txb.transferObjects([coin], toolbox.address());
 		const result = await toolbox.client.signAndExecuteTransactionBlock({
-			transactionBlock: txb,
+			transactionBlock: txb as never,
 			signer: toolbox.keypair,
 		});
 
@@ -50,7 +57,7 @@ describe('GraphQL SuiClient compatibility', () => {
 	});
 
 	test('getRpcApiVersion', async () => {
-		const version = await toolbox.graphQLClient!.getRpcApiVersion();
+		const version = await graphQLClient!.getRpcApiVersion();
 
 		expect(version?.match(/^\d+.\d+.\d+$/)).not.toBeNull();
 	});
@@ -59,7 +66,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		const { data: rpcCoins } = await toolbox.client.getCoins({
 			owner: toolbox.address(),
 		});
-		const { data: graphQLCoins } = await toolbox.graphQLClient!.getCoins({
+		const { data: graphQLCoins } = await graphQLClient!.getCoins({
 			owner: toolbox.address(),
 		});
 
@@ -70,7 +77,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		const { data: rpcCoins } = await toolbox.client.getAllCoins({
 			owner: toolbox.address(),
 		});
-		const { data: graphQLCoins } = await toolbox.graphQLClient!.getAllCoins({
+		const { data: graphQLCoins } = await graphQLClient!.getAllCoins({
 			owner: toolbox.address(),
 		});
 
@@ -81,7 +88,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		const rpcCoins = await toolbox.client.getBalance({
 			owner: toolbox.address(),
 		});
-		const graphQLCoins = await toolbox.graphQLClient!.getBalance({
+		const graphQLCoins = await graphQLClient!.getBalance({
 			owner: toolbox.address(),
 		});
 
@@ -91,7 +98,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		const rpcBalance = await toolbox.client.getBalance({
 			owner: toolbox.address(),
 		});
-		const graphQLBalance = await toolbox.graphQLClient!.getBalance({
+		const graphQLBalance = await graphQLClient!.getBalance({
 			owner: toolbox.address(),
 		});
 
@@ -102,7 +109,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		const rpcBalances = await toolbox.client.getAllBalances({
 			owner: toolbox.address(),
 		});
-		const graphQLBalances = await toolbox.graphQLClient!.getAllBalances({
+		const graphQLBalances = await graphQLClient!.getAllBalances({
 			owner: toolbox.address(),
 		});
 
@@ -114,7 +121,7 @@ describe('GraphQL SuiClient compatibility', () => {
 			coinType: '0x02::sui::SUI',
 		});
 
-		const graphQLMetadata = await toolbox.graphQLClient!.getCoinMetadata({
+		const graphQLMetadata = await graphQLClient!.getCoinMetadata({
 			coinType: '0x02::sui::SUI',
 		});
 
@@ -126,7 +133,7 @@ describe('GraphQL SuiClient compatibility', () => {
 			coinType: '0x02::sui::SUI',
 		});
 
-		const graphQLgetTotalSupply = await toolbox.graphQLClient!.getTotalSupply({
+		const graphQLgetTotalSupply = await graphQLClient!.getTotalSupply({
 			coinType: '0x02::sui::SUI',
 		});
 
@@ -140,7 +147,7 @@ describe('GraphQL SuiClient compatibility', () => {
 			function: 'balance',
 		});
 
-		const graphQLMoveFunction = await toolbox.graphQLClient!.getMoveFunctionArgTypes({
+		const graphQLMoveFunction = await graphQLClient!.getMoveFunctionArgTypes({
 			package: '0x02',
 			module: 'coin',
 			function: 'balance',
@@ -156,7 +163,7 @@ describe('GraphQL SuiClient compatibility', () => {
 			function: 'balance',
 		});
 
-		const graphQLMoveFunction = await toolbox.graphQLClient!.getNormalizedMoveFunction({
+		const graphQLMoveFunction = await graphQLClient!.getNormalizedMoveFunction({
 			package: '0x02',
 			module: 'coin',
 			function: 'balance',
@@ -170,7 +177,7 @@ describe('GraphQL SuiClient compatibility', () => {
 			package: '0x02',
 		});
 
-		const graphQLMovePackage = await toolbox.graphQLClient!.getNormalizedMoveModulesByPackage({
+		const graphQLMovePackage = await graphQLClient!.getNormalizedMoveModulesByPackage({
 			package: '0x02',
 		});
 
@@ -183,7 +190,7 @@ describe('GraphQL SuiClient compatibility', () => {
 			module: 'coin',
 		});
 
-		const graphQLMoveModule = await toolbox.graphQLClient!.getNormalizedMoveModule({
+		const graphQLMoveModule = await graphQLClient!.getNormalizedMoveModule({
 			package: '0x02',
 			module: 'coin',
 		});
@@ -198,7 +205,7 @@ describe('GraphQL SuiClient compatibility', () => {
 			struct: 'Coin',
 		});
 
-		const graphQLMoveStruct = await toolbox.graphQLClient!.getNormalizedMoveStruct({
+		const graphQLMoveStruct = await graphQLClient!.getNormalizedMoveStruct({
 			package: '0x02',
 			module: 'coin',
 			struct: 'Coin',
@@ -220,7 +227,7 @@ describe('GraphQL SuiClient compatibility', () => {
 				showType: true,
 			},
 		});
-		const { data: graphQLObjects } = await toolbox.graphQLClient!.getOwnedObjects({
+		const { data: graphQLObjects } = await graphQLClient!.getOwnedObjects({
 			owner: toolbox.address(),
 			options: {
 				showBcs: true,
@@ -253,7 +260,7 @@ describe('GraphQL SuiClient compatibility', () => {
 				showType: true,
 			},
 		});
-		const graphQLObject = await toolbox.graphQLClient!.getObject({
+		const graphQLObject = await graphQLClient!.getObject({
 			id,
 			options: {
 				showBcs: true,
@@ -290,7 +297,7 @@ describe('GraphQL SuiClient compatibility', () => {
 				showType: true,
 			},
 		});
-		const graphQLObject = await toolbox.graphQLClient!.tryGetPastObject({
+		const graphQLObject = await graphQLClient!.tryGetPastObject({
 			id,
 			version: Number.parseInt(version, 10),
 			options: {
@@ -324,7 +331,7 @@ describe('GraphQL SuiClient compatibility', () => {
 				showType: true,
 			},
 		});
-		const graphQLObjects = await toolbox.graphQLClient!.multiGetObjects({
+		const graphQLObjects = await graphQLClient!.multiGetObjects({
 			ids: [id],
 			options: {
 				showBcs: true,
@@ -355,20 +362,19 @@ describe('GraphQL SuiClient compatibility', () => {
 			},
 		});
 
-		const { nextCursor: __, ...graphQLTransactions } =
-			await toolbox.graphQLClient!.queryTransactionBlocks({
-				filter: {
-					FromAddress: toolbox.address(),
-				},
-				options: {
-					showBalanceChanges: true,
-					showEffects: true,
-					showEvents: true,
-					showInput: true,
-					showObjectChanges: true,
-					showRawInput: true,
-				},
-			});
+		const { nextCursor: __, ...graphQLTransactions } = await graphQLClient!.queryTransactionBlocks({
+			filter: {
+				FromAddress: toolbox.address(),
+			},
+			options: {
+				showBalanceChanges: true,
+				showEffects: true,
+				showEvents: true,
+				showInput: true,
+				showObjectChanges: true,
+				showRawInput: true,
+			},
+		});
 
 		expect(graphQLTransactions).toEqual(rpcTransactions);
 	});
@@ -385,7 +391,7 @@ describe('GraphQL SuiClient compatibility', () => {
 				showRawInput: true,
 			},
 		})) as SuiTransactionBlockResponse & { rawEffects: unknown };
-		const graphQLTransactionBlock = await toolbox.graphQLClient!.getTransactionBlock({
+		const graphQLTransactionBlock = await graphQLClient!.getTransactionBlock({
 			digest: transactionBlockDigest,
 			options: {
 				showBalanceChanges: true,
@@ -412,7 +418,7 @@ describe('GraphQL SuiClient compatibility', () => {
 				showRawInput: true,
 			},
 		});
-		const [graphQLTransactionBlock] = await toolbox.graphQLClient!.multiGetTransactionBlocks({
+		const [graphQLTransactionBlock] = await graphQLClient!.multiGetTransactionBlocks({
 			digests: [transactionBlockDigest],
 			options: {
 				showBalanceChanges: true,
@@ -429,14 +435,14 @@ describe('GraphQL SuiClient compatibility', () => {
 
 	test('getTotalTransactionBlocks', async () => {
 		const rpc = await toolbox.client.getTotalTransactionBlocks();
-		const graphql = await toolbox.graphQLClient!.getTotalTransactionBlocks();
+		const graphql = await graphQLClient!.getTotalTransactionBlocks();
 
 		expect(graphql).toEqual(rpc);
 	});
 
 	test('getReferenceGasPrice', async () => {
 		const rpc = await toolbox.client.getReferenceGasPrice();
-		const graphql = await toolbox.graphQLClient!.getReferenceGasPrice();
+		const graphql = await graphQLClient!.getReferenceGasPrice();
 
 		expect(graphql).toEqual(rpc);
 	});
@@ -445,7 +451,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		const rpc = await toolbox.client.getStakes({
 			owner: toolbox.address(),
 		});
-		const graphql = await toolbox.graphQLClient!.getStakes({
+		const graphql = await graphQLClient!.getStakes({
 			owner: toolbox.address(),
 		});
 
@@ -460,7 +466,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		const rpc = await toolbox.client.getStakesByIds({
 			stakedSuiIds: [stakes[0].stakes[0].stakedSuiId],
 		});
-		const graphql = await toolbox.graphQLClient!.getStakesByIds({
+		const graphql = await graphQLClient!.getStakesByIds({
 			stakedSuiIds: [stakes[0].stakes[0].stakedSuiId],
 		});
 
@@ -469,7 +475,7 @@ describe('GraphQL SuiClient compatibility', () => {
 
 	test.skip('getLatestSuiSystemState', async () => {
 		const rpc = await toolbox.client.getLatestSuiSystemState();
-		const graphql = await toolbox.graphQLClient!.getLatestSuiSystemState();
+		const graphql = await graphQLClient!.getLatestSuiSystemState();
 
 		expect(graphql).toEqual(rpc);
 	});
@@ -482,7 +488,7 @@ describe('GraphQL SuiClient compatibility', () => {
 			limit: 1,
 		});
 
-		const { nextCursor: __, ...graphql } = await toolbox.graphQLClient!.queryEvents({
+		const { nextCursor: __, ...graphql } = await graphQLClient!.queryEvents({
 			query: {
 				Package: '0x3',
 			},
@@ -499,11 +505,11 @@ describe('GraphQL SuiClient compatibility', () => {
 		txb.transferObjects([coin], toolbox.address());
 
 		const rpc = await toolbox.client.devInspectTransactionBlock({
-			transactionBlock: txb,
+			transactionBlock: txb as never,
 			sender: toolbox.address(),
 		});
 
-		const graphql = await toolbox.graphQLClient!.devInspectTransactionBlock({
+		const graphql = await graphQLClient!.devInspectTransactionBlock({
 			transactionBlock: txb,
 			sender: toolbox.address(),
 		});
@@ -516,7 +522,7 @@ describe('GraphQL SuiClient compatibility', () => {
 			parentId: parentObjectId,
 		});
 
-		const { nextCursor: _, ...graphql } = await toolbox.graphQLClient!.getDynamicFields({
+		const { nextCursor: _, ...graphql } = await graphQLClient!.getDynamicFields({
 			parentId: parentObjectId,
 		});
 
@@ -535,7 +541,7 @@ describe('GraphQL SuiClient compatibility', () => {
 			name: field.name,
 		});
 
-		const graphql = await toolbox.graphQLClient!.getDynamicFieldObject({
+		const graphql = await graphQLClient!.getDynamicFieldObject({
 			parentId: parentObjectId,
 			name: field.name,
 		});
@@ -558,8 +564,8 @@ describe('GraphQL SuiClient compatibility', () => {
 		txb.transferObjects([coin], toolbox.address());
 
 		const { confirmedLocalExecution, ...graphql } =
-			await toolbox.graphQLClient!.signAndExecuteTransactionBlock({
-				transactionBlock: txb,
+			await graphQLClient!.signAndExecuteTransactionBlock({
+				transactionBlock: txb as TransactionBlock,
 				signer: toolbox.keypair,
 				options: {
 					showBalanceChanges: true,
@@ -597,13 +603,13 @@ describe('GraphQL SuiClient compatibility', () => {
 		txb.setSender(toolbox.address());
 		const [coin] = txb.splitCoins(txb.gas, [1]);
 		txb.transferObjects([coin], toolbox.address());
-		const bytes = await txb.build({ client: toolbox.client });
+		const bytes = await txb.build({ client: toolbox.client as never });
 
 		const rpc = await toolbox.client.dryRunTransactionBlock({
 			transactionBlock: bytes,
 		});
 
-		const graphql = await toolbox.graphQLClient!.dryRunTransactionBlock({
+		const graphql = await graphQLClient!.dryRunTransactionBlock({
 			transactionBlock: bytes,
 		});
 
@@ -612,7 +618,7 @@ describe('GraphQL SuiClient compatibility', () => {
 
 	test('getLatestCheckpointSequenceNumber', async () => {
 		const rpc = await toolbox.client.getLatestCheckpointSequenceNumber();
-		const graphql = await toolbox.graphQLClient!.getLatestCheckpointSequenceNumber();
+		const graphql = await graphQLClient!.getLatestCheckpointSequenceNumber();
 
 		expect(graphql).toEqual(rpc);
 	});
@@ -621,7 +627,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		const rpc = await toolbox.client.getCheckpoint({
 			id: '3',
 		});
-		const graphql = await toolbox.graphQLClient!.getCheckpoint({
+		const graphql = await graphQLClient!.getCheckpoint({
 			id: '3',
 		});
 
@@ -633,7 +639,7 @@ describe('GraphQL SuiClient compatibility', () => {
 			descendingOrder: false,
 			limit: 5,
 		});
-		const { data: graphql } = await toolbox.graphQLClient!.getCheckpoints({
+		const { data: graphql } = await graphQLClient!.getCheckpoints({
 			descendingOrder: false,
 			limit: 5,
 		});
@@ -643,56 +649,56 @@ describe('GraphQL SuiClient compatibility', () => {
 
 	test.skip('getCommitteeInfo', async () => {
 		const rpc = await toolbox.client.getCommitteeInfo({});
-		const graphql = await toolbox.graphQLClient!.getCommitteeInfo({});
+		const graphql = await graphQLClient!.getCommitteeInfo({});
 
 		expect(graphql).toEqual(rpc);
 	});
 
 	test.skip('getNetworkMetrics', async () => {
 		const rpc = await toolbox.client.getNetworkMetrics();
-		const graphql = await toolbox.graphQLClient!.getNetworkMetrics();
+		const graphql = await graphQLClient!.getNetworkMetrics();
 
 		expect(graphql).toEqual(rpc);
 	});
 
 	test.skip('getMoveCallMetrics', async () => {
 		const rpc = await toolbox.client.getMoveCallMetrics();
-		const graphql = await toolbox.graphQLClient!.getMoveCallMetrics();
+		const graphql = await graphQLClient!.getMoveCallMetrics();
 
 		expect(graphql).toEqual(rpc);
 	});
 
 	test.skip('getAddressMetrics', async () => {
 		const rpc = await toolbox.client.getAddressMetrics();
-		const graphql = await toolbox.graphQLClient!.getAddressMetrics();
+		const graphql = await graphQLClient!.getAddressMetrics();
 
 		expect(graphql).toEqual(rpc);
 	});
 
 	test.skip('getAllEpochAddressMetrics', async () => {
 		const rpc = await toolbox.client.getAllEpochAddressMetrics();
-		const graphql = await toolbox.graphQLClient!.getAllEpochAddressMetrics();
+		const graphql = await graphQLClient!.getAllEpochAddressMetrics();
 
 		expect(graphql).toEqual(rpc);
 	});
 
 	test.skip('getEpochs', async () => {
 		const rpc = await toolbox.client.getEpochs();
-		const graphql = await toolbox.graphQLClient!.getEpochs();
+		const graphql = await graphQLClient!.getEpochs();
 
 		expect(graphql).toEqual(rpc);
 	});
 
 	test.skip('getCurrentEpoch', async () => {
 		const rpc = await toolbox.client.getCurrentEpoch();
-		const graphql = await toolbox.graphQLClient!.getCurrentEpoch();
+		const graphql = await graphQLClient!.getCurrentEpoch();
 
 		expect(graphql).toEqual(rpc);
 	});
 
 	test('getValidatorsApy', async () => {
 		const rpc = await toolbox.client.getValidatorsApy();
-		const graphql = await toolbox.graphQLClient!.getValidatorsApy();
+		const graphql = await graphQLClient!.getValidatorsApy();
 
 		for (let i = 0; i < rpc.apys.length; i++) {
 			expect(graphql.apys[i].address).toEqual(rpc.apys[i].address);
@@ -701,14 +707,14 @@ describe('GraphQL SuiClient compatibility', () => {
 
 	test('getChainIdentifier', async () => {
 		const rpc = await toolbox.client.getChainIdentifier();
-		const graphql = await toolbox.graphQLClient!.getChainIdentifier();
+		const graphql = await graphQLClient!.getChainIdentifier();
 
 		expect(graphql).toEqual(rpc);
 	});
 
 	test('getProtocolConfig', async () => {
 		const rpc = await toolbox.client.getProtocolConfig();
-		const graphql = await toolbox.graphQLClient!.getProtocolConfig();
+		const graphql = await graphQLClient!.getProtocolConfig();
 
 		expect(graphql).toEqual(rpc);
 	});
@@ -717,7 +723,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		const rpc = await toolbox.client.resolveNameServiceAddress({
 			name: 'test.sui',
 		});
-		const graphql = await toolbox.graphQLClient!.resolveNameServiceAddress({
+		const graphql = await graphQLClient!.resolveNameServiceAddress({
 			name: 'test.sui',
 		});
 
@@ -728,7 +734,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		const rpc = await toolbox.client.resolveNameServiceNames({
 			address: toolbox.address(),
 		});
-		const graphql = await toolbox.graphQLClient!.resolveNameServiceNames({
+		const graphql = await graphQLClient!.resolveNameServiceNames({
 			address: toolbox.address(),
 		});
 
