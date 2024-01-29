@@ -1,11 +1,13 @@
 ---
 title: Conventions
-description: Recommended Sui Move 2024 best practices
+description: Recommended Move 2024 best practices for the Sui blockchain.
 ---
 
-The recommendations below are based on 2024 Move.
+The following recommendations are based on 2024 Move.
 
 ## Add section titles
+
+Use titles in code comments to create sections for your Move code files. Structure your titles using `===` on either side of the title.
 
 ```move
 module conventions::comments {
@@ -35,6 +37,8 @@ module conventions::comments {
 
 ## CRUD functions names
 
+These are the available CRUD functions:
+
 - `add`: Adds a value.
 - `new`: Creates an object.
 - `drop`: Drops a struct.
@@ -48,9 +52,9 @@ module conventions::comments {
 - `property_name`: Returns an immutable reference or a copy.
 - `property_name_mut`: Returns a mutable reference.
 
-## Potato Structs
+## Potato structs
 
-Do not call structs as Potato. It is a pattern recognized by the lack of abilities.
+Do use 'potato' in the name of structs. The lack of abilities define it as a potato pattern.
 
 ```move
 module conventions::request {
@@ -62,7 +66,7 @@ module conventions::request {
 }
 ```
 
-## Read Functions
+## Read functions
 
 Be mindful of the dot syntax when naming functions. Avoid using the object name on function names.
 
@@ -97,9 +101,9 @@ module conventions::defi {
   let name2 = profile.profile_age();
 }
 ```
-## Empty Function
+## Empty function
 
-Functions that create data structures must be called empty.
+Name the functions that create data structures as `empty`.
 
 ```move
 module conventions::collection {
@@ -115,9 +119,9 @@ module conventions::collection {
   }
 }
 ```
-## New Function
+## New function
 
-Functions that create objects must be called new.
+Name the functions that create objects as `new`.
 
 ```move
 module conventions::object {
@@ -137,7 +141,7 @@ module conventions::object {
 }
 ```
 
-## Shared Objects
+## Shared objects
 
 Library modules that share objects should provide two functions: one to create the object and another to share it. It allows the caller to access its UID and run custom functionality before sharing it.
 
@@ -164,9 +168,9 @@ module conventions::profile {
 }
 ```
 
-## Reference Functions
+## Reference functions
 
-Functions that return a reference must be named property_name_mut or property_name.
+Name the functions that return a reference as `<PROPERTY-NAME>_mut` or `<PROPERTY-NAME>`, replacing with <PROPERTY-NAME\> the actual name of the property.
 
 ```move
 module conventions::profile {
@@ -193,10 +197,9 @@ module conventions::profile {
 }
 ```
 
-## Separation of Concerns
+## Separation of concerns
 
-Modules must be designed around one Object or Data Structure. A variant structure should have its own module to avoid complexity and bugs.
-
+Design your modules around one object or data structure. A variant structure should have its own module to avoid complexity and bugs.
 ```move
 module conventions::wallet {
 
@@ -221,7 +224,7 @@ module conventions::claw_back_wallet {
 
 ## Errors
 
-Errors must be CamelCase, start with an E and be descriptive.
+Use PascalCase for errors, start with an E and be descriptive.
 
 ```move
 module conventions::errors {
@@ -233,7 +236,7 @@ module conventions::errors {
 }
 ```
 
-## Struct Property Comments
+## Struct property comments
 
 Describe the properties of your structs.
 
@@ -254,10 +257,9 @@ module conventions::profile {
 }
 ```
 
-## Destroy Functions
+## Destroy functions
 
-Provide functions to delete objects. Empty objects must be destroyed with the function destroy_empty. The function drop must be used for objects that have types that can be dropped.
-
+Provide functions to delete objects. Destroy empty objects with the function `destroy_empty`. Use the function `drop` for objects that have types that can be dropped.
 ```move
 module conventions::wallet {
 
@@ -286,10 +288,9 @@ module conventions::wallet {
 }
 ```
 
-## Pure Functions
+## Pure functions
 
-Keep your functions pure to maintain composability. Do not use transfer::transfer or transfer::public_transfer inside core functions.
-
+Keep your functions pure to maintain composability. Do not use `transfer::transfer` or `transfer::public_transfer` inside core functions.
 ```move
 module conventions::amm {
 
@@ -330,7 +331,7 @@ module conventions::amm {
 
 ## Coin argument
 
-Pass the Coin by value with the right amount directly, it's better for transaction readability from the frontend.
+Pass the `Coin` object by value with the right amount directly because it's better for transaction readability from the frontend.
 
 ```move
 module conventions::amm {
@@ -356,7 +357,7 @@ module conventions::amm {
 }
 ```
 
-## Access Control
+## Access control
 
 To maintain composability, use capabilities instead of addresses for access control.
 
@@ -404,9 +405,9 @@ module conventions::access_control {
 }
 ```
 
-## Data Storage in Owned vs Shared Objects
+## Data storage in owned vs shared objects
 
-If your dApp data has a one to one relationship, we recommend to use Owned Objects.
+If your dApp data has a one to one relationship, it's best to use owned objects.
 
 ```move
 module conventions::vesting_wallet {
@@ -431,7 +432,7 @@ module conventions::vesting_wallet {
 
   /*
   * A vesting wallet releases a certain amount of coin over a period of time.
-  * If the entire balance belongs to one user and the wallet has no additional functionalities, it is best to store it in an Owned Object.
+  * If the entire balance belongs to one user and the wallet has no additional functionalities, it is best to store it in an owned object.
   */
   public fun new(deposit: Coin<SUI>, ctx: &mut TxContext): OwnedWallet {
     // Implementation omitted.
@@ -450,7 +451,7 @@ module conventions::vesting_wallet {
 }
 ```
 
-## Admin Capability
+## Admin capability
 
 In admin-gated functions, the first parameter should be the capability. It helps the autocomplete with user types.
 
