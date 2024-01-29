@@ -12,7 +12,7 @@ use tracing::info;
 
 use crate::block_verifier::BlockVerifier;
 use crate::context::Context;
-use crate::core::{Core, CoreOptions, CoreSignals};
+use crate::core::{Core, CoreSignals};
 use crate::metrics::initialise_metrics;
 use crate::transactions_client::{TransactionsClient, TransactionsConsumer};
 
@@ -46,8 +46,18 @@ impl AuthorityNode {
         let start_time = Instant::now();
 
         // Create the transactions client and the transactions consumer
-        let (client, tx_receiver) = TransactionsClient::new(context.clone());
-        let tx_consumer = TransactionsConsumer::new(tx_receiver);
+        let (client, tx_receiver) = TransactionsClient::new(
+            context.clone(),
+            context
+                .protocol_config
+                .consensus_max_transaction_size_bytes(),
+        );
+        let tx_consumer = TransactionsConsumer::new(
+            tx_receiver,
+            context
+                .protocol_config
+                .consensus_max_block_transactions_size_bytes(),
+        );
 
         // Construct Core
         let (core_signals, _signals_receivers) = CoreSignals::new();
@@ -57,7 +67,6 @@ impl AuthorityNode {
             tx_consumer,
             block_manager,
             core_signals,
-            CoreOptions::default(),
             block_signer,
         );
 

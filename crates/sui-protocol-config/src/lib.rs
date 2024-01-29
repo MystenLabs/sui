@@ -107,7 +107,7 @@ const MAX_PROTOCOL_VERSION: u64 = 36;
 //             Enable coin deny list.
 // Version 36: Enable group operations native functions in devnet.
 //             Enable shared object deletion in mainnet.
-
+//             Set the consensus accepted transaction size and the included transactions size in the proposed block.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -922,6 +922,11 @@ pub struct ProtocolConfig {
     /// Maximum allowed precision loss when reducing voting weights for the random beacon
     /// protocol.
     random_beacon_reduction_allowed_delta: Option<u16>,
+
+    /// The maximum serialised transaction size (in bytes) accepted by consensus
+    consensus_max_transaction_size_bytes: Option<u64>,
+    /// The maximum size of transactions included in a consensus proposed block
+    consensus_max_block_transactions_size_bytes: Option<u64>,
 }
 
 // feature flags
@@ -1554,8 +1559,11 @@ impl ProtocolConfig {
             max_age_of_jwk_in_epochs: None,
 
             random_beacon_reduction_allowed_delta: None,
-            // When adding a new constant, set it to None in the earliest version, like this:
-            // new_constant: None,
+
+            consensus_max_transaction_size_bytes: None,
+
+            consensus_max_block_transactions_size_bytes: None, // When adding a new constant, set it to None in the earliest version, like this:
+                                                               // new_constant: None,
         };
         for cur in 2..=version.0 {
             match cur {
@@ -1871,6 +1879,9 @@ impl ProtocolConfig {
                     }
                     // Enable shared object deletion on all networks.
                     cfg.feature_flags.shared_object_deletion = true;
+
+                    cfg.consensus_max_transaction_size_bytes = Some(6 * 1_024 * 1024);
+                    cfg.consensus_max_block_transactions_size_bytes = Some(6 * 1_024 * 1024);
                 }
                 // Use this template when making changes:
                 //
@@ -1957,6 +1968,12 @@ impl ProtocolConfig {
     }
     pub fn set_enable_effects_v2(&mut self, val: bool) {
         self.feature_flags.enable_effects_v2 = val;
+    }
+    pub fn set_consensus_max_transaction_size_bytes(&mut self, val: u64) {
+        self.consensus_max_transaction_size_bytes = Some(val);
+    }
+    pub fn set_consensus_max_block_transactions_size_bytes(&mut self, val: u64) {
+        self.consensus_max_block_transactions_size_bytes = Some(val);
     }
 }
 

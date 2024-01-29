@@ -5,6 +5,8 @@ use std::sync::Arc;
 
 use consensus_config::{AuthorityIndex, Committee, Parameters};
 use sui_protocol_config::ProtocolConfig;
+#[cfg(test)]
+use sui_protocol_config::{Chain, ProtocolVersion};
 
 use crate::metrics::Metrics;
 
@@ -54,14 +56,20 @@ impl Context {
     ) -> (Self, Vec<(NetworkKeyPair, ProtocolKeyPair)>) {
         let (committee, keypairs) = Committee::new_for_test(0, vec![1; committee_size]);
         let metrics = test_metrics();
+
         let context = Context::new(
             AuthorityIndex::new_for_test(0),
             committee,
             Parameters::default(),
-            ProtocolConfig::get_for_min_version(),
+            Self::default_protocol_config_for_testing(),
             metrics,
         );
         (context, keypairs)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn default_protocol_config_for_testing() -> ProtocolConfig {
+        ProtocolConfig::get_for_version(ProtocolVersion::from(36), Chain::Unknown)
     }
 
     #[cfg(test)]

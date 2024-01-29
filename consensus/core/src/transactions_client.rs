@@ -9,8 +9,6 @@ use tap::tap::TapFallible;
 use thiserror::Error;
 use tracing::error;
 
-/// Maximum number of transactions to be fetched per request of `next`
-const MAX_FETCHED_TRANSACTIONS: usize = 100;
 /// The maximum number of transactions pending to the queue to be pulled for block proposal
 const MAX_PENDING_TRANSACTIONS: usize = 2_000;
 
@@ -20,32 +18,45 @@ const MAX_PENDING_TRANSACTIONS: usize = 2_000;
 #[allow(dead_code)]
 pub(crate) struct TransactionsConsumer {
     tx_receiver: metered_channel::Receiver<Transaction>,
-    max_fetched_per_request: usize,
+    max_fetched_bytes_per_request: u64,
+    pending_transaction: Option<Transaction>,
 }
 
 #[allow(dead_code)]
 impl TransactionsConsumer {
-    pub(crate) fn new(tx_receiver: metered_channel::Receiver<Transaction>) -> Self {
+    pub(crate) fn new(
+        tx_receiver: metered_channel::Receiver<Transaction>,
+        max_fetched_bytes_per_request: u64,
+    ) -> Self {
         Self {
             tx_receiver,
-            max_fetched_per_request: MAX_FETCHED_TRANSACTIONS,
+            max_fetched_bytes_per_request,
+            pending_transaction: None,
         }
     }
 
-    pub(crate) fn with_max_fetched_per_request(mut self, max_fetched_per_request: usize) -> Self {
-        self.max_fetched_per_request = max_fetched_per_request;
-        self
-    }
-
-    // Attempts to fetch the next transactions that have been submitted for sequence.
+    // Attempts to fetch the next transactions that have been submitted for sequence. Also a `max_fetched_bytes` parameter
+    // is given in order to ensure up to `max_fetched_bytes` bytes of transactions are retrieved.
     pub(crate) fn next(&mut self) -> Vec<Transaction> {
         let mut transactions = Vec::new();
-        while let Ok(transaction) = self.tx_receiver.try_recv() {
-            transactions.push(transaction);
+        let mut total_fetched_size: usize = 0;
 
-            if transactions.len() >= self.max_fetched_per_request {
+        if let Some(transaction) = self.pending_transaction.take() {
+            // Here we assume that a transaction can always fit in `max_fetched_bytes_per_request`
+            total_fetched_size += transaction.data().len();
+            transactions.push(transaction);
+        }
+
+        while let Ok(transaction) = self.tx_receiver.try_recv() {
+            total_fetched_size += transaction.data().len();
+
+            // If we went over the max size with this transaction, just cache it for the next pull.
+            if total_fetched_size as u64 > self.max_fetched_bytes_per_request {
+                self.pending_transaction = Some(transaction);
                 break;
             }
+
+            transactions.push(transaction);
         }
         transactions
     }
@@ -55,28 +66,48 @@ impl TransactionsConsumer {
 #[allow(dead_code)]
 pub struct TransactionsClient {
     sender: metered_channel::Sender<Transaction>,
+    max_transaction_size: u64,
 }
 
 #[derive(Error, Debug)]
 pub enum ClientError {
     #[error("Failed to submit transaction to consensus: {0}")]
     SubmitError(String),
+
+    #[error("Transaction size {0}bytes is too big to get accepted from consensus with max threshold {1}bytes")]
+    TransactionTooBig(u64, u64),
 }
 
 #[allow(dead_code)]
 impl TransactionsClient {
-    pub(crate) fn new(context: Arc<Context>) -> (Self, metered_channel::Receiver<Transaction>) {
+    pub(crate) fn new(
+        context: Arc<Context>,
+        max_transaction_size: u64,
+    ) -> (Self, metered_channel::Receiver<Transaction>) {
         let (sender, receiver) = channel_with_total(
             MAX_PENDING_TRANSACTIONS,
             &context.metrics.channel_metrics.tx_transactions_submit,
             &context.metrics.channel_metrics.tx_transactions_submit_total,
         );
 
-        (Self { sender }, receiver)
+        (
+            Self {
+                sender,
+                max_transaction_size,
+            },
+            receiver,
+        )
     }
 
-    // Submits a transaction to be sequenced.
+    // Submits a transaction to be sequenced. The transaction length gets evaluated and rejected from consensus if too big.
+    // That shouldn't be the common case as sizes should be aligned between consensus and client.
     pub async fn submit(&self, transaction: Vec<u8>) -> Result<(), ClientError> {
+        if transaction.len() as u64 > self.max_transaction_size {
+            return Err(ClientError::TransactionTooBig(
+                transaction.len() as u64,
+                self.max_transaction_size,
+            ));
+        }
         self.sender
             .send(Transaction::new(transaction))
             .await
@@ -94,8 +125,9 @@ mod tests {
     #[tokio::test]
     async fn basic_submit_and_consume() {
         let context = Arc::new(Context::new_for_test(4).0);
-        let (client, tx_receiver) = TransactionsClient::new(context);
-        let mut consumer = TransactionsConsumer::new(tx_receiver);
+        let max_bytes_to_fetch = 2_000; // 2 KB
+        let (client, tx_receiver) = TransactionsClient::new(context, max_bytes_to_fetch);
+        let mut consumer = TransactionsConsumer::new(tx_receiver, max_bytes_to_fetch);
 
         // submit some transactions
         for i in 0..3 {
@@ -118,5 +150,58 @@ mod tests {
 
         // try to pull again transactions, result should be empty
         assert!(consumer.next().is_empty());
+    }
+
+    #[tokio::test]
+    async fn submit_over_max_fetch_size_and_consume() {
+        let context = Arc::new(Context::new_for_test(4).0);
+        let max_bytes_to_fetch = 100;
+        let (client, tx_receiver) = TransactionsClient::new(context, max_bytes_to_fetch);
+        let mut consumer = TransactionsConsumer::new(tx_receiver, max_bytes_to_fetch);
+
+        // submit some transactions
+        for i in 0..10 {
+            let transaction =
+                bcs::to_bytes(&format!("transaction {i}")).expect("Serialization should not fail.");
+            client
+                .submit(transaction)
+                .await
+                .expect("Shouldn't submit successfully transaction")
+        }
+
+        // now pull the transactions from the consumer
+        let mut all_transactions = Vec::new();
+        let transactions = consumer.next();
+        assert_eq!(transactions.len(), 7);
+
+        // ensure their total size is less than `max_bytes_to_fetch`
+        let total_size: u64 = transactions.iter().map(|t| t.data().len() as u64).sum();
+        assert!(
+            total_size <= max_bytes_to_fetch,
+            "Should have fetched transactions up to {}",
+            max_bytes_to_fetch
+        );
+        all_transactions.extend(transactions);
+
+        // try to pull again transactions, next should be provided
+        let transactions = consumer.next();
+        assert_eq!(transactions.len(), 3);
+
+        // ensure their total size is less than `max_bytes_to_fetch`
+        let total_size: u64 = transactions.iter().map(|t| t.data().len() as u64).sum();
+        assert!(
+            total_size <= max_bytes_to_fetch,
+            "Should have fetched transactions up to {}",
+            max_bytes_to_fetch
+        );
+        all_transactions.extend(transactions);
+
+        // try to pull again transactions, result should be empty
+        assert!(consumer.next().is_empty());
+
+        for (i, transaction) in all_transactions.iter().enumerate() {
+            let t: String = bcs::from_bytes(transaction.data()).unwrap();
+            assert_eq!(format!("transaction {i}").to_string(), t);
+        }
     }
 }

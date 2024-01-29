@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
-use std::{collections::HashSet, mem, sync::Arc};
+use std::{collections::HashSet, sync::Arc};
 
 use crate::{
     block::{
         timestamp_utc_ms, Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, Round, SignedBlock,
-        Transaction, VerifiedBlock,
+        VerifiedBlock,
     },
     block_manager::BlockManager,
     context::Context,
@@ -19,23 +19,6 @@ use consensus_config::{AuthorityIndex, NetworkKeyPair};
 use mysten_metrics::monitored_scope;
 use tokio::sync::watch;
 
-/// The maximum transaction payload defined in bytes.
-/// TODO: move to protocol config
-const MAX_BLOCK_TRANSACTIONS_SIZE_BYTES: usize = 5 * 1024 * 1024; // 5 MB
-
-#[derive(Clone)]
-pub(crate) struct CoreOptions {
-    max_payload_size_bytes: usize,
-}
-
-impl Default for CoreOptions {
-    fn default() -> Self {
-        Self {
-            max_payload_size_bytes: MAX_BLOCK_TRANSACTIONS_SIZE_BYTES,
-        }
-    }
-}
-
 #[allow(dead_code)]
 pub(crate) struct Core {
     context: Arc<Context>,
@@ -45,8 +28,6 @@ pub(crate) struct Core {
     last_proposed_block: VerifiedBlock,
     /// The consumer to use in order to pull transactions to be included for the next proposals
     transactions_consumer: TransactionsConsumer,
-    /// The transactions that haven't been proposed yet and are to be included in the next proposal
-    pending_transactions: Vec<Transaction>,
     /// The pending ancestors to be included in proposals organised by round.
     pending_ancestors: BTreeMap<Round, Vec<VerifiedBlock>>,
     /// The block manager which is responsible for keeping track of the DAG dependencies when processing new blocks
@@ -54,8 +35,6 @@ pub(crate) struct Core {
     block_manager: BlockManager,
     /// Signals that the component emits
     signals: CoreSignals,
-    /// The options for the component
-    options: CoreOptions,
     /// The keypair to be used for block signing
     block_signer: NetworkKeyPair,
 }
@@ -67,7 +46,6 @@ impl Core {
         transactions_consumer: TransactionsConsumer,
         block_manager: BlockManager,
         mut signals: CoreSignals,
-        options: CoreOptions,
         block_signer: NetworkKeyPair,
     ) -> Self {
         // TODO: restore the threshold clock round based on the last quorum data in storage when crash/recover
@@ -96,11 +74,9 @@ impl Core {
             threshold_clock,
             last_proposed_block: genesis_my,
             transactions_consumer,
-            pending_transactions: Vec::new(),
             pending_ancestors,
             block_manager,
             signals,
-            options,
             block_signer,
         }
     }
@@ -163,11 +139,6 @@ impl Core {
     fn try_new_block(&mut self, ignore_leaders_check: bool) -> Option<VerifiedBlock> {
         let _scope = monitored_scope("Core::try_new_block");
 
-        // Pull transactions to be proposed and append to the pending list
-        for transaction in self.transactions_consumer.next() {
-            self.pending_transactions.push(transaction);
-        }
-
         let clock_round = self.threshold_clock.get_round();
         if clock_round <= self.last_proposed_round() {
             return None;
@@ -186,9 +157,8 @@ impl Core {
             let now = timestamp_utc_ms();
             let ancestors = self.ancestors_to_propose(clock_round, now);
 
-            //2. consume the next transactions to be included. Split the vec and swap because we want to hold on the
-            // `payload` variable the front of the queue (the older transactions).
-            let payload = self.transactions_to_propose();
+            //2. consume the next transactions to be included.
+            let payload = self.transactions_consumer.next();
 
             //3. create the block and insert to storage.
             // TODO: take a decision on whether we want to flush to disk at this point the DagState.
@@ -318,23 +288,6 @@ impl Core {
     fn last_proposed_block(&self) -> &VerifiedBlock {
         &self.last_proposed_block
     }
-
-    fn transactions_to_propose(&mut self) -> Vec<Transaction> {
-        let mut total_payload_size = 0;
-        let transactions_index = self
-            .pending_transactions
-            .iter()
-            .position(|t| {
-                total_payload_size += t.data().len();
-                total_payload_size > self.options.max_payload_size_bytes
-            })
-            .unwrap_or(self.pending_transactions.len());
-
-        let mut payload = self.pending_transactions.split_off(transactions_index);
-        mem::swap(&mut payload, &mut self.pending_transactions);
-
-        payload
-    }
 }
 
 /// Signals support a series of signals that are sent from Core when various events happen (ex new block produced).
@@ -396,31 +349,42 @@ impl CoreSignalsReceivers {
 mod test {
     use super::*;
     use crate::block::TestBlock;
-    use crate::metrics::test_metrics;
     use crate::transactions_client::TransactionsClient;
-    use consensus_config::{Committee, Parameters, Stake};
+    use consensus_config::{Committee, Stake};
     use std::collections::BTreeSet;
     use std::time::Duration;
     use sui_protocol_config::ProtocolConfig;
 
     #[tokio::test]
     async fn test_core_propose_after_genesis() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_consensus_max_transaction_size_bytes(2_000);
+            config.set_consensus_max_block_transactions_size_bytes(2_000);
+            config
+        });
+
         let (context, mut key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
         let block_manager = BlockManager::new();
-        let (transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
-        let transactions_consumer = TransactionsConsumer::new(tx_receiver);
+        let (transactions_client, tx_receiver) = TransactionsClient::new(
+            context.clone(),
+            context
+                .protocol_config
+                .consensus_max_transaction_size_bytes(),
+        );
+        let transactions_consumer = TransactionsConsumer::new(
+            tx_receiver,
+            context
+                .protocol_config
+                .consensus_max_block_transactions_size_bytes(),
+        );
         let (signals, _signal_receivers) = CoreSignals::new();
-        let options = CoreOptions {
-            max_payload_size_bytes: 100,
-        };
 
         let mut core = Core::new(
             context.clone(),
             transactions_consumer,
             block_manager,
             signals,
-            options.clone(),
             key_pairs.remove(context.own_index.value()).0,
         );
 
@@ -452,11 +416,16 @@ mod test {
 
         let mut total = 0;
         for (i, transaction) in block.transactions().iter().enumerate() {
-            total += transaction.data().len();
+            total += transaction.data().len() as u64;
             let transaction: String = bcs::from_bytes(transaction.data()).unwrap();
             assert_eq!(format!("Transaction {i}"), transaction);
         }
-        assert!(total < options.max_payload_size_bytes);
+        assert!(
+            total
+                < context
+                    .protocol_config
+                    .consensus_max_block_transactions_size_bytes()
+        );
 
         // genesis blocks should be referenced
         let (genesis_my, mut genesis_others) = Block::genesis(context);
@@ -479,8 +448,18 @@ mod test {
         let (context, mut key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
         let block_manager = BlockManager::new();
-        let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
-        let transactions_consumer = TransactionsConsumer::new(tx_receiver);
+        let (_transactions_client, tx_receiver) = TransactionsClient::new(
+            context.clone(),
+            context
+                .protocol_config
+                .consensus_max_transaction_size_bytes(),
+        );
+        let transactions_consumer = TransactionsConsumer::new(
+            tx_receiver,
+            context
+                .protocol_config
+                .consensus_max_block_transactions_size_bytes(),
+        );
         let (signals, _signal_receivers) = CoreSignals::new();
 
         let mut core = Core::new(
@@ -488,7 +467,6 @@ mod test {
             transactions_consumer,
             block_manager,
             signals,
-            CoreOptions::default(),
             key_pairs.remove(context.own_index.value()).0,
         );
 
@@ -679,16 +657,26 @@ mod test {
 
         for index in 0..authorities.len() {
             let (committee, mut signers) = Committee::new_for_test(0, authorities.clone());
-            let context = Arc::new(Context::new(
-                AuthorityIndex::new_for_test(index as u32),
-                committee,
-                Parameters::default(),
-                ProtocolConfig::get_for_min_version(),
-                test_metrics(),
-            ));
+            let (mut context, _) = Context::new_for_test(4);
+            context = context
+                .with_committee(committee)
+                .with_authority_index(AuthorityIndex::new_for_test(index as u32));
+
+            let context = Arc::new(context);
+
             let block_manager = BlockManager::new();
-            let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
-            let transactions_consumer = TransactionsConsumer::new(tx_receiver);
+            let (_transactions_client, tx_receiver) = TransactionsClient::new(
+                context.clone(),
+                context
+                    .protocol_config
+                    .consensus_max_transaction_size_bytes(),
+            );
+            let transactions_consumer = TransactionsConsumer::new(
+                tx_receiver,
+                context
+                    .protocol_config
+                    .consensus_max_block_transactions_size_bytes(),
+            );
             let (signals, signal_receivers) = CoreSignals::new();
 
             let block_signer = signers.remove(index).0;
@@ -698,7 +686,6 @@ mod test {
                 transactions_consumer,
                 block_manager,
                 signals,
-                CoreOptions::default(),
                 block_signer,
             );
 
