@@ -17,6 +17,8 @@ module crypto::ec_ops {
     #[test_only]
     use std::hash::sha2_256;
     #[test_only]
+    use sui::bcs;
+    #[test_only]
     use sui::test_utils::assert_eq;
 
     const EInvalidLength: u64 = 0;
@@ -215,74 +217,123 @@ module crypto::ec_ops {
         assert!(!equility_verify(&pk1, &pk2, &enc1, &enc2, &proof), 0);
     }
 
-    ////////////////////////////
-    ////// IBE decryption //////
+    ///////////////////////////////////////
+    ////// tlock (an IBE decryption) //////
 
+    /// An encryption of 32 bytes message following https://eprint.iacr.org/2023/189.pdf.
     struct IbeEncryption has store, drop, copy {
         u: Element<bls12381::G2>,
         v: vector<u8>,
         w: vector<u8>,
     }
 
+    public fun ibe_encryption_from_bytes(bytes: &vector<u8>): IbeEncryption {
+        assert!(vector::length(bytes) == 96 + 32 + 32, 0);
+        let buffer = vector::empty();
+        let i = 0;
+        while (i < 96) {
+            vector::push_back(&mut buffer, *vector::borrow(bytes, i));
+            i = i + 1;
+        };
+        let u = bls12381::g2_from_bytes(&buffer);
+
+        let v = vector::empty();
+        while (i < 96 + 32) {
+            vector::push_back(&mut v, *vector::borrow(bytes, i));
+            i = i + 1;
+        };
+
+        let w = vector::empty();
+        while (i < 96 + 32 + 32) {
+            vector::push_back(&mut w, *vector::borrow(bytes, i));
+            i = i + 1;
+        };
+
+        IbeEncryption { u, v, w }
+    }
+
     // Encrypt a message 'm' for 'target'. Follows the algorithms of https://eprint.iacr.org/2023/189.pdf.
+    // Note that the algorithms in that paper use G2 for signatures, where the actual chain uses G1, thus
+    // the operations below are slightly different.
     #[test_only]
     fun insecure_ibe_encrypt(pk: &Element<bls12381::G2>, target: &vector<u8>, m: &vector<u8>, sigma: &vector<u8>): IbeEncryption {
-        assert!(vector::length(target) <= 32, 0);
-        // r = H(sigma | m) as a scalar
-        let to_hash = vector::empty<u8>();
+        assert!(vector::length(sigma) == 32, 0);
+
+        // pk_rho = e(H1(target), pk)
+        let target_hash = bls12381::hash_to_g1(target);
+        let pk_rho = bls12381::pairing(&target_hash, pk);
+
+        // r = H3(sigma | m) as a scalar
+        assert!(vector::length(m) == vector::length(sigma), 0);
+        let to_hash = b"HASH3 - ";
         vector::append(&mut to_hash, *sigma);
         vector::append(&mut to_hash, *m);
         let r = modulo_order(&blake2b256(&to_hash));
         let r = bls12381::scalar_from_bytes(&r);
+
         // U = r*g2
         let u = bls12381::g2_mul(&r, &bls12381::g2_generator());
-        // V = sigma xor H(e(H(target), pk^r))
-        let pk_r = bls12381::g2_mul(&r, pk);
-        let target_hash = bls12381::hash_to_g1(target);
-        let e = bls12381::pairing(&target_hash, &pk_r);
-        let hash = blake2b256(group_ops::bytes(&e));
+
+        // V = sigma xor H2(pk_rho^r)
+        let pk_rho_r = bls12381::gt_mul(&r, &pk_rho);
+        let to_hash = b"HASH2 - ";
+        vector::append(&mut to_hash, *group_ops::bytes(&pk_rho_r));
+        let hash_pk_rho_r = blake2b256(&to_hash);
         let v = vector::empty();
         let i = 0;
         while (i < vector::length(sigma)) {
-            vector::push_back(&mut v, *vector::borrow(sigma, i) ^ *vector::borrow(&hash, i));
+            vector::push_back(&mut v, *vector::borrow(sigma, i) ^ *vector::borrow(&hash_pk_rho_r, i));
             i = i + 1;
         };
-        // W = m xor H(sigma)
-        let hash = blake2b256(sigma);
+
+        // W = m xor H4(sigma)
+        let to_hash = b"HASH4 - ";
+        vector::append(&mut to_hash, *sigma);
+        let hash = blake2b256(&to_hash);
         let w = vector::empty();
         let i = 0;
         while (i < vector::length(m)) {
             vector::push_back(&mut w, *vector::borrow(m, i) ^ *vector::borrow(&hash, i));
             i = i + 1;
         };
+
         IbeEncryption { u, v, w }
     }
 
     // Decrypt an IBE encryption using a 'target_key'.
     public fun ibe_decrypt(enc: IbeEncryption, target_key: &Element<bls12381::G1>): Option<vector<u8>> {
-        // sigma_prime = V xor H(e(H(target), pk^r))
+        // sigma_prime = V xor H2(e(target_key, u))
         let e = bls12381::pairing(target_key, &enc.u);
-        let hash = blake2b256(group_ops::bytes(&e));
+        let to_hash = b"HASH2 - ";
+        vector::append(&mut to_hash, *group_ops::bytes(&e));
+        let hash = blake2b256(&to_hash);
         let sigma_prime = vector::empty();
         let i = 0;
         while (i < vector::length(&enc.v)) {
             vector::push_back(&mut sigma_prime, *vector::borrow(&hash, i) ^ *vector::borrow(&enc.v, i));
             i = i + 1;
         };
-        // m_prime = W xor H(sigma_prime)
-        let hash = blake2b256(&sigma_prime);
+
+        // m_prime = W xor H4(sigma_prime)
+        let to_hash = b"HASH4 - ";
+        vector::append(&mut to_hash, sigma_prime);
+        let hash = blake2b256(&to_hash);
         let m_prime = vector::empty();
         let i = 0;
         while (i < vector::length(&enc.w)) {
             vector::push_back(&mut m_prime, *vector::borrow(&hash, i) ^ *vector::borrow(&enc.w, i));
             i = i + 1;
         };
-        // r = H(sigma_prime | m_prime) as a scalar
-        let to_hash = vector::empty<u8>();
+
+        // r = H3(sigma_prime | m_prime) as a scalar (the paper has a typo)
+        let to_hash = b"HASH3 - ";
         vector::append(&mut to_hash, sigma_prime);
         vector::append(&mut to_hash, m_prime);
+        // If the encryption is generated correctly, this should always be a valid scalar (before the modulo).
+        // However since in the tests we create it insecurely, we make sure it is in the right range.
         let r = modulo_order(&blake2b256(&to_hash));
         let r = bls12381::scalar_from_bytes(&r);
+
         // U ?= r*g2
         let g2r = bls12381::g2_mul(&r, &bls12381::g2_generator());
         if (group_ops::equal(&enc.u, &g2r)) {
@@ -299,18 +350,11 @@ module crypto::ec_ops {
         let round = 1234;
         let pk_bytes = x"83cf0f2896adee7eb8b5f01fcad3912212c437e0073e911fb90022d3e760183c8c4b450b6a0a6c3ac6a5776a2d1064510d1fec758c921cc22b0e17e63aaf4bcb5ed66304de9cf809bd274ca73bab4af5a6e9c76a4bc09e76eae8991ef5ece45a";
         let pk = bls12381::g2_from_bytes(&pk_bytes);
-        let msg = x"0101010101";
+        let msg = x"0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
 
         // Derive the 'target' for the specific round (see drand_lib.move).
-        let round_bytes: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0];
-        let i = 7;
-        while (i > 0) {
-            let curr_byte = round % 0x100;
-            let curr_element = vector::borrow_mut(&mut round_bytes, i);
-            *curr_element = (curr_byte as u8);
-            round = round >> 8;
-            i = i - 1;
-        };
+        let round_bytes = bcs::to_bytes(&round);
+        vector::reverse(&mut round_bytes);
         let target = sha2_256(round_bytes);
 
         // Retreived with 'curl https://api.drand.sh/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/public/1234'.
@@ -318,7 +362,13 @@ module crypto::ec_ops {
         let target_key = bls12381::g1_from_bytes(&sig_bytes);
         assert!(bls12381::bls12381_min_sig_verify(&sig_bytes, &pk_bytes, &target), 0);
 
-        let enc = insecure_ibe_encrypt(&pk, &target, &msg, &x"1234567890");
+        let enc = insecure_ibe_encrypt(&pk, &target, &msg, &x"A123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF");
+        let decrypted_msg = ibe_decrypt(enc, &target_key);
+        assert!(option::extract(&mut decrypted_msg) == msg, 0);
+
+        // Test an example output that was generated by the Rust CLI.
+        let enc = x"b598e92e55ac1a2e78b61ce4a223c3c6b17db2dc4e5c807965649d882c71f05e1a7eac110e40c7b7faae4d556d6b418c03521e351504b371e91c1e7637292e4fb9f7ad4a8b6a1fecebd2b3208e18cab594b081d11cbfb1f15b7b18b4af6876fd796026a67def0b05222aadabcf86eaace0e708f469f491483f681e184f9178236f4e749635de4478f3bf44fb9264d35d6e83d58b3e5e686414b0953e99142a62";
+        let enc = ibe_encryption_from_bytes(&enc);
         let decrypted_msg = ibe_decrypt(enc, &target_key);
         assert!(option::extract(&mut decrypted_msg) == msg, 0);
     }
