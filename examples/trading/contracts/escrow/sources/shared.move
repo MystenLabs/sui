@@ -30,11 +30,19 @@ module escrow::shared {
     use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
+    use sui::event;
+    use sui::dynamic_object_field::{Self as dof};
 
     use escrow::lock::{Self, Locked, Key};
 
+    /// The `name` of the DOF that holds the Escrowed object.
+    /// Allows easy discoverability for the escrowed object.
+    struct EscrowedObjectKey has copy, store, drop {}
+
     /// An object held in escrow
-    struct Escrow<T: key + store> has key, store {
+    /// 
+    /// The escrowed object is added as a Dynamic Object Field so it can still be looked-up.
+    struct Escrow<phantom T: key + store> has key, store {
         id: UID,
 
         /// Owner of `escrowed`
@@ -46,10 +54,6 @@ module escrow::shared {
         /// ID of the key that opens the lock on the object sender wants from
         /// recipient.
         exchange_key: ID,
-
-        /// the escrowed object that we store into an option because it could
-        /// already be taken
-        escrowed: T,
     }
 
     // === Error codes ===
@@ -68,13 +72,22 @@ module escrow::shared {
         recipient: address,
         ctx: &mut TxContext
     ) {
-        let escrow = Escrow {
+        let escrow = Escrow<T> {
             id: object::new(ctx),
             sender: tx_context::sender(ctx),
             recipient,
             exchange_key,
-            escrowed,
         };
+
+        event::emit(EscrowCreated {
+            escrow_id: object::id(&escrow),
+            key_id: exchange_key,
+            sender: escrow.sender,
+            recipient,
+            item_id: object::id(&escrowed),
+        });
+
+        dof::add(&mut escrow.id, EscrowedObjectKey {}, escrowed);
 
         transfer::public_share_object(escrow);
     }
@@ -86,12 +99,13 @@ module escrow::shared {
         locked: Locked<U>,
         ctx: &TxContext,
     ): T {
+        let escrowed = dof::remove<EscrowedObjectKey, T>(&mut escrow.id, EscrowedObjectKey {});
+
         let Escrow {
             id,
             sender,
             recipient,
             exchange_key,
-            escrowed,
         } = escrow;
 
         assert!(recipient == tx_context::sender(ctx), EMismatchedSenderRecipient);
@@ -99,6 +113,11 @@ module escrow::shared {
 
         // Do the actual swap
         transfer::public_transfer(lock::unlock(locked, key), sender);
+
+        event::emit(EscrowSwapped {
+            escrow_id: object::uid_to_inner(&id),
+        });
+
         object::delete(id);
 
         escrowed
@@ -109,17 +128,45 @@ module escrow::shared {
         escrow: Escrow<T>,
         ctx: &TxContext
     ): T {
+
+        event::emit(EscrowCancelled {
+            escrow_id: object::id(&escrow)
+        });
+
+        let escrowed = dof::remove<EscrowedObjectKey, T>(&mut escrow.id, EscrowedObjectKey {});
+
         let Escrow {
             id,
             sender,
             recipient: _,
             exchange_key: _,
-            escrowed,
         } = escrow;
 
         assert!(sender == tx_context::sender(ctx), EMismatchedSenderRecipient);
         object::delete(id);
         escrowed
+    }
+
+    // === Events ===
+    struct EscrowCreated has copy, drop {
+        /// the ID of the escrow that was created
+        escrow_id: ID,
+        /// The ID of the `Key` that unlocks the requested object.
+        key_id: ID,
+        /// The id of the sender who'll receive `T` upon swap
+        sender: address,
+        /// The (original) recipient of the escrowed object
+        recipient: address,
+        /// The ID of the escrowed item
+        item_id: ID,
+    }
+
+    struct EscrowSwapped has copy, drop {
+        escrow_id: ID
+    }
+
+    struct EscrowCancelled has copy, drop {
+        escrow_id: ID
     }
 
     // === Tests ===
