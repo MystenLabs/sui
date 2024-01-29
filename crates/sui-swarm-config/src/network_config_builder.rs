@@ -6,7 +6,7 @@ use std::time::Duration;
 use std::{num::NonZeroUsize, path::Path, sync::Arc};
 
 use rand::rngs::OsRng;
-use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
+use sui_config::genesis::{Genesis, TokenAllocation, TokenDistributionScheduleBuilder};
 use sui_config::node::OverloadThresholdConfig;
 use sui_macros::nondeterministic;
 use sui_protocol_config::SupportedProtocolVersions;
@@ -55,6 +55,7 @@ pub struct ConfigBuilder<R = OsRng> {
     config_directory: PathBuf,
     supported_protocol_versions_config: Option<ProtocolVersionsConfig>,
     committee: CommitteeConfig,
+    genesis: Option<Genesis>,
     genesis_config: Option<GenesisConfig>,
     reference_gas_price: Option<u64>,
     additional_objects: Vec<Object>,
@@ -71,6 +72,7 @@ impl ConfigBuilder {
             config_directory: config_directory.as_ref().into(),
             supported_protocol_versions_config: None,
             committee: CommitteeConfig::Size(NonZeroUsize::new(1).unwrap()),
+            genesis: None,
             genesis_config: None,
             reference_gas_price: None,
             additional_objects: vec![],
@@ -117,6 +119,11 @@ impl<R> ConfigBuilder<R> {
 
     pub fn with_validators(mut self, validators: Vec<ValidatorGenesisConfig>) -> Self {
         self.committee = CommitteeConfig::Validators(validators);
+        self
+    }
+
+    pub fn with_genesis(mut self, genesis: Genesis) -> Self {
+        self.genesis = Some(genesis);
         self
     }
 
@@ -206,6 +213,7 @@ impl<R> ConfigBuilder<R> {
             config_directory: self.config_directory,
             supported_protocol_versions_config: self.supported_protocol_versions_config,
             committee: self.committee,
+            genesis: self.genesis,
             genesis_config: self.genesis_config,
             reference_gas_price: self.reference_gas_price,
             additional_objects: self.additional_objects,
@@ -324,7 +332,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             builder.build()
         };
 
-        let genesis = {
+        let genesis = self.genesis.unwrap_or_else(|| {
             let mut builder = sui_genesis_builder::Builder::new()
                 .with_parameters(genesis_config.parameters)
                 .add_objects(self.additional_objects);
@@ -346,7 +354,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             }
 
             builder.build()
-        };
+        });
 
         let validator_configs = validators
             .into_iter()

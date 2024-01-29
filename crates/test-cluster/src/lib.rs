@@ -12,6 +12,7 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use sui_config::genesis::Genesis;
 use sui_config::node::{DBCheckpointConfig, OverloadThresholdConfig, RunWithRange};
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
@@ -703,6 +704,7 @@ impl Drop for RandomNodeRestarter {
 }
 
 pub struct TestClusterBuilder {
+    genesis: Option<Genesis>,
     genesis_config: Option<GenesisConfig>,
     network_config: Option<NetworkConfig>,
     additional_objects: Vec<Object>,
@@ -726,6 +728,7 @@ pub struct TestClusterBuilder {
 impl TestClusterBuilder {
     pub fn new() -> Self {
         TestClusterBuilder {
+            genesis: None,
             genesis_config: None,
             network_config: None,
             additional_objects: vec![],
@@ -761,6 +764,11 @@ impl TestClusterBuilder {
     pub fn set_genesis_config(mut self, genesis_config: GenesisConfig) -> Self {
         assert!(self.genesis_config.is_none() && self.network_config.is_none());
         self.genesis_config = Some(genesis_config);
+        self
+    }
+
+    pub fn set_genesis(mut self, genesis: Genesis) -> Self {
+        self.genesis = Some(genesis);
         self
     }
 
@@ -981,6 +989,10 @@ impl TestClusterBuilder {
             )
             .with_db_checkpoint_config(self.db_checkpoint_config_fullnodes.clone())
             .with_fullnode_run_with_range(self.fullnode_run_with_range);
+
+        if let Some(genesis) = self.genesis.take() {
+            builder = builder.with_genesis(genesis);
+        }
 
         if let Some(genesis_config) = self.genesis_config.take() {
             builder = builder.with_genesis_config(genesis_config);

@@ -14,6 +14,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use sui_config::genesis::Genesis;
 use sui_config::node::{DBCheckpointConfig, OverloadThresholdConfig, RunWithRange};
 use sui_config::NodeConfig;
 use sui_macros::nondeterministic;
@@ -34,6 +35,7 @@ pub struct SwarmBuilder<R = OsRng> {
     // template: NodeConfig,
     dir: Option<PathBuf>,
     committee: CommitteeConfig,
+    genesis: Option<Genesis>,
     genesis_config: Option<GenesisConfig>,
     network_config: Option<NetworkConfig>,
     additional_objects: Vec<Object>,
@@ -58,6 +60,7 @@ impl SwarmBuilder {
             rng: OsRng,
             dir: None,
             committee: CommitteeConfig::Size(NonZeroUsize::new(1).unwrap()),
+            genesis: None,
             genesis_config: None,
             network_config: None,
             additional_objects: vec![],
@@ -82,6 +85,7 @@ impl<R> SwarmBuilder<R> {
             rng,
             dir: self.dir,
             committee: self.committee,
+            genesis: self.genesis,
             genesis_config: self.genesis_config,
             network_config: self.network_config,
             additional_objects: self.additional_objects,
@@ -126,6 +130,11 @@ impl<R> SwarmBuilder<R> {
     pub fn with_genesis_config(mut self, genesis_config: GenesisConfig) -> Self {
         assert!(self.network_config.is_none() && self.genesis_config.is_none());
         self.genesis_config = Some(genesis_config);
+        self
+    }
+
+    pub fn with_genesis(mut self, genesis: Genesis) -> Self {
+        self.genesis = Some(genesis);
         self
     }
 
@@ -259,6 +268,10 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 
         let network_config = self.network_config.unwrap_or_else(|| {
             let mut config_builder = ConfigBuilder::new(dir.as_ref());
+
+            if let Some(genesis) = self.genesis {
+                config_builder = config_builder.with_genesis(genesis);
+            }
 
             if let Some(genesis_config) = self.genesis_config {
                 config_builder = config_builder.with_genesis_config(genesis_config);

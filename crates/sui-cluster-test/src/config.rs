@@ -46,6 +46,9 @@ pub struct ClusterTestOpt {
     /// URL for the indexer RPC server
     #[clap(long)]
     pub graphql_address: Option<String>,
+    /// Path to genesis file
+    #[clap(long)]
+    pub genesis: Option<PathBuf>,
 }
 
 fn obfuscated_pg_address(val: &Option<String>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -76,6 +79,7 @@ impl ClusterTestOpt {
             config_dir: None,
             graphql_address: None,
             use_indexer_v2: false,
+            genesis: None,
         }
     }
 }

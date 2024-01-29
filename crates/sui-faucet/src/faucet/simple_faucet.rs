@@ -121,8 +121,9 @@ impl SimpleFaucet {
         let wal = WriteAheadLog::open(wal_path);
         let mut pending = vec![];
 
-        let (producer, consumer) = mpsc::channel(coins.len());
-        let (batch_producer, batch_consumer) = mpsc::channel(coins.len());
+        let channel_size = std::cmp::max(coins.len(), 1);
+        let (producer, consumer) = mpsc::channel(channel_size);
+        let (batch_producer, batch_consumer) = mpsc::channel(channel_size);
 
         let (sender, mut receiver) =
             mpsc::channel::<(Uuid, SuiAddress, Vec<u64>)>(config.max_request_queue_length as usize);

@@ -91,12 +91,17 @@ struct Args {
     /// If we should use the new version of the indexer
     #[clap(long)]
     pub use_indexer_v2: bool,
+
+    /// The directory location of the genesis file to use for  running a forked version of a pre-existing chain
+    #[clap(long)]
+    pub genesis: Option<std::path::PathBuf>,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
+        //.with_log_file("start_output.txt")
         .init();
 
     let args = Args::parse();
@@ -116,6 +121,7 @@ async fn main() -> Result<()> {
         with_indexer,
         use_indexer_experimental_methods,
         use_indexer_v2,
+        genesis,
     } = args;
 
     // We don't pass epoch duration if we have a genesis config.
@@ -148,6 +154,7 @@ async fn main() -> Result<()> {
         config_dir,
         graphql_address: graphql_port.map(|p| format!("{}:{}", graphql_host, p)),
         use_indexer_v2,
+        genesis,
     };
 
     println!("Starting Sui validator with config: {:#?}", cluster_config);

@@ -5,6 +5,7 @@ use super::config::{ClusterTestOpt, Env};
 use async_trait::async_trait;
 use std::net::SocketAddr;
 use std::path::Path;
+use sui_config::node::Genesis;
 use sui_config::Config;
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG};
 use sui_graphql_rpc::config::ConnectionConfig;
@@ -196,6 +197,12 @@ impl Cluster for LocalNewCluster {
             cluster_builder = cluster_builder.set_network_config(network_config);
             cluster_builder = cluster_builder.with_config_dir(config_dir);
         } else {
+            if let Some(genesis_file) = &options.genesis {
+                let binding = Genesis::new_from_file(genesis_file);
+                let genesis = binding.genesis()?;
+                cluster_builder = cluster_builder.set_genesis(genesis.clone());
+            }
+
             // Let the faucet account hold 1000 gas objects on genesis
             let genesis_config = GenesisConfig::custom_genesis(1, 100);
             // Custom genesis should be build here where we add the extra accounts

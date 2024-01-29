@@ -35,6 +35,7 @@ async fn test_sui_cluster() {
         config_dir: None,
         graphql_address: Some(graphql_address),
         use_indexer_v2: true,
+        genesis: None,
     };
 
     let _cluster = LocalNewCluster::start(&opts).await.unwrap();
