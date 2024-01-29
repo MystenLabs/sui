@@ -1159,6 +1159,37 @@ importers:
         specifier: ^5.1.6
         version: 5.1.6
 
+  examples/trading/api:
+    dependencies:
+      '@mysten/sui.js':
+        specifier: workspace:*
+        version: link:../../../sdk/typescript
+      '@prisma/client':
+        specifier: ^5.8.1
+        version: 5.8.1(prisma@5.8.1)
+      express:
+        specifier: ^4.18.2
+        version: 4.18.2
+    devDependencies:
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.21
+      '@types/node':
+        specifier: ^20.4.2
+        version: 20.4.2
+      concurrently:
+        specifier: ^8.2.0
+        version: 8.2.0
+      prisma:
+        specifier: ^5.8.1
+        version: 5.8.1
+      ts-node:
+        specifier: ^10.9.1
+        version: 10.9.1(@types/node@20.4.2)(typescript@5.1.6)
+      typescript:
+        specifier: ^5.1.6
+        version: 5.1.6
+
   sdk/bcs:
     dependencies:
       bs58:
