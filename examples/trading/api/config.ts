@@ -13,9 +13,11 @@ const parseConfigurationFile = (fileName: string) => {
 	}
 };
 
-/// A default configuration
-/// You need to call `publish-contracts.ts` before running any functionality
-/// depends on it, or update our imports to not use these json files.
+/**
+ * A default configuration
+ * You need to call `publish-contracts.ts` before running any functionality
+ * depends on it, or update our imports to not use these json files.
+ * */
 export const CONFIG = {
 	/// Look for events every 1s
 	POLLING_INTERVAL_MS: 1000,

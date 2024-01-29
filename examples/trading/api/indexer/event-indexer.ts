@@ -83,8 +83,10 @@ const runEventJob = async (client: SuiClient, tracker: EventTracker) => {
 	}
 };
 
-/// Gets the latest cursor for an event tracker, either from the DB (if it's undefined)
-/// or from the running cursors.
+/**
+ * Gets the latest cursor for an event tracker, either from the DB (if it's undefined)
+ *  or from the running cursors.
+ */
 const getLatestCursor = async (tracker: EventTracker) => {
 	if (Object.hasOwn(runningCursors, tracker.type)) return runningCursors[tracker.type];
 
@@ -99,8 +101,10 @@ const getLatestCursor = async (tracker: EventTracker) => {
 	return runningCursors[tracker.type];
 };
 
-/// Saves the latest cursor for an event tracker to the db, so we can resume
-/// from there.
+/**
+ * Saves the latest cursor for an event tracker to the db, so we can resume
+ * from there.
+ * */
 const saveLatestCursor = async (tracker: EventTracker, cursor: EventId) => {
 	const data = {
 		eventSeq: cursor.eventSeq,
