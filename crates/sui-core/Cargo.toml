@@ -23,6 +23,7 @@ im.workspace = true
 indexmap.workspace = true
 itertools.workspace = true
 lru.workspace = true
+mockall.workspace = true
 num_cpus.workspace = true
 object_store.workspace = true
 once_cell.workspace = true
@@ -46,6 +47,7 @@ tokio-stream.workspace = true
 tracing.workspace = true
 
 fastcrypto.workspace = true
+fastcrypto-tbls.workspace = true
 fastcrypto-zkp.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true

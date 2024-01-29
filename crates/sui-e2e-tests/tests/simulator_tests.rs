@@ -131,6 +131,7 @@ async fn test_net_determinism() {
         // consensus. It does not appear to be caused by this feature itself, so I'm disabling this
         // until I have time to debug further.
         config.set_enable_jwk_consensus_updates_for_testing(false);
+        config.set_random_beacon_for_testing(false);
         config
     });
 

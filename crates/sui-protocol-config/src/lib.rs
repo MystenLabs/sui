@@ -1808,6 +1808,9 @@ impl ProtocolConfig {
     pub fn set_enable_jwk_consensus_updates_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_jwk_consensus_updates = val
     }
+    pub fn set_random_beacon_for_testing(&mut self, val: bool) {
+        self.feature_flags.random_beacon = val
+    }
     pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.upgraded_multisig_supported = val
     }

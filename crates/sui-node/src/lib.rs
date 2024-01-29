@@ -24,6 +24,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::SubmitToConsensus;
+use sui_core::epoch::randomness::RandomnessManager;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_types::base_types::ConciseableName;
 use sui_types::digests::ChainIdentifier;
@@ -1173,6 +1174,18 @@ impl SuiNode {
                 epoch_store.clone(),
                 consensus_adapter.clone(),
             );
+        }
+
+        if epoch_store.randomness_state_enabled() {
+            let randomness_manager = RandomnessManager::try_new(
+                Arc::downgrade(&epoch_store),
+                consensus_adapter.clone(),
+                config.protocol_key_pair(),
+            )
+            .map(Arc::new);
+            if let Some(randomness_manager) = &randomness_manager {
+                epoch_store.set_randomness_manager(randomness_manager.clone())?;
+            }
         }
 
         Ok(ValidatorComponents {
