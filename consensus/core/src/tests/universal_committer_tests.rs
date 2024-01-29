@@ -29,18 +29,20 @@ fn direct_commit() {
     // Create committer without pipelining and only 1 leader per round
     let committer = UniversalCommitterBuilder::new(context.clone(), dag_state.clone()).build();
 
-    // Build fully connected fully connected dag with empty blocks
-    // adding up to voting round of wave 2 to the dag so that we have
-    // 2 completed waves and one incomplete wave. The universal committer
-    // should mark the potential leaders in r6 undecided because there is no way
-    // to get enough certificates for r6 leaders without completing wave 2.
+    // Build fully connected dag with empty blocks adding up to voting round of
+    // wave 2 to the dag so that we have 2 completed waves and one incomplete wave.
     // note: without pipelining or multi-leader enabled there should only be one committer.
+    assert!(committer.committers.len() == 1);
     let leader_round_wave_1 = committer.committers[0].leader_round(1);
     let voting_round_wave_2 = committer.committers[0].leader_round(2) + 1;
     build_dag(context, dag_state, None, voting_round_wave_2);
 
     // Genesis cert will not be included in commit sequence, marking it as last decided
     let last_decided = Slot::new_for_test(0, 0);
+
+    // The universal committer should mark the potential leaders in r6 as undecided
+    // because there is no way to get enough certificates for r6 leaders without
+    // completing wave 2.
     let sequence = committer.try_commit(last_decided);
     tracing::info!("Commit sequence: {sequence:?}");
 
@@ -154,9 +156,13 @@ fn indirect_commit() {
     tracing::info!("Commit sequence: {sequence:?}");
     assert_eq!(sequence.len(), 2);
 
-    if let LeaderStatus::Commit(ref block) = sequence[0] {
-        assert_eq!(block.author(), leader_wave_1);
-    } else {
-        panic!("Expected a committed leader")
-    };
+    for (idx, decided_leader) in sequence.iter().enumerate() {
+        let leader_round = committer.committers[0].leader_round(idx as u32 + 1);
+        let expected_leader = committer.get_leaders(leader_round)[0];
+        if let LeaderStatus::Commit(ref block) = decided_leader {
+            assert_eq!(block.author(), expected_leader);
+        } else {
+            panic!("Expected a committed leader")
+        };
+    }
 }

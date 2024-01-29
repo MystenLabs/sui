@@ -22,7 +22,7 @@ pub mod universal_committer_tests;
 /// It can be configured to use a combination of different commit strategies, including
 /// multi-leaders, backup leaders, and pipelines.
 #[allow(unused)]
-pub struct UniversalCommitter {
+pub(crate) struct UniversalCommitter {
     /// The per-epoch configuration of this authority.
     context: Arc<Context>,
     /// Block store representing the Dag state
@@ -91,8 +91,7 @@ impl UniversalCommitter {
             .collect()
     }
 
-    /// Return list of leaders for the round. Syncer may give those leaders some extra time.
-    /// To preserve (theoretical) liveness, we should wait `Delta` time for at least the first leader.
+    /// Return list of leaders for the round.
     /// Can return empty vec if round does not have a designated leader.
     pub fn get_leaders(&self, round: Round) -> Vec<AuthorityIndex> {
         self.committers
@@ -136,7 +135,7 @@ mod universal_committer_builder {
         leader_schedule::LeaderSchedule,
     };
 
-    pub struct UniversalCommitterBuilder {
+    pub(crate) struct UniversalCommitterBuilder {
         context: Arc<Context>,
         leader_schedule: LeaderSchedule,
         dag_state: Arc<RwLock<DagState>>,

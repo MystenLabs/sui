@@ -61,7 +61,6 @@ impl DagState {
             Some(commit) => commit.last_committed_rounds.clone(),
             None => vec![0; num_authorities],
         };
-        let highest_round = *last_committed_rounds.iter().max().unwrap();
 
         let mut state = Self {
             context,
@@ -69,7 +68,7 @@ impl DagState {
             cached_refs: vec![BTreeSet::new(); num_authorities],
             last_commit,
             store,
-            highest_round,
+            highest_round: 0,
         };
 
         for (i, round) in last_committed_rounds.into_iter().enumerate() {
