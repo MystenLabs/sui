@@ -934,6 +934,7 @@ mod test {
     use prometheus::Registry;
 
     #[test]
+    #[cfg_attr(msim, ignore)]
     fn test_available_objects_cache() {
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::default()));
         let mut cache = AvailableObjectsCache::new_with_size(metrics, 5);
