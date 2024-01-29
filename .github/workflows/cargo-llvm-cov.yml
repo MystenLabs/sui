@@ -29,7 +29,7 @@ jobs:
         
       - name: Generate code coverage for nextest
         continue-on-error: true
-        run: SUI_SKIP_SIMTESTS=1 cargo llvm-cov --no-fail-fast --lcov --output-path lcov.info nextest
+        run: SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
