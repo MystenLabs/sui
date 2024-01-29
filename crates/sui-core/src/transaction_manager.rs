@@ -756,6 +756,7 @@ impl TransactionManager {
         assert!(inner
             .executing_certificates
             .insert(*pending_certificate.certificate.digest()));
+        self.metrics.txn_ready_rate_tracker.lock().record();
         let _ = self.tx_ready_certificates.send(pending_certificate);
         self.metrics.transaction_manager_num_ready.inc();
         self.metrics.execution_driver_dispatch_queue.inc();
