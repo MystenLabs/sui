@@ -49,7 +49,7 @@ jobs:
           export sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)
           [[ "${sui_tag}" == "main" ]] && echo "tag cannot be equals to 'main'" && exit 1
           echo "sui_tag=${sui_tag}" >> $GITHUB_ENV
-          export sui_version=$(echo ${sui_tag} | sed s/'mainnet-v'//)
+          export sui_version=$(echo ${sui_tag} | sed -e 's/mainnet-v//' -e 's/testnet-v//')
           echo "sui_version=${sui_version}" >> $GITHUB_ENV
 
       - name: Configure AWS credentials
@@ -160,7 +160,7 @@ jobs:
           [[ ${{ env.sui_tag }} == *"mainnet"* ]] && aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz || true
 
       - name: "Publish Windows sui binary to Chocolately"
-        if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' && contains( env.sui_tag, 'mainnet') }}
+        if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' && contains( env.sui_tag, 'testnet') }}
         working-directory: chocolatey
         shell: bash
         run: |
