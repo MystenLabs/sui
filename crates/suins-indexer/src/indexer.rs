@@ -17,7 +17,7 @@ use crate::models::VerifiedDomain;
 /// TODO(manos): Hardcode mainnet addresses.
 const REGISTRY_TABLE_ID: &str =
     "0xe64cd9db9f829c6cc405d9790bd71567ae07259855f4fba6f02c84f52298c106";
-const SUBDOMAIN_REGISTRATION_TYPE: &str = "0xe64cd9db9f829c6cc405d9790bd71567ae07259855f4fba6f02c84f52298c106::subdomain_registration::SubDomainRegistration";
+const SUBDOMAIN_REGISTRATION_TYPE: &str = "0xPackageIdTBD::subdomain_registration::SubDomainRegistration";
 
 #[derive(Debug, Clone)]
 pub struct NameRecordChange {

@@ -65,7 +65,6 @@ impl SuinsIndexerWorker {
                         // That prevents a scenario where we first process a later checkpoint that did an update to the name record (e..g change target address),
                         // without first executing the checkpoint that created the subdomain wrapper.
                         // Since wrapper re-assignment can only happen every 2 days, we can't write invalid data here.
-                        //
                         domains::subdomain_wrapper_id
                             .eq(sql(&format_update_subdomain_wrapper_query())),
                     ))
@@ -101,6 +100,7 @@ async fn main() -> Result<()> {
     let aws_key_id = env::var("AWS_ACCESS_KEY_ID").ok();
     let aws_secret_access_key = env::var("AWS_ACCESS_SECRET_KEY").ok();
     let aws_session_token = env::var("AWS_SESSION_TOKEN").ok();
+    let aws_s3_endpoint = env::var("AWS_S3_ENDPOINT").ok();
     let backfill_progress_file_path =
         env::var("BACKFILL_PROGRESS_FILE_PATH").unwrap_or("/tmp/backfill_progress".to_string());
     let checkpoints_dir = env::var("CHECKPOINTS_DIR").unwrap_or("/tmp/checkpoints".to_string());
@@ -126,11 +126,7 @@ async fn main() -> Result<()> {
     executor
         .run(
             PathBuf::from(checkpoints_dir), /* directory should exist but can be empty */
-            if aws_key_id.is_some() {
-                Some("https://s3.us-west-2.amazonaws.com/mysten-mainnet-checkpoints".to_string())
-            } else {
-                None
-            }, /* remote_read_endpoint: If set */
+            aws_s3_endpoint, /* remote_read_endpoint: If set */
             vec![
                 (
                     "aws_access_key_id".to_string(),

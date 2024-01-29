@@ -14,12 +14,15 @@ const TEST_SUBDOMAIN_REGISTRATION_TYPE: &str = "0x22fa05f21b1ad71442491220bb9338
 
 /// For our test policy, we have a few checkpoints that contain some data additions, deletions, replacements
 ///
-/// Checkpoint 22279187: Adds 3 different names. Deletes none.
-/// Checkpoint 22279365: Removes 1 name. Adds 1 name
-///
-/// TODO: Finish the tests.
+/// Checkpoint 22279187: Adds 3 different names (1 SLD, 1 leaf, 1 node). Deletes none.
+/// Checkpoint 22279365: Removes 1 leaf name. Adds 1 leaf name.
+/// Checkpoint 22279496: Replaces the name added on `22279365` (new.test.sui) by removing it and then adding it as a node name.
+/// Checkpoint 22279944: Adds `remove.test.sui`.
+/// Checkpoint 22280030: Adds `remove.test.sui` as a replacement (the previous one expired!). 
+///                      [This was only simulated using a dummy contract and cannot happen in realistic scenarios.]
+/// 
 #[test]
-fn process_initial_checkpoint() {
+fn process_22279187_checkpoint() {
     let checkpoint = read_checkpoint_from_file("22279187");
     let indexer = get_test_indexer();
 
@@ -35,6 +38,73 @@ fn process_initial_checkpoint() {
     assert!(names.contains(&"node.test.sui".to_string()));
     assert!(names.contains(&"test.sui".to_string()));
 }
+
+#[test]
+fn process_22279365_checkpoint() {
+    let checkpoint = read_checkpoint_from_file("22279365");
+    let indexer = get_test_indexer();
+    let (updates, removals) = indexer.process_checkpoint(checkpoint.clone());
+
+    // This checkpoint has 1 removal and 1 addition.
+    assert_eq!(removals.len(), 1);
+    assert_eq!(updates.len(), 1);
+
+    let addition = updates.get(0).unwrap();
+    assert_eq!(addition.name, "new.test.sui".to_string());
+    assert_eq!(addition.parent, "test.sui".to_string());
+    assert_eq!(addition.nft_id, "0xa4891f3754b203ef230a5e2a08822c835c808eab71e2bc6ca33a73cec9728376".to_string());
+    assert_eq!(addition.expiration_timestamp_ms, 0);
+    assert_eq!(addition.subdomain_wrapper_id, None);
+}
+
+#[test]
+fn process_22279496_checkpoint() {
+    let checkpoint = read_checkpoint_from_file("22279496");
+    let indexer = get_test_indexer();
+    let (updates, removals) = indexer.process_checkpoint(checkpoint.clone());
+
+    assert_eq!(removals.len(), 0);
+    assert_eq!(updates.len(), 1);
+
+    let addition = updates.get(0).unwrap();
+    assert_eq!(addition.name, "new.test.sui".to_string());
+    assert_eq!(addition.parent, "test.sui".to_string());
+    assert_eq!(addition.nft_id, "0x87f04a4ffa1713e0a7e3a9e5ebf56f0ab24ce0bba87b17eb11a7532cb381bd58".to_string());
+    assert_eq!(addition.expiration_timestamp_ms, 1706213544456);
+    assert_eq!(addition.subdomain_wrapper_id, Some("0xa308d8b800a2b65f4b2282bd0bbf11edf2435705905119c45257c21914bff032".to_string()));
+}
+
+#[test]
+fn process_22279944_checkpoint() {
+    let checkpoint = read_checkpoint_from_file("22279944");
+    let indexer = get_test_indexer();
+    let (updates, removals) = indexer.process_checkpoint(checkpoint.clone());
+    
+    assert_eq!(removals.len(), 0);
+    assert_eq!(updates.len(), 1);
+
+    let addition = updates.get(0).unwrap();
+    assert_eq!(addition.name, "remove.test.sui".to_string());
+    assert_eq!(addition.nft_id, "0x7c230e1a4cd7b708232a713a138f4c950e7f579b61d01b988f06d7dc53e99211".to_string());
+    assert_eq!(addition.subdomain_wrapper_id, Some("0x9ca93181d093598b55787e82f69296819e9f779f25f1cc5226d2cd4d07126790".to_string()));
+}
+
+#[test]
+fn process_22280030_checkpoint() {
+
+    let checkpoint = read_checkpoint_from_file("22280030");
+    let indexer = get_test_indexer();
+    let (updates, removals) = indexer.process_checkpoint(checkpoint.clone());
+    
+    assert_eq!(removals.len(), 0);
+    assert_eq!(updates.len(), 1);
+
+    let addition = updates.get(0).unwrap();
+    assert_eq!(addition.name, "remove.test.sui".to_string());
+    assert_eq!(addition.nft_id, "0xdd513860269b0768c6ed77ddaf48cd579ba0c2995e793eab182d6ab861818250".to_string());
+    assert_eq!(addition.subdomain_wrapper_id, Some("0x48de1a7eef5956c4f3478849654abd94dcf5b206c631328c50518091b0eee9b0".to_string()));
+}
+
 
 /// Reads a checkpoint from a given file in the `/tests/data` directory.
 fn read_checkpoint_from_file(file_name: &str) -> CheckpointData {
