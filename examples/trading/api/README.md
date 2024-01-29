@@ -5,7 +5,8 @@ to easily & efficiently serve on-chain data for our app.
 
 The demo indexer uses polling to watch for new events.
 
-Everything is pre-configured on testnet, but can be easily tweaked to work on any other network.
+Everything is pre-configured on testnet, but can be tweaked to work on any other network.
+You can easily change the network by creating a `.env` file with the variable `NETWORK=<mainnet|testnet|devnet|localnet>`
 
 ## Installation
 
@@ -57,8 +58,6 @@ npx ts-node helpers/create-demo-data.ts
 npx ts-node helpers/create-demo-escrows.ts
 ```
 
-
-
 If you want to reset the database (start from scratch), run:
 ```
 pnpm db:reset:dev && pnpm db:setup:dev
@@ -100,9 +99,11 @@ Available query parameters:
 | recipient 	| string            	|
 | sender    	| string            	|
 
-Example query: 
-
-`GET /escrows?sort=asc&limit=10&cursor=15&recipient=0x2&cancelled=false`
+> Example Query: Get only active escrows for address (5 per page)
+`0xfe09cf0b3d77678b99250572624bf74fe3b12af915c5db95f0ed5d755612eb68`
+```
+curl --location 'http://localhost:3000/escrows?limit=5&recipient=0xfe09cf0b3d77678b99250572624bf74fe3b12af915c5db95f0ed5d755612eb68&cancelled=false&swapped=false'
+```
 
 
 ## Event Indexer
