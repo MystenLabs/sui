@@ -197,7 +197,7 @@ impl TransactionBlockEffects {
 
     /// Effects to the gas object.
     async fn gas_effects(&self) -> Option<GasEffects> {
-        Some(GasEffects::from(self.native(), None)) // TODO (wlmyng) - pass in self.checkpoint_viewed_at
+        Some(GasEffects::from(self.native(), self.checkpoint_viewed_at))
     }
 
     /// Shared objects that are referenced by but not changed by this transaction.
@@ -260,7 +260,7 @@ impl TransactionBlockEffects {
         for c in cs {
             let object_change = ObjectChange {
                 native: object_changes[*c].clone(),
-                checkpoint_viewed_at: None, // TODO (wlmyng) pass in self.checkpoint_viewed_at
+                checkpoint_viewed_at: self.checkpoint_viewed_at,
             };
 
             connection
@@ -300,8 +300,8 @@ impl TransactionBlockEffects {
                 continue;
             };
 
-            let balance_change = BalanceChange::read(serialized, None) // TODO (wlmyng) - pass in txBlock's checkpoint_viewed_at
-                .extend()?;
+            let balance_change =
+                BalanceChange::read(serialized, self.checkpoint_viewed_at).extend()?;
             connection
                 .edges
                 .push(Edge::new(c.encode_cursor(), balance_change));
