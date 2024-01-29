@@ -22,8 +22,6 @@ use move_compiler::{
     diagnostics::{
         report_diagnostics_to_color_buffer, report_warnings, Diagnostics, FilesSourceText,
     },
-    expansion::ast::Attributes,
-    shared::known_attributes::KnownAttribute,
     sui_mode::linters::LINT_WARNING_PREFIX,
 };
 use move_core_types::{
