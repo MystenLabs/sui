@@ -2054,7 +2054,7 @@ pub struct ObjectOutput {
     pub digest: String,
     pub obj_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub owner_type: Option<String>,
+    pub owner: Option<Owner>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prev_tx: Option<TransactionDigest>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2065,13 +2065,6 @@ pub struct ObjectOutput {
 
 impl From<&SuiObjectData> for ObjectOutput {
     fn from(obj: &SuiObjectData) -> Self {
-        let owner_type = match obj.owner {
-            Some(Owner::AddressOwner(_)) => Some("AddressOwner".to_string()),
-            Some(Owner::ObjectOwner(_)) => Some("ObjectOwner".to_string()),
-            Some(Owner::Shared { .. }) => Some("Shared".to_string()),
-            Some(Owner::Immutable) => Some("Immutable".to_string()),
-            None => None,
-        };
         let obj_type = match obj.type_.as_ref() {
             Some(x) => x.to_string(),
             None => "unknown".to_string(),
@@ -2081,7 +2074,7 @@ impl From<&SuiObjectData> for ObjectOutput {
             version: obj.version,
             digest: obj.digest.to_string(),
             obj_type,
-            owner_type,
+            owner: obj.owner,
             prev_tx: obj.previous_transaction,
             storage_rebate: obj.storage_rebate,
             content: obj.content.clone(),
