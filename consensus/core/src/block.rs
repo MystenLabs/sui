@@ -525,7 +525,7 @@ mod tests {
 
     #[test]
     fn test_block_signing() {
-        let (context, key_pairs) = Context::new_for_test();
+        let (context, key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
 
         // Create a block that authority 2 has created

@@ -22,7 +22,7 @@ use crate::{
 fn try_direct_commit() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(4));
+    let context = Arc::new(Context::new_for_test(4).0);
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
@@ -78,7 +78,7 @@ fn try_direct_commit() {
 fn idempotence() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(4));
+    let context = Arc::new(Context::new_for_test(4).0);
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
@@ -122,7 +122,7 @@ fn idempotence() {
 fn multiple_direct_commit() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(4));
+    let context = Arc::new(Context::new_for_test(4).0);
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
@@ -163,7 +163,7 @@ fn multiple_direct_commit() {
 fn direct_skip() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(4));
+    let context = Arc::new(Context::new_for_test(4).0);
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
@@ -215,7 +215,7 @@ fn direct_skip() {
 fn indirect_commit() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(4));
+    let context = Arc::new(Context::new_for_test(4).0);
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
@@ -357,7 +357,7 @@ fn indirect_commit() {
 fn indirect_skip() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(4));
+    let context = Arc::new(Context::new_for_test(4).0);
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
@@ -487,7 +487,7 @@ fn indirect_skip() {
 fn undecided() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(4));
+    let context = Arc::new(Context::new_for_test(4).0);
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
@@ -575,7 +575,7 @@ fn undecided() {
 fn test_byzantine_direct_commit() {
     telemetry_subscribers::init_for_testing();
     // Commitee of 4 with even stake
-    let context = Arc::new(Context::new_for_test(4));
+    let context = Arc::new(Context::new_for_test(4).0);
     let dag_state = Arc::new(RwLock::new(DagState::new(
         context.clone(),
         Arc::new(MemStore::new()),
