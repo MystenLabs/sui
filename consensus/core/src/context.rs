@@ -5,8 +5,6 @@ use std::sync::Arc;
 
 use consensus_config::{AuthorityIndex, Committee, Parameters};
 use sui_protocol_config::ProtocolConfig;
-#[cfg(test)]
-use sui_protocol_config::{Chain, ProtocolVersion};
 
 use crate::metrics::Metrics;
 
@@ -69,7 +67,7 @@ impl Context {
 
     #[cfg(test)]
     pub(crate) fn default_protocol_config_for_testing() -> ProtocolConfig {
-        ProtocolConfig::get_for_version(ProtocolVersion::from(36), Chain::Unknown)
+        ProtocolConfig::get_for_max_version_UNSAFE()
     }
 
     #[cfg(test)]
