@@ -7,7 +7,7 @@ edition = "2021"
 license = "Apache-2.0"
 name = "suiop-cli"
 publish = false
-version = "0.1.6"
+version = "0.1.7"
 
 [lib]
 name = "suioplib"
