@@ -8,17 +8,19 @@ module bridge::limiter {
     use std::vector;
     use sui::clock;
     use sui::clock::Clock;
+    use sui::math::pow;
     use sui::vec_map;
     use sui::vec_map::VecMap;
+    use bridge::treasury;
     use bridge::chain_ids::BridgeRoute;
-    #[test_only]
-    use sui::sui::SUI;
     #[test_only]
     use sui::test_scenario;
     #[test_only]
     use sui::test_utils::destroy;
     #[test_only]
     use bridge::chain_ids;
+    #[test_only]
+    use bridge::eth::ETH;
 
     const ETransferAmountExceedLimit: u64 = 0;
 
@@ -95,6 +97,7 @@ module bridge::limiter {
         // Compute notional amount
         let coin_type = type_name::get<T>();
         let notional_amount = *vec_map::get(&self.notional_values, &coin_type) * amount;
+        let notional_amount = notional_amount / pow(10, treasury::token_decimals<T>());
 
         // Check if transfer amount exceed limit
         assert!(record.total_amount + notional_amount <= route_limit, ETransferAmountExceedLimit);
@@ -115,24 +118,27 @@ module bridge::limiter {
         };
 
         let route = chain_ids::get_route(chain_ids::sui_devnet(), chain_ids::eth_sepolia());
-        vec_map::insert(&mut limiter.transfer_limits, route, 1000000);
-        vec_map::insert(&mut limiter.notional_values, type_name::get<SUI>(), 10);
+
+        // Global transfer limit is 1M USD
+        vec_map::insert(&mut limiter.transfer_limits, route, 1_000_000);
+        // Notional price for ETH is 10 USD
+        vec_map::insert(&mut limiter.notional_values, type_name::get<ETH>(), 10);
 
         let scenario = test_scenario::begin(@0x1);
         let ctx = test_scenario::ctx(&mut scenario);
         let clock = clock::create_for_testing(ctx);
         clock::set_for_testing(&mut clock, 1706288001377);
 
-        check_and_record_transfer<SUI>(&clock, &mut limiter, route, 10000);
+        check_and_record_transfer<ETH>(&clock, &mut limiter, route, 1_000_000_000_000);
 
         let record = vec_map::get(&limiter.transfer_records, &route);
         assert!(record.total_amount == 10000 * 10, 0);
 
-        // transfer 1000 sui every hour, the 24 hours totol should be 24000 * 10
+        // transfer 1000 ETH every hour, the 24 hours totol should be 24000 * 10
         let i = 0;
         while (i < 50) {
             clock::increment_for_testing(&mut clock, 60 * 60 * 1000);
-            check_and_record_transfer<SUI>(&clock, &mut limiter, route, 1000);
+            check_and_record_transfer<ETH>(&clock, &mut limiter, route, 100_000_000_000);
             i = i + 1;
         };
 
@@ -156,24 +162,26 @@ module bridge::limiter {
         };
 
         let route = chain_ids::get_route(chain_ids::sui_devnet(), chain_ids::eth_sepolia());
-        vec_map::insert(&mut limiter.transfer_limits, route, 1000000);
-        vec_map::insert(&mut limiter.notional_values, type_name::get<SUI>(), 10);
+        // Global transfer limit is 1M USD
+        vec_map::insert(&mut limiter.transfer_limits, route, 1_000_000);
+        // Notional price for ETH is 10 USD
+        vec_map::insert(&mut limiter.notional_values, type_name::get<ETH>(), 10);
 
         let scenario = test_scenario::begin(@0x1);
         let ctx = test_scenario::ctx(&mut scenario);
         let clock = clock::create_for_testing(ctx);
         clock::set_for_testing(&mut clock, 1706288001377);
 
-        check_and_record_transfer<SUI>(&clock, &mut limiter, route, 90000);
+        check_and_record_transfer<ETH>(&clock, &mut limiter, route, 9_000_000_000_000);
 
         let record = vec_map::get(&limiter.transfer_records, &route);
         assert!(record.total_amount == 90000 * 10, 0);
 
-        // tx should fail after 10 iteration when total amount exceed 1000000
+        // tx should fail after 10 iteration when total amount exceed 1000000 * 10^8
         let i = 0;
         while (i < 11) {
             clock::increment_for_testing(&mut clock, 60 * 60 * 1000);
-            check_and_record_transfer<SUI>(&clock, &mut limiter, route, 1000);
+            check_and_record_transfer<ETH>(&clock, &mut limiter, route, 100_000_000_000);
             i = i + 1;
         };
         destroy(limiter);
