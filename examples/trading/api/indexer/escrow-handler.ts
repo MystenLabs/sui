@@ -24,7 +24,7 @@ type EscrowCancelled = {
 	escrow_id: string;
 };
 
-/// Handles all events emitted by the `lock` module.
+/** Handles all events emitted by the `lock` module. */
 export const handleEscrowObjects = async (events: SuiEvent[]) => {
 	const updates: Record<
 		string,
@@ -62,7 +62,7 @@ export const handleEscrowObjects = async (events: SuiEvent[]) => {
 		updates[data.escrow_id].keyId = creationData.key_id;
 	}
 
-	/// SQLite does not support bulk insertion & conflict handling, so we have to insert 1 by 1.
+	// SQLite does not support bulk insertion & conflict handling, so we have to insert 1 by 1.
 	//  Always use a single `bulkInsert` query with proper `onConflict` handling in production.
 	const promises = Object.values(updates).map((update) =>
 		prisma.escrow.upsert({

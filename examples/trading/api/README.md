@@ -11,20 +11,27 @@ You can easily change the network by creating a `.env` file with the variable `N
 ## Installation
 
 1. Install dependencies by running
+
 ```
 pnpm install
 ```
+
 2. Build BCS & TS SDK in the repo:
+
 ```
 pnpm -w bcs build && pnpm -w sdk build
 ```
+
 3. Setup the database by running
+
 ```
 pnpm db:setup:dev
 ```
+
 4. [Publish the contract & demo data](#demo-data)
 
 5. Run both the API and the indexer
+
 ```
 pnpm dev
 ```
@@ -36,6 +43,7 @@ pnpm dev
 > Make sure you have enough testnet (or any net) SUI in the active address of the CLI.
 
 There are some helper functions to:
+
 1. Publish the smart contract
 2. Create some demo data (for testnet)
 
@@ -54,11 +62,13 @@ npx ts-node helpers/create-demo-data.ts
 ```
 
 3. Produce demo escrows
+
 ```
 npx ts-node helpers/create-demo-escrows.ts
 ```
 
 If you want to reset the database (start from scratch), run:
+
 ```
 pnpm db:reset:dev && pnpm db:setup:dev
 ```
@@ -69,12 +79,11 @@ The API exposes data written from the event indexer.
 
 For each request, we have pagination with a max limit of 50 per page.
 
-| Parameter 	| Expected value  	|
-|-----------	|-----------------	|
-| limit     	| number (1-50)     |
-| cursor    	| number          	|
-| sort      	| 'asc' \| 'desc' 	|
-
+| Parameter | Expected value  |
+| --------- | --------------- |
+| limit     | number (1-50)   |
+| cursor    | number          |
+| sort      | 'asc' \| 'desc' |
 
 There are two available routes:
 
@@ -82,35 +91,35 @@ There are two available routes:
 
 Available query parameters:
 
-| Parameter 	| Expected value    	|
-|-----------	|-------------------	|
-| deleted   	| 'true' \| 'false' 	|
-| keyId     	| string            	|
-| creator   	| string            	|
+| Parameter | Expected value    |
+| --------- | ----------------- |
+| deleted   | 'true' \| 'false' |
+| keyId     | string            |
+| creator   | string            |
 
 ### `/escrows`: Returns indexed escrow objects
 
 Available query parameters:
 
-| Parameter 	| Expected value    	|
-|-----------	|-------------------	|
-| cancelled 	| 'true' \| 'false' 	|
-| swapped   	| 'true' \| 'false' 	|
-| recipient 	| string            	|
-| sender    	| string            	|
+| Parameter | Expected value    |
+| --------- | ----------------- |
+| cancelled | 'true' \| 'false' |
+| swapped   | 'true' \| 'false' |
+| recipient | string            |
+| sender    | string            |
 
 > Example Query: Get only active escrows for address (5 per page)
-`0xfe09cf0b3d77678b99250572624bf74fe3b12af915c5db95f0ed5d755612eb68`
+> `0xfe09cf0b3d77678b99250572624bf74fe3b12af915c5db95f0ed5d755612eb68`
+
 ```
 curl --location 'http://localhost:3000/escrows?limit=5&recipient=0xfe09cf0b3d77678b99250572624bf74fe3b12af915c5db95f0ed5d755612eb68&cancelled=false&swapped=false'
 ```
-
 
 ## Event Indexer
 
 > You should only run a single instance of the indexer.
 
-Indexer uses polling to watch for new events. We're saving the 
+Indexer uses polling to watch for new events. We're saving the
 cursor data in the database so we can start from where we left off
 when restarting the API.
 

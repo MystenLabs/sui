@@ -19,7 +19,7 @@ type LockDestroyed = {
 	lock_id: string;
 };
 
-/// Handles all events emitted by the `lock` module.
+/** Handles all events emitted by the `lock` module. */
 export const handleLockObjects = async (events: SuiEvent[]) => {
 	const updates: Record<string, Optional<Locked, 'id' | 'keyId' | 'deleted' | 'creator'>> = {};
 
@@ -44,7 +44,7 @@ export const handleLockObjects = async (events: SuiEvent[]) => {
 		updates[data.lock_id].creator = data.creator;
 	}
 
-	/// SQLite does not support bulk insertion & conflict handling, so we have to insert 1 by 1.
+	// SQLite does not support bulk insertion & conflict handling, so we have to insert 1 by 1.
 	//  Always use a single `bulkInsert` query with proper `onConflict` handling in production.
 	const promises = Object.values(updates).map((update) =>
 		prisma.locked.upsert({

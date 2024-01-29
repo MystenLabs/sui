@@ -25,8 +25,10 @@ export type WhereParam = {
 	type: WhereParamTypes;
 };
 
-/// A helper to prepare pagination based on `req.query`.
-/// We are doing only primary key cursor + ordering for this example.
+/**
+ * A helper to prepare pagination based on `req.query`.
+ * We are doing only primary key cursor + ordering for this example.
+ */
 export const parsePaginationForQuery = (body: Record<string, any>) => {
 	const pagination: ApiPagination = {
 		orderBy: {
@@ -58,7 +60,7 @@ export const parsePaginationForQuery = (body: Record<string, any>) => {
 	return pagination;
 };
 
-/// Parses a where statement based on the query params.
+/** Parses a where statement based on the query params. */
 export const parseWhereStatement = (query: Record<string, any>, acceptedParams: WhereParam[]) => {
 	const params: Record<string, any> = {};
 	for (const key of Object.keys(query)) {
@@ -93,8 +95,10 @@ export const getResponseCursor = (results: any[]): number | undefined => {
 	return results[results.length - 1]?.id || undefined;
 };
 
-/// Helper to format a paginated response.
-/// Assumes `id` as the primary key that we're using the cursor against.
+/**
+ * Helper to format a paginated response.
+ *  Assumes `id` as the primary key that we're using the cursor against.
+ */
 export const formatPaginatedResponse = (data: any[]) => {
 	return {
 		data,
