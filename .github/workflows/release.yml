@@ -199,7 +199,7 @@ jobs:
     name: Push binaries to homebrew
     needs: release-build
     runs-on: ubuntu-latest
-    if: ${{ contains( inputs.sui_tag, 'mainnet') || contains( github.ref, 'mainnet') }}
+    if: ${{ contains( inputs.sui_tag, 'testnet') || contains( github.ref, 'testnet') }}
     steps:
       - name: Clean up tag name ${{ env.TAG_NAME }}
         shell: bash
@@ -211,7 +211,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: MystenLabs/homebrew-tap
-          # @john's PAT, needs to be rotated jan 5 2024
+          # @john's PAT, needs to be rotated jan 5 2025
           token: ${{ secrets.HOMEBREW_TAP_REPO_READ_WRITE }}
           ref: main
           fetch-depth: 0
@@ -242,7 +242,7 @@ jobs:
           template_env = jinja2.Environment(loader=template_loader)
           template = template_env.get_template("sui.rb.j2")
 
-          version = "${{ env.sui_tag }}".removeprefix("mainnet-v")
+          version = "${{ env.sui_tag }}".removeprefix("testnet-v")
 
           # Render the template with variables
           output = template.render(
