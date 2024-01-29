@@ -44,7 +44,7 @@ use sui_types::error::SuiResult;
 use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
 use sui_types::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
-use sui_types::transaction::TransactionData;
+use sui_types::transaction::{TransactionData, TransactionDataAPI};
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
 use sui_types::zk_login_util::get_zklogin_inputs;
 use tabled::builder::Builder;
@@ -73,11 +73,13 @@ pub enum KeyToolCommand {
     /// Sui Wallet and Sui CLI Keystore. Use `sui keytool import` if you
     /// wish to import a key to Sui Keystore.
     Convert { value: String },
-
-    /// Given a Base64 encoded transaction bytes, decode its components.
-    DecodeTxBytes {
+    /// Given a Base64 encoded transaction bytes, decode its components. If a signature is provided,
+    /// verify the signature against the transaction and output the result.
+    DecodeOrVerifyTx {
         #[clap(long)]
         tx_bytes: String,
+        #[clap(long)]
+        sig: Option<GenericSignature>,
     },
     /// Given a Base64 encoded MultiSig signature, decode its components.
     /// If tx_bytes is passed in, verify the multisig.
@@ -304,6 +306,13 @@ pub struct DecodedMultiSigOutput {
     transaction_result: String,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DecodeOrVerifyTxOutput {
+    tx: TransactionData,
+    result: Option<SuiResult>,
+}
+
 #[derive(PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Key {
@@ -431,7 +440,7 @@ pub enum CommandOutput {
     Alias(AliasUpdate),
     Convert(ConvertOutput),
     DecodeMultiSig(DecodedMultiSigOutput),
-    DecodeTxBytes(TransactionData),
+    DecodeOrVerifyTx(DecodeOrVerifyTxOutput),
     Error(String),
     Generate(Key),
     Import(Key),
@@ -521,13 +530,29 @@ impl KeyToolCommand {
                 CommandOutput::DecodeMultiSig(output)
             }
 
-            KeyToolCommand::DecodeTxBytes { tx_bytes } => {
+            KeyToolCommand::DecodeOrVerifyTx { tx_bytes, sig } => {
                 let tx_bytes = Base64::decode(&tx_bytes)
                     .map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
                 let tx_data: TransactionData = bcs::from_bytes(&tx_bytes)?;
-                CommandOutput::DecodeTxBytes(tx_data)
+                match sig {
+                    None => CommandOutput::DecodeOrVerifyTx(DecodeOrVerifyTxOutput {
+                        tx: tx_data,
+                        result: None,
+                    }),
+                    Some(s) => {
+                        let res = s.verify_authenticator(
+                            &IntentMessage::new(Intent::sui_transaction(), tx_data.clone()),
+                            tx_data.sender(),
+                            None,
+                            &VerifyParams::default(),
+                        );
+                        CommandOutput::DecodeOrVerifyTx(DecodeOrVerifyTxOutput {
+                            tx: tx_data,
+                            result: Some(res),
+                        })
+                    }
+                }
             }
-
             KeyToolCommand::Generate {
                 key_scheme,
                 derivation_path,
