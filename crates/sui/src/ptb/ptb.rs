@@ -64,10 +64,10 @@ pub struct PTB {
     #[clap(long, num_args(2))]
     transfer_objects: Vec<String>,
     /// Publish the move package. It takes as input the folder where the package exists.
-    #[clap(long, num_args(1), required=false)]
+    #[clap(long, num_args(1), required = false)]
     publish: String,
     /// Upgrade the move package. It takes as input the folder where the package exists.
-    #[clap(long, num_args(2), required=false)]
+    #[clap(long, num_args(2), required = false)]
     upgrade: String,
     /// Preview the PTB instead of executing it
     #[clap(long)]
@@ -347,11 +347,13 @@ impl PTB {
         let (parsed, errors) = parser.finish();
 
         if !errors.is_empty() {
+            let suffix = if errors.len() > 1 { "s" } else { "" };
             let rendered = render_errors(commands, errors);
+            eprintln!("Encountered error{suffix} when parsing PTB:");
             for e in rendered.iter() {
-                println!("{:?}", e);
+                eprintln!("{:?}", e);
             }
-            anyhow::bail!("Encountered errors when parsing the PTB",);
+            anyhow::bail!("Could not build PTB due to previous error{suffix}");
         }
 
         // We need to resolve object IDs, so we need a fullnode to access
@@ -367,11 +369,13 @@ impl PTB {
 
         let (ptb, budget, _preview) = match builder.finish() {
             Err(errors) => {
+                let suffix = if errors.len() > 1 { "s" } else { "" };
+                eprintln!("Encountered error{suffix} when building PTB:");
                 let rendered = render_errors(commands, errors);
                 for e in rendered.iter() {
-                    println!("{:?}", e);
+                    eprintln!("{:?}", e);
                 }
-                anyhow::bail!("Encountered errors when building the PTB",);
+                anyhow::bail!("Could not build PTB due to previous error{suffix}");
             }
             Ok(x) => x,
         };

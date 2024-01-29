@@ -214,86 +214,96 @@ pub fn span<T: Debug + Clone + PartialEq + Eq>(loc: Span, value: T) -> Spanned<T
     Spanned { span: loc, value }
 }
 
-// If no span we point to the command name
-// If there is a span, we convert the span range to the appropriate offset in the whole string for
-// the command
-fn convert_span(
-    original_command: PTBCommand,
-    error: PTBError,
-) -> (String, LabeledSpan, String, Option<String>) {
-    let PTBError::WithSource {
-        span,
-        file_scope,
-        message,
-        help,
-    } = error;
-    let (range, command_string) = match span {
-        // No span -- point to the command name
-        None => (
-            0..original_command.name.len(),
-            original_command.name + " " + &original_command.values.join(" "),
-        ),
-        Some(span) => {
-            // Conver the character offset within the given argument index to the offset in the
-            // whole string.
-            let mut offset = original_command.name.len();
-            let mut final_string = original_command.name.clone();
-            let mut range = (span.start, span.end);
-            for (i, arg) in original_command.values.iter().enumerate() {
-                offset += 1;
-                final_string.push_str(" ");
-                if i != span.arg_idx {
-                    offset += arg.len();
-                    final_string.push_str(arg);
-                } else {
-                    range.0 += offset;
-                    range.1 += offset;
-                    offset += arg.len();
-                    final_string.push_str(arg);
-                }
-            }
-
-            // Handle range boundaries for e.g., unexpected tokens at the end of the token stream
-            // by pushing on a space at the end of the string. This will capture any unexpected
-            // token errors and allow us to point "to the end" of the argument.
-            final_string.push_str(" ");
-            (range.0..range.1, final_string)
-        }
-    };
-    let label = LabeledSpan::at(range, message.clone());
-    let error_string = format!(
-        "{} {}",
-        file_scope.file_command_index,
-        if file_scope.name == "console" {
-            "from console input".to_string()
-        } else {
-            let usage_string = if file_scope.name_index == 0 {
-                "".to_string()
-            } else {
-                format!("(usage {} of file)", file_scope.name_index + 1)
-            };
-            format!("in PTB file '{}' {usage_string}", file_scope.name)
-        }
-    );
-
-    (command_string, label, error_string, help)
+pub struct DisplayableError {
+    pub command_string: String,
+    pub label: LabeledSpan,
+    pub error_string: String,
+    pub help: Option<String>,
 }
 
-pub fn convert_to_displayable_error(
-    original_command: PTBCommand,
-    error: PTBError,
-) -> miette::Report {
-    let (command_string, label, formatted_error, help_msg) = convert_span(original_command, error);
-    match help_msg {
-        Some(help_msg) => miette!(
-            labels = vec![label],
-            help = help_msg,
-            "Error at command {}",
-            formatted_error
-        ),
-        None => miette!(labels = vec![label], "Error at command {}", formatted_error),
+impl DisplayableError {
+    // If no span we point to the command name
+    // If there is a span, we convert the span range to the appropriate offset in the whole string for
+    // the command
+    pub fn new(original_command: PTBCommand, error: PTBError) -> Self {
+        let PTBError::WithSource {
+            span,
+            file_scope,
+            message,
+            help,
+        } = error;
+        let (range, command_string) = match span {
+            // No span -- point to the command name
+            None => (
+                0..original_command.name.len(),
+                original_command.name + " " + &original_command.values.join(" "),
+            ),
+            Some(span) => {
+                // Convert the character offset within the given argument index to the offset in the
+                // whole string.
+                let mut offset = original_command.name.len();
+                let mut final_string = original_command.name.clone();
+                let mut range = (span.start, span.end);
+                for (i, arg) in original_command.values.iter().enumerate() {
+                    offset += 1;
+                    final_string.push_str(" ");
+                    if i != span.arg_idx {
+                        offset += arg.len();
+                        final_string.push_str(arg);
+                    } else {
+                        range.0 += offset;
+                        range.1 += offset;
+                        offset += arg.len();
+                        final_string.push_str(arg);
+                    }
+                }
+
+                // Handle range boundaries for e.g., unexpected tokens at the end of the token stream
+                // by pushing on a space at the end of the string. This will capture any unexpected
+                // token errors and allow us to point "to the end" of the argument.
+                final_string.push_str(" ");
+                (range.0..range.1, final_string)
+            }
+        };
+        let label = LabeledSpan::at(range, message.clone());
+        let error_string = format!(
+            "{} {}",
+            file_scope.file_command_index,
+            if file_scope.name == "console" {
+                "from console input".to_string()
+            } else {
+                let usage_string = if file_scope.name_index == 0 {
+                    "".to_string()
+                } else {
+                    format!("(usage {} of file)", file_scope.name_index + 1)
+                };
+                format!("in PTB file '{}' {usage_string}", file_scope.name)
+            }
+        );
+        Self {
+            command_string,
+            label,
+            error_string,
+            help,
+        }
     }
-    .with_source_code(command_string)
+
+    pub fn create_report(self) -> miette::Report {
+        match self.help {
+            Some(help_msg) => miette!(
+                labels = vec![self.label],
+                help = help_msg,
+                "Error at command {}",
+                self.error_string
+            ),
+            None => miette!(
+                labels = vec![self.label],
+                "Error at command {}",
+                self.error_string
+            ),
+        }
+        .with_source_code(self.command_string)
+    }
 }
 
 pub fn render_errors(
@@ -307,7 +317,9 @@ pub fn render_errors(
             PTBError::WithSource { file_scope, .. } => file_scope,
         };
         match file_indexed_commands.get(&file_scope) {
-            Some(command) => rendered.push(convert_to_displayable_error(command.clone(), error)),
+            Some(command) => {
+                rendered.push(DisplayableError::new(command.clone(), error).create_report())
+            }
             None => rendered.push(miette!(
                 labels = vec![],
                 "Error at command {} in PTB file '{}': {}",

@@ -16,7 +16,7 @@ use anyhow::{anyhow, bail, Context, Result as AResult};
 
 use super::{
     argument::Argument,
-    command_token::CommandToken,
+    command_token::{CommandToken, ALL_PUBLIC_COMMAND_TOKENS},
     context::PTBContext,
     errors::{span, PTBError, Span, Spanned},
 };
@@ -71,7 +71,7 @@ impl PTBParser {
                 span: None,
                 help: Some(format!(
                     "Valid commands are: {}",
-                    CommandToken::all().join(", ")
+                    ALL_PUBLIC_COMMAND_TOKENS.join(", ")
                 )),
             });
             return;

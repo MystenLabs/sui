@@ -38,7 +38,7 @@ use crate::{
     err, error,
     ptb::ptb_parser::{
         argument::Argument as PTBArg,
-        command_token::{CommandToken, ASSIGN, GAS_BUDGET, MOVE_CALL, WARN_SHADOWS},
+        command_token::{CommandToken, ASSIGN, GAS_BUDGET, MOVE_CALL},
         context::{FileScope, PTBContext},
         errors::{span, PTBError, PTBResult, Span, Spanned},
         parser::ParsedPTBCommand,
@@ -220,7 +220,7 @@ pub struct PTBBuilder<'a> {
     pub arguments_to_resolve: BTreeMap<Identifier, Spanned<PTBArg>>,
     /// The arguments that we have resolved. This is a map from identifiers to the actual
     /// transaction arguments.
-    /// TODO(tzakian): Maybe make these spanned as well.
+    // TODO(tzakian): Maybe make these spanned as well.
     pub resolved_arguments: BTreeMap<Identifier, Tx::Argument>,
     /// The actual PTB that we are building up.
     pub ptb: ProgrammableTransactionBuilder,
@@ -361,8 +361,7 @@ impl<'a> PTBBuilder<'a> {
                                 ident, i + 1
                             ),
                             span: Some(*command_loc),
-                            help: Some(format!("You can either rename this variable, or not use the '{WARN_SHADOWS}' \
-                                               command to not warn on these types of errors.")),
+                            help: Some(format!("You can either rename this variable, or do not pass the `warn-shadows` flag to ignore these types of errors.")),
                         });
                     }
                 }
@@ -744,7 +743,7 @@ impl<'a> PTBBuilder<'a> {
                         sp: ident_loc,
                         help: {
                            "This is most likely because the previous command did not \
-                           produce a result, e.g., an '{ASSIGN}' or '{GAS_BUDGET}' command."
+                           produce a result, e.g., '{ASSIGN}' or '{GAS_BUDGET}' commands do not produce results.."
 
                         },
                         self,
