@@ -156,8 +156,10 @@ module Test::M1 {
   epoch {
     validatorSet {
       activeValidators {
-        address {
-          address
+        nodes {
+          address {
+            address
+          }
         }
       }
     }
