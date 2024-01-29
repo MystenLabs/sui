@@ -73,6 +73,7 @@ sui-replay.workspace = true
 sui-transaction-builder.workspace = true
 move-binary-format.workspace = true
 test-cluster.workspace = true
+sui-client-gen.workspace = true
 
 fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true

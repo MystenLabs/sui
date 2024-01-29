@@ -21,6 +21,7 @@ use std::{fs, io};
 use sui_bridge::config::BridgeCommitteeConfig;
 use sui_bridge::sui_client::SuiBridgeClient;
 use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
+use sui_client_gen::cli::run_client_gen;
 use sui_config::node::Genesis;
 use sui_config::p2p::SeedPeer;
 use sui_config::{
@@ -306,6 +307,30 @@ pub enum SuiCommand {
     /// Invoke Sui's move-analyzer via CLI
     #[clap(name = "analyzer", hide = true)]
     Analyzer,
+
+    /// Tool for generating TypeScript SDKs for Move packages.
+    #[clap(name = "client-gen")]
+    ClientGen {
+        #[clap(
+            short,
+            long,
+            help = "Path to the `gen.toml` file.",
+            default_value = "./gen.toml"
+        )]
+        manifest: String,
+        #[clap(
+            short,
+            long,
+            help = "Path to the output directory. If omitted, the current directory will be used.",
+            default_value = "."
+        )]
+        out: String,
+        #[clap(
+            long,
+            help = "Remove all contents of the output directory before generating, except for gen.toml. Use with caution."
+        )]
+        clean: bool,
+    },
 }
 
 impl SuiCommand {
@@ -525,6 +550,11 @@ impl SuiCommand {
                 analyzer::run();
                 Ok(())
             }
+            SuiCommand::ClientGen {
+                manifest,
+                out,
+                clean,
+            } => run_client_gen(manifest, out, clean).await,
         }
     }
 }

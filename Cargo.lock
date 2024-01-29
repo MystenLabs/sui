@@ -4882,6 +4882,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "genco"
+version = "0.17.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "afac3cbb14db69ac9fef9cdb60d8a87e39a7a527f85a81a923436efa40ad42c6"
+dependencies = [
+ "genco-macros",
+ "relative-path",
+ "smallvec",
+]
+
+[[package]]
+name = "genco-macros"
+version = "0.17.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "553630feadf7b76442b0849fd25fdf89b860d933623aec9693fed19af0400c78"
+dependencies = [
+ "proc-macro2 1.0.78",
+ "quote 1.0.35",
+ "syn 2.0.48",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10034,6 +10056,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 
 [[package]]
+name = "relative-path"
+version = "1.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba39f3699c378cd8970968dcbff9c43159ea4cfbd88d43c00b22f2ef10a435d2"
+
+[[package]]
 name = "reqwest"
 version = "0.11.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11760,6 +11788,7 @@ dependencies = [
  "shlex",
  "signature 1.6.4",
  "sui-bridge",
+ "sui-client-gen",
  "sui-cluster-test",
  "sui-config",
  "sui-execution",
@@ -12214,6 +12243,34 @@ dependencies = [
  "test-cluster",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "sui-client-gen"
+version = "1.29.0"
+dependencies = [
+ "anyhow",
+ "codespan-reporting",
+ "colored",
+ "convert_case 0.6.0",
+ "futures",
+ "genco",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-command-line-common",
+ "move-compiler",
+ "move-core-types",
+ "move-model",
+ "move-package",
+ "move-symbol-pool",
+ "regex",
+ "sui-json-rpc-types",
+ "sui-move",
+ "sui-move-build",
+ "sui-sdk 1.29.0",
+ "tempfile",
+ "tokio",
+ "toml 0.5.10",
 ]
 
 [[package]]
@@ -15616,7 +15673,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
