@@ -229,28 +229,36 @@ impl Epoch {
         use epochs::dsl;
 
         let id = filter.map(|id| id as i64);
-        let stored: Option<QueryableEpochInfo> = db
-            .execute(move |conn| {
-                conn.first(move || {
-                    let mut query = dsl::epochs
-                        .select(QueryableEpochInfo::as_select())
-                        .order_by(dsl::epoch.desc())
-                        .into_boxed();
+        let (stored, checkpoint_viewed_at): (Option<QueryableEpochInfo>, u64) = db
+            .execute_repeatable(move |conn| {
+                let checkpoint_viewed_at = match checkpoint_viewed_at {
+                    Some(value) => Ok(value),
+                    None => Checkpoint::available_range(conn).map(|(_, rhs)| rhs),
+                }?;
 
-                    if let Some(id) = id {
-                        query = query.filter(dsl::epoch.eq(id));
-                    }
+                let stored = conn
+                    .first(move || {
+                        let mut query = dsl::epochs
+                            .select(QueryableEpochInfo::as_select())
+                            .order_by(dsl::epoch.desc())
+                            .into_boxed();
 
-                    query
-                })
-                .optional()
+                        if let Some(id) = id {
+                            query = query.filter(dsl::epoch.eq(id));
+                        }
+
+                        query
+                    })
+                    .optional()?;
+
+                Ok::<_, diesel::result::Error>((stored, checkpoint_viewed_at))
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch epoch: {e}")))?;
 
         Ok(stored.map(|stored| Epoch {
             stored,
-            checkpoint_viewed_at,
+            checkpoint_viewed_at: Some(checkpoint_viewed_at),
         }))
     }
 }
