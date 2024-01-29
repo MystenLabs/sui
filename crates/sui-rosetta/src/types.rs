@@ -557,7 +557,13 @@ pub struct ConstructionPreprocessRequest {
 }
 
 #[derive(Serialize, Deserialize)]
-pub enum PreprocessMetadata {
+pub struct PreprocessMetadata {
+    pub internal_operation: InternalOperationRequest,
+    pub budget: Option<u64>
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum InternalOperationRequest {
     PaySui,
     Delegation,
 }
@@ -573,6 +579,7 @@ pub struct ConstructionPreprocessResponse {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MetadataOptions {
     pub internal_operation: InternalOperation,
+    pub budget: Option<u64>
 }
 
 impl IntoResponse for ConstructionPreprocessResponse {

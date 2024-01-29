@@ -171,9 +171,13 @@ pub async fn preprocess(
 
     let internal_operation = request.operations.into_internal()?;
     let sender = internal_operation.sender();
+    let budget = request.metadata.map(|m| m.budget).flatten();
 
     Ok(ConstructionPreprocessResponse {
-        options: Some(MetadataOptions { internal_operation }),
+        options: Some(MetadataOptions {
+            internal_operation,
+            budget,
+        }),
         required_public_keys: vec![sender.into()],
     })
 }
@@ -207,6 +211,7 @@ pub async fn metadata(
 ) -> Result<ConstructionMetadataResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let option = request.options.ok_or(Error::MissingMetadata)?;
+    let budget = option.budget;
     let sender = option.internal_operation.sender();
     let mut gas_price = context
         .client
@@ -291,8 +296,9 @@ pub async fn metadata(
         return Err(Error::TransactionDryRunError(error.to_string()));
     }
 
-    let budget =
-        effects.gas_cost_summary().computation_cost + effects.gas_cost_summary().storage_cost;
+    let budget = budget.unwrap_or(
+        effects.gas_cost_summary().computation_cost + effects.gas_cost_summary().storage_cost,
+    );
 
     // Try select coins for required amounts
     let coins = if let Some(amount) = total_required_amount {
