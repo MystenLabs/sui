@@ -21,6 +21,7 @@ model Locked {
   objectId String @unique
   keyId String?
   creator String?
+  itemId String?
   deleted Boolean @default(false)
 
   @@index([creator])
@@ -36,6 +37,7 @@ model Escrow {
   sender String?
   recipient String?
   keyId String?
+  itemId String?
   swapped Boolean @default(false)
   cancelled Boolean @default(false)
   

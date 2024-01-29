@@ -11,6 +11,7 @@ type LockCreated = {
 	creator: string;
 	lock_id: string;
 	key_id: string;
+	item_id: string;
 };
 
 type LockDestroyed = {
@@ -40,6 +41,7 @@ export const handleLockObjects = async (events: SuiEvent[]) => {
 		// Handle creation event
 		updates[data.lock_id].keyId = data.key_id;
 		updates[data.lock_id].creator = data.creator;
+		updates[data.lock_id].itemId = data.item_id;
 	}
 
 	//  As part of the demo and to avoid having external dependencies, we use SQLite as our database.

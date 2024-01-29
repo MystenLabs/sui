@@ -12,6 +12,7 @@ type EscrowCreated = {
 	recipient: string;
 	escrow_id: string;
 	key_id: string;
+	item_id: string;
 };
 
 type EscrowSwapped = {
@@ -55,6 +56,7 @@ export const handleEscrowObjects = async (events: SuiEvent[]) => {
 		updates[data.escrow_id].sender = creationData.sender;
 		updates[data.escrow_id].recipient = creationData.recipient;
 		updates[data.escrow_id].keyId = creationData.key_id;
+		updates[data.escrow_id].itemId = creationData.item_id;
 	}
 
 	//  As part of the demo and to avoid having external dependencies, we use SQLite as our database.
