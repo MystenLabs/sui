@@ -17,7 +17,7 @@ module a::m {
         }
     }
 
-    macro fun new<T>(len: u64, f: |u64| T): vector<T> {
+    macro fun new<T>(len: u64, f: |u64| -> T): vector<T> {
         let mut v = vector[];
         for!(0, len, |i| v.push_back(f(i)));
         v
@@ -30,8 +30,8 @@ module a::m {
     }
 
     entry fun main() {
-        let _v = new!(10, |i| i);
-        // assert!(sum!(&v) == 45, 0);
+        let v = new!(10, |i| i);
+        assert!(sum!(&v) == 45, 0);
     }
 
 }

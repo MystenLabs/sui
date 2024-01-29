@@ -2683,10 +2683,11 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
         PE::While(pb, ploop) => EE::While(None, exp(context, pb), exp(context, ploop)),
         PE::Loop(ploop) => EE::Loop(None, exp(context, ploop)),
         PE::Block(seq) => EE::Block(None, sequence(context, loc, seq)),
-        PE::Lambda(plambda, pe) => {
+        PE::Lambda(plambda, pty_opt, pe) => {
             let elambda_opt = lambda_bind_list(context, plambda);
+            let ty_opt = pty_opt.map(|t| type_(context, t));
             match elambda_opt {
-                Some(elambda) => EE::Lambda(elambda, exp(context, pe)),
+                Some(elambda) => EE::Lambda(elambda, ty_opt, exp(context, pe)),
                 None => {
                     assert!(context.env().has_errors());
                     EE::UnresolvedError

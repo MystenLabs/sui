@@ -25,7 +25,7 @@ error[E04032]: unable to expand macro function
 error[E04030]: invalid usage of lambda type
    ┌─ tests/move_2024/typing/macro_call_indirect_lambda_invalid.move:12:13
    │
-12 │         let f: |u64| u64;
+12 │         let f: |u64| -> u64;
    │             ^ Unexpected lambda type. Lambdas can only be used as parameters for, or direct arguments to, macro functions
 
 error[E04032]: unable to expand macro function
@@ -37,14 +37,14 @@ error[E04032]: unable to expand macro function
 error[E04032]: unable to expand macro function
    ┌─ tests/move_2024/typing/macro_call_indirect_lambda_invalid.move:17:24
    │
-17 │         let x = apply!((0: |u64| u64), 1);
-   │                        ^^^^^^^^^^^^^^ Unable to bind lambda to parameter 'f'. The lambda must be passed directly
+17 │         let x = apply!((0: |u64| -> u64), 1);
+   │                        ^^^^^^^^^^^^^^^^^ Unable to bind lambda to parameter 'f'. The lambda must be passed directly
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/macro_call_indirect_lambda_invalid.move:17:28
    │
-17 │         let x = apply!((0: |u64| u64), 1);
-   │                         -  ^^^^^^^^^
+17 │         let x = apply!((0: |u64| -> u64), 1);
+   │                         -  ^^^^^^^^^^^^
    │                         │  │
    │                         │  Invalid type annotation
    │                         │  Expected: '|u64|u64'
@@ -53,8 +53,8 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/macro_call_indirect_lambda_invalid.move:21:17
    │
- 2 │     macro fun apply(f: |u64| u64, x: u64): u64 {
-   │                                      --- Expected: 'u64'
+ 2 │     macro fun apply(f: |u64| -> u64, x: u64): u64 {
+   │                                         --- Expected: 'u64'
    ·
 21 │         let x = apply!(|x| x, |x| x);
    │                 ^^^^^^^^^^^^^^^^^^^^
@@ -65,7 +65,7 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/macro_call_indirect_lambda_invalid.move:21:25
    │
- 2 │     macro fun apply(f: |u64| u64, x: u64): u64 {
+ 2 │     macro fun apply(f: |u64| -> u64, x: u64): u64 {
    │                         --- Expected: 'u64'
  3 │         f(x)
    │           - Given: '|_|_'

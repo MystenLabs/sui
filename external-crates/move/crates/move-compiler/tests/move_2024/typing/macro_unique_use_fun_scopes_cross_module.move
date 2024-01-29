@@ -8,7 +8,7 @@ module a::m {
 
     use fun a as u64.foo;
 
-    public macro fun apply(x: u64, f: |u64| u64): u64 {
+    public macro fun apply(x: u64, f: |u64| -> u64): u64 {
         f({
             (x.foo(): A);
             x

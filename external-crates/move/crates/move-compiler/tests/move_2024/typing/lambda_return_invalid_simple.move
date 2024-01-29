@@ -1,5 +1,5 @@
 module a::m {
-    macro fun call<T>(f: || T): T {
+    macro fun call<T>(f: || -> T): T {
         f()
     }
 

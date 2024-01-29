@@ -1326,7 +1326,11 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                     }
                 })
                 .collect();
-            let ret_ty = make_tvar(context, lambda.body.loc);
+            let ret_ty = if let Some(ty) = lambda.return_type.clone() {
+                core::instantiate(context, ty)
+            } else {
+                make_tvar(context, lambda.body.loc)
+            };
             let tfun = sp(eloc, Type_::Fun(param_tys, Box::new(ret_ty)));
             (tfun, TE::Lambda(lambda))
         }

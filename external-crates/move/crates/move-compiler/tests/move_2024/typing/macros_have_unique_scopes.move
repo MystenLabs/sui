@@ -1,12 +1,12 @@
 module a::m {
     // macros have their own unique scopes
-    macro fun foo(x: u64, f: || address): (u64, bool, address) {
+    macro fun foo(x: u64, f: || -> address): (u64, bool, address) {
         // f(); // try to capture x
         let a = f();
         (x, { let x = false; x }, a)
     }
 
-    macro fun bar<T>(x: vector<u64>, f: |T| address, v: T): (u64, bool, address) {
+    macro fun bar<T>(x: vector<u64>, f: |T| -> address, v: T): (u64, bool, address) {
         // f(v); // try to capture x
         let x = get(x);
         let a = f(v);

@@ -1,5 +1,5 @@
 module a::m {
-    macro fun apply(f: |u64| u64, x: u64): u64 {
+    macro fun apply(f: |u64| -> u64, x: u64): u64 {
         f(x)
     }
 
@@ -9,12 +9,12 @@ module a::m {
     }
 
     fun t2() {
-        let f: |u64| u64;
+        let f: |u64| -> u64;
         let x = apply!(f, 1);
     }
 
     fun t3() {
-        let x = apply!((0: |u64| u64), 1);
+        let x = apply!((0: |u64| -> u64), 1);
     }
 
     fun t4() {

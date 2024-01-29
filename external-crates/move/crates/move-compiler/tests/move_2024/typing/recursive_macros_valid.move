@@ -1,9 +1,9 @@
 module a::m {
-    macro fun apply1(f: || u64): u64 {
+    macro fun apply1(f: || -> u64): u64 {
         f()
     }
 
-    macro fun apply2(f: || u64): u64 {
+    macro fun apply2(f: || -> u64): u64 {
         f()
     }
 

@@ -301,6 +301,7 @@ pub enum NominalBlockUsage {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Lambda {
     pub parameters: LambdaLValues,
+    pub return_type: Option<Type>,
     pub return_label: BlockLabel,
     pub use_fun_color: Color,
     pub body: Box<Exp>,
@@ -1447,6 +1448,7 @@ impl AstDebug for Lambda {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Lambda {
             parameters: sp!(_, bs),
+            return_type,
             return_label,
             use_fun_color,
             body: e,
@@ -1454,6 +1456,10 @@ impl AstDebug for Lambda {
         return_label.ast_debug(w);
         w.write(": ");
         bs.ast_debug(w);
+        if let Some(ty) = return_type {
+            w.write(" -> ");
+            ty.ast_debug(w);
+        }
         w.write(&format!("use_funs#{}", use_fun_color));
         e.ast_debug(w);
     }

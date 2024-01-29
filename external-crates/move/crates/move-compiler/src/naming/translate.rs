@@ -1483,9 +1483,10 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             from_lambda_expansion: None,
             seq: sequence(context, eseq),
         }),
-        EE::Lambda(elambda_binds, body) => {
+        EE::Lambda(elambda_binds, ety_opt, body) => {
             context.new_local_scope();
             let nlambda_binds_opt = lambda_bind_list(context, elambda_binds);
+            let return_type = ety_opt.map(|t| type_(context, t));
             context.enter_nominal_block(eloc, None, NominalBlockType::Lambda);
             let body = exp(context, body);
             context.close_local_scope();
@@ -1497,6 +1498,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 }
                 Some(parameters) => NE::Lambda(N::Lambda {
                     parameters,
+                    return_type,
                     return_label,
                     use_fun_color: 0, // used in macro expansion
                     body,
@@ -2254,6 +2256,7 @@ fn remove_unused_bindings_exp(
         N::Exp_::Lambda(N::Lambda {
             parameters: sp!(_, parameters),
             return_label: _,
+            return_type: _,
             use_fun_color: _,
             body,
         }) => {

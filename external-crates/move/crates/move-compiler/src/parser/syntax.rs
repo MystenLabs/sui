@@ -878,7 +878,7 @@ fn parse_bind_list(context: &mut Context) -> Result<BindList, Box<Diagnostic>> {
 
 // Parse a list of bindings for lambda.
 //      LambdaBindList =
-//          "|" Comma<Bind> "|"
+//          "|" Comma<BindList (":"  Type)?> "|"
 fn parse_lambda_bind_list(context: &mut Context) -> Result<LambdaBindings, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     let b = parse_comma_list(
@@ -1529,6 +1529,7 @@ fn at_start_of_exp(context: &mut Context) -> bool {
 // Parse an expression:
 //      Exp =
 //            <LambdaBindList> <Exp>
+//          | <LambdaBindList> "->" "{" <Sequence>
 //          | <Quantifier>                  spec only
 //          | <BinOpExp>
 //          | <UnaryExp> "=" <Exp>
@@ -1543,8 +1544,19 @@ fn parse_exp(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
             } else {
                 parse_lambda_bind_list(context)?
             };
-            let body = Box::new(parse_exp(context)?);
-            Exp_::Lambda(bindings, body)
+            let (ret_ty_opt, body) = if context.tokens.peek() == Tok::MinusGreater {
+                context.tokens.advance()?;
+                let ret_ty = parse_type(context)?;
+                let start_loc = context.tokens.start_loc();
+                consume_token(context.tokens, Tok::LBrace)?;
+                let block_ = Exp_::Block(parse_sequence(context)?);
+                let end_loc = context.tokens.previous_end_loc();
+                let block = spanned(context.tokens.file_hash(), start_loc, end_loc, block_);
+                (Some(ret_ty), block)
+            } else {
+                (None, parse_exp(context)?)
+            };
+            Exp_::Lambda(bindings, ret_ty_opt, Box::new(body))
         }
         Tok::Identifier if is_quant(context) => parse_quant(context)?,
         _ => {
@@ -2056,12 +2068,13 @@ fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
         }
         tok @ Tok::PipePipe | tok @ Tok::Pipe => {
             let args = if tok == Tok::PipePipe {
-                consume_token(context.tokens, Tok::PipePipe)?;
+                context.tokens.advance()?;
                 vec![]
             } else {
                 parse_comma_list(context, Tok::Pipe, Tok::Pipe, parse_type, "a type")?
             };
-            let result = if is_start_of_type(context) {
+            let result = if context.tokens.peek() == Tok::MinusGreater {
+                context.tokens.advance()?;
                 parse_type(context)?
             } else {
                 spanned(
@@ -2090,15 +2103,6 @@ fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
     };
     let end_loc = context.tokens.previous_end_loc();
     Ok(spanned(context.tokens.file_hash(), start_loc, end_loc, t))
-}
-
-/// Checks whether the next tokens looks like the start of a type. Must be aligned
-/// with `parse_type`.
-fn is_start_of_type(context: &mut Context) -> bool {
-    matches!(
-        context.tokens.peek(),
-        Tok::LParen | Tok::Amp | Tok::AmpMut | Tok::Pipe | Tok::PipePipe | Tok::Identifier
-    )
 }
 
 // Parse an optional list of type arguments.

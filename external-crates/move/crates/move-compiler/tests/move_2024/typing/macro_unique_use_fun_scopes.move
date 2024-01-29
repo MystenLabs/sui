@@ -10,7 +10,7 @@ module a::m {
     fun c(_: u64): C { C() }
     fun d(_: u64): D { D() }
 
-    macro fun apply(x: u64, f: |u64| u64): u64 {
+    macro fun apply(x: u64, f: |u64| -> u64): u64 {
         use fun d as u64.foo;
         (x.foo(): D);
         let res = f({

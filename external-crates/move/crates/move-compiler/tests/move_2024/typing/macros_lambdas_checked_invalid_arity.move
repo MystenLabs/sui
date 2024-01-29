@@ -1,5 +1,5 @@
 module a::m {
-    macro fun foo<T, U>(f: |T| U, g: |T, T| U, h: || (U, U)) {
+    macro fun foo<T, U>(f: |T| -> U, g: |T, T| -> U, h: || -> (U, U)) {
         f(0);
         g(0, 1);
         h();

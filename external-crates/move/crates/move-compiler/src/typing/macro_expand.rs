@@ -490,6 +490,7 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
 
         N::Exp_::Lambda(N::Lambda {
             parameters: sp!(_, parameters),
+            return_type: _,
             return_label,
             use_fun_color,
             body,
@@ -667,6 +668,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             let (
                 N::Lambda {
                     parameters: sp!(_, mut lambda_params),
+                    return_type: _,
                     return_label,
                     use_fun_color,
                     body: mut lambda_body,

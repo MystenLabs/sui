@@ -1,5 +1,5 @@
 module a::m {
-    macro fun do(f: || ()): () {
+    macro fun do(f: || -> ()): () {
         f()
     }
 

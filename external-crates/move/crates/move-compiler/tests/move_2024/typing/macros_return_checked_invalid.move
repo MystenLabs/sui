@@ -7,11 +7,11 @@ module a::m {
         (x, y, z)
     }
 
-    macro fun ref<T, U>(f: || T): &U {
+    macro fun ref<T, U>(f: || -> T): &U {
         f()
     }
 
-    macro fun double<T, U>(f: || T): (U, U) {
+    macro fun double<T, U>(f: || -> T): (U, U) {
         f()
     }
 

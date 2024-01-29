@@ -622,8 +622,9 @@ pub enum Exp_ {
     Labled(BlockLabel, Box<Exp>),
     // { seq }
     Block(Sequence),
-    // fun (x1, ..., xn) e
-    Lambda(LambdaBindings, Box<Exp>), // spec only
+    // |lv1, ..., lvn| e
+    // |lv1, ..., lvn| -> { e }
+    Lambda(LambdaBindings, Option<Type>, Box<Exp>),
     // forall/exists x1 : e1, ..., xn [{ t1, .., tk } *] [where cond]: en.
     Quant(
         QuantKind,
@@ -1820,8 +1821,12 @@ impl AstDebug for Exp_ {
                 e.ast_debug(w)
             }
             E::Block(seq) => w.block(|w| seq.ast_debug(w)),
-            E::Lambda(sp!(_, bs), e) => {
+            E::Lambda(sp!(_, bs), ty_opt, e) => {
                 bs.ast_debug(w);
+                if let Some(ty) = ty_opt {
+                    w.write(" -> ");
+                    ty.ast_debug(w);
+                }
                 e.ast_debug(w);
             }
             E::Quant(kind, sp!(_, rs), trs, c_opt, e) => {

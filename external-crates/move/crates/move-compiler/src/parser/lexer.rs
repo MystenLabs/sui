@@ -89,6 +89,7 @@ pub enum Tok {
     Type,
     Match,
     BlockLabel,
+    MinusGreater,
 }
 
 impl fmt::Display for Tok {
@@ -168,6 +169,7 @@ impl fmt::Display for Tok {
             Type => "type",
             Match => "match",
             BlockLabel => "'[Identifier]",
+            MinusGreater => "->",
         };
         fmt::Display::fmt(s, formatter)
     }
@@ -608,6 +610,20 @@ fn find_token(
                 (Tok::Colon, 1)
             }
         }
+        '.' => {
+            if text.starts_with("..") {
+                (Tok::PeriodPeriod, 2)
+            } else {
+                (Tok::Period, 1)
+            }
+        }
+        '-' => {
+            if text.starts_with("->") {
+                (Tok::MinusGreater, 2)
+            } else {
+                (Tok::Minus, 1)
+            }
+        }
         '%' => (Tok::Percent, 1),
         '(' => (Tok::LParen, 1),
         ')' => (Tok::RParen, 1),
@@ -616,14 +632,6 @@ fn find_token(
         '*' => (Tok::Star, 1),
         '+' => (Tok::Plus, 1),
         ',' => (Tok::Comma, 1),
-        '-' => (Tok::Minus, 1),
-        '.' => {
-            if text.starts_with("..") {
-                (Tok::PeriodPeriod, 2)
-            } else {
-                (Tok::Period, 1)
-            }
-        }
         '/' => (Tok::Slash, 1),
         ';' => (Tok::Semicolon, 1),
         '^' => (Tok::Caret, 1),

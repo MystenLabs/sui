@@ -351,7 +351,7 @@ pub enum Exp_ {
     While(Option<BlockLabel>, Box<Exp>, Box<Exp>),
     Loop(Option<BlockLabel>, Box<Exp>),
     Block(Option<BlockLabel>, Sequence),
-    Lambda(LambdaLValues, Box<Exp>),
+    Lambda(LambdaLValues, Option<Type>, Box<Exp>),
     Quant(
         QuantKind,
         LValueWithRangeList,
@@ -1397,8 +1397,12 @@ impl AstDebug for Exp_ {
                 name.map(|name| w.write(format!("'{}: ", name)));
                 seq.ast_debug(w);
             }
-            E::Lambda(sp!(_, bs), e) => {
+            E::Lambda(sp!(_, bs), ty_opt, e) => {
                 bs.ast_debug(w);
+                if let Some(ty) = ty_opt {
+                    w.write(" -> ");
+                    ty.ast_debug(w);
+                }
                 e.ast_debug(w);
             }
             E::Quant(kind, sp!(_, rs), trs, c_opt, e) => {

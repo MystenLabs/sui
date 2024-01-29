@@ -12,7 +12,7 @@ module 0x42::m {
         }
     }
 
-    macro fun new<T>(len: u64, f: |u64| T): vector<T> {
+    macro fun new<T>(len: u64, f: |u64| -> T): vector<T> {
         let mut v = vector[];
         for!(0, len, |i| v.push_back(f(i)));
         v
@@ -22,7 +22,7 @@ module 0x42::m {
         for!(0, v.length(), |i| body(v.borrow(i)))
     }
 
-    macro fun fold<T, U>(xs: &vector<T>, init: U, body: |U, &T| U): U {
+    macro fun fold<T, U>(xs: &vector<T>, init: U, body: |U, &T| -> U): U {
         let mut acc = init;
         for_each!(xs, |x| acc = body(acc, x));
         acc
