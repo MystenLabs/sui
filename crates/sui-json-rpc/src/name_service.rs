@@ -66,6 +66,9 @@ impl Domain {
 
     /// Derive the parent domain for a given domain
     /// E.g. `test.example.sui` -> `example.sui`
+    ///
+    /// SAFETY: This is a safe operation because we only allow a
+    /// domain's label vector size to be >= 2 (see `Domain::from_str`)
     pub fn parent(&self) -> Domain {
         Domain {
             labels: self.labels[0..(self.labels.len() - 1)].to_vec(),
@@ -79,6 +82,8 @@ impl Domain {
     /// Returns the depth for a name.
     /// Depth is defined by the amount of labels in a domain, including TLD.
     /// E.g. `test.example.sui` -> `3`
+    ///
+    /// SAFETY: We can safely cast to a u8 as the max depth is 235.
     pub fn depth(&self) -> u8 {
         self.labels.len() as u8
     }
@@ -235,19 +240,16 @@ pub struct NameRecord {
 
 impl NameRecord {
     /// Leaf records expire when their parent expires.
+    /// The `expiration_timestamp_ms` is set to `0` (on-chain) to indicate this.
     pub fn is_leaf_record(&self) -> bool {
         self.expiration_timestamp_ms == LEAF_EXPIRATION_TIMESTAMP
     }
 
-    /// Checks if a leaf record has expired.
-    pub fn is_leaf_expired(&self, parent: &NameRecord, checkpoint_timestamp_ms: u64) -> bool {
-        self.is_leaf_record()
-            && (parent.is_node_expired(checkpoint_timestamp_ms) || !self.has_valid_parent(parent))
-    }
-
-    /// Validate that a leaf record's NFT_ID is equal to the parent's NFT_ID.
-    pub fn has_valid_parent(&self, parent: &NameRecord) -> bool {
-        self.nft_id == parent.nft_id
+    /// Validate that a `NameRecord` is a valid parent of a child `NameRecord`.
+    ///
+    /// WARNING: This only applies for `leaf` records
+    pub fn is_valid_leaf_parent(&self, child: &NameRecord) -> bool {
+        self.nft_id == child.nft_id
     }
 
     /// Checks if a `node` name record has expired.

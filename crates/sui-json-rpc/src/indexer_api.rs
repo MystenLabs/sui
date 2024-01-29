@@ -400,7 +400,8 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
 
             // Couldn't find a `multi_get_object` for this crate (looks like it uses a k,v db)
             // Always fetching both parent + child at the same time (even for node subdomains),
-            // to avoid sequential db reads.
+            // to avoid sequential db reads. We do this because we do not know if the requested
+            // domain is a node subdomain or a leaf subdomain, and we can save a trip to the db.
             let mut results = future::try_join_all(requests).await?;
 
             // Removing without checking vector len, since it is known (== 1 or 2 depending on whether
@@ -411,13 +412,14 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
 
             let name_record = NameRecord::try_from(object)?;
 
-            // Handling SLD names & node subdomains is the same (we handle them as `node`` records)
+            // Handling SLD names & node subdomains is the same (we handle them as `node` records)
             // We check their expiration, and and if not expired, return the target address.
             if !name_record.is_leaf_record() {
-                if name_record.is_node_expired(current_timestamp_ms) {
-                    return Err(Error::from(NameServiceError::NameExpired));
-                }
-                return Ok(name_record.target_address);
+                return if !name_record.is_node_expired(current_timestamp_ms) {
+                    Ok(name_record.target_address)
+                } else {
+                    Err(Error::from(NameServiceError::NameExpired))
+                };
             }
 
             // == Handle leaf subdomains case ==
@@ -429,11 +431,16 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
 
             let parent_name_record = NameRecord::try_from(parent_object)?;
 
-            if name_record.is_leaf_expired(&parent_name_record, current_timestamp_ms) {
-                return Err(Error::from(NameServiceError::NameExpired));
+            // For a leaf record, we check that:
+            // 1. The parent is a valid parent for that leaf record
+            // 2. The parent is not expired
+            if parent_name_record.is_valid_leaf_parent(&name_record)
+                && !parent_name_record.is_node_expired(current_timestamp_ms)
+            {
+                Ok(name_record.target_address)
+            } else {
+                Err(Error::from(NameServiceError::NameExpired))
             }
-
-            Ok(name_record.target_address)
         })
     }
 
@@ -474,9 +481,11 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .resolve_name_service_address(domain_name.clone())
                 .await?;
 
-            if resolved_address.is_none() || resolved_address != Some(address) {
+            // If looking up the domain returns an empty result, we return an empty result.
+            if resolved_address.is_none() {
                 return Ok(result);
             }
+
             // TODO(manos): Discuss why is this even a paginated response.
             // This API is always going to return a single domain name.
             result.data.push(domain_name);
