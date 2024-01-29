@@ -4,6 +4,14 @@ settings:
   autoInstallPeers: false
   excludeLinksFromLockfile: false
 
+overrides:
+  node-notifier: 10.0.0
+  async: 3.2.2
+  nth-check: 2.0.1
+  yaml@<2.2.2: '>=2.2.2'
+  semver@<7.5.2: '>=7.5.2'
+  postcss@<8.4.31: '>=8.4.31'
+
 importers:
 
   .:
@@ -9183,7 +9191,7 @@ packages:
     dependencies:
       '@storybook/channels': 7.1.0
       '@types/babel__core': 7.20.1
-      '@types/express': 4.17.17
+      '@types/express': 4.17.21
       file-system-cache: 2.3.0
     dev: true
 
@@ -9918,15 +9926,6 @@ packages:
       '@types/qs': 6.9.7
       '@types/range-parser': 1.2.4
       '@types/send': 0.17.1
-    dev: true
-
-  /@types/express@4.17.17:
-    resolution: {integrity: sha512-Q4FmmuLGBG58btUnfS1c1r/NQdlp3DMfGDGig8WhfpA2YRUtEkxAjkZb0yvplJGYdF1fsQ81iMDcH24sSCNC/Q==}
-    dependencies:
-      '@types/body-parser': 1.19.2
-      '@types/express-serve-static-core': 4.17.35
-      '@types/qs': 6.9.7
-      '@types/serve-static': 1.15.2
     dev: true
 
   /@types/express@4.17.21:
