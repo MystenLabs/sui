@@ -9,11 +9,11 @@ use indicatif::MultiProgress;
 use std::collections::HashSet;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
+use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ObjectID;
 use sui_types::object::Object;
-use sui_types::storage::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use tempfile::tempdir;
 
 fn temp_dir() -> std::path::PathBuf {

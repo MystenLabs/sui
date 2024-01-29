@@ -417,7 +417,7 @@ mod tests {
     use object_store::path::Path;
     use std::fs;
     use std::num::NonZeroUsize;
-    use sui_types::storage::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
+    use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
     use tempfile::TempDir;
 
     #[tokio::test]

@@ -10,7 +10,7 @@ use std::sync::Arc;
 use crate::object_store::http::gcs::GoogleCloudStorage;
 use crate::object_store::http::local::LocalStorage;
 use crate::object_store::http::s3::AmazonS3;
-use sui_types::storage::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
+use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 
 use crate::object_store::ObjectStoreGetExt;
 use anyhow::{anyhow, Context, Result};
@@ -126,7 +126,7 @@ mod tests {
     use crate::object_store::http::HttpDownloaderBuilder;
     use object_store::path::Path;
     use std::fs;
-    use sui_types::storage::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
+    use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
     use tempfile::TempDir;
 
     #[tokio::test]

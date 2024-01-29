@@ -20,6 +20,9 @@ serde_with.workspace = true
 serde_yaml.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
+clap.workspace = true
+object_store.workspace = true
+reqwest.workspace = true
 
 narwhal-config.workspace = true
 sui-keys.workspace = true

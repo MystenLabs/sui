@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::certificate_deny_config::CertificateDenyConfig;
 use crate::genesis;
+use crate::object_storage_config::ObjectStoreConfig;
 use crate::p2p::P2pConfig;
 use crate::transaction_deny_config::TransactionDenyConfig;
 use crate::Config;
@@ -27,7 +28,6 @@ use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::NetworkKeyPair;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::storage::object_storage_config::ObjectStoreConfig;
 
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair};
 use sui_types::multiaddr::Multiaddr;

@@ -17,6 +17,7 @@ use snowflake_api::{QueryResult, SnowflakeApi};
 use strum_macros::EnumIter;
 use tracing::info;
 
+use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_indexer::framework::Handler;
 use sui_rest_api::CheckpointData;
 use sui_storage::object_store::util::{
@@ -24,7 +25,6 @@ use sui_storage::object_store::util::{
 };
 use sui_types::base_types::EpochId;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::storage::object_storage_config::ObjectStoreConfig;
 
 use crate::analytics_metrics::AnalyticsMetrics;
 use crate::analytics_processor::AnalyticsProcessor;

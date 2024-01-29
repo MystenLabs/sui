@@ -23,6 +23,7 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
+use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_core::authority::authority_store_tables::{AuthorityPerpetualTables, LiveObject};
 use sui_core::authority::AuthorityStore;
 use sui_storage::blob::{Blob, BlobEncoding};
@@ -31,7 +32,6 @@ use sui_storage::object_store::util::{copy_file, copy_files, path_to_filesystem}
 use sui_storage::object_store::{ObjectStoreGetExt, ObjectStorePutExt};
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
-use sui_types::storage::object_storage_config::ObjectStoreConfig;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;

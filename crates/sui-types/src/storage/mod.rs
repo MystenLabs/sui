@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod error;
-pub mod object_storage_config;
 mod object_store_trait;
 mod read_store;
 mod shared_in_memory_store;

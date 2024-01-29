@@ -43,6 +43,7 @@ sui-types.workspace = true
 telemetry-subscribers.workspace = true
 sui-rest-api.workspace = true
 sui-storage.workspace = true
+sui-config.workspace = true
 typed-store-derive.workspace = true
 typed-store.workspace = true
 move-binary-format.workspace = true
