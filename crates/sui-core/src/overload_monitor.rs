@@ -12,7 +12,10 @@ use tracing::info;
 
 #[derive(Default)]
 pub struct AuthorityOverloadInfo {
+    /// Whether the authority is overloaded.
     pub is_overload: AtomicBool,
+
+    /// The calculated percentage of transactions to drop.
     pub load_shedding_percentage: AtomicU32,
 }
 
@@ -29,6 +32,8 @@ impl AuthorityOverloadInfo {
     }
 }
 
+// Monitors the overload signals in `authority_state` periodically, and updates its `overload_info`
+// when the signals indicates overload.
 pub async fn overload_monitor(
     authority_state: Weak<AuthorityState>,
     config: OverloadThresholdConfig,
@@ -63,6 +68,7 @@ pub async fn overload_monitor(
                 .authority_load_shedding_percentage
                 .set(load_shedding_percentage as i64);
         } else {
+            // `authority_state` doesn't exist anymore. Quit overload monitor.
             break;
         }
 
@@ -72,14 +78,22 @@ pub async fn overload_monitor(
     info!("Shut down system overload monitor.");
 }
 
+// Calculates the percentage of transactions to drop in order to reduce execution queue.
+// Returns the integer percentage between 0 and 100.
 fn calculate_load_shedding_percentage(txn_ready_rate: f64, execution_rate: f64) -> u32 {
+    // Deflate the execution rate to account for the case that execution_rate is close to
+    // txn_ready_rate.
     if execution_rate * 0.9 > txn_ready_rate {
         return 0;
     }
 
+    // In order to maintain execution queue length, we need to drop at least (1 - executionRate / readyRate).
+    // TO reduce the queue length, here we add 10% more transactions to drop.
     (((1.0 - execution_rate * 0.9 / txn_ready_rate) + 0.1).min(1.0) * 100.0).round() as u32
 }
 
+// Given overload signals (`queueing_latency`, `txn_ready_rate`, `execution_rate`), return whether
+// the authority server should enter load shedding mode, and how much percentage of transactions to drop.
 fn check_system_overload(
     config: &OverloadThresholdConfig,
     queueing_latency: Duration,
@@ -136,6 +150,7 @@ mod tests {
             );
         }
 
+        // Tests that load shedding percentage can't go beyond 100%.
         {
             overload_info.set_overload(110);
             assert!(overload_info.is_overload.load(Ordering::Relaxed));

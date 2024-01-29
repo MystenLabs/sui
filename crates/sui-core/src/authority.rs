@@ -274,7 +274,11 @@ pub struct AuthorityMetrics {
     // Tracks recent average txn queueing delay between when it is ready for execution
     // until it starts executing.
     pub execution_queueing_latency: LatencyObserver,
+
+    // Tracks the rate of transactions become ready for execution in transaction manager.
     pub txn_ready_rate_tracker: Arc<Mutex<RateTracker>>,
+
+    // Tracks the rate of transactions starts execution in execution driver.
     pub execution_rate_tracker: Arc<Mutex<RateTracker>>,
 }
 
@@ -704,6 +708,7 @@ pub struct AuthorityState {
     /// Config for when we consider the node overloaded.
     overload_threshold_config: OverloadThresholdConfig,
 
+    /// Current overload status in this authority. Updated periodically.
     pub overload_info: AuthorityOverloadInfo,
 }
 
