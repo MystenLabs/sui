@@ -213,7 +213,8 @@ To filter the events returned from your queries, use the following data structur
 | ------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | `All`         | All events                                               | `{"All"}`                                                                                             |
 | `Transaction` | Events emitted from the specified transaction            | `{"Transaction":"DGUe2TXiJdN3FI6MH1FwghYbiHw+NKu8Nh579zdFtUk="}`                                      |
-| `MoveModule`  | Events emitted from the specified Move module            | `{"MoveModule":{"package":"", "module":"nft"}}`                                                       |
+| `MoveModule`  | Events emitted from the specified Move module            | `{"MoveModule":{"package":"<PACKAGE-ID>", "module":"nft"}}`                                                       |
+| `MoveEventModule` | Events emitted, defined on the specified Move module.           | `{"MoveEventModule": {"package": "<DEFINING-PACKAGE-ID>", "module": "nft"}}` |
 | `MoveEvent`   | Move struct name of the event                            | `{"MoveEvent":"::nft::MintNFTEvent"}`                                                                 |
 | `EventType`   | Type of event described in Events section                | `{"EventType": "NewObject"}`                                                                          |
 | `Sender`      | Query by sender address                                  | `{"Sender":"0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106"}`                     |
