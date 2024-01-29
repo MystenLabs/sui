@@ -39,48 +39,71 @@ pub async fn overload_monitor(
     config: OverloadThresholdConfig,
 ) {
     info!("Starting system overload monitor.");
+
     loop {
-        if let Some(authority) = authority_state.upgrade() {
-            let queueing_latency = authority
-                .metrics
-                .execution_queueing_latency
-                .latency()
-                .unwrap_or_default();
-            let txn_ready_rate = authority.metrics.txn_ready_rate_tracker.lock().rate();
-            let execution_rate = authority.metrics.execution_rate_tracker.lock().rate();
-
-            let (is_overload, load_shedding_percentage) =
-                check_system_overload(&config, queueing_latency, txn_ready_rate, execution_rate);
-            if is_overload {
-                authority
-                    .overload_info
-                    .set_overload(load_shedding_percentage);
-            } else {
-                authority.overload_info.clear_overload();
-            }
-
-            authority
-                .metrics
-                .authority_overload_status
-                .set(is_overload as i64);
-            authority
-                .metrics
-                .authority_load_shedding_percentage
-                .set(load_shedding_percentage as i64);
-        } else {
+        let authority_exist = check_authority_overload(&authority_state, &config);
+        if !authority_exist {
             // `authority_state` doesn't exist anymore. Quit overload monitor.
             break;
         }
-
         sleep(config.overload_monitor_interval).await;
     }
 
     info!("Shut down system overload monitor.");
 }
 
+// Checks authority overload signals, and updates authority's `overload_info`.
+// Returns whether the authority state exists.
+fn check_authority_overload(
+    authority_state: &Weak<AuthorityState>,
+    config: &OverloadThresholdConfig,
+) -> bool {
+    let authority_arc = authority_state.upgrade();
+    if authority_arc.is_none() {
+        // `authority_state` doesn't exist anymore.
+        return false;
+    }
+
+    let authority = authority_arc.unwrap();
+    let queueing_latency = authority
+        .metrics
+        .execution_queueing_latency
+        .latency()
+        .unwrap_or_default();
+    let txn_ready_rate = authority.metrics.txn_ready_rate_tracker.lock().rate();
+    let execution_rate = authority.metrics.execution_rate_tracker.lock().rate();
+
+    let (is_overload, load_shedding_percentage) =
+        check_overload_signals(&config, queueing_latency, txn_ready_rate, execution_rate);
+    if is_overload {
+        authority
+            .overload_info
+            .set_overload(load_shedding_percentage);
+    } else {
+        authority.overload_info.clear_overload();
+    }
+
+    authority
+        .metrics
+        .authority_overload_status
+        .set(is_overload as i64);
+    authority
+        .metrics
+        .authority_load_shedding_percentage
+        .set(load_shedding_percentage as i64);
+    true
+}
+
 // Calculates the percentage of transactions to drop in order to reduce execution queue.
 // Returns the integer percentage between 0 and 100.
 fn calculate_load_shedding_percentage(txn_ready_rate: f64, execution_rate: f64) -> u32 {
+    // When transaction ready rate is practically 0, we aren't adding more load to the
+    // execution driver, so no shedding.
+    // TODO: consensus handler or transaction manager can also be overloaded.
+    if txn_ready_rate < 1e-10 {
+        return 0;
+    }
+
     // Deflate the execution rate to account for the case that execution_rate is close to
     // txn_ready_rate.
     if execution_rate * 0.9 > txn_ready_rate {
@@ -94,7 +117,7 @@ fn calculate_load_shedding_percentage(txn_ready_rate: f64, execution_rate: f64) 
 
 // Given overload signals (`queueing_latency`, `txn_ready_rate`, `execution_rate`), return whether
 // the authority server should enter load shedding mode, and how much percentage of transactions to drop.
-fn check_system_overload(
+fn check_overload_signals(
     config: &OverloadThresholdConfig,
     queueing_latency: Duration,
     txn_ready_rate: f64,
@@ -127,6 +150,9 @@ fn check_system_overload(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::authority::test_authority_builder::TestAuthorityBuilder;
+    use std::sync::Arc;
 
     #[test]
     pub fn test_authority_overload_info() {
@@ -182,10 +208,11 @@ mod tests {
         assert_eq!(calculate_load_shedding_percentage(110.0, 100.0), 28);
         assert_eq!(calculate_load_shedding_percentage(180.0, 100.0), 60);
         assert_eq!(calculate_load_shedding_percentage(100.0, 0.0), 100);
+        assert_eq!(calculate_load_shedding_percentage(0.0, 1.0), 0);
     }
 
     #[test]
-    pub fn test_check_system_overload() {
+    pub fn test_check_overload_signals() {
         let config = OverloadThresholdConfig {
             execution_queue_latency_hard_limit: Duration::from_secs(10),
             execution_queue_latency_soft_limit: Duration::from_secs(1),
@@ -195,42 +222,71 @@ mod tests {
 
         // When execution queueing latency is within soft limit, don't start overload protection.
         assert_eq!(
-            check_system_overload(&config, Duration::from_millis(500), 1000.0, 10.0),
+            check_overload_signals(&config, Duration::from_millis(500), 1000.0, 10.0),
             (false, 0)
         );
 
         // When execution queueing latency hits soft limit and execution rate is higher, don't
         // start overload protection.
         assert_eq!(
-            check_system_overload(&config, Duration::from_secs(2), 100.0, 120.0),
+            check_overload_signals(&config, Duration::from_secs(2), 100.0, 120.0),
             (false, 0)
         );
 
         // When execution queueing latency hits soft limit, but not hard limit, start overload
         // protection.
         assert_eq!(
-            check_system_overload(&config, Duration::from_secs(2), 100.0, 100.0),
+            check_overload_signals(&config, Duration::from_secs(2), 100.0, 100.0),
             (true, 20)
         );
 
         // When execution queueing latency hits hard limit, start more aggressive overload
         // protection.
         assert_eq!(
-            check_system_overload(&config, Duration::from_secs(11), 100.0, 100.0),
+            check_overload_signals(&config, Duration::from_secs(11), 100.0, 100.0),
             (true, 50)
         );
 
         // When execution queueing latency hits hard limit and calculated shedding percentage
         // is higher than
         assert_eq!(
-            check_system_overload(&config, Duration::from_secs(11), 240.0, 100.0),
+            check_overload_signals(&config, Duration::from_secs(11), 240.0, 100.0),
             (true, 73)
         );
 
         // Maximum transactions shed is cap by `max_load_shedding_percentage` config.
         assert_eq!(
-            check_system_overload(&config, Duration::from_secs(11), 100.0, 0.0),
+            check_overload_signals(&config, Duration::from_secs(11), 100.0, 0.0),
             (true, 90)
         );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    pub async fn test_check_authority_overload() {
+        let state = TestAuthorityBuilder::new().build().await;
+        let config = OverloadThresholdConfig::default();
+
+        // Creates a simple case to see if authority state overload_info can be updated
+        // correctly by check_authority_overload.
+        state
+            .metrics
+            .execution_queueing_latency
+            .report(Duration::from_secs(20));
+        let authority = Arc::downgrade(&state);
+        assert!(check_authority_overload(&authority, &config));
+        assert!(state.overload_info.is_overload.load(Ordering::Relaxed));
+        assert_eq!(
+            state
+                .overload_info
+                .load_shedding_percentage
+                .load(Ordering::Relaxed),
+            config.min_load_shedding_percentage_above_hard_limit
+        );
+
+        // Checks that check_authority_overload should return false when the input
+        // authority state doesn't exist.
+        let authority = Arc::downgrade(&state);
+        drop(state);
+        assert!(!check_authority_overload(&authority, &config));
     }
 }
