@@ -33,11 +33,19 @@ jobs:
         run: rustup update stable
         
       - name: Generate code coverage for nextest
-        continue-on-error: true
         run: SUI_SKIP_SIMTESTS=1 cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest
 
-      - name: Upload coverage to Codecov
+      - name: Upload report to Codecov for nextest
         uses: codecov/codecov-action@v3
         with:
           files: lcov.info
           fail_ci_if_error: true
+
+      - name: Generate code coverage for simtest
+        run: cargo llvm-cov --ignore-run-fail --lcov --output-path lcov.info simtest
+
+      - name: Upload report to Codecov for simtest
+        uses: codecov/codecov-action@v3
+        with:
+          files: lcov.info
+          fail_ci_if_error: true          
