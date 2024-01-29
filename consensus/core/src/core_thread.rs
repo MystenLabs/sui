@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_trait::async_trait;
 use mysten_metrics::{metered_channel, monitored_scope};
 use std::{collections::HashSet, fmt::Debug, sync::Arc, thread};
 use thiserror::Error;
@@ -16,6 +17,15 @@ use crate::{
 };
 
 const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 32;
+
+#[async_trait]
+pub(crate) trait CoreThreadDispatcherInterface: Sync + Send + 'static {
+    async fn add_blocks(&self, blocks: Vec<VerifiedBlock>) -> Result<Vec<BlockRef>, CoreError>;
+
+    async fn force_new_block(&self, round: Round) -> Result<(), CoreError>;
+
+    async fn get_missing_blocks(&self) -> Result<Vec<HashSet<BlockRef>>, CoreError>;
+}
 
 #[allow(unused)]
 pub(crate) struct CoreThreadDispatcherHandle {
@@ -86,7 +96,6 @@ pub(crate) enum CoreError {
     Shutdown(RecvError),
 }
 
-#[allow(unused)]
 impl CoreThreadDispatcher {
     pub fn start(core: Core, context: Arc<Context>) -> (Self, CoreThreadDispatcherHandle) {
         let (sender, receiver) = metered_channel::channel_with_total(
@@ -116,26 +125,6 @@ impl CoreThreadDispatcher {
         (dispatcher, handler)
     }
 
-    pub async fn add_blocks(&self, blocks: Vec<VerifiedBlock>) -> Result<Vec<BlockRef>, CoreError> {
-        let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::AddBlocks(blocks, sender))
-            .await;
-        receiver.await.map_err(Shutdown)
-    }
-
-    pub async fn force_new_block(&self, round: Round) -> Result<(), CoreError> {
-        let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::ForceNewBlock(round, sender))
-            .await;
-        receiver.await.map_err(Shutdown)
-    }
-
-    pub async fn get_missing_blocks(&self) -> Result<Vec<HashSet<BlockRef>>, CoreError> {
-        let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::GetMissing(sender)).await;
-        receiver.await.map_err(Shutdown)
-    }
-
     async fn send(&self, command: CoreThreadCommand) {
         self.context.metrics.node_metrics.core_lock_enqueued.inc();
         if let Some(sender) = self.sender.upgrade() {
@@ -146,6 +135,30 @@ impl CoreThreadDispatcher {
                 );
             }
         }
+    }
+}
+
+#[async_trait]
+#[allow(unused)]
+impl CoreThreadDispatcherInterface for CoreThreadDispatcher {
+    async fn add_blocks(&self, blocks: Vec<VerifiedBlock>) -> Result<Vec<BlockRef>, CoreError> {
+        let (sender, receiver) = oneshot::channel();
+        self.send(CoreThreadCommand::AddBlocks(blocks, sender))
+            .await;
+        receiver.await.map_err(Shutdown)
+    }
+
+    async fn force_new_block(&self, round: Round) -> Result<(), CoreError> {
+        let (sender, receiver) = oneshot::channel();
+        self.send(CoreThreadCommand::ForceNewBlock(round, sender))
+            .await;
+        receiver.await.map_err(Shutdown)
+    }
+
+    async fn get_missing_blocks(&self) -> Result<Vec<HashSet<BlockRef>>, CoreError> {
+        let (sender, receiver) = oneshot::channel();
+        self.send(CoreThreadCommand::GetMissing(sender)).await;
+        receiver.await.map_err(Shutdown)
     }
 }
 
