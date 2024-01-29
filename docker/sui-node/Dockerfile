@@ -21,7 +21,7 @@ RUN cargo build --profile ${PROFILE} --bin sui-node
 # Production Image
 FROM debian:bullseye-slim AS runtime
 # Use jemalloc as memory allocator
-RUN apt-get update && apt-get install -y libjemalloc-dev ca-certificates
+RUN apt-get update && apt-get install -y libjemalloc-dev ca-certificates curl
 ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
 ARG PROFILE=release
 WORKDIR "$WORKDIR/sui"
@@ -29,6 +29,8 @@ WORKDIR "$WORKDIR/sui"
 COPY --from=builder /sui/target/release/sui-node /opt/sui/bin/sui-node
 # Support legacy usages of /usr/local/bin/sui-node
 COPY --from=builder /sui/target/release/sui-node /usr/local/bin
+# script to use for health check purposes (e.g. k8s readiness probe)
+COPY /docker/sui-node/ready.sh /opt/sui
 
 ARG BUILD_DATE
 ARG GIT_REVISION
