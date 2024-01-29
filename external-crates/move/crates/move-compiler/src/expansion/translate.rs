@@ -2374,7 +2374,7 @@ fn function_(
             .check_feature(FeatureGate::Macros, current_package, macro_loc);
     }
     let visibility = visibility(pvisibility);
-    let signature = function_signature(context, psignature);
+    let signature = function_signature(context, macro_, psignature);
     let body = function_body(context, pbody);
     if let Some((m, use_funs_builder)) = module_and_use_funs {
         let implicit = E::ImplicitUseFunCandidate {
@@ -2415,6 +2415,7 @@ fn visibility(pvisibility: P::Visibility) -> E::Visibility {
 
 fn function_signature(
     context: &mut Context,
+    is_macro: Option<Loc>,
     psignature: P::FunctionSignature,
 ) -> E::FunctionSignature {
     let P::FunctionSignature {
@@ -2422,14 +2423,14 @@ fn function_signature(
         parameters: pparams,
         return_type: pret_ty,
     } = psignature;
-    let type_parameters = type_parameters(context, pty_params);
+    let type_parameters = function_type_parameters(context, is_macro, pty_params);
     context.push_type_parameters(type_parameters.iter().map(|(name, _)| name));
     let parameters = pparams
         .into_iter()
         .map(|(pmut, v, t)| (mutability(context, v.loc(), pmut), v, type_(context, t)))
         .collect::<Vec<_>>();
     for (_, v, _) in &parameters {
-        check_valid_local_name(context, v)
+        check_valid_function_parameter_name(context, is_macro, v)
     }
     let return_type = type_(context, pret_ty);
     E::FunctionSignature {
@@ -2468,14 +2469,16 @@ fn ability_set(context: &mut Context, case: &str, abilities_vec: Vec<Ability>) -
     set
 }
 
-fn type_parameters(
+fn function_type_parameters(
     context: &mut Context,
+    is_macro: Option<Loc>,
     pty_params: Vec<(Name, Vec<Ability>)>,
 ) -> Vec<(Name, E::AbilitySet)> {
     pty_params
         .into_iter()
         .map(|(name, constraints_vec)| {
             let constraints = ability_set(context, "constraint", constraints_vec);
+            let _ = check_valid_type_parameter_name(context, is_macro, &name);
             (name, constraints)
         })
         .collect()
@@ -2487,10 +2490,13 @@ fn struct_type_parameters(
 ) -> Vec<E::StructTypeParameter> {
     pty_params
         .into_iter()
-        .map(|param| E::StructTypeParameter {
-            is_phantom: param.is_phantom,
-            name: param.name,
-            constraints: ability_set(context, "constraint", param.constraints),
+        .map(|param| {
+            let _ = check_valid_type_parameter_name(context, None, &param.name);
+            E::StructTypeParameter {
+                is_phantom: param.is_phantom,
+                name: param.name,
+                constraints: ability_set(context, "constraint", param.constraints),
+            }
         })
         .collect()
 }
@@ -3260,14 +3266,56 @@ fn check_valid_address_name(
     }
 }
 
-fn check_valid_local_name(context: &mut Context, v: &Var) {
-    fn is_valid(s: Symbol) -> bool {
-        s.starts_with('_') || s.starts_with(|c: char| c.is_ascii_lowercase())
+fn check_valid_function_parameter_name(context: &mut Context, is_macro: Option<Loc>, v: &Var) {
+    const MACRO_IDENTIFIER_NOTE: &str =
+        "'macro' parameters start with '$' to indicate that their arguments are not evaluated \
+        before the macro is expanded, meaning the entire expression is substituted. \
+        This is different from regular function parameters that are evaluated before the \
+        function is called.";
+    let is_macro_identifier = v.is_macro_identifier();
+    if let Some(macro_loc) = is_macro {
+        if !is_macro_identifier {
+            let msg = format!(
+                "Invalid parameter name '{}'. '{}' parameter names must start with '$'",
+                v, MACRO_MODIFIER,
+            );
+            let macro_msg = format!("Declared '{}' here", MACRO_MODIFIER);
+            let mut diag = diag!(
+                Declarations::InvalidName,
+                (v.loc(), msg),
+                (macro_loc, macro_msg),
+            );
+            diag.add_note(MACRO_IDENTIFIER_NOTE);
+            context.env().add_diag(diag);
+        }
+    } else {
+        if is_macro_identifier {
+            let msg = format!(
+                "Invalid parameter name '{}'. Non-'{}' parameter names cannot start with '$'",
+                v, MACRO_MODIFIER,
+            );
+            context
+                .env()
+                .add_diag(diag!(Declarations::InvalidName, (v.loc(), msg)));
+        } else if !is_valid_local_variable_name(v.value()) {
+            let msg = format!(
+                "Invalid parameter name '{}'. Local variable names must start with 'a'..'z' or \
+                 '_'",
+                v,
+            );
+            let mut diag = diag!(Declarations::InvalidName, (v.loc(), msg));
+            diag.add_note(MACRO_IDENTIFIER_NOTE);
+            context.env().add_diag(diag);
+        }
     }
-    if !is_valid(v.value()) {
+    let _ = check_restricted_name_all_cases(&mut context.defn_context, NameCase::Variable, &v.0);
+}
+
+fn check_valid_local_name(context: &mut Context, v: &Var) {
+    if !is_valid_local_variable_name(v.value()) {
         let msg = format!(
-            "Invalid local variable name '{}'. Local variable names must start with 'a'..'z' (or \
-             '_')",
+            "Invalid local variable name '{}'. Local variable names must start with 'a'..'z' or \
+             '_'",
             v,
         );
         context
@@ -3275,6 +3323,10 @@ fn check_valid_local_name(context: &mut Context, v: &Var) {
             .add_diag(diag!(Declarations::InvalidName, (v.loc(), msg)));
     }
     let _ = check_restricted_name_all_cases(&mut context.defn_context, NameCase::Variable, &v.0);
+}
+
+fn is_valid_local_variable_name(s: Symbol) -> bool {
+    s.starts_with('_') || s.starts_with(|c: char| c.is_ascii_lowercase())
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -3307,6 +3359,7 @@ pub enum NameCase {
     ModuleAlias,
     Variable,
     Address,
+    TypeParameter,
 }
 
 impl NameCase {
@@ -3324,6 +3377,7 @@ impl NameCase {
             NameCase::ModuleAlias => "module alias",
             NameCase::Variable => "variable",
             NameCase::Address => "address",
+            NameCase::TypeParameter => "type parameter",
         }
     }
 }
@@ -3419,6 +3473,62 @@ fn check_valid_module_member_name_impl(
     check_restricted_name_all_cases(&mut context.defn_context, case, n)?;
 
     Ok(())
+}
+
+fn check_valid_type_parameter_name(
+    context: &mut Context,
+    is_macro: Option<Loc>,
+    n: &Name,
+) -> Result<(), ()> {
+    const MACRO_IDENTIFIER_NOTE: &str = "Type parameter names starting with '$' indicate that \
+        their arguments do not have to satisfy certain constraints before the macro is expanded, \
+        meaning types like '&mut u64' or '(bool, u8)' may be used as arguments.";
+
+    let is_macro_ident = Var::is_macro_identifier_name(n.value);
+    if let Some(macro_loc) = is_macro {
+        if !is_macro_ident {
+            let msg = format!(
+                "Invalid type parameter name. \
+                '{} fun' type parameter names must start with '$'",
+                MACRO_MODIFIER
+            );
+            let macro_msg = format!("Declared '{}' here", MACRO_MODIFIER);
+            let mut diag = diag!(
+                Declarations::InvalidName,
+                (n.loc, msg),
+                (macro_loc, macro_msg),
+            );
+            diag.add_note(MACRO_IDENTIFIER_NOTE);
+            context.env().add_diag(diag);
+        }
+    } else {
+        if is_macro_ident {
+            let msg = format!(
+                "Invalid type parameter name. \
+                Only '{} fun' type parameter names cat start with '$'",
+                MACRO_MODIFIER
+            );
+            let mut diag = diag!(Declarations::InvalidName, (n.loc, msg));
+            diag.add_note(MACRO_IDENTIFIER_NOTE);
+            context.env().add_diag(diag);
+        }
+    }
+
+    // TODO move these names to a more central place?
+    check_restricted_names(
+        context,
+        NameCase::TypeParameter,
+        n,
+        crate::naming::ast::BuiltinFunction_::all_names(),
+    )?;
+    check_restricted_names(
+        context,
+        NameCase::TypeParameter,
+        n,
+        crate::naming::ast::BuiltinTypeName_::all_names(),
+    )?;
+
+    check_restricted_name_all_cases(&mut context.defn_context, NameCase::TypeParameter, n)
 }
 
 pub fn is_valid_struct_constant_or_schema_name(s: &str) -> bool {

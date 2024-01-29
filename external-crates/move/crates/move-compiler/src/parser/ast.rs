@@ -780,12 +780,22 @@ impl ModuleName {
 }
 
 impl Var {
+    pub const MACRO_IDENT_START: char = '$';
+
     pub fn is_underscore(&self) -> bool {
         self.0.value == symbol!("_")
     }
 
     pub fn starts_with_underscore(&self) -> bool {
         self.0.value.starts_with('_')
+    }
+
+    pub fn is_macro_identifier(&self) -> bool {
+        Self::is_macro_identifier_name(self.0.value)
+    }
+
+    pub fn is_macro_identifier_name(n: Symbol) -> bool {
+        n.starts_with(Self::MACRO_IDENT_START)
     }
 }
 

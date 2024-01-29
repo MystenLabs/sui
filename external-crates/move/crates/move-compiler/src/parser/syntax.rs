@@ -368,6 +368,22 @@ fn parse_identifier(context: &mut Context) -> Result<Name, Box<Diagnostic>> {
     Ok(spanned(context.tokens.file_hash(), start_loc, end_loc, id))
 }
 
+// Parse a macro identifier:
+//      MacroIdentifier = <MacroIdentifierValue>
+fn parse_macro_identifier(context: &mut Context) -> Result<Name, Box<Diagnostic>> {
+    if context.tokens.peek() != Tok::MacroIdentifier {
+        return Err(unexpected_token_error(
+            context.tokens,
+            "an identifier prefixed by '$'",
+        ));
+    }
+    let start_loc = context.tokens.start_loc();
+    let id = context.tokens.content().into();
+    context.tokens.advance()?;
+    let end_loc = context.tokens.previous_end_loc();
+    Ok(spanned(context.tokens.file_hash(), start_loc, end_loc, id))
+}
+
 // Parse a numerical address value
 //     NumericalAddress = <Number>
 fn parse_address_bytes(
@@ -389,7 +405,7 @@ fn parse_address_bytes(
 }
 
 // Parse the beginning of an access, either an address or an identifier:
-//      LeadingNameAccess = <NumericalAddress> | <Identifier>
+//      LeadingNameAccess = <NumericalAddress> | <Identifier> | <MacroIdentifier>
 fn parse_leading_name_access(context: &mut Context) -> Result<LeadingNameAccess, Box<Diagnostic>> {
     parse_leading_name_access_(context, false, || "an address or an identifier")
 }
@@ -411,6 +427,16 @@ fn parse_leading_name_access_<'a, F: FnOnce() -> &'a str>(
             };
             Ok(sp(loc, name))
         }
+        Tok::MacroIdentifier => {
+            let loc = current_token_loc(context.tokens);
+            let n = parse_macro_identifier(context)?;
+            let name = if global_name {
+                LeadingNameAccess_::GlobalAddress(n)
+            } else {
+                LeadingNameAccess_::Name(n)
+            };
+            Ok(sp(loc, name))
+        }
         Tok::NumValue => {
             let sp!(loc, addr) = parse_address_bytes(context)?;
             Ok(sp(loc, LeadingNameAccess_::AnonymousAddress(addr)))
@@ -420,9 +446,12 @@ fn parse_leading_name_access_<'a, F: FnOnce() -> &'a str>(
 }
 
 // Parse a variable name:
-//      Var = <Identifier>
+//      Var = <Identifier> | <MacroIdentifier>
 fn parse_var(context: &mut Context) -> Result<Var, Box<Diagnostic>> {
-    Ok(Var(parse_identifier(context)?))
+    Ok(Var(match context.tokens.peek() {
+        Tok::MacroIdentifier => parse_macro_identifier(context)?,
+        _ => parse_identifier(context)?,
+    }))
 }
 
 // Parse a field name:

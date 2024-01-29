@@ -21,6 +21,7 @@ pub enum Tok {
     NumTypedValue,
     ByteStringValue,
     Identifier,
+    MacroIdentifier,
     Exclaim,
     ExclaimEqual,
     Percent,
@@ -101,6 +102,7 @@ impl fmt::Display for Tok {
             NumTypedValue => "[NumTyped]",
             ByteStringValue => "[ByteString]",
             Identifier => "[Identifier]",
+            MacroIdentifier => "[MacroIdentifier]",
             Exclaim => "!",
             ExclaimEqual => "!=",
             Percent => "%",
@@ -549,6 +551,18 @@ fn find_token(
             } else {
                 let len = get_name_len(text);
                 (get_name_token(edition, &text[..len]), len)
+            }
+        }
+        '$' => {
+            if text.len() > 1 && text.starts_with(|c| matches!(c,'A'..='Z' | 'a'..='z' | '_')) {
+                let len = get_name_len(&text[1..]);
+                (Tok::MacroIdentifier, len + 1)
+            } else {
+                let loc = make_loc(file_hash, start_offset, start_offset + 1);
+                return Err(Box::new(diag!(
+                    Syntax::UnexpectedToken,
+                    (loc, "Expected an identifier following '$', e.g. '$x'"),
+                )));
             }
         }
         '&' => {
