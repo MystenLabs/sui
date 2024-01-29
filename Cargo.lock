@@ -4880,6 +4880,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "genco"
+version = "0.17.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98d7af598790738fee616426e669360fa361273b1b9c9b7f30c92fa627605cad"
+dependencies = [
+ "genco-macros",
+ "relative-path",
+ "smallvec",
+]
+
+[[package]]
+name = "genco-macros"
+version = "0.17.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4cf186fea4af17825116f72932fe52cce9a13bae39ff63b4dc0cfdb3fb4bde1"
+dependencies = [
+ "proc-macro2 1.0.78",
+ "quote 1.0.35",
+ "syn 2.0.48",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9992,6 +10014,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 
 [[package]]
+name = "relative-path"
+version = "1.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e898588f33fdd5b9420719948f9f2a32c922a246964576f71ba7f24f80610fbc"
+
+[[package]]
 name = "reqwest"
 version = "0.11.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11746,6 +11774,7 @@ dependencies = [
  "shell-words",
  "shlex",
  "signature 1.6.4",
+ "sui-client-gen",
  "sui-config",
  "sui-execution",
  "sui-genesis-builder",
@@ -12128,6 +12157,34 @@ dependencies = [
  "typed-store",
  "typed-store-derive",
  "url",
+]
+
+[[package]]
+name = "sui-client-gen"
+version = "1.24.0"
+dependencies = [
+ "anyhow",
+ "codespan-reporting",
+ "colored",
+ "convert_case 0.6.0",
+ "futures",
+ "genco",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-command-line-common",
+ "move-compiler",
+ "move-core-types",
+ "move-model",
+ "move-package",
+ "move-symbol-pool",
+ "regex",
+ "sui-json-rpc-types",
+ "sui-move",
+ "sui-move-build",
+ "sui-sdk",
+ "tempfile",
+ "tokio",
+ "toml 0.5.10",
 ]
 
 [[package]]
