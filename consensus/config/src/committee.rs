@@ -133,6 +133,10 @@ impl Committee {
             .map(|(i, a)| (AuthorityIndex(i as u32), a))
     }
 
+    pub fn exists(&self, index: AuthorityIndex) -> bool {
+        index.value() < self.size()
+    }
+
     pub fn size(&self) -> usize {
         self.authorities.len()
     }

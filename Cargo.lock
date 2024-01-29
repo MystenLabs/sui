@@ -2626,6 +2626,7 @@ dependencies = [
  "rand 0.8.5",
  "rstest",
  "serde",
+ "shared-crypto",
  "sui-protocol-config",
  "tap",
  "telemetry-subscribers",

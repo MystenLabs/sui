@@ -10,12 +10,18 @@ use std::{
 };
 
 use bytes::Bytes;
-use consensus_config::{AuthorityIndex, DefaultHashFunction, Epoch, DIGEST_LENGTH};
+use consensus_config::{
+    AuthorityIndex, DefaultHashFunction, Epoch, NetworkKeySignature, DIGEST_LENGTH,
+};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, HashFunction};
+use fastcrypto::traits::{Signer, ToFromBytes};
 use serde::{Deserialize, Serialize};
 
+use crate::authority_signature::{to_consensus_block_intent, AuthoritySignature};
 use crate::context::Context;
+use crate::ensure;
+use crate::error::{ConsensusError, ConsensusResult};
 
 const GENESIS_ROUND: Round = 0;
 
@@ -72,7 +78,7 @@ impl Block {
             .committee
             .authorities()
             .map(|(authority_index, _)| {
-                let signed = SignedBlock::new(Block::V1(BlockV1::genesis(
+                let signed = SignedBlock::new_genesis(Block::V1(BlockV1::genesis(
                     authority_index,
                     context.committee.epoch(),
                 )));
@@ -296,12 +302,43 @@ pub(crate) struct SignedBlock {
 impl SignedBlock {
     // TODO: add verification.
 
-    // TODO: will refactor once the signing approach has been introduced.
-    pub(crate) fn new(block: Block) -> Self {
+    /// Should only be used when constructing the genesis blocks
+    pub(crate) fn new_genesis(block: Block) -> Self {
         Self {
             inner: block,
             signature: Bytes::default(),
         }
+    }
+    pub(crate) fn new<S>(block: Block, signer: &S) -> ConsensusResult<Self>
+    where
+        S: Signer<NetworkKeySignature>,
+    {
+        let digest = compute_digest(&block)?;
+        let signature = NetworkKeySignature::new(&to_consensus_block_intent(digest), signer);
+        let signature_bytes = signature.as_bytes();
+        Ok(Self {
+            inner: block,
+            signature: signature_bytes.to_vec().into(),
+        })
+    }
+
+    #[allow(unused)]
+    /// This method is only verifying the block's signature for now. It does not do any kind of validation so it can
+    /// fail for numerous reasons.
+    pub(crate) fn verify(&self, context: &Context) -> ConsensusResult<()> {
+        let digest = compute_digest(&self.inner)?;
+
+        ensure!(
+            context.committee.exists(self.inner.author()),
+            ConsensusError::UnknownAuthority(self.inner.author().to_string())
+        );
+        let authority = context.committee.authority(self.inner.author());
+
+        let signature = NetworkKeySignature::from_bytes(self.signature.as_ref())?;
+
+        signature
+            .verify(&to_consensus_block_intent(digest), &authority.network_key)
+            .map_err(ConsensusError::SignatureVerificationFailure)
     }
 
     /// Serialises the block using the bcs serializer
@@ -328,7 +365,7 @@ impl VerifiedBlock {
         signed_block: SignedBlock,
         serialized: Bytes,
     ) -> Result<Self, bcs::Error> {
-        let digest = Self::compute_digest(&signed_block.inner)?;
+        let digest = compute_digest(&signed_block.inner)?;
         Ok(VerifiedBlock {
             block: Arc::new(signed_block),
             digest,
@@ -345,7 +382,7 @@ impl VerifiedBlock {
 
     #[cfg(test)]
     pub(crate) fn new_for_test(block: Block) -> Self {
-        let digest = Self::compute_digest(&block).unwrap();
+        let digest = compute_digest(&block).unwrap();
         // Use empty signature in test.
         let signed_block = SignedBlock {
             inner: block,
@@ -378,12 +415,12 @@ impl VerifiedBlock {
     pub(crate) fn serialized(&self) -> &Bytes {
         &self.serialized
     }
+}
 
-    pub(crate) fn compute_digest(block: &Block) -> Result<BlockDigest, bcs::Error> {
-        let mut hasher = DefaultHashFunction::new();
-        hasher.update(bcs::to_bytes(block)?);
-        Ok(BlockDigest(hasher.finalize().into()))
-    }
+fn compute_digest(block: &Block) -> Result<BlockDigest, bcs::Error> {
+    let mut hasher = DefaultHashFunction::new();
+    hasher.update(bcs::to_bytes(block)?);
+    Ok(BlockDigest(hasher.finalize().into()))
 }
 
 /// Allow quick access on the underlying Block without having to always refer to the inner block ref.
@@ -477,3 +514,43 @@ impl TestBlock {
 
 // TODO: add basic verification for BlockRef and BlockDigest.
 // TODO: add tests for SignedBlock and VerifiedBlock conversion.
+
+#[cfg(test)]
+mod tests {
+    use crate::block::{SignedBlock, TestBlock};
+    use crate::context::Context;
+    use crate::error::ConsensusError;
+    use fastcrypto::error::FastCryptoError;
+    use std::sync::Arc;
+
+    #[test]
+    fn test_block_signing() {
+        let (context, key_pairs) = Context::new_for_test(4);
+        let context = Arc::new(context);
+
+        // Create a block that authority 2 has created
+        let block = TestBlock::new(10, 2).build();
+
+        // Create a signed block with authority's 2 private key
+        let author_two_key = &key_pairs[2].0;
+        let signed_block = SignedBlock::new(block, author_two_key).expect("Shouldn't fail signing");
+
+        // Now verify the block's signature
+        let result = signed_block.verify(&context);
+        assert!(result.is_ok());
+
+        // Try to sign authority's 2 block with authority's 1 key
+        let block = TestBlock::new(10, 2).build();
+        let author_one_key = &key_pairs[1].0;
+        let signed_block = SignedBlock::new(block, author_one_key).expect("Shouldn't fail signing");
+
+        // Now verify the block, it should fail
+        let result = signed_block.verify(&context);
+        match result.err().unwrap() {
+            ConsensusError::SignatureVerificationFailure(err) => {
+                assert_eq!(err, FastCryptoError::InvalidSignature);
+            }
+            err => panic!("Unexpected error: {err:?}"),
+        }
+    }
+}
