@@ -558,14 +558,7 @@ pub struct ConstructionPreprocessRequest {
 
 #[derive(Serialize, Deserialize)]
 pub struct PreprocessMetadata {
-    pub internal_operation: InternalOperationRequest,
     pub budget: Option<u64>
-}
-
-#[derive(Serialize, Deserialize)]
-pub enum InternalOperationRequest {
-    PaySui,
-    Delegation,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
