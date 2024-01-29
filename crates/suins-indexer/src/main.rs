@@ -130,7 +130,7 @@ async fn main() -> Result<()> {
                 Some("https://s3.us-west-2.amazonaws.com/mysten-mainnet-checkpoints".to_string())
             } else {
                 None
-            },
+            }, /* remote_read_endpoint: If set */
             vec![
                 (
                     "aws_access_key_id".to_string(),
@@ -144,7 +144,8 @@ async fn main() -> Result<()> {
                     "aws_session_token".to_string(),
                     aws_session_token.unwrap_or("".to_string()),
                 ),
-            ],
+            ], /* aws credentials */
+            100,                            /* remote_read_batch_size */
             exit_receiver,
         )
         .await?;
