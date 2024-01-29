@@ -35,6 +35,11 @@
   epoch(id: 2) {
     validatorSet {
       totalStake
+      activeValidators {
+        nodes {
+          name
+        }
+      }
     }
     totalGasFees
     totalStakeRewards
