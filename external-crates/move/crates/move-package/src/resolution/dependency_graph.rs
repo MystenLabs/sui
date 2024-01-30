@@ -130,10 +130,15 @@ pub struct Package {
 
 impl PartialEq for Package {
     fn eq(&self, other: &Self) -> bool {
-        // comparison omit the type of resolver (as it would actually lead to incorrect result when
+        // When the resolve_version hook is defined (both packages have a version),
+        // we compare the packages based on their version rather than their location (`PM::DependencyKind`)
+        // as defined in their parent manifest. When the hook is not defined (or returns None) for both packages,
+        // we compare the packages based on their location. If the version resolves for one package but is None for
+        // the other, we consider the packages to be different.
+        // Comparison omits the type of resolver (as it would actually lead to incorrect result when
         // comparing packages during insertion of externally resolved ones - an internally resolved
         // existing package in the graph would not be recognized as a potential different version of
-        // the externally resolved one)
+        // the externally resolved one).
         match (&self.version, &other.version) {
             (Some(this), Some(other)) => this == other,
             (None, None) => self.kind == other.kind,
@@ -154,6 +159,8 @@ pub struct Dependency {
 }
 
 impl PartialEq for Dependency {
+    // We store the original dependency name in the graph for printing user-friendly error messages,
+    // but we don't want to consider it when comparing dependencies for equality.
     fn eq(&self, other: &Self) -> bool {
         self.mode == other.mode
             && self.subst == other.subst
@@ -1664,11 +1671,7 @@ fn deps_equal<'a>(
         })
         .collect::<BTreeMap<PM::PackageName, (&Dependency, &Package)>>();
 
-    // Compare deps in both graphs. When the resolve_version hook is defined (both packages have a version),
-    // we compare the packages based on their version rather than their location (`PM::DependencyKind`)
-    // as defined in their parent manifest. When the hook is not defined (or returns None) for both packages,
-    // we compare the packages based on their location. If the version resolves for one package but is None for
-    // the other, we consider the packages to be different.
+    // Compare deps in both graphs. See `PartialEq` implementation for `Package` for more details.
     let mut graph1_pkgs = vec![];
     for (k, v) in graph1_edges.iter() {
         if !graph2_edges.contains_key(k) || graph2_edges.get(k) != Some(v) {

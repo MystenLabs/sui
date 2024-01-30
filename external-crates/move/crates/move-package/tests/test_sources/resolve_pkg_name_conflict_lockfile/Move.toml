@@ -1,5 +1,5 @@
 # This test highlights the problem of error messages using resolved pkg
-# names instead of original when dependnecy lock files are present. The
+# names instead of original when dependency lock files are present. The
 # resulting error massage in Move.resolved should print `C-rename` instead
 # of `C-resolved`.
 #                                                             
