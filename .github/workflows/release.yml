@@ -142,7 +142,7 @@ jobs:
           [ -f ./target/release/sui-bridge ] && mv ./target/release/sui-bridge ./target/release/sui-bridge-${os_type}
           [ -f ./external-crates/move/target/release/move-analyzer ] && mv ./external-crates/move/target/release/move-analyzer ./external-crates/move/target/release/move-analyzer-${os_type}
           tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}* ./external-crates/move/target/release/move-analyzer-${os_type}
-          [[ ${{ env.sui_tag }} == *"mainnet"* ]] && aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz || true
+          [[ ${{ env.sui_tag }} == *"testnet"* ]] && aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz || true
 
       - name: Rename binaries for Windows
         if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' }}
@@ -157,7 +157,7 @@ jobs:
           [ -f ./target/release/sui-data-ingestion.exe ] &&  mv ./target/release/sui-data-ingestion.exe ./target/release/sui-data-ingestion-${os_type}.exe
           [ -f ./external-crates/move/target/release/move-analyzer.exe ] && mv ./external-crates/move/target/release/move-analyzer.exe ./external-crates/move/target/release/move-analyzer-${os_type}.exe
           tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}* ./external-crates/move/target/release/move-analyzer-${os_type}.exe
-          [[ ${{ env.sui_tag }} == *"mainnet"* ]] && aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz || true
+          [[ ${{ env.sui_tag }} == *"testnet"* ]] && aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz || true
 
       - name: "Publish Windows sui binary to Chocolately"
         if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' && contains( env.sui_tag, 'testnet') }}
