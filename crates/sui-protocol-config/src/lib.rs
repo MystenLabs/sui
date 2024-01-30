@@ -1562,8 +1562,9 @@ impl ProtocolConfig {
 
             consensus_max_transaction_size_bytes: None,
 
-            consensus_max_block_transactions_size_bytes: None, // When adding a new constant, set it to None in the earliest version, like this:
-                                                               // new_constant: None,
+            consensus_max_block_transactions_size_bytes: None,
+            // When adding a new constant, set it to None in the earliest version, like this:
+            // new_constant: None,
         };
         for cur in 2..=version.0 {
             match cur {
