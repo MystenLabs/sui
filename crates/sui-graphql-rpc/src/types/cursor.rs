@@ -16,6 +16,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     config::ServiceConfig,
+    consistency::ConsistentIndexCursor,
     data::{Conn, DbConnection, DieselBackend, DieselConn, Query},
     error::Error,
     raw_query::RawQuery,
@@ -231,6 +232,58 @@ impl Page<JsonCursor<usize>> {
         }
 
         Some((0 < lo, hi < total, (lo..hi).map(JsonCursor::new)))
+    }
+}
+
+impl Page<JsonCursor<ConsistentIndexCursor>> {
+    /// Treat the cursors of this Page as indices into a range [0, total). Returns two booleans
+    /// indicating whether there is a previous or next page in the range, followed by an iterator of
+    /// cursors within that Page. Ignores whether each cursor's `c`, checkpoint sequence number, is
+    /// consistent, and returns an iterator of `JsonCursor<usize>`.
+    pub(crate) fn paginate_consistent_indices(
+        &self,
+        total: usize,
+        checkpoint_viewed_at: u64,
+    ) -> Result<
+        Option<(
+            bool,
+            bool,
+            impl Iterator<Item = JsonCursor<ConsistentIndexCursor>>,
+        )>,
+        Error,
+    > {
+        let cursor_viewed_at = self.validate_cursor_consistency()?;
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
+
+        let mut lo = self.after().map_or(0, |a| a.ix + 1);
+        let mut hi = self.before().map_or(total, |b| b.ix);
+
+        if hi <= lo {
+            return Ok(None);
+        } else if (hi - lo) > self.limit() {
+            if self.is_from_front() {
+                hi = lo + self.limit();
+            } else {
+                lo = hi - self.limit();
+            }
+        }
+
+        Ok(Some((
+            0 < lo,
+            hi < total,
+            (lo..hi).map(move |ix| {
+                JsonCursor::new(ConsistentIndexCursor {
+                    ix,
+                    c: checkpoint_viewed_at,
+                })
+            }),
+        )))
+    }
+}
+
+impl Checkpointed for JsonCursor<ConsistentIndexCursor> {
+    fn checkpoint_viewed_at(&self) -> Option<u64> {
+        Some(self.c)
     }
 }
 
