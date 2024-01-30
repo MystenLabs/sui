@@ -92,10 +92,7 @@ async fn pay_with_gas_budget(budget: u64) -> TransactionIdentifierResponseResult
         )
         .await;
     println!("Preprocess : {preprocess:?}");
-    assert_eq!(
-        preprocess.options.as_ref().unwrap().budget.unwrap(),
-        budget
-    );
+    assert_eq!(preprocess.options.as_ref().unwrap().budget.unwrap(), budget);
 
     let metadata: ConstructionMetadataResponse = rosetta_client
         .call(
