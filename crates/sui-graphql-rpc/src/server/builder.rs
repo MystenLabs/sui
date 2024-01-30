@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::{MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD};
+use crate::config::{
+    ConnectionConfig, MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
+};
 use crate::context_data::package_cache::DbPackageStore;
 use crate::data::Db;
 use crate::metrics::Metrics;
@@ -27,8 +29,9 @@ use async_graphql::extensions::Tracing;
 use async_graphql::EmptySubscription;
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use axum::extract::FromRef;
 use axum::extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo, State};
-use axum::http::HeaderMap;
+use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::{self};
 use axum::response::IntoResponse;
 use axum::routing::{post, MethodRouter, Route};
@@ -38,6 +41,7 @@ use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Body;
 use hyper::Server as HyperServer;
 use std::convert::Infallible;
+use std::net::{TcpListener, TcpStream};
 use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
@@ -62,27 +66,52 @@ impl Server {
 }
 
 pub(crate) struct ServerBuilder {
-    port: u16,
-    host: String,
-
+    state: AppState,
     schema: SchemaBuilder<Query, Mutation, EmptySubscription>,
     router: Option<Router>,
+}
+
+#[derive(Clone)]
+struct AppState {
+    connection: ConnectionConfig,
     metrics: Metrics,
 }
 
-impl ServerBuilder {
-    pub fn new(port: u16, host: String, metrics: Metrics) -> Self {
+impl AppState {
+    fn new(connection: ConnectionConfig, metrics: Metrics) -> Self {
         Self {
-            port,
-            host,
+            connection,
+            metrics,
+        }
+    }
+}
+
+impl FromRef<AppState> for ConnectionConfig {
+    fn from_ref(app_state: &AppState) -> ConnectionConfig {
+        app_state.connection.clone()
+    }
+}
+
+impl FromRef<AppState> for Metrics {
+    fn from_ref(app_state: &AppState) -> Metrics {
+        app_state.metrics.clone()
+    }
+}
+
+impl ServerBuilder {
+    pub fn new(state: AppState) -> Self {
+        Self {
+            state,
             schema: schema_builder(),
             router: None,
-            metrics,
         }
     }
 
     pub fn address(&self) -> String {
-        format!("{}:{}", self.host, self.port)
+        format!(
+            "{}:{}",
+            self.state.connection.host, self.state.connection.port
+        )
     }
 
     pub fn context_data(mut self, context_data: impl Any + Send + Sync) -> Self {
@@ -115,9 +144,9 @@ impl ServerBuilder {
                 .route("/", post(graphql_handler))
                 .route("/graphql", post(graphql_handler))
                 .route("/health", axum::routing::get(health_checks))
-                .with_state(self.metrics.clone())
+                .with_state(self.state.clone())
                 .route_layer(middleware::from_fn_with_state(
-                    self.metrics.clone(),
+                    self.state.metrics.clone(),
                     check_version_middleware,
                 ))
                 .layer(middleware::from_fn(set_version_middleware));
@@ -185,12 +214,8 @@ impl ServerBuilder {
 
         // METRICS
         let metrics = Metrics::new(&registry);
-
-        let mut builder = ServerBuilder::new(
-            config.connection.port,
-            config.connection.host.clone(),
-            metrics.clone(),
-        );
+        let state = AppState::new(config.connection.clone(), metrics.clone());
+        let mut builder = ServerBuilder::new(state);
 
         let name_service_config = config.name_service.clone();
         let reader = PgManager::reader_with_config(
@@ -300,36 +325,24 @@ async fn graphql_handler(
     result.into()
 }
 
-async fn health_checks(
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    schema: axum::Extension<SuiGraphQLSchema>,
-    req: GraphQLRequest,
-) -> impl axum::response::IntoResponse {
-    // Simple request to check if the DB is up
-    // TODO: add more checks and figure out better ways to do these health checks
-    let mut req = req.into_inner();
-    req.data.insert(addr);
-    // insert the NIL UUID which helps avoid logging these health requests
-    req.data.insert(HEALTH_UUID);
-    req.query = r#"
-        query {
-            chainIdentifier
+/// Connect via a TCPStream to the DB to check if it is alive
+async fn health_checks(State(connection): State<ConnectionConfig>) -> StatusCode {
+    let db_url = connection.db_url;
+    let url = reqwest::Url::parse(db_url.as_str());
+    if let Ok(url) = url {
+        if let (Some(h), Some(p)) = (url.host_str(), url.port()) {
+            let listener = TcpStream::connect(format!("{}:{}", h, p));
+            if listener.is_err() {
+                StatusCode::INTERNAL_SERVER_ERROR
+            } else {
+                StatusCode::OK
+            }
+        } else {
+            StatusCode::INTERNAL_SERVER_ERROR
         }
-        "#
-    .to_string();
-    let db_up = match schema.execute(req).await.is_ok() {
-        true => "UP",
-        false => "DOWN",
-    };
-    let uptime = get_or_init_server_start_time()
-        .await
-        .elapsed()
-        .as_secs_f64();
-    format!(
-        r#"{{"status": "UP","uptime": {},"checks": {{"DB": "{}",}}}}
-        "#,
-        uptime, db_up
-    )
+    } else {
+        StatusCode::INTERNAL_SERVER_ERROR
+    }
 }
 
 // One server per proc, so this is okay
@@ -433,7 +446,8 @@ pub mod tests {
             let metrics = metrics();
             let db = Db::new(reader.clone(), cfg.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader);
-            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics)
+            let state = AppState::new(connection_config.clone(), metrics.clone());
+            let mut schema = ServerBuilder::new(state)
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(cfg)
@@ -487,7 +501,8 @@ pub mod tests {
             let metrics = metrics();
             let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader);
-            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics.clone())
+            let state = AppState::new(connection_config.clone(), metrics.clone());
+            let mut schema = ServerBuilder::new(state)
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(service_config)
@@ -560,7 +575,8 @@ pub mod tests {
             let metrics = metrics();
             let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
             let pg_conn_pool = PgManager::new(reader);
-            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics.clone())
+            let state = AppState::new(connection_config.clone(), metrics.clone());
+            let mut schema = ServerBuilder::new(state)
                 .context_data(db)
                 .context_data(pg_conn_pool)
                 .context_data(service_config)
@@ -633,7 +649,8 @@ pub mod tests {
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader);
-        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics.clone())
+        let state = AppState::new(connection_config.clone(), metrics.clone());
+        let mut schema = ServerBuilder::new(state)
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)
@@ -686,7 +703,8 @@ pub mod tests {
         let metrics = metrics();
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader);
-        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics.clone())
+        let state = AppState::new(connection_config.clone(), metrics.clone());
+        let mut schema = ServerBuilder::new(state)
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)
@@ -728,7 +746,8 @@ pub mod tests {
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader);
-        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string(), metrics.clone())
+        let state = AppState::new(connection_config.clone(), metrics.clone());
+        let mut schema = ServerBuilder::new(state)
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(service_config)
