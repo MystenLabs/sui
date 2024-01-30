@@ -1292,16 +1292,15 @@ Response: {
       "message": "Requested data is outside the available range",
       "locations": [
         {
-          "line": 21,
-          "column": 11
+          "line": 8,
+          "column": 9
         }
       ],
       "path": [
         "all_transactions",
         "nodes",
         0,
-        "gasInput",
-        "gasSponsor",
+        "sender",
         "objects"
       ],
       "extensions": {
@@ -1312,15 +1311,16 @@ Response: {
       "message": "Requested data is outside the available range",
       "locations": [
         {
-          "line": 8,
-          "column": 9
+          "line": 21,
+          "column": 11
         }
       ],
       "path": [
         "all_transactions",
         "nodes",
         0,
-        "sender",
+        "gasInput",
+        "gasSponsor",
         "objects"
       ],
       "extensions": {
