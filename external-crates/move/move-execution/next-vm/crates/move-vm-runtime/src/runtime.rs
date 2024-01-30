@@ -27,8 +27,6 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
-#[cfg(feature = "gas-profiler")]
-use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
@@ -488,6 +486,7 @@ impl VMRuntime {
         extensions: &mut NativeContextExtensions,
     ) -> VMResult<SerializedReturnValues> {
         move_vm_profiler::gas_profiler_feature_enabled! {
+            use move_vm_profiler::GasProfiler;
             if gas_meter.get_profiler_mut().is_none() {
                 gas_meter.set_profiler(GasProfiler::init_default_cfg(
                     function_name.to_string(),
