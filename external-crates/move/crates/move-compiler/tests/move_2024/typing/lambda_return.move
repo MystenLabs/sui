@@ -1,6 +1,6 @@
 module a::m {
-    macro fun call<T>(f: || -> T): T {
-        f()
+    macro fun call<$T>($f: || -> $T): $T {
+        $f()
     }
 
     #[allow(dead_code)]

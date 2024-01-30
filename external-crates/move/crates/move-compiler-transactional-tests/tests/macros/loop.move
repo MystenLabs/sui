@@ -4,19 +4,21 @@
 
 module 0x42::m {
 
-    macro fun for(start: u64, stop: u64, body: |u64|) {
-        let mut i = start;
+    macro fun for($start: u64, $stop: u64, $body: |u64|) {
+        let mut i = $start;
+        let stop = $stop;
         while (i < stop) {
-            body(i);
+            $body(i);
             i = i + 1
         }
     }
 
-    macro fun for_each<T>(v: &vector<T>, body: |&T|) {
+    macro fun for_each<$T>($v: &vector<$T>, $body: |&$T|) {
+        let v = $v;
         let mut i = 0;
         let n = v.length();
         while (i < n) {
-            body(v.borrow(i));
+            $body(v.borrow(i));
             i = i + 1
         }
     }

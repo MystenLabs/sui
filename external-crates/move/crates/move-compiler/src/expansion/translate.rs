@@ -3274,9 +3274,9 @@ fn check_valid_function_parameter_name(context: &mut Context, is_macro: Option<L
         function is called.";
     let is_macro_identifier = v.is_macro_identifier();
     if let Some(macro_loc) = is_macro {
-        if !is_macro_identifier {
+        if !is_macro_identifier && !v.is_underscore() {
             let msg = format!(
-                "Invalid parameter name '{}'. '{}' parameter names must start with '$'",
+                "Invalid parameter name '{}'. '{}' parameter names must start with '$' (or must be '_')",
                 v, MACRO_MODIFIER,
             );
             let macro_msg = format!("Declared '{}' here", MACRO_MODIFIER);
@@ -3294,18 +3294,18 @@ fn check_valid_function_parameter_name(context: &mut Context, is_macro: Option<L
                 "Invalid parameter name '{}'. Non-'{}' parameter names cannot start with '$'",
                 v, MACRO_MODIFIER,
             );
-            context
-                .env()
-                .add_diag(diag!(Declarations::InvalidName, (v.loc(), msg)));
+            let mut diag = diag!(Declarations::InvalidName, (v.loc(), msg));
+            diag.add_note(MACRO_IDENTIFIER_NOTE);
+            context.env().add_diag(diag);
         } else if !is_valid_local_variable_name(v.value()) {
             let msg = format!(
                 "Invalid parameter name '{}'. Local variable names must start with 'a'..'z' or \
                  '_'",
                 v,
             );
-            let mut diag = diag!(Declarations::InvalidName, (v.loc(), msg));
-            diag.add_note(MACRO_IDENTIFIER_NOTE);
-            context.env().add_diag(diag);
+            context
+                .env()
+                .add_diag(diag!(Declarations::InvalidName, (v.loc(), msg)));
         }
     }
     let _ = check_restricted_name_all_cases(&mut context.defn_context, NameCase::Variable, &v.0);
@@ -3326,7 +3326,7 @@ fn check_valid_local_name(context: &mut Context, v: &Var) {
 }
 
 fn is_valid_local_variable_name(s: Symbol) -> bool {
-    s.starts_with('_') || s.starts_with(|c: char| c.is_ascii_lowercase())
+    Var::is_valid_name(s) && !Var::is_macro_identifier_name(s)
 }
 
 #[derive(Copy, Clone, Debug)]

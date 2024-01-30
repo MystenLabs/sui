@@ -1,5 +1,5 @@
 module a::m {
-    macro fun foo<T>() {}
+    macro fun foo<$T>() {}
 
     fun t() {
         // invalid for normal functions

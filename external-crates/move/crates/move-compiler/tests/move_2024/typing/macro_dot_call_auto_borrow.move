@@ -3,9 +3,9 @@ module 0x42::t {
 public struct X has drop {}
 public struct Y has drop { x: X }
 
-macro fun val(_self: X) {}
-macro fun imm(_self: &X) {}
-macro fun mut_(_self: &mut X) {}
+macro fun val($_self: X) {}
+macro fun imm($_self: &X) {}
+macro fun mut_($_self: &mut X) {}
 
 public fun foo(mut x1: X, x2: &X, x3: &mut X) {
     x1.mut_!();

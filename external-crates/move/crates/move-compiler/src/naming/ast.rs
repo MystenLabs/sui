@@ -10,8 +10,8 @@ use crate::{
         Visibility,
     },
     parser::ast::{
-        Ability_, BinOp, ConstantName, Field, FunctionName, Mutability, StructName, UnaryOp,
-        ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
+        self as P, Ability_, BinOp, ConstantName, Field, FunctionName, Mutability, StructName,
+        UnaryOp, ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
     },
     shared::{ast_debug::*, program_info::NamingProgramInfo, unique_map::UniqueMap, *},
 };
@@ -720,6 +720,16 @@ impl Type_ {
             Type_::Fun(_, _) => Some(AbilitySet::FUNCTIONS.contains(&ability)),
             Type_::Var(_) => None,
         }
+    }
+}
+
+impl Var_ {
+    pub fn starts_with_underscore(&self) -> bool {
+        P::Var::starts_with_underscore_name(self.name)
+    }
+
+    pub fn is_valid(&self) -> bool {
+        P::Var::is_valid_name(self.name)
     }
 }
 

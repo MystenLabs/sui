@@ -1,6 +1,6 @@
 module a::m {
-    macro fun do<T>(f: || -> T): T { f() }
-    macro fun do2<T1, T2>(f: || -> T1, g: || -> T2): (T1, T2) { (f(), g()) }
+    macro fun do<$T>($f: || -> $T): $T { $f() }
+    macro fun do2<$T1, $T2>($f: || -> $T1, $g: || -> $T2): ($T1, $T2) { ($f(), $g()) }
 
 
     // simple test of break/return in a lambda with a named block

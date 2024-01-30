@@ -372,7 +372,7 @@ impl Var {
     }
 
     pub fn starts_with_underscore(&self) -> bool {
-        self.0.value.starts_with('_')
+        self.0.value.starts_with('_') || self.0.value.starts_with("$_")
     }
 }
 

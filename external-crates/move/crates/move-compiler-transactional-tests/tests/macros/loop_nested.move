@@ -4,32 +4,39 @@
 
 module 0x42::m {
 
-    macro fun for(start: u64, stop: u64, body: |u64|) {
-        let mut i = start;
+    macro fun for($start: u64, $stop: u64, $body: |u64|) {
+        let mut i = $start;
+        let stop = $stop;
         while (i < stop) {
-            body(i);
+            $body(i);
             i = i + 1
         }
     }
 
-    macro fun new<T>(len: u64, f: |u64| -> T): vector<T> {
+    macro fun new<$T>($len: u64, $f: |u64| -> $T): vector<$T> {
         let mut v = vector[];
-        for!(0, len, |i| v.push_back(f(i)));
+        for!(0, $len, |i| v.push_back($f(i)));
         v
     }
 
-    macro fun for_each<T>(v: &vector<T>, body: |&T|) {
-        for!(0, v.length(), |i| body(v.borrow(i)))
+    macro fun for_each<$T>($v: &vector<$T>, $body: |&$T|) {
+        let v = $v;
+        for!(0, v.length(), |i| $body(v.borrow(i)))
     }
 
-    macro fun fold<T, U>(xs: &vector<T>, init: U, body: |U, &T| -> U): U {
-        let mut acc = init;
-        for_each!(xs, |x| acc = body(acc, x));
+    macro fun fold<$T, $U>(
+        $xs: &vector<$T>,
+        $init: $U,
+        $body: |$U, &$T| -> $U,
+    ): $U {
+        let xs = $xs;
+        let mut acc = $init;
+        for_each!(xs, |x| acc = $body(acc, x));
         acc
     }
 
-    macro fun sum(v: &vector<u64>): u64 {
-        fold!(v, 0, |acc, x| acc + *x)
+    macro fun sum($v: &vector<u64>): u64 {
+        fold!($v, 0, |acc, x| acc + *x)
     }
 
     entry fun main() {

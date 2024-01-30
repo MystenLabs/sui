@@ -6,8 +6,8 @@ module a::m {
         x
     }
 
-    macro fun apply(f: |u64| -> ()) {
-        use fun f as u64.f;
-        f(0);
+    macro fun apply($f: |u64| -> ()) {
+        use fun $f as u64.f;
+        $f(0);
     }
 }

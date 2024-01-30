@@ -787,7 +787,11 @@ impl Var {
     }
 
     pub fn starts_with_underscore(&self) -> bool {
-        self.0.value.starts_with('_')
+        Self::starts_with_underscore_name(self.0.value)
+    }
+
+    pub fn starts_with_underscore_name(n: Symbol) -> bool {
+        n.starts_with('_') || n.starts_with("$_")
     }
 
     pub fn is_macro_identifier(&self) -> bool {
@@ -796,6 +800,16 @@ impl Var {
 
     pub fn is_macro_identifier_name(n: Symbol) -> bool {
         n.starts_with(Self::MACRO_IDENT_START)
+    }
+
+    pub fn is_valid(&self) -> bool {
+        Self::is_valid_name(self.0.value)
+    }
+
+    pub fn is_valid_name(s: Symbol) -> bool {
+        s.starts_with('_')
+            || s.starts_with(|c: char| c.is_ascii_lowercase())
+            || Self::is_macro_identifier_name(s)
     }
 }
 

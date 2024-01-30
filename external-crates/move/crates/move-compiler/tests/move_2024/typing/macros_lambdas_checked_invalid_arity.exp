@@ -1,8 +1,8 @@
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:9:9
    │  
- 2 │       macro fun foo<T, U>(f: |T| -> U, g: |T, T| -> U, h: || -> (U, U)) {
-   │                              -------- Expected a lambda with 1 arguments: '|u64|vector<u8>'
+ 2 │       macro fun foo<$T, $U>($f: |$T| -> $U, $g: |$T, $T| -> $U, $h: || -> ($U, $U)) {
+   │                                 ---------- Expected a lambda with 1 arguments: '|u64|vector<u8>'
    ·  
  9 │ ╭         foo!<u64, vector<u8>>(
 10 │ │             || vector[], // invalid
@@ -10,7 +10,7 @@ error[E04007]: incompatible types
 11 │ │             |a, b| vector[(a as u8), (b as u8)],
 12 │ │             || (b"hello", b"world"),
 13 │ │         );
-   │ ╰─────────^ Invalid call of 'a::m::foo'. Invalid argument for parameter 'f'
+   │ ╰─────────^ Invalid call of 'a::m::foo'. Invalid argument for parameter '$f'
 
 error[E04010]: cannot infer type
    ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:10:16
@@ -21,8 +21,8 @@ error[E04010]: cannot infer type
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:14:9
    │  
- 2 │       macro fun foo<T, U>(f: |T| -> U, g: |T, T| -> U, h: || -> (U, U)) {
-   │                              -------- Expected a lambda with 1 arguments: '|u64|vector<u8>'
+ 2 │       macro fun foo<$T, $U>($f: |$T| -> $U, $g: |$T, $T| -> $U, $h: || -> ($U, $U)) {
+   │                                 ---------- Expected a lambda with 1 arguments: '|u64|vector<u8>'
    ·  
 14 │ ╭         foo!<u64, vector<u8>>(
 15 │ │             |_, _| vector[], // invalid
@@ -30,7 +30,7 @@ error[E04007]: incompatible types
 16 │ │             |a, b| vector[(a as u8), (b as u8)],
 17 │ │             || (b"hello", b"world"),
 18 │ │         );
-   │ ╰─────────^ Invalid call of 'a::m::foo'. Invalid argument for parameter 'f'
+   │ ╰─────────^ Invalid call of 'a::m::foo'. Invalid argument for parameter '$f'
 
 error[E04010]: cannot infer type
    ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:15:20
@@ -52,8 +52,8 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:24:9
    │  
- 2 │       macro fun foo<T, U>(f: |T| -> U, g: |T, T| -> U, h: || -> (U, U)) {
-   │                                           ----------- Expected a lambda with 2 arguments: '|u64, u64|vector<u8>'
+ 2 │       macro fun foo<$T, $U>($f: |$T| -> $U, $g: |$T, $T| -> $U, $h: || -> ($U, $U)) {
+   │                                                 -------------- Expected a lambda with 2 arguments: '|u64, u64|vector<u8>'
    ·  
 24 │ ╭         foo!<u64, vector<u8>>(
 25 │ │             |_| vector[],
@@ -61,13 +61,13 @@ error[E04007]: incompatible types
    │ │             -------------------------------------- Given lambda with 3 arguments: '|_, _, _|_'
 27 │ │             || (b"hello", b"world"),
 28 │ │         );
-   │ ╰─────────^ Invalid call of 'a::m::foo'. Invalid argument for parameter 'g'
+   │ ╰─────────^ Invalid call of 'a::m::foo'. Invalid argument for parameter '$g'
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:32:16
    │
- 2 │     macro fun foo<T, U>(f: |T| -> U, g: |T, T| -> U, h: || -> (U, U)) {
-   │                                                               ------ Expected expression list of length 2: '(vector<u8>, vector<u8>)'
+ 2 │     macro fun foo<$T, $U>($f: |$T| -> $U, $g: |$T, $T| -> $U, $h: || -> ($U, $U)) {
+   │                                                                         -------- Expected expression list of length 2: '(vector<u8>, vector<u8>)'
    ·
 32 │             || (b"hello", b"world", b"!"), // invalid
    │                ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -78,8 +78,8 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:37:16
    │
- 2 │     macro fun foo<T, U>(f: |T| -> U, g: |T, T| -> U, h: || -> (U, U)) {
-   │                                                               ------ Expected: '(vector<u8>, vector<u8>)'
+ 2 │     macro fun foo<$T, $U>($f: |$T| -> $U, $g: |$T, $T| -> $U, $h: || -> ($U, $U)) {
+   │                                                                         -------- Expected: '(vector<u8>, vector<u8>)'
    ·
 37 │             || b"hello", // invalid
    │                ^^^^^^^^

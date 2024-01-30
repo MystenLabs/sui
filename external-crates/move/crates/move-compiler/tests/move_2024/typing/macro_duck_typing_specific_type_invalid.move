@@ -1,16 +1,16 @@
 module a::m {
     public struct X() has copy, drop;
 
-    macro fun is_x<T>(x: T) {
-        (x: X);
+    macro fun is_x<$T>($x: $T) {
+        ($x: X);
     }
 
-    macro fun is_x_ret<T>(x: T): X {
-        x
+    macro fun is_x_ret<$T>($x: $T): X {
+        $x
     }
 
-    macro fun is_num<T>(x: T) {
-        (x as T);
+    macro fun is_num<$T>($x: $T) {
+        ($x as $T);
     }
 
     fun t() {

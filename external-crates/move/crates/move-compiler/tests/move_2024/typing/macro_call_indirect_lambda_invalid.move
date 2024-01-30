@@ -1,6 +1,6 @@
 module a::m {
-    macro fun apply(f: |u64| -> u64, x: u64): u64 {
-        f(x)
+    macro fun apply($f: |u64| -> u64, $x: u64): u64 {
+        $f($x)
     }
 
     fun t() {

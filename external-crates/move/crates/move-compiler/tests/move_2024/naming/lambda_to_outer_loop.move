@@ -1,6 +1,6 @@
 module a::m {
-    macro fun do(f: || -> ()): () {
-        f()
+    macro fun do($f: || -> ()): () {
+        $f()
     }
 
     // TODO Fix deadcode bug

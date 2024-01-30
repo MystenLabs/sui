@@ -1,8 +1,8 @@
 module a::m {
-    macro fun foo<T, U>(f: |T| -> U, g: |T, T| -> U, h: || -> U) {
-        f(0);
-        g(0, 1);
-        h();
+    macro fun foo<$T, $U>($f: |$T| -> $U, $g: |$T, $T| -> $U, $h: || -> $U) {
+        $f(0);
+        $g(0, 1);
+        $h();
     }
 
     fun t() {

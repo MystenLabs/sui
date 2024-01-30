@@ -2,19 +2,19 @@ module a::m {
     public struct None()
     public struct NeedsCopy<phantom T: copy> {} has copy, drop, store;
 
-    macro fun foo<T: copy, U>(
-        _a: u64,
-        _r: &mut u64,
-        _n: NeedsCopy<T>,
+    macro fun foo<$T: copy, $U>(
+        $_a: u64,
+        $_r: &mut u64,
+        $_n: NeedsCopy<$T>,
     ) {
-        let _: NeedsCopy<U> = NeedsCopy {};
+        let _: NeedsCopy<$U> = NeedsCopy {};
     }
 
-    macro fun ret<T>(): T {
+    macro fun ret<$T>(): $T {
         NeedsCopy {}
     }
 
-    macro fun ret2<T>(): NeedsCopy<T> {
+    macro fun ret2<$T>(): NeedsCopy<$T> {
         NeedsCopy {}
     }
 

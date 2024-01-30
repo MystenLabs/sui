@@ -1,7 +1,7 @@
 module a::m {
     fun f() {}
-    macro fun do<T>(f: || -> T): T {
-        // TODO the local f should shadow the outer f
+    // if we ever add non-$ var calls, we will need to fix this
+    macro fun do<$T>(f: || -> $T): $T {
         f()
     }
 }

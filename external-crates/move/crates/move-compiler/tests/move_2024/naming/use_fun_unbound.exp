@@ -13,6 +13,6 @@ error[E03005]: unbound unscoped name
 error[E03005]: unbound unscoped name
    ┌─ tests/move_2024/naming/use_fun_unbound.move:10:17
    │
-10 │         use fun f as u64.f;
-   │                 ^ Unbound function 'f' in current scope
+10 │         use fun $f as u64.f;
+   │                 ^^ Unbound function '$f' in current scope
 

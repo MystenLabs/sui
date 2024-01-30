@@ -1175,7 +1175,9 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
                 ));
             }
         }
-        Tok::Identifier | Tok::RestrictedIdentifier => parse_name_exp(context)?,
+        Tok::Identifier | Tok::RestrictedIdentifier | Tok::MacroIdentifier => {
+            parse_name_exp(context)?
+        }
 
         Tok::NumValue => {
             // Check if this is a ModuleIdent (in a ModuleAccess).
@@ -2185,11 +2187,16 @@ fn parse_ability(context: &mut Context) -> Result<Ability, Box<Diagnostic>> {
 
 // Parse a type parameter:
 //      TypeParameter =
-//          <Identifier> <Constraint>?
+//          <MacroIdentifier> <Constraint>?
+//        | <Identifier> <Constraint>?
 //      Constraint =
 //          ":" <Ability> (+ <Ability>)*
 fn parse_type_parameter(context: &mut Context) -> Result<(Name, Vec<Ability>), Box<Diagnostic>> {
-    let n = parse_identifier(context)?;
+    let n = if context.tokens.peek() == Tok::MacroIdentifier {
+        parse_macro_identifier(context)?
+    } else {
+        parse_identifier(context)?
+    };
 
     let ability_constraints = if match_token(context.tokens, Tok::Colon)? {
         parse_list(

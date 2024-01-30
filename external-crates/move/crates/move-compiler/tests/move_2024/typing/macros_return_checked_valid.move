@@ -1,18 +1,18 @@
 module a::m {
-    macro fun foo<T, U>(
-        x: u64,
-        y: u64,
-        z: &mut u64
-    ): (u64, T, U) {
-        (x, y, z)
+    macro fun foo<$T, $U>(
+        $x: u64,
+        $y: u64,
+        $z: &mut u64
+    ): (u64, $T, $U) {
+        ($x, $y, $z)
     }
 
-    macro fun ref<T, U>(f: || -> T): &U {
-        f()
+    macro fun ref<$T, $U>($f: || -> $T): &$U {
+        $f()
     }
 
-    macro fun double<T, U>(f: || -> T): (U, U) {
-        f()
+    macro fun double<$T, $U>($f: || -> $T): ($U, $U) {
+        $f()
     }
 
     fun t() {

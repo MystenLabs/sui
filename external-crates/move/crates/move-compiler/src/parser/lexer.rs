@@ -554,11 +554,12 @@ fn find_token(
             }
         }
         '$' => {
-            if text.len() > 1 && text.starts_with(|c| matches!(c,'A'..='Z' | 'a'..='z' | '_')) {
+            if text.len() > 1 && text[1..].starts_with(|c| matches!(c,'A'..='Z' | 'a'..='z' | '_'))
+            {
                 let len = get_name_len(&text[1..]);
                 (Tok::MacroIdentifier, len + 1)
             } else {
-                let loc = make_loc(file_hash, start_offset, start_offset + 1);
+                let loc = make_loc(file_hash, start_offset, start_offset);
                 return Err(Box::new(diag!(
                     Syntax::UnexpectedToken,
                     (loc, "Expected an identifier following '$', e.g. '$x'"),

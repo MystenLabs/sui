@@ -18,12 +18,12 @@ module a::m {
     }
 
     // invalid cycle through lambda
-    macro fun cycle_app(f: || -> u64): u64 {
-        apply!(|| cycle_app!(|| f()))
+    macro fun cycle_app($f: || -> u64): u64 {
+        apply!(|| cycle_app!(|| $f()))
     }
 
-    macro fun apply(f: || -> u64): u64 {
-        f()
+    macro fun apply($f: || -> u64): u64 {
+        $f()
     }
 
 

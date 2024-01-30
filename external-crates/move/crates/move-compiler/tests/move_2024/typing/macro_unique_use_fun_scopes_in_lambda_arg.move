@@ -3,8 +3,8 @@ module a::m {
 
     use fun id as u64.id;
 
-    public macro fun apply(f: |u64| -> u64, x: u64): u64 {
-        f(x.id())
+    public macro fun apply($f: |u64| -> u64, $x: u64): u64 {
+        $f($x.id())
     }
 }
 

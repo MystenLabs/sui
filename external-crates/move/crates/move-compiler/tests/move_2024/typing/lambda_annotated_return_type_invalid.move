@@ -5,8 +5,8 @@ module a::m {
 
     fun any<T>(): T { abort 0}
 
-    macro fun call<T>(f: || -> T): T {
-        f()
+    macro fun call<$T>($f: || -> $T): $T {
+        $f()
     }
 
     fun t() {

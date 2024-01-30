@@ -8,15 +8,16 @@ module a::m {
 
     use fun a as u64.foo;
 
-    public macro fun apply(x: u64, f: |u64| -> u64): u64 {
-        f({
+    public macro fun apply($x: u64, $f: |u64| -> u64): u64 {
+        let x = $x;
+        $f({
             (x.foo(): A);
             x
         });
         (x.foo(): A);
         {
             use fun b as u64.foo;
-            let res = f({
+            let res = $f({
                 (x.foo(): B);
                 x
             });

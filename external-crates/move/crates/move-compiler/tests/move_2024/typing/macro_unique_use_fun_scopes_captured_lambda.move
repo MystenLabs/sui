@@ -3,8 +3,8 @@ module a::m {
 
     use fun into as u64.into;
 
-    public macro fun apply(f: |u64| -> u64, x: u64): u64 {
-        f(x.into())
+    public macro fun apply($f: |u64| -> u64, $x: u64): u64 {
+        $f($x.into())
     }
 }
 
@@ -14,8 +14,9 @@ module b::other {
     public fun into(x: u8): u64 { (x as u64) }
     use fun into as u8.into;
 
-    public macro fun myapply(f: |u8| -> u64, x: u8): u64 {
-        apply!(|u| f(x) + x.into() + u, x.into())
+    public macro fun myapply($f: |u8| -> u64, $x: u8): u64 {
+        let x = $x;
+        apply!(|u| $f(x) + x.into() + u, x.into())
     }
 
     public fun t(): u64 {

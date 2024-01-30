@@ -3,12 +3,12 @@ module a::m {
     public struct FPoint { x: u64, y: u64 } has copy, drop, store;
 
     macro fun foo(
-        x: &u64,
-        p: Point,
-        s: &mut FPoint,
-        f: |u64, (&u64, Point, &mut FPoint)|
+        $x: &u64,
+        $p: Point,
+        $s: &mut FPoint,
+        $f: |u64, (&u64, Point, &mut FPoint)|
     ) {
-        f(0, (x, p, s))
+        $f(0, ($x, $p, $s))
     }
 
     fun t() {
