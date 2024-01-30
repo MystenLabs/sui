@@ -620,6 +620,7 @@ pub enum SuiClientCommands {
         /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
         /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
         /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
+        #[clap(long, required = false)]
         serialize_unsigned_transaction: bool,
 
         /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
