@@ -98,7 +98,7 @@ impl EndOfEpochTransaction {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let mut connection = Connection::new(false, false);
-        let Some((prev, next, cs)) =
+        let Some((prev, next, _, cs)) =
             page.paginate_consistent_indices(self.native.len(), self.checkpoint_viewed_at)?
         else {
             return Ok(connection);
@@ -179,7 +179,7 @@ impl ChangeEpochTransaction {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let mut connection = Connection::new(false, false);
-        let Some((prev, next, cs)) = page.paginate_consistent_indices(
+        let Some((prev, next, _, cs)) = page.paginate_consistent_indices(
             self.native.system_packages.len(),
             self.checkpoint_viewed_at,
         )?
@@ -208,7 +208,7 @@ impl ChangeEpochTransaction {
 
             let runtime_id = native.id();
             let object = Object::from_native(SuiAddress::from(runtime_id), native, Some(c.c));
-            let package = MovePackage::try_from(&object)
+            let package = MovePackage::try_from(&object, self.checkpoint_viewed_at)
                 .map_err(|_| Error::Internal("Failed to create system package".to_string()))
                 .extend()?;
 

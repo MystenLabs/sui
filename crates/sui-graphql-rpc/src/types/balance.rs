@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::cursor::{self, Checkpointed, Page, RawPaginated, Target};
+use super::cursor::{self, Page, RawPaginated, Target};
 use super::{big_int::BigInt, move_type::MoveType, sui_address::SuiAddress};
-use crate::consistency::consistent_range;
+use crate::consistency::{consistent_range, Checkpointed};
 use crate::data::{Db, DbConnection, QueryExecutor};
 use crate::error::Error;
 use crate::raw_query::RawQuery;

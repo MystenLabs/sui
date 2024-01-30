@@ -4,13 +4,14 @@
 use std::str::FromStr;
 
 use super::checkpoint::Checkpoint;
-use super::cursor::{self, Checkpointed, Page, Paginated, Target};
+use super::cursor::{self, Page, Paginated, Target};
 use super::digest::Digest;
 use super::type_filter::{ModuleFilter, TypeFilter};
 use super::{
     address::Address, base64::Base64, date_time::DateTime, move_module::MoveModule,
     move_value::MoveValue, sui_address::SuiAddress,
 };
+use crate::consistency::Checkpointed;
 use crate::data::{self, QueryExecutor};
 use crate::{data::Db, error::Error};
 use async_graphql::connection::{Connection, CursorType, Edge};
@@ -36,9 +37,8 @@ use sui_types::{
 pub(crate) struct Event {
     pub stored: Option<StoredEvent>,
     pub native: NativeEvent,
-    /// The checkpoint_sequence_number at which this was viewed at, or `None` if the data was
-    /// requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint sequence number this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 /// Contents of an Event's cursor.
@@ -103,6 +103,7 @@ impl Event {
             ctx.data_unchecked(),
             self.native.package_id.into(),
             &self.native.transaction_module.to_string(),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()
@@ -116,7 +117,7 @@ impl Event {
 
         Ok(Some(Address {
             address: self.native.sender.into(),
-            checkpoint_viewed_at: self.checkpoint_viewed_at,
+            checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
         }))
     }
 
@@ -229,7 +230,7 @@ impl Event {
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
             conn.edges.push(Edge::new(
                 cursor,
-                Event::try_from_stored_event(stored, Some(checkpoint_viewed_at))?,
+                Event::try_from_stored_event(stored, checkpoint_viewed_at)?,
             ));
         }
 
@@ -239,7 +240,7 @@ impl Event {
     pub(crate) fn try_from_stored_transaction(
         stored_tx: &StoredTransaction,
         idx: usize,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Self, Error> {
         let Some(Some(serialized_event)) = stored_tx.events.get(idx) else {
             return Err(Error::Internal(format!(
@@ -279,7 +280,7 @@ impl Event {
 
     fn try_from_stored_event(
         stored: StoredEvent,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Self, Error> {
         let Some(Some(sender_bytes)) = stored.senders.first() else {
             return Err(Error::Internal("No senders found for event".to_string()));

@@ -16,7 +16,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     config::ServiceConfig,
-    consistency::ConsistentIndexCursor,
+    consistency::{Checkpointed, ConsistentIndexCursor},
     data::{Conn, DbConnection, DieselBackend, DieselConn, Query},
     error::Error,
     raw_query::RawQuery,
@@ -99,10 +99,6 @@ pub(crate) trait RawPaginated<C: CursorType>: Target<C> {
 pub(crate) trait Target<C: CursorType> {
     /// The cursor pointing at this target value, assuming it was read at `checkpoint_viewed_at`.
     fn cursor(&self, checkpoint_viewed_at: u64) -> C;
-}
-
-pub(crate) trait Checkpointed: CursorType {
-    fn checkpoint_viewed_at(&self) -> u64;
 }
 
 impl<C> JsonCursor<C> {
@@ -207,36 +203,11 @@ where
     }
 }
 
-impl Page<JsonCursor<usize>> {
-    /// Treat the cursors of this Page as indices into a range [0, total). Returns two booleans
-    /// indicating whether there is a previous or next page in the range, followed by an iterator of
-    /// cursors within that Page.
-    pub(crate) fn paginate_indices(
-        &self,
-        total: usize,
-    ) -> Option<(bool, bool, impl Iterator<Item = JsonCursor<usize>>)> {
-        let mut lo = self.after().map_or(0, |a| **a + 1);
-        let mut hi = self.before().map_or(total, |b| **b);
-
-        if hi <= lo {
-            return None;
-        } else if (hi - lo) > self.limit() {
-            if self.is_from_front() {
-                hi = lo + self.limit();
-            } else {
-                lo = hi - self.limit();
-            }
-        }
-
-        Some((0 < lo, hi < total, (lo..hi).map(JsonCursor::new)))
-    }
-}
-
 impl Page<JsonCursor<ConsistentIndexCursor>> {
-    /// Treat the cursors of this Page as indices into a range [0, total). Returns two booleans
-    /// indicating whether there is a previous or next page in the range, followed by an iterator of
-    /// cursors within that Page. Ignores whether each cursor's `c`, checkpoint sequence number, is
-    /// consistent, and returns an iterator of `JsonCursor<usize>`.
+    /// Treat the cursors of this Page as indices into a range [0, total). Validates that the
+    /// cursors of the page are consistent, and returns two booleans indicating whether there is a
+    /// previous or next page in the range, the `checkpoint_viewed_at` to set for consistency, and
+    /// an iterator of cursors within that Page.
     pub(crate) fn paginate_consistent_indices(
         &self,
         total: usize,
@@ -245,6 +216,7 @@ impl Page<JsonCursor<ConsistentIndexCursor>> {
         Option<(
             bool,
             bool,
+            u64,
             impl Iterator<Item = JsonCursor<ConsistentIndexCursor>>,
         )>,
         Error,
@@ -268,6 +240,7 @@ impl Page<JsonCursor<ConsistentIndexCursor>> {
         Ok(Some((
             0 < lo,
             hi < total,
+            checkpoint_viewed_at,
             (lo..hi).map(move |ix| {
                 JsonCursor::new(ConsistentIndexCursor {
                     ix,
@@ -275,12 +248,6 @@ impl Page<JsonCursor<ConsistentIndexCursor>> {
                 })
             }),
         )))
-    }
-}
-
-impl Checkpointed for JsonCursor<ConsistentIndexCursor> {
-    fn checkpoint_viewed_at(&self) -> u64 {
-        self.c
     }
 }
 

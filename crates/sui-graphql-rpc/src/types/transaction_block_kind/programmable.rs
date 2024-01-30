@@ -215,7 +215,7 @@ impl ProgrammableTransactionBlock {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let mut connection = Connection::new(false, false);
-        let Some((prev, next, cs)) =
+        let Some((prev, next, _, cs)) =
             page.paginate_consistent_indices(self.native.inputs.len(), self.checkpoint_viewed_at)?
         else {
             return Ok(connection);
@@ -244,7 +244,7 @@ impl ProgrammableTransactionBlock {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
 
         let mut connection = Connection::new(false, false);
-        let Some((prev, next, cs)) = page
+        let Some((prev, next, _, cs)) = page
             .paginate_consistent_indices(self.native.commands.len(), self.checkpoint_viewed_at)?
         else {
             return Ok(connection);
@@ -287,6 +287,7 @@ impl MoveCallTransaction {
             self.native.package.into(),
             self.native.module.as_str(),
             self.native.function.as_str(),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::consistency::ConsistentIndexCursor;
 use crate::context_data::db_data_provider::PgManager;
 use crate::types::cursor::{JsonCursor, Page};
 use async_graphql::connection::{Connection, CursorType, Edge};
@@ -19,12 +20,11 @@ pub(crate) struct Validator {
     pub validator_summary: NativeSuiValidatorSummary,
     pub at_risk: Option<u64>,
     pub report_records: Option<Vec<Address>>,
-    /// The checkpoint sequence number at which this was viewed at, or None if the data was
-    /// requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint sequence number at which this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
-type CAddr = JsonCursor<usize>;
+type CAddr = JsonCursor<ConsistentIndexCursor>;
 
 #[Object]
 impl Validator {
@@ -32,7 +32,7 @@ impl Validator {
     async fn address(&self) -> Address {
         Address {
             address: SuiAddress::from(self.validator_summary.sui_address),
-            checkpoint_viewed_at: self.checkpoint_viewed_at,
+            checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
         }
     }
 
@@ -98,10 +98,7 @@ impl Validator {
         MoveObject::query(
             ctx.data_unchecked(),
             self.operation_cap_id(),
-            match self.checkpoint_viewed_at {
-                Some(checkpoint_viewed_at) => ObjectLookupKey::LatestAt(checkpoint_viewed_at),
-                None => ObjectLookupKey::Latest,
-            },
+            ObjectLookupKey::LatestAt(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -113,10 +110,7 @@ impl Validator {
         MoveObject::query(
             ctx.data_unchecked(),
             self.staking_pool_id(),
-            match self.checkpoint_viewed_at {
-                Some(checkpoint_viewed_at) => ObjectLookupKey::LatestAt(checkpoint_viewed_at),
-                None => ObjectLookupKey::Latest,
-            },
+            ObjectLookupKey::LatestAt(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -128,10 +122,7 @@ impl Validator {
         MoveObject::query(
             ctx.data_unchecked(),
             self.exchange_rates_id(),
-            match self.checkpoint_viewed_at {
-                Some(checkpoint_viewed_at) => ObjectLookupKey::LatestAt(checkpoint_viewed_at),
-                None => ObjectLookupKey::Latest,
-            },
+            ObjectLookupKey::LatestAt(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -238,7 +229,9 @@ impl Validator {
             return Ok(connection);
         };
 
-        let Some((prev, next, cs)) = page.paginate_indices(addresses.len()) else {
+        let Some((prev, next, _, cs)) =
+            page.paginate_consistent_indices(addresses.len(), self.checkpoint_viewed_at)?
+        else {
             return Ok(connection);
         };
 
@@ -246,9 +239,13 @@ impl Validator {
         connection.has_next_page = next;
 
         for c in cs {
-            connection
-                .edges
-                .push(Edge::new(c.encode_cursor(), addresses[*c]));
+            connection.edges.push(Edge::new(
+                c.encode_cursor(),
+                Address {
+                    address: addresses[c.ix].address,
+                    checkpoint_viewed_at: Some(c.c),
+                },
+            ));
         }
 
         Ok(connection)

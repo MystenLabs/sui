@@ -123,7 +123,7 @@ impl PgManager {
 pub(crate) fn convert_to_validators(
     validators: Vec<SuiValidatorSummary>,
     system_state: Option<NativeSuiSystemStateSummary>,
-    checkpoint_viewed_at: Option<u64>,
+    checkpoint_viewed_at: u64,
 ) -> Vec<Validator> {
     let (at_risk, reports) = if let Some(NativeSuiSystemStateSummary {
         at_risk_validators,
@@ -149,7 +149,7 @@ pub(crate) fn convert_to_validators(
                     .cloned()
                     .map(|a| Address {
                         address: SuiAddress::from(a),
-                        checkpoint_viewed_at,
+                        checkpoint_viewed_at: Some(checkpoint_viewed_at),
                     })
                     .collect()
             });

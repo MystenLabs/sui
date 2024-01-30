@@ -19,6 +19,7 @@ pub(crate) struct MoveStruct {
     abilities: Vec<MoveAbility>,
     type_parameters: Vec<MoveStructTypeParameter>,
     fields: Vec<MoveField>,
+    checkpoint_viewed_at: u64,
 }
 
 #[derive(SimpleObject)]
@@ -41,9 +42,14 @@ pub(crate) struct MoveField {
 impl MoveStruct {
     /// The module this struct was originally defined in.
     async fn module(&self, ctx: &Context<'_>) -> Result<MoveModule> {
-        let Some(module) = MoveModule::query(ctx.data_unchecked(), self.defining_id, &self.module)
-            .await
-            .extend()?
+        let Some(module) = MoveModule::query(
+            ctx.data_unchecked(),
+            self.defining_id,
+            &self.module,
+            self.checkpoint_viewed_at,
+        )
+        .await
+        .extend()?
         else {
             return Err(Error::Internal(format!(
                 "Failed to load module for struct: {}::{}::{}",
@@ -88,7 +94,12 @@ impl MoveField {
 }
 
 impl MoveStruct {
-    pub(crate) fn new(module: String, name: String, def: StructDef) -> Self {
+    pub(crate) fn new(
+        module: String,
+        name: String,
+        def: StructDef,
+        checkpoint_viewed_at: u64,
+    ) -> Self {
         let type_parameters = def
             .type_params
             .into_iter()
@@ -114,6 +125,7 @@ impl MoveStruct {
             abilities: abilities(def.abilities),
             type_parameters,
             fields,
+            checkpoint_viewed_at,
         }
     }
 }
