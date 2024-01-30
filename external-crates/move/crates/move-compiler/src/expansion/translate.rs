@@ -2882,7 +2882,7 @@ fn check_ellipsis_usage(context: &mut Context, ellipsis_locs: &[Loc]) {
         for loc in ellipsis_locs.iter().skip(1) {
             diag.add_secondary_label((*loc, "Ellipsis pattern used again here"));
         }
-        diag.add_note("An ellipsis pattern can only appear once in a field constructor.");
+        diag.add_note("An ellipsis pattern can only appear once in a constructor's pattern.");
         context.env().add_diag(diag);
     }
 }
@@ -3013,25 +3013,18 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
             let tys = optional_sp_types(context, pts_opt);
             match head_ctor_name {
                 head_ctor_name @ sp!(_, EM::Variant(_, _)) => {
-                    let ellipsis_locs = fields
-                        .value
-                        .iter()
-                        .filter_map(|f| match f {
-                            P::Ellipsis::Binder(_) => None,
-                            P::Ellipsis::Ellipsis(loc) => Some(*loc),
-                        })
-                        .collect::<Vec<_>>();
-
-                    let stripped_fields = fields
-                        .value
-                        .into_iter()
-                        .filter_map(|field_pat| match field_pat {
+                    let mut ellipsis_locs = vec![];
+                    let mut stripped_fields = vec![];
+                    for field in fields.value.into_iter() {
+                        match field {
                             P::Ellipsis::Binder((field, pat)) => {
-                                Some((field, match_pattern(context, pat)))
+                                stripped_fields.push((field, match_pattern(context, pat)));
                             }
-                            P::Ellipsis::Ellipsis(_) => None,
-                        })
-                        .collect();
+                            P::Ellipsis::Ellipsis(eloc) => {
+                                ellipsis_locs.push(eloc);
+                            }
+                        }
+                    }
                     let fields =
                         named_fields(context, loc, "pattern", "sub-pattern", stripped_fields);
                     check_ellipsis_usage(context, &ellipsis_locs);
