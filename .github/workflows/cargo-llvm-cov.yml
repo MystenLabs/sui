@@ -44,7 +44,7 @@ jobs:
       - name: Run code coverage for simtest
         run: |
           ./scripts/simtest/install.sh
-          ./scripts/simtest/cargo-simtest simtest codecov
+          ./scripts/simtest/cargo-simtest simtest codecov --test-threads "12"
 
       - name: Upload report to Codecov for simtest
         uses: codecov/codecov-action@v3
