@@ -3261,8 +3261,9 @@ fn check_valid_address_name(
     use P::LeadingNameAccess_ as LN;
     match ln_ {
         LN::AnonymousAddress(_) => Ok(()),
-        LN::GlobalAddress(n) => check_restricted_name_all_cases(context, NameCase::Address, n),
-        LN::Name(n) => check_restricted_name_all_cases(context, NameCase::Address, n),
+        LN::GlobalAddress(n) | LN::Name(n) => {
+            check_restricted_name_all_cases(context, NameCase::Address, n)
+        }
     }
 }
 
@@ -3542,6 +3543,31 @@ fn check_restricted_name_all_cases(
     case: NameCase,
     n: &Name,
 ) -> Result<(), ()> {
+    match case {
+        NameCase::Constant
+        | NameCase::Function
+        | NameCase::Struct
+        | NameCase::Schema
+        | NameCase::Module
+        | NameCase::ModuleMemberAlias(_)
+        | NameCase::ModuleAlias
+        | NameCase::Address => {
+            if Var::is_macro_identifier_name(n.value) {
+                let msg = format!(
+                    "Invalid {} name '{}'. Identifiers starting with '$' can be used only for \
+                    parameters and type paramters",
+                    case.name(),
+                    n,
+                );
+                context
+                    .env
+                    .add_diag(diag!(Declarations::InvalidName, (n.loc, msg)));
+                return Err(());
+            }
+        }
+        NameCase::Variable | NameCase::TypeParameter => (),
+    }
+
     let n_str = n.value.as_str();
     let can_be_vector = matches!(case, NameCase::Module | NameCase::ModuleAlias);
     if n_str == ModuleName::SELF_NAME

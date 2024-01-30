@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/invalid_macro_identifier_usage.move:2:9
+  │
+2 │     fun $foo() { let $x = 0; }
+  │         ^^^^
+  │         │
+  │         Unexpected '$foo'
+  │         Expected an identifier
+
