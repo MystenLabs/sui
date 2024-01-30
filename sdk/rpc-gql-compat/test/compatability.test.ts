@@ -11,7 +11,7 @@ import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { beforeAll, describe, expect, test } from 'vitest';
 
 import { publishPackage, setup, TestToolbox } from '../../typescript/test/e2e/utils/setup';
-import { GraphQLSuiClient } from '../src';
+import { SuiClientGraphQLTransport } from '../src/transport';
 
 const DEFAULT_GRAPHQL_URL = import.meta.env.DEFAULT_GRAPHQL_URL ?? 'http:127.0.0.1:9125';
 
@@ -20,9 +20,10 @@ describe('GraphQL SuiClient compatibility', () => {
 	let transactionBlockDigest: string;
 	let packageId: string;
 	let parentObjectId: string;
-	const graphQLClient = new GraphQLSuiClient({
-		graphqlURL: DEFAULT_GRAPHQL_URL,
-		url: DEFAULT_GRAPHQL_URL,
+	const graphQLClient = new SuiClient({
+		transport: new SuiClientGraphQLTransport({
+			url: DEFAULT_GRAPHQL_URL,
+		}),
 	});
 
 	beforeAll(async () => {
