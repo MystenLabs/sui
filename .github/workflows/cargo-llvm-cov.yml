@@ -48,11 +48,6 @@ jobs:
         with:
           swap-size-gb: 256
 
-      - name: Install python dependencies
-        run: |
-          pip install pyopenssl --upgrade
-          if [ -f narwhal/benchmark/requirements.txt ]; then pip install -r narwhal/benchmark/requirements.txt; fi
-
       - name: Install Rust
         run: rustup update stable
         
