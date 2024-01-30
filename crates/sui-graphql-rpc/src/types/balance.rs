@@ -42,6 +42,7 @@ pub struct StoredBalance {
 }
 
 pub(crate) type Cursor = cursor::JsonCursor<BalanceCursor>;
+
 /// The inner struct for the `Balance`'s cursor. The `coin_type` is used as the cursor, while the
 /// `checkpoint_viewed_at` sets the consistent upper bound for the cursor.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
