@@ -512,22 +512,6 @@ Response: {
       "extensions": {
         "code": "BAD_USER_INPUT"
       }
-    },
-    {
-      "message": "Requested data is outside the available range",
-      "locations": [
-        {
-          "line": 3,
-          "column": 5
-        }
-      ],
-      "path": [
-        "after_obj_6_0_at_checkpoint_2_now_before_available_range",
-        "objects"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
     }
   ]
 }

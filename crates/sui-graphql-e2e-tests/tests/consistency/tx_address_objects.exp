@@ -1294,6 +1294,7 @@ Response: {
         {
           "line": 8,
           "column": 9
+<<<<<<< HEAD
         }
       ],
       "path": [
@@ -1313,6 +1314,8 @@ Response: {
         {
           "line": 21,
           "column": 11
+=======
+>>>>>>> 442b7c2d9b (fix tests)
         }
       ],
       "path": [
