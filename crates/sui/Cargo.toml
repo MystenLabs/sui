@@ -36,6 +36,7 @@ reqwest.workspace = true
 im.workspace = true
 async-recursion.workspace = true
 thiserror.workspace = true
+miette.workspace = true
 
 sui-config.workspace = true
 sui-execution = { path = "../../sui-execution" }
