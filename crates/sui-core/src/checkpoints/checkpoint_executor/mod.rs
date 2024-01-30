@@ -68,11 +68,7 @@ type CheckpointExecutionBuffer = FuturesOrdered<JoinHandle<VerifiedCheckpoint>>;
 /// The interval to log checkpoint progress, in # of checkpoints processed.
 const CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL: u64 = 5000;
 
-#[cfg(msim)]
-const SCHEDULING_EVENT_FUTURE_TIMEOUT_MS: u64 = 200;
-
-#[cfg(not(msim))]
-const SCHEDULING_EVENT_FUTURE_TIMEOUT_MS: u64 = 1000;
+const SCHEDULING_EVENT_FUTURE_TIMEOUT_MS: u64 = 1200;
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum StopReason {
