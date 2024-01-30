@@ -148,7 +148,7 @@ jobs:
         if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' }}
         shell: bash
         run: |
-          [ -f ./target/release/sui.exe ] && mv ./target/release/sui.exe ./target/release/sui-${os_type}.exe
+          [ -f ./target/release/sui.exe ] && cp ./target/release/sui.exe ./target/release/sui-${os_type}.exe
           [ -f ./target/release/sui-node.exe ] && mv ./target/release/sui-node.exe ./target/release/sui-node-${os_type}.exe
           [ -f ./target/release/sui-tool.exe ] && mv ./target/release/sui-tool.exe ./target/release/sui-tool-${os_type}.exe
           [ -f ./target/release/sui-faucet.exe ] && mv ./target/release/sui-faucet.exe ./target/release/sui-faucet-${os_type}.exe
@@ -162,6 +162,7 @@ jobs:
       - name: "Publish Windows sui binary to Chocolately"
         if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' && contains( env.sui_tag, 'testnet') }}
         working-directory: chocolatey
+        continue-on-error: true
         shell: bash
         run: |
           choco install checksum
