@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{anyhow, ensure};
+use anyhow::{anyhow, bail, ensure};
 use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
@@ -742,7 +742,7 @@ impl SuiClientCommands {
                 profile_output,
             } => {
                 move_vm_profiler::gas_profiler_feature_disabled! {
-                    anyhow::bail!(
+                    bail!(
                         "gas-profiler feature is not enabled, rebuild or reinstall with \
                          --features gas-profiler"
                     );
