@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{anyhow, ensure};
+use anyhow::{anyhow, bail, ensure};
 use bip32::DerivationPath;
 use clap::*;
 use colored::Colorize;
