@@ -171,7 +171,7 @@ pub async fn preprocess(
 
     let internal_operation = request.operations.into_internal()?;
     let sender = internal_operation.sender();
-    let budget = request.metadata.map(|m| m.budget).flatten();
+    let budget = request.metadata.and_then(|m| m.budget);
 
     Ok(ConstructionPreprocessResponse {
         options: Some(MetadataOptions {
