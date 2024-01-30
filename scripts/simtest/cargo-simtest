@@ -100,7 +100,7 @@ if [ "$1" = "build" ]; then
 fi
 
 if [ $CODE_COV == 1 ]; then
-  CARGO_COMMAND=(llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest run --cargo-profile simulator)
+  CARGO_COMMAND=(llvm-cov --ignore-run-fail --lcov --output-path lcov.info nextest --cargo-profile simulator)
 fi
 
 # Must supply a new temp dir - the test is deterministic and can't choose one randomly itself.
