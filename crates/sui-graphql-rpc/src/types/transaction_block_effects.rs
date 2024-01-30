@@ -171,7 +171,7 @@ impl TransactionBlockEffects {
                 .iter()
                 .map(|d| Digest::from(*d))
                 .collect(),
-            Some(self.checkpoint_viewed_at),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()?;

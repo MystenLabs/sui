@@ -162,10 +162,7 @@ impl TransactionBlock {
     /// The type of this transaction as well as the commands and/or parameters comprising the
     /// transaction of this kind.
     async fn kind(&self) -> Option<TransactionBlockKind> {
-        Some(TransactionBlockKind::from(
-            self.native().kind().clone(),
-            self.checkpoint_viewed_at,
-        ))
+        Some(TransactionBlockKind::from(self.native().kind().clone()))
     }
 
     /// A list of all signatures, Base64-encoded, from senders, and potentially the gas owner if
@@ -279,23 +276,16 @@ impl TransactionBlock {
     pub(crate) async fn multi_query(
         db: &Db,
         digests: Vec<Digest>,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<BTreeMap<Digest, Self>, Error> {
         use transactions::dsl;
         let digests: Vec<_> = digests.into_iter().map(|d| d.to_vec()).collect();
 
-        let (stored, checkpoint_viewed_at): (Vec<StoredTransaction>, u64) = db
-            .execute_repeatable(move |conn| {
-                let checkpoint_viewed_at = match checkpoint_viewed_at {
-                    Some(value) => Ok(value),
-                    None => Checkpoint::latest_checkpoint_sequence_number(conn),
-                }?;
-
-                let results = conn.results(move || {
+        let stored: Vec<StoredTransaction> = db
+            .execute(move |conn| {
+                conn.results(move || {
                     dsl::transactions.filter(dsl::transaction_digest.eq_any(digests.clone()))
-                })?;
-
-                Ok::<_, diesel::result::Error>((results, checkpoint_viewed_at))
+                })
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch transactions: {e}")))?;
