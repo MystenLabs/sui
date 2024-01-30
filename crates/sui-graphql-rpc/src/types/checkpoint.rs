@@ -39,9 +39,8 @@ pub(crate) struct Checkpoint {
     /// Representation of transaction data in the Indexer's Store. The indexer stores the
     /// transaction data and its effects together, in one table.
     pub stored: StoredCheckpoint,
-    // The checkpoint_sequence_number at which this was viewed at, or `None` if the data was
-    // requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    // The checkpoint_sequence_number at which this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 pub(crate) type Cursor = cursor::JsonCursor<CheckpointCursor>;
@@ -52,7 +51,7 @@ type Query<ST, GB> = data::Query<ST, checkpoints::table, GB>;
 /// cursor.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub(crate) struct CheckpointCursor {
-    pub checkpoint_viewed_at: Option<u64>,
+    pub checkpoint_viewed_at: u64,
     pub sequence_number: u64,
 }
 
@@ -132,7 +131,7 @@ impl Checkpoint {
         Epoch::query(
             ctx.data_unchecked(),
             Some(self.stored.epoch as u64),
-            self.checkpoint_viewed_at,
+            Some(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -164,7 +163,7 @@ impl Checkpoint {
             ctx.data_unchecked(),
             page,
             filter,
-            self.checkpoint_viewed_at,
+            Some(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -235,7 +234,7 @@ impl Checkpoint {
 
         Ok(stored.map(|stored| Checkpoint {
             stored,
-            checkpoint_viewed_at: Some(checkpoint_viewed_at),
+            checkpoint_viewed_at,
         }))
     }
 
@@ -326,7 +325,7 @@ impl Checkpoint {
                 cursor,
                 Checkpoint {
                     stored,
-                    checkpoint_viewed_at: Some(checkpoint_viewed_at),
+                    checkpoint_viewed_at,
                 },
             ));
         }
@@ -391,13 +390,13 @@ impl Target<Cursor> for StoredCheckpoint {
     fn cursor(&self) -> Cursor {
         Cursor::new(CheckpointCursor {
             sequence_number: self.sequence_number as u64,
-            checkpoint_viewed_at: None,
+            checkpoint_viewed_at: self.sequence_number as u64, // TODO (wlmyng) remove
         })
     }
 
     fn consistent_cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
         Cursor::new(CheckpointCursor {
-            checkpoint_viewed_at: Some(checkpoint_viewed_at),
+            checkpoint_viewed_at,
             sequence_number: self.sequence_number as u64,
         })
     }
@@ -405,6 +404,6 @@ impl Target<Cursor> for StoredCheckpoint {
 
 impl Checkpointed for Cursor {
     fn checkpoint_viewed_at(&self) -> Option<u64> {
-        self.checkpoint_viewed_at
+        Some(self.checkpoint_viewed_at)
     }
 }

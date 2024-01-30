@@ -22,9 +22,8 @@ pub(crate) struct GasInput {
     pub price: u64,
     pub budget: u64,
     pub payment_obj_keys: Vec<ObjectKey>,
-    /// The checkpoint sequence number at which this was viewed at, or None if the data was
-    /// requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint sequence number at which this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,7 +50,7 @@ impl GasInput {
     async fn gas_sponsor(&self) -> Option<Address> {
         Some(Address {
             address: self.owner,
-            checkpoint_viewed_at: self.checkpoint_viewed_at,
+            checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
         })
     }
 
@@ -81,7 +80,7 @@ impl GasInput {
             ctx.data_unchecked(),
             page,
             filter,
-            self.checkpoint_viewed_at,
+            Some(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -168,7 +167,7 @@ impl GasInput {
     /// was queried for, or `None` if the data was requested at the latest checkpoint. This is
     /// stored on `GasInput` so that when viewing that entity's state, it will be as if it was read
     /// at the same checkpoint.
-    pub(crate) fn from(s: &GasData, checkpoint_viewed_at: Option<u64>) -> Self {
+    pub(crate) fn from(s: &GasData, checkpoint_viewed_at: u64) -> Self {
         Self {
             owner: s.owner.into(),
             price: s.price,
