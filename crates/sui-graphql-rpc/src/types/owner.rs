@@ -28,9 +28,6 @@ use sui_types::gas_coin::GAS;
 #[derive(Clone, Debug)]
 pub(crate) struct Owner {
     pub address: SuiAddress,
-    /// If set, this is the version of the object designated as an Owner. Used to query the dynamic
-    /// fields of the object.
-    pub version: Option<u64>,
     /// The checkpoint sequence number at which this was viewed at, or None if the data was
     /// requested at the latest checkpoint.
     pub checkpoint_viewed_at: Option<u64>,
@@ -39,9 +36,6 @@ pub(crate) struct Owner {
 /// Type to implement GraphQL fields that are shared by all Owners.
 pub(crate) struct OwnerImpl {
     pub address: SuiAddress,
-    /// The version of the object to use when querying dynamic fields. If not set, defaults to using
-    /// the latest checkpoint.
-    pub version: Option<u64>,
     /// The checkpoint sequence number at which this was viewed at, or None if the data was
     /// requested at the latest checkpoint.
     pub checkpoint_viewed_at: Option<u64>,
@@ -241,15 +235,9 @@ impl Owner {
         Object::query(
             ctx.data_unchecked(),
             self.address,
-            match (self.version, self.checkpoint_viewed_at) {
-                (Some(version), checkpoint_viewed_at) => ObjectLookupKey::VersionAt {
-                    version,
-                    checkpoint_viewed_at,
-                },
-                (None, Some(checkpoint_viewed_at)) => {
-                    ObjectLookupKey::LatestAt(checkpoint_viewed_at)
-                }
-                (None, None) => ObjectLookupKey::Latest,
+            match self.checkpoint_viewed_at {
+                Some(checkpoint_viewed_at) => ObjectLookupKey::LatestAt(checkpoint_viewed_at),
+                None => ObjectLookupKey::Latest,
             },
         )
         .await
@@ -266,7 +254,9 @@ impl Owner {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl::from(self).dynamic_field(ctx, name).await
+        OwnerImpl::from(self)
+            .dynamic_field(ctx, name, /* parent_version */ None)
+            .await
     }
 
     /// Access a dynamic object field on an object using its name. Names are arbitrary Move values
@@ -280,7 +270,9 @@ impl Owner {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl::from(self).dynamic_object_field(ctx, name).await
+        OwnerImpl::from(self)
+            .dynamic_object_field(ctx, name, /* parent_version */ None)
+            .await
     }
 
     /// The dynamic fields and dynamic object fields on an object.
@@ -295,7 +287,9 @@ impl Owner {
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_fields(ctx, first, after, last, before)
+            .dynamic_fields(
+                ctx, first, after, last, before, /* parent_version */ None,
+            )
             .await
     }
 }
@@ -447,11 +441,13 @@ impl OwnerImpl {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
+        parent_version: Option<u64>,
     ) -> Result<Option<DynamicField>> {
         use DynamicFieldType as T;
         DynamicField::query(
             ctx.data_unchecked(),
             self.address,
+            parent_version,
             name,
             T::DynamicField,
             self.checkpoint_viewed_at,
@@ -464,11 +460,13 @@ impl OwnerImpl {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
+        parent_version: Option<u64>,
     ) -> Result<Option<DynamicField>> {
         use DynamicFieldType as T;
         DynamicField::query(
             ctx.data_unchecked(),
             self.address,
+            parent_version,
             name,
             T::DynamicObject,
             self.checkpoint_viewed_at,
@@ -484,13 +482,14 @@ impl OwnerImpl {
         after: Option<object::Cursor>,
         last: Option<u64>,
         before: Option<object::Cursor>,
+        parent_version: Option<u64>,
     ) -> Result<Connection<String, DynamicField>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         DynamicField::paginate(
             ctx.data_unchecked(),
             page,
             self.address,
-            self.version,
+            parent_version,
             self.checkpoint_viewed_at,
         )
         .await
@@ -502,7 +501,6 @@ impl From<&Owner> for OwnerImpl {
     fn from(owner: &Owner) -> Self {
         OwnerImpl {
             address: owner.address,
-            version: None,
             checkpoint_viewed_at: owner.checkpoint_viewed_at,
         }
     }

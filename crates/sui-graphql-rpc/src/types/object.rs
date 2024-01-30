@@ -433,7 +433,9 @@ impl Object {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl::from(self).dynamic_field(ctx, name).await
+        OwnerImpl::from(self)
+            .dynamic_field(ctx, name, Some(self.version_impl()))
+            .await
     }
 
     /// Access a dynamic object field on an object using its name. Names are arbitrary Move values
@@ -448,7 +450,9 @@ impl Object {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl::from(self).dynamic_object_field(ctx, name).await
+        OwnerImpl::from(self)
+            .dynamic_object_field(ctx, name, Some(self.version_impl()))
+            .await
     }
 
     /// The dynamic fields and dynamic object fields on an object.
@@ -464,7 +468,7 @@ impl Object {
         before: Option<Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
         OwnerImpl::from(self)
-            .dynamic_fields(ctx, first, after, last, before)
+            .dynamic_fields(ctx, first, after, last, before, Some(self.version_impl()))
             .await
     }
 
@@ -507,7 +511,6 @@ impl ObjectImpl<'_> {
                 Some(ObjectOwner::Address(AddressOwner {
                     owner: Some(Owner {
                         address,
-                        version: None,
                         checkpoint_viewed_at: self.0.checkpoint_viewed_at,
                     }),
                 }))
@@ -1244,7 +1247,6 @@ impl From<&Object> for OwnerImpl {
     fn from(object: &Object) -> Self {
         OwnerImpl {
             address: object.address,
-            version: Some(object.version_impl()),
             checkpoint_viewed_at: object.checkpoint_viewed_at,
         }
     }

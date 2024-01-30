@@ -144,10 +144,14 @@ impl DynamicField {
 
 impl DynamicField {
     /// Fetch a single dynamic field entry from the `db`, on `parent` object, with field name
-    /// `name`, and kind `kind` (dynamic field or dynamic object field).
+    /// `name`, and kind `kind` (dynamic field or dynamic object field). The dynamic field is bound
+    /// by the `parent_version` if provided - the fetched field will be the latest version at or
+    /// before the provided version. If `parent_version` is not provided, the latest version of the
+    /// field is returned as bounded by the `checkpoint_viewed_at` parameter.
     pub(crate) async fn query(
         db: &Db,
         parent: SuiAddress,
+        parent_version: Option<u64>,
         name: DynamicFieldName,
         kind: DynamicFieldType,
         checkpoint_viewed_at: Option<u64>,
@@ -162,25 +166,32 @@ impl DynamicField {
         let field_id = derive_dynamic_field_id(parent, &type_, &name.bcs.0)
             .map_err(|e| Error::Internal(format!("Failed to derive dynamic field id: {e}")))?;
 
-        let super_ = MoveObject::query(
-            db,
-            SuiAddress::from(field_id),
-            match checkpoint_viewed_at {
+        let key = match parent_version {
+            Some(version) => ObjectLookupKey::VersionAt {
+                version,
+                checkpoint_viewed_at,
+            },
+            None => match checkpoint_viewed_at {
                 Some(seq) => ObjectLookupKey::LatestAt(seq),
                 None => ObjectLookupKey::Latest,
             },
-        )
-        .await?;
+        };
+
+        let super_ = MoveObject::query(db, SuiAddress::from(field_id), key).await?;
 
         super_.map(Self::try_from).transpose()
     }
 
-    /// Query the `db` for a `page` of dynamic fields attached to object with ID `parent`.
+    /// Query the `db` for a `page` of dynamic fields attached to object with ID `parent`. The
+    /// returned dynamic fields are bound by the `parent_version` if provided - each field will be
+    /// the latest version at or before the provided version. If `parent_version` is not provided,
+    /// the latest version of each field is returned as bounded by the `checkpoint_viewed-at`
+    /// parameter.`
     pub(crate) async fn paginate(
         db: &Db,
         page: Page<object::Cursor>,
         parent: SuiAddress,
-        version: Option<u64>,
+        parent_version: Option<u64>,
         checkpoint_viewed_at: Option<u64>,
     ) -> Result<Connection<String, DynamicField>, Error> {
         // If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
@@ -203,7 +214,7 @@ impl DynamicField {
                 let result = page.paginate_raw_query::<StoredHistoryObject>(
                     conn,
                     rhs,
-                    dynamic_fields_query(parent, version, lhs as i64, rhs as i64),
+                    dynamic_fields_query(parent, parent_version, lhs as i64, rhs as i64),
                 )?;
 
                 Ok(Some((result, rhs)))
@@ -346,14 +357,13 @@ fn dynamic_fields_query(parent: SuiAddress, version: Option<u64>, lhs: i64, rhs:
             format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
         );
         let query = query!(
-            r#"
-        SELECT candidates.*
-        FROM ({}) candidates
-        LEFT JOIN ({}) newer
-        ON (
-            candidates.object_id = newer.object_id
-            AND candidates.object_version < newer.object_version
-        )"#,
+            r#"SELECT candidates.*
+            FROM ({}) candidates
+            LEFT JOIN ({}) newer
+            ON (
+                candidates.object_id = newer.object_id
+                AND candidates.object_version < newer.object_version
+            )"#,
             candidates,
             newer
         );

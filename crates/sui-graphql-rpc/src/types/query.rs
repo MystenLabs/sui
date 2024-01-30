@@ -178,7 +178,6 @@ impl Query {
     async fn owner(&self, address: SuiAddress) -> Option<Owner> {
         Some(Owner {
             address,
-            version: None,
             checkpoint_viewed_at: None,
         })
     }

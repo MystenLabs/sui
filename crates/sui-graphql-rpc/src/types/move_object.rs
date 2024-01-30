@@ -305,7 +305,9 @@ impl MoveObject {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl::from(&self.super_).dynamic_field(ctx, name).await
+        OwnerImpl::from(&self.super_)
+            .dynamic_field(ctx, name, Some(self.super_.version_impl()))
+            .await
     }
 
     /// Access a dynamic object field on an object using its name. Names are arbitrary Move values
@@ -321,7 +323,7 @@ impl MoveObject {
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         OwnerImpl::from(&self.super_)
-            .dynamic_object_field(ctx, name)
+            .dynamic_object_field(ctx, name, Some(self.super_.version_impl()))
             .await
     }
 
@@ -338,7 +340,14 @@ impl MoveObject {
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
         OwnerImpl::from(&self.super_)
-            .dynamic_fields(ctx, first, after, last, before)
+            .dynamic_fields(
+                ctx,
+                first,
+                after,
+                last,
+                before,
+                Some(self.super_.version_impl()),
+            )
             .await
     }
 
