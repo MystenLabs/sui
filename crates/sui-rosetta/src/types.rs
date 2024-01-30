@@ -559,7 +559,7 @@ pub struct ConstructionPreprocessRequest {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PreprocessMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub budget: Option<u64>
+    pub budget: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -574,7 +574,7 @@ pub struct ConstructionPreprocessResponse {
 pub struct MetadataOptions {
     pub internal_operation: InternalOperation,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub budget: Option<u64>
+    pub budget: Option<u64>,
 }
 
 impl IntoResponse for ConstructionPreprocessResponse {
