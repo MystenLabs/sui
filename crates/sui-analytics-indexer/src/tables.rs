@@ -6,7 +6,7 @@ use crate::{ParquetSchema, ParquetValue};
 use serde::Serialize;
 use strum_macros::Display;
 use sui_analytics_indexer_derive::SerializeParquet;
-// use std::collections::BTreeSet;
+use sui_types::dynamic_field::DynamicFieldType;
 
 //
 // Table entries for the analytics database.
@@ -232,4 +232,22 @@ pub(crate) struct MovePackageEntry {
     pub(crate) bcs: String,
     // txn publishing the package
     pub(crate) transaction_digest: String,
+}
+
+#[derive(Serialize, Clone, SerializeParquet)]
+pub(crate) struct DynamicFieldEntry {
+    // indexes
+    pub(crate) parent_object_id: String,
+    pub(crate) transaction_digest: String,
+    pub(crate) checkpoint: u64,
+    pub(crate) epoch: u64,
+    pub(crate) timestamp_ms: u64,
+    // df information
+    pub(crate) name: String,
+    pub(crate) bcs_name: String,
+    pub(crate) type_: DynamicFieldType,
+    pub(crate) object_id: String,
+    pub(crate) version: u64,
+    pub(crate) digest: String,
+    pub(crate) object_type: String,
 }
