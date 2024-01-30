@@ -131,7 +131,8 @@ impl Mutation {
                     native,
                     events,
                 },
-                checkpoint_viewed_at: None,
+                // set to u64::MAX, as the executed transaction has not been indexed yet
+                checkpoint_viewed_at: u64::MAX,
             },
         })
     }

@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use serde::{Deserialize, Serialize};
+
 use crate::data::Conn;
 use crate::raw_query::RawQuery;
 use crate::types::checkpoint::Checkpoint;
@@ -13,6 +15,13 @@ pub(crate) enum View {
     /// Return objects that fulfill the filtering criteria and are the most recent version within
     /// the checkpoint range
     Consistent,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub(crate) struct ConsistentIndexCursor {
+    pub ix: usize,
+    /// The checkpoint sequence number at which the entity corresponding to this cursor was viewed at.
+    pub c: u64,
 }
 
 /// Constructs a `RawQuery` against the `objects_snapshot` and `objects_history` table to fetch

@@ -198,7 +198,10 @@ type Query<ST, GB> = data::Query<ST, objects::table, GB>;
 /// `checkpoint_viewed_at` sets the consistent upper bound for the cursor.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub(crate) struct HistoricalObjectCursor {
+    #[serde(rename = "o")]
     object_id: Vec<u8>,
+    /// The checkpoint sequence number this was viewed at.
+    #[serde(rename = "c")]
     checkpoint_viewed_at: u64,
 }
 
@@ -760,9 +763,7 @@ impl Object {
         for stored in results {
             // To maintain consistency, the returned cursor should have the same upper-bound as the
             // checkpoint found on the cursor.
-            let cursor = stored
-                .consistent_cursor(checkpoint_viewed_at)
-                .encode_cursor();
+            let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
             let object =
                 Object::try_from_stored_history_object(stored, Some(checkpoint_viewed_at))?;
             conn.edges.push(Edge::new(cursor, downcast(object)?));
@@ -1214,8 +1215,8 @@ impl HistoricalObjectCursor {
 }
 
 impl Checkpointed for Cursor {
-    fn checkpoint_viewed_at(&self) -> Option<u64> {
-        Some(self.checkpoint_viewed_at)
+    fn checkpoint_viewed_at(&self) -> u64 {
+        self.checkpoint_viewed_at
     }
 }
 
@@ -1241,14 +1242,7 @@ impl Paginated<Cursor> for StoredObject {
 }
 
 impl Target<Cursor> for StoredObject {
-    fn cursor(&self) -> Cursor {
-        Cursor::new(HistoricalObjectCursor::new(
-            self.object_id.clone(),
-            self.checkpoint_sequence_number as u64,
-        ))
-    }
-
-    fn consistent_cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
+    fn cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
         Cursor::new(HistoricalObjectCursor::new(
             self.object_id.clone(),
             checkpoint_viewed_at,
@@ -1287,14 +1281,7 @@ impl RawPaginated<Cursor> for StoredHistoryObject {
 }
 
 impl Target<Cursor> for StoredHistoryObject {
-    fn cursor(&self) -> Cursor {
-        Cursor::new(HistoricalObjectCursor {
-            object_id: self.object_id.clone(),
-            checkpoint_viewed_at: self.checkpoint_sequence_number as u64,
-        })
-    }
-
-    fn consistent_cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
+    fn cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
         Cursor::new(HistoricalObjectCursor::new(
             self.object_id.clone(),
             checkpoint_viewed_at,

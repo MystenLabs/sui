@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::error::Error;
+use crate::{consistency::ConsistentIndexCursor, error::Error};
 use async_graphql::{
     connection::{Connection, ConnectionNameType, CursorType, Edge, EdgeNameType, EmptyFields},
     *,
@@ -35,9 +35,8 @@ use super::{
 #[derive(Clone, Debug)]
 pub(crate) struct TransactionBlockEffects {
     pub kind: TransactionBlockEffectsKind,
-    /// The checkpoint_sequence_number at which this was viewed at, or `None` if the data was
-    /// requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint sequence number this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -77,11 +76,11 @@ pub enum ExecutionStatus {
 /// therefore must be a different types to the default `TransactionBlockConnection`).
 struct DependencyConnectionNames;
 
-type CDependencies = JsonCursor<usize>;
-type CUnchangedSharedObject = JsonCursor<usize>;
-type CObjectChange = JsonCursor<usize>;
-type CBalanceChange = JsonCursor<usize>;
-type CEvent = JsonCursor<usize>;
+type CDependencies = JsonCursor<ConsistentIndexCursor>;
+type CUnchangedSharedObject = JsonCursor<ConsistentIndexCursor>;
+type CObjectChange = JsonCursor<ConsistentIndexCursor>;
+type CBalanceChange = JsonCursor<ConsistentIndexCursor>;
+type CEvent = JsonCursor<ConsistentIndexCursor>;
 
 /// The effects representing the result of executing a transaction block.
 #[Object]
@@ -156,7 +155,9 @@ impl TransactionBlockEffects {
 
         let dependencies = self.native().dependencies();
 
-        let Some((prev, next, cs)) = page.paginate_indices(dependencies.len()) else {
+        let Some((prev, next, cs)) =
+            page.paginate_consistent_indices(dependencies.len(), self.checkpoint_viewed_at)?
+        else {
             return Ok(connection);
         };
 
@@ -168,11 +169,11 @@ impl TransactionBlockEffects {
 
         let transactions = TransactionBlock::multi_query(
             ctx.data_unchecked(),
-            dependencies[**fst..=**lst]
+            dependencies[fst.ix..=lst.ix]
                 .iter()
                 .map(|d| Digest::from(*d))
                 .collect(),
-            self.checkpoint_viewed_at,
+            fst.c, // Each element's cursor has the same checkpoint sequence number set
         )
         .await
         .extend()?;
@@ -184,10 +185,10 @@ impl TransactionBlockEffects {
         connection.has_previous_page = prev;
         connection.has_next_page = next;
 
-        for idx in indices {
-            let digest: Digest = dependencies[*idx].into();
+        for c in indices {
+            let digest: Digest = dependencies[c.ix].into();
             connection.edges.push(Edge::new(
-                idx.encode_cursor(),
+                c.encode_cursor(),
                 transactions.get(&digest).cloned(),
             ));
         }
@@ -214,7 +215,9 @@ impl TransactionBlockEffects {
 
         let input_shared_objects = self.native().input_shared_objects();
 
-        let Some((prev, next, cs)) = page.paginate_indices(input_shared_objects.len()) else {
+        let Some((prev, next, cs)) = page
+            .paginate_consistent_indices(input_shared_objects.len(), self.checkpoint_viewed_at)?
+        else {
             return Ok(connection);
         };
 
@@ -222,7 +225,7 @@ impl TransactionBlockEffects {
         connection.has_next_page = next;
 
         for c in cs {
-            let result = UnchangedSharedObject::try_from(input_shared_objects[*c].clone());
+            let result = UnchangedSharedObject::try_from(input_shared_objects[c.ix].clone(), c.c);
             match result {
                 Ok(unchanged_shared_object) => {
                     connection
@@ -250,7 +253,9 @@ impl TransactionBlockEffects {
 
         let object_changes = self.native().object_changes();
 
-        let Some((prev, next, cs)) = page.paginate_indices(object_changes.len()) else {
+        let Some((prev, next, cs)) =
+            page.paginate_consistent_indices(object_changes.len(), self.checkpoint_viewed_at)?
+        else {
             return Ok(connection);
         };
 
@@ -259,8 +264,8 @@ impl TransactionBlockEffects {
 
         for c in cs {
             let object_change = ObjectChange {
-                native: object_changes[*c].clone(),
-                checkpoint_viewed_at: self.checkpoint_viewed_at,
+                native: object_changes[c.ix].clone(),
+                checkpoint_viewed_at: c.c,
             };
 
             connection
@@ -288,7 +293,11 @@ impl TransactionBlockEffects {
             return Ok(connection);
         };
 
-        let Some((prev, next, cs)) = page.paginate_indices(stored_tx.balance_changes.len()) else {
+        let Some((prev, next, cs)) = page.paginate_consistent_indices(
+            stored_tx.balance_changes.len(),
+            self.checkpoint_viewed_at,
+        )?
+        else {
             return Ok(connection);
         };
 
@@ -296,12 +305,11 @@ impl TransactionBlockEffects {
         connection.has_next_page = next;
 
         for c in cs {
-            let Some(serialized) = &stored_tx.balance_changes[*c] else {
+            let Some(serialized) = &stored_tx.balance_changes[c.ix] else {
                 continue;
             };
 
-            let balance_change =
-                BalanceChange::read(serialized, self.checkpoint_viewed_at).extend()?;
+            let balance_change = BalanceChange::read(serialized, c.c).extend()?;
             connection
                 .edges
                 .push(Edge::new(c.encode_cursor(), balance_change));
@@ -326,7 +334,9 @@ impl TransactionBlockEffects {
             TransactionBlockEffectsKind::Executed { events, .. }
             | TransactionBlockEffectsKind::DryRun { events, .. } => events.len(),
         };
-        let Some((prev, next, cs)) = page.paginate_indices(len) else {
+        let Some((prev, next, cs)) =
+            page.paginate_consistent_indices(len, self.checkpoint_viewed_at)?
+        else {
             return Ok(connection);
         };
 
@@ -336,14 +346,13 @@ impl TransactionBlockEffects {
         for c in cs {
             let event = match &self.kind {
                 TransactionBlockEffectsKind::Stored { stored_tx, .. } => {
-                    Event::try_from_stored_transaction(stored_tx, *c, self.checkpoint_viewed_at)
-                        .extend()?
+                    Event::try_from_stored_transaction(stored_tx, c.ix, Some(c.c)).extend()?
                 }
                 TransactionBlockEffectsKind::Executed { events, .. }
                 | TransactionBlockEffectsKind::DryRun { events, .. } => Event {
                     stored: None,
-                    native: events[*c].clone(),
-                    checkpoint_viewed_at: self.checkpoint_viewed_at,
+                    native: events[c.ix].clone(),
+                    checkpoint_viewed_at: Some(c.c),
                 },
             };
             connection.edges.push(Edge::new(c.encode_cursor(), event));
@@ -365,7 +374,7 @@ impl TransactionBlockEffects {
         Epoch::query(
             ctx.data_unchecked(),
             Some(self.native().executed_epoch()),
-            self.checkpoint_viewed_at,
+            Some(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -381,7 +390,7 @@ impl TransactionBlockEffects {
         Checkpoint::query(
             ctx.data_unchecked(),
             CheckpointId::by_seq_num(stored_tx.checkpoint_sequence_number as u64),
-            self.checkpoint_viewed_at,
+            Some(self.checkpoint_viewed_at),
         )
         .await
         .extend()
