@@ -2797,7 +2797,7 @@ fn unused_let_muts(context: &mut Context) {
     for (v, local) in locals {
         let Local { mut_, used_mut, .. } = local;
         let Some(mut_loc) = mut_ else { continue };
-        if used_mut.is_none() {
+        if used_mut.is_none() && !v.value.starts_with_underscore() {
             let decl_msg = format!("The variable '{}' is never used mutably", v.value.name);
             let mut_msg = "Consider removing the 'mut' declaration here";
             context.env.add_diag(diag!(

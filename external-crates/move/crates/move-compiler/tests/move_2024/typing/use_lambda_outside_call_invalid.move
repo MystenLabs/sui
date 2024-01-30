@@ -4,8 +4,8 @@ module a::m {
         x();
     }
 
-    macro fun bar(mut $f: || -> u64) {
-        $f = || 0;
+    macro fun bar(mut f: || -> u64) {
+        f = || 0;
     }
 
     macro fun baz($f: || -> || -> u64): || -> u64 {

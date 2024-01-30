@@ -1099,14 +1099,29 @@ fn function_signature(context: &mut Context, sig: E::FunctionSignature) -> N::Fu
     let parameters = sig
         .parameters
         .into_iter()
-        .map(|(mut_, param, param_ty)| {
+        .map(|(mut mut_, param, param_ty)| {
             let is_underscore = param.is_underscore();
-            let mut_ = if is_underscore {
+            if is_underscore {
                 check_mut_underscore(context, mut_);
-                None
-            } else {
-                mut_
+                mut_ = None
             };
+            if param.is_macro_identifier()
+                && context
+                    .env
+                    .supports_feature(context.current_package, FeatureGate::LetMut)
+            {
+                if let Some(mutloc) = mut_ {
+                    let msg = format!(
+                        "Invalid 'mut' parameter. \
+                        '{}' parameters cannot be declared as mutable",
+                        MACRO_MODIFIER
+                    );
+                    let mut diag = diag!(NameResolution::InvalidMacroParameter, (mutloc, msg));
+                    diag.add_note(ASSIGN_MACRO_IDENTIFIER_NOTE);
+                    context.env.add_diag(diag);
+                    mut_ = None
+                }
+            }
             if let Err((param, prev_loc)) = declared.add(param, ()) {
                 if !is_underscore {
                     let msg = format!("Duplicate parameter with name '{}'", param);
@@ -1137,6 +1152,9 @@ fn function_body(context: &mut Context, sp!(loc, b_): E::FunctionBody) -> N::Fun
         E::FunctionBody_::Defined(es) => sp(loc, N::FunctionBody_::Defined(sequence(context, es))),
     }
 }
+
+const ASSIGN_MACRO_IDENTIFIER_NOTE: &'static str = "'macro' parameters are substituted without \
+    being evaluated. There is no local variable to assign to";
 
 //**************************************************************************************************
 // Structs
@@ -1894,17 +1912,6 @@ fn lvalue(
                         n,
                     )?,
                 };
-                if v.is_macro_identifier() && matches!(case, C::Assign) {
-                    let msg = format!(
-                        "Invalid assignment. Cannot assign to '{}' parameter '{}'",
-                        MACRO_MODIFIER, v,
-                    );
-                    let note = format!("'{}' parameters are substituted without being evaluated. There is no local variable to assign to", MACRO_MODIFIER);
-                    let mut diag = diag!(NameResolution::InvalidAssignment, (loc, msg));
-                    diag.add_note(note);
-                    context.env.add_diag(diag);
-                    return None;
-                }
                 NL::Var {
                     mut_,
                     var: nv,
@@ -1962,7 +1969,16 @@ fn lvalue(
 }
 
 fn check_mut_underscore(context: &mut Context, mut_: Option<Loc>) {
+    // no error if not a mut declaration
     let Some(mut_) = mut_ else { return };
+    // no error if let-mut is not supported
+    // (we mark all locals as having mut if the feature is off)
+    if !context
+        .env
+        .supports_feature(context.current_package, FeatureGate::LetMut)
+    {
+        return;
+    }
     let msg = "Invalid 'mut' declaration. 'mut' is applied to variables and cannot be applied to the '_' pattern";
     context
         .env

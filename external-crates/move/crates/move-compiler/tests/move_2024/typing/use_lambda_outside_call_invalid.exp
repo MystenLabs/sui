@@ -10,11 +10,21 @@ error[E04031]: invalid usage of lambda
 3 │         let x = $f;
   │                 ^^ Lambdas can only be used directly as arguments to macro functions
 
-error[E04031]: invalid usage of lambda
-  ┌─ tests/move_2024/typing/use_lambda_outside_call_invalid.move:8:14
+error[E02010]: invalid name
+  ┌─ tests/move_2024/typing/use_lambda_outside_call_invalid.move:7:23
   │
-8 │         $f = || 0;
-  │              ^^^^ Lambdas can only be used directly as arguments to macro functions
+7 │     macro fun bar(mut f: || -> u64) {
+  │     -----             ^ Invalid parameter name 'f'. 'macro' parameter names must start with '$' (or must be '_')
+  │     │                  
+  │     Declared 'macro' here
+  │
+  = 'macro' parameters start with '$' to indicate that their arguments are not evaluated before the macro is expanded, meaning the entire expression is substituted. This is different from regular function parameters that are evaluated before the function is called.
+
+error[E04031]: invalid usage of lambda
+  ┌─ tests/move_2024/typing/use_lambda_outside_call_invalid.move:8:13
+  │
+8 │         f = || 0;
+  │             ^^^^ Lambdas can only be used directly as arguments to macro functions
 
 error[E04010]: cannot infer type
    ┌─ tests/move_2024/typing/use_lambda_outside_call_invalid.move:16:17

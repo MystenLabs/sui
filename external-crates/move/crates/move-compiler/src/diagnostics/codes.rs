@@ -229,7 +229,7 @@ codes!(
         InvalidLabel: { msg: "invalid use of label", severity: BlockingError },
         UnboundLabel: { msg: "unbound label", severity: BlockingError },
         InvalidMut: { msg: "invalid 'mut' declaration", severity: NonblockingError },
-        InvalidAssignment: { msg: "invalid assignment", severity: NonblockingError },
+        InvalidMacroParameter: { msg: "invalid macro parameter", severity: NonblockingError },
     ],
     // errors for typing rules. mostly typing/translate
     TypeSafety: [
