@@ -515,7 +515,7 @@
 >    validatorSet {
 >      totalStake
 >      pendingActiveValidatorsSize
->      stakePoolMappingsSize
+>      stakingPoolMappingsSize
 >      inactivePoolsSize
 >      validatorCandidatesSize
 >      activeValidators {

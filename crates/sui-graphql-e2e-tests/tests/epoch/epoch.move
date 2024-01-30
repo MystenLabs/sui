@@ -40,10 +40,13 @@
           name
         }
       }
+      validatorCandidatesSize
+      inactivePoolsId
     }
     totalGasFees
     totalStakeRewards
     totalStakeSubsidies
+    totalTransactions
     fundSize
     fundInflow
     fundOutflow

@@ -53,7 +53,15 @@ impl Epoch {
         let validator_set = ValidatorSet {
             total_stake: Some(BigInt::from(self.stored.total_stake)),
             active_validators: Some(active_validators),
-            ..Default::default()
+            pending_removals: Some(system_state.pending_removals),
+            pending_active_validators_id: Some(system_state.pending_active_validators_id.into()),
+            pending_active_validators_size: Some(system_state.pending_active_validators_size),
+            staking_pool_mappings_id: Some(system_state.staking_pool_mappings_id.into()),
+            staking_pool_mappings_size: Some(system_state.staking_pool_mappings_size),
+            inactive_pools_id: Some(system_state.inactive_pools_id.into()),
+            inactive_pools_size: Some(system_state.inactive_pools_size),
+            validator_candidates_id: Some(system_state.validator_candidates_id.into()),
+            validator_candidates_size: Some(system_state.validator_candidates_size),
         };
         Ok(Some(validator_set))
     }
@@ -85,6 +93,37 @@ impl Epoch {
         Ok(Some(BigInt::from(
             last - self.stored.first_checkpoint_id as u64,
         )))
+    }
+
+    /// The total number of transaction blocks in this epoch so far.
+    async fn total_transactions(&self, ctx: &Context<'_>) -> Result<Option<BigInt>> {
+        match self.stored.epoch_total_transactions {
+            Some(total) => Ok(Some(BigInt::from(total as u64))),
+            None => {
+                // If the epoch has not ended yet, we calculate the total transactions by
+                // subtracting the last epoch's network total transactions from the last checkpoint's.
+                let last_checkpoint_network_total =
+                    Checkpoint::query(ctx.data_unchecked(), CheckpointId::default())
+                        .await
+                        .extend()?
+                        .map(|c| c.network_total_transactions_impl());
+                let last_epoch_last_checkpoint_id =
+                    CheckpointId::by_seq_num((self.stored.first_checkpoint_id - 1) as u64);
+                let last_epoch_network_total =
+                    Checkpoint::query(ctx.data_unchecked(), last_epoch_last_checkpoint_id)
+                        .await
+                        .extend()?
+                        .map(|c| c.network_total_transactions_impl());
+                match (last_checkpoint_network_total, last_epoch_network_total) {
+                    (Some(last_checkpoint_network_total), Some(last_epoch_network_total)) => {
+                        Ok(Some(BigInt::from(
+                            last_checkpoint_network_total - last_epoch_network_total,
+                        )))
+                    }
+                    _ => Ok(None),
+                }
+            }
+        }
     }
 
     /// The total amount of gas fees (in MIST) that were paid in this epoch.

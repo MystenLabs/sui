@@ -46,7 +46,7 @@ Checkpoint created: 1
 task 5 'advance-epoch'. lines 41-41:
 Epoch advanced: 0
 
-task 6 'run-graphql'. lines 43-68:
+task 6 'run-graphql'. lines 43-69:
 Response: {
   "data": {
     "objects": {
@@ -56,7 +56,8 @@ Response: {
           "node": {
             "asMoveObject": {
               "asStakedSui": {
-                "principal": "20000000000000000"
+                "principal": "20000000000000000",
+                "poolId": "0x1a33cf751194d221ebd518ab0dd084fc04a5dc305e0c0888158341ef67453091"
               }
             }
           }
@@ -66,7 +67,8 @@ Response: {
           "node": {
             "asMoveObject": {
               "asStakedSui": {
-                "principal": "40000"
+                "principal": "40000",
+                "poolId": "0x1a33cf751194d221ebd518ab0dd084fc04a5dc305e0c0888158341ef67453091"
               }
             }
           }
@@ -76,7 +78,8 @@ Response: {
           "node": {
             "asMoveObject": {
               "asStakedSui": {
-                "principal": "10000000000"
+                "principal": "10000000000",
+                "poolId": "0x1a33cf751194d221ebd518ab0dd084fc04a5dc305e0c0888158341ef67453091"
               }
             }
           }

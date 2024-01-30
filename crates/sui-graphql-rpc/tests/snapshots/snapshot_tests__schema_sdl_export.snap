@@ -1013,6 +1013,10 @@ type Epoch {
 	"""
 	totalCheckpoints: BigInt
 	"""
+	The total number of transaction blocks in this epoch so far.
+	"""
+	totalTransactions: BigInt
+	"""
 	The total amount of gas fees (in MIST) that were paid in this epoch.
 	"""
 	totalGasFees: BigInt
@@ -3323,6 +3327,10 @@ type StakedSui implements IMoveObject & IObject & IOwner {
 	"""
 	requestedEpoch: Epoch
 	"""
+	The id of the validator staking pool this stake belongs to.
+	"""
+	poolId: SuiAddress
+	"""
 	The SUI that was initially staked.
 	"""
 	principal: BigInt
@@ -4075,9 +4083,39 @@ type ValidatorSet {
 	to `activeValidators`.
 	"""
 	pendingRemovals: [Int!]
+	"""
+	Id of the wrapped object `TableVec` storing the pending active validators.
+	"""
+	pendingActiveValidatorsId: SuiAddress
+	"""
+	Size of the pending active validators table.
+	"""
 	pendingActiveValidatorsSize: Int
-	stakePoolMappingsSize: Int
+	"""
+	Id of the table storing the mapping from staking pool ids to the addresses
+	of the corresponding validators. This is needed because a validator's address
+	can potentially change but its pool id will not.
+	"""
+	stakingPoolMappingsId: SuiAddress
+	"""
+	Size of the stake pool mappings table.
+	"""
+	stakingPoolMappingsSize: Int
+	"""
+	Id of the table storing the inactive staking pools.
+	"""
+	inactivePoolsId: SuiAddress
+	"""
+	Size of the inactive pools table.
+	"""
 	inactivePoolsSize: Int
+	"""
+	Id of the table storing the validator candidates.
+	"""
+	validatorCandidatesId: SuiAddress
+	"""
+	Size of the validator candidates table.
+	"""
 	validatorCandidatesSize: Int
 	"""
 	The current set of active validators.

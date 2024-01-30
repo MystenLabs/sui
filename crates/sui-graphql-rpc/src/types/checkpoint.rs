@@ -96,7 +96,7 @@ impl Checkpoint {
 
     /// The total number of transaction blocks in the network by the end of this checkpoint.
     async fn network_total_transactions(&self) -> Option<u64> {
-        Some(self.stored.network_total_transactions as u64)
+        Some(self.network_total_transactions_impl())
     }
 
     /// The computation cost, storage cost, storage rebate, and non-refundable storage fee
@@ -158,6 +158,10 @@ impl CheckpointId {
 impl Checkpoint {
     pub(crate) fn sequence_number_impl(&self) -> u64 {
         self.stored.sequence_number as u64
+    }
+
+    pub(crate) fn network_total_transactions_impl(&self) -> u64 {
+        self.stored.network_total_transactions as u64
     }
 
     pub(crate) fn digest_impl(&self) -> Result<CheckpointDigest, Error> {
