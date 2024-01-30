@@ -4,7 +4,7 @@
 use std::str::FromStr;
 
 use super::checkpoint::Checkpoint;
-use super::cursor::{self, Checkpointed, Page, Paginated, Target};
+use super::cursor::{self, Checkpointed, ConsistentTarget, Page, Paginated, Target};
 use super::digest::Digest;
 use super::type_filter::{ModuleFilter, TypeFilter};
 use super::{
@@ -36,9 +36,8 @@ use sui_types::{
 pub(crate) struct Event {
     pub stored: Option<StoredEvent>,
     pub native: NativeEvent,
-    /// The checkpoint_sequence_number at which this was viewed at, or `None` if the data was
-    /// requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint_sequence_number at which this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 /// Contents of an Event's cursor.
@@ -50,9 +49,8 @@ pub(crate) struct EventKey {
     /// Event Sequence Number
     e: u64,
 
-    /// The checkpoint_sequence_number at which this was viewed at, or `None` if the data was
-    /// requested at the latest checkpoint.
-    checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint_sequence_number at which this was viewed at.
+    c: u64,
 }
 
 pub(crate) type Cursor = cursor::JsonCursor<EventKey>;
@@ -116,7 +114,7 @@ impl Event {
 
         Ok(Some(Address {
             address: self.native.sender.into(),
-            checkpoint_viewed_at: self.checkpoint_viewed_at,
+            checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
         }))
     }
 
@@ -229,7 +227,7 @@ impl Event {
                 .encode_cursor();
             conn.edges.push(Edge::new(
                 cursor,
-                Event::try_from_stored_event(stored, Some(checkpoint_viewed_at))?,
+                Event::try_from_stored_event(stored, checkpoint_viewed_at)?,
             ));
         }
 
@@ -239,7 +237,7 @@ impl Event {
     pub(crate) fn try_from_stored_transaction(
         stored_tx: &StoredTransaction,
         idx: usize,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Self, Error> {
         let Some(Some(serialized_event)) = stored_tx.events.get(idx) else {
             return Err(Error::Internal(format!(
@@ -279,7 +277,7 @@ impl Event {
 
     fn try_from_stored_event(
         stored: StoredEvent,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Self, Error> {
         let Some(Some(sender_bytes)) = stored.senders.first() else {
             return Err(Error::Internal("No senders found for event".to_string()));
@@ -346,7 +344,7 @@ impl Target<Cursor> for StoredEvent {
         Cursor::new(EventKey {
             tx: self.tx_sequence_number as u64,
             e: self.event_sequence_number as u64,
-            checkpoint_viewed_at: None,
+            c: self.checkpoint_sequence_number as u64, // TODO (wlmyng) make sure to come back and delete this
         })
     }
 
@@ -354,13 +352,23 @@ impl Target<Cursor> for StoredEvent {
         Cursor::new(EventKey {
             tx: self.tx_sequence_number as u64,
             e: self.event_sequence_number as u64,
-            checkpoint_viewed_at: Some(checkpoint_viewed_at),
+            c: checkpoint_viewed_at,
         })
     }
 }
 
+// impl ConsistentTarget<Cursor> for StoredEvent {
+//     fn consistent_cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
+//         Cursor::new(EventKey {
+//             tx: self.tx_sequence_number as u64,
+//             e: self.event_sequence_number as u64,
+//             c: checkpoint_viewed_at,
+//         })
+//     }
+// }
+
 impl Checkpointed for Cursor {
     fn checkpoint_viewed_at(&self) -> Option<u64> {
-        self.checkpoint_viewed_at
+        Some(self.c)
     }
 }

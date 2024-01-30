@@ -335,18 +335,14 @@ impl TransactionBlockEffects {
         for c in cs {
             let event = match &self.inner {
                 TransactionBlockEffectsInner::Stored { stored_tx, .. } => {
-                    Event::try_from_stored_transaction(
-                        stored_tx,
-                        *c,
-                        Some(self.checkpoint_viewed_at),
-                    )
-                    .extend()?
+                    Event::try_from_stored_transaction(stored_tx, *c, self.checkpoint_viewed_at)
+                        .extend()?
                 }
                 TransactionBlockEffectsInner::Executed { events, .. }
                 | TransactionBlockEffectsInner::DryRun { events, .. } => Event {
                     stored: None,
                     native: events[*c].clone(),
-                    checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
+                    checkpoint_viewed_at: self.checkpoint_viewed_at,
                 },
             };
             connection.edges.push(Edge::new(c.encode_cursor(), event));

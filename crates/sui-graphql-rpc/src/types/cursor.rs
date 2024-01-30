@@ -105,6 +105,11 @@ pub(crate) trait Target<C: CursorType> {
     }
 }
 
+pub(crate) trait ConsistentTarget<C: CursorType> {
+    /// The cursor pointing at this target value, assuming it was read at `checkpoint_viewed_at`.
+    fn consistent_cursor(&self, checkpoint_viewed_at: u64) -> C;
+}
+
 pub(crate) trait Checkpointed {
     fn checkpoint_viewed_at(&self) -> Option<u64>;
 }
