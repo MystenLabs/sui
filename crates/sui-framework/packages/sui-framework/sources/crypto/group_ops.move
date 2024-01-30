@@ -63,8 +63,8 @@ module sui::group_ops {
 
     /// Aborts with `EInputTooLong` if the vectors are too long.
     public(friend) fun multi_scalar_multiplication<S, G>(type: u8, scalars: &vector<Element<S>>, elements: &vector<Element<G>>): Element<G> {
-        assert!(vector::length(scalars) == vector::length(elements), EInvalidInput);
         assert!(vector::length(scalars) > 0, EInvalidInput);
+        assert!(vector::length(scalars) == vector::length(elements), EInvalidInput);
 
         let scalars_bytes = vector::empty<u8>();
         let elements_bytes = vector::empty<u8>();
