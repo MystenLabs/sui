@@ -105,6 +105,10 @@ pub(crate) trait Target<C: CursorType> {
     }
 }
 
+pub(crate) trait Checkpointed {
+    fn checkpoint_viewed_at(&self) -> Option<u64>;
+}
+
 impl<C> JsonCursor<C> {
     pub(crate) fn new(cursor: C) -> Self {
         JsonCursor(OpaqueCursor(cursor))
@@ -177,6 +181,31 @@ impl<C> Page<C> {
 
     pub(crate) fn is_from_front(&self) -> bool {
         matches!(self.end, End::Front)
+    }
+}
+
+impl<C> Page<C>
+where
+    C: Checkpointed,
+{
+    // If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
+    // consistent. Otherwise, use the value from the parameter, or set to None. This is so that
+    // paginated queries are consistent with the previous query that created the cursor.
+    pub(crate) fn validate_cursor_consistency(&self) -> Result<Option<u64>, Error> {
+        match (self.after(), self.before()) {
+            (Some(after), Some(before)) => {
+                if after.checkpoint_viewed_at() == before.checkpoint_viewed_at() {
+                    Ok(after.checkpoint_viewed_at())
+                } else {
+                    Err(Error::Client(
+                        "The provided cursors are taken from different checkpoints and cannot be used together in the same query."
+                            .to_string(),
+                    ))
+                }
+            }
+            (Some(cursor), None) | (None, Some(cursor)) => Ok(cursor.checkpoint_viewed_at()),
+            (None, None) => Ok(None),
+        }
     }
 }
 

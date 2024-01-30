@@ -3,7 +3,7 @@
 
 use super::{
     base64::Base64,
-    cursor::{self, Page, Paginated, Target},
+    cursor::{self, Checkpointed, Page, Paginated, Target},
     date_time::DateTime,
     digest::Digest,
     epoch::Epoch,
@@ -259,7 +259,7 @@ impl Checkpoint {
         checkpoint_viewed_at: Option<u64>,
     ) -> Result<Connection<String, Checkpoint>, Error> {
         use checkpoints::dsl;
-        let cursor_viewed_at = validate_cursor_consistency(page.after(), page.before())?;
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
         let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
 
         let ((prev, next, results), rhs) = db
@@ -375,22 +375,8 @@ impl Target<Cursor> for StoredCheckpoint {
     }
 }
 
-pub(crate) fn validate_cursor_consistency(
-    after: Option<&Cursor>,
-    before: Option<&Cursor>,
-) -> Result<Option<u64>, Error> {
-    match (after, before) {
-        (Some(after_cursor), Some(before_cursor)) => {
-            if after_cursor.checkpoint_viewed_at == before_cursor.checkpoint_viewed_at {
-                Ok(after_cursor.checkpoint_viewed_at)
-            } else {
-                Err(Error::Client(
-                    "Cursors are inconsistent and cannot be used together in the same query."
-                        .to_string(),
-                ))
-            }
-        }
-        (Some(cursor), None) | (None, Some(cursor)) => Ok(cursor.checkpoint_viewed_at),
-        (None, None) => Ok(None),
+impl Checkpointed for Cursor {
+    fn checkpoint_viewed_at(&self) -> Option<u64> {
+        self.checkpoint_viewed_at
     }
 }

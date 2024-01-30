@@ -10,9 +10,7 @@ use sui_package_resolver::Resolver;
 use sui_types::dynamic_field::{derive_dynamic_field_id, DynamicFieldInfo, DynamicFieldType};
 
 use super::cursor::{Page, Target};
-use super::object::{
-    self, deserialize_move_struct, validate_cursor_consistency, Object, ObjectKind, ObjectLookupKey,
-};
+use super::object::{self, deserialize_move_struct, Object, ObjectKind, ObjectLookupKey};
 use super::type_filter::ExactTypeFilter;
 use super::{
     base64::Base64, move_object::MoveObject, move_value::MoveValue, sui_address::SuiAddress,
@@ -186,7 +184,7 @@ impl DynamicField {
         // If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
         // consistent. Otherwise, use the value from the parameter, or set to None. This is so that
         // paginated queries are consistent with the previous query that created the cursor.
-        let cursor_viewed_at = validate_cursor_consistency(page.after(), page.before())?;
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
         let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
 
         let Some(((prev, next, results), checkpoint_viewed_at)) = db
