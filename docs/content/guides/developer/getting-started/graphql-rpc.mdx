@@ -10,11 +10,8 @@ The quickest way to access the Sui GraphQL service is through the online IDE tha
 The online IDE is available for [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql). This guide contains various queries that you try directly in the IDE.
 
 :::info
-Any existing addresses/object IDs in these examples refer to `mainnet` data only.
-:::
-
-:::info
-Both [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql) services are rate-limited to keep network throughput optimized.
+- Any existing addresses/object IDs in these examples refer to `mainnet` data only.
+- Both [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql) services are rate-limited to keep network throughput optimized.
 :::
 
 For more details about some concepts used in the examples below, please see the [GraphQL concepts](concepts/graphql-rpc.mdx) page.
@@ -40,7 +37,7 @@ This example finds the total stake rewards, the reference gas price, the number 
 
 ```graphql
 query {
-  epoch(id: 100) # note that id is optional, and without it, last epoch is returned
+  epoch(id: 100) # note that id is optional, and without it, latest epoch is returned
   {
     epochId
     totalStakeRewards
