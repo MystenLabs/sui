@@ -21,7 +21,7 @@ use async_graphql::{
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer::{models_v2::checkpoints::StoredCheckpoint, schema_v2::checkpoints};
-use sui_types::messages_checkpoint::{CheckpointCommitment, CheckpointDigest};
+use sui_types::messages_checkpoint::CheckpointDigest;
 
 /// Filter either by the digest, or the sequence number, or neither, to get the latest checkpoint.
 #[derive(Default, InputObject)]
@@ -75,23 +75,6 @@ impl Checkpoint {
             .previous_checkpoint_digest
             .as_ref()
             .map(Base58::encode)
-    }
-
-    /// A commitment by the committee at the end of epoch on the contents of the live object set at
-    /// that time. This can be used to verify state snapshots.
-    async fn live_object_set_digest(&self) -> Result<Option<String>> {
-        use CheckpointCommitment as C;
-        Ok(
-            bcs::from_bytes::<Vec<C>>(&self.stored.checkpoint_commitments)
-                .map_err(|e| Error::Internal(format!("Error deserializing commitments: {e}")))
-                .extend()?
-                .into_iter()
-                .map(|commitment| {
-                    let C::ECMHLiveObjectSetDigest(digest) = commitment;
-                    Base58::encode(digest.digest.into_inner())
-                })
-                .next(),
-        )
     }
 
     /// The total number of transaction blocks in the network by the end of this checkpoint.

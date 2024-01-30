@@ -386,11 +386,6 @@ type Checkpoint {
 	"""
 	previousCheckpointDigest: String
 	"""
-	A commitment by the committee at the end of epoch on the contents of the live object set at
-	that time. This can be used to verify state snapshots.
-	"""
-	liveObjectSetDigest: String
-	"""
 	The total number of transaction blocks in the network by the end of this checkpoint.
 	"""
 	networkTotalTransactions: Int
@@ -1073,6 +1068,11 @@ type Epoch {
 	Parameters related to the subsidy that supplements staking rewards
 	"""
 	systemStakeSubsidy: StakeSubsidy
+	"""
+	A commitment by the committee at the end of epoch on the contents of the live object set at
+	that time. This can be used to verify state snapshots.
+	"""
+	liveObjectSetDigest: String
 	"""
 	The epoch's corresponding checkpoints.
 	"""

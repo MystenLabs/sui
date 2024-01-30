@@ -16,8 +16,10 @@ use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
 use async_graphql::*;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
+use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer::models_v2::epoch::QueryableEpochInfo;
 use sui_indexer::schema_v2::epochs;
+use sui_types::messages_checkpoint::CheckpointCommitment as EpochCommitment;
 
 pub(crate) struct Epoch {
     pub stored: QueryableEpochInfo,
@@ -163,6 +165,32 @@ impl Epoch {
             .fetch_sui_system_state(Some(self.stored.epoch as u64))
             .await?;
         Ok(SystemStateSummary { native: state })
+    }
+
+    /// A commitment by the committee at the end of epoch on the contents of the live object set at
+    /// that time. This can be used to verify state snapshots.
+    async fn live_object_set_digest(&self) -> Result<Option<String>> {
+        self.stored
+            .epoch_commitments
+            .as_ref()
+            .map(|commitments| {
+                bcs::from_bytes::<Vec<EpochCommitment>>(commitments)
+                    .map_err(|e| {
+                        Error::Internal(format!("Error deserializing commitments: {e}")).extend()
+                    })
+                    .map(|commitments| {
+                        commitments
+                            .into_iter()
+                            .map(|commitment| {
+                                let EpochCommitment::ECMHLiveObjectSetDigest(digest) = commitment;
+                                Base58::encode(digest.digest.into_inner())
+                            })
+                            .next()
+                    })
+                    .transpose()
+            })
+            .flatten()
+            .transpose()
     }
 
     /// The epoch's corresponding checkpoints.
